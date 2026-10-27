@@ -3,9 +3,11 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { base, enc, getManifest, getPage, getProject, listProjects } from "./api";
-import { THEME_NAME, THEMES, type SideTab, type Theme } from "./consts";
+import { DRAWER, SIDE, THEME_NAME, THEMES, type DrawerTab, type SideTab, type Theme } from "./consts";
+import { Drawer } from "./Drawer";
 import { applyTheme, remember, remembered, savedTheme } from "./palette";
 import { Logo } from "./Logo";
+import { PanelStage } from "./PanelStage";
 import { SheetStage, type StageHandle } from "./SheetStage";
 import { SidePanel } from "./SidePanel";
 import { SourceView } from "./SourceView";
@@ -29,7 +31,12 @@ export function App() {
   const [page, setPage] = useState<Page | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [banners, setBanners] = useState<string[]>([]);
-  const [side, setSide] = useState<SideTab>(() => (remembered("side") as SideTab) || "tables");
+  const [side, setSide] = useState<SideTab>(() => {
+    const t = remembered("side");
+    return t && t in SIDE ? (t as SideTab) : "tables";
+  });
+  const [drawer, setDrawer] = useState<DrawerTab | null>(null);  // вопросы, исходники, проект
+  const [closing, setClosing] = useState(false);                // панель уезжает
   const [source, setSource] = useState<string | null>(null);  // файл source/, открытый вместо листа
   const [theme, setTheme] = useState<Theme>(savedTheme);
   const [reloads, setReloads] = useState(0);
@@ -107,6 +114,13 @@ export function App() {
     if (confirmLeave()) setSheet(index);
   };
   const showSide = (tab: SideTab) => { setSide(tab); remember("side", tab); };
+  // Та же кнопка — закрыть (панель уезжает), другая — открыть её
+  const toggleDrawer = (tab: DrawerTab) => {
+    if (drawer === tab && !closing) setClosing(true);
+    else { setDrawer(tab); setClosing(false); }
+  };
+  const closeDrawer = useCallback(() => setClosing(true), []);
+  const drawerClosed = useCallback(() => { setDrawer(null); setClosing(false); }, []);
   const showSource = (file: string) => { if (confirmLeave()) setSource(file); };
   const saved = (notes: string[]) => {
     setBanners(notes.length ? [`wiring.yaml: ${notes.join("; ")}`] : []);
@@ -123,7 +137,9 @@ export function App() {
   else if (error) main = <div className="error">{error}</div>;
   else if (source && project) main = <SourceView project={project} file={source} onBack={() => setSource(null)} />;
   else if (project && !project.artifact) main = <div className="empty">Нет out/project.epd — листы появятся после build</div>;
-  else if (page && project) {
+  else if (page && project && page.panel) {
+    main = <PanelStage ref={stage} key={`${current}/${sheet}/${reloads}`} page={page} panel={page.panel} />;
+  } else if (page && project) {
     main = <SheetStage ref={stage} key={`${current}/${sheet}/${reloads}`} page={page} project={project.name}
                        onSaved={saved} onBanner={(b) => setBanners([b])} />;
   }
@@ -150,9 +166,19 @@ export function App() {
           ))}
         </nav>
         <div className="spacer" />
-        <span>
-          {openQs > 0 && <button className="pill" onClick={() => showSide("questions")}>Открытых вопросов: {openQs}</button>}
-        </span>
+        {project && (
+          <div className="tabs" aria-label="Проект">
+            {(Object.keys(DRAWER) as DrawerTab[]).map((k) => {
+              const n = k === "questions" ? openQs : 0;
+              return (
+                <button key={k} className={drawer === k && !closing ? "on" : undefined} aria-pressed={drawer === k && !closing}
+                        aria-label={n ? `${DRAWER[k]}: открытых ${n}` : undefined} onClick={() => toggleDrawer(k)}>
+                  <span className="tab-name">{DRAWER[k]}{n > 0 && <span className="count" aria-hidden="true">{n}</span>}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
         <button title="Тема: системная → светлая → тёмная"
                 onClick={() => {
                   const next = THEMES[(THEMES.indexOf(theme) + 1) % THEMES.length];
@@ -170,8 +196,12 @@ export function App() {
       </div>
       <div className="layout">
         <main id="stage">{main}</main>
-        <SidePanel tab={side} onTab={showSide} project={project} page={source ? null : page}
-                   shownSource={source} onSource={showSource} />
+        <SidePanel tab={side} onTab={showSide} page={source ? null : page}>
+          {drawer && project && (
+            <Drawer tab={drawer} project={project} shownSource={source} onSource={showSource}
+                    closing={closing} onClose={closeDrawer} onClosed={drawerClosed} />
+          )}
+        </SidePanel>
       </div>
     </>
   );

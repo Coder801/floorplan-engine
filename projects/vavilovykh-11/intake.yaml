@@ -2,7 +2,7 @@
 sources:
   - { file: "source/Діма_і_Аня_план_після_перепланування.pdf", note: "план после перепланировки + ответы заказчика" }
   - { file: "source/Діма і Аня електрика.pdf", note: "электрика: точки, высоты, группы" }
-  - { file: "source/изменения-заказчика.md", note: "2026-10-21: кондиционер в зале" }
+  - { file: "source/изменения-заказчика.md", note: "2026-10-21: кондиционер в зале; 2026-10-28: тёплый пол, группы кухни, зал и коридор раздельно" }
 
 questions:
   - id: q1
@@ -44,3 +44,25 @@ questions:
     text: "Кондиционер — отдельная группа от щита (QF14, кабель 3×2,5, автомат 16 А)? Так сейчас в модели."
     answer: text
     severity: minor
+  - id: q7
+    stage: electrical
+    target: points.living_floor_reg_1.offset
+    text: "Тёплый пол в коридоре: где регулятор? Сейчас — на стене у входа, рядом с выключателем коридора (мм от угла с санвузлом до середины)"
+    answer: value
+    unit: mm
+    assumption: 240
+  - id: q8
+    stage: electrical
+    target: points.living_floor_reg_2.offset
+    text: "Тёплый пол в санвузле: где регулятор? Сейчас — в коридоре снаружи санвузла, слева от его выключателя (мм от начала стены у выступа)"
+    answer: value
+    unit: mm
+    assumption: 780
+  - id: q9
+    stage: electrical
+    target: points.living_floor_reg_1.height
+    also: [points.living_floor_reg_2.height]
+    text: "Регуляторы тёплого пола: на какой высоте от пола?"
+    answer: value
+    unit: mm
+    assumption: 900

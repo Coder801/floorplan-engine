@@ -52,6 +52,7 @@ class Stage(StrEnum):
     POWER = "power"
     WIRING = "wiring"
     PLUMBING = "plumbing"
+    PANEL = "panel"  # щит: вопросы составляет код по расчёту (panel.panel_questions)
 
 
 class QSeverity(StrEnum):

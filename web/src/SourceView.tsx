@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { base, enc, getText } from "./api";
-import { kindOf } from "./SidePanel";
+import { kindOf } from "./Drawer";
 import type { Project } from "./types";
 
 export function SourceView({ project, file, onBack }: { project: Project; file: string; onBack: () => void }) {

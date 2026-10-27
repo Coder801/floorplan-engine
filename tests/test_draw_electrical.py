@@ -279,7 +279,8 @@ def test_board_attributes_do_not_inflate_view(tmp_path: Path) -> None:
         ("02 Электрика", "02-electrical.png"),
         ("02 Електрика", "02-electrical.png"),
         ("03 Проводка", "03-wiring.png"),
-        ("04 Что-то новое", "04-sheet.png"),
+        ("04 Щит", "04-panel.png"),
+        ("05 Что-то новое", "05-sheet.png"),
     ],
 )
 def test_sheet_png_name(tab: str, name: str) -> None:
@@ -299,4 +300,4 @@ def test_all_sheets_share_one_format(tmp_path: Path) -> None:
     )
     doc = _save(build_project_document(plan, contours, elec), tmp_path / "project.dxf")
     sizes = {lay.dxf_layout.dxf.paper_size for lay in sheet_layouts(doc)}
-    assert len(sheet_layouts(doc)) == 3 and len(sizes) == 1
+    assert len(sheet_layouts(doc)) == 4 and len(sizes) == 1  # план, электрика, проводка, щит

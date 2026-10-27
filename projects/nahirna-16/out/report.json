@@ -24,6 +24,16 @@
       "questions": [
         "q6"
       ]
+    },
+    {
+      "stage": "panel",
+      "status": "questions",
+      "builds": true,
+      "reason": "",
+      "weight": 1,
+      "questions": [
+        "panel_input"
+      ]
     }
   ],
   "questions": [
@@ -90,6 +100,19 @@
       "options": [],
       "severity": "major",
       "state": "open"
+    },
+    {
+      "id": "panel_input",
+      "stage": "panel",
+      "text": "Вводной автомат по техусловиям? Сейчас 63 А (допущение); расчётный ток квартиры 40,3 А",
+      "target": "panel.input",
+      "also": [],
+      "answer": "value",
+      "unit": "А",
+      "options": [],
+      "assumption": 63.0,
+      "severity": "minor",
+      "state": "open"
     }
   ],
   "issues": [
@@ -104,6 +127,12 @@
       "path": "rooms[5].openings[1].sill",
       "severity": "warning",
       "message": "не указана высота подоконника"
+    },
+    {
+      "file": "electrical.yaml",
+      "path": "panel",
+      "severity": "warning",
+      "message": "Вводной автомат 63 А — допущение: уточните по техусловиям (panel.input)"
     }
   ]
 }

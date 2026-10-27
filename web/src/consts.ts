@@ -7,7 +7,7 @@ export const STATUS: Record<string, string> = {
 };
 export const STAGE: Record<string, string> = {
   plan: "План", electrical: "Электрика", wiring: "Проводка", plumbing: "Сантехника",
-  furniture: "Мебель", lighting: "Освещение",
+  furniture: "Мебель", lighting: "Освещение", panel: "Щит",
 };
 export const QSTATE: Record<string, string> = {
   open: "открыт", answered: "ответ подставлен", accepted: "оставлено допущение",
@@ -26,9 +26,11 @@ export const OBJECT: Record<string, string> = {
   point: "Точка", label: "Подпись точек", board: "Щит", cable: "Кабель", led_strip: "LED-лента",
   wire: "Линия проводки", box: "Коробка",
 };
-export const SIDE = { tables: "Таблицы", layers: "Слои", questions: "Вопросы", sources: "Исходники",
-                      project: "Проект" } as const;
+export const SIDE = { tables: "Таблицы", layers: "Слои" } as const;
 export type SideTab = keyof typeof SIDE;
+// Не про лист — кнопками в шапке, выдвижной панелью (Drawer.tsx)
+export const DRAWER = { questions: "Вопросы", sources: "Исходники", project: "Проект" } as const;
+export type DrawerTab = keyof typeof DRAWER;
 export const THEMES = ["system", "light", "dark"] as const;
 export type Theme = (typeof THEMES)[number];
 export const THEME_NAME: Record<Theme, string> = {

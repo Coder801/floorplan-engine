@@ -2,32 +2,37 @@
 # Подложка — room.yaml (план перепланировки): точки привязаны к ближайшей стене по размерам
 # из PDF; без размеров — по векторной геометрии PDF (источник «PDF»).
 # Высоты — с плана; без подписи: выключатели 900, розетки 300 (примечание на плане).
+# Изменения заказчика — source/изменения-заказчика.md (2026-10-21 кондиционер; 2026-10-28
+# тёплый пол, группы кухни, розетки зала и коридора раздельно).
 units: mm
 points:
   # --- Зал + коридор
-  - { id: living_socket_1, room: living, wall: w1, offset: 2200, type: socket, height: 100, note: "холодильник", group: QF10 }  # текст: 150 от стенки
+  - { id: living_socket_1, room: living, wall: w1, offset: 2200, type: socket, height: 100, note: "холодильник", group: QF18 }  # текст: 150 от стенки
   - { id: living_led_output_1, room: living, wall: w1, offset: 1740, type: led_output, height: 2200, note: "підсвітка кухні", group: QF1 }  # PDF
   - { id: living_switch_1, room: living, wall: w1, offset: 1650, type: switch, height: 1100, note: "підсвітка", group: QF1 }  # PDF; H текст
-  - { id: living_socket_2, room: living, wall: w1, offset: 1540, type: socket, height: 1100, count: 2, note: "мікрохвильовка", group: QF10 }  # 620 текст (центр блока) + PDF
-  - { id: living_socket_3, room: living, wall: w10, offset: 5145, type: socket, height: 1100, count: 2, group: QF10 }  # текст: 250 от перегородки
+  - { id: living_socket_2, room: living, wall: w1, offset: 1540, type: socket, height: 1100, count: 2, note: "мікрохвильовка", group: QF17 }  # 620 текст (центр блока) + PDF
+  - { id: living_socket_3, room: living, wall: w10, offset: 5145, type: socket, height: 1100, count: 2, group: QF16 }  # текст: 250 от перегородки
   - { id: living_socket_4, room: living, wall: w10, offset: 4795, type: socket, height: 100, note: "посудомийка", group: QF11 }  # текст: 600
   - { id: living_socket_5, room: living, wall: w10, offset: 3895, type: socket, height: 100, count: 1, note: "духовка", group: QF12 }  # текст: 600+900
   - { id: living_socket_6, room: living, wall: w10, offset: 3895, type: socket, height: 100, count: 1, note: "варильна поверхня (кабель)", group: QF13 }  # текст: 600+900
-  - { id: living_socket_7, room: living, wall: w10, offset: 3895, type: socket, height: 1800, note: "витяжка", group: QF10 }  # текст
+  - { id: living_socket_7, room: living, wall: w10, offset: 3895, type: socket, height: 1800, note: "витяжка", group: QF19 }  # текст
   - { id: living_socket_8, room: living, wall: w10, offset: 3280, type: socket, height: 1100, count: 3, group: QF10 }  # текст: 650 (центр блока) + PDF
   - { id: living_switch_2, room: living, wall: w10, offset: 3130, type: switch, height: 1100, note: "підвісні над островом", group: QF1 }  # PDF
   - { id: living_socket_9, room: living, wall: w10, offset: 2550, type: socket, height: 300, group: QF6 }  # текст: 2550 от правой стены
   - { id: living_socket_14, room: living, wall: w10, offset: 400, type: socket, height: 2200, note: "кондиціонер", group: QF14 }  # изменения заказчика 2026-10-21: нижняя стена, справа окно; offset 400 от правого угла и h — допущение (q4, q5)
-  - { id: living_socket_10, room: living, wall: w8, offset: 480, type: socket, height: 300, group: QF6 }  # PDF
+  - { id: living_socket_10, room: living, wall: w8, offset: 480, type: socket, height: 300, group: QF20 }  # PDF; коридор (x < 600 — до выступа санвузла)
   - { id: living_switch_3, room: living, wall: w8, offset: 480, type: switch, height: 900, keys: 2, note: "кухня / зал", group: QF1 }  # PDF; H легенда
   - { id: living_socket_11, room: living, wall: w8, offset: 2350, type: socket, height: 700, count: 2, group: QF6 }  # текст: 350 от откоса двери спальни
   - { id: living_socket_12, room: living, wall: w8, offset: 3000, type: socket, height: 1400, count: 3, note: "TV блок", group: QF6 }  # 1265/1265: середина между дверями + PDF
   - { id: living_data_1, room: living, wall: w8, offset: 3160, type: data, height: 1400 }  # середина между дверями
   - { id: living_tv_1, room: living, wall: w8, offset: 3340, type: tv, height: 1400 }  # PDF
-  - { id: living_socket_13, room: living, wall: w5, offset: 160, type: socket, height: 300, group: QF6 }  # PDF
+  - { id: living_socket_13, room: living, wall: w5, offset: 160, type: socket, height: 300, group: QF20 }  # PDF; коридор
   - { id: living_switch_4, room: living, wall: w5, offset: 160, type: switch, height: 900, note: "коридор", group: QF1 }  # PDF
   - { id: living_switch_5, room: living, wall: w6, offset: 200, type: switch, height: 900, note: "комора", group: QF5 }  # PDF, от откоса
   - { id: living_switch_6, room: living, wall: w4, offset: 860, type: switch, height: 900, note: "санвузол", group: QF3 }  # 140 от откоса (PDF), со стороны ручки: x = 1450 + 140
+  # Тёплый пол (изменения заказчика 2026-10-28): регуляторы коридора и санвузла, место и высота — допущение (q7–q9)
+  - { id: living_floor_reg_1, room: living, wall: w5, offset: 240, type: switch, height: 900, note: "регулятор ТП коридору", group: QF15 }  # рядом с выключателем коридора
+  - { id: living_floor_reg_2, room: living, wall: w4, offset: 780, type: switch, height: 900, note: "регулятор ТП санвузла", group: QF15 }  # снаружи санвузла, рядом с его выключателем
   - { id: living_downlight_1, room: living, ceiling: [-1400, 3178], type: downlight, group: QF1 }  # текст 450/733
   - { id: living_downlight_2, room: living, ceiling: [-517, 3178], type: downlight, group: QF1 }  # текст 883/733
   - { id: living_downlight_3, room: living, ceiling: [1200, 2561], type: downlight, group: QF1 }  # текст: 1200 от перегородки / 1200+700 от правой; 1000/1561
@@ -92,16 +97,16 @@ cables:
   - { id: cable_4, from: board, to: [balcony_switch_2, balcony_downlight_2, balcony_downlight_1, balcony_switch_1, balcony_led_output_1], group: QF4, cable: "3x1.5", route: ceiling }
   # QF5 — світло: комора
   - { id: cable_5, from: board, to: [living_switch_5, storage_pendant_1], group: QF5, cable: "3x1.5", route: ceiling }
-  # QF6 — розетки: зал, коридор
-  - { id: cable_6, from: board, to: [living_socket_13, living_socket_10, living_socket_11, living_socket_12, living_socket_9], group: QF6, cable: "3x2.5", route: wall }
+  # QF6 — розетки: зал
+  - { id: cable_6, from: board, to: [living_socket_11, living_socket_12, living_socket_9], group: QF6, cable: "3x2.5", route: wall }
   # QF7 — розетки: спальня
   - { id: cable_7, from: board, to: [bedroom_socket_4, bedroom_socket_3, bedroom_socket_1, bedroom_socket_2, bedroom_socket_5], group: QF7, cable: "3x2.5", route: wall }
   # QF8 — розетки: санвузол
   - { id: cable_8, from: board, to: [bathroom_socket_2, bathroom_socket_3, bathroom_socket_1], group: QF8, cable: "3x2.5", route: wall }
   # QF9 — розетки: балкон
   - { id: cable_9, from: board, to: [balcony_socket_3, balcony_socket_1, balcony_socket_2], group: QF9, cable: "3x2.5", route: wall }
-  # QF10 — кухня: робоча зона
-  - { id: cable_10, from: board, to: [living_socket_1, living_socket_2, living_socket_3, living_socket_7, living_socket_8], group: QF10, cable: "3x2.5", route: wall }
+  # QF10 — кухня: робоча зона 1 (изменения заказчика 2026-10-28: кухня — несколькими группами)
+  - { id: cable_10, from: board, to: [living_socket_8], group: QF10, cable: "3x2.5", route: wall }
   # QF11 — посудомийка
   - { id: cable_11, from: board, to: [living_socket_4], group: QF11, cable: "3x2.5", route: wall }
   # QF12 — духовка
@@ -110,6 +115,30 @@ cables:
   - { id: cable_13, from: board, to: [living_socket_6], group: QF13, cable: "3x4", route: wall }
   # QF14 — кондиціонер (изменения заказчика 2026-10-21; отдельная группа и 3x2.5 — допущение, q6)
   - { id: cable_14, from: board, to: [living_socket_14], group: QF14, cable: "3x2.5", route: ceiling }
+  # QF15 — тепла підлога: коридор, санвузол (2026-10-28); каждый регулятор — своей линией, марка — допущение
+  - { id: cable_15, from: board, to: [living_floor_reg_1, living_floor_reg_2], group: QF15, cable: "3x2.5", route: wall, direct: true }
+  # QF16 — кухня: робоча зона 2 (2026-10-28)
+  - { id: cable_16, from: board, to: [living_socket_3], group: QF16, cable: "3x2.5", route: wall }
+  # QF17 — мікрохвильовка (2026-10-28)
+  - { id: cable_17, from: board, to: [living_socket_2], group: QF17, cable: "3x2.5", route: wall }
+  # QF18 — холодильник (2026-10-28)
+  - { id: cable_18, from: board, to: [living_socket_1], group: QF18, cable: "3x2.5", route: wall }
+  # QF19 — витяжка (2026-10-28: так в этой квартире)
+  - { id: cable_19, from: board, to: [living_socket_7], group: QF19, cable: "3x2.5", route: wall }
+  # QF20 — розетки: коридор (2026-10-28: отдельно от зала)
+  - { id: cable_20, from: board, to: [living_socket_13, living_socket_10], group: QF20, cable: "3x2.5", route: wall }
+# Назначения групп и УЗО — со слов заказчика 2026-10-28; автоматы не названы — подбирает код
+groups:
+  QF6: { name: "Розетки — зал" }
+  QF10: { name: "Розетки кухні — робоча зона 1" }
+  QF13: { name: "Варильна поверхня", rcd: "30 мА" }
+  QF14: { name: "Кондиціонер — зал" }
+  QF15: { name: "Тепла підлога — коридор, санвузол", rcd: "30 мА" }
+  QF16: { name: "Розетки кухні — робоча зона 2" }
+  QF17: { name: "Мікрохвильовка" }
+  QF18: { name: "Холодильник" }
+  QF19: { name: "Витяжка" }
+  QF20: { name: "Розетки — коридор" }
 led_strips:
   - { id: bedroom_led_strip_1, room: bedroom, wall: w1, start: 0, end: 1400 }  # PDF
   - { id: balcony_led_strip_1, room: balcony, wall: w2, start: 0, end: 1300 }  # PDF

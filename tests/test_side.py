@@ -10,7 +10,7 @@ from pathlib import Path
 from floorplan_engine.artifact import export_artifact
 from floorplan_engine.objects import describe_objects
 from floorplan_engine.sheets import build_project_document, sheet_slug
-from floorplan_engine.side import STAGE_OBJECTS, from_table, side_tables
+from floorplan_engine.side import STAGE_OBJECTS, drop_column, from_table, side_tables
 from floorplan_engine.tables import Column, Table
 from tests.test_objects import _model
 
@@ -37,10 +37,23 @@ def test_from_table_marks_sections_and_keeps_keys() -> None:
     assert "keys" not in side.rows[0].as_dict()
 
 
+def test_drop_column_keeps_keys_and_total_label() -> None:
+    t = Table(
+        "T",
+        (Column("Поз.", 8.0), Column("Назначение", 30.0, "left"), Column("P", 10.0)),
+        (("QF1", "Свет", "0,5"),),
+        total=("", "Установлена", "0,5"),
+    )
+    side = drop_column(from_table(t, [("device:QF1",)]), 1)
+    assert side.columns == ("Поз.", "P") and side.align == ("center", "center")
+    assert side.rows[0].cells == ("QF1", "0,5") and side.rows[0].keys == ("device:QF1",)
+    assert side.total == ("Установлена", "0,5")
+
+
 def test_side_tables_link_rows_to_objects() -> None:
     plan, contours, elec, wiring = _model()
     tables = side_tables(plan, contours, elec, wiring)
-    assert set(tables) == {"plan", "electrical", "wiring"}
+    assert set(tables) == {"plan", "electrical", "wiring", "panel"}
     rooms = tables["plan"][0]
     assert "room:r" in rooms.rows[0].keys and "wall:r.w1" in rooms.rows[0].keys
     assert rooms.rows[0].cells[2] == "12,00"  # 3 × 4 м — как поле площади
@@ -65,8 +78,8 @@ def test_epd_page_has_view_stage_tables_and_theme_objects(tmp_path: Path) -> Non
         side_tables(plan, contours, elec, wiring),
     )
     with zipfile.ZipFile(path) as zf:
-        pages = [json.loads(zf.read(f"pages/0{k}.json")) for k in (1, 2, 3)]
-    assert [p["stage"] for p in pages] == ["plan", "electrical", "wiring"]
+        pages = [json.loads(zf.read(f"pages/0{k}.json")) for k in (1, 2, 3, 4)]
+    assert [p["stage"] for p in pages] == ["plan", "electrical", "wiring", "panel"]
     for page in pages:
         x0, y0, x1, y1 = page["view"]
         assert 0 < x0 < x1 < page["size"][0] and 0 < y0 < y1 < page["size"][1]
@@ -75,3 +88,5 @@ def test_epd_page_has_view_stage_tables_and_theme_objects(tmp_path: Path) -> Non
         assert page["tables"]
     assert not any(k.startswith("point:") for k in pages[2]["objects"])  # проводка: без точек
     assert any(k.startswith("box:") for k in pages[2]["objects"])
+    assert "device:QS1" in pages[3]["objects"] and "model" not in pages[3]
+    assert "panel" not in pages[3]  # без данных щита — только примитивы листа

@@ -15,7 +15,7 @@ from ezdxf.filemanagement import readfile
 
 from floorplan_engine.artifact import export_artifact
 from floorplan_engine.assess import STAGE_FILES, StageResult, assess
-from floorplan_engine.draw_electrical import group_key
+from floorplan_engine.draw_electrical import group_colors, group_key
 from floorplan_engine.draw_wiring import write_chases, write_journal
 from floorplan_engine.estimate import (
     ESTIMATE_CSV,
@@ -39,6 +39,7 @@ from floorplan_engine.objects import (
     wire_titles,
     wiring_handles,
 )
+from floorplan_engine.panel import build_panel, panel_data, write_loads
 from floorplan_engine.preview import render_png, sheet_layouts
 from floorplan_engine.report import REPORT_JSON, REPORT_MD, render_markdown, to_json
 from floorplan_engine.scene3d import build_scene
@@ -47,6 +48,7 @@ from floorplan_engine.sheets import build_project_document, document_scale, shee
 from floorplan_engine.side import side_tables
 from floorplan_engine.thumbnail import PREVIEW_FILE, plan_thumbnail
 from floorplan_engine.validate import (
+    ELECTRICAL_FILE,
     WIRING_FILE,
     Issue,
     Report,
@@ -71,6 +73,7 @@ PROJECT_FILE = "project.dxf"
 ARTIFACT_FILE = "project.epd"
 WIRING_JOURNAL_FILE = "wiring-boxes.csv"  # кабельный журнал проводки через коробки
 CHASES_FILE = "wiring-chases.csv"  # ведомость штроб по стенам
+LOADS_FILE = "panel-loads.csv"  # роспись потребителей по группам щита
 SHEETS_DIR = "sheets"
 
 
@@ -119,6 +122,7 @@ class BuildResult:
     artifact: Path | None = None
     journal: Path | None = None  # кабельный журнал проводки через коробки (CSV)
     chases: Path | None = None  # ведомость штроб (CSV)
+    loads: Path | None = None  # роспись потребителей щита (CSV)
     price_issues: list[Issue] = field(default_factory=list)  # prices.yaml не прочитан
     sheets: list[Path] = field(default_factory=list)
 
@@ -215,13 +219,44 @@ def build_project(project: Path, previews: bool = False) -> BuildResult:
     else:
         journal.unlink(missing_ok=True)
         chases.unlink(missing_ok=True)
+    panel = build_panel(report.plan, elec) if elec is not None else None
+    loads = out / LOADS_FILE
+    if panel is not None:
+        result.loads = write_loads(panel, loads)
+        if panel.warnings:
+            report.issues += [
+                Issue(
+                    ELECTRICAL_FILE,
+                    f"groups.{w.group}" if w.group else "panel",
+                    w.text["ru"],
+                    Severity.WARNING,
+                )
+                for w in panel.warnings
+            ]
+            result.report_files = write_report(out, assessment, project.name)
+    else:
+        loads.unlink(missing_ok=True)
+    panel_view = None
+    if panel is not None:
+        assert elec is not None
+        board = elec.board.name if elec.board is not None else "ЩР"
+        panel_view = panel_data(panel, group_colors(elec), board, report.plan.language)
     # Артефакт — из записанного файла: ровно то, что откроет AutoCAD
     objects = describe_objects(report.plan, report.contours, elec, wiring)
     tables = side_tables(report.plan, report.contours, elec, wiring, prices)
     chains = line_chains(wiring) if wiring is not None else None
     groups = line_groups(wiring) if wiring is not None else None
     result.artifact = export_artifact(
-        saved, report.plan, out / ARTIFACT_FILE, objects, tables, chains, groups, edit, scene
+        saved,
+        report.plan,
+        out / ARTIFACT_FILE,
+        objects,
+        tables,
+        chains,
+        groups,
+        edit,
+        scene,
+        panel_view,
     )
     if previews:
         result.sheets = render_sheets(out)

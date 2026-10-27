@@ -1,6 +1,6 @@
 // Рисование примитивов .epd в canvas по правилам формата (docs/epd-format.md)
 
-import { MIN_LINE_PX } from "../consts";
+import { MIN_LINE_PX, PNG_DPI, PNG_LONG, PNG_SHORT } from "../consts";
 import type { Box, Item, Page } from "../types";
 
 export interface DrawItem extends Item {
@@ -53,3 +53,24 @@ export function bbox(d: string): Box {
 
 export const inBox = (b: Box, x: number, y: number, t: number) =>
   x >= b[0] - t && x <= b[2] + t && y >= b[1] - t && y <= b[3] + t;
+
+// PNG листа для альбома: весь лист с таблицами и штампом, не больше A3 при 150 dpi
+export function downloadSheetPng(page: Page, filename: string) {
+  const [pw, ph] = page.size;
+  const k = Math.min(PNG_DPI / 25.4, PNG_LONG / Math.max(pw, ph), PNG_SHORT / Math.min(pw, ph));
+  const out = document.createElement("canvas");
+  out.width = Math.round(pw * k); out.height = Math.round(ph * k);
+  const ctx = out.getContext("2d")!;
+  ctx.setTransform(k, 0, 0, k, 0, 0);
+  ctx.fillStyle = page.background || "#ffffff";
+  ctx.fillRect(0, 0, pw, ph);
+  const all = page.items.map((i) => ({ ...i, box: [0, 0, 0, 0] as DrawItem["box"], path: new Path2D(i.d) }));
+  paint(ctx, all, k, (it) => [it.c, 1, 1], new Set());
+  out.toBlob((blob) => {
+    if (!blob) return;
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = filename;
+    document.body.append(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }, "image/png");
+}

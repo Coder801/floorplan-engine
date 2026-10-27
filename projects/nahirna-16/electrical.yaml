@@ -189,3 +189,6 @@ led_strips:
   - { id: study_led_strip_1, room: study, wall: w2, start: 1430, end: 3050 }
   - { id: living_led_strip_1, room: living, wall: w3, start: 600, end: 1980 }
   - { id: bedroom_led_strip_1, room: bedroom, wall: w4, start: 2630, end: 2840 }
+# Щит: без резерва — инвертора нет (изменения заказчика 2026-10-28, source/изменения-заказчика.md)
+panel:
+  backup: none

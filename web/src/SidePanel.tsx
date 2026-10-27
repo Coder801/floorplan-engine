@@ -1,46 +1,40 @@
-// Боковая панель: таблицы листа (связь строка ↔ объекты), слои, вопросы, исходники, проект
+// Боковая панель листа: таблицы (связь строка ↔ объекты) и слои — у листов, нарисованных
+// из примитивов (у щита слоёв нет: он рисуется своим компонентом). Вопросы, исходники
+// и проект — в шапке (Drawer.tsx).
 
 import { useEffect, useMemo, useState } from "react";
-import { base, enc, getText } from "./api";
-import { unresolved } from "./App";
-import { LAYER, QSTATE, SEVERITY, SIDE, STAGE, STATUS, SHEET_ONLY, type SideTab } from "./consts";
+import { LAYER, SIDE, SHEET_ONLY, type SideTab } from "./consts";
 import { expand } from "./page";
 import { refreshPalette, screenColor } from "./palette";
 import { useView, view } from "./store";
-import type { Page, Project, SideTable } from "./types";
+import type { Page, SideTable } from "./types";
 
 interface Props {
   tab: SideTab;
   onTab: (tab: SideTab) => void;
-  project: Project | null;
   page: Page | null;
-  shownSource: string | null;
-  onSource: (file: string) => void;
+  children?: React.ReactNode;  // выдвижная панель шапки — поверх боковой
 }
 
-export function SidePanel({ tab, onTab, project, page, shownSource, onSource }: Props) {
-  let body: React.ReactNode;
-  if (!project) body = <div className="muted">Проект не открыт</div>;
-  else if (tab === "tables") body = <Tables page={page} />;
-  else if (tab === "layers") body = <Layers page={page} />;
-  else if (tab === "questions") body = <Questions project={project} />;
-  else if (tab === "sources") body = <Sources project={project} shown={shownSource} onSource={onSource} />;
-  else body = <ProjectInfo project={project} />;
-  const open = unresolved(project);
+// Слои есть у листа, нарисованного из примитивов: у щита (page.panel) — нет
+export const hasLayers = (page: Page | null) =>
+  !!page && !page.panel && page.items.some((it) => !SHEET_ONLY.has(it.l));
+
+export function SidePanel({ tab, onTab, page, children }: Props) {
+  const tabs = (Object.keys(SIDE) as SideTab[]).filter((k) => k !== "layers" || hasLayers(page));
+  const shown = tabs.includes(tab) ? tab : "tables";
   return (
     <aside>
-      <div className="side-tabs" role="tablist">
-        {(Object.keys(SIDE) as SideTab[]).map((k) => {
-          const n = k === "questions" ? open : 0;
-          return (
-            <button key={k} role="tab" className={k === tab ? "on" : undefined} aria-selected={k === tab}
-                    aria-label={n ? `${SIDE[k]}: ${n}` : undefined} onClick={() => onTab(k)}>
-              <span className="tab-name">{SIDE[k]}{n > 0 && <span className="count" aria-hidden="true">{n}</span>}</span>
-            </button>
-          );
-        })}
-      </div>
-      <div className="side-body">{body}</div>
+      {tabs.length > 1 && (
+        <div className="side-tabs" role="tablist">
+          {tabs.map((k) => (
+            <button key={k} role="tab" className={k === shown ? "on" : undefined} aria-selected={k === shown}
+                    onClick={() => onTab(k)}>{SIDE[k]}</button>
+          ))}
+        </div>
+      )}
+      <div className="side-body">{shown === "layers" ? <Layers page={page} /> : <Tables page={page} />}</div>
+      {children}
     </aside>
   );
 }
@@ -64,15 +58,18 @@ function Tables({ page }: { page: Page | null }) {
     <>
       {tables.map((t, ti) => (
         <TableView key={ti} t={t} id={`${ti}`} rowHover={rowHover} hoverKeys={hoverKeys}
-                   onRow={(rid, keys) => { setRowHover(rid); view.set({ lit: keys }); }} />
+                   onRow={(rid, keys) => { setRowHover(rid); view.set({ lit: keys }); }}
+                   onPick={page.panel ? (keys) => view.set({ pinned: keys[0] }) : undefined} />
       ))}
     </>
   );
 }
 
-function TableView({ t, id, rowHover, hoverKeys, onRow }: {
+// onPick — клик по строке (лист «Щит»: карточка аппарата)
+function TableView({ t, id, rowHover, hoverKeys, onRow, onPick }: {
   t: SideTable; id: string; rowHover: string | null; hoverKeys: Set<string>;
   onRow: (rid: string | null, keys: Set<string> | null) => void;
+  onPick?: (keys: string[]) => void;
 }) {
   const al = (i: number) => (t.align[i] === "left" ? undefined : "c");
   return (
@@ -88,7 +85,8 @@ function TableView({ t, id, rowHover, hoverKeys, onRow }: {
             return (
               <tr key={ri} className={cls || undefined}
                   onPointerEnter={r.keys ? () => onRow(rid, new Set(r.keys)) : undefined}
-                  onPointerLeave={r.keys ? () => onRow(null, null) : undefined}>
+                  onPointerLeave={r.keys ? () => onRow(null, null) : undefined}
+                  onClick={onPick && r.keys?.length ? () => onPick(r.keys!) : undefined}>
                 {r.cells.map((c, i) => (
                   <td key={i} className={i === 0 && r.color ? "mark" : al(i)}>
                     {/* Группа щита — кружок её цвета, как линии на чертеже */}
@@ -131,144 +129,5 @@ function Layers({ page }: { page: Page | null }) {
         </label>
       ))}
     </div>
-  );
-}
-
-function answerText(a: unknown): string {
-  if (a === undefined) return "";
-  if (a && typeof a === "object") {
-    const o = a as Record<string, unknown>;
-    if (o.accept) return "оставить допущение";
-    if ("text" in o) return `«${o.text}»${o.resolved ? " (разобран)" : ""}`;
-    return JSON.stringify(a);
-  }
-  return String(a);
-}
-
-function Questions({ project: p }: { project: Project }) {
-  if (!p.report) return <div className="muted">Отчёта нет — проект не собран</div>;
-  const qs = p.report.questions;
-  if (!qs.length) return <div className="muted">Вопросов нет</div>;
-  const order: Record<string, number> = { open: 0, text: 1, answered: 2, accepted: 3 };
-  return (
-    <>
-      {[...qs].sort((a, b) => (order[a.state] ?? 9) - (order[b.state] ?? 9)).map((q) => (
-        <div key={q.id} className={`card${q.state === "open" ? "" : " done"}`}>
-          <div className={`sev sev-${q.severity}`}>
-            {`${SEVERITY[q.severity] || q.severity} · ${STAGE[q.stage] || q.stage}`}
-            <span className="mono muted">{` · ${q.id}`}</span>
-          </div>
-          <div style={{ margin: "4px 0" }}>{q.text}</div>
-          {q.assumption !== undefined && (
-            <div className="small muted">{`В модели: ${String(q.assumption)}${q.unit ? " " + q.unit : ""}`}</div>
-          )}
-          {p.answers[q.id] !== undefined && <div className="small">Ответ: {answerText(p.answers[q.id])}</div>}
-          <div className={`small ${q.state === "open" ? "sev-major" : "muted"}`}>{QSTATE[q.state] || q.state}</div>
-          {q.target && <div className="mono muted">{q.target}</div>}
-        </div>
-      ))}
-    </>
-  );
-}
-
-// Исходные ресурсы: файлы source/ и что из них разобрано (intake.yaml, sources)
-const KIND: [RegExp, string][] = [[/\.pdf$/i, "pdf"], [/\.(png|jpe?g|webp|gif)$/i, "image"], [/\.(md|txt|ya?ml|csv)$/i, "text"]];
-export const kindOf = (f: string) => (KIND.find(([re]) => re.test(f)) || [null, "file"])[1];
-
-function Sources({ project: p, shown, onSource }: { project: Project; shown: string | null; onSource: (f: string) => void }) {
-  const parsed = new Map((p.parsed || []).map((s) => [s.file, s.note]));
-  const files = [...new Set([...p.sources, ...parsed.keys()])];
-  if (!files.length) return <div className="muted">В source/ нет файлов</div>;
-  // Старый сервер без parsed — о разборе неизвестно, а не «не использован»
-  const list = files.map((f) => ({ file: f, used: p.parsed ? parsed.has(f) : null, note: parsed.get(f) || "",
-                                   exists: p.sources.includes(f) }));
-  const used = list.filter((s) => s.used).length;
-  return (
-    <>
-      <div className="small muted" style={{ marginBottom: 10 }}>
-        {p.parsed ? `Разобрано ${used} из ${list.length}. Отметки — из intake.yaml (sources).`
-          : "Сервер просмотра устарел — перезапустите floorplan-engine view, чтобы увидеть, что разобрано."}
-      </div>
-      {list.map((s) => (
-        <div key={s.file} className={`card${s.file === shown ? " lit" : ""}`}>
-          <div className={`sev ${s.used ? "st-ready" : "muted"}`}>
-            {!s.exists ? "нет файла в source/" : s.used === null ? "разбор неизвестен"
-              : s.used ? "использован в разборе" : "не использован"}
-            <span className="muted">{` · ${kindOf(s.file)}`}</span>
-          </div>
-          <div style={{ margin: "4px 0", wordBreak: "break-word" }}>{s.file}</div>
-          {s.note && <div className="small muted">{s.note}</div>}
-          {s.exists && (
-            <div className="row-btns">
-              <button onClick={() => onSource(s.file)}>Показать</button>
-              <a href={`${base(p.name)}/source/${enc(s.file)}`} target="_blank" rel="noreferrer">Открыть в новой вкладке</a>
-            </div>
-          )}
-        </div>
-      ))}
-    </>
-  );
-}
-
-const when = (t: number | null) => (t ? new Date(t * 1000).toLocaleString("ru") : "не собран");
-
-function ProjectInfo({ project: p }: { project: Project }) {
-  const issues = p.report?.issues || [];
-  const [modelFile, setModelFile] = useState<string | null>(null);
-  const [text, setText] = useState("…");
-  const file = modelFile && p.model.includes(modelFile) ? modelFile : p.model[0] ?? null;
-  useEffect(() => {
-    if (!file) return;
-    let alive = true;
-    setText("…");
-    getText(`${base(p.name)}/model/${file}`).then((t) => alive && setText(t), (e) => alive && setText((e as Error).message));
-    return () => { alive = false; };
-  }, [p.name, file]);
-  const link = (dir: string, f: string) => (
-    <a key={f} href={`${base(p.name)}/${dir}/${enc(f)}`} target="_blank" rel="noreferrer"
-       download={/\.(dxf|epd|csv|json)$/i.test(f) ? f.split("/").pop() : undefined}>{f}</a>
-  );
-  return (
-    <>
-      <h3>{p.title}</h3>
-      <div className="small muted"><span className="mono">{`projects/${p.name}`}</span>{` · собран ${when(p.built)}`}</div>
-      {p.stages.length > 0 && (
-        <>
-          <h3>Этапы</h3>
-          <div className="stages">
-            {p.stages.map((s) => (
-              <div key={s.stage}>
-                <div className="small muted">{STAGE[s.stage] || s.stage}</div>
-                <div className={`st-${s.status}`}>{STATUS[s.status] || s.status}</div>
-              </div>
-            ))}
-          </div>
-        </>
-      )}
-      <h3>{`Замечания проверки · ${issues.length}`}</h3>
-      {issues.length ? issues.map((i, k) => (
-        <div key={k} className="card">
-          <div className={`sev ${i.severity === "error" ? "sev-critical" : "sev-major"}`}>
-            {i.severity === "error" ? "ошибка" : "предупреждение"}
-          </div>
-          <div className="mono muted">{`${i.file}: ${i.path}`}</div>
-          <div>{i.message}</div>
-        </div>
-      )) : <div className="muted small">Замечаний нет</div>}
-      <h3>Результаты (out/)</h3>
-      {p.files.length ? <div className="files small">{p.files.map((f) => link("out", f))}</div>
-        : <div className="muted small">Пока ничего не собрано</div>}
-      {file && (
-        <>
-          <h3>Модель</h3>
-          <div className="tabs" style={{ marginBottom: 8 }}>
-            {p.model.map((f) => (
-              <button key={f} className={f === file ? "on" : undefined} onClick={() => setModelFile(f)}>{f}</button>
-            ))}
-          </div>
-          <pre>{text}</pre>
-        </>
-      )}
-    </>
   );
 }

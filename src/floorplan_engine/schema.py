@@ -18,6 +18,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from floorplan_engine.panel_catalog import BRANDS
 from floorplan_engine.texts import Language
 
 ID_PATTERN = r"^[A-Za-z0-9_\-]+$"
@@ -168,6 +169,12 @@ class ElectricalPoint(StrictModel):
     keys: int = Field(default=1, ge=1, le=2, description="Клавиш у выключателя")
     group: str | None = None
     note: str | None = None
+    power: float | None = Field(
+        default=None,
+        gt=0,
+        description="Мощность потребителя, Вт — только из источника; нет — типовая по виду "
+        "и пометке (допущение, лист щита)",
+    )
 
     @model_validator(mode="after")
     def _placement(self) -> ElectricalPoint:
@@ -239,6 +246,64 @@ class Group(StrictModel):
     rcd: str | None = Field(default=None, description="УЗО / диф: «30 мА»")
 
 
+# Схема щита (решение 2026-10-27): economy — минимум аппаратов, мокрые зоны под одним УЗО,
+# ручной ввод резерва; standard — реле напряжения, мокрые зоны дифавтоматами, АВР; premium —
+# плюс УЗИП, все группы дифавтоматами, характеристика B
+PanelScheme = Literal["economy", "standard", "premium"]
+Earthing = Literal["TN-C-S", "TN-S", "TT"]
+
+
+class PanelSetup(StrictModel):
+    """Щит в лицо (лист «Щит»): ввод, схема и резерв. Номиналы ввода и мощность — только
+    из источника (техусловия, договор); нет — допущение и вопрос на листе."""
+
+    phases: Literal[1, 3] = Field(default=1, description="Фаз на вводе: пока только 1")
+    earthing: Earthing = Field(
+        default="TN-C-S", description="Система заземления: TN-C-S | TN-S; TT — позже"
+    )
+    scheme: PanelScheme | None = Field(
+        default=None,
+        description="economy | standard | premium; не задана — по mode (proper → premium)",
+    )
+    input: int | None = Field(default=None, gt=0, description="Вводной автомат, А")
+    power: float | None = Field(default=None, gt=0, description="Выделенная мощность, кВт")
+    voltage_relay: bool | None = Field(
+        default=None, description="Реле напряжения; по умолчанию — кроме economy"
+    )
+    spd: bool | None = Field(default=None, description="УЗИП; по умолчанию — только premium")
+    backup: Literal["none", "inverter", "plug"] | None = Field(
+        default=None,
+        description="Резерв: none — нет, inverter — гибридный инвертор с АКБ, plug — генератор "
+        "через силовую вилку; не задан — вопрос, допущение inverter",
+    )
+    ats: bool | None = Field(
+        default=None, description="АВР вместо ручного переключателя; по умолчанию — кроме economy"
+    )
+    brand: str = Field(
+        default="generic", description="Бренд аппаратов щита — модели из каталога (panel_catalog)"
+    )
+    backup_power: float | None = Field(
+        default=None, gt=0, description="Мощность инвертора или генератора, кВт"
+    )
+    reserve: list[str] = Field(
+        default_factory=list,
+        description="Группы на резервной шине; пусто — свет, холодильник, роутер, котёл, "
+        "насос, ворота, розетки кухни (допущение)",
+    )
+
+    @model_validator(mode="after")
+    def _setup(self) -> PanelSetup:
+        if self.phases != 1:
+            raise ValueError("трёхфазный щит пока не поддерживается: phases: 1")
+        if self.earthing == "TT":
+            raise ValueError("система TT пока не поддерживается: earthing: TN-C-S или TN-S")
+        if self.reserve and self.backup == "none":
+            raise ValueError("reserve — только с резервом (backup: inverter | plug)")
+        if self.brand not in BRANDS:
+            raise ValueError(f"бренда «{self.brand}» нет в каталоге: {', '.join(sorted(BRANDS))}")
+        return self
+
+
 # Раскладка электрики (решение 2026-10-25): economy — меньше автоматов, бюджетно;
 # standard — свет и розетки каждого помещения своей группой; proper — «по правильному»
 ElectricalMode = Literal["economy", "standard", "proper"]
@@ -258,6 +323,7 @@ class Electrical(StrictModel):
     board: Board | None = None
     cables: list[Cable] = Field(default_factory=list)
     led_strips: list[LedStrip] = Field(default_factory=list)
+    panel: PanelSetup = Field(default_factory=PanelSetup, description="Щит в лицо: схема, ввод")
 
 
 # --- Ручные правки проводки (wiring.yaml) ------------------------------------

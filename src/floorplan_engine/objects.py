@@ -14,6 +14,7 @@ from typing import Any
 from floorplan_engine.draw_plan import room_geometries
 from floorplan_engine.draw_wiring import lay_out
 from floorplan_engine.geometry import Contour, Vec
+from floorplan_engine.panel import BoardPanel, amps, build_panel, kw
 from floorplan_engine.schema import Electrical, ElectricalPoint, OpeningType, Plan
 from floorplan_engine.symbols import symbol_key
 from floorplan_engine.texts import Language, tr
@@ -89,7 +90,20 @@ TEXT: dict[str, dict[str, str]] = {
     "label": {"ru": "Подпись точек", "uk": "Підпис точок"},
     "led": {"ru": "LED-подсветка", "uk": "LED-підсвітка"},
     "board": {"ru": "Щит {name}", "uk": "Щит {name}"},
+    "device": {"ru": "Аппарат", "uk": "Апарат"},
+    "load": {"ru": "Нагрузка", "uk": "Навантаження"},
+    "load_value": {"ru": "{p} кВт, {i} А", "uk": "{p} кВт, {i} А"},
+    "load_assumed": {
+        "ru": "{p} кВт, {i} А (мощность типовая — допущение)",
+        "uk": "{p} кВт, {i} А (потужність типова — припущення)",
+    },
+    "consumer": {"ru": "{title} ×{n}, {room}", "uk": "{title} ×{n}, {room}"},
+    "consumer_one": {"ru": "{title}, {room}", "uk": "{title}, {room}"},
+    "watts": {"ru": "{w} Вт", "uk": "{w} Вт"},
+    "more": {"ru": "ещё {n}", "uk": "ще {n}"},
+    "warning": {"ru": "Внимание", "uk": "Увага"},
 }
+CARD_LOADS = 8  # потребителей в карточке аппарата, остальные — «ещё N»
 
 
 def text(key: str, language: Language, **values: object) -> str:
@@ -168,6 +182,38 @@ def describe_objects(
             out[f"opening:{op.id}"] = ObjectInfo(f"{text(name, lang)} {op.id}", tuple(rows))
     if elec is not None:
         out.update(_electrical(plan, elec, wiring))
+        panel = build_panel(plan, elec)
+        if panel is not None:
+            out.update(device_cards(panel, lang))
+    return out
+
+
+def device_cards(panel: BoardPanel, lang: Language) -> dict[str, ObjectInfo]:
+    """Карточки аппаратов листа «Щит»: у автомата группы — нагрузка, потребители и слабые
+    места группы."""
+    groups = {g.group: g for g in panel.groups}
+    out: dict[str, ObjectInfo] = {}
+    for d in panel.devices:
+        g = groups.get(d.group or "")
+        if g is None:
+            out[d.key] = ObjectInfo(f"{d.id} — {d.title}", ((text("device", lang), d.label),))
+            continue
+        key = "load_assumed" if g.assumed else "load_value"
+        rows = [
+            (text("device", lang), d.label),
+            (text("cable", lang), g.cable or "—"),
+            (text("load", lang), text(key, lang, p=kw(g.power), i=amps(g.current))),
+        ]
+        for ld in g.loads[:CARD_LOADS]:
+            k = "consumer" if ld.count > 1 else "consumer_one"
+            label = text(k, lang, title=ld.title, n=ld.count, room=ld.room)
+            rows.append((label, text("watts", lang, w=f"{ld.power:g}")))
+        if len(g.loads) > CARD_LOADS:
+            rows.append(("…", text("more", lang, n=len(g.loads) - CARD_LOADS)))
+        rows += [
+            (text("warning", lang), w.text[lang]) for w in panel.warnings if w.group == g.group
+        ]
+        out[d.key] = ObjectInfo(f"{d.id}: {g.purpose}", tuple(rows))
     return out
 
 

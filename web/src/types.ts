@@ -137,6 +137,59 @@ export interface Scene {
   board?: { pos: XYZ; inward: XY | null };
 }
 
+// --- Щит в лицо (ключ panel страницы листа «Щит») ---
+
+export interface PanelModel {
+  id: string;           // «generic.breaker»
+  brand: string;
+  series: string;
+  modules: number;
+  width: number;        // мм
+  height: number;       // мм
+  style: string;        // как рисовать: breaker, diff, rcd, relay, spd, changeover, ats, input, feed
+  body: string;
+  lever: string;
+  accent?: string;
+}
+
+export interface PanelDevice {
+  id: string;           // QS1, KV1, QF4…
+  key: string;          // device:QF4 — как ключи строк таблиц
+  kind: string;
+  label: string;        // на аппарате: «C16 30 мА»
+  title: string;
+  model: PanelModel;
+  group?: string;
+  feeds?: string[];
+  assumed?: boolean;
+  reserve?: boolean;
+}
+
+export interface PanelGroup {
+  purpose: string;
+  purpose_assumed: boolean;
+  cable: string;
+  power: number;        // Вт
+  current: number;      // А
+  assumed: boolean;
+  loads: number;
+  color: string | null;
+  split_of: string | null;  // линия перегруженной группы, разделённой на щите (QF8.2)
+}
+
+export interface PanelData {
+  name: string;
+  phases: number;
+  scheme: "economy" | "standard" | "premium";
+  input: { label: string; assumed: boolean };
+  devices: PanelDevice[];
+  groups: Record<string, PanelGroup>;
+  totals: { installed: number; demand: number; calculated: number; current: number; modules: number };
+  warnings: { severity: string; text: string; group: string | null }[];
+  texts: { title: string; grid: string; reserve: string };
+  external?: { id: string; kind: string; title: string; to: string; feed: string | null };
+}
+
 export interface Page {
   name: string;
   format: string | null;
@@ -152,4 +205,5 @@ export interface Page {
   groups?: Record<string, string[]>;
   edit?: { wires: Record<string, EditWire>; boxes: Record<string, EditBox> };
   scene?: Scene;
+  panel?: PanelData;
 }

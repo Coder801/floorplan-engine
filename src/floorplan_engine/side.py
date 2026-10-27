@@ -9,14 +9,16 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 from floorplan_engine.draw_electrical import group_colors
+from floorplan_engine.draw_panel import ASSUMED, KIND_NAME, devices_table, panel_notes
 from floorplan_engine.draw_wiring import wiring_notes, wiring_table
 from floorplan_engine.estimate import PriceList, build_estimate, estimate_table
 from floorplan_engine.fields import format_area
 from floorplan_engine.geometry import Contour
 from floorplan_engine.groups import group_rows, groups_table
+from floorplan_engine.panel import BoardPanel, build_panel, color_of
 from floorplan_engine.schema import Electrical, Plan
 from floorplan_engine.specification import specification_table
 from floorplan_engine.symbols import LEGEND_ORDER, symbol_key
@@ -29,12 +31,21 @@ STAGE_OBJECTS: dict[str, frozenset[str]] = {
     "plan": frozenset({"room", "wall", "dimension", "opening"}),
     "electrical": frozenset({"point", "label", "board", "cable", "led_strip"}),
     "wiring": frozenset({"wire", "box", "board"}),
+    "panel": frozenset({"device", "board"}),
 }
 
 TEXT: dict[str, dict[str, str]] = {
     "symbols": {"ru": "Условные обозначения", "uk": "Умовні позначення"},
     "symbol": {"ru": "Обозначение", "uk": "Позначення"},
     "qty": {"ru": "Кол.", "uk": "Кільк."},
+    "consumers": {"ru": "Роспись потребителей", "uk": "Розпис споживачів"},
+    "group": {"ru": "Группа", "uk": "Група"},
+    "consumer": {"ru": "Потребитель", "uk": "Споживач"},
+    "room": {"ru": "Помещение", "uk": "Приміщення"},
+    "watts": {"ru": "P, Вт", "uk": "P, Вт"},
+    "total": {"ru": "Установленная", "uk": "Встановлена"},
+    "devices": {"ru": "Аппараты для закупки", "uk": "Апарати для закупівлі"},
+    "modules": {"ru": "Модулей DIN", "uk": "Модулів DIN"},
 }
 
 
@@ -112,6 +123,26 @@ def from_table(
         tuple(rows),
         cells(table.total) if table.total is not None else None,
         tuple(notes),
+    )
+
+
+def drop_column(table: SideTable, index: int) -> SideTable:
+    """Таблица без колонки index; подпись итога из неё переходит в первую ячейку итога."""
+
+    def cut(cells: Sequence[str]) -> tuple[str, ...]:
+        return tuple(c for k, c in enumerate(cells) if k != index)
+
+    total = None
+    if table.total is not None:
+        total = cut(table.total)
+        if not total[0] and table.total[index]:
+            total = (table.total[index], *total[1:])
+    return replace(
+        table,
+        columns=cut(table.columns),
+        align=cut(table.align),
+        rows=tuple(replace(r, cells=cut(r.cells)) for r in table.rows),
+        total=total,
     )
 
 
@@ -219,4 +250,59 @@ def side_tables(
         out["electrical"] = tables
         if wiring is not None:
             out["wiring"] = wiring_tables(wiring, elec, lang, prices)
+        panel = build_panel(plan, elec)
+        if panel is not None:
+            out["panel"] = panel_tables(panel, elec, lang)
+    return out
+
+
+def panel_tables(panel: BoardPanel, elec: Electrical, language: Language) -> list[SideTable]:
+    """Лист «Щит»: аппараты с нагрузкой и слабыми местами (строка → аппарат), роспись
+    потребителей по группам и аппараты по видам — для закупки."""
+    colors = group_colors(elec)
+    table = devices_table(panel, language, colors)
+    keys = [(d.key,) for d in panel.devices]
+    # Назначение в панели не помещается — оно в карточке аппарата по клику на строку
+    out = [drop_column(from_table(table, keys, panel_notes(panel, language)), 1)]
+    rows = []
+    for g in panel.groups:
+        c = color_of(g.group, colors)
+        color = f"#{c:06x}" if c is not None else None
+        head = (g.group, g.purpose, "", f"{g.power:g}")
+        rows.append(SideRow(head, (f"device:{g.group}",), section=True, color=color))
+        for ld in g.loads:
+            title = ld.title + (f" ×{ld.count}" if ld.count > 1 else "")
+            power = f"{ld.power:g}" + (ASSUMED if ld.assumed else "")
+            rows.append(SideRow(("", title, ld.room, power), (f"device:{g.group}",)))
+    out.append(
+        SideTable(
+            text("consumers", language),
+            (
+                text("group", language),
+                text("consumer", language),
+                text("room", language),
+                text("watts", language),
+            ),
+            ("center", "left", "left", "center"),
+            tuple(rows),
+            ("", text("total", language), "", f"{panel.installed:g}"),
+        )
+    )
+    counts: dict[tuple[str, str], list[str]] = {}
+    for d in panel.devices:
+        kind = KIND_NAME.get(d.kind)
+        name = f"{kind[language]} {d.label}" if kind is not None else f"{d.title}, {d.label}"
+        counts.setdefault((d.kind.value, name), []).append(d.key)
+    spec = tuple(
+        SideRow((name, str(len(ks))), tuple(ks)) for (_, name), ks in sorted(counts.items())
+    )
+    out.append(
+        SideTable(
+            text("devices", language),
+            (text("symbol", language), text("qty", language)),
+            ("left", "center"),
+            spec,
+            (text("modules", language), str(panel.modules)),
+        )
+    )
     return out

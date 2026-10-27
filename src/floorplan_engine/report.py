@@ -23,6 +23,7 @@ STAGE_TEXT = {
     "power": "Розетки",
     "wiring": "Проводка",
     "plumbing": "Вода и канализация",
+    "panel": "Щит",
 }
 SEVERITY_TEXT = {
     QSeverity.CRITICAL: "Критичные — без ответа этап не строится",
@@ -85,7 +86,7 @@ def render_markdown(name: str, report: Report, results: list[StageResult]) -> st
             )
     closed = [
         q
-        for q in (report.intake.questions if report.intake else [])
+        for q in report.questions
         if report.question_states.get(q.id) in STATE_TEXT and report.question_states[q.id] != "text"
     ]
     if closed:
@@ -119,7 +120,7 @@ def to_json(name: str, report: Report, results: list[StageResult]) -> str:
                 "severity": severity(q).value,
                 "state": report.question_states.get(q.id, "open"),
             }
-            for q in (report.intake.questions if report.intake else [])
+            for q in report.questions
         ],
         "issues": [
             {

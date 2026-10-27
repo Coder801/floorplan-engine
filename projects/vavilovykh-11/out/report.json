@@ -14,11 +14,27 @@
       "status": "questions",
       "builds": true,
       "reason": "",
-      "weight": 5,
+      "weight": 11,
       "questions": [
         "q4",
         "q5",
-        "q6"
+        "q7",
+        "q8",
+        "q9"
+      ]
+    },
+    {
+      "stage": "panel",
+      "status": "questions",
+      "builds": true,
+      "reason": "",
+      "weight": 9,
+      "questions": [
+        "panel_backup",
+        "panel_input",
+        "panel_reserve",
+        "panel_split_QF8",
+        "panel_cable_QF13"
       ]
     }
   ],
@@ -97,6 +113,106 @@
       "answer": "text",
       "options": [],
       "severity": "minor",
+      "state": "answered"
+    },
+    {
+      "id": "q7",
+      "stage": "electrical",
+      "text": "Тёплый пол в коридоре: где регулятор? Сейчас — на стене у входа, рядом с выключателем коридора (мм от угла с санвузлом до середины)",
+      "target": "points.living_floor_reg_1.offset",
+      "also": [],
+      "answer": "value",
+      "unit": "mm",
+      "options": [],
+      "assumption": 240.0,
+      "severity": "major",
+      "state": "open"
+    },
+    {
+      "id": "q8",
+      "stage": "electrical",
+      "text": "Тёплый пол в санвузле: где регулятор? Сейчас — в коридоре снаружи санвузла, слева от его выключателя (мм от начала стены у выступа)",
+      "target": "points.living_floor_reg_2.offset",
+      "also": [],
+      "answer": "value",
+      "unit": "mm",
+      "options": [],
+      "assumption": 780.0,
+      "severity": "major",
+      "state": "open"
+    },
+    {
+      "id": "q9",
+      "stage": "electrical",
+      "text": "Регуляторы тёплого пола: на какой высоте от пола?",
+      "target": "points.living_floor_reg_1.height",
+      "also": [
+        "points.living_floor_reg_2.height"
+      ],
+      "answer": "value",
+      "unit": "mm",
+      "options": [],
+      "assumption": 900.0,
+      "severity": "minor",
+      "state": "open"
+    },
+    {
+      "id": "panel_backup",
+      "stage": "panel",
+      "text": "Нужен ли резерв питания? Сейчас — гибридный инвертор с АКБ (допущение): none — без резерва, inverter — инвертор, plug — генератор через силовую вилку",
+      "target": "panel.backup",
+      "also": [],
+      "answer": "choice",
+      "options": [
+        "none",
+        "inverter",
+        "plug"
+      ],
+      "assumption": "inverter",
+      "severity": "minor",
+      "state": "open"
+    },
+    {
+      "id": "panel_input",
+      "stage": "panel",
+      "text": "Вводной автомат по техусловиям? Сейчас 63 А (допущение); расчётный ток квартиры 59,0 А",
+      "target": "panel.input",
+      "also": [],
+      "answer": "value",
+      "unit": "А",
+      "options": [],
+      "assumption": 63.0,
+      "severity": "minor",
+      "state": "open"
+    },
+    {
+      "id": "panel_reserve",
+      "stage": "panel",
+      "text": "Что держать на резерве? Сейчас: QF1, QF2, QF3, QF4, QF5, QF18 — свет, холодильник, роутер, котёл, насос, ворота, розетки кухни (допущение). Список групп — panel.reserve",
+      "also": [],
+      "answer": "text",
+      "options": [],
+      "severity": "minor",
+      "state": "open"
+    },
+    {
+      "id": "panel_split_QF8",
+      "stage": "panel",
+      "text": "QF8: 19,1 А на автомате 16 А — на щите разделена на 2 линии: QF8 — Розетка, Пральна + сушильна (2,40 кВт); QF8.2 — Бойлер (2,00 кВт). Мокрая зона — каждая линия через дифавтомат 30 мА. Подтвердите — второй кабель от щита перенесём в electrical.yaml",
+      "also": [],
+      "answer": "text",
+      "options": [],
+      "severity": "major",
+      "state": "open"
+    },
+    {
+      "id": "panel_cable_QF13",
+      "stage": "panel",
+      "text": "QF13: Варильна поверхня (кабель) 7,20 кВт — 31,3 А, а кабель 3x4 и автомат 25 А. Нужен кабель 3x6 и автомат 32 А — или укажите мощность прибора (power у точки)",
+      "also": [],
+      "answer": "text",
+      "options": [],
+      "severity": "major",
       "state": "open"
     }
   ],
@@ -106,6 +222,36 @@
       "path": "rooms[1].openings[0].sill",
       "severity": "warning",
       "message": "не указана высота подоконника"
+    },
+    {
+      "file": "electrical.yaml",
+      "path": "groups.QF8",
+      "severity": "warning",
+      "message": "QF8: перегруз — на щите разделена на 2 линии; второй кабель — в вопросе"
+    },
+    {
+      "file": "electrical.yaml",
+      "path": "groups.QF8",
+      "severity": "warning",
+      "message": "QF8: Пральна + сушильна (2,20 кВт) в общей группе — нужна своя линия"
+    },
+    {
+      "file": "electrical.yaml",
+      "path": "groups.QF13",
+      "severity": "warning",
+      "message": "QF13: Варильна поверхня (кабель) — ток 31,3 А больше автомата 25 А: нужен кабель сечением больше и автомат 32 А (или мощность прибора ниже)"
+    },
+    {
+      "file": "electrical.yaml",
+      "path": "panel",
+      "severity": "warning",
+      "message": "Вводной автомат 63 А — допущение: уточните по техусловиям (panel.input)"
+    },
+    {
+      "file": "electrical.yaml",
+      "path": "panel",
+      "severity": "warning",
+      "message": "Мощность инвертора или генератора не задана (panel.backup_power) — резервная шина 1,06 кВт не проверена"
     }
   ]
 }

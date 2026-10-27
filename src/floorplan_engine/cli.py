@@ -135,6 +135,8 @@ def build(
         typer.echo(f"  {result.journal} — кабельный журнал (проводка через коробки)")
     if result.chases is not None:
         typer.echo(f"  {result.chases} — ведомость штроб")
+    if result.loads is not None:
+        typer.echo(f"  {result.loads} — роспись потребителей щита")
     for sheet_png in result.sheets:
         typer.echo(f"  {sheet_png}")
 

@@ -177,9 +177,10 @@ class PageRecorder(BackendInterface):
 
 def record_page(doc: Drawing, layout: Paperspace) -> dict[str, Any]:
     width, height = paper_size(layout)
+    # Объекты модели и листа: схема щита нарисована прямо на листе
     objects = {
         e.dxf.handle: f"{oid[0]}:{oid[1]}"
-        for e in doc.modelspace()
+        for e in (*doc.modelspace(), *layout)
         if (oid := object_id(e)) is not None
     }
     recorder = PageRecorder(height, objects)
@@ -194,13 +195,15 @@ def record_page(doc: Drawing, layout: Paperspace) -> dict[str, Any]:
         "background": "#ffffff",
         "items": recorder.items,
     }
+    stage = sheet_slug(layout.name)
     view = view_rect(layout, height)
+    if view is None and stage == "panel":
+        view = objects_rect(recorder.items)
     if view is not None:
         page["view"] = view
     model = model_transform(layout, height)
     if model is not None:
         page["model"] = model
-    stage = sheet_slug(layout.name)
     if stage is not None:
         page["stage"] = stage
     return page
@@ -238,6 +241,28 @@ def view_rect(layout: Paperspace, height: float) -> list[float] | None:
     return None
 
 
+_NUMBER = re.compile(r"-?\d+(?:\.\d+)?")
+SCHEME_MARGIN = 6.0  # мм листа вокруг схемы в области показа
+
+
+def objects_rect(items: list[dict[str, Any]]) -> list[float] | None:
+    """Область схемы без видового экрана (щит): рамка всех примитивов с объектом и подписью
+    над ними, с полем; объектов нет — None."""
+    xs: list[float] = []
+    ys: list[float] = []
+    for item in items:
+        if "o" not in item:
+            continue
+        nums = [float(n) for n in _NUMBER.findall(item["d"])]
+        xs += nums[::2]
+        ys += nums[1::2]
+    if not xs:
+        return None
+    m = SCHEME_MARGIN
+    # Сверху — ещё на заголовок щита: он без объекта
+    return [_round(min(xs) - m), _round(min(ys) - 2 * m), _round(max(xs) + m), _round(max(ys) + m)]
+
+
 def _round(value: float) -> float:
     return round(value, 2)
 
@@ -259,6 +284,7 @@ def export_artifact(
     groups: dict[str, list[str]] | None = None,
     edit: dict[str, Any] | None = None,
     scene: dict[str, Any] | None = None,
+    panel: dict[str, Any] | None = None,
 ) -> Path:
     """Записать .epd: манифест и по странице на каждый лист документа. objects — карточки
     объектов для подсказок (objects.describe_objects): в страницу — только её объекты
@@ -267,7 +293,7 @@ def export_artifact(
     (objects.line_chains): в страницу — только нарисованные на ней; groups — состав групп
     для подсветки соседей выделенной линии (objects.line_groups); edit — что можно
     править на листе проводки (objects.wiring_handles); scene — 3D-сцена проводки
-    (scene3d.build_scene)."""
+    (scene3d.build_scene); panel — щит для своего показа в просмотре (panel.panel_data)."""
     pages = []
     path.parent.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(path, "w") as zf:
@@ -295,6 +321,8 @@ def export_artifact(
                 page["edit"] = edit
             if scene and stage == "wiring":
                 page["scene"] = scene
+            if panel and stage == "panel":
+                page["panel"] = panel
             file = f"pages/{no:02d}.json"
             _write(zf, file, page)
             pages.append(

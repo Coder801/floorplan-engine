@@ -106,6 +106,8 @@ W_BOX = LayerSpec("W-BOX", 1, "Распаечные коробки (провод
 W_CABLE = LayerSpec("W-CABLE", 1, "Кабели проводки через коробки", CABLE_LINETYPE)
 W_CABLE_FLOOR = LayerSpec("W-CABLE-FLOOR", 1, "Кабели по полу (в стяжке)", FLOOR_LINETYPE)
 W_TEXT = LayerSpec("W-TEXT", 1, "Подписи коробок")
+E_PANEL = LayerSpec("E-PANEL", 7, "Щит в лицо: корпус, рейки, аппараты, подписи")
+E_PANEL_WIRE = LayerSpec("E-PANEL-WIRE", 1, "Щит в лицо: провода групп к автоматам")
 A_SHEET = LayerSpec("A-SHEET", 7, "Рамка листа и основная надпись")
 A_VPORT = LayerSpec("A-VPORT", 8, "Рамки видовых экранов на листах (не печатается)", plot=False)
 
@@ -121,7 +123,8 @@ ELECTRICAL_LAYERS = (
     A_SHEET,
 )
 WIRING_LAYERS = (W_BOX, W_CABLE, W_CABLE_FLOOR, W_TEXT, A_SHEET)
-ALL_LAYERS = tuple(dict.fromkeys(PLAN_LAYERS + ELECTRICAL_LAYERS + WIRING_LAYERS))
+PANEL_LAYERS = (E_PANEL, E_PANEL_WIRE, A_SHEET)
+ALL_LAYERS = tuple(dict.fromkeys(PLAN_LAYERS + ELECTRICAL_LAYERS + WIRING_LAYERS + PANEL_LAYERS))
 
 
 def new_document(layers: tuple[LayerSpec, ...] = ALL_LAYERS) -> Drawing:

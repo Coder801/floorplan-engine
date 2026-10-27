@@ -33,6 +33,7 @@ from floorplan_engine.intake import (
     Accept,
     Answers,
     Intake,
+    Question,
     Stage,
     TargetError,
     TextAnswer,
@@ -40,6 +41,8 @@ from floorplan_engine.intake import (
     index_path,
     set_target,
 )
+from floorplan_engine.lines import split_by_lines
+from floorplan_engine.panel import AUTO_PREFIX, build_panel, panel_questions
 from floorplan_engine.schema import (
     Board,
     Electrical,
@@ -93,6 +96,13 @@ class Report:
     # text — текстовый ответ ждёт анализатора
     question_states: dict[str, QuestionState] = field(default_factory=dict)
     wiring_edits: WiringEdits | None = None  # wiring.yaml; сверка с проводкой — при сборке
+    # Вопросы щита, составленные кодом по расчёту (panel.panel_questions), id «panel_…»
+    auto_questions: list[Question] = field(default_factory=list)
+
+    @property
+    def questions(self) -> list[Question]:
+        """Все вопросы проекта: из intake.yaml и составленные кодом."""
+        return [*(self.intake.questions if self.intake else []), *self.auto_questions]
 
     @property
     def errors(self) -> list[Issue]:
@@ -623,6 +633,8 @@ def apply_answers(
             except TargetError as exc:
                 issues.append(Issue(INTAKE_FILE, f"questions[{k}].{key}", str(exc)))
     for qid, answer in answers.answers.items():
+        if qid.startswith(AUTO_PREFIX):
+            continue  # вопрос щита — его составит код (apply_auto_answers)
         path = f"answers.{qid}"
         question = by_id.get(qid)
         if question is None:
@@ -670,7 +682,8 @@ def validate_project(project_dir: Path) -> Report:
     report.intake = intake
     answers, issues = _load_optional(project_dir / ANSWERS_FILE, Answers)
     report.issues += issues
-    if answers is not None and intake is None:
+    own = [k for k in (answers.answers if answers else {}) if not k.startswith(AUTO_PREFIX)]
+    if own and intake is None:
         report.issues.append(Issue(ANSWERS_FILE, "", f"есть ответы, но нет {INTAKE_FILE}"))
 
     raw: dict[Stage, Any] = {}
@@ -693,12 +706,90 @@ def validate_project(project_dir: Path) -> Report:
         covered = _question_paths(intake, raw)
     else:
         covered = set()
+    report.auto_questions, states, issues = apply_auto_answers(answers or Answers(), raw)
+    report.question_states.update(states)
+    report.issues += issues
     _validate_stages(report, raw, project_dir)
     # Предупреждение о поле, по которому уже есть вопрос, дублирует вопрос
     report.issues = [
         i for i in report.issues if i.severity is Severity.ERROR or (i.file, i.path) not in covered
     ]
     return report
+
+
+def auto_questions(raw: dict[Stage, Any]) -> list[Question]:
+    """Вопросы щита по сырым данным этапов: план и электрика разбираются молча — их ошибки
+    покажет проверка."""
+    plan_data, elec_data = raw.get(Stage.PLAN), raw.get(Stage.ELECTRICAL)
+    if plan_data is None or elec_data is None:
+        return []
+    try:
+        plan = Plan.model_validate(plan_data)
+        elec = Electrical.model_validate(elec_data)
+    except ValidationError:
+        return []
+    issues, contours = validate_plan(plan)
+    if not any(i.severity is Severity.ERROR for i in issues):
+        elec = split_by_lines(plan, contours, elec)
+    panel = build_panel(plan, elec)
+    return panel_questions(elec, panel) if panel is not None else []
+
+
+def apply_auto_answers(
+    answers: Answers, raw: dict[Stage, Any]
+) -> tuple[list[Question], dict[str, QuestionState], list[Issue]]:
+    """Вопросы щита и ответы на них. Значение и выбор подставляются в `panel` электрики
+    (raw меняется на месте), после чего вопросы составляются заново: отвеченные поля
+    вопросов уже не дают, а раздел щита может измениться (резерв, линии)."""
+    states: dict[str, QuestionState] = {}
+    issues: list[Issue] = []
+
+    def apply(questions: list[Question]) -> None:
+        for q in questions:
+            answer = answers.answers.get(q.id)
+            path = f"answers.{q.id}"
+            if answer is None:
+                states.setdefault(q.id, "open")
+            elif isinstance(answer, Accept):
+                states[q.id] = "accepted"
+            elif isinstance(answer, TextAnswer):
+                states[q.id] = "answered" if answer.resolved else "text"
+            elif q.answer == "text":
+                issues.append(Issue(ANSWERS_FILE, path, "на этот вопрос нужен ответ { text: ... }"))
+            elif q.answer == "choice" and answer not in q.options:
+                issues.append(
+                    Issue(ANSWERS_FILE, path, f"допустимые ответы: {', '.join(q.options)}")
+                )
+            elif q.answer == "value" and not isinstance(answer, float):
+                issues.append(Issue(ANSWERS_FILE, path, f"ожидается число{_fmt_value(answer)}"))
+            else:
+                elec = raw.get(Stage.ELECTRICAL)
+                assert q.target is not None and isinstance(elec, dict)
+                panel = elec.setdefault("panel", {})
+                if isinstance(panel, dict):
+                    value = int(answer) if q.answer == "value" else answer
+                    panel[q.target.removeprefix("panel.")] = value
+                    states[q.id] = "answered"
+
+    first = auto_questions(raw)
+    apply(first)
+    final = auto_questions(raw)
+    apply(final)
+    ids = {q.id for q in final}
+    # Отвеченный вопрос поля больше не составляется — показываем его отвеченным
+    final += [q for q in first if q.id not in ids and states.get(q.id) == "answered"]
+    known = {q.id for q in final}
+    for qid in answers.answers:
+        if qid.startswith(AUTO_PREFIX) and qid not in known:
+            issues.append(
+                Issue(
+                    ANSWERS_FILE,
+                    f"answers.{qid}",
+                    "вопроса щита больше нет — ответ не нужен",
+                    Severity.WARNING,
+                )
+            )
+    return final, {k: v for k, v in states.items() if k in known}, issues
 
 
 def _question_paths(intake: Intake, raw: dict[Stage, Any]) -> set[tuple[str, str]]:
@@ -735,7 +826,11 @@ def _validate_stages(report: Report, raw: dict[Stage, Any], project_dir: Path) -
     if elec is None:
         return
     report.electrical = elec
-    report.issues += validate_electrical(elec, plan, report.contours)
+    elec_issues = validate_electrical(elec, plan, report.contours)
+    report.issues += elec_issues
+    if not any(i.severity is Severity.ERROR for i in [*report.issues, *elec_issues]):
+        # premium и proper: у каждой линии от щита — своя группа (lines.py)
+        report.electrical = split_by_lines(plan, report.contours, elec)
     # Ошибка в правках проводки сборку не останавливает: проводка строится автоматически
     edits, issues = _load_optional(project_dir / WIRING_FILE, WiringEdits)
     report.issues += [

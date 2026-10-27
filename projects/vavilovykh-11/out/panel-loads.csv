@@ -1,0 +1,55 @@
+group,device,cable,point,room,consumer,count,watts,power_from
+QF1,C10,3x1.5,living_led_output_1,Зал-вітальня + коридор,Підсвітка кухні,1,50,typical
+QF1,C10,3x1.5,living_downlight_1,Зал-вітальня + коридор,Світильник точковий,1,10,typical
+QF1,C10,3x1.5,living_downlight_2,Зал-вітальня + коридор,Світильник точковий,1,10,typical
+QF1,C10,3x1.5,living_downlight_3,Зал-вітальня + коридор,Світильник точковий,1,10,typical
+QF1,C10,3x1.5,living_downlight_4,Зал-вітальня + коридор,Світильник точковий,1,10,typical
+QF1,C10,3x1.5,living_downlight_5,Зал-вітальня + коридор,Світильник точковий,1,10,typical
+QF1,C10,3x1.5,living_downlight_6,Зал-вітальня + коридор,Світильник точковий,1,10,typical
+QF1,C10,3x1.5,living_downlight_7,Зал-вітальня + коридор,Світильник точковий,1,10,typical
+QF1,C10,3x1.5,living_downlight_8,Зал-вітальня + коридор,Світильник точковий,1,10,typical
+QF1,C10,3x1.5,living_downlight_9,Зал-вітальня + коридор,Світильник точковий,1,10,typical
+QF1,C10,3x1.5,living_pendant_1,Зал-вітальня + коридор,Світильник підвісний,1,100,typical
+QF1,C10,3x1.5,living_pendant_2,Зал-вітальня + коридор,Світильник підвісний,1,100,typical
+QF2,C10,3x1.5,bedroom_sconce_1,Спальня,Бра,1,40,typical
+QF2,C10,3x1.5,bedroom_sconce_2,Спальня,Бра,1,40,typical
+QF2,C10,3x1.5,bedroom_led_output_1,Спальня,Підсвітка шафи,1,50,typical
+QF2,C10,3x1.5,bedroom_downlight_1,Спальня,Світильник точковий,1,10,typical
+QF2,C10,3x1.5,bedroom_downlight_2,Спальня,Світильник точковий,1,10,typical
+QF2,C10,3x1.5,bedroom_downlight_3,Спальня,Світильник точковий,1,10,typical
+QF2,C10,3x1.5,bedroom_downlight_4,Спальня,Світильник точковий,1,10,typical
+QF3,C10,3x1.5,bathroom_led_output_1,Санвузол,Дзеркало 12 В,1,50,typical
+QF3,C10,3x1.5,bathroom_downlight_1,Санвузол,Світильник точковий,1,10,typical
+QF3,C10,3x1.5,bathroom_downlight_2,Санвузол,Світильник точковий,1,10,typical
+QF3,C10,3x1.5,bathroom_downlight_3,Санвузол,Світильник точковий,1,10,typical
+QF4,C10,3x1.5,balcony_led_output_1,Балкон,Підсвітка,1,50,typical
+QF4,C10,3x1.5,balcony_downlight_1,Балкон,Світильник точковий,1,10,typical
+QF4,C10,3x1.5,balcony_downlight_2,Балкон,Світильник точковий,1,10,typical
+QF5,C10,3x1.5,storage_pendant_1,Комора,Світильник підвісний,1,100,typical
+QF6,C16,3x2.5,living_socket_9,Зал-вітальня + коридор,Розетка,1,100,typical
+QF6,C16,3x2.5,living_socket_11,Зал-вітальня + коридор,Розетка,2,200,typical
+QF6,C16,3x2.5,living_socket_12,Зал-вітальня + коридор,TV блок,3,300,typical
+QF7,C16,3x2.5,bedroom_socket_1,Спальня,Розетка,2,200,typical
+QF7,C16,3x2.5,bedroom_socket_2,Спальня,Розетка,2,200,typical
+QF7,C16,3x2.5,bedroom_socket_3,Спальня,Розетка,2,200,typical
+QF7,C16,3x2.5,bedroom_socket_4,Спальня,Розетка,4,400,typical
+QF7,C16,3x2.5,bedroom_socket_5,Спальня,Розетка,1,100,typical
+QF8,C16 30 мА,3x2.5,bathroom_socket_1,Санвузол,Розетка,2,200,typical
+QF8,C16 30 мА,3x2.5,bathroom_socket_2,Санвузол,Пральна + сушильна,2,2200,typical
+QF8.2,C16 30 мА,3x2.5,bathroom_socket_3,Санвузол,Бойлер,1,2000,typical
+QF9,C16,3x2.5,balcony_socket_1,Балкон,Розетка,1,100,typical
+QF9,C16,3x2.5,balcony_socket_2,Балкон,Розетка,3,300,typical
+QF9,C16,3x2.5,balcony_socket_3,Балкон,Розетка,1,100,typical
+QF10,C16,3x2.5,living_socket_8,Зал-вітальня + коридор,Розетка,3,300,typical
+QF11,C16,3x2.5,living_socket_4,Зал-вітальня + коридор,Посудомийка,1,2200,typical
+QF12,C16,3x2.5,living_socket_5,Зал-вітальня + коридор,Духовка,1,3500,typical
+QF13,C25 30 мА,3x4,living_socket_6,Зал-вітальня + коридор,Варильна поверхня (кабель),1,7200,typical
+QF14,C16,3x2.5,living_socket_14,Зал-вітальня + коридор,Кондиціонер,1,1500,typical
+QF15,C16 30 мА,3x2.5,living_floor_reg_1,Зал-вітальня + коридор,Регулятор ТП коридору,1,1500,typical
+QF15,C16 30 мА,3x2.5,living_floor_reg_2,Зал-вітальня + коридор,Регулятор ТП санвузла,1,1500,typical
+QF16,C16,3x2.5,living_socket_3,Зал-вітальня + коридор,Розетка,2,200,typical
+QF17,C16,3x2.5,living_socket_2,Зал-вітальня + коридор,Мікрохвильовка,2,1200,typical
+QF18,C16,3x2.5,living_socket_1,Зал-вітальня + коридор,Холодильник,1,300,typical
+QF19,C16,3x2.5,living_socket_7,Зал-вітальня + коридор,Витяжка,1,200,typical
+QF20,C16,3x2.5,living_socket_10,Зал-вітальня + коридор,Розетка,1,100,typical
+QF20,C16,3x2.5,living_socket_13,Зал-вітальня + коридор,Розетка,1,100,typical

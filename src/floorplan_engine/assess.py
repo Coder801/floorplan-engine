@@ -34,6 +34,7 @@ DEPENDS_ON = {
     Stage.POWER: Stage.PLAN,
     Stage.WIRING: Stage.PLAN,
     Stage.PLUMBING: Stage.PLAN,
+    Stage.PANEL: Stage.ELECTRICAL,
 }
 
 
@@ -93,7 +94,7 @@ def _stages_in_play(report: Report) -> list[Stage]:
     present = set(STAGE_FILES)
     if report.intake is not None:
         present |= set(report.intake.stages)
-        present |= {q.stage for q in report.intake.questions}
+    present |= {q.stage for q in report.questions}
     return [s for s in Stage if s in present]
 
 
@@ -104,7 +105,7 @@ def assess(report: Report) -> list[StageResult]:
     for stage in _stages_in_play(report):
         open_q = [
             q
-            for q in (intake.questions if intake else [])
+            for q in report.questions
             if q.stage is stage and report.question_states.get(q.id, "open") in ("open", "text")
         ]
         result = StageResult(stage, Status.READY, open_questions=open_q)
@@ -116,7 +117,14 @@ def assess(report: Report) -> list[StageResult]:
         )
         errors = [i for i in report.errors if file is not None and i.file in (file,)]
         parent = DEPENDS_ON.get(stage)
-        if file is None:
+        if stage is Stage.PANEL:
+            # Щит строится вместе с электрикой; его вопросы её не останавливают
+            built = parent in results and results[parent].status.builds
+            result.status = (
+                Status.BLOCKED if not built else Status.QUESTIONS if open_q else Status.READY
+            )
+            result.reason = "" if built else f"не готов этап {parent}"
+        elif file is None:
             result.status = (
                 Status.ABSENT
                 if note is not None and note.status == "absent"

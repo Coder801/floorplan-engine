@@ -38,6 +38,7 @@ from floorplan_engine.draw_electrical import (
     legend_size,
     split_legend,
 )
+from floorplan_engine.draw_panel import devices_table, draw_panel_front, fit_panel, panel_notes
 from floorplan_engine.draw_plan import RoomArea, add_text, draw_plan, plan_stamp
 from floorplan_engine.draw_wiring import draw_wiring, wiring_notes, wiring_table
 from floorplan_engine.estimate import PRICES_FILE, PriceList, build_estimate, estimate_table
@@ -71,6 +72,7 @@ from floorplan_engine.layers import (
     sheet_scale,
     text_width,
 )
+from floorplan_engine.panel import build_panel
 from floorplan_engine.schema import Electrical, Plan, WiringEdits
 from floorplan_engine.specification import specification_table
 from floorplan_engine.symbols import define_blocks
@@ -130,7 +132,12 @@ class Panel:
 
 
 # Имя PNG листа по его вкладке: «02 Електрика» → 02-electrical.png (латиница — для путей и API)
-SHEET_SLUGS = {"tab_plan": "plan", "tab_electrical": "electrical", "tab_wiring": "wiring"}
+SHEET_SLUGS = {
+    "tab_plan": "plan",
+    "tab_electrical": "electrical",
+    "tab_wiring": "wiring",
+    "tab_panel": "panel",
+}
 
 
 def sheet_slug(tab: str) -> str | None:
@@ -151,6 +158,9 @@ class SheetSpec:
     layers: tuple[LayerSpec, ...]  # видимые в видовом экране слои модели
     tables: tuple[Panel, ...] = ()  # справа от вида, по порядку
     legends: tuple[Panel, ...] = ()  # варианты ряда легенды у штампа (разное число колонок)
+    # Схема вместо видового экрана (щит): по месту (ширина, высота) — панель или None,
+    # если не помещается
+    body: Callable[[float, float], Panel | None] | None = None
 
 
 @dataclass(frozen=True)
@@ -166,7 +176,9 @@ def visible_extents(doc: Drawing, layers: tuple[LayerSpec, ...]) -> BoundingBox:
 
 
 def view_size(doc: Drawing, spec: SheetSpec) -> tuple[float, float]:
-    """Ширина и высота видового экрана 1:50 под слои листа, мм листа."""
+    """Ширина и высота видового экрана 1:50 под слои листа, мм листа; у схемы — 0."""
+    if spec.body is not None:
+        return 0.0, 0.0
     box = visible_extents(doc, spec.layers)
     k = sheet_scale()
     return box.size.x / k + 2 * VIEW_MARGIN, box.size.y / k + 2 * VIEW_MARGIN
@@ -273,7 +285,16 @@ def fit_legend(legends: Sequence[Panel], sec: Region) -> tuple[Panel, Vec] | Non
 def panels_fit(spec: SheetSpec, paper: Paper) -> bool:
     g = grid(paper[1], paper[2])
     legend_ok = not spec.legends or fit_legend(spec.legends, g.legend) is not None
-    return legend_ok and arrange(spec.tables, g) is not None
+    return legend_ok and arrange(spec.tables, g) is not None and fit_body(spec, paper) is not False
+
+
+def fit_body(spec: SheetSpec, paper: Paper) -> Panel | bool:
+    """Схема листа под секцию плана без отступов; схемы нет — True, не влезла — False."""
+    if spec.body is None:
+        return True
+    x0, y0, x1, y1 = plan_region(spec, paper)
+    body = spec.body(x1 - x0 - 2 * PADDING, y1 - y0 - 2 * PADDING)
+    return body if body is not None else False
 
 
 def plan_region(spec: SheetSpec, paper: Paper) -> Region:
@@ -317,20 +338,15 @@ def place(view: tuple[float, float], spec: SheetSpec, paper: Paper) -> Placement
 def add_sheet(
     doc: Drawing, spec: SheetSpec, tab: str, stamp: StampText, paper: Paper
 ) -> Paperspace:
-    """Лист на бумаге paper: рамка, штамп, видовой экран, таблицы и легенда."""
+    """Лист на бумаге paper: рамка, штамп, видовой экран (или схема), таблицы и легенда."""
+    if spec.body is not None:
+        return _add_body_sheet(doc, spec, tab, stamp, paper)
     box = visible_extents(doc, spec.layers)
     vw, vh = view_size(doc, spec)
     p = place((vw, vh), spec, paper)
     layout = p.layout
 
-    psp = doc.layouts.new(tab)
-    psp.page_setup(
-        size=(layout.width, layout.height),
-        margins=(0, 0, 0, 0),
-        units="mm",
-        scale=(1, 1),
-        name=layout.paper_prefix,
-    )
+    psp = _new_layout(doc, tab, layout)
     draw_sheet(psp, layout, stamp)
     vp = psp.add_viewport(
         center=(p.view_at.x + vw / 2, p.view_at.y - vh / 2),
@@ -342,6 +358,35 @@ def add_sheet(
     vp.dxf.flags = vp.dxf.flags | VIEWPORT_LOCKED
     shown = {s.name.upper() for s in spec.layers} | NEVER_FROZEN
     vp.frozen_layers = [lay.dxf.name for lay in doc.layers if lay.dxf.name.upper() not in shown]
+    for panel, at in p.panels:
+        panel.draw(psp, at)
+    return psp
+
+
+def _new_layout(doc: Drawing, tab: str, layout: SheetLayout) -> Paperspace:
+    psp = doc.layouts.new(tab)
+    psp.page_setup(
+        size=(layout.width, layout.height),
+        margins=(0, 0, 0, 0),
+        units="mm",
+        scale=(1, 1),
+        name=layout.paper_prefix,
+    )
+    return psp
+
+
+def _add_body_sheet(
+    doc: Drawing, spec: SheetSpec, tab: str, stamp: StampText, paper: Paper
+) -> Paperspace:
+    """Лист со схемой вместо видового экрана: схема — по центру секции плана."""
+    p = place((0.0, 0.0), spec, paper)
+    body = fit_body(spec, paper)
+    layout = p.layout if isinstance(body, Panel) else replace(p.layout, fits=False)
+    psp = _new_layout(doc, tab, layout)
+    draw_sheet(psp, layout, stamp)
+    if isinstance(body, Panel):
+        x0, y0, x1, y1 = plan_region(spec, paper)
+        body.draw(psp, Vec((x0 + x1 - body.width) / 2, (y0 + y1 + body.height) / 2))
     for panel, at in p.panels:
         panel.draw(psp, at)
     return psp
@@ -525,7 +570,38 @@ def _draw(
                     wiring_panels(wiring, elec, plan.language, prices),
                 )
             )
+        board = panel_spec(plan, elec)
+        if board is not None:
+            specs.append(board)
     return doc, specs
+
+
+def panel_spec(plan: Plan, elec: Electrical) -> SheetSpec | None:
+    """Лист «Щит»: щит в лицо по центру секции плана, справа — аппараты с нагрузкой
+    и слабые места. Групп нет — листа нет."""
+    panel = build_panel(plan, elec)
+    if panel is None:
+        return None
+    lang = plan.language
+    colors = group_colors(elec)
+    name = elec.board.name if elec.board is not None else "ЩР"
+
+    def body(width: float, height: float) -> Panel | None:
+        fit = fit_panel(panel, width, height)
+        if fit is None:
+            return None
+        return Panel(
+            fit.width,
+            fit.height,
+            lambda psp, tl: draw_panel_front(psp, panel, fit, tl, colors, name, lang),
+        )
+
+    table = devices_table(panel, lang, colors)
+    tables = stacked(
+        Panel(table.width, table.height, lambda psp, tl: draw_table(psp, table, tl)),
+        notes_panel(panel_notes(panel, lang), width=table.width),
+    )
+    return SheetSpec("tab_panel", "panel_image", (), (tables,), body=body)
 
 
 def _at(view: tuple[float, float], scale: float) -> tuple[float, float]:
@@ -564,8 +640,11 @@ def choose_paper_and_scale(
     papers = format_candidates(plan.sheet.format)
 
     def worst(paper: Paper, scale: float) -> float:
+        # Схема (щит) масштаба не имеет: её место проверяет panels_fit
         return max(
-            fill(_at(v, scale), plan_region(s, paper)) for v, s in zip(views, specs, strict=True)
+            fill(_at(v, scale), plan_region(s, paper))
+            for v, s in zip(views, specs, strict=True)
+            if s.body is None
         )
 
     def ok(paper: Paper, scale: float) -> bool:

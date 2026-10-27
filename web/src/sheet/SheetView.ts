@@ -4,14 +4,14 @@
 
 import {
   CABLE_MIN_PX, DIM_ALPHA, EDIT_HIT_PX, EDIT_MOVE_PX, FOCUS_MAX, FOCUS_MS, NEIGHBOR_ALPHA,
-  FIT_SHRINK, PNG_DPI, PNG_LONG, PNG_SHORT, REDUCED_MOTION, SHEET_ONLY, TIP_GAP, VIEW_PAD,
+  FIT_SHRINK, REDUCED_MOTION, SHEET_ONLY, TIP_GAP, VIEW_PAD,
 } from "../consts";
 import { WiringEdit, type Hit } from "../edit/WiringEdit";
 import { expand, PageIndex } from "../page";
 import { palette, refreshPalette, screenColor } from "../palette";
 import { view } from "../store";
 import type { Page } from "../types";
-import { bbox, inBox, inView, paint, viewOf, type DrawItem } from "./paint";
+import { bbox, downloadSheetPng, inBox, inView, paint, viewOf, type DrawItem } from "./paint";
 
 const TIP_WIDTH = 320;  // закреплённая подсказка (max-width в CSS) — место справа при наезде
 
@@ -333,22 +333,6 @@ export class SheetView {
 
   // PNG для альбома: весь лист с таблицами и штампом, цвета листа, не больше A3 при 150 dpi
   downloadPng(filename: string) {
-    const [pw, ph] = this.page.size;
-    const k = Math.min(PNG_DPI / 25.4, PNG_LONG / Math.max(pw, ph), PNG_SHORT / Math.min(pw, ph));
-    const out = document.createElement("canvas");
-    out.width = Math.round(pw * k); out.height = Math.round(ph * k);
-    const ctx = out.getContext("2d")!;
-    ctx.setTransform(k, 0, 0, k, 0, 0);
-    ctx.fillStyle = this.page.background || "#ffffff";
-    ctx.fillRect(0, 0, pw, ph);
-    const all = this.page.items.map((i) => ({ ...i, box: [0, 0, 0, 0] as DrawItem["box"], path: new Path2D(i.d) }));
-    paint(ctx, all, k, (it) => [it.c, 1, 1], new Set());
-    out.toBlob((blob) => {
-      if (!blob) return;
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(blob); a.download = filename;
-      document.body.append(a); a.click(); a.remove();
-      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-    }, "image/png");
+    downloadSheetPng(this.page, filename);
   }
 }

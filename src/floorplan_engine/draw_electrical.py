@@ -305,10 +305,10 @@ def place_label(
         add_text(msp, text, at + step * k, TEXT_SMALL_MM, E_TEXT.name, align=align)
 
 
-def group_key(group: str) -> tuple[str, int]:
-    """QF2 раньше QF10: сортировка по числу в имени группы."""
-    m = re.match(r"^(\D*)(\d+)", group)
-    return (m.group(1), int(m.group(2))) if m else (group, 0)
+def group_key(group: str) -> tuple[str, int, int]:
+    """QF2 раньше QF10, линия QF1.2 — сразу после QF1: сортировка по числам в имени группы."""
+    m = re.match(r"^(\D*)(\d+)(?:\.(\d+))?", group)
+    return (m.group(1), int(m.group(2)), int(m.group(3) or 1)) if m else (group, 0, 0)
 
 
 def rgb(hex_color: str) -> int:
