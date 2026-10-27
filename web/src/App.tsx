@@ -5,9 +5,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { base, enc, getManifest, getPage, getProject, listProjects } from "./api";
 import { THEME_NAME, THEMES, type SideTab, type Theme } from "./consts";
 import { applyTheme, remember, remembered, savedTheme } from "./palette";
+import { Logo } from "./Logo";
 import { SheetStage, type StageHandle } from "./SheetStage";
 import { SidePanel } from "./SidePanel";
 import { SourceView } from "./SourceView";
+import { Welcome } from "./Welcome";
 import { resetSelection, view } from "./store";
 import type { ManifestPage, Page, Project, ProjectSummary } from "./types";
 
@@ -128,8 +130,9 @@ export function App() {
 
   return (
     <>
+      {!current && <Welcome list={list} onOpen={(name) => { location.hash = encodeURIComponent(name); }} />}
       <header>
-        <div className="logo" aria-hidden="true">ep</div>
+        <Logo />
         <label className="small muted" htmlFor="project">Проект</label>
         <select id="project" value={current || ""}
                 onChange={(e) => { location.hash = encodeURIComponent(e.target.value); }}>
