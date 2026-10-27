@@ -4,7 +4,7 @@
 
 import {
   CABLE_MIN_PX, DIM_ALPHA, EDIT_HIT_PX, EDIT_MOVE_PX, FOCUS_MAX, FOCUS_MS, NEIGHBOR_ALPHA,
-  PNG_DPI, PNG_LONG, PNG_SHORT, REDUCED_MOTION, SHEET_ONLY, TIP_GAP, VIEW_PAD,
+  FIT_SHRINK, PNG_DPI, PNG_LONG, PNG_SHORT, REDUCED_MOTION, SHEET_ONLY, TIP_GAP, VIEW_PAD,
 } from "../consts";
 import { WiringEdit, type Hit } from "../edit/WiringEdit";
 import { expand, PageIndex } from "../page";
@@ -77,7 +77,7 @@ export class SheetView {
 
   fit() {
     const [x0, y0, x1, y1] = viewOf(this.page);
-    this.scale = Math.min((this.w - 2 * VIEW_PAD) / (x1 - x0), (this.h - 2 * VIEW_PAD) / (y1 - y0));
+    this.scale = FIT_SHRINK * Math.min((this.w - 2 * VIEW_PAD) / (x1 - x0), (this.h - 2 * VIEW_PAD) / (y1 - y0));
     this.fitScale = this.scale;
     this.ox = (this.w - (x1 + x0) * this.scale) / 2;
     this.oy = (this.h - (y1 + y0) * this.scale) / 2;

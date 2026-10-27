@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from shtroba.schema import Electrical
-from shtroba.specification import specification, specification_table
+from floorplan_engine.schema import Electrical
+from floorplan_engine.specification import specification, specification_table
 
 
 def _elec() -> Electrical:

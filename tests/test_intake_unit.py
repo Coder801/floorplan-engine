@@ -7,7 +7,7 @@ from typing import Any
 
 import pytest
 
-from shtroba.intake import TargetError, get_target, index_path, set_target
+from floorplan_engine.intake import TargetError, get_target, index_path, set_target
 
 
 def _data() -> dict[str, Any]:

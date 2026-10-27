@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from shtroba.service.facts.primitives import Direction, Label, Segment
+from floorplan_engine.service.facts.primitives import Direction, Label, Segment
 
 
 def test_segment_length() -> None:

@@ -1,10 +1,10 @@
-# Штроба — знаем, что в стене (пакет `shtroba`, CLI `shtroba`)
+# Штроба — знаем, что в стене (пакет `floorplan_engine`, CLI `floorplan-engine`)
 
 Инструмент делает DXF-чертежи (план помещения, электрика) из YAML-описания.
 Распознавание фото и текста делаешь ты: читаешь фото или описание и пишешь `room.yaml` /
 `electrical.yaml`. Код только валидирует YAML и детерминированно строит DXF и артефакт `.epd`
 (листы для просмотра в браузере, canvas).
-В ядре (`shtroba`: схема, геометрия, DXF, отчёт) нет LLM и API-ключей — не добавляй их.
+В ядре (`floorplan_engine`: схема, геометрия, DXF, отчёт) нет LLM и API-ключей — не добавляй их.
 LLM есть только в анализаторе сервиса (`service/llm_analyzer.py`): `claude -p` по подписке
 или Anthropic API по ключу. Его результат — тот же YAML, и он проходит ту же валидацию ядра.
 
@@ -15,20 +15,20 @@ LLM есть только в анализаторе сервиса (`service/llm
 ## Команды
 
 ```bash
-uv run shtroba check projects/<имя>                 # валидация, без файлов
-uv run shtroba build projects/<имя>                 # out/project.dxf + project.epd (без PNG)
-uv run shtroba estimate projects/<имя>              # смета электрики: out/estimate.md + .csv
-uv run shtroba render-artifact projects/<имя>       # PNG листов из project.epd — для проверки
-uv run shtroba serve --data data/projects           # API сервиса (docs/service-api.md)
-uv run shtroba view                                 # API просмотра projects/ (8000); пишет только wiring.yaml
+uv run floorplan-engine check projects/<имя>                 # валидация, без файлов
+uv run floorplan-engine build projects/<имя>                 # out/project.dxf + project.epd (без PNG)
+uv run floorplan-engine estimate projects/<имя>              # смета электрики: out/estimate.md + .csv
+uv run floorplan-engine render-artifact projects/<имя>       # PNG листов из project.epd — для проверки
+uv run floorplan-engine serve --data data/projects           # API сервиса (docs/service-api.md)
+uv run floorplan-engine view                                 # API просмотра projects/ (8000); пишет только wiring.yaml
 cd web && npm install && npm run dev                    # страница просмотра: http://127.0.0.1:5173 (API — view)
 cd web && npm run build                                 # сборка фронта в web/dist (выкладка — README в web/)
 cd web && npm run check && npm test                     # типы TypeScript и тесты фронта (vitest)
-uv run shtroba analyze projects/<имя>               # LLM-анализ source/ → YAML (подписка)
-uv run shtroba pdf-facts projects/<имя>/source/x.pdf # выжимка из векторного PDF без LLM (--json)
-uv run shtroba facts projects/<имя>/source/x.jpg   # выжимка из любого источника: вектор или растр
-uv run shtroba facts-bench projects/<имя>/source/x.pdf # точность растра против вектора
-uv run shtroba preview projects/<имя>               # PNG листов из DXF (отладка ezdxf)
+uv run floorplan-engine analyze projects/<имя>               # LLM-анализ source/ → YAML (подписка)
+uv run floorplan-engine pdf-facts projects/<имя>/source/x.pdf # выжимка из векторного PDF без LLM (--json)
+uv run floorplan-engine facts projects/<имя>/source/x.jpg   # выжимка из любого источника: вектор или растр
+uv run floorplan-engine facts-bench projects/<имя>/source/x.pdf # точность растра против вектора
+uv run floorplan-engine preview projects/<имя>               # PNG листов из DXF (отладка ezdxf)
 uv run pytest && uv run mypy && uv run ruff check . && uv run ruff format --check .
 docker compose up -d db && uv run alembic upgrade head  # база сервиса (docs/database.md)
 ```
@@ -81,7 +81,7 @@ Slash-команды: `/plan`, `/electrical`, `/check` (в `.claude/commands/`).
 
 ## Векторный PDF: сначала выжимка
 
-Для PDF из программы проектирования (не скан) запусти `uv run shtroba pdf-facts <файл>`.
+Для PDF из программы проектирования (не скан) запусти `uv run floorplan-engine pdf-facts <файл>`.
 Код сам находит масштаб листа, размеры (подпись и длину размерной линии), цепочки с суммами
 и надписи с координатами в мм. Правила те же, что в разделе «Выжимка из PDF» в
 `service/analyzer_prompt.md`:
@@ -221,7 +221,7 @@ group, at }`). Потребители и щит не двигаются. Ты э
 
 - Python 3.11+, `uv`. Типизация везде, `mypy --strict` и `ruff` без ошибок. После правок
   запускай `uv run pytest`.
-- Модули в `src/shtroba/`:
+- Модули в `src/floorplan_engine/`:
   - `schema.py` — модели pydantic;
   - `geometry.py` — контур, невязка, площадь, внешние углы;
   - `validate.py` — правила и сообщения на русском с путём к полю; наложение ответов;
@@ -257,7 +257,7 @@ group, at }`). Потребители и щит не двигаются. Ты э
     коробки, щит; новых расчётов нет — тот же `wiring.py`. Показ — `web/src/three/Scene3D.tsx`
     (react-three-fiber);
   - `symbols.py` — блоки УГО;
-  - `ids.py` — ID объектов в DXF: XDATA `SHTROBA` (тип + id из YAML) на каждом примитиве
+  - `ids.py` — ID объектов в DXF: XDATA `FLOORPLAN_ENGINE` (тип + id из YAML) на каждом примитиве
     модели; новый рисуемый объект оборачивай в `with tagged(msp, тип, id)`;
   - `fields.py` — поля AutoCAD (FIELD) в MTEXT, например площадь по полилинии; ezdxf их
     не создаёт, объекты собираются из тегов;

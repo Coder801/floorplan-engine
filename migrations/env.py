@@ -6,8 +6,8 @@ from logging.config import fileConfig
 
 from alembic import context
 
-from shtroba.service.db.models import Base
-from shtroba.service.db.session import database_url, make_engine
+from floorplan_engine.service.db.models import Base
+from floorplan_engine.service.db.session import database_url, make_engine
 
 if context.config.config_file_name is not None:
     fileConfig(context.config.config_file_name)

@@ -8,11 +8,11 @@ from typing import Any
 import pytest
 import yaml
 
-from shtroba.estimate import PriceList, build_estimate, quantities, unknown_keys
-from shtroba.pipeline import estimate_project
-from shtroba.schema import Electrical, Plan
-from shtroba.validate import validate_plan
-from shtroba.wiring import RESERVE, box_wiring
+from floorplan_engine.estimate import PriceList, build_estimate, quantities, unknown_keys
+from floorplan_engine.pipeline import estimate_project
+from floorplan_engine.schema import Electrical, Plan
+from floorplan_engine.validate import validate_plan
+from floorplan_engine.wiring import RESERVE, box_wiring
 from tests.conftest import make_plan
 
 RECT = [{"length": 3000}, {"length": 4000}, {"length": 3000}, {"length": 4000}]
@@ -156,7 +156,7 @@ def test_wet_boxes_and_wall_holes_in_estimate() -> None:
 
 
 def test_estimate_table_with_and_without_prices() -> None:
-    from shtroba.estimate import estimate_table
+    from floorplan_engine.estimate import estimate_table
 
     wiring, elec = _wiring()
     prices = PriceList.model_validate({"items": {"socket_box": 20}})
@@ -182,8 +182,8 @@ def test_estimate_on_wiring_sheet(tmp_path: Path) -> None:
     """Смета стоит на CAD-листе проводки — тем же текстом, что в таблице."""
     from ezdxf.filemanagement import readfile
 
-    from shtroba.preview import sheet_layouts
-    from shtroba.sheets import build_project_document
+    from floorplan_engine.preview import sheet_layouts
+    from floorplan_engine.sheets import build_project_document
 
     plan = make_plan(RECT, [DOOR])
     _, contours = validate_plan(plan)

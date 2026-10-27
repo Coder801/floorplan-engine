@@ -8,7 +8,7 @@ import pytest
 import yaml
 from fastapi.testclient import TestClient
 
-from shtroba.service.app import create_app
+from floorplan_engine.service.app import create_app
 
 ROOM: dict[str, Any] = {
     "name": "Тест",

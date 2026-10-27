@@ -7,9 +7,9 @@ from pathlib import Path
 
 import pytest
 
-from shtroba.service.facts.analysis import page_facts
-from shtroba.service.facts.primitives import Label, Segment, Sheet
-from shtroba.service.facts.raster import Word, _label, dedupe, merge, snap, tiles
+from floorplan_engine.service.facts.analysis import page_facts
+from floorplan_engine.service.facts.primitives import Label, Segment, Sheet
+from floorplan_engine.service.facts.raster import Word, _label, dedupe, merge, snap, tiles
 
 
 def test_tiles_cover_image_with_overlap() -> None:
@@ -74,8 +74,8 @@ def test_merged_chain_line_split_by_ticks_on_raster() -> None:
 
 
 def test_gate_page_problems() -> None:
-    from shtroba.service.facts.analysis import Dimension, PageFacts
-    from shtroba.service.facts.gate import MIN_DIMS, page_problem
+    from floorplan_engine.service.facts.analysis import Dimension, PageFacts
+    from floorplan_engine.service.facts.gate import MIN_DIMS, page_problem
 
     def facts(n: int, scale: float | None, conf: float = 1.0) -> PageFacts:
         dims = [Dimension(1000, "h", 0, 0, 100, confidence=conf) for _ in range(n)]
@@ -88,7 +88,7 @@ def test_gate_page_problems() -> None:
 
 
 def test_gate_text_source_always_passes(tmp_path: Path) -> None:
-    from shtroba.service.facts.gate import check_sources
+    from floorplan_engine.service.facts.gate import check_sources
 
     src = tmp_path
     (src / "plan.pdf").write_bytes(b"%PDF")

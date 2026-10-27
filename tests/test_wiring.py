@@ -11,7 +11,7 @@ from ezdxf import bbox
 from shapely.geometry import Point, Polygon
 from shapely.geometry import box as shapely_box
 
-from shtroba.draw_wiring import (
+from floorplan_engine.draw_wiring import (
     bundles,
     draw_wiring,
     fillet,
@@ -19,12 +19,12 @@ from shtroba.draw_wiring import (
     offset_path,
     segments,
 )
-from shtroba.geometry import Vec
-from shtroba.layers import W_TEXT, new_document
-from shtroba.schema import Electrical, Plan
-from shtroba.specification import specification
-from shtroba.validate import validate_plan
-from shtroba.wiring import (
+from floorplan_engine.geometry import Vec
+from floorplan_engine.layers import W_TEXT, new_document
+from floorplan_engine.schema import Electrical, Plan
+from floorplan_engine.specification import specification
+from floorplan_engine.validate import validate_plan
+from floorplan_engine.wiring import (
     BOX_ABOVE_FLOOR,
     BOX_BELOW_CEILING,
     BOX_CLEARANCE,
@@ -478,7 +478,7 @@ def test_boxes_in_wet_rooms_marked() -> None:
 def test_lanes_keep_clear_of_walls() -> None:
     from shapely.geometry import box
 
-    from shtroba.draw_wiring import clearance
+    from floorplan_engine.draw_wiring import clearance
 
     many = [[Vec(0, 50), Vec(1000 + k, 50)] for k in range(5)]  # 5 кабелей в 50 мм от стены y=0
     room = clearance(box(-100, 0, 2000, 3000), 10.0)
@@ -491,8 +491,8 @@ def test_lanes_keep_clear_of_walls() -> None:
 
 
 def test_fan_angle_ignores_row_on_box_wall() -> None:
-    from shtroba.draw_electrical import Anchor
-    from shtroba.wiring import fan_angle
+    from floorplan_engine.draw_electrical import Anchor
+    from floorplan_engine.wiring import fan_angle
 
     box = Anchor(Vec(1000, 0), Vec(0, 1), Vec(1, 0), 10.0)  # на нижней стене, в комнату — вверх
     row = [Anchor(Vec(x, 0), Vec(0, 1), Vec(1, 0), 10.0) for x in (300, 1800)]
@@ -502,7 +502,7 @@ def test_fan_angle_ignores_row_on_box_wall() -> None:
 
 
 def test_fanned_box_goes_to_ceiling_inside_room() -> None:
-    from shtroba.routing import CLEARANCE
+    from floorplan_engine.routing import CLEARANCE
 
     plan = make_plan(RECT, [DOOR])
     pts = [
@@ -523,7 +523,7 @@ def test_fanned_box_goes_to_ceiling_inside_room() -> None:
 
 
 def test_box_size_by_lines() -> None:
-    from shtroba.wiring import box_size
+    from floorplan_engine.wiring import box_size
 
     assert [box_size(n) for n in (2, 3, 4, 6, 7, 8, 9)] == [
         "80", "80", "100x100", "100x100", "150x110", "150x110", "190x140",
@@ -531,7 +531,7 @@ def test_box_size_by_lines() -> None:
 
 
 def test_split_points_by_zones() -> None:
-    from shtroba.wiring import split_points
+    from floorplan_engine.wiring import split_points
 
     left = [Vec(100 + 10 * k, 500) for k in range(6)]
     right = [Vec(5000 + 10 * k, 500) for k in range(6)]
@@ -542,7 +542,7 @@ def test_split_points_by_zones() -> None:
 
 
 def test_box_lines_never_exceed_largest_regular_box() -> None:
-    from shtroba.wiring import BOX_BRANCHES
+    from floorplan_engine.wiring import BOX_BRANCHES
 
     plan = make_plan([{"length": 4000}, {"length": 6000}, {"length": 4000}, {"length": 6000}], [])
     pts = [_wall(f"d{k}", "sconce", "w1", 300 + 250 * k, 2000, "QF1") for k in range(14)]
@@ -590,7 +590,7 @@ def test_switch_outside_room_goes_into_its_light_box() -> None:
 
 
 def _edited(edits: dict[str, Any]) -> Any:
-    from shtroba.schema import WiringEdits
+    from floorplan_engine.schema import WiringEdits
 
     plan = make_plan(RECT, [DOOR])
     _, contours = validate_plan(plan)
@@ -641,9 +641,9 @@ def test_wall_box_slides_along_its_wall() -> None:
 
 
 def test_ceiling_box_moves_only_inside_room() -> None:
-    from shtroba.draw_electrical import Anchor
-    from shtroba.draw_plan import room_geometries
-    from shtroba.wiring import moved_anchor
+    from floorplan_engine.draw_electrical import Anchor
+    from floorplan_engine.draw_plan import room_geometries
+    from floorplan_engine.wiring import moved_anchor
 
     plan = make_plan(RECT, [DOOR])
     _, contours = validate_plan(plan)
@@ -664,14 +664,14 @@ def test_stale_box_edit_is_ignored() -> None:
 def test_wire_edit_must_be_orthogonal() -> None:
     from pydantic import ValidationError
 
-    from shtroba.schema import WireEdit
+    from floorplan_engine.schema import WireEdit
 
     with pytest.raises(ValidationError, match="прямые"):
         WireEdit.model_validate({"from": "board", "to": "s1", "path": [[0, 0], [100, 100]]})
 
 
 def test_wiring_handles_lane_follows_path() -> None:
-    from shtroba.objects import wiring_handles
+    from floorplan_engine.objects import wiring_handles
 
     plan = make_plan(RECT, [DOOR])
     _, contours = validate_plan(plan)

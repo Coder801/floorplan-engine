@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-from shtroba.validate import Issue, Report, Severity, _fmt_value, _wall_list, format_loc
+from floorplan_engine.validate import Issue, Report, Severity, _fmt_value, _wall_list, format_loc
 
 
 @pytest.mark.parametrize(

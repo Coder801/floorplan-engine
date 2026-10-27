@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from shtroba.geometry import (
+from floorplan_engine.geometry import (
     Vec,
     closure_suspects,
     outer_corners,

@@ -10,18 +10,18 @@ from ezdxf.entities.lwpolyline import LWPolyline
 from ezdxf.entities.mtext import MText
 from ezdxf.filemanagement import readfile
 
-from shtroba.draw_plan import (
+from floorplan_engine.draw_plan import (
     HATCH_SCALE_BEARING,
     HATCH_SCALE_PARTITION,
     readable_angle,
     room_geometries,
     wall_pieces,
 )
-from shtroba.geometry import Vec
-from shtroba.ids import object_id
-from shtroba.schema import Plan
-from shtroba.sheets import build_project_document
-from shtroba.validate import validate_plan
+from floorplan_engine.geometry import Vec
+from floorplan_engine.ids import object_id
+from floorplan_engine.schema import Plan
+from floorplan_engine.sheets import build_project_document
+from floorplan_engine.validate import validate_plan
 from tests.conftest import make_plan
 
 L_SHAPE = [

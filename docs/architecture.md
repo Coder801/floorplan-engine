@@ -116,7 +116,7 @@ flowchart LR
 | Рамка и основная надпись по ДСТУ Б А.2.4-4:2009, форма 3 | `titleblock.draw_sheet`, `draw_stamp` |
 | Масштаб — общий для комплекта, из ряда ГОСТ 2.302 и 1:30 (`layers.SCALES`): тот, при котором план ближе всего к 94 % своей секции (не больше 100 %); текст и символы рисуются под него (`sheet()`), на бумаге их размер постоянный. Видовой экран в этом масштабе, чужие слои заморожены | `sheets.choose_paper_and_scale`, `add_sheet`, `layers.drawing_scale` |
 | Надписи на чертеже на `ru` / `uk` | `texts.tr` |
-| `id` из YAML на каждом примитиве модели (XDATA `SHTROBA`) | `ids.tagged` |
+| `id` из YAML на каждом примитиве модели (XDATA `FLOORPLAN_ENGINE`) | `ids.tagged` |
 | Аудит DXF после записи | `pipeline.save_checked` |
 | PNG листов из DXF (отладка, `build --png`, `preview`) | `preview.render_png` |
 | Листы в браузере: в canvas — только чертёж (видовой экран `view`), таблицы листа — в боковой панели со связью строка ↔ объекты; подсказки — только у объектов темы листа; светлая и тёмная тема; PNG листа для альбома — весь лист из canvas, не больше A3 150 dpi | `web/src/sheet/SheetView.ts`, `sheet/paint.ts`, `SidePanel.tsx` (`Tables`); страницы — `viewer.sheets`, `viewer.sheet` |

@@ -6,7 +6,7 @@ import math
 
 import pytest
 
-from shtroba.geometry import (
+from floorplan_engine.geometry import (
     Contour,
     Vec,
     WallSegment,

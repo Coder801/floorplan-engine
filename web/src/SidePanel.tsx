@@ -187,7 +187,7 @@ function Sources({ project: p, shown, onSource }: { project: Project; shown: str
     <>
       <div className="small muted" style={{ marginBottom: 10 }}>
         {p.parsed ? `Разобрано ${used} из ${list.length}. Отметки — из intake.yaml (sources).`
-          : "Сервер просмотра устарел — перезапустите shtroba view, чтобы увидеть, что разобрано."}
+          : "Сервер просмотра устарел — перезапустите floorplan-engine view, чтобы увидеть, что разобрано."}
       </div>
       {list.map((s) => (
         <div key={s.file} className={`card${s.file === shown ? " lit" : ""}`}>

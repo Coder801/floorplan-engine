@@ -1,16 +1,16 @@
-# shtroba-web — просмотр проектов
+# floorplan-engine-web — просмотр проектов
 
 Фронт просмотра собранных проектов Штроба: листы `.epd` в canvas, таблицы и подсказки,
 правка трасс проводки, 3D проводки. React 18 + TypeScript + Vite; 3D — react-three-fiber.
 
-Данные — API бэка (`shtroba view`, порт 8000). Запросы `/api` идут к нему через прокси
+Данные — API бэка (`floorplan-engine view`, порт 8000). Запросы `/api` идут к нему через прокси
 Vite, поэтому CORS не нужен.
 
 ## Запуск
 
 ```bash
 # 1. API (из корня репозитория)
-uv run shtroba view                 # http://127.0.0.1:8000/api
+uv run floorplan-engine view                 # http://127.0.0.1:8000/api
 
 # 2. Фронт (из web/)
 npm install
@@ -36,7 +36,7 @@ API на другом адресе — переменная `API_URL`: `API_URL=
 
 ```nginx
 location /api/ { proxy_pass http://127.0.0.1:8000; }
-location / { root /srv/shtroba-web/dist; try_files $uri /index.html; }
+location / { root /srv/floorplan-engine-web/dist; try_files $uri /index.html; }
 ```
 
 ## Устройство

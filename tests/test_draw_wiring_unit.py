@@ -6,8 +6,8 @@ import math
 
 import pytest
 
-from shtroba.draw_wiring import Bundle, Segment, _m, _readable, _unit, segments
-from shtroba.geometry import Vec
+from floorplan_engine.draw_wiring import Bundle, Segment, _m, _readable, _unit, segments
+from floorplan_engine.geometry import Vec
 
 
 def test_segments_axis_and_order_of_ends() -> None:

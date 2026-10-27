@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from shtroba.geometry import Vec
-from shtroba.wiring import CHASE_NARROW, Chase, Run, Wiring, section
+from floorplan_engine.geometry import Vec
+from floorplan_engine.wiring import CHASE_NARROW, Chase, Run, Wiring, section
 
 
 @pytest.mark.parametrize(

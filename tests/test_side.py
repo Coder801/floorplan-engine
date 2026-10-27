@@ -7,11 +7,11 @@ import json
 import zipfile
 from pathlib import Path
 
-from shtroba.artifact import export_artifact
-from shtroba.objects import describe_objects
-from shtroba.sheets import build_project_document, sheet_slug
-from shtroba.side import STAGE_OBJECTS, from_table, side_tables
-from shtroba.tables import Column, Table
+from floorplan_engine.artifact import export_artifact
+from floorplan_engine.objects import describe_objects
+from floorplan_engine.sheets import build_project_document, sheet_slug
+from floorplan_engine.side import STAGE_OBJECTS, from_table, side_tables
+from floorplan_engine.tables import Column, Table
 from tests.test_objects import _model
 
 

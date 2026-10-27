@@ -7,11 +7,11 @@
 Запуск:
 
 ```bash
-uv run shtroba serve --data data/projects --port 8000
+uv run floorplan-engine serve --data data/projects --port 8000
 ```
 
 Интерактивная документация OpenAPI открывается по адресу `http://127.0.0.1:8000/docs`.
-Собранные проекты из `projects/` смотрят в браузере другой командой — `shtroba view` (README).
+Собранные проекты из `projects/` смотрят в браузере другой командой — `floorplan-engine view` (README).
 Анализатор выбирается флагом `--analyzer`: `manual`, `claude-code` (подписка) или `api` (ключ).
 Подробности — в README, раздел «Сервис».
 

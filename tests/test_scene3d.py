@@ -7,15 +7,15 @@ from typing import Any
 
 import pytest
 
-from shtroba.scene3d import (
+from floorplan_engine.scene3d import (
     DOOR_TOP_MM,
     FLOOR_Z_MM,
     WINDOW_HEIGHT_MM,
     WINDOW_SILL_MM,
     build_scene,
 )
-from shtroba.validate import validate_plan
-from shtroba.wiring import box_wiring
+from floorplan_engine.validate import validate_plan
+from floorplan_engine.wiring import box_wiring
 from tests.conftest import make_plan
 from tests.test_wiring import DOOR, RECT, _elec
 
@@ -74,7 +74,7 @@ def test_walls_have_lintel_and_sill_and_assumptions() -> None:
 
 
 def test_shared_partition_is_one_piece_with_both_normals() -> None:
-    from shtroba.schema import Plan
+    from floorplan_engine.schema import Plan
 
     def room(rid: str, x: float) -> dict[str, Any]:
         walls = [{"id": f"w{k + 1}", "length": n} for k, n in enumerate((3000, 4000, 3000, 4000))]
@@ -89,8 +89,8 @@ def test_shared_partition_is_one_piece_with_both_normals() -> None:
         }
     )
     _, contours = validate_plan(plan)
-    from shtroba.draw_plan import room_geometries
-    from shtroba.scene3d import _walls
+    from floorplan_engine.draw_plan import room_geometries
+    from floorplan_engine.scene3d import _walls
 
     walls = _walls(room_geometries(plan, contours), 2700)
     shared = [w for w in walls if len(w["normals"]) == 2]

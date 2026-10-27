@@ -2,18 +2,18 @@
 
 Сервис пока хранит проекты в папках (`service/storage.py`). База заведена рядом: схема,
 миграции и слой доступа готовы и проверены, к `Workflow` она ещё не подключена. Ядро
-(`shtroba` без `service/`) о базе не знает и не узнает: оно собирает чертёж из папки.
+(`floorplan_engine` без `service/`) о базе не знает и не узнает: оно собирает чертёж из папки.
 
 ## Запуск локально
 
 ```bash
 cp .env.example .env                 # пароль и порт локальной базы
-docker compose up -d db              # Postgres 17, контейнер shtroba-db, порт 5433
-export DATABASE_URL=postgresql+psycopg://shtroba:shtroba@localhost:5433/shtroba
+docker compose up -d db              # Postgres 17, контейнер floorplan-engine-db, порт 5433
+export DATABASE_URL=postgresql+psycopg://floorplan_engine:floorplan_engine@localhost:5433/floorplan_engine
 uv run alembic upgrade head          # создать или обновить таблицы
 ```
 
-Новая миграция после правки `src/shtroba/service/db/models.py`:
+Новая миграция после правки `src/floorplan_engine/service/db/models.py`:
 
 ```bash
 uv run alembic revision --autogenerate -m "что изменилось"

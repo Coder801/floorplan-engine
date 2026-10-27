@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from shtroba.groups import ASSUMED, group_rows, groups_table
-from shtroba.schema import Electrical
-from shtroba.tables import Mark
-from shtroba.validate import validate_electrical, validate_plan
+from floorplan_engine.groups import ASSUMED, group_rows, groups_table
+from floorplan_engine.schema import Electrical
+from floorplan_engine.tables import Mark
+from floorplan_engine.validate import validate_electrical, validate_plan
 from tests.conftest import make_plan
 
 RECT = [{"length": 3000}, {"length": 4000}, {"length": 3000}, {"length": 4000}]

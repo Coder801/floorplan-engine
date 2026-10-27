@@ -4,7 +4,7 @@
 чертежа: рамка, основная надпись, вид, таблицы, легенда. Для показа кабинету не нужны DXF,
 CAD-библиотеки или шрифты: достаточно уметь рисовать пути.
 
-Файл собирает `shtroba build` вместе с `project.dxf`: `projects/<имя>/out/project.epd`.
+Файл собирает `floorplan-engine build` вместе с `project.dxf`: `projects/<имя>/out/project.epd`.
 
 ## Контейнер
 
@@ -24,9 +24,9 @@ pages/02.json
 
 ```json
 {
-  "format": "shtroba/epd",
+  "format": "floorplan-engine/epd",
   "version": 1,
-  "generator": "shtroba 0.1.0",
+  "generator": "floorplan-engine 0.1.0",
   "project": {"name": "Квартира, вул. Вавилових, 11", "language": "uk"},
   "units": "mm",
   "pages": [
@@ -251,7 +251,7 @@ const svg = [`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" wi
 
 ## Эталонный рендер
 
-`uv run shtroba render-artifact projects/<имя>` строит из `out/project.epd` картинки
+`uv run floorplan-engine render-artifact projects/<имя>` строит из `out/project.epd` картинки
 `out/artifact/NN-<лист>.png` (Python и matplotlib, без DXF). Картинки кабинета можно сверять
 с ними.
 

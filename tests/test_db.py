@@ -7,10 +7,10 @@ from collections.abc import Iterator
 import pytest
 from sqlalchemy.orm import Session
 
-from shtroba.service.db import repositories as repo
-from shtroba.service.db.models import Base
-from shtroba.service.db.session import create_tables, make_engine, make_sessions
-from shtroba.service.facts.analysis import Dimension, PageFacts
+from floorplan_engine.service.db import repositories as repo
+from floorplan_engine.service.db.models import Base
+from floorplan_engine.service.db.session import create_tables, make_engine, make_sessions
+from floorplan_engine.service.facts.analysis import Dimension, PageFacts
 
 
 @pytest.fixture

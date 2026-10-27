@@ -7,12 +7,12 @@ from ezdxf import bbox
 from ezdxf.document import Drawing
 from ezdxf.filemanagement import readfile
 
-from shtroba.draw_electrical import point_label
-from shtroba.layers import SCALES
-from shtroba.preview import sheet_layouts
-from shtroba.schema import Electrical, ElectricalPoint, PointType
-from shtroba.sheets import build_project_document, sheet_png_name
-from shtroba.validate import (
+from floorplan_engine.draw_electrical import point_label
+from floorplan_engine.layers import SCALES
+from floorplan_engine.preview import sheet_layouts
+from floorplan_engine.schema import Electrical, ElectricalPoint, PointType
+from floorplan_engine.sheets import build_project_document, sheet_png_name
+from floorplan_engine.validate import (
     parse_model,
     validate_electrical,
     validate_plan,

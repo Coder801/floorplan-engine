@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from shtroba.geometry import Vec
-from shtroba.routing import length, simplify
+from floorplan_engine.geometry import Vec
+from floorplan_engine.routing import length, simplify
 
 
 def _v(*pts: tuple[float, float]) -> list[Vec]:
@@ -57,7 +57,7 @@ def test_length_is_manhattan(path: list[Vec], mm: float) -> None:
 
 
 def test_move_end_keeps_right_angles() -> None:
-    from shtroba.routing import move_end
+    from floorplan_engine.routing import move_end
 
     u = _v((0, 0), (0, 1000), (2000, 1000), (2000, 0))
     # Поперёк первого участка: соседняя вершина едет следом, участок остаётся вертикальным
@@ -69,7 +69,7 @@ def test_move_end_keeps_right_angles() -> None:
 
 
 def test_fit_path_snaps_ends_to_nodes() -> None:
-    from shtroba.routing import fit_path
+    from floorplan_engine.routing import fit_path
 
     path = _v((0, 0), (0, 1000), (2000, 1000))
     assert fit_path(path, Vec(0.3, 0), Vec(2000, 1000)) == _v((0.3, 0), (0, 1000), (2000, 1000))

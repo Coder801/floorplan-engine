@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from shtroba.service.pdf_facts import describe, extract
+from floorplan_engine.service.pdf_facts import describe, extract
 
 # Цифра Helvetica 10 pt — 5,56 pt шириной
 DIGIT = 5.56
@@ -124,8 +124,8 @@ def test_broken_pdf_is_reported(tmp_path: Path) -> None:
 def test_analysis_needs_only_primitives() -> None:
     """Разбор не знает формата: страница из надписей и отрезков, собранная руками (как из
     растрового адаптера), даёт те же размеры и масштаб."""
-    from shtroba.service.facts.analysis import page_facts, render
-    from shtroba.service.facts.primitives import Label, Segment, Sheet
+    from floorplan_engine.service.facts.analysis import page_facts, render
+    from floorplan_engine.service.facts.primitives import Label, Segment, Sheet
 
     def dim(x0: float, x1: float, y: float, value: int) -> tuple[Label, list[Segment]]:
         ticks = [Segment(x - 1, y - 1.5, x + 1, y + 1.5) for x in (x0, x1)]
@@ -150,7 +150,7 @@ def test_facts_json_round_trip(sheet: Path) -> None:
     """JSON выжимки (для базы) читается обратно в тот же объект — и тот же Markdown."""
     import json
 
-    from shtroba.service.facts.analysis import ALGO_VERSION, from_dict, render, to_dict
+    from floorplan_engine.service.facts.analysis import ALGO_VERSION, from_dict, render, to_dict
 
     pages = extract(sheet)
     data = json.loads(json.dumps([to_dict(f) for f in pages]))

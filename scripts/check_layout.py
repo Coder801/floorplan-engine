@@ -11,10 +11,10 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from shtroba.estimate import PRICES_FILE
-from shtroba.layers import drawing_scale
-from shtroba.pipeline import assess_project, load_prices
-from shtroba.sheets import _draw, choose_paper_and_scale, place, view_size
+from floorplan_engine.estimate import PRICES_FILE
+from floorplan_engine.layers import drawing_scale
+from floorplan_engine.pipeline import assess_project, load_prices
+from floorplan_engine.sheets import _draw, choose_paper_and_scale, place, view_size
 
 
 def check(project: Path) -> bool:

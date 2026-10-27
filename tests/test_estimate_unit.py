@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from shtroba.estimate import (
+from floorplan_engine.estimate import (
     Estimate,
     Line,
     Price,

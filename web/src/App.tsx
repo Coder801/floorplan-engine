@@ -113,8 +113,8 @@ export function App() {
 
   const openQs = unresolved(project);
   const warn = project?.stale
-    ? `YAML правили после сборки — листы устарели: uv run shtroba build projects/${project.name}`
-    : project && !project.report ? `Проект не собран: uv run shtroba build projects/${project.name}` : null;
+    ? `YAML правили после сборки — листы устарели: uv run floorplan-engine build projects/${project.name}`
+    : project && !project.report ? `Проект не собран: uv run floorplan-engine build projects/${project.name}` : null;
 
   let main: React.ReactNode;
   if (!current) main = <div className="empty">Выберите проект</div>;

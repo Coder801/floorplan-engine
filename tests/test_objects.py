@@ -7,12 +7,12 @@ import zipfile
 from pathlib import Path
 from typing import Any
 
-from shtroba.artifact import export_artifact
-from shtroba.objects import describe_objects, page_objects, wire_titles
-from shtroba.schema import Electrical, Plan
-from shtroba.sheets import build_project_document
-from shtroba.validate import validate_plan
-from shtroba.wiring import Wiring, box_wiring
+from floorplan_engine.artifact import export_artifact
+from floorplan_engine.objects import describe_objects, page_objects, wire_titles
+from floorplan_engine.schema import Electrical, Plan
+from floorplan_engine.sheets import build_project_document
+from floorplan_engine.validate import validate_plan
+from floorplan_engine.wiring import Wiring, box_wiring
 from tests.conftest import make_plan
 
 RECT = [{"length": 3000}, {"length": 4000}, {"length": 3000}, {"length": 4000}]
@@ -100,7 +100,7 @@ def test_epd_pages_carry_only_their_objects(tmp_path: Path) -> None:
 
 
 def test_line_chains_select_whole_line() -> None:
-    from shtroba.objects import line_chains
+    from floorplan_engine.objects import line_chains
 
     _, _, _, wiring = _model()
     chains = line_chains(wiring)
@@ -114,7 +114,7 @@ def test_line_chains_select_whole_line() -> None:
 
 
 def test_line_chains_feed_and_box_include_children() -> None:
-    from shtroba.objects import line_chains
+    from floorplan_engine.objects import line_chains
 
     _, _, _, wiring = _model()
     chains = line_chains(wiring)
@@ -128,7 +128,7 @@ def test_line_chains_feed_and_box_include_children() -> None:
 
 
 def test_line_groups_hold_group_lines_boxes_points() -> None:
-    from shtroba.objects import line_groups
+    from floorplan_engine.objects import line_groups
 
     _, _, _, wiring = _model()
     groups = line_groups(wiring)

@@ -9,8 +9,8 @@ from typing import Any
 import pytest
 import yaml
 
-from shtroba.service import llm_analyzer
-from shtroba.service.llm_analyzer import (
+from floorplan_engine.service import llm_analyzer
+from floorplan_engine.service.llm_analyzer import (
     FIX_ATTEMPTS,
     USAGE_FILE,
     ApiBackend,
@@ -221,7 +221,7 @@ def test_claude_code_error_is_reported(tmp_path: Path, monkeypatch: pytest.Monke
 def test_service_accumulates_llm_cost(tmp_path: Path) -> None:
     from fastapi.testclient import TestClient
 
-    from shtroba.service.app import create_app
+    from floorplan_engine.service.app import create_app
 
     backend = FakeBackend([_envelope(ROOM)])
     client = TestClient(create_app(tmp_path / "data", LlmAnalyzer(lambda: backend)))
@@ -240,7 +240,7 @@ def test_unusable_sources_rejected_before_llm(tmp_path: Path) -> None:
     """Порог «не удалось»: по источнику ничего не построить — модель не вызывается."""
     from fastapi.testclient import TestClient
 
-    from shtroba.service.app import create_app
+    from floorplan_engine.service.app import create_app
 
     backend = FakeBackend([_envelope(ROOM)])
     client = TestClient(create_app(tmp_path / "data", LlmAnalyzer(lambda: backend)))

@@ -8,14 +8,14 @@ from ezdxf.entities.idbuffer import FieldList
 from ezdxf.entities.mtext import MText
 from ezdxf.filemanagement import readfile
 
-from shtroba.fields import (
+from floorplan_engine.fields import (
     add_area_field,
     add_area_sum_field,
     finalize_fields,
     format_area,
     text_checksum,
 )
-from shtroba.layers import new_document
+from floorplan_engine.layers import new_document
 
 
 def _field_value(tags: list[tuple[int, object]], code: int) -> object:

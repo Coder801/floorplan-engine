@@ -16,13 +16,13 @@ description: Полная проверка изменений Штробы бе�
 2. Если менялся разбор источников (`service/facts/`): выжимка Markdown по векторным PDF
    должна совпасть с эталоном до правки (сохрани эталон в scratchpad до изменений):
    ```bash
-   for f in projects/*/source/*.pdf; do uv run shtroba pdf-facts "$f"; done > after.md
+   for f in projects/*/source/*.pdf; do uv run floorplan-engine pdf-facts "$f"; done > after.md
    diff before.md after.md
    ```
 3. Если менялись листы (`sheets.py`, таблицы, легенда, штамп): собери проекты и проверь
    раскладку кодом — формат, масштаб, ничего не вылезло и не легло на план:
    ```bash
-   uv run shtroba build projects/<имя>
+   uv run floorplan-engine build projects/<имя>
    uv run python scripts/check_layout.py <имя> [<имя>…]
    ```
    Картинки листов (`render-artifact`) открывай, только если пользователь просит или кодом

@@ -10,12 +10,12 @@ from ezdxf.entities.insert import Insert
 from ezdxf.entities.mtext import MText
 from ezdxf.filemanagement import readfile
 
-from shtroba.layers import text_width
-from shtroba.preview import sheet_layouts
-from shtroba.schema import Plan, SheetInfo
-from shtroba.sheets import Panel, SheetSpec, build_project_document, grid, place
-from shtroba.texts import TEXTS
-from shtroba.titleblock import (
+from floorplan_engine.layers import text_width
+from floorplan_engine.preview import sheet_layouts
+from floorplan_engine.schema import Plan, SheetInfo
+from floorplan_engine.sheets import Panel, SheetSpec, build_project_document, grid, place
+from floorplan_engine.texts import TEXTS
+from floorplan_engine.titleblock import (
     FRAME_LEFT,
     FRAME_MARGIN,
     PADDING,
@@ -28,7 +28,7 @@ from shtroba.titleblock import (
     fit_cell,
     fit_line,
 )
-from shtroba.validate import validate_plan
+from floorplan_engine.validate import validate_plan
 from tests.conftest import make_plan
 
 
@@ -211,7 +211,7 @@ def test_every_text_has_both_languages() -> None:
 
 
 def test_tables_go_in_columns_and_take_plan_space() -> None:
-    from shtroba.sheets import arrange, columns
+    from floorplan_engine.sheets import arrange, columns
 
     g = grid(594.0, 420.0)  # A2: секция таблиц над штампом 185 мм
     tall = Panel(140, 250, lambda psp, at: None)
@@ -228,7 +228,7 @@ def test_tables_go_in_columns_and_take_plan_space() -> None:
 
 
 def test_wrap_by_font_metrics() -> None:
-    from shtroba.sheets import wrap
+    from floorplan_engine.sheets import wrap
 
     text = "Штроби по стінах: 86 шт, 95,4 м (до 4 кабелів, якщо спуски ближче 150 мм)"
     lines = wrap(text, 60.0, 2.0)

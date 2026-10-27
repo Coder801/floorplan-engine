@@ -8,11 +8,11 @@ import pytest
 import yaml
 from typer.testing import CliRunner
 
-from shtroba.assess import WEIGHT_LIMIT, Status, assess, severity
-from shtroba.cli import app
-from shtroba.intake import Intake, QSeverity, Question, Stage, index_path
-from shtroba.report import render_markdown, to_json
-from shtroba.validate import parse_model, validate_project
+from floorplan_engine.assess import WEIGHT_LIMIT, Status, assess, severity
+from floorplan_engine.cli import app
+from floorplan_engine.intake import Intake, QSeverity, Question, Stage, index_path
+from floorplan_engine.report import render_markdown, to_json
+from floorplan_engine.validate import parse_model, validate_project
 
 ROOM = {
     "name": "Тест",

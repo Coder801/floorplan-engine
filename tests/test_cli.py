@@ -4,8 +4,8 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
-from shtroba.cli import app
-from shtroba.symbols import SYMBOLS
+from floorplan_engine.cli import app
+from floorplan_engine.symbols import SYMBOLS
 
 runner = CliRunner()
 

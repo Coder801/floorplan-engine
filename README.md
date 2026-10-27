@@ -1,4 +1,4 @@
-# shtroba
+# Штроба (floorplan-engine)
 
 Чертежи DXF для AutoCAD и BricsCAD — план помещения и электрика — по описанию в YAML.
 YAML по фото с размерами или по текстовому описанию составляет Claude Code в этом
@@ -27,7 +27,7 @@ YAML по фото с размерами или по текстовому опи
   (STRETCH рамкой), выполнили REGEN — площади и итог пересчитались.
 - Удалишь или перерисуешь контур на `A-AREA` — поле покажет `####`.
 - У символов точек электрики есть невидимые атрибуты `ID`, `H` (высота) и `GROUP`, их правят
-  через EATTEDIT. У каждого объекта модели есть метка XDATA `SHTROBA` с типом и id из YAML,
+  через EATTEDIT. У каждого объекта модели есть метка XDATA `FLOORPLAN_ENGINE` с типом и id из YAML,
   например `wall` / `living.w3`. Метки нужны, чтобы потом переносить правки из AutoCAD
   обратно в проект. Не удаляйте их.
 
@@ -37,23 +37,23 @@ YAML по фото с размерами или по текстовому опи
 
 ```bash
 uv sync
-uv run shtroba --help
+uv run floorplan-engine --help
 ```
 
 ## Команды
 
 ```bash
-uv run shtroba check   projects/kv42                          # только валидация
-uv run shtroba build   projects/kv42                          # out/project.dxf + project.epd
-uv run shtroba build   projects/kv42 --png                    # ещё PNG листов из DXF (sheets/)
-uv run shtroba preview projects/kv42                          # PNG листов из готового DXF
-uv run shtroba render-artifact projects/kv42                  # PNG листов из out/project.epd (проверка)
-uv run shtroba serve --data data/projects                     # API сервиса, документация на /docs
-uv run shtroba view                                           # просмотр собранных projects/ в браузере
-uv run shtroba estimate projects/kv42                         # смета электрики таблицей
-uv run shtroba analyze projects/kv42                          # LLM-анализ source/ → YAML
-uv run shtroba pdf-facts projects/kv42/source/plan.pdf        # выжимка из PDF без LLM
-uv run shtroba symbols symbols/                               # блоки УГО в отдельные DXF
+uv run floorplan-engine check   projects/kv42                          # только валидация
+uv run floorplan-engine build   projects/kv42                          # out/project.dxf + project.epd
+uv run floorplan-engine build   projects/kv42 --png                    # ещё PNG листов из DXF (sheets/)
+uv run floorplan-engine preview projects/kv42                          # PNG листов из готового DXF
+uv run floorplan-engine render-artifact projects/kv42                  # PNG листов из out/project.epd (проверка)
+uv run floorplan-engine serve --data data/projects                     # API сервиса, документация на /docs
+uv run floorplan-engine view                                           # просмотр собранных projects/ в браузере
+uv run floorplan-engine estimate projects/kv42                         # смета электрики таблицей
+uv run floorplan-engine analyze projects/kv42                          # LLM-анализ source/ → YAML
+uv run floorplan-engine pdf-facts projects/kv42/source/plan.pdf        # выжимка из PDF без LLM
+uv run floorplan-engine symbols symbols/                               # блоки УГО в отдельные DXF
 ```
 
 `build` сначала проверяет проект. При ошибках не создаётся ни одного файла, код выхода 1.
@@ -62,7 +62,7 @@ uv run shtroba symbols symbols/                               # блоки УГ�
 
 ## Смета электрики
 
-`shtroba estimate projects/<имя>` — смета без чертежа: `out/estimate.md` (разделы
+`floorplan-engine estimate projects/<имя>` — смета без чертежа: `out/estimate.md` (разделы
 «Материалы» и «Работы», итоги, допущения) и `out/estimate.csv` (для Excel: UTF-8 с BOM, «;»).
 Объёмы считает код по модели — тем же расчётом, что лист проводки: кабель по маркам с запасом
 15 %, подрозетники и механизмы по постам, рамки, распаечные коробки, соединения под опрессовку
@@ -96,12 +96,12 @@ board_kit:
 
 ## Сервис
 
-`shtroba serve` запускает API (FastAPI). Через него проходит весь цикл: загрузка
+`floorplan-engine serve` запускает API (FastAPI). Через него проходит весь цикл: загрузка
 источников → анализ → вопросы → ответы → сборка `project.dxf` и `project.epd`. Описание API,
 состояния проекта и цикл работы — в [docs/service-api.md](docs/service-api.md).
 
 Собранные проекты (`projects/<имя>/` после `build`) можно смотреть в браузере. Нужны два
-процесса: API — `uv run shtroba view` (порт 8000) и страница — `cd web && npm install &&
+процесса: API — `uv run floorplan-engine view` (порт 8000) и страница — `cd web && npm install &&
 npm run dev` → `http://127.0.0.1:5173`. Листы, этапы, вопросы с ответами из
 `answers.yaml`, замечания проверки, файлы `out/`, источники и YAML модели. Если YAML правили
 после сборки, страница предупреждает, что листы устарели.
@@ -224,7 +224,7 @@ signatures:
 2,5 мм (ряд ГОСТ 2.304), дальше текст сжимается по ширине; в графах 2, 3, 4 и 9 длинное
 значение переносится на вторую строку (атрибуты `OBJECT` и `OBJECT_2` и т. д.).
 
-Шрифт надписей — IBM Plex Sans Light (OFL), лежит в `src/shtroba/fonts/`. Превью берёт
+Шрифт надписей — IBM Plex Sans Light (OFL), лежит в `src/floorplan_engine/fonts/`. Превью берёт
 его оттуда; чтобы DXF выглядел так же в AutoCAD/BricsCAD, установите шрифт в систему.
 
 ### Обход стен
@@ -470,7 +470,7 @@ uv run mypy                       # strict
 uv run ruff check . && uv run ruff format --check .
 ```
 
-Структура `src/shtroba/`:
+Структура `src/floorplan_engine/`:
 
 | Модуль | Назначение |
 | --- | --- |

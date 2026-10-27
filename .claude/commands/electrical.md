@@ -1,7 +1,7 @@
 ---
 description: Электрика для проекта → electrical.yaml, затем build и проверка листа электрики
 argument-hint: <проект> <описание точек, групп, щита, трасс>
-allowed-tools: Read, Write, Edit, Glob, Bash(uv run shtroba:*), Bash(ls:*)
+allowed-tools: Read, Write, Edit, Glob, Bash(uv run floorplan-engine:*), Bash(ls:*)
 ---
 
 Добавь электрику в проект. Аргументы: $ARGUMENTS
@@ -33,10 +33,10 @@ allowed-tools: Read, Write, Edit, Glob, Bash(uv run shtroba:*), Bash(ls:*)
 таблицу трасс и список допущений и вопросов. Дождись подтверждения.
 
 ## 4. После подтверждения
-1. Запиши `electrical.yaml`. Выполни `uv run shtroba check projects/<имя>`.
+1. Запиши `electrical.yaml`. Выполни `uv run floorplan-engine check projects/<имя>`.
    При ошибке покажи её и спроси; числа не подгоняй.
-2. `uv run shtroba build projects/<имя>`.
-3. Запусти `uv run shtroba render-artifact projects/<имя>` и открой через Read лист электрики
+2. `uv run floorplan-engine build projects/<имя>`.
+3. Запусти `uv run floorplan-engine render-artifact projects/<имя>` и открой через Read лист электрики
    `out/artifact/02-electrical.png` (и проводку — `03-wiring.png`). Проверь:
    - каждая точка на нужной стене и не в дверном или оконном проёме;
    - символы смотрят в помещение;

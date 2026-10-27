@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from shtroba.service.viewer import create_viewer
+from floorplan_engine.service.viewer import create_viewer
 
 PAGE = {
     "name": "01 План",
@@ -22,7 +22,7 @@ PAGE = {
 
 def _epd(path: Path, version: int) -> None:
     manifest = {
-        "format": "shtroba/epd",
+        "format": "floorplan-engine/epd",
         "version": version,
         "pages": [
             {

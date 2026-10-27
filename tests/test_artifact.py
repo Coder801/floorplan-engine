@@ -11,7 +11,7 @@ from ezdxf.document import Drawing
 from ezdxf.filemanagement import readfile
 from numpy.typing import NDArray
 
-from shtroba.artifact import (
+from floorplan_engine.artifact import (
     FORMAT_NAME,
     FORMAT_VERSION,
     MANIFEST,
@@ -20,9 +20,9 @@ from shtroba.artifact import (
     read_artifact,
     render_page_png,
 )
-from shtroba.schema import Electrical, Plan
-from shtroba.sheets import build_project_document
-from shtroba.validate import parse_model, validate_plan
+from floorplan_engine.schema import Electrical, Plan
+from floorplan_engine.sheets import build_project_document
+from floorplan_engine.validate import parse_model, validate_plan
 from tests.conftest import make_plan
 
 
@@ -82,7 +82,7 @@ def test_artifact_round_trip(tmp_path: Path) -> None:
 
 
 def test_model_transform_maps_model_to_sheet(tmp_path: Path) -> None:
-    from shtroba.sheets import document_scale
+    from floorplan_engine.sheets import document_scale
 
     doc, plan = _project(tmp_path)
     _, pages = read_artifact(export_artifact(doc, plan, tmp_path / "project.epd"))

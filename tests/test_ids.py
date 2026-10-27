@@ -5,11 +5,11 @@ from pathlib import Path
 from ezdxf.entities.insert import Insert
 from ezdxf.filemanagement import readfile
 
-from shtroba.artifact import export_artifact, read_artifact
-from shtroba.ids import APP_ID, object_id
-from shtroba.schema import Electrical
-from shtroba.sheets import build_project_document
-from shtroba.validate import parse_model, validate_plan
+from floorplan_engine.artifact import export_artifact, read_artifact
+from floorplan_engine.ids import APP_ID, object_id
+from floorplan_engine.schema import Electrical
+from floorplan_engine.sheets import build_project_document
+from floorplan_engine.validate import parse_model, validate_plan
 from tests.conftest import make_plan
 
 RECT = [{"length": 3000}, {"length": 4000}, {"length": 3000}, {"length": 4000}]

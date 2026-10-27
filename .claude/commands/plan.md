@@ -1,7 +1,7 @@
 ---
 description: План помещения по фото или тексту → projects/<имя>/room.yaml, таблица размеров, после подтверждения check + build
 argument-hint: <путь к фото | текстовое описание> [имя проекта]
-allowed-tools: Read, Write, Edit, Glob, Bash(uv run shtroba:*), Bash(mkdir:*), Bash(cp:*), Bash(ls:*)
+allowed-tools: Read, Write, Edit, Glob, Bash(uv run floorplan-engine:*), Bash(mkdir:*), Bash(cp:*), Bash(ls:*)
 ---
 
 Создай план помещения по входным данным: $ARGUMENTS
@@ -42,10 +42,10 @@ allowed-tools: Read, Write, Edit, Glob, Bash(uv run shtroba:*), Bash(mkdir:*), B
 и показывай таблицу снова.
 
 ## 4. После подтверждения
-1. `uv run shtroba check projects/<имя>`.
+1. `uv run floorplan-engine check projects/<имя>`.
    При ошибке не меняй числа сам: покажи невязку и предложенные варианты и спроси, какой размер неверный.
-2. `uv run shtroba build projects/<имя>`.
-3. Запусти `uv run shtroba render-artifact projects/<имя>`, открой лист плана
+2. `uv run floorplan-engine build projects/<имя>`.
+3. Запусти `uv run floorplan-engine render-artifact projects/<имя>`, открой лист плана
    `projects/<имя>/out/artifact/01-plan.png` через Read и проверь:
    - контур замкнут, стены на месте;
    - каждый проём на своей стене, со своей стороны, нужной ширины; дуга двери открывается куда нужно;

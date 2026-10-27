@@ -4,8 +4,8 @@ from pathlib import Path
 
 import yaml
 
-from shtroba.schema import Electrical, Plan
-from shtroba.validate import (
+from floorplan_engine.schema import Electrical, Plan
+from floorplan_engine.validate import (
     Severity,
     parse_model,
     validate_electrical,

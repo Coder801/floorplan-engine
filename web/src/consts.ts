@@ -42,6 +42,7 @@ export const CABLE_MIN_PX = 2;   // линии проводки на экран�
 // Слои только листа DXF (рамка, штамп, таблицы): на экране их нет, в PNG для альбома — есть
 export const SHEET_ONLY = new Set(["A-SHEET", "A-VPORT"]);
 export const VIEW_PAD = 16;
+export const FIT_SHRINK = 0.93;     // «весь чертёж» на 7 % мельче впритык — подписи снизу не обрезаются
 export const TIP_GAP = 12;          // px от закреплённой подсказки до края и до чертежа
 export const FOCUS_MAX = 6;         // выделенная линия — не крупнее, чем 6× «весь чертёж»
 export const FOCUS_MS = 280;        // длительность наезда на линию
