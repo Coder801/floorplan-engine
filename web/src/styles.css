@@ -189,7 +189,10 @@
   .welcome-plan .pt { fill: var(--hl); }
   .welcome-card:hover .welcome-plan .outline { stroke: var(--hl); }
   /* Превью из модели: координаты в мм, линии — без масштабирования толщины */
-  .welcome-plan.real svg { display: block; width: 100%; height: 100%; }
+  /* Рамка одна на все карточки: план вписан по центру, остальное — фон листа (белый) */
+  .welcome-plan.real { position: relative; }
+  .welcome-plan.real svg { position: absolute; inset: 14px; width: calc(100% - 28px);
+                           height: calc(100% - 28px); }
   .welcome-plan.real .room { stroke: none; }
   .welcome-plan.real .wet { fill: var(--hl-row); }
   .welcome-plan.real .wall { fill: var(--text); stroke: none; }

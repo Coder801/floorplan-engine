@@ -33,7 +33,7 @@ export function remember(key: string, value: string) {
 
 export function savedTheme(): Theme {
   const t = remembered("theme");
-  return (THEMES as readonly string[]).includes(t || "") ? (t as Theme) : "system";
+  return (THEMES as readonly string[]).includes(t || "") ? (t as Theme) : "light";  // по умолчанию — светлая
 }
 
 export function applyTheme(theme: Theme) {
