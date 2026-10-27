@@ -1,0 +1,132 @@
+{
+  "project": "Квартира, вул. Вавилових 11, кв. 114",
+  "stages": [
+    {
+      "stage": "plan",
+      "status": "questions",
+      "builds": true,
+      "reason": "",
+      "weight": 6,
+      "questions": [
+        "q1",
+        "q2",
+        "q3",
+        "q4"
+      ]
+    },
+    {
+      "stage": "electrical",
+      "status": "absent",
+      "builds": false,
+      "reason": "розеток і вимикачів немає; аркуш 8 — лише освітлення ванної і душової (LED, бра), без прив'язок",
+      "weight": 0,
+      "questions": []
+    },
+    {
+      "stage": "plumbing",
+      "status": "absent",
+      "builds": false,
+      "reason": "сантехніка лише як меблі на плані",
+      "weight": 0,
+      "questions": []
+    }
+  ],
+  "questions": [
+    {
+      "id": "q1",
+      "stage": "plan",
+      "text": "На аркуші 6 немає розмірів: усі стіни, товщини і прорізи зняті з векторів у масштабі 1:50 і округлені до 10 мм (# PDF, масштаб у room.yaml). Підтвердіть або надішліть «ОБМІРНИЙ ПЛАН станом на 25.04.2026» (на нього посилається концепція).",
+      "also": [],
+      "answer": "text",
+      "options": [],
+      "severity": "major",
+      "state": "open"
+    },
+    {
+      "id": "q2",
+      "stage": "plan",
+      "text": "Несучі стіни на аркуші 3 позначені окремо — у моделі вони не відмічені (bearing). Які стіни несучі?",
+      "also": [],
+      "answer": "text",
+      "options": [],
+      "severity": "minor",
+      "state": "open"
+    },
+    {
+      "id": "q3",
+      "stage": "plan",
+      "text": "Передпокій (1) і гардеробна (8), кухня (4) і вітальня (6) на плані без стін між собою — у моделі це по одному приміщенню. Розділити?",
+      "also": [],
+      "answer": "text",
+      "options": [],
+      "severity": "minor",
+      "state": "open"
+    },
+    {
+      "id": "q4",
+      "stage": "plan",
+      "text": "Висота стелі і підвіконь у джерелі не вказана. Якщо є — надішліть.",
+      "also": [],
+      "answer": "text",
+      "options": [],
+      "severity": "minor",
+      "state": "open"
+    }
+  ],
+  "issues": [
+    {
+      "file": "room.yaml",
+      "path": "rooms[3].openings[2].sill",
+      "severity": "warning",
+      "message": "не указана высота подоконника"
+    },
+    {
+      "file": "room.yaml",
+      "path": "rooms[4].openings[1].sill",
+      "severity": "warning",
+      "message": "не указана высота подоконника"
+    },
+    {
+      "file": "room.yaml",
+      "path": "rooms[4].openings[3].sill",
+      "severity": "warning",
+      "message": "не указана высота подоконника"
+    },
+    {
+      "file": "room.yaml",
+      "path": "rooms[4].openings[4].sill",
+      "severity": "warning",
+      "message": "не указана высота подоконника"
+    },
+    {
+      "file": "room.yaml",
+      "path": "rooms[4].openings[5].sill",
+      "severity": "warning",
+      "message": "не указана высота подоконника"
+    },
+    {
+      "file": "room.yaml",
+      "path": "rooms[4].openings[6].sill",
+      "severity": "warning",
+      "message": "не указана высота подоконника"
+    },
+    {
+      "file": "room.yaml",
+      "path": "rooms[5].openings[0].sill",
+      "severity": "warning",
+      "message": "не указана высота подоконника"
+    },
+    {
+      "file": "room.yaml",
+      "path": "rooms[5].openings[2].sill",
+      "severity": "warning",
+      "message": "не указана высота подоконника"
+    },
+    {
+      "file": "room.yaml",
+      "path": "rooms[5].openings[3].sill",
+      "severity": "warning",
+      "message": "не указана высота подоконника"
+    }
+  ]
+}

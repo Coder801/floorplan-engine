@@ -1,0 +1,81 @@
+# Квартира, ул. Вавиловых 11 (Діма і Аня), план после перепланировки.
+# Источник: source/Діма_і_Аня_план_після_перепланування.pdf + ответы заказчика. Все размеры в мм.
+# Общая система координат: x = 0 — внутренняя грань левой наружной стены (коридор),
+# y = 0 — внутренняя грань нижней наружной стены.
+units: mm
+name: "Квартира, вул. Вавилових, 11"
+language: uk                       # надписи на чертеже — украинский
+default_wall_thickness: 300        # наружные стены по периметру квартиры (текст)
+rooms:
+  - id: living
+    name: "Зал-вітальня + коридор"
+    origin: [1850, 0]              # 1750 + 100 перегородка
+    walls:
+      - { id: w1, length: 2350, thickness: 100 }             # w1: перегородка с санузлом (вверх)
+      - { id: w2, length: 600, thickness: 100, turn: 270 }   # w2: низ выступа стенки 600 (вправо)
+      - { id: w3, length: 100, thickness: 100, turn: 270 }   # w3: торец выступа (вверх)
+      - { id: w4, length: 2450, thickness: 100 }             # w4: стена санузла со стороны коридора (влево)
+      - { id: w5, length: 1461, bearing: true }              # w5: левая наружная, вход (вверх), 350 + 1111
+      - { id: w6, length: 1783, thickness: 120 }             # w6: стена кладовки (вправо), расчёт 7245 − 5462
+      - { id: w7, length: 350, thickness: 120, turn: 270 }   # w7: торец стены спальни (вниз)
+      - { id: w8, length: 5462, thickness: 120 }             # w8: стена спальни и балкона (вправо)
+      - { id: w9, length: 3561, bearing: true }              # w9: правая наружная, с окном (вниз)
+      - { id: w10, length: 5395, bearing: true }              # w10: нижняя наружная (влево)
+    openings:
+      - { id: living_door_1, wall: w4, type: door, offset: 1000, width: 800, hinge: end }  # дверь санвузла (2450 − 1450): наружу, правая — петли у левого откоса
+      - { id: living_door_2, wall: w6, type: door, offset: 300, width: 800, hinge: end }     # дверь в комору (текст)
+      - { id: living_door_3, wall: w8, type: door, offset: 1000, width: 1000, hinge: start } # дверь в спальню
+      - { id: living_door_4, wall: w8, type: door, offset: 4312, width: 1000, hinge: end }   # дверь на балкон
+      - { id: living_door_5, wall: w5, type: door, offset: 416, width: 800, hinge: end, swing: out }  # входная (текст: 800, наружу); место и петли — PDF: проём 2761…3771, по центру
+      - { id: living_window_1, wall: w9, type: window, offset: 740, width: 2400 }  # текст: 2400; место — PDF: проём 410…2826, по центру
+
+  - id: bedroom
+    name: "Спальня"
+    origin: [1903, 3681]           # 1783 + 120; 3561 + 120
+    walls:
+      - { id: w1, length: 2700, thickness: 120 }   # w1: левая, с коридором/кладовкой
+      - { id: w2, length: 3842, bearing: true }    # w2: верхняя наружная
+      - { id: w3, length: 2700, thickness: 200 }   # w3: правая, с балконом
+      - { id: w4, length: 3842, thickness: 120 }   # w4: нижняя, с гостиной
+    openings:
+      - { id: bedroom_window_1, wall: w3, type: window, offset: 600, width: 2100 }    # стеклянная перегородка
+      - { id: bedroom_opening_1, wall: w4, type: opening, offset: 1962, width: 1000 }  # под дверь (полотно 900)
+
+  - id: balcony
+    name: "Балкон"
+    origin: [5945, 3681]           # 1903 + 3842 + 200
+    walls:
+      - { id: w1, length: 2700, thickness: 200 }   # w1: левая, со спальней
+      - { id: w2, length: 1300, bearing: true }    # w2: верхняя наружная
+      - { id: w3, length: 2700, bearing: true }    # w3: правая наружная, окно 2400
+      - { id: w4, length: 1300, thickness: 120 }   # w4: нижняя, с гостиной
+    openings:
+      - { id: balcony_opening_1, wall: w1, type: opening, offset: 0, width: 2100 }     # стеклянная перегородка (со стороны спальни)
+      - { id: balcony_opening_2, wall: w4, type: opening, offset: 150, width: 1000 }   # под дверь (полотно 900)
+      - { id: balcony_window_1, wall: w3, type: window, offset: 100, width: 2400 }    # текст: 2400; место — PDF: остекление 3817…6347, по центру
+
+  - id: bathroom
+    name: "Санвузол"
+    origin: [30, 0]                # уступ вентканала 30 мм
+    walls:
+      - { id: w1, length: 1500, thickness: 330, bearing: true, turn: 270 }  # w1: левая у вентканала (300 + 30)
+      - { id: w2, length: 30, thickness: 330, bearing: true }               # w2: уступ вентканала (влево)
+      - { id: w3, length: 850, bearing: true }                              # w3: левая наружная, 2350 − 1500
+      - { id: w4, length: 1750, thickness: 100 }                            # w4: верхняя, с коридором
+      - { id: w5, length: 2350, thickness: 100 }                            # w5: правая, с гостиной
+      - { id: w6, length: 1720, bearing: true }                             # w6: нижняя наружная
+    openings:
+      - { id: bathroom_opening_1, wall: w4, type: opening, offset: 650, width: 800 }  # под дверь санвузла, 300 от правого угла
+
+  - id: storage
+    name: "Комора"
+    origin: [0, 4031]              # 3911 + 120
+    walls:
+      - { id: w1, length: 1061, bearing: true }    # w1: левая наружная
+      - { id: w2, length: 1783, bearing: true }    # w2: верхняя наружная
+      - { id: w3, length: 1061, thickness: 120 }   # w3: правая, со спальней
+      - { id: w4, length: 1783, thickness: 120 }   # w4: нижняя, с коридором
+    openings:
+      - { id: storage_opening_1, wall: w4, type: opening, offset: 683, width: 800 }    # под дверь: 1783 − 300 − 800
+
+source: photo

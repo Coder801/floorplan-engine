@@ -1,0 +1,102 @@
+# Квартира 71 м² (технічний дизайн-проєкт, листи 08 «План освітлювальних приладів» і 09 «План розміщення розеток»).
+# Источник: source/*.pdf. Обмерного плана нет — ЧЕРНОВАЯ геометрия, размеры будут уточнены.
+# Длины сняты с векторов PDF в масштабе, откалиброванном по подписанным привязкам (шаг светильников 1400 мм
+# = 103,18 pt → 13,568 мм/pt), округлены до 10 мм. Квартира упрощена до прямоугольника (по словам заказчика),
+# утеплитель, короба и мелкие ниши не учтены.
+# Общая система координат: x = 0 — внутренняя грань левой наружной стены, y = 0 — внутренняя грань нижней.
+units: mm
+name: "Квартира 71 м²"
+language: uk
+default_wall_thickness: 400          # наружные стены по PDF ≈ 400
+rooms:
+  - id: bath
+    name: "Санвузол"
+    wet: true                      # вологе приміщення: коробки IP44
+    origin: [0, 2850]
+    walls:
+      - { id: w1, length: 1220 }                              # w1: левая наружная до короба (вверх)
+      - { id: w2, length: 1490, thickness: 230, turn: 270 }   # w2: низ короба (вправо)
+      - { id: w3, length: 230, thickness: 100, turn: 270 }    # w3: торец короба (вверх)
+      - { id: w4, length: 1490, thickness: 230 }              # w4: верх короба (влево)
+      - { id: w5, length: 2000 }                              # w5: левая наружная над коробом (вверх)
+      - { id: w6, length: 1830 }                              # w6: верхняя наружная
+      - { id: w7, length: 2590, thickness: 200, turn: 180 }   # w7: правая, с кабинетом (вниз)
+      - { id: w8, length: 860, thickness: 100 }               # w8: правая, с коридором (вниз)
+      - { id: w9, length: 1830, thickness: 100 }              # w9: нижняя, с санвузлом 2
+    openings:
+      - { id: bath_door_1, wall: w8, type: door, offset: 70, width: 700, hinge: start, swing: out }
+
+  - id: bath2
+    name: "Санвузол 2 (пральня)"
+    wet: true                      # вологе приміщення: коробки IP44
+    origin: [0, 0]
+    walls:
+      - { id: w1, length: 2750 }                    # w1: левая наружная
+      - { id: w2, length: 1830, thickness: 100 }    # w2: верхняя, с санвузлом
+      - { id: w3, length: 2750, thickness: 100 }    # w3: правая, с коридором (вниз)
+      - { id: w4, length: 1830 }                    # w4: нижняя наружная
+    openings:
+      - { id: bath2_door_1, wall: w3, type: door, offset: 1060, width: 700, hinge: end, swing: out }
+
+  - id: study
+    name: "Кабінет"
+    origin: [2030, 3810]
+    walls:
+      - { id: w1, length: 2490, thickness: 200 }    # w1: левая, с санвузлом
+      - { id: w2, length: 3070 }                    # w2: верхняя наружная
+      - { id: w3, length: 2490, thickness: 100 }    # w3: правая, с кухней
+      - { id: w4, length: 3070, thickness: 100 }    # w4: нижняя, с коридором (влево)
+    openings:
+      - { id: study_door_1, wall: w4, type: door, offset: 60, width: 760, hinge: start, swing: out }
+
+  - id: living
+    name: "Кухня-вітальня, коридор, передпокій"
+    origin: [1930, 0]
+    walls:
+      - { id: w1, length: 3710, thickness: 100 }               # w1: левая — коридор (вверх)
+      - { id: w2, length: 3270, thickness: 100, turn: 270 }    # w2: низ кабинета (вправо)
+      - { id: w3, length: 2590, thickness: 100 }               # w3: стена кабинета со стороны кухни (вверх)
+      - { id: w4, length: 3770 }                               # w4: верхняя наружная (кухня)
+      - { id: w5, length: 6300, thickness: 200 }               # w5: правая — к столовой и спальне (вниз)
+      - { id: w6, length: 5090 }                               # w6: нижняя наружная, вітальня (влево)
+      - { id: w7, length: 1900, thickness: 100 }               # w7: перегородка передпокою, сторона вітальні (вверх)
+      - { id: w8, length: 420, thickness: 100, turn: 270 }     # w8: низ шафи (вправо)
+      - { id: w9, length: 640, thickness: 100, turn: 270 }     # w9: торец шафи «середина стінки» (вверх)
+      - { id: w10, length: 900, thickness: 100, turn: 270 }     # w10: верх шафи (влево)
+      - { id: w11, length: 640, thickness: 100, turn: 270 }     # w11: шафа со стороны коридору (вниз)
+      - { id: w12, length: 380, thickness: 100 }                # w12: низ шафи над перегородкой (вправо)
+      - { id: w13, length: 1900, thickness: 100 }               # w13: перегородка, сторона передпокою (вниз)
+      - { id: w14, length: 1850 }                               # w14: нижняя наружная, вхід (влево)
+    openings:
+      - { id: living_opening_1, wall: w1, type: opening, offset: 990, width: 700 }    # дверь санвузла 2
+      - { id: living_opening_2, wall: w1, type: opening, offset: 2940, width: 700 }   # дверь санвузла
+      - { id: living_opening_3, wall: w2, type: opening, offset: 2350, width: 760 }   # дверь кабинета
+      - { id: living_opening_4, wall: w5, type: opening, offset: 760, width: 1890 }   # проём в столовую
+      - { id: living_opening_5, wall: w5, type: opening, offset: 4990, width: 700 }   # дверь спальни
+      - { id: living_door_1, wall: w14, type: door, offset: 650, width: 1000, hinge: end, swing: out }  # входная
+
+  - id: dining
+    name: "Їдальня"
+    origin: [9170, 3650]
+    walls:
+      - { id: w1, length: 2650, thickness: 200 }    # w1: левая, проём на кухню
+      - { id: w2, length: 3030 }                    # w2: верхняя наружная
+      - { id: w3, length: 2650 }                    # w3: правая наружная, балконный блок (вниз)
+      - { id: w4, length: 3030, thickness: 200 }    # w4: нижняя, со спальней (влево)
+    openings:
+      - { id: dining_opening_1, wall: w1, type: opening, offset: 0, width: 1890 }
+      - { id: dining_window_1, wall: w3, type: window, offset: 1000, width: 1600 }
+
+  - id: bedroom
+    name: "Спальня"
+    origin: [9170, 0]
+    walls:
+      - { id: w1, length: 3450, thickness: 200 }    # w1: левая, с вітальнею
+      - { id: w2, length: 3030, thickness: 200 }    # w2: верхняя, со столовой
+      - { id: w3, length: 3450 }                    # w3: правая наружная, балконный блок (вниз)
+      - { id: w4, length: 3030 }                    # w4: нижняя наружная (влево)
+    openings:
+      - { id: bedroom_door_1, wall: w1, type: door, offset: 610, width: 700, hinge: start }
+      - { id: bedroom_window_1, wall: w3, type: window, offset: 150, width: 2700 }
+
+source: photo

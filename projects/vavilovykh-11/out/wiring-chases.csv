@@ -1,0 +1,37 @@
+kind,room,wall,offset_mm,length_m,cables,width,route,circuit,points
+point,balcony,w2,65,1.60,2,narrow,ceiling,power,balcony_led_output_1 balcony_switch_1
+point,balcony,w2,270,1.60,1,narrow,ceiling,power,balcony_socket_1
+point,balcony,w2,580,2.40,1,narrow,ceiling,power,balcony_socket_2
+point,balcony,w4,1225,2.40,2,narrow,ceiling,power,balcony_switch_2 balcony_socket_3
+point,bathroom,w3,400,1.80,2,narrow,ceiling,power,bathroom_socket_3 bathroom_socket_2
+point,bathroom,w5,735,1.60,2,narrow,ceiling,power,bathroom_switch_1 bathroom_socket_1
+point,bathroom,w5,1100,0.90,1,narrow,ceiling,power,bathroom_led_output_1
+point,bedroom,w1,630,2.40,1,narrow,ceiling,power,bedroom_socket_4
+point,bedroom,w1,1200,1.60,2,narrow,ceiling,power,bedroom_socket_3 bedroom_switch_3
+point,bedroom,w1,1440,1.05,1,narrow,ceiling,power,bedroom_led_output_1
+point,bedroom,w2,1401,2.00,3,wide,ceiling,power,bedroom_socket_1 bedroom_pass_switch_1 bedroom_sconce_1
+point,bedroom,w2,1520,2.00,1,narrow,ceiling,power,bedroom_switch_1
+point,bedroom,w2,3410,2.00,3,wide,ceiling,power,bedroom_switch_2 bedroom_sconce_2 bedroom_pass_switch_2
+point,bedroom,w2,3530,2.00,1,narrow,ceiling,power,bedroom_socket_2
+point,bedroom,w4,1762,2.40,2,narrow,ceiling,power,bedroom_switch_4 bedroom_socket_5
+point,living,w1,1595,1.60,2,narrow,ceiling,power,living_socket_2 living_switch_1
+point,living,w1,1740,0.50,1,narrow,ceiling,power,living_led_output_1
+point,living,w1,2200,2.60,1,narrow,ceiling,power,living_socket_1
+point,living,w10,400,0.50,1,narrow,ceiling,power,living_socket_14
+point,living,w10,2550,2.40,1,narrow,ceiling,power,living_socket_9
+point,living,w10,3205,1.60,2,narrow,ceiling,power,living_switch_2 living_socket_8
+point,living,w10,3895,2.60,3,wide,ceiling,power,living_socket_7 living_socket_5 living_socket_6
+point,living,w10,4795,2.60,1,narrow,ceiling,power,living_socket_4
+point,living,w10,5145,1.60,1,narrow,ceiling,power,living_socket_3
+point,living,w4,860,1.80,1,narrow,ceiling,power,living_switch_6
+point,living,w5,160,2.40,2,narrow,ceiling,power,living_switch_4 living_socket_13
+point,living,w6,200,1.80,1,narrow,ceiling,power,living_switch_5
+point,living,w8,480,2.40,2,narrow,ceiling,power,living_switch_3 living_socket_10
+point,living,w8,2350,2.00,1,narrow,ceiling,power,living_socket_11
+point,living,w8,3000,1.30,1,narrow,ceiling,power,living_socket_12
+board,living,w4,2174,1.00,4,wide,ceiling,power,
+board,living,w4,2174,1.00,4,wide,ceiling,power,
+board,living,w4,2174,1.00,4,wide,ceiling,power,
+board,living,w4,2174,1.00,4,wide,ceiling,power,
+board,living,w4,2174,1.00,1,narrow,ceiling,power,
+box,storage,,0,0.20,3,wide,ceiling,power,

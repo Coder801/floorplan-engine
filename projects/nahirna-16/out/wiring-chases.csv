@@ -1,0 +1,65 @@
+kind,room,wall,offset_mm,length_m,cables,width,route,circuit,points
+point,bath,w1,130,0.70,1,narrow,ceiling,power,bath_led_1
+point,bath,w1,420,2.14,1,narrow,ceiling,power,bath_socket_1
+point,bath,w2,340,1.55,2,narrow,ceiling,power,bath_socket_2 bath_switch_1
+point,bath,w5,120,0.91,1,narrow,ceiling,power,bath_led_2
+point,bath,w7,2150,1.80,1,narrow,ceiling,power,bath_towel
+point,bath,w9,310,1.20,1,narrow,ceiling,power,bath_floor_reg
+point,bath2,w1,620,2.60,1,narrow,ceiling,power,bath2_led_1
+point,bath2,w2,1060,2.40,2,narrow,ceiling,power,bath2_socket_2 bath2_socket_1
+point,bath2,w3,880,1.80,1,narrow,ceiling,power,bath2_switch_1
+point,bath2,w3,1950,2.40,1,narrow,ceiling,power,bath2_socket_3
+point,bath2,w4,270,2.40,1,narrow,ceiling,power,bath2_socket_4
+point,bedroom,w1,1430,1.80,1,narrow,ceiling,power,bedroom_switch_1
+point,bedroom,w2,360,1.95,4,wide,ceiling,power,bedroom_ac bedroom_sconce_1 bedroom_socket_1 bedroom_switch_2
+point,bedroom,w2,2630,1.95,3,wide,ceiling,power,bedroom_sconce_2 bedroom_socket_2 bedroom_switch_3
+point,bedroom,w3,2960,2.20,1,narrow,ceiling,power,bedroom_socket_3
+point,bedroom,w4,2630,0.10,1,narrow,ceiling,power,bedroom_led_1
+point,dining,w2,310,2.40,1,narrow,ceiling,power,dining_socket_1
+point,dining,w3,840,2.20,1,narrow,ceiling,power,dining_socket_2
+point,dining,w4,850,1.00,1,narrow,ceiling,power,dining_sconce_1
+point,dining,w4,2300,1.00,1,narrow,ceiling,power,dining_sconce_2
+point,dining,w4,2930,1.80,2,narrow,ceiling,power,dining_switch_1 dining_switch_2
+point,living,w1,820,0.70,1,narrow,ceiling,power,hall_sconce_1
+point,living,w1,1910,1.80,1,narrow,ceiling,power,hall_switch_1
+point,living,w1,2310,0.70,1,narrow,ceiling,power,hall_sconce_2
+point,living,w1,2670,1.80,2,narrow,ceiling,power,hall_pass_1 hall_switch_2
+point,living,w13,1650,1.60,1,narrow,ceiling,power,entry_socket_1
+point,living,w14,330,1.60,4,wide,ceiling,power,entry_sconce_2 entry_sconce_1 entry_pass_1 entry_switch_1
+point,living,w14,445,1.40,2,narrow,ceiling,power,entry_master entry_floor_reg
+point,living,w2,360,2.40,1,narrow,ceiling,power,hall_socket_1
+point,living,w3,630,1.50,3,wide,ceiling,power,kitchen_socket_1 kitchen_switch_1 kitchen_switch_2
+point,living,w3,1330,2.40,1,narrow,ceiling,power,kitchen_socket_2
+point,living,w3,1970,2.60,2,narrow,ceiling,power,kitchen_led_1 kitchen_socket_3
+point,living,w4,350,1.60,1,narrow,ceiling,power,kitchen_socket_4
+point,living,w4,2570,2.40,3,wide,ceiling,power,kitchen_socket_7 kitchen_socket_5 kitchen_socket_6
+point,living,w4,3570,2.45,1,narrow,ceiling,power,kitchen_ac
+point,living,w5,5970,2.40,1,narrow,ceiling,power,living_socket_1
+point,living,w6,1140,2.59,1,narrow,ceiling,power,living_socket_2
+point,living,w6,1920,2.30,2,narrow,ceiling,power,living_socket_3 living_socket_4
+point,living,w6,2600,2.10,1,narrow,ceiling,power,living_socket_5
+point,living,w6,4740,0.05,1,narrow,ceiling,power,living_led_1
+point,living,w7,1630,1.85,2,narrow,ceiling,power,living_socket_6 living_switch_1
+point,living,w9,310,1.80,4,wide,ceiling,power,living_sconce_1 living_sconce_2 living_pass_1 living_switch_2
+point,study,w1,1170,2.40,1,narrow,ceiling,power,study_socket_1
+point,study,w2,1460,1.40,1,narrow,ceiling,power,study_led_1
+point,study,w2,2750,1.85,1,narrow,ceiling,power,study_socket_2
+point,study,w4,1000,1.80,1,narrow,ceiling,power,study_switch_2
+point,study,w4,2800,1.80,2,narrow,ceiling,power,study_sconce_1 study_switch_1
+board,bath2,w4,240,1.00,4,wide,ceiling,power,
+board,bath2,w4,240,1.00,4,wide,ceiling,power,
+board,bath2,w4,240,1.00,4,wide,ceiling,power,
+board,bath2,w4,240,1.00,4,wide,ceiling,power,
+board,bath2,w4,240,1.00,4,wide,ceiling,power,
+board,bath2,w4,240,1.00,4,wide,ceiling,power,
+board,bath2,w4,240,1.00,4,wide,ceiling,power,
+box,living,,0,0.20,4,wide,ceiling,power,
+box,living,,0,0.20,3,wide,ceiling,power,
+box,living,,0,0.20,4,wide,ceiling,power,
+box,living,,0,0.20,2,narrow,ceiling,power,
+box,bedroom,,0,0.20,4,wide,ceiling,power,
+box,bedroom,,0,0.20,2,narrow,ceiling,power,
+box,study,,0,0.20,4,wide,ceiling,power,
+box,study,,0,0.20,1,narrow,ceiling,power,
+box,study,,0,0.20,3,wide,ceiling,power,
+box,dining,,0,0.20,3,wide,ceiling,power,

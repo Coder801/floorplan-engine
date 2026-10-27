@@ -1,0 +1,115 @@
+# Квартира, вул. Вавилових 11, секція 3, кв. 114 — план після перепланування.
+# Джерело: source/АРХІТЕКТУРНА ДИЗАЙН-КОНЦЕПЦІЯ.pdf, аркуш 6 (М 1:50, А3).
+# На аркуші немає підписаних розмірів: усі довжини, товщини і прорізи зняті з векторів
+# у масштабі 1:50 і округлені до 10 мм (# PDF, масштаб). Спільна система координат:
+# x = 0 — внутрішня грань лівої стіни передпокою, y = 0 — внутрішня грань його нижньої стіни.
+units: mm
+source: photo                      # PDF-концепція, розміри з векторів у масштабі
+name: "Квартира, вул. Вавилових 11, кв. 114"
+language: uk
+default_wall_thickness: 120
+rooms:
+  - id: hall
+    name: "Передпокій + гардеробна"
+    origin: [0, 0]
+    walls:
+      - { id: w1, length: 1210, thickness: 310 }  # PDF, масштаб
+      - { id: w2, length: 530 }  # PDF, масштаб
+      - { id: w3, length: 310, turn: 270 }  # PDF, масштаб
+      - { id: w4, length: 1070, turn: 270 }  # PDF, масштаб
+      - { id: w5, length: 310 }  # PDF, масштаб
+      - { id: w6, length: 690, turn: 270 }  # PDF, масштаб
+      - { id: w7, length: 120, turn: 270 }  # PDF, масштаб
+      - { id: w8, length: 490 }  # PDF, масштаб
+      - { id: w9, length: 2390 }  # PDF, масштаб
+      - { id: w10, length: 1610 }  # PDF, масштаб
+      - { id: w11, length: 3720 }  # PDF, масштаб; нижче ванної стіна до сходів товща (≈520) — спрощено
+      - { id: w12, length: 3410, thickness: 280 }  # PDF, масштаб
+    openings:
+      - { id: hall_door_1, wall: w12, type: door, offset: 1820, width: 900, hinge: start, swing: out }  # проріз з чвертю 906…1029, типовий 900; вхідні
+      - { id: hall_opening_1, wall: w9, type: opening, offset: 460, width: 700 }  # аркуш 5: розрив у стіні 4850…5550; двері душової
+      - { id: hall_opening_2, wall: w10, type: opening, offset: 630, width: 980 }  # PDF, масштаб; прохід у кухню
+  - id: shower
+    name: "Душова"
+    wet: true
+    origin: [0, 1330]
+    walls:
+      - { id: w1, length: 2400, thickness: 310 }  # PDF, масштаб
+      - { id: w2, length: 350 }  # PDF, масштаб
+      - { id: w3, length: 400, turn: 270, thickness: 540 }  # PDF, масштаб
+      - { id: w4, length: 550, turn: 270, thickness: 520 }  # PDF, масштаб
+      - { id: w5, length: 400, thickness: 540 }  # PDF, масштаб
+      - { id: w6, length: 780 }  # PDF, масштаб
+      - { id: w7, length: 2400 }  # PDF, масштаб
+      - { id: w8, length: 200, turn: 270 }  # PDF, масштаб
+      - { id: w9, length: 310 }  # PDF, масштаб
+      - { id: w10, length: 830 }  # PDF, масштаб
+      - { id: w11, length: 310, turn: 270 }  # PDF, масштаб
+      - { id: w12, length: 650 }  # PDF, масштаб
+    openings:
+      - { id: shower_door_1, wall: w7, type: door, offset: 1240, width: 700, hinge: start, swing: out }  # аркуш 5: розрив у стіні 4850…5550 (на аркуші 6 — з коробкою, 586)
+  - id: bath
+    name: "Ванна"
+    wet: true
+    origin: [3530, 1280]
+    walls:
+      - { id: w1, length: 2430 }  # PDF, масштаб
+      - { id: w2, length: 1890 }  # PDF, масштаб
+      - { id: w3, length: 920, turn: 270, thickness: 310 }  # PDF, масштаб
+      - { id: w4, length: 190 }  # PDF, масштаб
+      - { id: w5, length: 1510 }  # PDF, масштаб
+      - { id: w6, length: 2080, thickness: 250 }  # PDF, масштаб
+    openings:
+      - { id: bath_door_1, wall: w5, type: door, offset: 0, width: 700, hinge: start, swing: out }  # аркуш 5: проріз 700 після ланцюжка 293 + 400 + 108; зі спальні
+  - id: bedroom
+    name: "Спальня"
+    origin: [5730, 1280]
+    walls:
+      - { id: w1, length: 3710 }  # PDF, масштаб
+      - { id: w2, length: 3600 }  # PDF, масштаб
+      - { id: w3, length: 3710, thickness: 420 }  # PDF, масштаб
+      - { id: w4, length: 3600, thickness: 250 }  # PDF, масштаб
+    openings:
+      - { id: bedroom_opening_1, wall: w1, type: opening, offset: 800, width: 700 }  # аркуш 5: 293 + 400 + 108, проріз 700; двері ванної
+      - { id: bedroom_door_1, wall: w1, type: door, offset: 2590, width: 800, hinge: start, swing: out }  # аркуш 5: 800
+      - { id: bedroom_window_1, wall: w3, type: window, offset: 700, width: 2400 }  # PDF, масштаб
+  - id: kitchen
+    name: "Кухня-вітальня"
+    origin: [10, 3840]
+    walls:
+      - { id: w1, length: 4210, thickness: 320 }  # PDF, масштаб
+      - { id: w2, length: 4010, thickness: 100 }  # PDF, масштаб
+      - { id: w3, length: 1440, turn: 270, thickness: 250 }  # PDF, масштаб
+      - { id: w4, length: 250, turn: 270, thickness: 250 }  # PDF, масштаб
+      - { id: w5, length: 1700, turn: 270, thickness: 250 }  # PDF, масштаб
+      - { id: w6, length: 140, thickness: 250 }  # PDF, масштаб
+      - { id: w7, length: 1195, thickness: 100 }  # аркуші 4, 5: 469 + 726
+      - { id: w8, length: 180, turn: 270, thickness: 540 }  # PDF, масштаб
+      - { id: w9, length: 125 }  # аркуші 4, 5: 123; узгоджено з w7
+      - { id: w10, length: 5020, thickness: 420 }  # PDF, масштаб
+      - { id: w11, length: 4520, thickness: 420 }  # PDF, масштаб
+      - { id: w12, length: 3720, turn: 270 }  # PDF, масштаб
+      - { id: w13, length: 1270 }  # PDF, масштаб
+      - { id: w14, length: 5600 }  # PDF, масштаб
+    openings:
+      - { id: kitchen_opening_1, wall: w14, type: opening, offset: 2200, width: 980 }  # PDF, масштаб; прохід у гардеробну
+      - { id: kitchen_window_5, wall: w2, type: window, offset: 410, width: 3473 }  # аркуш 5: 3473 (1225 + 2230); скляна перегородка «гармошка» до лоджії
+      - { id: kitchen_opening_3, wall: w7, type: opening, offset: 469, width: 726 }  # аркуші 4, 5: 726; двері лоджії
+      - { id: kitchen_window_1, wall: w7, type: window, offset: 0, width: 469 }  # аркуші 4, 5: 469; скло біля дверей лоджії
+      - { id: kitchen_window_2, wall: w10, type: window, offset: 0, width: 2020 }  # PDF, масштаб
+      - { id: kitchen_window_3, wall: w10, type: window, offset: 3000, width: 2020 }  # PDF, масштаб
+      - { id: kitchen_window_4, wall: w11, type: window, offset: 2620, width: 1700 }  # PDF, масштаб
+      - { id: kitchen_opening_4, wall: w13, type: opening, offset: 440, width: 800 }  # аркуш 5: 800, над ним 145 + 172; двері спальні
+  - id: loggia
+    name: "Лоджія"
+    origin: [40, 8150]
+    walls:
+      - { id: w1, length: 1350, thickness: 350 }  # PDF, масштаб
+      - { id: w2, length: 3990, thickness: 540 }  # PDF, масштаб
+      - { id: w3, length: 1350, thickness: 100 }  # PDF, масштаб
+      - { id: w4, length: 3990, thickness: 100 }  # PDF, масштаб
+    openings:
+      - { id: loggia_window_1, wall: w2, type: window, offset: 850, width: 2320 }  # PDF, масштаб
+      - { id: loggia_door_1, wall: w3, type: door, offset: 0, width: 726, hinge: start, swing: out }  # аркуші 4, 5: 726; у вітальню
+      - { id: loggia_window_2, wall: w3, type: window, offset: 726, width: 469 }  # аркуші 4, 5: 469; скло біля дверей
+      - { id: loggia_window_3, wall: w4, type: window, offset: 130, width: 3473 }  # аркуш 5: 3473 (1225 + 2230); скляна перегородка «гармошка»

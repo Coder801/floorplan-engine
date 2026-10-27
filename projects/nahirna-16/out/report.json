@@ -1,0 +1,109 @@
+{
+  "project": "Квартира 71 м²",
+  "stages": [
+    {
+      "stage": "plan",
+      "status": "questions",
+      "builds": true,
+      "reason": "",
+      "weight": 7,
+      "questions": [
+        "q1",
+        "q2",
+        "q3",
+        "q4",
+        "q5"
+      ]
+    },
+    {
+      "stage": "electrical",
+      "status": "questions",
+      "builds": true,
+      "reason": "",
+      "weight": 3,
+      "questions": [
+        "q6"
+      ]
+    }
+  ],
+  "questions": [
+    {
+      "id": "q1",
+      "stage": "plan",
+      "text": "Нет обмерного плана: все длины стен черновые (векторы PDF). Заказчик называет короткую сторону 5,5 м, по подписанным привязкам выходит ≈6,3 м. Есть ли обмер?",
+      "also": [],
+      "answer": "text",
+      "options": [],
+      "assumption": "длины с векторов PDF",
+      "severity": "major",
+      "state": "open"
+    },
+    {
+      "id": "q2",
+      "stage": "plan",
+      "text": "Толщины стен и перегородок (400 / 200 / 100) сняты с векторов PDF, не подписаны",
+      "target": "default_wall_thickness",
+      "also": [],
+      "answer": "value",
+      "unit": "mm",
+      "options": [],
+      "assumption": 400.0,
+      "severity": "minor",
+      "state": "open"
+    },
+    {
+      "id": "q3",
+      "stage": "plan",
+      "text": "Шафа в коридоре («середина стінки») описана как стена-короб 900×640 — так и есть?",
+      "also": [],
+      "answer": "text",
+      "options": [],
+      "severity": "minor",
+      "state": "open"
+    },
+    {
+      "id": "q4",
+      "stage": "plan",
+      "text": "Окна и балконные блоки в столовой и спальне: границы и высоты условные",
+      "also": [],
+      "answer": "text",
+      "options": [],
+      "severity": "minor",
+      "state": "open"
+    },
+    {
+      "id": "q5",
+      "stage": "plan",
+      "text": "Двери: ширина проёма по PDF, петли и открывание — по дугам на плане. Подтвердить?",
+      "also": [],
+      "answer": "text",
+      "options": [],
+      "severity": "minor",
+      "state": "open"
+    },
+    {
+      "id": "q6",
+      "stage": "electrical",
+      "text": "Групп автоматов на листах нет. Сейчас в модели разбивка по помещениям (допущение, режим standard): свет — QF1 кухня-гостиная, QF2 коридор и передпокій (с проходными и мастер-выключателем), QF3 спальня, QF4 кабинет, QF5 столовая, QF6 санузел, QF7 санузел 2 (с вытяжками); розетки — QF8 кухня, QF9 гостиная, коридор и передпокій, QF10 спальня, QF11 кабинет, QF12 столовая, QF13 и QF14 санузлы (через УЗО); QF15, QF16 — кондиционеры кухни и спальни; QF17 — рушникосушка; QF18 — тёплый пол. Свет 3×1,5, остальное 3×2,5. Подтвердите, выберите режим economy (меньше автоматов) или пришлите схему щита.",
+      "also": [],
+      "answer": "text",
+      "options": [],
+      "severity": "major",
+      "state": "open"
+    }
+  ],
+  "issues": [
+    {
+      "file": "room.yaml",
+      "path": "rooms[4].openings[1].sill",
+      "severity": "warning",
+      "message": "не указана высота подоконника"
+    },
+    {
+      "file": "room.yaml",
+      "path": "rooms[5].openings[1].sill",
+      "severity": "warning",
+      "message": "не указана высота подоконника"
+    }
+  ]
+}

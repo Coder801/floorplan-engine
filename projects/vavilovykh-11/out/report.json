@@ -1,0 +1,111 @@
+{
+  "project": "Квартира, вул. Вавилових, 11",
+  "stages": [
+    {
+      "stage": "plan",
+      "status": "ready",
+      "builds": true,
+      "reason": "",
+      "weight": 0,
+      "questions": []
+    },
+    {
+      "stage": "electrical",
+      "status": "questions",
+      "builds": true,
+      "reason": "",
+      "weight": 5,
+      "questions": [
+        "q4",
+        "q5",
+        "q6"
+      ]
+    }
+  ],
+  "questions": [
+    {
+      "id": "q1",
+      "stage": "plan",
+      "text": "Окно 2400 в гостиной: высота подоконника не указана",
+      "target": "rooms.living.openings.living_window_1.sill",
+      "also": [],
+      "answer": "value",
+      "unit": "mm",
+      "options": [],
+      "severity": "minor",
+      "state": "answered"
+    },
+    {
+      "id": "q2",
+      "stage": "plan",
+      "text": "Окно 2400 на балконе: высота подоконника не указана",
+      "target": "rooms.balcony.openings.balcony_window_1.sill",
+      "also": [],
+      "answer": "value",
+      "unit": "mm",
+      "options": [],
+      "severity": "minor",
+      "state": "accepted"
+    },
+    {
+      "id": "q3",
+      "stage": "plan",
+      "text": "Ширина кладовки на плане не подписана: 1783 — расчёт 7245 − 5462",
+      "target": "rooms.storage.walls.w2.length",
+      "also": [
+        "rooms.storage.walls.w4.length",
+        "rooms.living.walls.w6.length"
+      ],
+      "answer": "value",
+      "unit": "mm",
+      "options": [],
+      "assumption": 1783.0,
+      "severity": "major",
+      "state": "answered"
+    },
+    {
+      "id": "q4",
+      "stage": "electrical",
+      "text": "Кондиционер в зале, нижняя стена, справа окно: сколько мм от правого угла (у окна) до середины розетки кондиционера?",
+      "target": "points.living_socket_14.offset",
+      "also": [],
+      "answer": "value",
+      "unit": "mm",
+      "options": [],
+      "assumption": 400.0,
+      "severity": "major",
+      "state": "open"
+    },
+    {
+      "id": "q5",
+      "stage": "electrical",
+      "text": "Кондиционер в зале: на какой высоте от пола розетка или вывод кабеля?",
+      "target": "points.living_socket_14.height",
+      "also": [],
+      "answer": "value",
+      "unit": "mm",
+      "options": [],
+      "assumption": 2200.0,
+      "severity": "minor",
+      "state": "open"
+    },
+    {
+      "id": "q6",
+      "stage": "electrical",
+      "text": "Кондиционер — отдельная группа от щита (QF14, кабель 3×2,5, автомат 16 А)? Так сейчас в модели.",
+      "also": [],
+      "answer": "text",
+      "options": [],
+      "severity": "minor",
+      "state": "open"
+    }
+  ],
+  "issues": [
+    {
+      "file": "room.yaml",
+      "path": "rooms[1].openings[0].sill",
+      "severity": "warning",
+      "message": "не указана высота подоконника"
+    }
+  ]
+}

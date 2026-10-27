@@ -1,0 +1,46 @@
+# Что известно об источниках и открытые вопросы. Формат — README, раздел «intake.yaml».
+sources:
+  - { file: "source/Діма_і_Аня_план_після_перепланування.pdf", note: "план после перепланировки + ответы заказчика" }
+  - { file: "source/Діма і Аня електрика.pdf", note: "электрика: точки, высоты, группы" }
+  - { file: "source/изменения-заказчика.md", note: "2026-10-21: кондиционер в зале" }
+
+questions:
+  - id: q1
+    stage: plan
+    target: rooms.living.openings.living_window_1.sill
+    text: "Окно 2400 в гостиной: высота подоконника не указана"
+    answer: value
+    unit: mm
+  - id: q2
+    stage: plan
+    target: rooms.balcony.openings.balcony_window_1.sill
+    text: "Окно 2400 на балконе: высота подоконника не указана"
+    answer: value
+    unit: mm
+  - id: q3
+    stage: plan
+    target: rooms.storage.walls.w2.length
+    also: [rooms.storage.walls.w4.length, rooms.living.walls.w6.length]
+    text: "Ширина кладовки на плане не подписана: 1783 — расчёт 7245 − 5462"
+    answer: value
+    unit: mm
+    assumption: 1783
+  - id: q4
+    stage: electrical
+    target: points.living_socket_14.offset
+    text: "Кондиционер в зале, нижняя стена, справа окно: сколько мм от правого угла (у окна) до середины розетки кондиционера?"
+    answer: value
+    unit: mm
+    assumption: 400
+  - id: q5
+    stage: electrical
+    target: points.living_socket_14.height
+    text: "Кондиционер в зале: на какой высоте от пола розетка или вывод кабеля?"
+    answer: value
+    unit: mm
+    assumption: 2200
+  - id: q6
+    stage: electrical
+    text: "Кондиционер — отдельная группа от щита (QF14, кабель 3×2,5, автомат 16 А)? Так сейчас в модели."
+    answer: text
+    severity: minor

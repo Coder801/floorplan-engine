@@ -1,0 +1,81 @@
+id,label,group,mark,from,to,route,plan_m,vertical_m,ends_m,length_m
+wire_1,QF1: ЩР → К1,QF1,3x1.5,board,box_1,ceiling,0.28,1.00,1.90,3.18
+wire_2,"QF1: К1 → Вимикач, Зал-вітальня + коридор",QF1,3x1.5,box_1,living_switch_4,ceiling,0.25,1.80,0.40,2.45
+wire_3,"QF1: К1 → Світильник точковий, Зал-вітальня + коридор",QF1,3x1.5,box_1,living_downlight_1,ceiling,0.53,0.00,0.40,0.93
+wire_4,"QF1: К1 → Світильник точковий, Зал-вітальня + коридор",QF1,3x1.5,box_1,living_downlight_2,ceiling,1.41,0.00,0.40,1.81
+wire_5,"QF1: К1 → Вивід для підсвітки, Зал-вітальня + коридор",QF1,3x1.5,box_1,living_led_output_1,ceiling,3.82,0.50,0.40,4.72
+wire_6,"QF1: К1 → Вимикач, Зал-вітальня + коридор",QF1,3x1.5,box_1,living_switch_1,ceiling,3.86,1.60,0.40,5.86
+wire_7,QF1: ЩР → К2,QF1,3x1.5,board,box_2,ceiling,3.78,1.00,1.90,6.68
+wire_8,"QF1: К2 → Вимикач двоклавішний, Зал-вітальня + коридор",QF1,3x1.5,box_2,living_switch_3,ceiling,2.41,1.80,0.40,4.61
+wire_9,"QF1: К2 → Світильник точковий, Зал-вітальня + коридор",QF1,3x1.5,box_2,living_downlight_3,ceiling,0.81,0.00,0.40,1.21
+wire_10,"QF1: К2 → Світильник точковий, Зал-вітальня + коридор",QF1,3x1.5,box_2,living_downlight_4,ceiling,0.75,0.00,0.40,1.15
+wire_11,"QF1: К2 → Світильник точковий, Зал-вітальня + коридор",QF1,3x1.5,box_2,living_downlight_9,ceiling,0.03,0.00,0.40,0.43
+wire_12,"QF1: К2 → Світильник підвісний, Зал-вітальня + коридор",QF1,3x1.5,box_2,living_pendant_1,ceiling,0.93,0.00,0.40,1.33
+wire_13,"QF1: К2 → Світильник підвісний, Зал-вітальня + коридор",QF1,3x1.5,box_2,living_pendant_2,ceiling,1.65,0.00,0.40,2.05
+wire_14,QF1: ЩР → К3,QF1,3x1.5,board,box_3,ceiling,6.78,1.00,1.90,9.68
+wire_15,"QF1: К3 → Вимикач, Зал-вітальня + коридор",QF1,3x1.5,box_3,living_switch_2,ceiling,2.15,1.60,0.40,4.15
+wire_16,"QF1: К3 → Світильник точковий, Зал-вітальня + коридор",QF1,3x1.5,box_3,living_downlight_5,ceiling,1.52,0.00,0.40,1.92
+wire_17,"QF1: К3 → Світильник точковий, Зал-вітальня + коридор",QF1,3x1.5,box_3,living_downlight_6,ceiling,0.06,0.00,0.40,0.46
+wire_18,"QF1: К3 → Світильник точковий, Зал-вітальня + коридор",QF1,3x1.5,box_3,living_downlight_7,ceiling,2.71,0.00,0.40,3.11
+wire_19,"QF1: К3 → Світильник точковий, Зал-вітальня + коридор",QF1,3x1.5,box_3,living_downlight_8,ceiling,1.25,0.00,0.40,1.65
+wire_20,QF2: ЩР → К4,QF2,3x1.5,board,box_4,ceiling,5.71,1.00,1.90,8.61
+wire_21,"QF2: К4 → Вивід для підсвітки, Спальня",QF2,3x1.5,box_4,bedroom_led_output_1,ceiling,1.37,1.05,0.40,2.82
+wire_22,"QF2: К4 → Вимикач, Спальня",QF2,3x1.5,box_4,bedroom_switch_3,ceiling,1.53,1.60,0.40,3.53
+wire_23,"QF2: К4 → Світильник точковий, Спальня",QF2,3x1.5,box_4,bedroom_downlight_1,ceiling,0.50,0.00,0.40,0.90
+wire_24,"QF2: К4 → Світильник точковий, Спальня",QF2,3x1.5,box_4,bedroom_downlight_2,ceiling,1.08,0.00,0.40,1.48
+wire_25,"QF2: К4 → Вимикач прохідний, Спальня",QF2,3x1.5,box_4,bedroom_pass_switch_1,ceiling,1.02,2.00,0.40,3.42
+wire_26,"QF2: К4 → Бра, Спальня",QF2,3x1.5,box_4,bedroom_sconce_1,ceiling,1.19,1.40,0.40,2.99
+wire_27,QF2: ЩР → К5,QF2,3x1.5,board,box_5,ceiling,8.39,1.00,1.90,11.29
+wire_28,"QF2: К5 → Вимикач, Спальня",QF2,3x1.5,box_5,bedroom_switch_1,ceiling,1.64,2.00,0.40,4.04
+wire_29,"QF2: К5 → Вимикач, Спальня",QF2,3x1.5,box_5,bedroom_switch_4,ceiling,3.18,1.80,0.40,5.38
+wire_30,"QF2: К5 → Світильник точковий, Спальня",QF2,3x1.5,box_5,bedroom_downlight_3,ceiling,0.66,0.00,0.40,1.06
+wire_31,"QF2: К5 → Світильник точковий, Спальня",QF2,3x1.5,box_5,bedroom_downlight_4,ceiling,2.46,0.00,0.40,2.86
+wire_32,"QF2: К5 → Вимикач, Спальня",QF2,3x1.5,box_5,bedroom_switch_2,ceiling,0.43,2.00,0.40,2.83
+wire_33,"QF2: К5 → Бра, Спальня",QF2,3x1.5,box_5,bedroom_sconce_2,ceiling,0.57,1.40,0.40,2.37
+wire_34,"QF2: К5 → Вимикач прохідний, Спальня",QF2,3x1.5,box_5,bedroom_pass_switch_2,ceiling,0.41,2.00,0.40,2.81
+wire_35,QF3: ЩР → К6,QF3,3x1.5,board,box_6,ceiling,2.08,1.00,1.90,4.98
+wire_36,"QF3: К6 → Вимикач, Санвузол",QF3,3x1.5,box_6,bathroom_switch_1,ceiling,1.18,1.60,0.40,3.18
+wire_37,"QF3: К6 → Вивід для підсвітки, Санвузол",QF3,3x1.5,box_6,bathroom_led_output_1,ceiling,0.81,0.90,0.40,2.11
+wire_38,"QF3: К6 → Світильник точковий, Санвузол",QF3,3x1.5,box_6,bathroom_downlight_1,ceiling,0.89,0.00,0.40,1.29
+wire_39,"QF3: К6 → Світильник точковий, Санвузол",QF3,3x1.5,box_6,bathroom_downlight_2,ceiling,0.16,0.00,0.40,0.56
+wire_40,"QF3: К6 → Світильник точковий, Санвузол",QF3,3x1.5,box_6,bathroom_downlight_3,ceiling,0.74,0.00,0.40,1.15
+wire_41,"QF3: К6 → Вимикач, Зал-вітальня + коридор",QF3,3x1.5,box_6,living_switch_6,ceiling,2.20,1.80,0.40,4.40
+wire_42,QF4: ЩР → К7,QF4,3x1.5,board,box_7,ceiling,7.75,1.00,1.90,10.65
+wire_43,"QF4: К7 → Вивід для підсвітки, Балкон",QF4,3x1.5,box_7,balcony_led_output_1,ceiling,2.21,0.50,0.40,3.11
+wire_44,"QF4: К7 → Вимикач, Балкон",QF4,3x1.5,box_7,balcony_switch_1,ceiling,2.03,1.60,0.40,4.03
+wire_45,"QF4: К7 → Вимикач, Балкон",QF4,3x1.5,box_7,balcony_switch_2,ceiling,0.59,1.80,0.40,2.79
+wire_46,"QF4: К7 → Світильник точковий, Балкон",QF4,3x1.5,box_7,balcony_downlight_1,ceiling,1.25,0.00,0.40,1.65
+wire_47,"QF4: К7 → Світильник точковий, Балкон",QF4,3x1.5,box_7,balcony_downlight_2,ceiling,0.45,0.00,0.40,0.85
+wire_48,QF5: ЩР → К8,QF5,3x1.5,board,box_8,ceiling,2.53,1.20,1.90,5.63
+wire_49,"QF5: К8 → Світильник підвісний, Комора",QF5,3x1.5,box_8,storage_pendant_1,ceiling,0.85,0.20,0.40,1.45
+wire_50,"QF5: К8 → Вимикач, Зал-вітальня + коридор",QF5,3x1.5,box_8,living_switch_5,ceiling,1.42,2.00,0.40,3.82
+wire_51,QF6: ЩР → К9,QF6,3x2.5,board,box_9,ceiling,2.08,1.00,1.90,4.98
+wire_52,"QF6: К9 → Розетка із заземленням, Зал-вітальня + коридор",QF6,3x2.5,box_9,living_socket_9,ceiling,5.02,2.40,0.40,7.82
+wire_53,"QF6: К9 → Розетка із заземленням, Зал-вітальня + коридор",QF6,3x2.5,box_9,living_socket_10,ceiling,0.85,2.40,0.40,3.65
+wire_54,"QF6: К9 → Розетка із заземленням, Зал-вітальня + коридор",QF6,3x2.5,box_9,living_socket_11,ceiling,2.72,2.00,0.40,5.12
+wire_55,"QF6: К9 → Розетка із заземленням, Зал-вітальня + коридор",QF6,3x2.5,box_9,living_socket_12,ceiling,3.37,1.30,0.40,5.07
+wire_56,"QF6: К9 → Розетка із заземленням, Зал-вітальня + коридор",QF6,3x2.5,box_9,living_socket_13,ceiling,2.22,2.40,0.40,5.02
+wire_57,QF7: ЩР → К10,QF7,3x2.5,board,box_10,ceiling,4.81,1.00,1.90,7.71
+wire_58,"QF7: К10 → Розетка із заземленням, Спальня",QF7,3x2.5,box_10,bedroom_socket_1,ceiling,1.99,2.00,0.40,4.39
+wire_59,"QF7: К10 → Розетка із заземленням, Спальня",QF7,3x2.5,box_10,bedroom_socket_2,ceiling,4.16,2.00,0.40,6.56
+wire_60,"QF7: К10 → Розетка із заземленням, Спальня",QF7,3x2.5,box_10,bedroom_socket_3,ceiling,1.76,1.60,0.40,3.76
+wire_61,"QF7: К10 → Розетка із заземленням, Спальня",QF7,3x2.5,box_10,bedroom_socket_4,ceiling,1.30,2.40,0.40,4.10
+wire_62,"QF7: К10 → Розетка із заземленням, Спальня",QF7,3x2.5,box_10,bedroom_socket_5,ceiling,1.31,2.40,0.40,4.11
+wire_63,QF8: ЩР → К11,QF8,3x2.5,board,box_11,ceiling,1.48,1.00,1.90,4.38
+wire_64,"QF8: К11 → Розетка із заземленням, Санвузол",QF8,3x2.5,box_11,bathroom_socket_1,ceiling,1.14,1.60,0.40,3.14
+wire_65,"QF8: К11 → Розетка із заземленням, Санвузол",QF8,3x2.5,box_11,bathroom_socket_2,ceiling,0.83,1.80,0.40,3.03
+wire_66,"QF8: К11 → Розетка із заземленням, Санвузол",QF8,3x2.5,box_11,bathroom_socket_3,ceiling,0.73,0.70,0.40,1.83
+wire_67,QF9: ЩР → К12,QF9,3x2.5,board,box_12,ceiling,9.66,1.00,1.90,12.56
+wire_68,"QF9: К12 → Розетка із заземленням, Балкон",QF9,3x2.5,box_12,balcony_socket_1,ceiling,0.20,1.60,0.40,2.20
+wire_69,"QF9: К12 → Розетка із заземленням, Балкон",QF9,3x2.5,box_12,balcony_socket_2,ceiling,0.51,2.40,0.40,3.31
+wire_70,"QF9: К12 → Розетка із заземленням, Балкон",QF9,3x2.5,box_12,balcony_socket_3,ceiling,2.55,2.40,0.40,5.35
+wire_71,QF10: ЩР → К13,QF10,3x2.5,board,box_13,ceiling,5.48,1.00,1.90,8.38
+wire_72,"QF10: К13 → Розетка із заземленням, Зал-вітальня + коридор",QF10,3x2.5,box_13,living_socket_1,ceiling,2.08,2.60,0.40,5.08
+wire_73,"QF10: К13 → Розетка із заземленням, Зал-вітальня + коридор",QF10,3x2.5,box_13,living_socket_2,ceiling,1.42,1.60,0.40,3.42
+wire_74,"QF10: К13 → Розетка із заземленням, Зал-вітальня + коридор",QF10,3x2.5,box_13,living_socket_3,ceiling,0.23,1.60,0.40,2.23
+wire_75,"QF10: К13 → Розетка із заземленням, Зал-вітальня + коридор",QF10,3x2.5,box_13,living_socket_7,ceiling,1.33,0.90,0.40,2.63
+wire_76,"QF10: К13 → Розетка із заземленням, Зал-вітальня + коридор",QF10,3x2.5,box_13,living_socket_8,ceiling,2.09,1.60,0.40,4.09
+wire_77,"QF11: ЩР → Розетка із заземленням, Зал-вітальня + коридор",QF11,3x2.5,board,living_socket_4,ceiling,5.26,3.60,1.90,10.76
+wire_78,"QF12: ЩР → Розетка із заземленням, Зал-вітальня + коридор",QF12,3x2.5,board,living_socket_5,ceiling,5.76,3.60,1.90,11.26
+wire_79,"QF13: ЩР → Розетка із заземленням, Зал-вітальня + коридор",QF13,3x4,board,living_socket_6,ceiling,5.66,3.60,1.90,11.16
+wire_80,"QF14: ЩР → Розетка із заземленням, Зал-вітальня + коридор",QF14,3x2.5,board,living_socket_14,ceiling,9.27,1.50,1.90,12.67

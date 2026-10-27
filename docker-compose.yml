@@ -1,0 +1,23 @@
+# База сервиса для разработки: uv run shtroba … с DATABASE_URL из .env (см. .env.example)
+#   docker compose up -d db        — поднять
+#   uv run alembic upgrade head    — создать или обновить таблицы
+services:
+  db:
+    image: postgres:17
+    container_name: shtroba-db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-shtroba}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-shtroba}
+      POSTGRES_DB: ${POSTGRES_DB:-shtroba}
+    ports:
+      - "${POSTGRES_PORT:-5433}:5432"  # 5432 часто занят другими проектами
+    volumes:
+      - shtroba-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-shtroba} -d ${POSTGRES_DB:-shtroba}"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+volumes:
+  shtroba-pgdata:
