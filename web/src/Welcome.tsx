@@ -1,6 +1,9 @@
 // Экран приветствия: выбор проекта карточками на всю страницу, пока проект не открыт.
-// Картинка карточки — условный план, разбитый по имени проекта (не геометрия модели).
+// Картинка карточки — превью плана из модели (out/preview.svg, пишет build); нет его —
+// условный план, разбитый по имени проекта.
 
+import { useEffect, useState } from "react";
+import { base, getText } from "./api";
 import { STAGE, STATUS } from "./consts";
 import { Logo } from "./Logo";
 import type { ProjectSummary } from "./types";
@@ -57,6 +60,19 @@ function Plan({ name }: { name: string }) {
   );
 }
 
+// SVG пишет ядро (thumbnail.py): только пути и линии с классами, цвета — из styles.css
+function Preview({ p }: { p: ProjectSummary }) {
+  const [svg, setSvg] = useState<string | null>(null);
+  useEffect(() => {
+    if (!p.preview) return;
+    let alive = true;
+    getText(`${base(p.name)}/out/preview.svg?t=${p.built ?? 0}`).then((t) => alive && setSvg(t), () => {});
+    return () => { alive = false; };
+  }, [p.name, p.preview, p.built]);
+  if (!svg) return <Plan name={p.name} />;
+  return <div className="welcome-plan real" aria-hidden="true" dangerouslySetInnerHTML={{ __html: svg }} />;
+}
+
 const date = (t: number | null) =>
   (t ? new Date(t * 1000).toLocaleDateString("ru", { day: "numeric", month: "long", year: "numeric" }) : null);
 
@@ -81,7 +97,7 @@ export function Welcome({ list, onOpen }: { list: ProjectSummary[]; onOpen: (nam
         <div className="welcome-grid">
           {list.map((p) => (
             <button key={p.name} className="welcome-card" onClick={() => onOpen(p.name)}>
-              <Plan name={p.name} />
+              <Preview p={p} />
               <div className="welcome-body">
                 <div className="welcome-title">{p.title}</div>
                 <div className="mono muted">{p.name}</div>

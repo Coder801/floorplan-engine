@@ -40,6 +40,7 @@ export interface ProjectSummary {
   stale: boolean;
   stages: Stage[];
   open_questions: number;
+  preview: boolean;  // есть out/preview.svg — превью плана из модели
 }
 
 export interface Project extends ProjectSummary {

@@ -45,6 +45,7 @@ from floorplan_engine.scene3d import build_scene
 from floorplan_engine.schema import Electrical, WiringEdits
 from floorplan_engine.sheets import build_project_document, document_scale, sheet_png_name
 from floorplan_engine.side import side_tables
+from floorplan_engine.thumbnail import PREVIEW_FILE, plan_thumbnail
 from floorplan_engine.validate import (
     WIRING_FILE,
     Issue,
@@ -188,6 +189,8 @@ def build_project(project: Path, previews: bool = False) -> BuildResult:
     doc = build_project_document(report.plan, report.contours, elec, prices=prices, edits=edits)
     saved = save_checked(doc, out / PROJECT_FILE)
     result.dxf = out / PROJECT_FILE
+    # Превью для карточки проекта в просмотре
+    (out / PREVIEW_FILE).write_text(plan_thumbnail(report.plan, report.contours), "utf-8")
     wiring: Wiring | None = None
     edit: dict[str, Any] | None = None
     scene: dict[str, Any] | None = None

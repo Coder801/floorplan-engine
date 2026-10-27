@@ -44,6 +44,7 @@ from floorplan_engine.pipeline import (
     save_wiring_edits,
 )
 from floorplan_engine.report import REPORT_JSON
+from floorplan_engine.thumbnail import PREVIEW_FILE
 from floorplan_engine.validate import ELECTRICAL_FILE, ROOM_FILE, WIRING_FILE
 
 FRONT_HINT = "страница — проект web/: cd web && npm run dev → http://127.0.0.1:5173"
@@ -84,6 +85,8 @@ def _summary(project: Path) -> dict[str, Any]:
         "stale": built is not None and bool(model_times) and max(model_times) > built,
         "stages": report.get("stages", []),
         "open_questions": sum(1 for q in questions if q.get("state") == "open"),
+        # Превью плана для карточки: GET /api/projects/{name}/out/preview.svg
+        "preview": (project / OUT_DIR / PREVIEW_FILE).exists(),
     }
 
 
