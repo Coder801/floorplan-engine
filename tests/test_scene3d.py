@@ -43,6 +43,11 @@ def test_wires_are_orthogonal_and_end_at_point_heights() -> None:
         assert max(p[2] for p in pts) == pytest.approx(2700)  # по потолку
     s1 = next(r for r in wiring.runs if r.target == "s1")
     assert scene["wires"][s1.id]["pts"][-1][2] == pytest.approx(300)  # розетка на 300
+    # Помещение линии — помещение цели: по нему фильтр 3D в просмотре
+    point_rooms = {pid: p["room"] for pid, p in scene["points"].items()}
+    box_rooms = {bid: b["room"] for bid, b in scene["boxes"].items()}
+    for r in wiring.runs:
+        assert scene["wires"][r.id]["room"] == {**point_rooms, **box_rooms}[r.target]
 
 
 def test_floor_route_runs_in_screed() -> None:
@@ -96,3 +101,24 @@ def test_shared_partition_is_one_piece_with_both_normals() -> None:
     shared = [w for w in walls if len(w["normals"]) == 2]
     assert len(shared) == 1
     assert sorted(shared[0]["normals"]) == [[-1.0, 0.0], [1.0, 0.0]]
+
+
+def test_corner_does_not_give_wall_a_foreign_normal() -> None:
+    """Короткая стена (уступ 200 мм) перекрывается с соседней угловым квадратом — заметная
+    доля её площади, но это стык, а не общая стена: чужая (перпендикулярная) нормаль
+    заставила бы «срез» прятать соседнюю стену, когда та дальняя."""
+    from floorplan_engine.draw_plan import room_geometries
+    from floorplan_engine.scene3d import _walls
+
+    jog = [
+        {"length": 3000},
+        {"length": 2000},
+        {"length": 200, "turn": 270},
+        {"length": 2000},
+        {"length": 2800},
+        {"length": 4000},
+    ]
+    plan = make_plan(jog)
+    _, contours = validate_plan(plan)
+    walls = _walls(room_geometries(plan, contours), 2700)
+    assert all(len(w["normals"]) == 1 for w in walls)

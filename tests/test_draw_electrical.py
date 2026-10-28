@@ -7,10 +7,9 @@ from ezdxf import bbox
 from ezdxf.document import Drawing
 from ezdxf.filemanagement import readfile
 
-from floorplan_engine.draw_electrical import point_label
 from floorplan_engine.layers import SCALES
 from floorplan_engine.preview import sheet_layouts
-from floorplan_engine.schema import Electrical, ElectricalPoint, PointType
+from floorplan_engine.schema import Electrical
 from floorplan_engine.sheets import build_project_document, sheet_png_name
 from floorplan_engine.validate import (
     parse_model,
@@ -25,20 +24,6 @@ def _save(doc: Drawing, path: Path) -> Drawing:
     reread = readfile(path)
     assert not reread.audit().has_errors
     return reread
-
-
-def test_point_label() -> None:
-    pt = ElectricalPoint(
-        id="p1",
-        room="r",
-        wall="w1",
-        offset=1,
-        type=PointType.SOCKET,
-        height=300,
-        count=2,
-        group="QF1",
-    )
-    assert point_label(pt) == "2× h300"  # группа — на трассе и в легенде
 
 
 def test_board_must_fit_wall() -> None:
@@ -223,8 +208,10 @@ def test_sheets_show_own_layers_at_common_scale(tmp_path: Path) -> None:
         }
     )
     doc = _save(build_project_document(plan, contours, elec), tmp_path / "project.dxf")
-    plan_sheet, elec_sheet = sheet_layouts(doc)
+    plan_sheet, elec_sheet, points_sheet, walls_sheet = sheet_layouts(doc)
     assert [plan_sheet.name, elec_sheet.name] == ["01 План", "02 Электрика"]
+    assert points_sheet.name == "03 Точки"  # ведомость точек — приложением в конце
+    assert walls_sheet.name == "04 Развёртки"  # и развёртки стен
     assert "Layout1" not in doc.layout_names()
 
     # Масштаб — один из стандартных и общий для всех листов
@@ -267,7 +254,7 @@ def test_board_attributes_do_not_inflate_view(tmp_path: Path) -> None:
     (board,) = doc.modelspace().query("INSERT[name=='E_BOARD']")
     box = bbox.extents([board])
     assert box.size.x < 1000 and box.size.y < 1000
-    _, elec_sheet = sheet_layouts(doc)
+    _, elec_sheet, _ = sheet_layouts(doc)  # точек нет — листа «Точки» нет; развёртка — щит
     # Маленькая комната — маленький формат, а не A0 из-за раздутого габарита
     assert elec_sheet.dxf_layout.dxf.paper_size.split("_(")[0][-2:] in ("A4", "A3")
 
@@ -300,4 +287,5 @@ def test_all_sheets_share_one_format(tmp_path: Path) -> None:
     )
     doc = _save(build_project_document(plan, contours, elec), tmp_path / "project.dxf")
     sizes = {lay.dxf_layout.dxf.paper_size for lay in sheet_layouts(doc)}
-    assert len(sheet_layouts(doc)) == 4 and len(sizes) == 1  # план, электрика, проводка, щит
+    # план, электрика, проводка, щит, точки, развёртки
+    assert len(sheet_layouts(doc)) == 6 and len(sizes) == 1

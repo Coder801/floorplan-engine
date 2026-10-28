@@ -1,0 +1,77 @@
+// Боковая панель: вкладки | тело с прокруткой; выдвижная панель шапки — поверх (absolute)
+
+@use "./styles/mixins" as *;
+
+// Полоса (вид у «Электрики») | вкладки | тело; чего нет — строка нулевой высоты
+.side {
+  position: relative; overflow: hidden; min-height: 0;
+  display: grid; grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-areas: "bar" "tabs" "body";
+  background: var(--panel); border-left: 1px solid var(--line);
+}
+
+// Полоса: вид чертежа сегментами на всю ширину и «▴» шторки (только на узком экране)
+.bar {
+  grid-area: bar; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px;
+  padding: 10px 16px; border-bottom: 1px solid var(--line);
+  > [role="radiogroup"] { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; }
+}
+.barEmpty { display: none; }
+.title { font-weight: 500; }
+.toggle { display: none; min-width: 44px; padding: 0; font-size: 16px; }
+
+// Вкладок может не быть (у щита одни таблицы)
+.tabs {
+  grid-area: tabs;
+  display: grid; grid-auto-flow: column; grid-auto-columns: 1fr;
+  border-bottom: 1px solid var(--line);
+  button {
+    @include bare-button;
+    border-radius: 0; min-height: 44px; padding: 0 6px;
+    color: var(--muted); border-bottom: 2px solid transparent;
+  }
+  button[aria-selected="true"] { color: var(--text); border-bottom-color: var(--text); font-weight: 500; }
+}
+.body { grid-area: body; }
+
+// Таблица листа: строка со ссылками на объекты подсвечивается вместе с ними
+.table {
+  border-collapse: collapse; width: 100%; font-size: 12px;
+  th, td { padding: 4px 6px; border-top: 1px solid var(--line); vertical-align: top; text-align: left; }
+  th { color: var(--muted); font-weight: 500; border-top: 0; }
+  .c { text-align: center; }
+  .mark { white-space: nowrap; }
+  tr.linked:hover td { background: var(--soft); }
+  tr.lit td, tr.lit:hover td { background: var(--hl-row); }
+  tr.lit td:first-child { box-shadow: inset 3px 0 var(--hl); }
+  tr.section td { font-weight: 600; padding-top: 10px; }
+  tr.total td { border-top: 2px solid var(--text); font-weight: 600; }
+}
+.notes { margin: 6px 0 0; padding-left: 16px; color: var(--muted); font-size: 12px; }
+
+// Слои: флажок | цвет | название | код слоя
+.layers label {
+  display: grid; grid-template-columns: auto 14px minmax(0, 1fr) auto;
+  align-items: center; gap: 10px; min-height: 34px; cursor: pointer;
+}
+.swatch { height: 4px; }
+.code { color: var(--muted); }
+
+// Узкий экран — нижняя шторка: свёрнута — одна полоса под чертежом; развёрнута — поверх
+// чертежа снизу (App — position: relative), с вкладками и таблицами
+@media (max-width: $narrow) {
+  .side { border-left: 0; border-top: 1px solid var(--line); }
+  .bar { padding: 8px 12px; border-bottom: 0; }
+  .barEmpty { display: grid; }
+  .toggle { display: block; }
+  .tabs, .body { display: none; }
+  .side[data-open] {
+    // grid-area: auto — иначе рамка абсолютного элемента сетки — его пустая область side
+    grid-area: auto; position: absolute; left: 0; right: 0; bottom: 0; z-index: 6;
+    height: min(72dvh, calc(100% - 96px));
+    border-radius: 12px 12px 0 0; box-shadow: 0 -8px 28px rgba(0, 0, 0, .18);
+    .bar { border-bottom: 1px solid var(--line); }
+    .tabs { display: grid; }
+    .body { display: block; }
+  }
+}

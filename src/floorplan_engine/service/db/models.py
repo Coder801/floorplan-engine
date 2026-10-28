@@ -14,15 +14,19 @@ from typing import Any, ClassVar
 
 from sqlalchemy import (
     JSON,
+    Boolean,
+    CheckConstraint,
     DateTime,
     Float,
     ForeignKey,
+    Index,
     Integer,
     Numeric,
     String,
     Text,
     UniqueConstraint,
     Uuid,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
@@ -47,25 +51,62 @@ def _created() -> Mapped[datetime]:
     return mapped_column(DateTime(timezone=True), default=now)
 
 
-# --- Студии и доступ --------------------------------------------------------------
+# --- Студии и доступ (docs/database.md, «Доступ» и «Вход») ----------------------------
 
 
 class Studio(Base):
+    """Пространство проектов: студия или монтажник (`studio`) либо личное пространство
+    хозяина квартиры (`personal`, один проект). Граница доступа — студия."""
+
     __tablename__ = "studio"
     id: Mapped[uuid.UUID] = _id()
     name: Mapped[str] = mapped_column(String(200))
+    kind: Mapped[str] = mapped_column(String(20), default="studio")  # studio | personal
     created_at: Mapped[datetime] = _created()
     profile: Mapped[StudioProfile | None] = relationship(back_populates="studio")
     projects: Mapped[list[Project]] = relationship(back_populates="studio")
 
 
 class AppUser(Base):
-    """Пользователь (user — служебное слово Postgres)."""
+    """Пользователь (user — служебное слово Postgres). Паролей нет: вход через OAuth
+    (oauth_account). email может быть пустым — не каждый провайдер его отдаёт."""
 
     __tablename__ = "app_user"
     id: Mapped[uuid.UUID] = _id()
-    email: Mapped[str] = mapped_column(String(320), unique=True)
+    email: Mapped[str | None] = mapped_column(String(320), unique=True)
+    name: Mapped[str] = mapped_column(String(200), default="")
+    # client — хозяин квартиры, pro — студия или монтажник; None — ещё не выбрал
+    account_type: Mapped[str | None] = mapped_column(String(10))
+    is_superuser: Mapped[bool] = mapped_column(Boolean, default=False)  # видит всё
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = _created()
+
+
+class OAuthAccount(Base):
+    """Учётка у провайдера входа (google, …), привязанная к пользователю."""
+
+    __tablename__ = "oauth_account"
+    __table_args__ = (UniqueConstraint("provider", "provider_user_id"),)
+    id: Mapped[uuid.UUID] = _id()
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("app_user.id", ondelete="CASCADE"))
+    provider: Mapped[str] = mapped_column(String(20))
+    provider_user_id: Mapped[str] = mapped_column(String(255))
+    email: Mapped[str | None] = mapped_column(String(320))
+    created_at: Mapped[datetime] = _created()
+
+
+class UserSession(Base):
+    """Сессия входа: в cookie — случайный токен, здесь — только его sha256."""
+
+    __tablename__ = "user_session"
+    id: Mapped[uuid.UUID] = _id()
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("app_user.id", ondelete="CASCADE"))
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    user_agent: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = _created()
+    last_seen_at: Mapped[datetime] = _created()
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
 class Membership(Base):
@@ -77,6 +118,7 @@ class Membership(Base):
         ForeignKey("app_user.id", ondelete="CASCADE"), primary_key=True
     )
     role: Mapped[str] = mapped_column(String(20))  # owner | designer | installer
+    created_at: Mapped[datetime] = _created()
 
 
 class StudioProfile(Base):
@@ -110,6 +152,8 @@ class Project(Base):
     id: Mapped[uuid.UUID] = _id()
     studio_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("studio.id", ondelete="CASCADE"))
     name: Mapped[str] = mapped_column(String(200))
+    # Папка проекта в просмотре (projects/<slug>) — пока проекты живут в папках
+    slug: Mapped[str | None] = mapped_column(String(100), unique=True)
     # Состояние — значения service.models.ProjectState
     state: Mapped[str] = mapped_column(String(20), default="created")
     message: Mapped[str] = mapped_column(Text, default="")
@@ -118,6 +162,95 @@ class Project(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, onupdate=now)
     studio: Mapped[Studio] = relationship(back_populates="projects")
     sources: Mapped[list[Source]] = relationship(back_populates="project")
+
+
+class ProjectMember(Base):
+    """Доступ к одному проекту: клиент (хозяин квартиры) или монтажник со стороны.
+    Клиент — только в одном проекте (частичный уникальный индекс)."""
+
+    __tablename__ = "project_member"
+    __table_args__ = (
+        Index(
+            "uq_project_member_one_client",
+            "user_id",
+            unique=True,
+            postgresql_where=text("role = 'client'"),
+            sqlite_where=text("role = 'client'"),
+        ),
+    )
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("project.id", ondelete="CASCADE"), primary_key=True
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("app_user.id", ondelete="CASCADE"), primary_key=True
+    )
+    role: Mapped[str] = mapped_column(String(20))  # client | installer
+    invited_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("app_user.id", ondelete="SET NULL")
+    )
+    created_at: Mapped[datetime] = _created()
+
+
+class Invite(Base):
+    """Приглашение ссылкой — в студию или в проект; в базе только sha256 токена."""
+
+    __tablename__ = "invite"
+    __table_args__ = (
+        CheckConstraint(
+            "(studio_id IS NULL) <> (project_id IS NULL)", name="invite_studio_or_project"
+        ),
+    )
+    id: Mapped[uuid.UUID] = _id()
+    studio_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("studio.id", ondelete="CASCADE"))
+    project_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("project.id", ondelete="CASCADE")
+    )
+    role: Mapped[str] = mapped_column(String(20))
+    email: Mapped[str | None] = mapped_column(String(320))  # кому отправили — для списка
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    invited_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("app_user.id", ondelete="SET NULL")
+    )
+    created_at: Mapped[datetime] = _created()
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    accepted_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("app_user.id", ondelete="SET NULL")
+    )
+    accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class SupportGrant(Base):
+    """Доступ разработчика к чужому проекту: выдаёт владелец студии, с причиной и сроком."""
+
+    __tablename__ = "support_grant"
+    id: Mapped[uuid.UUID] = _id()
+    project_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("project.id", ondelete="CASCADE"))
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("app_user.id", ondelete="CASCADE"))
+    granted_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("app_user.id", ondelete="SET NULL")
+    )
+    reason: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = _created()
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class AuditEvent(Base):
+    """Журнал: входы, ответы, правки трасс, сборки, приглашения, скачивания, поддержка."""
+
+    __tablename__ = "audit_event"
+    __table_args__ = (Index("ix_audit_event_project", "project_id", "created_at"),)
+    id: Mapped[uuid.UUID] = _id()
+    project_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("project.id", ondelete="CASCADE")
+    )
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("app_user.id", ondelete="SET NULL")
+    )
+    action: Mapped[str] = mapped_column(String(30))
+    payload: Mapped[dict[str, Any]] = mapped_column(default=dict)
+    created_at: Mapped[datetime] = _created()
 
 
 class Source(Base):
@@ -170,7 +303,11 @@ class ModelVersion(Base):
     electrical_yaml: Mapped[str | None] = mapped_column(Text)
     intake_yaml: Mapped[str | None] = mapped_column(Text)
     answers_yaml: Mapped[str | None] = mapped_column(Text)
+    wiring_yaml: Mapped[str | None] = mapped_column(Text)  # правки трасс из просмотра
     author: Mapped[str] = mapped_column(String(20))  # analyzer | user | operator
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("app_user.id", ondelete="SET NULL")
+    )
     created_at: Mapped[datetime] = _created()
 
 
@@ -238,11 +375,21 @@ class BuildFile(Base):
 
 
 class PriceList(Base):
-    """Прайс проекта — то, что сейчас лежит в prices.yaml."""
+    """Прайс — то, что сейчас лежит в prices.yaml: свой у проекта или общий у студии
+    (projects/prices.yaml)."""
 
     __tablename__ = "price_list"
-    project_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("project.id", ondelete="CASCADE"), primary_key=True
+    __table_args__ = (
+        CheckConstraint(
+            "(studio_id IS NULL) <> (project_id IS NULL)", name="price_list_studio_or_project"
+        ),
+    )
+    id: Mapped[uuid.UUID] = _id()
+    studio_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("studio.id", ondelete="CASCADE"), unique=True
+    )
+    project_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("project.id", ondelete="CASCADE"), unique=True
     )
     currency: Mapped[str] = mapped_column(String(8), default="грн")
     date: Mapped[str] = mapped_column(String(20), default="")

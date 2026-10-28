@@ -14,6 +14,10 @@ GET /api/projects/{name}/model/{file}   YAML модели
 GET /api/projects/{name}/sheets         манифест листов из out/project.epd
 GET /api/projects/{name}/sheets/{n}     лист n (1, 2…): векторные примитивы для canvas
 POST /api/projects/{name}/wiring        правки проводки → wiring.yaml и пересборка
+GET /api/auth/me                        кто вошёл ({"auth": false} — вход выключен)
+
+Вход (service/auth.py) включается окружением SHTROBA_AUTH=on: тогда список проектов — только
+видимые пришедшему, а запросы к проекту проверяются по его роли (db/access.py).
 
 Страница просмотра — отдельный проект web/ (React + TypeScript, решение 2026-10-27): он
 обращается к этому API по /api через прокси (Vite в разработке, обратный прокси при выкладке).
@@ -29,7 +33,7 @@ from pathlib import Path
 from typing import Annotated, Any
 
 import yaml
-from fastapi import Body, FastAPI, HTTPException
+from fastapi import Body, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, PlainTextResponse, Response
 
 from floorplan_engine.artifact import FORMAT_VERSION, MANIFEST
@@ -44,6 +48,7 @@ from floorplan_engine.pipeline import (
     save_wiring_edits,
 )
 from floorplan_engine.report import REPORT_JSON
+from floorplan_engine.service.auth import Auth
 from floorplan_engine.thumbnail import PREVIEW_FILE
 from floorplan_engine.validate import ELECTRICAL_FILE, ROOM_FILE, WIRING_FILE
 
@@ -90,8 +95,16 @@ def _summary(project: Path) -> dict[str, Any]:
     }
 
 
-def create_viewer(root: Path) -> FastAPI:
+def create_viewer(root: Path, auth: Auth | None = None) -> FastAPI:
+    """API просмотра папки root; auth — вход и доступ (None — всё открыто, локально)."""
     app = FastAPI(title="Штроба · просмотр", version="0.1.0")
+    if auth is not None:
+        auth.install(app)
+    else:
+
+        @app.get("/api/auth/me")
+        def me() -> dict[str, bool]:
+            return {"auth": False}
 
     def project_dir(name: str) -> Path:
         path = root / name
@@ -111,8 +124,11 @@ def create_viewer(root: Path) -> FastAPI:
         return {"service": "Штроба · API просмотра", "front": FRONT_HINT, "docs": "/docs"}
 
     @app.get("/api/projects")
-    def projects() -> list[dict[str, Any]]:
+    def projects(request: Request) -> list[dict[str, Any]]:
         folders = sorted(p for p in root.iterdir() if p.is_dir() and not p.name.startswith("."))
+        if auth is not None:
+            shown = auth.visible(request, [p.name for p in folders])
+            folders = [p for p in folders if p.name in shown]
         return [
             _summary(p)
             for p in folders

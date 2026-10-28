@@ -197,7 +197,7 @@ def record_page(doc: Drawing, layout: Paperspace) -> dict[str, Any]:
     }
     stage = sheet_slug(layout.name)
     view = view_rect(layout, height)
-    if view is None and stage == "panel":
+    if view is None and stage in ("panel", "elevations"):  # схема на листе — по её объектам
         view = objects_rect(recorder.items)
     if view is not None:
         page["view"] = view
@@ -332,6 +332,7 @@ def export_artifact(
                     "format": page["format"],
                     "size": page["size"],
                     "file": file,
+                    **({"stage": page["stage"]} if "stage" in page else {}),
                 }
             )
         manifest = {

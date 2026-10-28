@@ -4,6 +4,9 @@
 import { useEffect, useState } from "react";
 import { base, enc, getText } from "./api";
 import { DRAWER, QSTATE, REDUCED_MOTION, SEVERITY, STAGE, STATUS, type DrawerTab } from "./consts";
+import { cx } from "./cx";
+import css from "./Drawer.module.scss";
+import ui from "./styles/ui.module.scss";
 import type { Project } from "./types";
 
 interface Props {
@@ -29,13 +32,13 @@ export function Drawer({ tab, project, shownSource, onSource, closing, onClose, 
   else if (tab === "sources") body = <Sources project={project} shown={shownSource} onSource={onSource} />;
   else body = <ProjectInfo project={project} />;
   return (
-    <section className={`drawer${closing ? " out" : ""}`} role="dialog" aria-label={DRAWER[tab]}
+    <section className={cx(css.drawer, closing && css.out)} role="dialog" aria-label={DRAWER[tab]}
              onAnimationEnd={(ev) => { if (closing && ev.target === ev.currentTarget) onClosed(); }}>
-      <div className="drawer-head">
+      <div className={ui.panelHead}>
         <button aria-label="Закрыть" title="Закрыть (Esc)" onClick={onClose}>→</button>
         <h2>{DRAWER[tab]}</h2>
       </div>
-      <div className="side-body">{body}</div>
+      <div className={ui.panelBody}>{body}</div>
     </section>
   );
 }
@@ -59,12 +62,12 @@ function Questions({ project: p }: { project: Project }) {
   return (
     <>
       {[...qs].sort((a, b) => (order[a.state] ?? 9) - (order[b.state] ?? 9)).map((q) => (
-        <div key={q.id} className={`card${q.state === "open" ? "" : " done"}`}>
-          <div className={`sev sev-${q.severity}`}>
+        <div key={q.id} className={cx(css.card, q.state !== "open" && css.done)}>
+          <div className={cx(css.sev, `sev-${q.severity}`)}>
             {`${SEVERITY[q.severity] || q.severity} · ${STAGE[q.stage] || q.stage}`}
             <span className="mono muted">{` · ${q.id}`}</span>
           </div>
-          <div style={{ margin: "4px 0" }}>{q.text}</div>
+          <div className={css.text}>{q.text}</div>
           {q.assumption !== undefined && (
             <div className="small muted">{`В модели: ${String(q.assumption)}${q.unit ? " " + q.unit : ""}`}</div>
           )}
@@ -91,21 +94,21 @@ function Sources({ project: p, shown, onSource }: { project: Project; shown: str
   const used = list.filter((s) => s.used).length;
   return (
     <>
-      <div className="small muted" style={{ marginBottom: 10 }}>
+      <div className={cx(css.lead, "small muted")}>
         {p.parsed ? `Разобрано ${used} из ${list.length}. Отметки — из intake.yaml (sources).`
           : "Сервер просмотра устарел — перезапустите floorplan-engine view, чтобы увидеть, что разобрано."}
       </div>
       {list.map((s) => (
-        <div key={s.file} className={`card${s.file === shown ? " lit" : ""}`}>
-          <div className={`sev ${s.used ? "st-ready" : "muted"}`}>
+        <div key={s.file} className={cx(css.card, s.file === shown && css.lit)}>
+          <div className={cx(css.sev, s.used ? "st-ready" : "muted")}>
             {!s.exists ? "нет файла в source/" : s.used === null ? "разбор неизвестен"
               : s.used ? "использован в разборе" : "не использован"}
             <span className="muted">{` · ${kindOf(s.file)}`}</span>
           </div>
-          <div style={{ margin: "4px 0", wordBreak: "break-word" }}>{s.file}</div>
+          <div className={css.file}>{s.file}</div>
           {s.note && <div className="small muted">{s.note}</div>}
           {s.exists && (
-            <div className="row-btns">
+            <div className={css.rowBtns}>
               <button onClick={() => onSource(s.file)}>Показать</button>
               <a href={`${base(p.name)}/source/${enc(s.file)}`} target="_blank" rel="noreferrer">Открыть в новой вкладке</a>
             </div>
@@ -141,9 +144,9 @@ function ProjectInfo({ project: p }: { project: Project }) {
       {p.stages.length > 0 && (
         <>
           <h3>Этапы</h3>
-          <div className="stages">
+          <div className={css.stages}>
             {p.stages.map((s) => (
-              <div key={s.stage}>
+              <div key={s.stage} className={css.stage}>
                 <div className="small muted">{STAGE[s.stage] || s.stage}</div>
                 <div className={`st-${s.status}`}>{STATUS[s.status] || s.status}</div>
               </div>
@@ -153,8 +156,8 @@ function ProjectInfo({ project: p }: { project: Project }) {
       )}
       <h3>{`Замечания проверки · ${issues.length}`}</h3>
       {issues.length ? issues.map((i, k) => (
-        <div key={k} className="card">
-          <div className={`sev ${i.severity === "error" ? "sev-critical" : "sev-major"}`}>
+        <div key={k} className={css.card}>
+          <div className={cx(css.sev, i.severity === "error" ? "sev-critical" : "sev-major")}>
             {i.severity === "error" ? "ошибка" : "предупреждение"}
           </div>
           <div className="mono muted">{`${i.file}: ${i.path}`}</div>
@@ -162,14 +165,14 @@ function ProjectInfo({ project: p }: { project: Project }) {
         </div>
       )) : <div className="muted small">Замечаний нет</div>}
       <h3>Результаты (out/)</h3>
-      {p.files.length ? <div className="files small">{p.files.map((f) => link("out", f))}</div>
+      {p.files.length ? <div className={cx(css.files, "small")}>{p.files.map((f) => link("out", f))}</div>
         : <div className="muted small">Пока ничего не собрано</div>}
       {file && (
         <>
           <h3>Модель</h3>
-          <div className="tabs" style={{ marginBottom: 8 }}>
+          <div className={cx(ui.segmented, css.models)}>
             {p.model.map((f) => (
-              <button key={f} className={f === file ? "on" : undefined} onClick={() => setModelFile(f)}>{f}</button>
+              <button key={f} className={cx(f === file && ui.on)} onClick={() => setModelFile(f)}>{f}</button>
             ))}
           </div>
           <pre>{text}</pre>

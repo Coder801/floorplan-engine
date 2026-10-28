@@ -44,6 +44,7 @@ from floorplan_engine.intake import (
 from floorplan_engine.lines import split_by_lines
 from floorplan_engine.panel import AUTO_PREFIX, build_panel, panel_questions
 from floorplan_engine.schema import (
+    LIGHT_TYPES,
     Board,
     Electrical,
     ElectricalPoint,
@@ -385,6 +386,41 @@ def _check_height(value: float | None, path: str, file: str) -> list[Issue]:
     ]
 
 
+def _check_controls(elec: Electrical, file: str) -> list[Issue]:
+    """controls выключателя ссылается на светильник, вывод LED или ленту проекта."""
+    lights = {p.id for p in elec.points if p.type in LIGHT_TYPES}
+    lights |= {s.id for s in elec.led_strips}
+    return [
+        Issue(
+            file,
+            f"points[{k}].controls[{j}]",
+            f"«{ref}» — не светильник, не вывод LED и не лента проекта",
+        )
+        for k, pt in enumerate(elec.points)
+        for j, ref in enumerate(pt.controls)
+        if ref not in lights
+    ]
+
+
+def _above_ceiling(elec: Electrical, plan: Plan, file: str) -> list[Issue]:
+    """Точка на стене выше потолка: неверна высота точки или высота потолка (предупреждение —
+    на развёртке стены такая точка видна над линией потолка)."""
+    ceiling = plan.ceiling_height
+    default = "ceiling_height" not in plan.model_fields_set
+    note = " (не задана в room.yaml — по умолчанию)" if default else ""
+    return [
+        Issue(
+            file,
+            f"points[{k}].height",
+            f"точка {pt.id} на высоте {pt.height:g} мм — выше потолка {ceiling:g} мм{note}: "
+            "уточните высоту точки или потолка",
+            Severity.WARNING,
+        )
+        for k, pt in enumerate(elec.points)
+        if pt.wall is not None and pt.height is not None and pt.height > ceiling
+    ]
+
+
 def _check_wall_anchor(
     plan: Plan, room_id: str, wall: str, offset: float, path: str, file: str
 ) -> list[Issue]:
@@ -496,6 +532,8 @@ def validate_electrical(
     )
     for k, pt in enumerate(elec.points):
         issues += _check_point(plan, contours, pt, f"points[{k}]", file)
+    issues += _above_ceiling(elec, plan, file)
+    issues += _check_controls(elec, file)
     if elec.board is not None:
         b = elec.board
         issues += _check_height(b.height, "board.height", file)

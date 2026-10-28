@@ -150,6 +150,18 @@ class PointType(StrEnum):
     OUTLET = "outlet"  # силовой вывод кабеля к технике: вытяжка, кондиционер, рушникосушка
 
 
+# Свет: что включают выключатели (лист «Освещение»)
+LIGHT_TYPES = frozenset(
+    {
+        PointType.LIGHT,
+        PointType.DOWNLIGHT,
+        PointType.PENDANT,
+        PointType.SCONCE,
+        PointType.LED_OUTPUT,
+    }
+)
+SWITCH_TYPES = frozenset({PointType.SWITCH, PointType.PASS_SWITCH})
+
 # Что может висеть на потолке и что — только там
 CEILING_TYPES = frozenset({PointType.LIGHT, PointType.DOWNLIGHT, PointType.PENDANT})
 CEILING_ONLY_TYPES = frozenset({PointType.DOWNLIGHT, PointType.PENDANT})
@@ -169,6 +181,11 @@ class ElectricalPoint(StrictModel):
     keys: int = Field(default=1, ge=1, le=2, description="Клавиш у выключателя")
     group: str | None = None
     note: str | None = None
+    controls: list[str] = Field(
+        default_factory=list,
+        description="У выключателя: id светильников, выводов LED и лент, которые он включает — "
+        "только из источника; нет — связь по группе и помещению (допущение, лист «Освещение»)",
+    )
     power: float | None = Field(
         default=None,
         gt=0,
@@ -193,6 +210,8 @@ class ElectricalPoint(StrictModel):
             raise ValueError(f"{self.type.value} ставится только на потолок: укажите ceiling")
         if self.keys > 1 and self.type is not PointType.SWITCH:
             raise ValueError("keys (число клавиш) бывает только у switch")
+        if self.controls and self.type not in SWITCH_TYPES:
+            raise ValueError("controls (что включает) бывает только у выключателя")
         return self
 
 

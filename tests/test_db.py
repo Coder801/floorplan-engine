@@ -25,7 +25,8 @@ def test_schema_has_all_tables() -> None:
     expected = {
         "studio", "app_user", "membership", "studio_profile", "symbol", "project", "source",
         "facts_page", "model_version", "round", "question", "answer", "build", "build_file",
-        "price_list", "usage",
+        "price_list", "usage", "oauth_account", "user_session", "project_member", "invite",
+        "support_grant", "audit_event",
     }  # fmt: skip
     assert set(Base.metadata.tables) == expected
 
@@ -70,3 +71,12 @@ def test_usage_sums_per_project(session: Session) -> None:
     repo.record_usage(session, project.id, 1, "api", 1.25, input_tokens=1000)
     repo.record_usage(session, project.id, 2, "api", 0.5)
     assert repo.project_cost(session, project.id) == pytest.approx(1.75)
+
+
+def test_database_url_uses_psycopg(monkeypatch: pytest.MonkeyPatch) -> None:
+    from floorplan_engine.service.db.session import database_url
+
+    monkeypatch.setenv("DATABASE_URL", "postgresql://u:p@host:5432/db")
+    assert database_url() == "postgresql+psycopg://u:p@host:5432/db"
+    monkeypatch.setenv("DATABASE_URL", "sqlite:///x.db")
+    assert database_url() == "sqlite:///x.db"

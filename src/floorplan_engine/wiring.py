@@ -71,7 +71,7 @@ from floorplan_engine.draw_electrical import (
 )
 from floorplan_engine.draw_plan import RoomGeometry, room_geometries
 from floorplan_engine.geometry import Contour, Vec, WallSegment
-from floorplan_engine.layers import sheet
+from floorplan_engine.layers import DEFAULT_SCALE, drawing_scale, sheet
 from floorplan_engine.routing import (
     End,
     Grid,
@@ -426,6 +426,19 @@ class _Context:
     @property
     def ceiling(self) -> float:
         return self.plan.ceiling_height
+
+
+def estimate_wiring(
+    plan: Plan,
+    contours: dict[str, Contour],
+    elec: Electrical,
+    edits: WiringEdits | None = None,
+) -> Wiring | None:
+    """Проводка для объёмов сметы — всегда в масштабе 1:50. Полосы пучков задаются в мм листа,
+    и длины трасс чуть зависят от масштаба листа; смета от формата не зависит: одна и та же
+    на листе A2, A3 и в out/estimate.*."""
+    with drawing_scale(DEFAULT_SCALE):
+        return box_wiring(plan, contours, elec, edits)
 
 
 def box_wiring(

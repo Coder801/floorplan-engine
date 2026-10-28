@@ -20,6 +20,7 @@ from floorplan_engine.draw_wiring import write_chases, write_journal
 from floorplan_engine.estimate import (
     ESTIMATE_CSV,
     ESTIMATE_MD,
+    ESTIMATE_XLSX,
     FIXING_STEP,
     PRICES_FILE,
     Estimate,
@@ -28,6 +29,7 @@ from floorplan_engine.estimate import (
     unknown_keys,
     write_csv,
     write_markdown,
+    write_xlsx,
 )
 from floorplan_engine.estimate import text as estimate_text
 from floorplan_engine.intake import Stage
@@ -40,13 +42,15 @@ from floorplan_engine.objects import (
     wiring_handles,
 )
 from floorplan_engine.panel import build_panel, panel_data, write_loads
-from floorplan_engine.preview import render_png, sheet_layouts
+from floorplan_engine.preview import paper_size, render_png, sheet_layouts
+from floorplan_engine.printing import SheetCheck, check_sheets, write_album
 from floorplan_engine.report import REPORT_JSON, REPORT_MD, render_markdown, to_json
 from floorplan_engine.scene3d import build_scene
-from floorplan_engine.schema import Electrical, WiringEdits
+from floorplan_engine.schema import Electrical, SheetFormat, WiringEdits
 from floorplan_engine.sheets import build_project_document, document_scale, sheet_png_name
 from floorplan_engine.side import side_tables
 from floorplan_engine.thumbnail import PREVIEW_FILE, plan_thumbnail
+from floorplan_engine.titleblock import FORMATS
 from floorplan_engine.validate import (
     ELECTRICAL_FILE,
     WIRING_FILE,
@@ -66,11 +70,13 @@ from floorplan_engine.wiring import (
     RESERVE,
     Wiring,
     box_wiring,
+    estimate_wiring,
 )
 
 OUT_DIR = "out"
 PROJECT_FILE = "project.dxf"
 ARTIFACT_FILE = "project.epd"
+ALBUM_FILE = "album.pdf"  # PDF-альбом листов (команда print)
 WIRING_JOURNAL_FILE = "wiring-boxes.csv"  # кабельный журнал проводки через коробки
 CHASES_FILE = "wiring-chases.csv"  # ведомость штроб по стенам
 LOADS_FILE = "panel-loads.csv"  # роспись потребителей по группам щита
@@ -136,6 +142,20 @@ def assess_project(project: Path) -> Assessment:
     return Assessment(report, assess(report))
 
 
+def _sheet_inputs(
+    project: Path, assessment: Assessment
+) -> tuple[Electrical | None, PriceList | None, list[Issue]]:
+    """Что идёт на листы, кроме плана: электрика (если этап строится) и прайс сметы."""
+    report = assessment.report
+    elec_status = assessment.status(Stage.ELECTRICAL)
+    elec = report.electrical if elec_status is not None and elec_status.status.builds else None
+    price_path = find_prices(project)
+    if elec is None or price_path is None:
+        return elec, None, []
+    prices, issues = load_prices(price_path)
+    return elec, prices, issues
+
+
 def write_report(out: Path, assessment: Assessment, fallback_name: str) -> list[Path]:
     out.mkdir(parents=True, exist_ok=True)
     name = assessment.name or fallback_name
@@ -184,11 +204,7 @@ def build_project(project: Path, previews: bool = False) -> BuildResult:
         return result
     report = assessment.report
     assert report.plan is not None
-    elec_status = assessment.status(Stage.ELECTRICAL)
-    elec = report.electrical if elec_status is not None and elec_status.status.builds else None
-    prices: PriceList | None = None
-    if elec is not None and (project / PRICES_FILE).exists():
-        prices, result.price_issues = load_prices(project / PRICES_FILE)
+    elec, prices, result.price_issues = _sheet_inputs(project, assessment)
     edits = report.wiring_edits
     doc = build_project_document(report.plan, report.contours, elec, prices=prices, edits=edits)
     saved = save_checked(doc, out / PROJECT_FILE)
@@ -243,7 +259,10 @@ def build_project(project: Path, previews: bool = False) -> BuildResult:
         panel_view = panel_data(panel, group_colors(elec), board, report.plan.language)
     # Артефакт — из записанного файла: ровно то, что откроет AutoCAD
     objects = describe_objects(report.plan, report.contours, elec, wiring)
-    tables = side_tables(report.plan, report.contours, elec, wiring, prices)
+    quantities = None
+    if wiring is not None and elec is not None:
+        quantities = estimate_wiring(report.plan, report.contours, elec, edits)
+    tables = side_tables(report.plan, report.contours, elec, wiring, prices, quantities)
     chains = line_chains(wiring) if wiring is not None else None
     groups = line_groups(wiring) if wiring is not None else None
     result.artifact = export_artifact(
@@ -336,6 +355,71 @@ class EstimateResult:
     files: list[Path] = field(default_factory=list)
 
 
+@dataclass
+class PrintResult:
+    assessment: Assessment
+    issues: list[Issue] = field(default_factory=list)  # почему альбома нет
+    pdf: Path | None = None
+    dxf: Path | None = None  # DXF под заданный формат (свой формат — out/project.dxf)
+    paper: str = ""  # «A3»
+    scale: float = 0.0  # 50 — это 1:50
+    checks: list[SheetCheck] = field(default_factory=list)
+
+    @property
+    def warnings(self) -> list[str]:
+        return [w for c in self.checks for w in c.warnings()]
+
+
+def print_project(project: Path, paper: SheetFormat = "auto") -> PrintResult:
+    """PDF-альбом листов в натуральную величину (printing.py). paper="auto" — комплект как
+    при сборке (out/project.dxf → out/album.pdf; сборки нет — ошибка); заданный формат —
+    листы раскладываются заново под него: out/print-A3.dxf и out/album-A3.pdf."""
+    assessment = assess_project(project)
+    result = PrintResult(assessment)
+    out = project / OUT_DIR
+    plan = assessment.report.plan
+    if paper == "auto":
+        dxf = out / PROJECT_FILE
+        if not dxf.exists():
+            result.issues.append(Issue(PROJECT_FILE, "", "нет сборки — сначала build"))
+            return result
+        doc, pdf = readfile(dxf), out / ALBUM_FILE
+    else:
+        if not assessment.plan_builds or plan is None:
+            result.issues.append(Issue("room.yaml", "", "план не строится — см. check"))
+            return result
+        elec, prices, result.issues = _sheet_inputs(project, assessment)
+        sheet = plan.sheet.model_copy(update={"format": paper})
+        doc = build_project_document(
+            plan.model_copy(update={"sheet": sheet}),
+            assessment.report.contours,
+            elec,
+            prices=prices,
+            edits=assessment.report.wiring_edits,
+        )
+        result.dxf = out / f"print-{paper}.dxf"
+        doc = save_checked(doc, result.dxf)
+        pdf = out / f"album-{paper}.pdf"
+    layouts = sheet_layouts(doc)
+    if layouts:
+        size = sorted(paper_size(layouts[0]))
+        result.paper = next((n for n, f in FORMATS.items() if list(f) == size), "")
+    result.scale = document_scale(doc)
+    result.checks = check_sheets(doc)
+    title = plan.name if plan is not None else project.name
+    result.pdf = write_album(doc, pdf, title)
+    return result
+
+
+def find_prices(project: Path) -> Path | None:
+    """Прайс сметы: свой у проекта (prices.yaml в его папке), иначе — общий прайс студии
+    (prices.yaml в папке над проектами, рядом со studio.yaml); нет ни того, ни другого — None."""
+    for path in (project / PRICES_FILE, project.parent / PRICES_FILE):
+        if path.is_file():
+            return path
+    return None
+
+
 def load_prices(path: Path) -> tuple[PriceList | None, list[Issue]]:
     """Прайс проекта; ошибки — с путём к полю, неизвестный ключ позиции — тоже ошибка."""
     data, issues = load_yaml(path)
@@ -349,8 +433,9 @@ def load_prices(path: Path) -> tuple[PriceList | None, list[Issue]]:
 
 
 def estimate_project(project: Path, prices_path: Path | None = None) -> EstimateResult:
-    """Смета электрики: объёмы из модели, цены — из prices.yaml проекта (или prices_path).
-    Нет прайса — смета с объёмами без цен. Пишет out/estimate.md и estimate.csv."""
+    """Смета электрики: объёмы из модели, цены — из prices.yaml проекта, иначе из общего
+    прайса студии (find_prices), или из prices_path. Нет прайса — смета с объёмами без цен.
+    Пишет out/estimate.md, estimate.csv и estimate.xlsx."""
     assessment = assess_project(project)
     result = EstimateResult(assessment)
     report = assessment.report
@@ -359,13 +444,13 @@ def estimate_project(project: Path, prices_path: Path | None = None) -> Estimate
         result.issues.append(Issue("electrical.yaml", "", "этап электрики не строится — см. check"))
         return result
     assert report.plan is not None and report.electrical is not None
-    wiring = box_wiring(report.plan, report.contours, report.electrical, report.wiring_edits)
+    wiring = estimate_wiring(report.plan, report.contours, report.electrical, report.wiring_edits)
     if wiring is None:
         result.issues.append(Issue("electrical.yaml", "board", "нет щита или точек с группами"))
         return result
-    path = prices_path or project / PRICES_FILE
+    path = prices_path or find_prices(project)
     prices = PriceList()
-    if path.exists():
+    if path is not None and path.exists():
         loaded, issues = load_prices(path)
         if loaded is None:
             result.issues += issues
@@ -380,6 +465,7 @@ def estimate_project(project: Path, prices_path: Path | None = None) -> Estimate
     result.files = [
         write_markdown(est, out / ESTIMATE_MD, title, notes, language),
         write_csv(est, out / ESTIMATE_CSV),
+        write_xlsx(est, out / ESTIMATE_XLSX, title, notes, language),
     ]
     return result
 

@@ -12,6 +12,7 @@
 
 import { FIT_SHRINK, REDUCED_MOTION, VIEW_PAD } from "../consts";
 import { palette, refreshPalette, screenColor } from "../palette";
+import { Pinch } from "../sheet/pinch";
 import { view } from "../store";
 import type { PanelData } from "../types";
 import { clip, plate, rendererFor, SCREW, shade, text, type Pen } from "./catalog";
@@ -55,6 +56,7 @@ export class PanelView {
   private readonly cleanup: (() => void)[] = [];
   private litAt = 0; private pulse = 0;
   private down: { x: number; y: number } | null = null;
+  private readonly pinch = new Pinch();
 
   constructor(private readonly canvas: HTMLCanvasElement, private readonly wrap: HTMLElement,
               readonly data: PanelData) {
@@ -123,13 +125,21 @@ export class PanelView {
       this.zoomBy(Math.exp(-ev.deltaY * 0.0015), ev.clientX - r.left, ev.clientY - r.top);
     }, { passive: false });
     this.on("pointerdown", (ev) => {
+      this.canvas.setPointerCapture(ev.pointerId);
+      if (this.pinch.down(ev)) { this.drag = null; this.down = null; return; }  // щипок, не сдвиг
       this.drag = { x: ev.clientX, y: ev.clientY, ox: this.ox, oy: this.oy };
       this.down = { x: ev.clientX, y: ev.clientY };
       this.canvas.setPointerCapture(ev.pointerId);
       this.canvas.classList.add("drag");
     });
     this.on("pointermove", (ev) => {
-      if (!this.drag) return;
+      const step = this.pinch.move(ev, this.canvas.getBoundingClientRect());
+      if (step) {
+        this.ox += step.dx; this.oy += step.dy;
+        this.zoomBy(step.f, step.x, step.y);
+        return;
+      }
+      if (!this.drag || this.pinch.busy) return;
       this.ox = this.drag.ox + ev.clientX - this.drag.x;
       this.oy = this.drag.oy + ev.clientY - this.drag.y;
       this.draw();
@@ -137,7 +147,8 @@ export class PanelView {
     const end = () => { this.drag = null; this.canvas.classList.remove("drag"); };
     // Клик (без сдвига) — карточка аппарата под курсором; мимо аппаратов — закрыть
     this.on("pointerup", (ev) => {
-      const d = this.down;
+      this.pinch.up(ev);
+      const d = this.pinch.used ? null : this.down;  // конец щипка — не клик
       this.down = null;
       end();
       if (!d || Math.hypot(ev.clientX - d.x, ev.clientY - d.y) > 4) return;
@@ -146,7 +157,7 @@ export class PanelView {
       const hit = this.lay.placed.find((p) => mx >= p.x && mx <= p.x + p.w && my >= p.y && my <= p.y + p.h);
       view.set({ pinned: hit ? hit.dev.key : null });
     });
-    this.on("pointercancel", end);
+    this.on("pointercancel", (ev) => { this.pinch.up(ev); end(); });
     this.on("dblclick", () => this.fit());
   }
 

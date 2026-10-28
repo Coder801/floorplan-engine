@@ -1,19 +1,32 @@
-// Лист .epd в canvas: масштаб, сдвиг, подсказки, выделение линии и правка трасс.
+// Чертёж в canvas: масштаб, сдвиг, подсказки, выделение линии и правка трасс.
 // Рисование — вне React (тысячи примитивов, каждый кадр); с остальным интерфейсом лист
 // связан через общее состояние (store.ts): под курсором, выделение, подсказка, слои.
+// Чертёж общий у листов с планом (sheet/drawing.ts): смена вкладки — setPage, без нового
+// холста — слои, подсказки и правка другого листа при тех же масштабе и сдвиге.
 
 import {
   CABLE_MIN_PX, DIM_ALPHA, EDIT_HIT_PX, EDIT_MOVE_PX, FOCUS_MAX, FOCUS_MS, NEIGHBOR_ALPHA,
-  FIT_SHRINK, REDUCED_MOTION, SHEET_ONLY, TIP_GAP, VIEW_PAD,
+  FIT_SHRINK, REDUCED_MOTION, TIP_GAP, VIEW_PAD,
 } from "../consts";
 import { WiringEdit, type Hit } from "../edit/WiringEdit";
 import { expand, PageIndex } from "../page";
 import { palette, refreshPalette, screenColor } from "../palette";
 import { view } from "../store";
 import type { Page } from "../types";
-import { bbox, downloadSheetPng, inBox, inView, paint, viewOf, type DrawItem } from "./paint";
+import { layerShown, sceneOf, type Drawing, type DrawingItem } from "./drawing";
+import { inBox, paint, type DrawItem } from "./paint";
+import { Pinch } from "./pinch";
 
 const TIP_WIDTH = 320;  // закреплённая подсказка (max-width в CSS) — место справа при наезде
+
+// Путь примитива на чертеже: с чужого листа — сдвинутый на лист base
+function pathOf(it: DrawingItem): Path2D {
+  const p = new Path2D(it.d), { f, dx, dy } = it.shift;
+  if (f === 1 && !dx && !dy) return p;
+  const out = new Path2D();
+  out.addPath(p, new DOMMatrix([f, 0, 0, f, dx, dy]));
+  return out;
+}
 
 interface Drag {
   edit?: boolean;
@@ -25,7 +38,11 @@ interface Drag {
 
 export class SheetView {
   readonly items: DrawItem[];
-  readonly ed: WiringEdit | null;
+  readonly has3d: boolean;  // у чертежа есть 3D (сцена листа проводки) — на любой вкладке
+  ed: WiringEdit | null = null;
+  page!: Page;
+  index!: PageIndex;
+  private own = new Set<string>();
   saved = false;          // правки записаны, лист пересобирается
   onEditChange: () => void = () => {};
   onZoom: (label: string) => void = () => {};
@@ -34,28 +51,48 @@ export class SheetView {
   private scale = 1; private fitScale = 1; private ox = 0; private oy = 0;
   private frame = 0; private flowFrame = 0;
   private drag: Drag | null = null;
+  private readonly pinch = new Pinch();
+  private fitted = true;  // вид — «весь чертёж»: при новом размере вписать заново, иначе оставить
   private readonly cleanup: (() => void)[] = [];
 
   constructor(private readonly canvas: HTMLCanvasElement, private readonly wrap: HTMLElement,
-              readonly page: Page, readonly index: PageIndex) {
-    this.items = page.items.filter((i) => !SHEET_ONLY.has(i.l))
-      .map((i) => ({ ...i, box: bbox(i.d) }))
-      .filter((i) => inView(page, i.box))
-      .map((i) => ({ ...i, path: new Path2D(i.d) }));
-    this.ed = page.edit && page.model ? new WiringEdit(page, this.items, () => view.get().hidden) : null;
+              readonly drawing: Drawing, page: Page, index: PageIndex) {
+    this.items = drawing.items.map((i) => ({ ...i, w: i.w && i.w * i.shift.f, path: pathOf(i) }));
+    this.has3d = !!sceneOf(drawing);
+    this.setPage(page, index, false);
     this.ctx = canvas.getContext("2d")!;
-    const resize = new ResizeObserver(() => { this.layout(); this.fit(); });
+    // Новый размер (окно, поворот телефона, нижняя панель): вписанный чертёж — вписать заново,
+    // приближенный — оставить как есть
+    const resize = new ResizeObserver(() => { this.layout(); if (this.fitted) this.fit(); else this.draw(); });
     resize.observe(wrap);
     this.cleanup.push(() => resize.disconnect());
     // Перерисовка — только когда меняется то, что видно на листе (подсказка у курсора — нет)
     let seen: unknown[] = [];
     this.cleanup.push(view.subscribe(() => {
       const s = view.get();
-      const now = [s.hover, s.lit, s.selected, s.neighbors, s.hidden, s.editMode, s.show3d, s.themeTick];
+      const now = [s.hover, s.lit, s.selected, s.neighbors, s.hidden, s.extra, s.editMode, s.show3d, s.themeTick];
       if (now.some((v, i) => v !== seen[i])) { seen = now; this.draw(); }
     }));
     this.bind();
   }
+
+  // Другая вкладка того же чертежа: её слои, подсказки и правка; масштаб и сдвиг — те же.
+  // Несохранённые правки трасс пропадают — App спрашивает до переключения
+  setPage(page: Page, index: PageIndex, redraw = true) {
+    this.page = page;
+    this.index = index;
+    this.own = this.drawing.own.get(page) ?? new Set(this.items.map((i) => i.l));
+    const model = this.drawing.base.model;
+    this.ed = page.edit && model ? new WiringEdit(page, this.items, this.shown, model) : null;
+    this.saved = false;
+    if (redraw) this.draw();
+  }
+
+  // Слой виден на этой вкладке: свой — пока не выключен, с другого листа — если включён
+  readonly shown = (l: string) => {
+    const { hidden, extra } = view.get();
+    return layerShown(this.own, hidden, extra, l);
+  };
 
   destroy() {
     for (const f of this.cleanup) f();
@@ -64,7 +101,7 @@ export class SheetView {
 
   editing() {
     const s = view.get();
-    return s.editMode && !!this.ed && !this.saved && !s.show3d;
+    return s.editMode && !!this.ed && !this.saved && !(s.show3d && this.has3d);
   }
 
   private layout() {
@@ -76,11 +113,12 @@ export class SheetView {
   }
 
   fit() {
-    const [x0, y0, x1, y1] = viewOf(this.page);
+    const [x0, y0, x1, y1] = this.drawing.view;
     this.scale = FIT_SHRINK * Math.min((this.w - 2 * VIEW_PAD) / (x1 - x0), (this.h - 2 * VIEW_PAD) / (y1 - y0));
     this.fitScale = this.scale;
     this.ox = (this.w - (x1 + x0) * this.scale) / 2;
     this.oy = (this.h - (y1 + y0) * this.scale) / 2;
+    this.fitted = true;
     this.draw();
   }
 
@@ -88,6 +126,7 @@ export class SheetView {
     const mx = (x - this.ox) / this.scale, my = (y - this.oy) / this.scale;
     this.scale = Math.min(Math.max(this.scale * f, this.fitScale * 0.5), this.fitScale * 40);
     this.ox = x - mx * this.scale; this.oy = y - my * this.scale;
+    this.fitted = false;
     this.draw();
   }
 
@@ -140,6 +179,7 @@ export class SheetView {
 
   private animate(scale: number, ox: number, oy: number) {
     const from = { scale: this.scale, ox: this.ox, oy: this.oy }, t0 = performance.now();
+    this.fitted = false;
     const step = (now: number) => {
       const t = Math.min((now - t0) / FOCUS_MS, 1), e = 1 - (1 - t) ** 3;
       this.scale = from.scale * (scale / from.scale) ** e;  // масштаб — по логарифму
@@ -153,7 +193,7 @@ export class SheetView {
   }
 
   draw() {
-    if (view.get().show3d) return;  // лист закрыт 3D
+    if (view.get().show3d && this.has3d) return;  // чертёж закрыт 3D
     const { ctx } = this;
     refreshPalette();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -161,14 +201,13 @@ export class SheetView {
     ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
     const k = this.dpr * this.scale;
     ctx.setTransform(k, 0, 0, k, this.dpr * this.ox, this.dpr * this.oy);
-    const [x0, y0, x1, y1] = viewOf(this.page);
+    const [x0, y0, x1, y1] = this.drawing.view;
     ctx.save();
     ctx.beginPath(); ctx.rect(x0, y0, x1 - x0, y1 - y0); ctx.clip();
     // Изменённые линии и коробки рисуются по правке, а не примитивами листа
     const skip = this.ed ? this.ed.hiddenKeys() : null;
     const items = skip && skip.size ? this.items.filter((it) => !it.o || !skip.has(it.o)) : this.items;
-    const hidden = view.get().hidden;
-    paint(ctx, items, k, (it) => this.look(it), hidden, CABLE_MIN_PX * this.dpr);
+    paint(ctx, items, k, (it) => this.look(it), this.shown, CABLE_MIN_PX * this.dpr);
     if (this.ed) this.ed.paint(ctx, k, performance.now(), this.dpr);
     ctx.restore();
     // Бегущий пунктир — следующий кадр, пока есть правящиеся линии
@@ -205,6 +244,12 @@ export class SheetView {
       this.zoomBy(Math.exp(-ev.deltaY * 0.0015), x, y);
     }, { passive: false });
     this.on("pointerdown", (ev) => {
+      // Второй палец — щипок: перетаскивание первым пальцем отменяется
+      if (this.pinch.down(ev)) {
+        c.setPointerCapture(ev.pointerId);
+        this.stop();
+        return;
+      }
       // Режим правки: участок линии или коробка — тянуть их, мимо — сдвиг чертежа
       const hit = this.editHit(ev);
       if (hit) {
@@ -221,6 +266,13 @@ export class SheetView {
       c.setPointerCapture(ev.pointerId); c.classList.add("drag");
     });
     this.on("pointermove", (ev) => {
+      const step = this.pinch.move(ev, c.getBoundingClientRect());
+      if (step) {
+        this.ox += step.dx; this.oy += step.dy;
+        this.zoomBy(step.f, step.x, step.y);
+        return;
+      }
+      if (this.pinch.busy) return;
       const drag = this.drag;
       if (drag?.edit) {
         if (!drag.moved && Math.abs(ev.clientX - drag.x) + Math.abs(ev.clientY - drag.y) <= EDIT_MOVE_PX) return;
@@ -234,6 +286,7 @@ export class SheetView {
         if (Math.abs(ev.clientX - drag.x) + Math.abs(ev.clientY - drag.y) > 4) drag.moved = true;
         if (!drag.moved) return;
         this.ox = drag.ox! + ev.clientX - drag.x; this.oy = drag.oy! + ev.clientY - drag.y;
+        this.fitted = false;
         this.draw();
         return;
       }
@@ -247,6 +300,8 @@ export class SheetView {
     });
     // Клик без сдвига — выделить линию и закрепить подсказку; мимо — снять выделение
     this.on("pointerup", (ev) => {
+      this.pinch.up(ev);
+      if (this.pinch.used) { this.stop(); return; }  // конец щипка — не клик
       const drag = this.drag;
       if (drag?.edit) { this.stop(); this.editChanged(); return; }
       const click = drag && !drag.moved, additive = drag?.additive;
@@ -267,7 +322,7 @@ export class SheetView {
         this.undo();
       }
     });
-    this.on("pointercancel", () => this.stop());
+    this.on("pointercancel", (ev) => { this.pinch.up(ev); this.stop(); });
     this.on("pointerleave", () => this.setHover(null));
     // Двойной клик по объекту — навести на его линию; мимо — весь чертёж
     this.on("dblclick", (ev) => {
@@ -300,11 +355,10 @@ export class SheetView {
     const tol = 4 / this.scale;
     const { ctx } = this;
     const k = this.dpr * this.scale;
-    const hidden = view.get().hidden;
     ctx.setTransform(k, 0, 0, k, this.dpr * this.ox, this.dpr * this.oy);
     let best: { o: string; area: number } | null = null;
     for (const it of this.items) {
-      if (hidden.has(it.l) || !this.index.interactive(it.o) || !inBox(it.box, mx, my, tol)) continue;
+      if (!this.shown(it.l) || !this.index.interactive(it.o) || !inBox(it.box, mx, my, tol)) continue;
       const area = (it.box[2] - it.box[0] + tol) * (it.box[3] - it.box[1] + tol);
       if (best && area >= best.area) continue;
       ctx.lineWidth = 2 * tol;
@@ -331,8 +385,4 @@ export class SheetView {
     view.set({ hover: o, ...(o ? {} : { tip: null }) });
   }
 
-  // PNG для альбома: весь лист с таблицами и штампом, цвета листа, не больше A3 при 150 dpi
-  downloadPng(filename: string) {
-    downloadSheetPng(this.page, filename);
-  }
 }

@@ -7,12 +7,14 @@ import type { ObjectCard, Page } from "./types";
 export const expand = (o: string): string[] =>
   (o.startsWith("label:") ? o.slice(6).split(",").map((id) => `point:${id}`) : [o]);
 
+// other — карточки других листов общего чертежа: для объектов слоя, включённого с чужого
+// листа (размеры на проводке); свои карточки и линии листа главнее
 export class PageIndex {
   readonly objects: Record<string, ObjectCard> | null;
   readonly chains: Record<string, string[]>;
   readonly groupOf = new Map<string, Set<string>>();
 
-  constructor(page: Page) {
+  constructor(page: Page, private readonly other: Record<string, ObjectCard> = {}) {
     this.objects = page.objects || null;
     this.chains = page.chains || {};
     for (const keys of Object.values(page.groups || {})) {
@@ -37,13 +39,13 @@ export class PageIndex {
   }
 
   interactive(o: string | null | undefined): o is string {
-    return !!o && (!this.objects || o in this.objects || expand(o).some((k) => k in this.chains));
+    return !!o && (!this.objects || o in this.objects || expand(o).some((k) => k in this.chains) || o in this.other);
   }
 
   // Карточка объекта; точка на листе проводки — карточка линии до неё; нет — тип и id
   card(o: string): ObjectCard {
     const objs = this.objects || {};
-    const info = objs[o] || objs[(this.chains[o] || [])[0]];
+    const info = objs[o] || objs[(this.chains[o] || [])[0]] || this.other[o];
     if (info) return info;
     const i = o.indexOf(":");
     return { title: `${OBJECT[o.slice(0, i)] || o.slice(0, i)} · ${o.slice(i + 1)}`, rows: [] };

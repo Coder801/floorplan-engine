@@ -96,7 +96,13 @@ flowchart LR
 | Экспликация помещений, итог — поле-сумма | `tables.room_schedule`, `fields.add_area_sum_field` |
 | Точка электрики на стене: позиция и направление в комнату | `draw_electrical.point_anchor` |
 | Несколько точек в одном месте — стопкой от стены | `draw_electrical.stacks`, `stack_shifts` |
-| Подписи точек «2× h300 …» без наложений, общая подпись для соседних | `draw_electrical.point_label`, `label_clusters`, `place_label` |
+| Номера точек (по помещениям, на стенах по обходу и отступу, затем потолочные) и ведомость «Точки» отдельным листом: вид, высота, количество, одинаковые точки одной строкой | `point_numbers.number_points`, `point_rows`, `points_table`; лист — `sheets.points_spec` |
+| Развёртки стен: что на каждой стене (проёмы, точки, щит, коробки, штробы) и рисунок со шкалами отступов и высот; листы по страницам в конце комплекта | `elevations.wall_elevations`; `draw_elevations.elevation_panel`; лист — `sheets.elevations_spec` (`SheetSpec.paged`, `paginate`) |
+| Точка на стене выше потолка — предупреждение | `validate._above_ceiling` |
+| План освещения: что чем включается (`controls` или допущение по группе, помещению и подписи), цепочки света, номера, таблица «Выключатели» | `lighting.switch_links`, `draw_lighting`, `switch_table`; лист — `sheets.lighting_spec`; боковая панель — `side.lighting_side_table`; проверка `controls` — `validate._check_controls` |
+| Подписи точек — номера («7», соседние на стене — «7–9»), общая подпись для соседних; место — перебором вокруг символа со штрафами (чужая подпись, символ, проём, LED-лента, стена, чужое помещение, выноска через подпись или символ) плюс расстояние; рядом места нет — дальше с выноской, за контур квартиры — не дальше 6 мм листа от габарита плана (иначе раздувается вид и меняется масштаб) | `draw_electrical.point_label`, `label_clusters`, `place_label`, `label_placer`; `labels.LabelPlacer` |
+| Размеры: ряды по уровням — ряд, чьи подписи ложатся на поставленные размеры, названия помещений или стены, уходит дальше (до 4 уровней); узкая или занятая подпись — рядом вдоль линии или строкой выше | `draw_plan.draw_dimensions`, `_place_rows`, `_moves` |
+| Масштаб листа: вынос подписей электрики за план (мм листа) с масштабом не пересчитывается | `sheets.view_parts`, `choose_paper_and_scale` |
 | Цвет группы (одинаковый на листах электрики и проводки) | `draw_electrical.group_colors` |
 | Блоки УГО (розетка, выключатель, светильники, щит…) с невидимыми атрибутами ID, H, GROUP | `symbols.define_blocks`, `draw_electrical.insert_symbol` |
 | Легенда: символы и счёт точек по группам | `draw_electrical.legend_rows` |
@@ -125,12 +131,14 @@ flowchart LR
 | `id` из YAML на каждом примитиве модели (XDATA `FLOORPLAN_ENGINE`) | `ids.tagged` |
 | Аудит DXF после записи | `pipeline.save_checked` |
 | PNG листов из DXF (отладка, `build --png`, `preview`) | `preview.render_png` |
-| Листы в браузере: в canvas — только чертёж (видовой экран `view`), таблицы листа — в боковой панели со связью строка ↔ объекты; подсказки — только у объектов темы листа; светлая и тёмная тема; PNG листа для альбома — весь лист из canvas, не больше A3 150 dpi | `web/src/sheet/SheetView.ts`, `sheet/paint.ts`, `SidePanel.tsx` (`Tables`, `Layers` — не у щита); вопросы, исходники и проект — кнопками в шапке, `Drawer.tsx`; страницы — `viewer.sheets`, `viewer.sheet` |
+| Листы в браузере: в canvas — только чертёж (видовой экран `view`), таблицы листа — в боковой панели со связью строка ↔ объекты; подсказки — только у объектов темы листа; светлая и тёмная тема; PNG листа для альбома — весь лист из canvas, не больше A3 150 dpi | `web/src/sheet/SheetView.ts`, `sheet/paint.ts`, `sheet/drawing.ts` (план, электрика, освещение и проводка — один чертёж по `model` листов; вкладка — слои своего листа, масштаб общий; 3D — на любой вкладке чертежа, со слоями вкладки; электрика, освещение и проводка — одна вкладка «Электрика» с видами справа, `tabs.ts`), `SidePanel.tsx` (`Tables`, `Layers` — не у щита); вопросы, исходники и проект — кнопками в шапке, `Drawer.tsx`; страницы — `viewer.sheets`, `viewer.sheet` |
 | Таблицы листа для боковой панели (экспликация, обозначения и группы, спецификация, кабели, смета) и ключи объектов у строк; объекты темы листа | `side.side_tables`, `side.STAGE_OBJECTS`; в страницу — `artifact.export_artifact` (`view_rect`, `sheets.sheet_slug`) |
 | Правка трасс в просмотре (лист проводки, «Править трассы»): тянется участок линии — соседние удлиняются, углы прямые, конец с коробкой и точкой — перпендикулярный отвод; ⌘/Ctrl+клик — несколько участков (коробки — нет); коробка на стене — вдоль стены, на потолке — свободно; шаг 10 мм; отмена шага. Потребители и щит не двигаются. Данные — ключ `edit` и переход `model` страницы `.epd`; «Сохранить» → `wiring.yaml` и пересборка | `objects.wiring_handles`, `artifact.model_transform`; `web/src/edit/WiringEdit.ts`, `edit/geometry.ts` (`dragPath`, `moveEnd`); `viewer.save_wiring` |
 | 3D проводки: стены призмами (над дверью перемычка, под окном подоконная часть; высоты проёмов без данных — типовые, с пометкой), общая перегородка — один кусок с нормалями двух комнат; трассы по высоте: подъём от источника, путь по потолку или полу (пучок — 15 мм между кабелями), спуск к точке у грани стены. Показ: react-three-fiber (three.js, MIT) в `web/`, отдельным файлом по первому нажатию, кнопка «3D» на листе проводки, изометрия, стены «срез» (ближние к камере — бортиком 300 мм) / прозрачные / без стен, закрытая часть линии — бледно; подсказки, выделение линии, связь с таблицами — как на листе | `scene3d.build_scene` (ключ `scene` страницы, `pipeline.build_project`); `web/src/three/Scene3D.tsx` |
 | Карточки объектов для подсказок: название линии по смыслу (группа: откуда → куда), автомат, кабель, длины; точки, коробки, щит, помещения, стены, проёмы; в страницу `.epd` — только её объекты; то же название — колонка `label` кабельного журнала | `objects.describe_objects`, `page_objects`, `wire_titles`; показ — `web/src/Tip.tsx` (`PageIndex.card`) |
 | PNG листов для проверки — тот же `.epd`, что в браузере | `artifact.render_page_png` (команда `render-artifact`) |
+| Печать: PDF-альбом в натуральную величину, проверка листа (текст ≥ 1,8 мм, за рамкой, пустой) | `printing.write_album`, `printing.check_sheets`; `pipeline.print_project` (команда `print`) |
+| Комплект на заданном формате: таблицы на листы-продолжения, деление таблиц по строкам, масштаб по плану с проверкой отрисовкой | `sheets.fit_specs`, `sheets.paginate`, `sheets.split_table`, `sheets.choose_paper_and_scale` |
 | `.epd` для кабинета: примитивы каждой страницы | `artifact.export_artifact` (формат — [epd-format.md](epd-format.md)) |
 
 ### Сервис
@@ -149,7 +157,7 @@ API на FastAPI ([service-api.md](service-api.md)). Проект проходи
 
 ### Команды CLI
 
-`check`, `build`, `estimate`, `preview`, `render-artifact`, `analyze`, `pdf-facts`, `serve`, `view`, `symbols`
+`check`, `build`, `estimate`, `print`, `preview`, `render-artifact`, `analyze`, `pdf-facts`, `serve`, `view`, `symbols`
 — тонкая обёртка над `pipeline.py` и сервисом (`cli.py`).
 
 ## Чего ещё нет

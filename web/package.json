@@ -5,15 +5,17 @@
   "description": "Просмотр собранных проектов Штроба: листы .epd, правка трасс, 3D проводки",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc --noEmit && vite build",
+    "dev": "node scripts/css-types.mjs && vite",
+    "build": "node scripts/css-types.mjs && tsc --noEmit && vite build",
     "preview": "vite preview",
-    "check": "tsc --noEmit",
-    "test": "vitest run"
+    "check": "node scripts/css-types.mjs && tsc --noEmit",
+    "test": "vitest run",
+    "css-types": "node scripts/css-types.mjs"
   },
   "dependencies": {
     "@react-three/drei": "9.122.0",
     "@react-three/fiber": "8.17.14",
+    "country-flag-icons": "1.6.20",
     "react": "18.3.1",
     "react-dom": "18.3.1",
     "three": "0.160.0"
@@ -24,6 +26,7 @@
     "@types/react-dom": "18.3.1",
     "@types/three": "0.160.0",
     "@vitejs/plugin-react": "4.7.0",
+    "sass-embedded": "1.105.1",
     "typescript": "5.9.3",
     "vite": "5.4.21",
     "vitest": "2.1.9"

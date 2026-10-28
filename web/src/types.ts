@@ -60,9 +60,11 @@ export interface ManifestPage {
   format: string | null;
   size: XY;
   file: string;
+  stage?: string;  // тема листа; «points» — ведомость для печати, вкладки нет; «elevations» — развёртки
 }
 
 export interface Manifest {
+  version: number;  // версия формата .epd (version.ts, FORMAT_VERSION)
   pages: ManifestPage[];
 }
 
@@ -123,6 +125,7 @@ export interface SceneWire {
   route: "ceiling" | "floor";
   from: string;
   to: string;
+  room?: string;  // помещение цели — для фильтра
   pts: XYZ[];
 }
 
@@ -132,8 +135,8 @@ export interface Scene {
   floors: { key: string; rings: XY[][] }[];
   walls: { key: string; polys: XY[][][]; z: [number, number]; normals: XY[] }[];
   wires: Record<string, SceneWire>;
-  points: Record<string, { pos: XYZ; inward: XY | null; type: string; group: string | null; color: string }>;
-  boxes: Record<string, { pos: XYZ; inward: XY | null; label: string; group: string }>;
+  points: Record<string, { pos: XYZ; inward: XY | null; type: string; room?: string; group: string | null; color: string }>;
+  boxes: Record<string, { pos: XYZ; inward: XY | null; label: string; room?: string; group: string }>;
   board?: { pos: XYZ; inward: XY | null };
 }
 

@@ -48,6 +48,7 @@ from floorplan_engine.layers import (
     TEXT_STYLE,
     sheet,
     sheet_scale,
+    text_width,
 )
 from floorplan_engine.schema import Opening, OpeningType, Plan, Room
 from floorplan_engine.texts import Language, tr
@@ -62,6 +63,12 @@ GRID = 0.1  # сетка координат стен, мм: общие гран�
 MIN_AREA = 1.0  # мм²: обрезки меньше — погрешность, не штрихуются
 DIM_LEVEL_1_MM = 8.0  # первый ряд размеров от грани стены, мм листа
 DIM_LEVEL_STEP_MM = 7.0  # шаг между рядами
+DIM_TEXT_GAP_MM = 0.8  # зазор вокруг подписи размера вдоль линии (как dimgap)
+DIM_LIFT_MM = TEXT_DIM_MM * 1.4  # подпись, которой нет места вдоль линии, — строкой выше
+DIM_GAP_MM = 0.8  # подпись над размерной линией (dimgap стиля)
+DIM_LINE_BAND_MM = 0.4  # полоса размерной линии для проверки наложений
+DIM_STEPS_MM = (0.0, 1.0, 2.0, 3.0, 4.0, 6.0, 8.0)  # насколько дальше от участка уводить подпись
+DIM_MAX_SHIFTS = 4  # на сколько уровней ряд может уйти, если его место занято
 SHARED_WALL_TOLERANCE = 1.0
 
 
@@ -114,9 +121,10 @@ class WallPiece:
     """Сплошной участок стены между проёмами.
 
     polygon — четырёхугольник от внутренней грани до внешней со срезанными под углом
-    концами: из них складывается силуэт стен. body — тело стены для раздела материалов:
-    прямоугольник, продлённый в выпуклых углах на толщину соседней стены, — так несущая
-    стена идёт сплошной, а перегородка упирается в неё ровным торцом.
+    концами: из них складывается силуэт стен (контур). body — тело стены для штриховки:
+    прямоугольник, продлённый в выпуклых углах на толщину соседней стены. Угол достаётся
+    одной стене целиком, соседняя упирается в неё торцом под 90° — стыки на плане прямые,
+    без шва «на ус» (несущая — сплошная, перегородка — торцом в неё).
     """
 
     tag: str  # «комната.стена» — метка FLOORPLAN_ENGINE
@@ -125,7 +133,7 @@ class WallPiece:
     body: BaseGeometry
 
 
-def _convex(a: WallSegment, b: WallSegment) -> bool:
+def convex(a: WallSegment, b: WallSegment) -> bool:
     """Угол между стеной a и следующей b выпуклый (обход по часовой — поворот вправо)."""
     return a.direction.x * b.direction.y - a.direction.y * b.direction.x < 0
 
@@ -159,15 +167,15 @@ def wall_pieces(g: RoomGeometry) -> list[WallPiece]:
             outer_b = g.outer_end(seg) if last else g.outer_point(seg, b)
             # Окно или дверь соседа доходит до выпуклого угла — угол целиком за этой
             # стеной, прямым торцом, а не срезом под углом
-            if first and _convex(prev, seg) and _open_at_end(g.room, prev):
+            if first and convex(prev, seg) and _open_at_end(g.room, prev):
                 inner_a = seg.point_at(-prev.thickness)
                 outer_a = g.outer_point(seg, -prev.thickness)
-            if last and _convex(seg, nxt) and _open_at_start(g.room, nxt):
+            if last and convex(seg, nxt) and _open_at_start(g.room, nxt):
                 inner_b = seg.point_at(seg.length + nxt.thickness)
                 outer_b = g.outer_point(seg, seg.length + nxt.thickness)
             quad = Polygon([_xy(inner_a), _xy(inner_b), _xy(outer_b), _xy(outer_a)])
-            lo = a - (prev.thickness if first and _convex(prev, seg) else 0.0)
-            hi = b + (nxt.thickness if last and _convex(seg, nxt) else 0.0)
+            lo = a - (prev.thickness if first and convex(prev, seg) else 0.0)
+            hi = b + (nxt.thickness if last and convex(seg, nxt) else 0.0)
             out_dir = seg.outward * seg.thickness
             body = Polygon(
                 [
@@ -189,7 +197,9 @@ def draw_walls(msp: Modelspace, geoms: Sequence[RoomGeometry]) -> None:
     bearing = shapely.unary_union([p.body for p in pieces if p.bearing]).intersection(total)
     covered: BaseGeometry = Polygon()
     for p in pieces:
-        area = p.body.intersection(bearing) if p.bearing else p.polygon.difference(bearing)
+        # Тело стены, а не срезанный «на ус» кусок: стык со следующей стеной — под 90°
+        body = p.body.intersection(total)
+        area = body.intersection(bearing) if p.bearing else body.difference(bearing)
         own = area.difference(covered)
         covered = covered.union(area)
         base = HATCH_SCALE_BEARING if p.bearing else HATCH_SCALE_PARTITION
@@ -247,19 +257,21 @@ def draw_openings(msp: Modelspace, g: RoomGeometry, language: Language = "ru") -
                 _draw_window(msp, g, seg, op, language)
 
 
-def _draw_door(msp: Modelspace, g: RoomGeometry, seg: WallSegment, op: Opening) -> None:
-    layer = {"layer": A_DOOR.name}
+def door_leaf(g: RoomGeometry, seg: WallSegment, op: Opening) -> tuple[Vec, Vec, Vec]:
+    """Петля, край закрытого полотна и направление открывания двери."""
     hinge_off, free_off = (
         (op.offset, op.offset + op.width)
         if op.hinge == "start"
         else (op.offset + op.width, op.offset)
     )
     if op.swing == "in":
-        hinge, closed = seg.point_at(hinge_off), seg.point_at(free_off)
-        normal = seg.inward
-    else:
-        hinge, closed = g.outer_point(seg, hinge_off), g.outer_point(seg, free_off)
-        normal = seg.outward
+        return seg.point_at(hinge_off), seg.point_at(free_off), seg.inward
+    return g.outer_point(seg, hinge_off), g.outer_point(seg, free_off), seg.outward
+
+
+def _draw_door(msp: Modelspace, g: RoomGeometry, seg: WallSegment, op: Opening) -> None:
+    layer = {"layer": A_DOOR.name}
+    hinge, closed, normal = door_leaf(g, seg, op)
     leaf_end = hinge + normal * op.width
     msp.add_line(_xy(hinge), _xy(leaf_end), dxfattribs=layer)
     a_closed = math.degrees(math.atan2(closed.y - hinge.y, closed.x - hinge.x))
@@ -297,8 +309,117 @@ def readable_angle(angle: float) -> float:
     return angle
 
 
-def _add_dim(msp: Modelspace, p1: Vec, p2: Vec, offset_outward: float) -> None:
-    """Размер между точками на грани стены, вынесенный по нормали наружу (+) или внутрь (−).
+def _reading(seg: WallSegment) -> tuple[Vec, Vec]:
+    """Направление чтения подписи размера вдоль стены и сторона «над линией»."""
+    d = seg.direction
+    angle = math.degrees(math.atan2(d.y, d.x))
+    if abs(readable_angle(angle) - angle) > 1e-6:
+        d = d * -1.0
+    return d, d.left()
+
+
+def _dim_label(a: float, b: float) -> str:
+    return f"{b - a:.0f}"
+
+
+def _text_box(seg: WallSegment, a: float, b: float, offset: float, move: Vec) -> BaseGeometry:
+    """Место подписи размера участка a…b: над размерной линией на offset (+ наружу),
+    сдвинутой на move (мм модели)."""
+    d, up = _reading(seg)
+    hw = sheet(text_width(_dim_label(a, b), TEXT_DIM_MM) / 2 + DIM_TEXT_GAP_MM)
+    hh = sheet(TEXT_DIM_MM * 0.6)
+    c = seg.point_at((a + b) / 2) + seg.outward * offset + up * (sheet(DIM_GAP_MM) + hh) + move
+    return Polygon([_xy(c + d * sx * hw + up * sy * hh) for sx, sy in CORNERS])
+
+
+CORNERS = ((-1, -1), (1, -1), (1, 1), (-1, 1))
+
+
+def _fits(a: float, b: float) -> bool:
+    """Подпись помещается между выносными линиями участка."""
+    return sheet(text_width(_dim_label(a, b), TEXT_DIM_MM) + 2 * DIM_TEXT_GAP_MM) <= b - a
+
+
+def _moves(seg: WallSegment, a: float, b: float) -> list[Vec]:
+    """Куда можно увести подпись узкого участка: вдоль линии за участок (ближе — раньше),
+    затем строкой выше — по центру и вдоль линии."""
+    d, up = _reading(seg)
+    reach = (b - a) / 2 + sheet(text_width(_dim_label(a, b), TEXT_DIM_MM) / 2 + DIM_TEXT_GAP_MM)
+    along = [reach + sheet(step) for step in DIM_STEPS_MM]
+    lift = up * sheet(DIM_LIFT_MM)
+    out = [d * (sign * x) for x in along for sign in (1.0, -1.0)]
+    return out + [lift] + [lift + v for v in out]
+
+
+def _line_band(seg: WallSegment, offset: float) -> BaseGeometry:
+    """Размерная линия ряда: чужие подписи на неё не ложатся. Концы обрезаны — в углу
+    комнаты линии соседних стен пересекаются всегда."""
+    band = sheet(DIM_LINE_BAND_MM)
+    trim = min(abs(offset) + sheet(DIM_GAP_MM), seg.length * 0.45)
+    a, b, n = seg.point_at(trim), seg.point_at(seg.length - trim), seg.outward
+    lo, hi = offset - band, offset + band
+    return Polygon([_xy(a + n * lo), _xy(b + n * lo), _xy(b + n * hi), _xy(a + n * hi)])
+
+
+def _hits(geom: BaseGeometry, taken: Sequence[BaseGeometry]) -> bool:
+    return any(geom.intersection(t).area > 0 for t in taken)
+
+
+def _place_rows(
+    seg: WallSegment,
+    rows: Sequence[Sequence[tuple[float, float]]],
+    sign: float,
+    base: float,
+    taken: list[BaseGeometry],
+) -> tuple[float, list[list[Vec | None]]]:
+    """Ряды размеров стены (участки каждого ряда) на первом уровне, где их подписи не
+    задевают уже поставленное (taken); узкие подписи — на свободное место рядом (_moves).
+    Возвращает уровень первого ряда и сдвиги подписей; поставленное добавляет в taken."""
+    step = sheet(DIM_LEVEL_STEP_MM)
+    zero = Vec(0.0, 0.0)
+
+    def offsets(start: float) -> list[float]:
+        return [sign * (start + r * step) for r in range(len(rows))]
+
+    level = base
+    for k in range(DIM_MAX_SHIFTS + 1):
+        start = base + k * step
+        boxes = [
+            _text_box(seg, a, b, off, zero)
+            for parts, off in zip(rows, offsets(start), strict=True)
+            for a, b in parts
+            if _fits(a, b)
+        ]
+        lines = [_line_band(seg, off) for off in offsets(start)]
+        if not any(_hits(g, taken) for g in boxes + lines):
+            level = start
+            break
+    moves: list[list[Vec | None]] = []
+    for parts, off in zip(rows, offsets(level), strict=True):
+        row: list[Vec | None] = []
+        for a, b in parts:
+            default = _text_box(seg, a, b, off, zero)
+            if _fits(a, b) and not _hits(default, taken):
+                taken.append(default)
+                row.append(None)
+                continue
+            # Узкая или легла на чужое — ближайшее свободное место рядом
+            options = ([zero] if _fits(a, b) else []) + _moves(seg, a, b)
+            move = next(
+                (m for m in options if not _hits(_text_box(seg, a, b, off, m), taken)), options[0]
+            )
+            taken.append(_text_box(seg, a, b, off, move))
+            row.append(None if move == zero else move)
+        moves.append(row)
+    taken.extend(_line_band(seg, off) for off in offsets(level))
+    return level, moves
+
+
+def _add_dim(
+    msp: Modelspace, p1: Vec, p2: Vec, offset_outward: float, move: Vec | None = None
+) -> None:
+    """Размер между точками на грани стены, вынесенный по нормали наружу (+) или внутрь (−);
+    move — сдвиг подписи от места по умолчанию, мм модели (узкий участок цепочки).
 
     У add_aligned_dim положительное distance — влево от p1→p2, а «влево» у стены — наружу.
     Если стена идёт влево или вниз, точки меняются местами, чтобы текст не был вверх ногами.
@@ -314,6 +435,8 @@ def _add_dim(msp: Modelspace, p1: Vec, p2: Vec, offset_outward: float) -> None:
         dimstyle=DIM_STYLE,
         dxfattribs={"layer": A_DIMS.name},
     )
+    if move is not None:
+        dim.set_location(_xy(move), relative=True)
     dim.render()
 
 
@@ -346,6 +469,7 @@ def draw_dimensions(
     g: RoomGeometry,
     all_rooms: Sequence[RoomGeometry],
     done: Sequence[RoomGeometry] = (),
+    taken: list[BaseGeometry] | None = None,
 ) -> None:
     """Размеры по внутренней грани стены.
 
@@ -353,7 +477,11 @@ def draw_dimensions(
     2-й — общая длина.
     Снаружи соседнее помещение — те же ряды внутрь своей комнаты, но только если
     эту перегородку ещё не образмерили со стороны соседа (`done`).
+    taken — подписи и размерные линии уже поставленных рядов и подписи помещений, общие
+    для всех комнат: ряд, чьи подписи на них ложатся, уходит на следующий уровень; узкая
+    подпись (не входит между выносными) — на свободное место рядом.
     """
+    taken = taken if taken is not None else []
     for seg in g.contour.segments:
         with tagged(msp, "dimension", f"{g.room.id}.{seg.id}"):
             gaps = _gaps(g.room, seg.id)
@@ -365,12 +493,17 @@ def draw_dimensions(
                 if any(_mirrored_wall(g, seg, o) is not None for o in done):
                     continue
                 sign, base = -1.0, sheet(DIM_LEVEL_1_MM)
+            parts = [(0.0, seg.length)]
             if gaps:
                 stops = sorted({0.0, seg.length, *(x for gap in gaps for x in gap)})
-                for a, b in itertools.pairwise(stops):
-                    _add_dim(msp, seg.point_at(a), seg.point_at(b), sign * base)
-                base += sheet(DIM_LEVEL_STEP_MM)
-            _add_dim(msp, seg.start, seg.end, sign * base)
+                parts = list(itertools.pairwise(stops))
+            # Ряды: цепочка проёмов (если есть), затем общая длина
+            rows = [parts, [(0.0, seg.length)]] if gaps else [parts]
+            level, moves = _place_rows(seg, rows, sign, base, taken)
+            step = sheet(DIM_LEVEL_STEP_MM)
+            for r, (row, row_moves) in enumerate(zip(rows, moves, strict=True)):
+                for (a, b), move in zip(row, row_moves, strict=True):
+                    _add_dim(msp, seg.point_at(a), seg.point_at(b), sign * (level + r * step), move)
 
 
 # --- Подписи -----------------------------------------------------------------
@@ -457,6 +590,21 @@ def draw_area_contour(msp: Modelspace, g: RoomGeometry) -> RoomArea:
     return RoomArea(poly, g.contour.area_mm2)
 
 
+def _room_label_box(g: RoomGeometry) -> BaseGeometry:
+    """Место названия и площади помещения (draw_room_label) — размеры на него не ложатся."""
+    at = label_point(g.contour)
+    w = max(text_width(g.room.name, TEXT_ROOM_MM), text_width("00,00 м²", TEXT_DIM_MM))
+    hw, hh = sheet(w / 2 + 1.0), sheet(TEXT_ROOM_MM * 1.6)
+    return Polygon(
+        [
+            (at.x - hw, at.y - hh),
+            (at.x + hw, at.y - hh),
+            (at.x + hw, at.y + hh),
+            (at.x - hw, at.y + hh),
+        ]
+    )
+
+
 def draw_room_label(msp: Modelspace, g: RoomGeometry, area: RoomArea) -> None:
     """Название и площадь помещения; площадь — поле AutoCAD от контура area."""
     doc = msp.doc
@@ -497,8 +645,12 @@ def draw_plan(msp: Modelspace, plan: Plan, contours: dict[str, Contour]) -> dict
             draw_room_label(msp, g, areas[g.room.id])
     # Общие перегородки образмериваем из более просторной комнаты
     done: list[RoomGeometry] = []
+    # Подписи размеров не ложатся на названия помещений и стены. Открывание дверей не в
+    # счёт: в коридоре с тремя дверями подписям иначе некуда встать рядом с участком
+    taken = [_room_label_box(g) for g in geoms]
+    taken += [p.polygon for g in geoms for p in wall_pieces(g)]
     for g in sorted(geoms, key=lambda r: r.contour.area_mm2, reverse=True):
-        draw_dimensions(msp, g, geoms, done)
+        draw_dimensions(msp, g, geoms, done, taken)
         done.append(g)
     return areas
 

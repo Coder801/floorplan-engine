@@ -1,0 +1,25 @@
+// Цвета — CSS-переменные, а не переменные SCSS: тема переключается без пересборки
+// (palette.ts читает их же для холста и 3D). Светлая — тёплый белый; тёмная —
+// нейтральный тёмно-коричневый.
+
+@mixin dark {
+  --bg: #1b1815; --panel: #24201c; --raise: #2c2722; --text: #ebe3d6; --muted: #a89d8e;
+  --line: #3a332c; --soft: #2f2a25; --accent: #ebe3d6; --accent-text: #1b1815;
+  --hl: #ff8a50; --hl-row: #4a3020; --badge: #d43a2f;
+  --paper: #211d19; --ink: #e6ddcf;
+  --critical: #f08070; --major: #e2a54e; --minor: #a89d8e; --ok: #6cc08d;
+  color-scheme: dark;
+}
+
+:root {
+  --bg: #efebe2; --panel: #fbf8f2; --raise: #ffffff; --text: #29251f; --muted: #6b6357;
+  --line: #e1dacd; --soft: #f3efe7; --accent: #29251f; --accent-text: #fbf8f2;
+  --hl: #d2491a; --hl-row: #fbe3d6; --badge: #c62828;
+  --paper: #ffffff; --ink: none;
+  --critical: #b3261e; --major: #9a5b00; --minor: #6b6357; --ok: #2e6b45;
+  color-scheme: light;
+}
+:root[data-theme="dark"] { @include dark; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { @include dark; }
+}

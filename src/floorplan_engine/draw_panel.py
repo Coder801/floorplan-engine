@@ -19,7 +19,7 @@ from ezdxf.layouts.base import BaseLayout
 from floorplan_engine.draw_plan import add_text
 from floorplan_engine.geometry import Vec
 from floorplan_engine.ids import tagged
-from floorplan_engine.layers import E_PANEL, E_PANEL_WIRE, text_width
+from floorplan_engine.layers import E_PANEL, E_PANEL_WIRE, MIN_TEXT_MM, text_width
 from floorplan_engine.panel import (
     BoardPanel,
     Device,
@@ -45,8 +45,9 @@ LEAD = 2.0  # ввод над щитом
 ROW = HEAD + BODY + GUTTER
 SIDE = 7.0  # внешний аппарат (инвертор, вилка) справа от щита, с зазором
 M_MAX = 9.0  # модуль на листе, мм: больше — щит слишком крупный
-M_MIN = 4.5  # меньше — подписи не читаются
 TEXT_MAX = 2.0
+GUTTER_TEXT = 0.28  # подписи под рейкой — доля модуля, самые мелкие на листе
+M_MIN = MIN_TEXT_MM / GUTTER_TEXT  # меньше — подписи мельче MIN_TEXT_MM
 DARK = 0x3A3A3A
 GREY = 0x8C8C8C
 BUS = 0x5A5A5A
@@ -200,7 +201,7 @@ def draw_device(layout: BaseLayout, d: Device, x: float, top: float, m: float, c
         if d.kind in (DeviceKind.DIFF, DeviceKind.RCD):  # кнопка «Тест»
             cx = x1 - 0.5 * m
             layout.add_circle((cx, mid), 0.22 * m, dxfattribs={"layer": E_PANEL.name})
-            _text(layout, "T", Vec(cx, mid - 0.55 * m), th * 0.8)
+            _text(layout, "T", Vec(cx, mid - 0.55 * m), th)
     elif d.kind is DeviceKind.RELAY:
         _fill(layout, x + 0.3 * m, mid - 0.4 * m, x1 - 0.3 * m, mid + 0.6 * m, 0x1F3D2B)
         _text(layout, "230V", Vec((x + x1) / 2, mid + 0.1 * m), th, color=0x7CFC9A)
@@ -234,7 +235,7 @@ def _gutter_labels(
     layout.add_circle(
         (x, bottom), 0.15 * m, dxfattribs={"layer": E_PANEL_WIRE.name, "true_color": color}
     )
-    th = min(TEXT_MAX * 0.9, 0.28 * m)
+    th = min(TEXT_MAX * 0.9, GUTTER_TEXT * m)
     room = (GUTTER - 1.0) * m
     star = ASSUMED if g.assumed else ""
     left = clip(g.purpose, room, th)

@@ -65,7 +65,8 @@ def test_artifact_round_trip(tmp_path: Path) -> None:
     manifest, pages = read_artifact(epd)
     assert manifest["format"] == FORMAT_NAME and manifest["version"] == FORMAT_VERSION
     assert manifest["project"] == {"name": "тест", "language": "ru"}
-    assert [p["name"] for p in manifest["pages"]] == ["01 План", "02 Электрика"]
+    names = [p["name"] for p in manifest["pages"]]
+    assert names == ["01 План", "02 Электрика", "03 Точки", "04 Развёртки"]
     for meta, page in zip(manifest["pages"], pages, strict=True):
         width, height = page["size"]
         assert meta["size"] == page["size"] and page["format"].startswith("A")
@@ -104,7 +105,13 @@ def test_artifact_is_deterministic_and_compressed(tmp_path: Path) -> None:
     assert a == b
     with zipfile.ZipFile(tmp_path / "a.epd") as zf:
         assert all(i.compress_type == zipfile.ZIP_DEFLATED for i in zf.infolist())
-        assert sorted(zf.namelist()) == [MANIFEST, "pages/01.json", "pages/02.json"]
+        assert sorted(zf.namelist()) == [
+            MANIFEST,
+            "pages/01.json",
+            "pages/02.json",
+            "pages/03.json",
+            "pages/04.json",
+        ]
 
 
 def test_read_rejects_foreign_or_newer_files(tmp_path: Path) -> None:

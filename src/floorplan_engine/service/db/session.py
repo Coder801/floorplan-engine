@@ -15,7 +15,12 @@ DEFAULT_URL = (
 
 
 def database_url() -> str:
-    return os.environ.get("DATABASE_URL", DEFAULT_URL)
+    """Адрес базы; postgres:// и postgresql:// (так его даёт Railway) — через psycopg 3."""
+    url = os.environ.get("DATABASE_URL", DEFAULT_URL)
+    for prefix in ("postgres://", "postgresql://"):
+        if url.startswith(prefix):
+            return "postgresql+psycopg://" + url.removeprefix(prefix)
+    return url
 
 
 def make_engine(url: str | None = None) -> Engine:

@@ -1,13 +1,18 @@
 // Область чертежа: лист в canvas (SheetView) или 3D проводки, кнопки под чертежом, подсказка.
+// Чертёж один на листы с планом (drawing): вкладка меняет слои, холст и масштаб остаются.
 
 import {
   forwardRef, lazy, Suspense, useEffect, useImperativeHandle, useMemo, useReducer, useRef, useState,
 } from "react";
 import { saveWiring } from "./api";
 import { WALL_MODES } from "./consts";
+import { Filter3D } from "./Filter3D";
 import { PageIndex } from "./page";
+import { objectLayers, sceneOf, type Drawing } from "./sheet/drawing";
 import { SheetView } from "./sheet/SheetView";
+import { cx } from "./cx";
 import { useView, view } from "./store";
+import ui from "./styles/ui.module.scss";
 import type { Scene3DApi } from "./three/Scene3D";
 import { Tip } from "./Tip";
 import type { Page } from "./types";
@@ -17,11 +22,11 @@ const Scene3D = lazy(() => import("./three/Scene3D").then((m) => ({ default: m.S
 
 export interface StageHandle {
   pending(): number;              // несохранённые правки трасс
-  downloadPng(filename: string): void;
 }
 
 interface Props {
   page: Page;
+  drawing: Drawing;
   project: string;
   onSaved: (notes: string[]) => void;
   onBanner: (text: string) => void;
@@ -33,31 +38,45 @@ const EDIT_TITLE = "Тяните участок линии: соседние у�
   + "⌘/Ctrl+клик — выделить несколько участков. Коробка на стене ездит вдоль стены, "
   + "на потолке — свободно. Потребители и щит не двигаются.";
 
-export const SheetStage = forwardRef<StageHandle, Props>(function SheetStage({ page, project, onSaved, onBanner }, ref) {
+export const SheetStage = forwardRef<StageHandle, Props>(function SheetStage({ page, drawing, project, onSaved, onBanner }, ref) {
   const wrap = useRef<HTMLElement | null>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
   const sheet = useRef<SheetView | null>(null);
   const scene = useRef<Scene3DApi | null>(null);
-  const index = useMemo(() => new PageIndex(page), [page]);
+  const index = useMemo(() => new PageIndex(page, drawing.objects), [page, drawing]);
   const [zoom, setZoom] = useState("100%");
   const [saving, setSaving] = useState(false);
   const [, tick] = useReducer((n: number) => n + 1, 0);  // правка изменилась — перерисовать кнопки
   const { editMode, show3d, wallMode } = useView((s) => s);
-  const in3d = show3d && !!page.scene;
+  // 3D — у всего чертежа (сцена листа проводки); на вкладке видно то же, что в её слоях
+  const scene3d = useMemo(() => sceneOf(drawing), [drawing]);
+  const layerOf = useMemo(() => objectLayers(drawing), [drawing]);
+  const own = drawing.own.get(page) ?? null;
+  const in3d = show3d && !!scene3d;
 
+  // Холст — на чертёж; вкладка того же чертежа — только setPage (ниже)
+  const first = useRef({ page, index });
+  first.current = { page, index };
   useEffect(() => {
     wrap.current = canvas.current!.parentElement;
-    const sv = new SheetView(canvas.current!, wrap.current!, page, index);
+    const sv = new SheetView(canvas.current!, wrap.current!, drawing, first.current.page, first.current.index);
     sv.onEditChange = tick;
     sv.onZoom = setZoom;
     sheet.current = sv;
     tick();  // лист создан после первого рендера — показать его кнопки правки
     return () => { sv.destroy(); sheet.current = null; };
+  }, [drawing]);
+
+  useEffect(() => {
+    const sv = sheet.current;
+    if (!sv || sv.page === page) return;
+    sv.setPage(page, index);
+    setSaving(false);
+    tick();
   }, [page, index]);
 
   useImperativeHandle(ref, () => ({
     pending: () => (sheet.current && !sheet.current.saved && sheet.current.ed ? sheet.current.ed.pending() : 0),
-    downloadPng: (f) => sheet.current?.downloadPng(f),
   }), []);
 
   const sv = sheet.current, ed = sv?.ed ?? null;
@@ -96,10 +115,10 @@ export const SheetStage = forwardRef<StageHandle, Props>(function SheetStage({ p
 
   let hint = `${page.format || ""} · ${HINT}`;
   if (in3d) {
-    const a = page.scene!.assumed, notes = [];
-    if (a.ceiling) notes.push(`потолок ${page.scene!.ceiling} — допущение`);
+    const a = scene3d!.assumed, notes = [];
+    if (a.ceiling) notes.push(`потолок ${scene3d!.ceiling} — допущение`);
     if (a.openings.length) notes.push(`высоты проёмов (${a.openings.length}) — типовые`);
-    hint = ["левая кнопка — вращать, правая — сдвиг, колесо — масштаб, двойной клик — к линии", ...notes].join(" · ");
+    hint = ["левая кнопка — вращать, правая — сдвиг, колесо — масштаб, двойной клик — к объекту", ...notes].join(" · ");
   } else if (editMode && ed) hint = saving ? "Сохраняю и пересобираю…" : EDIT_HINT;
 
   const n = ed?.pending() ?? 0, back = ed?.resettable();
@@ -107,20 +126,20 @@ export const SheetStage = forwardRef<StageHandle, Props>(function SheetStage({ p
     <>
       <canvas ref={canvas} tabIndex={0} aria-label="Чертёж листа" />
       {in3d && (
-        <Suspense fallback={<div className="three empty">Загружаю 3D…</div>}>
-          <Scene3D scene={page.scene!} index={index} apiRef={scene} onZoom={setZoom} />
+        <Suspense fallback={<div className={cx(ui.three, ui.empty)}>Загружаю 3D…</div>}>
+          <Scene3D scene={scene3d!} index={index} own={own} layerOf={layerOf} apiRef={scene} onZoom={setZoom} />
         </Suspense>
       )}
       <Tip index={index} />
-      <div className="zoom">
-        <div className="group">
+      <div className={ui.toolbar}>
+        <div className={ui.group}>
           <button aria-label="Уменьшить" onClick={() => zoomBy(1 / 1.25)}>−</button>
-          <span className="mono" style={{ padding: "0 8px", display: "flex", alignItems: "center" }}>{zoom}</span>
+          <span className={cx(ui.zoomValue, "mono")}>{zoom}</span>
           <button aria-label="Увеличить" onClick={() => zoomBy(1.25)}>+</button>
           <button onClick={fit}>Весь чертёж</button>
         </div>
-        {page.scene && (
-          <div className="group">
+        {scene3d && (
+          <div className={ui.group}>
             <button aria-pressed={in3d} onClick={toggle3d}
                     title="Проводка в объёме: трассы по потолку и полу, спуски к точкам">3D</button>
             {in3d && <button onClick={() => scene.current?.iso()}>Изометрия</button>}
@@ -130,12 +149,13 @@ export const SheetStage = forwardRef<StageHandle, Props>(function SheetStage({ p
             ))}
           </div>
         )}
+        {in3d && <Filter3D scene={scene3d!} index={index} />}
         {ed && !in3d && (
-          <div className="group">
+          <div className={ui.group}>
             <button aria-pressed={editMode} title={EDIT_TITLE} onClick={toggleEdit}>Править трассы</button>
             {editMode && (
               <>
-                <button className={n ? "primary" : undefined} disabled={!n || saving}
+                <button className={cx(!!n && ui.primary)} disabled={!n || saving}
                         title="Записать в wiring.yaml и пересобрать проект" onClick={save}>
                   {n ? `Сохранить (${n})` : "Сохранить"}
                 </button>
@@ -148,7 +168,7 @@ export const SheetStage = forwardRef<StageHandle, Props>(function SheetStage({ p
             )}
           </div>
         )}
-        <span className="small muted">{hint}</span>
+        <span className={ui.hint}>{hint}</span>
       </div>
     </>
   );

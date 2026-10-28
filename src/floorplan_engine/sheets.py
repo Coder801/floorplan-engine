@@ -14,6 +14,10 @@
 краю своей секции, одна под другой; не влезли — колонками справа налево, и колонки за линией
 штампа забирают место у секции плана (arrange); легенда — в секции слева от штампа. Формат,
 ориентация и масштаб — общие для комплекта.
+
+Таблицы, что не входят ни на один формат (печать на заданном формате, `print --paper A3`),
+уходят на лист-продолжение «… (продолжение)» во всю ширину над штампом; таблица выше листа
+делится по строкам на колонки (`fit_specs`).
 """
 
 from __future__ import annotations
@@ -26,7 +30,7 @@ from datetime import date
 from ezdxf import bbox
 from ezdxf.document import Drawing
 from ezdxf.enums import TextEntityAlignment
-from ezdxf.layouts.layout import Paperspace
+from ezdxf.layouts.layout import Modelspace, Paperspace
 from ezdxf.math import BoundingBox
 
 from floorplan_engine.draw_electrical import (
@@ -38,9 +42,11 @@ from floorplan_engine.draw_electrical import (
     legend_size,
     split_legend,
 )
+from floorplan_engine.draw_elevations import elevation_panel
 from floorplan_engine.draw_panel import devices_table, draw_panel_front, fit_panel, panel_notes
 from floorplan_engine.draw_plan import RoomArea, add_text, draw_plan, plan_stamp
 from floorplan_engine.draw_wiring import draw_wiring, wiring_notes, wiring_table
+from floorplan_engine.elevations import wall_elevations
 from floorplan_engine.estimate import PRICES_FILE, PriceList, build_estimate, estimate_table
 from floorplan_engine.estimate import text as estimate_text
 from floorplan_engine.fields import finalize_fields
@@ -62,7 +68,9 @@ from floorplan_engine.layers import (
     E_LIGHT,
     E_SOCKET,
     E_SWITCH,
+    E_TEXT,
     ELECTRICAL_LAYERS,
+    LIGHTING_LAYERS,
     SCALES,
     TEXT_SMALL_MM,
     WIRING_LAYERS,
@@ -72,11 +80,13 @@ from floorplan_engine.layers import (
     sheet_scale,
     text_width,
 )
+from floorplan_engine.lighting import draw_lighting, is_lighting, switch_table
 from floorplan_engine.panel import build_panel
-from floorplan_engine.schema import Electrical, Plan, WiringEdits
+from floorplan_engine.point_numbers import points_table
+from floorplan_engine.schema import LIGHT_TYPES, Electrical, Plan, WiringEdits
 from floorplan_engine.specification import specification_table
 from floorplan_engine.symbols import define_blocks
-from floorplan_engine.tables import draw_table, room_schedule
+from floorplan_engine.tables import Table, draw_table, room_schedule
 from floorplan_engine.texts import TEXTS, Language, tr
 from floorplan_engine.titleblock import (
     PADDING,
@@ -89,10 +99,12 @@ from floorplan_engine.titleblock import (
     format_candidates,
     frame_region,
 )
-from floorplan_engine.wiring import Wiring, box_wiring
+from floorplan_engine.wiring import Wiring, box_wiring, estimate_wiring
 
 VIEW_MARGIN = 3.0  # поле вокруг чертежа внутри видового экрана, мм листа
 PANEL_GAP = 10.0  # между таблицами и колонками легенды, мм листа
+ELEV_NOTES_W = 160.0  # ширина пояснения к развёрткам, мм листа
+MIN_LEAD_ROWS = 5  # меньше строк в остатке колонки — таблица начинается в следующей
 VIEW_FILL = 0.94  # какую долю секции плана занимает чертёж — цель (решение 2026-10-21)
 VIEW_FILL_MAX = 1.0  # больше — чертёж вылезает из секции
 LEGEND_PAD = 5.0  # отступ легенды сверху и снизу: секция низкая, по высоте штампа
@@ -105,6 +117,8 @@ NEVER_FROZEN = frozenset({"0", "DEFPOINTS", A_SHEET.name, A_VPORT.name})
 # Что видно в видовом экране каждого листа
 PLAN_SHEET_LAYERS = (A_WALL, A_DOOR, A_WIND, A_DIMS, A_TEXT)
 ELECTRICAL_SHEET_LAYERS = (A_WALL, A_DOOR, A_WIND, *ELECTRICAL_LAYERS)
+# Освещение: стены, свет и выключатели, связи и свои номера; без розеток, щита и групп
+LIGHTING_SHEET_LAYERS = (A_WALL, A_DOOR, A_WIND, E_SWITCH, E_LIGHT, E_LED, *LIGHTING_LAYERS)
 # Проводка: стены, символы точек и щит, коробки и кабели; без трасс и подписей листа электрики
 WIRING_SHEET_LAYERS = (
     A_WALL,
@@ -129,20 +143,68 @@ class Panel:
     width: float
     height: float
     draw: Callable[[Paperspace, Vec], None]
+    # Части: первая не выше first (остаток колонки), остальные не выше rest (таблица — по
+    # строкам); None — блок не делится
+    split: Callable[[float, float], list[Panel] | None] | None = None
+
+
+def table_panel(table: Table) -> Panel:
+    """Таблица блоком на листе; выше места — делится по строкам (split_table)."""
+
+    def split(first: float, rest: float) -> list[Panel] | None:
+        parts = split_table(table, first, rest)
+        return None if parts is None else [table_panel(t) for t in parts]
+
+    return Panel(table.width, table.height, lambda psp, tl: draw_table(psp, table, tl), split)
+
+
+def split_table(table: Table, first: float, rest: float) -> list[Table] | None:
+    """Таблица частями: первая не выше first, остальные — не выше rest; заголовок колонок —
+    в каждой, название — в первой, итог — в последней. В first не входят MIN_LEAD_ROWS
+    строк — обрывок не ставится, таблица начинается с rest; None — в rest не входят две."""
+    head = replace(table, rows=(), total=None).height
+    per = int((rest - head) // table.row_h)
+    if per < 2:
+        return None
+    rows = table.rows
+    lead = max(0, int((first - head) // table.row_h))
+    lead = lead if lead >= MIN_LEAD_ROWS else 0
+    chunks = [rows[:lead]] if lead else []
+    chunks += [rows[i : i + per] for i in range(lead, len(rows), per)]
+    chunks = chunks or [()]
+    room = lead if lead and len(chunks) == 1 else per
+    if table.total is not None and len(chunks[-1]) >= room:
+        chunks[-1], extra = chunks[-1][:-1], chunks[-1][-1:]
+        chunks.append(extra)
+    last = len(chunks) - 1
+    return [
+        replace(
+            table,
+            rows=chunk,
+            title=table.title if k == 0 else "",
+            total=table.total if k == last else None,
+        )
+        for k, chunk in enumerate(chunks)
+    ]
 
 
 # Имя PNG листа по его вкладке: «02 Електрика» → 02-electrical.png (латиница — для путей и API)
 SHEET_SLUGS = {
     "tab_plan": "plan",
     "tab_electrical": "electrical",
+    "tab_lighting": "lighting",
     "tab_wiring": "wiring",
     "tab_panel": "panel",
+    "tab_points": "points",
+    "tab_elevations": "elevations",
 }
 
 
 def sheet_slug(tab: str) -> str | None:
     """Тема листа (plan / electrical / wiring) по имени вкладки «NN Название» на любом языке."""
     title = tab.partition(" ")[2]
+    for suffix in TEXTS["sheet_continued"].values():
+        title = title.removesuffix(f" {suffix}")
     return next((slug for key, slug in SHEET_SLUGS.items() if title in TEXTS[key].values()), None)
 
 
@@ -161,6 +223,12 @@ class SheetSpec:
     # Схема вместо видового экрана (щит): по месту (ширина, высота) — панель или None,
     # если не помещается
     body: Callable[[float, float], Panel | None] | None = None
+    wide: bool = False  # схема во всю ширину над штампом (секции плана и таблиц вместе)
+    # Схема не влезла (печать на малом формате) — эти таблицы по страницам вместо неё
+    spill: tuple[Panel, ...] = ()
+    # Блоки spill всегда по страницам (развёртки стен): сколько листов — столько и будет
+    paged: bool = False
+    continued: bool = False  # лист-продолжение таблиц предыдущего листа
 
 
 @dataclass(frozen=True)
@@ -175,13 +243,26 @@ def visible_extents(doc: Drawing, layers: tuple[LayerSpec, ...]) -> BoundingBox:
     return bbox.extents((e for e in doc.modelspace() if e.dxf.layer in names), fast=True)
 
 
-def view_size(doc: Drawing, spec: SheetSpec) -> tuple[float, float]:
-    """Ширина и высота видового экрана 1:50 под слои листа, мм листа; у схемы — 0."""
+def view_size(
+    doc: Drawing, spec: SheetSpec, layers: tuple[LayerSpec, ...] | None = None
+) -> tuple[float, float]:
+    """Ширина и высота видового экрана 1:50 под слои листа (или layers), мм листа; у схемы — 0."""
     if spec.body is not None:
         return 0.0, 0.0
-    box = visible_extents(doc, spec.layers)
+    box = visible_extents(doc, layers or spec.layers)
     k = sheet_scale()
     return box.size.x / k + 2 * VIEW_MARGIN, box.size.y / k + 2 * VIEW_MARGIN
+
+
+def view_parts(doc: Drawing, spec: SheetSpec) -> tuple[tuple[float, float], tuple[float, float]]:
+    """Вид без подписей электрики и их вынос за него, мм листа. Подписи стоят в мм листа и
+    с масштабом не растут — при выборе масштаба вынос не пересчитывается (labels.py)."""
+    full = view_size(doc, spec)
+    core_layers = tuple(spec_ for spec_ in spec.layers if spec_.name != E_TEXT.name)
+    if spec.body is not None or len(core_layers) == len(spec.layers):
+        return full, (0.0, 0.0)
+    core = view_size(doc, spec, core_layers)
+    return core, (max(full[0] - core[0], 0.0), max(full[1] - core[1], 0.0))
 
 
 @dataclass(frozen=True)
@@ -283,6 +364,9 @@ def fit_legend(legends: Sequence[Panel], sec: Region) -> tuple[Panel, Vec] | Non
 
 
 def panels_fit(spec: SheetSpec, paper: Paper) -> bool:
+    if spec.paged:  # по страницам: лишь бы каждый блок влез на свою
+        x0, y0, x1, y1 = plan_region(replace(spec, wide=True), paper)
+        return paginate(spec.spill, x1 - x0 - 2 * PADDING, y1 - y0 - 2 * PADDING) is not None
     g = grid(paper[1], paper[2])
     legend_ok = not spec.legends or fit_legend(spec.legends, g.legend) is not None
     return legend_ok and arrange(spec.tables, g) is not None and fit_body(spec, paper) is not False
@@ -298,8 +382,11 @@ def fit_body(spec: SheetSpec, paper: Paper) -> Panel | bool:
 
 
 def plan_region(spec: SheetSpec, paper: Paper) -> Region:
-    """Секция плана на этом листе: без колонок таблиц, зашедших в неё."""
+    """Секция плана на этом листе: без колонок таблиц, зашедших в неё; у листа-продолжения —
+    секции плана и таблиц вместе."""
     g = grid(paper[1], paper[2])
+    if spec.wide:
+        return g.plan[0], g.plan[1], g.tables[2], g.tables[3]
     a = arrange(spec.tables, g)
     return a.plan if a is not None else g.plan
 
@@ -312,6 +399,8 @@ def place(view: tuple[float, float], spec: SheetSpec, paper: Paper) -> Placement
     arranged = arrange(spec.tables, g)
     legend = fit_legend(spec.legends, g.legend) if spec.legends else None
     plan = arranged.plan if arranged is not None else g.plan
+    if spec.wide:
+        plan = plan_region(spec, paper)
     fits = (
         arranged is not None
         and (not spec.legends or legend is not None)
@@ -404,16 +493,21 @@ def document_scale(doc: Drawing) -> float:
 
 def schedule_panel(plan: Plan, areas: dict[str, RoomArea]) -> Panel:
     table = room_schedule(plan, areas)
-    return Panel(table.width, table.height, lambda psp, top_left: draw_table(psp, table, top_left))
+    return table_panel(table)
 
 
 LEGEND_MIN_ROWS = 3  # строк в колонке легенды — не меньше
 
 
-def legend_columns(elec: Electrical, language: Language) -> tuple[Panel, ...]:
+def legend_columns(
+    elec: Electrical, language: Language, with_groups: bool = True
+) -> tuple[Panel, ...]:
     """Варианты нижнего ряда: условные обозначения и группы, разбитые на колонки по k
-    строк. Чем меньше k, тем ряд шире и ниже; берётся самый низкий, что поместится."""
+    строк. Чем меньше k, тем ряд шире и ниже; берётся самый низкий, что поместится.
+    with_groups=False — без цветов групп (лист освещения: линии там не по группам)."""
     symbols, groups = split_legend(legend_rows(elec, language))
+    if not with_groups:
+        groups = []
     head = symbols[0]
     blank = replace(head, text="")  # продолжение колонки — без заголовка, строки вровень
 
@@ -444,15 +538,46 @@ def groups_panel(plan: Plan, elec: Electrical) -> Panel | None:
     if built is None:
         return None
     table, notes = built
-    panel = Panel(table.width, table.height, lambda psp, tl: draw_table(psp, table, tl))
+    panel = table_panel(table)
     return stacked(panel, notes_panel(notes, width=table.width)) if notes else panel
+
+
+def points_spec(plan: Plan, elec: Electrical) -> SheetSpec | None:
+    """Лист «Точки» (решение 2026-10-28): номера на плане электрики → вид, высота,
+    количество. Таблица — на месте плана, колонками, если не входит по высоте."""
+    table = points_table(plan, elec)
+    if table is None:
+        return None
+
+    def body(width: float, height: float) -> Panel | None:
+        for k in range(1, len(table.rows) + 1):
+            per = -(-len(table.rows) // k)
+            parts = [
+                replace(table, rows=table.rows[i : i + per], title=table.title if i == 0 else "")
+                for i in range(0, len(table.rows), per)
+            ]
+            if max(t.height for t in parts) > height:
+                continue
+            panels = [Panel(t.width, t.height, _table_draw(t)) for t in parts]
+            out = panels[0]
+            for p in panels[1:]:
+                out = beside(out, p)
+            return out if out.width <= width else None
+        return None
+
+    spill = (table_panel(table),)
+    return SheetSpec("tab_points", "points_image", (), (), body=body, wide=True, spill=spill)
+
+
+def _table_draw(table: Table) -> Callable[[Paperspace, Vec], None]:
+    return lambda psp, tl: draw_table(psp, table, tl)
 
 
 def specification_panel(elec: Electrical, language: Language) -> Panel | None:
     table = specification_table(elec, language)
     if table is None:
         return None
-    return Panel(table.width, table.height, lambda psp, tl: draw_table(psp, table, tl))
+    return table_panel(table)
 
 
 def _row(panels: Sequence[Panel]) -> Panel:
@@ -489,19 +614,24 @@ def notes_panel(lines: Sequence[str], width: float | None = None) -> Panel:
 
 
 def wiring_panels(
-    wiring: Wiring, elec: Electrical, language: Language, prices: PriceList | None = None
+    wiring: Wiring,
+    elec: Electrical,
+    language: Language,
+    prices: PriceList | None = None,
+    quantities: Wiring | None = None,
 ) -> tuple[Panel, Panel]:
     """Таблица кабелей по группам и примечания, под ними — смета электрики (с прайсом) или
     ведомость объёмов (без прайса): смета этапа стоит на его листе. Кабель по маркам
-    с запасом — первые строки сметы, отдельной таблицы марок здесь нет."""
+    с запасом — первые строки сметы, отдельной таблицы марок здесь нет. quantities — проводка
+    для объёмов сметы (wiring.estimate_wiring); None — та же, что на листе."""
     table = wiring_table(wiring, language, group_colors(elec))
     cables = stacked(
-        Panel(table.width, table.height, lambda psp, tl: draw_table(psp, table, tl)),
+        table_panel(table),
         notes_panel(wiring_notes(wiring, language), width=table.width),
     )
-    est = build_estimate(wiring, elec, prices or PriceList(), language)
+    est = build_estimate(quantities or wiring, elec, prices or PriceList(), language)
     sheet = estimate_table(est, language, priced=prices is not None)
-    estimate = Panel(sheet.width, sheet.height, lambda psp, tl: draw_table(psp, sheet, tl))
+    estimate = table_panel(sheet)
     if prices is not None:
         date = f" ({prices.date})" if prices.date else ""
         lines = [estimate_text("sheet_prices", language, f=PRICES_FILE, date=date)]
@@ -528,7 +658,18 @@ def stacked(top: Panel, bottom: Panel) -> Panel:
         top.draw(psp, top_left)
         bottom.draw(psp, Vec(top_left.x, top_left.y - top.height - PANEL_GAP))
 
-    return Panel(max(top.width, bottom.width), top.height + PANEL_GAP + bottom.height, draw)
+    def split(first: float, rest: float) -> list[Panel] | None:
+        # Делится верхний блок; нижний (примечания) — под последней частью или отдельно
+        parts = top.split(first, rest) if top.split is not None else None
+        if parts is None or bottom.height > rest:
+            return None
+        room = first if len(parts) == 1 else rest
+        if parts[-1].height + PANEL_GAP + bottom.height <= room:
+            return [*parts[:-1], stacked(parts[-1], bottom)]
+        return [*parts, bottom]
+
+    width = max(top.width, bottom.width)
+    return Panel(width, top.height + PANEL_GAP + bottom.height, draw, split)
 
 
 def _draw(
@@ -559,6 +700,9 @@ def _draw(
                 legends=legend_columns(elec, plan.language),
             )
         )
+        lighting = lighting_spec(msp, plan, contours, elec)
+        if lighting is not None:
+            specs.append(lighting)
         wiring = box_wiring(plan, contours, elec, edits)
         if wiring is not None:
             draw_wiring(msp, wiring, elec)
@@ -567,13 +711,72 @@ def _draw(
                     "tab_wiring",
                     "wiring_image",
                     WIRING_SHEET_LAYERS,
-                    wiring_panels(wiring, elec, plan.language, prices),
+                    wiring_panels(
+                        wiring,
+                        elec,
+                        plan.language,
+                        prices,
+                        estimate_wiring(plan, contours, elec, edits),
+                    ),
                 )
             )
         board = panel_spec(plan, elec)
         if board is not None:
             specs.append(board)
+        # Ведомость точек — приложением в конце: номера листов этапов не меняются
+        points = points_spec(plan, elec)
+        if points is not None:
+            specs.append(points)
+        # Развёртки стен — тоже в конце, сколько листов понадобится
+        elevations = elevations_spec(plan, contours, elec, wiring)
+        if elevations is not None:
+            specs.append(elevations)
     return doc, specs
+
+
+def lighting_spec(
+    msp: Modelspace, plan: Plan, contours: dict[str, Contour], elec: Electrical
+) -> SheetSpec | None:
+    """Лист «Освещение» — сразу за электрикой: связи выключателей и таблица «Выключатели»,
+    легенда — только света. Света нет — листа нет."""
+    if not any(p.type in LIGHT_TYPES for p in elec.points):
+        return None
+    draw_lighting(msp, plan, contours, elec)
+    lang = plan.language
+    tables: list[Panel] = []
+    built = switch_table(plan, elec)
+    if built is not None:
+        table, notes = built
+        panel = table_panel(table)
+        tables.append(stacked(panel, notes_panel(notes, width=table.width)) if notes else panel)
+    light = elec.model_copy(
+        update={"points": [p for p in elec.points if is_lighting(p)], "board": None}
+    )
+    return SheetSpec(
+        "tab_lighting",
+        "lighting_image",
+        LIGHTING_SHEET_LAYERS,
+        tables=tuple(tables),
+        legends=legend_columns(light, lang, with_groups=False),
+    )
+
+
+def elevations_spec(
+    plan: Plan, contours: dict[str, Contour], elec: Electrical, wiring: Wiring | None
+) -> SheetSpec | None:
+    """Листы «Развёртки»: стена за стеной в масштабе комплекта, по страницам; первым —
+    как читать размеры. Стен с электрикой нет — листов нет."""
+    walls = wall_elevations(plan, contours, elec, wiring)
+    if not walls:
+        return None
+    lang = plan.language
+    blocks = [elevation_panel(e, sheet_scale(), lang) for e in walls]
+    notes = notes_panel([tr("elev_notes", lang)], width=ELEV_NOTES_W)
+    panels = (notes, *(Panel(b.width, b.height, b.draw) for b in blocks))
+    nothing: Callable[[float, float], Panel | None] = lambda w, h: None  # noqa: E731
+    return SheetSpec(
+        "tab_elevations", "elevations_image", (), body=nothing, wide=True, spill=panels, paged=True
+    )
 
 
 def panel_spec(plan: Plan, elec: Electrical) -> SheetSpec | None:
@@ -598,10 +801,123 @@ def panel_spec(plan: Plan, elec: Electrical) -> SheetSpec | None:
 
     table = devices_table(panel, lang, colors)
     tables = stacked(
-        Panel(table.width, table.height, lambda psp, tl: draw_table(psp, table, tl)),
+        table_panel(table),
         notes_panel(panel_notes(panel, lang), width=table.width),
     )
     return SheetSpec("tab_panel", "panel_image", (), (tables,), body=body)
+
+
+def paginate(tables: Sequence[Panel], width: float, height: float) -> list[Panel] | None:
+    """Таблицы по страницам width × height: колонками слева направо, колонка не шире
+    страницы; таблица, что не входит в остаток колонки, делится по строкам (Panel.split) и
+    продолжается в следующей колонке или на следующей странице. None — таблица не входит
+    даже частями."""
+    pages: list[list[list[Panel]]] = [[[]]]
+    used = -PANEL_GAP  # высота занятой части колонки
+
+    def page_width(cols: list[list[Panel]]) -> float:
+        return sum(max(p.width for p in c) for c in cols if c) + PANEL_GAP * (len(cols) - 1)
+
+    def put(part: Panel) -> bool:
+        nonlocal used
+        if part.width > width or part.height > height:
+            return False
+        cols = pages[-1]
+        if cols[-1] and used + PANEL_GAP + part.height > height:
+            cols.append([])
+            used = -PANEL_GAP
+        cols[-1].append(part)
+        if page_width(cols) > width:  # колонка не входит — на новую страницу
+            cols[-1].pop()
+            if not cols[-1]:
+                cols.pop()
+            pages.append([[part]])
+        used = part.height if len(pages[-1][-1]) == 1 else used + PANEL_GAP + part.height
+        return True
+
+    for t in tables:
+        left = height - used - PANEL_GAP
+        if t.height <= left or (t.split is None and t.height <= height):
+            parts = [t]
+        else:
+            split = t.split(left, height) if t.split is not None else None
+            if split is None:
+                return None
+            parts = split
+        if not all(put(part) for part in parts):
+            return None
+    return [_row([_column(c) for c in cols if c]) for cols in pages if any(cols)]
+
+
+def _column(panels: Sequence[Panel]) -> Panel:
+    out = panels[0]
+    for p in panels[1:]:
+        out = stacked(out, p)
+    return out
+
+
+def fit_specs(specs: Sequence[SheetSpec], paper: Paper) -> list[SheetSpec]:
+    """Листы на бумаге paper: у листа, таблицы которого не помещаются, остаются первые, что
+    влезли, остальные — на лист-продолжение сразу за ним; не влезла легенда — она тоже
+    (самым узким вариантом, первой)."""
+    out: list[SheetSpec] = []
+    for spec in specs:
+        if spec.paged:  # развёртки: первая страница — сам лист, дальше — продолжения
+            first, *rest = _continued(spec, spec.spill, paper)
+            out += [replace(first, continued=False), *rest]
+            continue
+        if panels_fit(spec, paper):
+            out.append(spec)
+            continue
+        if spec.body is not None:
+            # Схема (щит) — во всю ширину, её таблицы — на продолжение
+            wide = replace(spec, tables=(), wide=True)
+            if spec.tables and panels_fit(wide, paper):
+                out += [wide, *_continued(spec, spec.tables, paper)]
+            elif spec.spill:  # схема-таблица (точки) — по страницам
+                first, *rest = _continued(spec, spec.spill, paper)
+                out += [replace(first, continued=False), *rest]
+            else:
+                out.append(spec)  # не влезает и так — проверка печати скажет
+            continue
+        moved: list[Panel] = []
+        main = spec
+        if spec.legends and fit_legend(spec.legends, grid(paper[1], paper[2]).legend) is None:
+            moved.append(min(spec.legends, key=lambda p: p.width))
+            main = replace(spec, legends=())
+        # Остаются таблицы, что встают одной колонкой над штампом: план не уступает им место
+        sec = grid(paper[1], paper[2]).tables
+        k = next(
+            k
+            for k in range(len(main.tables), -1, -1)
+            if stack_right(main.tables[:k], sec) is not None
+        )
+        moved += main.tables[k:]
+        # Таблиц на листе не осталось — плану вся ширина над штампом
+        main = replace(main, tables=main.tables[:k], wide=k == 0)
+        out += [main, *_continued(spec, moved, paper)]
+    return out
+
+
+def _continued(spec: SheetSpec, tables: Sequence[Panel], paper: Paper) -> list[SheetSpec]:
+    """Листы-продолжения таблиц листа spec во всю ширину над штампом, по страницам. Не
+    входят даже частями — один лист с исходной схемой: его проверит печать (пустой лист)."""
+    x0, y0, x1, y1 = plan_region(replace(spec, wide=True), paper)
+    pages = paginate(tables, x1 - x0 - 2 * PADDING, y1 - y0 - 2 * PADDING)
+
+    def sheet(page: Panel | None) -> SheetSpec:
+        body = (lambda w, h: page) if page is not None else (lambda w, h: None)
+        return SheetSpec(
+            spec.tab_key,
+            spec.image_key,
+            (),
+            body=body,
+            wide=True,
+            continued=True,
+            paged=spec.paged,
+        )
+
+    return [sheet(p) for p in pages] if pages else [sheet(None)]
 
 
 def _at(view: tuple[float, float], scale: float) -> tuple[float, float]:
@@ -635,16 +951,19 @@ def choose_paper_and_scale(
     room.yaml — только он). Масштаб — тот, при котором самый тесный план ближе всего
     к VIEW_FILL, не больше VIEW_FILL_MAX."""
     with drawing_scale(DEFAULT_SCALE):
-        draft, specs = _draw(plan, contours, elec, prices, edits)
-        views = [view_size(draft, s) for s in specs]
+        draft, all_specs = _draw(plan, contours, elec, prices, edits)
+        views = {s.tab_key: view_parts(draft, s) for s in all_specs if s.body is None}
     papers = format_candidates(plan.sheet.format)
+    specs = all_specs
 
     def worst(paper: Paper, scale: float) -> float:
         # Схема (щит) масштаба не имеет: её место проверяет panels_fit
+        def at(core: tuple[float, float], extra: tuple[float, float]) -> tuple[float, float]:
+            w, h = _at(core, scale)
+            return w + extra[0], h + extra[1]
+
         return max(
-            fill(_at(v, scale), plan_region(s, paper))
-            for v, s in zip(views, specs, strict=True)
-            if s.body is None
+            fill(at(*views[s.tab_key]), plan_region(s, paper)) for s in specs if s.body is None
         )
 
     def ok(paper: Paper, scale: float) -> bool:
@@ -652,11 +971,26 @@ def choose_paper_and_scale(
         return panels and worst(paper, scale) <= VIEW_FILL_MAX
 
     base = [s for s in SCALES if s <= DEFAULT_SCALE]
-    paper = next(
-        (p for p in papers if any(ok(p, s) for s in base)),
-        max(papers, key=lambda p: (p[1] * p[2], p[1])),
-    )
-    fitting = [s for s in SCALES if ok(paper, s)]
+    found = next((p for p in papers if any(ok(p, s) for s in base)), None)
+    if found is None:
+        # Ни на один формат таблицы не входят — самый крупный, таблицы на продолжение
+        # Масштаб — по виду: схемам (щит, таблицы) он не поможет, их проверит печать
+        paper = max(papers, key=lambda p: (p[1] * p[2], p[1]))
+        specs = fit_specs(all_specs, paper)
+        fitting = [s for s in SCALES if worst(paper, s) <= VIEW_FILL_MAX]
+        # Оценка по черновику 1:50 занижает полосу размеров в мелком масштабе — выбранный
+        # масштаб проверяется отрисовкой, не влез — следующий мельче
+        best = min(fitting, key=lambda s: abs(worst(paper, s) - VIEW_FILL), default=SCALES[-1])
+        for scale in [s for s in SCALES if s >= best]:
+            with drawing_scale(scale):
+                real, real_specs = _draw(plan, contours, elec, prices, edits)
+                shown = [s for s in fit_specs(real_specs, paper) if s.body is None]
+                if all(fill(view_size(real, s), plan_region(s, paper)) <= 1.0 for s in shown):
+                    return paper, scale
+        return paper, SCALES[-1]
+    else:
+        paper = found
+        fitting = [s for s in SCALES if ok(paper, s)]
     if not fitting:
         return paper, SCALES[-1]
     return paper, min(fitting, key=lambda s: abs(worst(paper, s) - VIEW_FILL))
@@ -676,9 +1010,19 @@ def build_project_document(
     paper, scale = choose_paper_and_scale(plan, contours, elec, prices, edits)
     with drawing_scale(scale):
         doc, specs = _draw(plan, contours, elec, prices, edits)
+        specs = fit_specs(specs, paper)
+        main_no = 1  # лист, чьи таблицы продолжаются
         for no, spec in enumerate(specs, 1):
+            main_no = main_no if spec.continued else no
             tab = f"{no:02d} {tr(spec.tab_key, plan.language)}"
             stamp = plan_stamp(plan, spec.image_key, no, len(specs), today)
+            if spec.continued:
+                tab += f" {tr('sheet_continued', plan.language)}"
+                if spec.paged:  # продолжение развёрток — то же название
+                    image = f"{stamp.image} {tr('sheet_continued', plan.language)}"
+                else:
+                    image = tr("sheet_tables", plan.language, no=main_no)
+                stamp = replace(stamp, image=image)
             add_sheet(doc, spec, tab, stamp, paper)
     # Пустой лист по умолчанию из ezdxf не нужен
     doc.layouts.delete("Layout1")

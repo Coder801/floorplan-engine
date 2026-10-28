@@ -53,7 +53,7 @@ def test_drop_column_keeps_keys_and_total_label() -> None:
 def test_side_tables_link_rows_to_objects() -> None:
     plan, contours, elec, wiring = _model()
     tables = side_tables(plan, contours, elec, wiring)
-    assert set(tables) == {"plan", "electrical", "wiring", "panel"}
+    assert set(tables) == {"plan", "electrical", "lighting", "wiring", "panel", "points"}
     rooms = tables["plan"][0]
     assert "room:r" in rooms.rows[0].keys and "wall:r.w1" in rooms.rows[0].keys
     assert rooms.rows[0].cells[2] == "12,00"  # 3 × 4 м — как поле площади
@@ -61,7 +61,9 @@ def test_side_tables_link_rows_to_objects() -> None:
     qf2 = {f"wire:{r.id}" for r in wiring.runs if r.group == "QF2"}
     assert qf2 <= set(groups["QF2"])
     assert not qf2 & set(groups["QF3"])
-    groups_t, symbols = tables["electrical"][:2]
+    points_t, groups_t, symbols = tables["electrical"][:3]
+    # «Точки»: номер на плане → вид и высота; строка ведёт к своим точкам
+    assert any("point:s1" in r.keys for r in points_t.rows)
     assert groups_t.rows[0].cells[0] == "QF2" and "point:s1" in groups_t.rows[0].keys
     socket = next(r for r in symbols.rows if "point:s1" in r.keys)
     assert socket.cells[1] == "4"  # s1 ×2, s2, s3

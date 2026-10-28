@@ -1,2 +1,4 @@
 node_modules/
 dist/
+# Типы SCSS-модулей — пишет scripts/css-types.mjs (check, build, dev)
+src/**/*.module.scss.d.ts

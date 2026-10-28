@@ -23,11 +23,11 @@ export function inView(page: Page, box: Box): boolean {
 // Примитивы по порядку; pxPerMm — для минимальной толщины линии; cableMinPx — на экране
 // линии проводки не тоньше этого (px устройства); в PNG — 0
 export function paint(ctx: CanvasRenderingContext2D, items: DrawItem[], pxPerMm: number, look: Look,
-                      hidden: Set<string>, cableMinPx = 0) {
+                      shown: (layer: string) => boolean, cableMinPx = 0) {
   ctx.lineCap = "round"; ctx.lineJoin = "round";
   const minW = MIN_LINE_PX / pxPerMm, cableW = Math.max(cableMinPx / pxPerMm, minW);
   for (const it of items) {
-    if (hidden.has(it.l)) continue;
+    if (!shown(it.l)) continue;
     const [c, alpha, k] = look(it);
     ctx.globalAlpha = alpha;
     if (it.k === "f") { ctx.fillStyle = c; ctx.fill(it.path, "nonzero"); }
@@ -65,7 +65,7 @@ export function downloadSheetPng(page: Page, filename: string) {
   ctx.fillStyle = page.background || "#ffffff";
   ctx.fillRect(0, 0, pw, ph);
   const all = page.items.map((i) => ({ ...i, box: [0, 0, 0, 0] as DrawItem["box"], path: new Path2D(i.d) }));
-  paint(ctx, all, k, (it) => [it.c, 1, 1], new Set());
+  paint(ctx, all, k, (it) => [it.c, 1, 1], () => true);
   out.toBlob((blob) => {
     if (!blob) return;
     const a = document.createElement("a");

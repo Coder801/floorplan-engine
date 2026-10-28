@@ -13,6 +13,7 @@ from typing import Any
 
 from floorplan_engine.draw_plan import room_geometries
 from floorplan_engine.draw_wiring import lay_out
+from floorplan_engine.elevations import behind_text, wall_elevations
 from floorplan_engine.geometry import Contour, Vec
 from floorplan_engine.panel import BoardPanel, amps, build_panel, kw
 from floorplan_engine.schema import Electrical, ElectricalPoint, OpeningType, Plan
@@ -102,6 +103,8 @@ TEXT: dict[str, dict[str, str]] = {
     "watts": {"ru": "{w} Вт", "uk": "{w} Вт"},
     "more": {"ru": "ещё {n}", "uk": "ще {n}"},
     "warning": {"ru": "Внимание", "uk": "Увага"},
+    "behind": {"ru": "За стеной", "uk": "За стіною"},
+    "points_on_wall": {"ru": "Точек", "uk": "Точок"},
 }
 CARD_LOADS = 8  # потребителей в карточке аппарата, остальные — «ещё N»
 
@@ -182,6 +185,16 @@ def describe_objects(
             out[f"opening:{op.id}"] = ObjectInfo(f"{text(name, lang)} {op.id}", tuple(rows))
     if elec is not None:
         out.update(_electrical(plan, elec, wiring))
+        # Развёртки: имя (пейджер и подсказка просмотра) и что за стеной
+        for e in wall_elevations(plan, contours, elec, wiring):
+            out[f"elevation:{e.key}"] = ObjectInfo(
+                tr("elev_card", lang, room=e.room_name, n=e.index),
+                (
+                    (text("length", lang), _mm(e.length)),
+                    (text("behind", lang), behind_text(e, lang)),
+                    (text("points_on_wall", lang), str(len(e.points))),
+                ),
+            )
         panel = build_panel(plan, elec)
         if panel is not None:
             out.update(device_cards(panel, lang))

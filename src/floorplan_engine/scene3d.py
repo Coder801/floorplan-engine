@@ -26,7 +26,7 @@ from shapely.geometry.base import BaseGeometry
 from shapely.ops import unary_union
 
 from floorplan_engine.draw_electrical import Anchor, board_anchor, group_colors, point_anchor
-from floorplan_engine.draw_plan import RoomGeometry, room_geometries
+from floorplan_engine.draw_plan import RoomGeometry, convex, room_geometries
 from floorplan_engine.draw_wiring import lanes as lane_offsets
 from floorplan_engine.draw_wiring import offset_path, segments
 from floorplan_engine.geometry import Contour, Vec, WallSegment
@@ -42,6 +42,7 @@ WINDOW_SILL_MM = 900.0
 WINDOW_HEIGHT_MM = 1400.0
 MIN_AREA_MM2 = 100.0  # осколки стен меньше — не рисуются
 SHARED_SHARE = 0.25  # перекрытие больше этой доли куска — общая стена двух комнат
+OPPOSITE = 0.9  # нормали общей стены — навстречу друг другу (скалярное произведение < −0,9)
 NO_COLOR = "#888888"  # точка без группы
 
 
@@ -101,8 +102,14 @@ class _Walls:
             if common <= MIN_AREA_MM2:
                 continue
             overlap.append(shape)
-            # Общая стена — заметная доля куска; угол соседней стены (стык) — не в счёт
-            if common > SHARED_SHARE * min(shape.area, geom.area) and n not in piece["normals"]:
+            # Общая стена — заметная доля куска и нормаль навстречу своей (перегородка двух
+            # комнат смотрит в обе стороны). Угол соседней стены — стык, не в счёт, даже если
+            # у короткого куска он большой: иначе стена получает чужую нормаль и «срез»
+            # прячет её, когда она дальняя
+            own = piece["normals"][0]
+            facing = n[0] * own[0] + n[1] * own[1] < -OPPOSITE
+            shared = common > SHARED_SHARE * min(shape.area, geom.area)
+            if shared and facing and n not in piece["normals"]:
                 piece["normals"].append(n)
         rest = geom.difference(unary_union(overlap)) if overlap else geom
         rings = _rings(rest)
@@ -113,10 +120,24 @@ class _Walls:
 
 
 def _wall_quad(g: RoomGeometry, seg: WallSegment) -> BaseGeometry:
-    """Кусок стены: внутренняя грань и внешние углы (на стыке под 180° четырёхугольник
-    бывает самопересекающимся — приводится к валидному)."""
+    """Силуэт куска стены: внутренняя грань и внешние углы (на стыке под 180°
+    четырёхугольник бывает самопересекающимся — приводится к валидному)."""
     corners = (seg.start, seg.end, g.outer_end(seg), g.outer_start(seg))
     return shapely.make_valid(Polygon([p.as_tuple() for p in corners]))
+
+
+def _wall_body(g: RoomGeometry, seg: WallSegment, outline: BaseGeometry) -> BaseGeometry:
+    """Тело стены, как на плане (draw_plan.WallPiece.body): прямоугольник, в выпуклых углах
+    продлённый на толщину соседней стены, в пределах силуэта стен. Угол достаётся стене,
+    добавленной первой, — стыки под 90°, а не швом «на ус» по верхней грани."""
+    segs = g.contour.segments
+    prev, nxt = segs[seg.index - 1], segs[(seg.index + 1) % len(segs)]
+    lo = -prev.thickness if convex(prev, seg) else 0.0
+    hi = seg.length + (nxt.thickness if convex(seg, nxt) else 0.0)
+    out = seg.outward * seg.thickness
+    a, b = seg.point_at(lo), seg.point_at(hi)
+    rect = Polygon([p.as_tuple() for p in (a, b, b + out, a + out)])
+    return shapely.make_valid(rect).intersection(outline)
 
 
 def _strip(seg: WallSegment, op: Opening) -> Polygon:
@@ -128,10 +149,11 @@ def _strip(seg: WallSegment, op: Opening) -> Polygon:
 
 def _walls(geoms: Sequence[RoomGeometry], ceiling: float) -> list[dict[str, Any]]:
     walls = _Walls()
+    outline = unary_union([_wall_quad(g, seg) for g in geoms for seg in g.contour.segments])
     for g in geoms:
         for seg in g.contour.segments:
             key = f"wall:{g.room.id}.{seg.id}"
-            quad = _wall_quad(g, seg)
+            quad = _wall_body(g, seg, outline)
             ops = [o for o in g.room.openings if o.wall == seg.id]
             strips = [_strip(seg, o).intersection(quad) for o in ops]
             walls.add(key, quad.difference(unary_union(strips)), (0.0, ceiling), seg.inward)
@@ -155,8 +177,10 @@ def _wires(
     ends: dict[str, Anchor],
     colors: dict[str, str],
     ceiling: float,
+    rooms: dict[str, str],
 ) -> dict[str, Any]:
-    """Трассы в 3D: подъём от источника, путь по плану в плоскости потолка или пола, спуск."""
+    """Трассы в 3D: подъём от источника, путь по плану в плоскости потолка или пола, спуск.
+    Помещение линии — помещение её цели (точки или коробки): по нему фильтр в просмотре."""
     paths = [list(r.path) for r in wiring.runs]
     for route in ("ceiling", "floor"):
         idx = [k for k, r in enumerate(wiring.runs) if r.route == route]
@@ -184,6 +208,7 @@ def _wires(
             "route": r.route,
             "from": r.source,
             "to": r.target,
+            "room": rooms.get(r.target),
             "pts": clean,
         }
     return out
@@ -214,6 +239,7 @@ def build_scene(
             "pos": _xyz(_face(a), z),
             "inward": inward(a),
             "type": p.type.value,
+            "room": p.room,
             "group": p.group,
             "color": colors.get(p.group or "", NO_COLOR),
         }
@@ -222,6 +248,7 @@ def build_scene(
             "pos": _xyz(_face(b.anchor), _box_z(b, ceiling)),
             "inward": inward(b.anchor),
             "label": b.label,
+            "room": b.room,
             "group": b.group,
         }
         for b in wiring.boxes
@@ -237,7 +264,13 @@ def build_scene(
             for g in geoms
         ],
         "walls": _walls(geoms, ceiling),
-        "wires": _wires(wiring, ends, colors, ceiling),
+        "wires": _wires(
+            wiring,
+            ends,
+            colors,
+            ceiling,
+            {**{p.id: p.room for p in elec.points}, **{b.id: b.room for b in wiring.boxes}},
+        ),
         "points": points,
         "boxes": boxes,
     }

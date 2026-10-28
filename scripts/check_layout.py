@@ -11,17 +11,16 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from floorplan_engine.estimate import PRICES_FILE
 from floorplan_engine.layers import drawing_scale
-from floorplan_engine.pipeline import assess_project, load_prices
+from floorplan_engine.pipeline import assess_project, find_prices, load_prices
 from floorplan_engine.sheets import _draw, choose_paper_and_scale, place, view_size
 
 
 def check(project: Path) -> bool:
     report = assess_project(project).report
     assert report.plan is not None, f"{project}: план не строится"
-    prices_path = project / PRICES_FILE
-    prices = load_prices(prices_path)[0] if prices_path.exists() else None
+    prices_path = find_prices(project)
+    prices = load_prices(prices_path)[0] if prices_path is not None else None
     paper, scale = choose_paper_and_scale(report.plan, report.contours, report.electrical, prices)
     ok = True
     with drawing_scale(scale):

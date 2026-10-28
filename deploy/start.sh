@@ -20,6 +20,10 @@ for seed in /app/projects-seed/*/; do
   floorplan-engine build "$dest" > /dev/null || echo "Сборка $name не удалась" >&2
 done
 cp /app/projects-seed/*.yaml "$PROJECTS_DIR"/ 2>/dev/null || true  # профиль студии и т. п.
+# Вход включён (SHTROBA_AUTH=on) — сначала миграции базы (DATABASE_URL)
+if [ "$SHTROBA_AUTH" = "on" ]; then
+  (cd /app && alembic upgrade head)
+fi
 floorplan-engine view --projects "$PROJECTS_DIR" --host 127.0.0.1 --port 8000 &
 caddy run --config /etc/caddy/Caddyfile --adapter caddyfile &
 wait -n

@@ -1,6 +1,7 @@
 """Смета электрики: объёмы — из модели (код), цены — из прайса проекта (prices.yaml).
 
-Чертежа нет — только таблица: out/estimate.md и out/estimate.csv (для Excel).
+Чертежа нет — только таблица: out/estimate.md, out/estimate.csv и out/estimate.xlsx
+(Excel с формулами: поменяли цену или количество — суммы пересчитываются).
 Объёмы берутся из того же расчёта, что лист проводки (wiring.py) и спецификация:
 
 - кабель по маркам — с запасом RESERVE; работа по прокладке — по фактической длине;
@@ -30,6 +31,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
+from openpyxl import Workbook
+from openpyxl.comments import Comment
+from openpyxl.styles import Alignment, Font, PatternFill
 from pydantic import Field
 
 from floorplan_engine.layers import TEXT_DIM_MM, text_width
@@ -42,6 +46,10 @@ from floorplan_engine.wiring import BOX_ORDER, BOX_TITLES, RESERVE, Wiring
 PRICES_FILE = "prices.yaml"  # прайс проекта — в папке проекта, рядом с room.yaml
 ESTIMATE_MD = "estimate.md"
 ESTIMATE_CSV = "estimate.csv"
+ESTIMATE_XLSX = "estimate.xlsx"
+XLSX_MONEY = "#,##0.00"
+XLSX_QTY = "#,##0.0##"
+XLSX_EDIT_FILL = "FFF4D6"  # ячейки, которые правят руками: цена и количество
 SHEET_ROW_H = 5.5  # мм листа: строка сметы на листе — плотнее обычной таблицы (8)
 SHEET_HEADER_H = 8.0
 FIXING_STEP = 400.0  # мм: шаг креплений кабеля по трассе
@@ -411,6 +419,91 @@ def write_csv(est: Estimate, path: Path) -> Path:
                     "" if ln.total is None else f"{ln.total:.2f}".replace(".", ","),
                 ]
             )
+    return path
+
+
+def write_xlsx(est: Estimate, path: Path, title: str, notes: list[str], language: Language) -> Path:
+    """Смета в Excel: разделы, сумма строки — формулой «кол. × цена», итоги разделов и
+    «Всего» — формулами, цены и количества подсвечены (их правят). Позиция без цены —
+    пустая цена с примечанием; впишут цену — войдёт в итоги."""
+
+    def t(key: str, **values: object) -> str:
+        return text(key, language, **values)
+
+    wb = Workbook()
+    ws = wb.active
+    assert ws is not None
+    ws.title = t("sheet_title")[:31]
+    ws["A1"] = title
+    ws["A1"].font = Font(bold=True, size=14)
+    heads = [
+        t("col_no"),
+        t("col_name"),
+        t("col_unit"),
+        t("col_qty"),
+        t("col_price", c=est.currency),
+        t("col_sum", c=est.currency),
+        "key",
+    ]
+    ws.append([])
+    ws.append(heads)
+    head_row = ws.max_row
+    for cell in ws[head_row]:
+        cell.font = Font(bold=True)
+        cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    edit = PatternFill("solid", start_color=XLSX_EDIT_FILL, end_color=XLSX_EDIT_FILL)
+    grey = Font(color="999999", size=8)
+    subtotals: list[str] = []
+    for section in ("material", "work"):
+        rows = [ln for ln in est.lines if ln.section == section]
+        if not rows:
+            continue
+        ws.append(["", t(section)])
+        ws.cell(ws.max_row, 2).font = Font(bold=True)
+        first = ws.max_row + 1
+        for k, ln in enumerate(rows, 1):
+            r = ws.max_row + 1
+            ws.append([k, ln.name, ln.unit, ln.qty, ln.price, f'=IF(E{r}="","",D{r}*E{r})', ln.key])
+            ws.cell(r, 4).number_format = XLSX_QTY
+            ws.cell(r, 5).number_format = XLSX_MONEY
+            ws.cell(r, 6).number_format = XLSX_MONEY
+            ws.cell(r, 4).fill = edit
+            ws.cell(r, 5).fill = edit
+            ws.cell(r, 7).font = grey
+            if ln.price is None:
+                ws.cell(r, 5).comment = Comment(t("no_price"), "Shtroba")
+        last = ws.max_row
+        ws.append(["", t("section_total", s=t(section)), "", "", "", f"=SUM(F{first}:F{last})"])
+        total_row = ws.max_row
+        ws.cell(total_row, 2).font = Font(bold=True)
+        ws.cell(total_row, 6).font = Font(bold=True)
+        ws.cell(total_row, 6).number_format = XLSX_MONEY
+        subtotals.append(f"F{total_row}")
+    ws.append([])
+    ws.append(
+        [
+            "",
+            f"{t('total')}, {est.currency}",
+            "",
+            "",
+            "",
+            "=" + "+".join(subtotals) if subtotals else 0,
+        ]
+    )
+    grand = ws.max_row
+    for col in (2, 6):
+        ws.cell(grand, col).font = Font(bold=True, size=12)
+    ws.cell(grand, 6).number_format = XLSX_MONEY
+    ws.append([])
+    if est.unpriced:
+        ws.append(["", t("unpriced", n=est.unpriced, f=PRICES_FILE)])
+    for note in notes:
+        ws.append(["", note])
+    for letter, width in zip("ABCDEFG", (5, 48, 7, 10, 12, 14, 18), strict=True):
+        ws.column_dimensions[letter].width = width
+    ws.freeze_panes = f"A{head_row + 1}"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    wb.save(path)
     return path
 
 

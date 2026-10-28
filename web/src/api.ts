@@ -1,6 +1,7 @@
 // Запросы к серверу просмотра (service/viewer.py)
 
 import type { Manifest, Page, Project, ProjectSummary } from "./types";
+import { FORMAT_VERSION } from "./version";
 
 async function get<T>(path: string): Promise<T> {
   const r = await fetch(path);
@@ -17,7 +18,14 @@ export const base = (name: string) => `/api/projects/${encodeURIComponent(name)}
 
 export const listProjects = () => get<ProjectSummary[]>("/api/projects");
 export const getProject = (name: string) => get<Project>(base(name));
-export const getManifest = (name: string) => get<Manifest>(`${base(name)}/sheets`);
+// Листы другой версии формата эта страница нарисует неверно — лучше сказать сразу
+export async function getManifest(name: string): Promise<Manifest> {
+  const m = await get<Manifest>(`${base(name)}/sheets`);
+  if (m.version !== FORMAT_VERSION) {
+    throw new Error(`Листы в формате версии ${m.version}, страница понимает ${FORMAT_VERSION} — обновите страницу`);
+  }
+  return m;
+}
 export const getPage = (name: string, index: number) => get<Page>(`${base(name)}/sheets/${index}`);
 
 export async function getText(path: string): Promise<string> {

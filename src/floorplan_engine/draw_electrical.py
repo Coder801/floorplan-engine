@@ -17,14 +17,20 @@ from dataclasses import dataclass, replace
 from ezdxf.enums import TextEntityAlignment
 from ezdxf.layouts.base import BaseLayout
 from ezdxf.layouts.layout import Modelspace
+from shapely.geometry import LineString, Polygon, box
+from shapely.geometry.base import BaseGeometry
+from shapely.ops import unary_union
 
 from floorplan_engine.draw_plan import (
     RoomGeometry,
     add_text,
+    door_leaf,
     room_geometries,
+    wall_pieces,
 )
 from floorplan_engine.geometry import Contour, Vec
 from floorplan_engine.ids import tagged
+from floorplan_engine.labels import Align, LabelPlacer, Metrics, door_swing
 from floorplan_engine.layers import (
     E_LED,
     E_TEXT,
@@ -34,18 +40,19 @@ from floorplan_engine.layers import (
     sheet_scale,
     text_width,
 )
+from floorplan_engine.point_numbers import number_points, ranges
 from floorplan_engine.schema import (
     CEILING_TYPES,
     Board,
     Electrical,
     ElectricalPoint,
     LedStrip,
+    OpeningType,
     Plan,
 )
 from floorplan_engine.symbols import (
     BOARD_DEPTH,
     LEGEND_ORDER,
-    LIGHT_R,
     SYMBOLS,
     SymbolSpec,
     symbol_key,
@@ -58,7 +65,12 @@ LINE_STEP_MM = TEXT_SMALL_MM * 1.5
 STACK_GAP_MM = 1.0  # между символами, стоящими в одной точке стены
 STACK_TOLERANCE = 30.0  # мм: точки ближе этого по стене рисуются стопкой
 LABEL_CLUSTER_GAP = 250.0  # мм: соседние точки на стене ближе этого подписываются вместе
-LABEL_MAX_PUSH = 15  # сколько раз подпись можно отодвинуть от занятого места
+LABEL_PROBE_MM = 1.0  # шаг перебора мест подписи, мм листа
+LABEL_REACH = 12  # сколько шагов подпись может уйти от символа (вдоль стены и от неё)
+LABEL_FAR = 40  # рядом места нет — ищется до стольких шагов, с выноской
+LABEL_BAND_MM = 6.0  # насколько подпись может выйти за габарит плана, мм листа
+LEADER_MIN_MM = 3.0  # дальше этого от символа — подпись с выноской
+LW_LEADER = 13  # толщина выноски, сотые мм
 # Цвета групп — мягкие, RGB (true color в DXF), различимые между собой и читаемые тонкой
 # линией на белом (решение 2026-10-25); серых нет: просмотр в тёмной теме перекрашивает серое
 GROUP_PALETTE = (
@@ -210,18 +222,6 @@ def point_attribs(pt: ElectricalPoint) -> dict[str, str]:
 # --- Подписи -----------------------------------------------------------------
 
 
-def point_label(pt: ElectricalPoint) -> str:
-    """Одна строка подписи: «2× h300 примечание». Группа пишется на трассе и в легенде."""
-    parts: list[str] = []
-    if pt.count > 1:
-        parts.append(f"{pt.count}×")
-    if pt.height is not None:
-        parts.append(f"h{pt.height:g}")
-    if pt.note:
-        parts.append(pt.note)
-    return " ".join(parts)
-
-
 def label_clusters(points: Sequence[ElectricalPoint]) -> list[list[int]]:
     """Точки одной стены, идущие подряд с шагом не больше LABEL_CLUSTER_GAP, — одна подпись.
     Потолочные точки подписываются каждая отдельно."""
@@ -246,63 +246,104 @@ def label_clusters(points: Sequence[ElectricalPoint]) -> list[list[int]]:
     return out
 
 
-Box = tuple[float, float, float, float]  # x0, y0, x1, y1
+def _symbol_area(a: Anchor, half: float | None = None) -> BaseGeometry:
+    """Габарит символа для размещения подписей: у стены — от стены на depth, шириной в
+    две глубины (или 2 × half); на потолке — квадрат по радиусу."""
+    if a.inward is None:
+        r = a.depth
+        return box(a.pos.x - r, a.pos.y - r, a.pos.x + r, a.pos.y + r)
+    half = half if half is not None else max(a.depth, sheet(1.5))
+    u = a.inward.left() * half
+    tip = a.pos + a.inward * a.depth
+    corners = [a.pos + u, a.pos - u, tip - u, tip + u]
+    return Polygon([c.as_tuple() for c in corners]).envelope
 
 
-def _text_box(text: str, at: Vec, align: TextEntityAlignment) -> Box:
-    """Габарит строки по метрикам шрифта."""
-    h = sheet(TEXT_SMALL_MM)
-    w = text_width(text, h)
-    x0 = {
-        TextEntityAlignment.MIDDLE_LEFT: at.x,
-        TextEntityAlignment.MIDDLE_RIGHT: at.x - w,
-    }.get(align, at.x - w / 2)
-    y0 = {
-        TextEntityAlignment.BOTTOM_CENTER: at.y,
-        TextEntityAlignment.TOP_CENTER: at.y - h,
-    }.get(align, at.y - h / 2)
-    return (x0, y0, x0 + w, y0 + h)
+def _strip_area(strip: LedStrip, geoms: dict[str, RoomGeometry]) -> BaseGeometry:
+    """LED-лента — линия вдоль стены: подписи на неё не ложатся."""
+    seg = _geom(geoms, strip.room).contour.segment(strip.wall)
+    a = seg.point_at(strip.start) + seg.inward * sheet(LED_INSET_MM)
+    b = seg.point_at(strip.end) + seg.inward * sheet(LED_INSET_MM)
+    return LineString([a.as_tuple(), b.as_tuple()]).buffer(sheet(0.5))
 
 
-def _overlaps(a: Box, b: Box) -> bool:
-    return a[0] < b[2] and b[0] < a[2] and a[1] < b[3] and b[1] < a[3]
+def _opening_areas(geoms: Sequence[RoomGeometry]) -> list[BaseGeometry]:
+    """Зоны проёмов: открывание дверей и окна (остекление в толще стены)."""
+    out: list[BaseGeometry] = []
+    for g in geoms:
+        for op in g.room.openings:
+            seg = g.contour.segment(op.wall)
+            if op.type is OpeningType.DOOR:
+                hinge, closed, normal = door_leaf(g, seg, op)
+                out.append(door_swing(hinge, closed, normal, op.width))
+            elif op.type is OpeningType.WINDOW:
+                a, b = op.offset, op.offset + op.width
+                corners = [
+                    seg.point_at(a),
+                    seg.point_at(b),
+                    g.outer_point(seg, b),
+                    g.outer_point(seg, a),
+                ]
+                out.append(Polygon([c.as_tuple() for c in corners]))
+    return out
+
+
+def label_placer(
+    geoms: Sequence[RoomGeometry],
+    symbols: Sequence[BaseGeometry],
+    strips: Sequence[BaseGeometry] = (),
+) -> LabelPlacer:
+    """Размещение подписей листа: символы — препятствия для подписи и выноски, проёмы и
+    LED-ленты — только для подписи."""
+    metrics = Metrics(
+        line_h=sheet(TEXT_SMALL_MM),
+        step=sheet(LINE_STEP_MM),
+        gap=sheet(LABEL_GAP_MM),
+        probe=sheet(LABEL_PROBE_MM),
+        reach=LABEL_REACH,
+        far=LABEL_FAR,
+        leader_min=sheet(LEADER_MIN_MM),
+    )
+    walls = unary_union([p.polygon for g in geoms for p in wall_pieces(g)])
+    zones = [*_opening_areas(geoms), *strips]
+    # За контур квартиры — только в полосе LABEL_BAND_MM у плана: иначе вид листа растёт
+    frame = box(*unary_union([walls, *zones]).bounds).buffer(
+        sheet(LABEL_BAND_MM), join_style="mitre"
+    )
+    rooms = {g.room.id: Polygon([v.as_tuple() for v in g.contour.vertices]) for g in geoms}
+    return LabelPlacer(walls, symbols, zones, metrics, frame, rooms)
+
+
+ALIGN = {
+    Align.LEFT: TextEntityAlignment.MIDDLE_LEFT,
+    Align.RIGHT: TextEntityAlignment.MIDDLE_RIGHT,
+    Align.CENTER: TextEntityAlignment.MIDDLE_CENTER,
+}
 
 
 def place_label(
-    msp: Modelspace, lines: Sequence[str], anchor: Anchor, taken: list[Box] | None = None
+    msp: Modelspace,
+    placer: LabelPlacer,
+    lines: Sequence[str],
+    anchor: Anchor,
+    own: BaseGeometry | None = None,
+    room: str | None = None,
+    layer: str = E_TEXT.name,
 ) -> None:
-    """Горизонтальные подписи у символа, со стороны помещения.
-
-    taken — уже занятые подписями места: если блок строк задевает их, он отодвигается
-    дальше от стены (у потолочных — вниз), пока не найдётся свободное место.
-    """
+    """Горизонтальная подпись у символа в свободном месте (labels.py); далеко — с выноской.
+    layer — слой подписи (лист освещения — свой)."""
     lines = [s for s in lines if s]
     if not lines:
         return
-    if anchor.inward is None:
-        at = anchor.pos + Vec(sheet(LIGHT_R + LABEL_GAP_MM), 0)
-        down = Vec(0, -sheet(LINE_STEP_MM))
-        align, step, push = TextEntityAlignment.MIDDLE_LEFT, down, down
-    else:
-        n = anchor.inward
-        at = anchor.pos + n * (anchor.depth + sheet(LABEL_GAP_MM))
-        push = n * sheet(LINE_STEP_MM)
-        if abs(n.x) >= abs(n.y):
-            align = TextEntityAlignment.MIDDLE_LEFT if n.x > 0 else TextEntityAlignment.MIDDLE_RIGHT
-            step = Vec(0, -sheet(LINE_STEP_MM))
-        else:
-            align = TextEntityAlignment.BOTTOM_CENTER if n.y > 0 else TextEntityAlignment.TOP_CENTER
-            step = n * sheet(LINE_STEP_MM)
-    boxes: list[Box] = []
-    for _ in range(LABEL_MAX_PUSH):
-        boxes = [_text_box(t, at + step * k, align) for k, t in enumerate(lines)]
-        if taken is None or not any(_overlaps(b, t) for b in boxes for t in taken):
-            break
-        at += push
-    if taken is not None:
-        taken.extend(boxes)
-    for k, text in enumerate(lines):
-        add_text(msp, text, at + step * k, TEXT_SMALL_MM, E_TEXT.name, align=align)
+    h = sheet(TEXT_SMALL_MM)
+    widths = [text_width(t, h) for t in lines]
+    placed = placer.place(lines, widths, anchor.pos, anchor.inward, anchor.depth, own, room)
+    for text, at in placed.lines:
+        add_text(msp, text, at, TEXT_SMALL_MM, layer, align=ALIGN[placed.align])
+    if placed.leader is not None:
+        a, b = placed.leader
+        attribs = {"layer": layer, "lineweight": LW_LEADER}
+        msp.add_line(a.as_tuple(), b.as_tuple(), dxfattribs=attribs)
 
 
 def group_key(group: str) -> tuple[str, int, int]:
@@ -452,11 +493,18 @@ def draw_electrical(
                 yscale=k_ins,
                 attribs=point_attribs(pt),
             )
-    taken: list[Box] = []
+    board_area = None
+    if elec.board is not None:
+        board = board_anchor(elec.board, geoms)
+        board_area = _symbol_area(board, elec.board.width / 2)
+    symbols = [_symbol_area(a) for a in anchors] + ([board_area] if board_area else [])
+    strips = [_strip_area(strip, geoms) for strip in elec.led_strips]
+    placer = label_placer(geoms_list, symbols, strips)
+    numbers = number_points(plan, elec)
     for cluster in label_clusters(elec.points):
-        # Строки без повторов, по порядку вдоль стены; подпись — по центру группы,
-        # за самым далёким от стены символом
-        lines = list(dict.fromkeys(point_label(elec.points[k]) for k in cluster))
+        # У символа — только номера (вид и высота — в таблице «Точки»); подпись — по центру
+        # группы, за самым далёким от стены символом
+        lines = [ranges([numbers[elec.points[k].id] for k in cluster])]
         first, last = anchors[cluster[0]], anchors[cluster[-1]]
         deepest = max(
             (anchors[k] for k in cluster),
@@ -466,8 +514,9 @@ def draw_electrical(
         if deepest.inward is not None:
             center += deepest.inward * (deepest.pos - center).dot(deepest.inward)
         label_at = Anchor(center, deepest.inward, deepest.wall_dir, deepest.depth)
+        own = unary_union([_symbol_area(anchors[k]) for k in cluster])
         with tagged(msp, "label", ",".join(elec.points[k].id for k in cluster)):
-            place_label(msp, lines, label_at, taken)
+            place_label(msp, placer, lines, label_at, own, elec.points[cluster[0]].room)
     if elec.board is not None:
         b = elec.board
         anchor = board_anchor(b, geoms)
@@ -481,4 +530,4 @@ def draw_electrical(
                 yscale=sheet(BOARD_DEPTH),
                 attribs=attribs,
             )
-            place_label(msp, [b.name, f"h{b.height:g}"], anchor, taken)
+            place_label(msp, placer, [b.name, f"h{b.height:g}"], anchor, board_area, b.room)

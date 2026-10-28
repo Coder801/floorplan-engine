@@ -56,6 +56,7 @@ FLOOR_LINETYPE = "W_FLOOR_DASHDOT"
 TEXT_DIM_MM = 2.5  # размеры
 TEXT_SMALL_MM = 2.0  # подписи электрики, площади
 TEXT_ROOM_MM = 3.5  # названия помещений, общая площадь
+MIN_TEXT_MM = 1.8  # ГОСТ 2.304: мельче на листе не печатается (проверка — printing.py)
 
 
 def sheet_scale() -> float:
@@ -99,13 +100,15 @@ E_SOCKET = LayerSpec("E-SOCKET", 1, "Розетки")
 E_SWITCH = LayerSpec("E-SWITCH", 5, "Выключатели")
 E_LIGHT = LayerSpec("E-LIGHT", 6, "Светильники")
 E_BOARD = LayerSpec("E-BOARD", 1, "Электрощит")
-E_TEXT = LayerSpec("E-TEXT", 1, "Группы, высоты, сечения")
+# Подписи — тёмные (7), цвет на листах — только у символов и у группы (отзыв 2026-10-28:
+# красные подписи сливались с красными розетками)
+E_TEXT = LayerSpec("E-TEXT", 7, "Группы, высоты, сечения")
 E_DATA = LayerSpec("E-DATA", 140, "Интернет и TV")
 E_LED = LayerSpec("E-LED", 221, "LED-подсветка и выводы под неё", LED_LINETYPE)
 W_BOX = LayerSpec("W-BOX", 1, "Распаечные коробки (проводка через коробки)")
 W_CABLE = LayerSpec("W-CABLE", 1, "Кабели проводки через коробки", CABLE_LINETYPE)
 W_CABLE_FLOOR = LayerSpec("W-CABLE-FLOOR", 1, "Кабели по полу (в стяжке)", FLOOR_LINETYPE)
-W_TEXT = LayerSpec("W-TEXT", 1, "Подписи коробок")
+W_TEXT = LayerSpec("W-TEXT", 7, "Подписи коробок")
 E_PANEL = LayerSpec("E-PANEL", 7, "Щит в лицо: корпус, рейки, аппараты, подписи")
 E_PANEL_WIRE = LayerSpec("E-PANEL-WIRE", 1, "Щит в лицо: провода групп к автоматам")
 A_SHEET = LayerSpec("A-SHEET", 7, "Рамка листа и основная надпись")
@@ -124,7 +127,16 @@ ELECTRICAL_LAYERS = (
 )
 WIRING_LAYERS = (W_BOX, W_CABLE, W_CABLE_FLOOR, W_TEXT, A_SHEET)
 PANEL_LAYERS = (E_PANEL, E_PANEL_WIRE, A_SHEET)
-ALL_LAYERS = tuple(dict.fromkeys(PLAN_LAYERS + ELECTRICAL_LAYERS + WIRING_LAYERS + PANEL_LAYERS))
+E_LINK = LayerSpec("E-LINK", 5, "Освещение: что чем включает выключатель", CABLE_LINETYPE)
+L_TEXT = LayerSpec("L-TEXT", 7, "Освещение: номера светильников и выключателей")
+LW_LINK = 18  # толщина связи выключателя, сотые мм
+LIGHTING_LAYERS = (E_LINK, L_TEXT)
+E_ELEV = LayerSpec("E-ELEV", 7, "Развёртки стен: стена, проёмы, точки, коробки, штробы, размеры")
+ALL_LAYERS = tuple(
+    dict.fromkeys(
+        PLAN_LAYERS + ELECTRICAL_LAYERS + LIGHTING_LAYERS + WIRING_LAYERS + PANEL_LAYERS + (E_ELEV,)
+    )
+)
 
 
 def new_document(layers: tuple[LayerSpec, ...] = ALL_LAYERS) -> Drawing:

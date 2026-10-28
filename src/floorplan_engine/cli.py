@@ -4,7 +4,7 @@ symbols."""
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated
 
 import typer
 
@@ -18,12 +18,17 @@ from floorplan_engine.pipeline import (
     assess_project,
     build_project,
     estimate_project,
+    print_project,
     render_sheets,
 )
 from floorplan_engine.report import STAGE_TEXT
+from floorplan_engine.schema import SheetFormat
 from floorplan_engine.sheets import sheet_png_name
 from floorplan_engine.symbols import export_symbols
 from floorplan_engine.validate import Report, Severity
+
+if TYPE_CHECKING:
+    from floorplan_engine.service.auth import Auth
 
 app = typer.Typer(
     help="Чертежи DXF (план, электрика) из room.yaml / electrical.yaml.",
@@ -141,6 +146,45 @@ def build(
         typer.echo(f"  {sheet_png}")
 
 
+@app.command("print")
+def print_album(
+    project: ProjectArg,
+    paper: Annotated[
+        str,
+        typer.Option(
+            "--paper",
+            help="Формат комплекта: auto — как при build, или A4 / A3 / A2 / A1 / A0 "
+            "(листы раскладываются заново, масштаб подбирается под формат)",
+        ),
+    ] = "auto",
+) -> None:
+    """PDF-альбом листов в натуральную величину: страница — формат листа, печать «в размер»
+    даёт масштаб чертежа. Проверяет самый мелкий текст и выход за рамку."""
+    formats: tuple[SheetFormat, ...] = ("auto", "A4", "A3", "A2", "A1", "A0")
+    fmt = next((f for f in formats if f.lower() == paper.lower()), None)
+    if fmt is None:
+        typer.secho(f"Формат «{paper}»: нужен один из {', '.join(formats)}", fg=typer.colors.RED)
+        raise typer.Exit(code=2)
+    try:
+        result = print_project(project, fmt)
+    except AuditError as exc:
+        typer.secho(str(exc), fg=typer.colors.RED)
+        raise typer.Exit(code=2) from exc
+    for issue in result.issues:
+        typer.secho(f"  {issue.file}: {issue.message}", fg=typer.colors.YELLOW)
+    if result.pdf is None:
+        raise typer.Exit(code=1)
+    typer.echo(f"Формат {result.paper}, масштаб 1:{result.scale:g}, листов: {len(result.checks)}")
+    for check in result.checks:
+        text = f"{check.min_text:.1f} мм" if check.min_text is not None else "—"
+        typer.echo(f"  {check.tab}: мелкий текст {text}")
+    for warning in result.warnings:
+        typer.secho(f"  [внимание] {warning}", fg=typer.colors.YELLOW)
+    if result.dxf is not None:
+        typer.echo(f"  {result.dxf} — DXF под формат {result.paper}")
+    typer.echo(f"  {result.pdf}")
+
+
 @app.command()
 def preview(project: ProjectArg) -> None:
     """PNG листов уже собранного out/project.dxf без перегенерации."""
@@ -195,11 +239,14 @@ def serve(
 def estimate(
     project: ProjectArg,
     prices: Annotated[
-        Path | None, typer.Option(help="Прайс (по умолчанию — prices.yaml в папке проекта)")
+        Path | None,
+        typer.Option(help="Прайс (по умолчанию — prices.yaml проекта, иначе общий прайс студии)"),
     ] = None,
 ) -> None:
-    """Смета электрики таблицей (без чертежа): out/estimate.md и out/estimate.csv."""
+    """Смета электрики таблицей (без чертежа): out/estimate.md, .csv и .xlsx (Excel с формулами)."""
     result = estimate_project(project, prices)
+    if result.prices is not None:
+        typer.echo(f"Цены: {result.prices}")
     for issue in result.issues:
         typer.secho(str(issue), fg=typer.colors.RED)
     if result.estimate is None:
@@ -231,7 +278,48 @@ def view(
         typer.echo(f"Папки {projects} нет", err=True)
         raise typer.Exit(1)
     typer.echo(f"API просмотра: http://{host}:{port}/api; {FRONT_HINT}")
-    uvicorn.run(create_viewer(projects), host=host, port=port)
+    uvicorn.run(create_viewer(projects, _viewer_auth()), host=host, port=port)
+
+
+@app.command()
+def dev(
+    projects: Annotated[Path, typer.Option(help="Папка собранных проектов")] = Path("projects"),
+    port: Annotated[int, typer.Option(help="Порт API")] = 8000,
+    web: Annotated[Path, typer.Option(help="Папка фронта")] = Path("web"),
+) -> None:
+    """Просмотр одной командой для разработки: API (`view`) и страница web/ (`npm run dev`,
+    http://127.0.0.1:5173) с перезагрузкой при правках; Ctrl+C останавливает оба."""
+    import os
+    import shutil
+    import subprocess
+
+    import uvicorn
+
+    from floorplan_engine.service.viewer import create_viewer
+
+    if not projects.is_dir() or not (web / "package.json").is_file():
+        typer.echo(
+            f"Нет папки {projects} или {web}/package.json — запускайте из корня репозитория",
+            err=True,
+        )
+        raise typer.Exit(1)
+    npm = shutil.which("npm")
+    if npm is None:
+        typer.echo("Нет npm — поставьте Node.js 22", err=True)
+        raise typer.Exit(1)
+    if not (web / "node_modules").is_dir():
+        subprocess.run([npm, "install"], cwd=web, check=True)
+    env = {**os.environ, "API_URL": f"http://127.0.0.1:{port}"}
+    front = subprocess.Popen([npm, "run", "dev"], cwd=web, env=env)
+    typer.echo(f"Страница: http://127.0.0.1:5173 · API: http://127.0.0.1:{port}/api")
+    try:
+        uvicorn.run(create_viewer(projects, _viewer_auth()), host="127.0.0.1", port=port)
+    finally:
+        front.terminate()
+        try:
+            front.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            front.kill()
 
 
 @app.command()
@@ -310,3 +398,80 @@ def symbols(
     """Выгрузить блоки УГО (розетка, выключатель, светильник, щит) в отдельные DXF."""
     for path in export_symbols(folder):
         typer.echo(f"  {path}")
+
+
+def _viewer_auth() -> Auth | None:
+    """Вход в просмотр по окружению (SHTROBA_AUTH=on, service/auth.py); выключен — None."""
+    from floorplan_engine.service.auth import Auth, AuthConfig, ConfigError
+    from floorplan_engine.service.db.session import make_engine, make_sessions
+
+    try:
+        config = AuthConfig.from_env()
+    except ConfigError as exc:
+        typer.secho(f"Вход: {exc}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(2) from exc
+    if config is None:
+        return None
+    google = "Google" if config.google else "без Google (нет GOOGLE_CLIENT_ID)"
+    guest = ", гостевой вход для отладки" if config.visitor else ""
+    typer.echo(f"Вход включён: {google}{guest}")
+    return Auth(config, make_sessions(make_engine()))
+
+
+access_app = typer.Typer(help="Доступ к проектам просмотра: связь папки с базой, приглашения.")
+app.add_typer(access_app, name="access")
+
+
+@access_app.command("link")
+def access_link(
+    project: ProjectArg,
+    owner: Annotated[str, typer.Option(help="Email владельца (уже входил и выбрал тип)")],
+) -> None:
+    """Связать папку проекта с базой: проект в студии владельца, slug — имя папки."""
+    from floorplan_engine.service.db import access as acc
+    from floorplan_engine.service.db.models import AppUser
+    from floorplan_engine.service.db.session import make_engine, make_sessions
+
+    with make_sessions(make_engine())() as db:
+        user = db.query(AppUser).filter(AppUser.email == owner.strip().lower()).one_or_none()
+        if user is None:
+            typer.secho(f"Нет пользователя {owner} — пусть сначала войдёт", fg=typer.colors.RED)
+            raise typer.Exit(1)
+        if acc.project_by_slug(db, project.name) is not None:
+            typer.secho(f"Проект {project.name} уже в базе", fg=typer.colors.YELLOW)
+            raise typer.Exit(1)
+        try:
+            acc.create_project_for(db, user, project.name, project.name)
+        except acc.AccessError as exc:
+            typer.secho(str(exc), fg=typer.colors.RED)
+            raise typer.Exit(1) from exc
+        db.commit()
+    typer.echo(f"Проект {project.name} — в студии {owner}")
+
+
+@access_app.command("invite")
+def access_invite(
+    project: ProjectArg,
+    role: Annotated[str, typer.Option(help="client — хозяин квартиры, installer — монтажник")],
+    email: Annotated[str | None, typer.Option(help="Кому (для списка приглашений)")] = None,
+    days: Annotated[int, typer.Option(help="Срок ссылки, дней")] = 7,
+) -> None:
+    """Ссылка-приглашение в проект (от имени владельца платформы)."""
+    import os
+
+    from floorplan_engine.service.db import access as acc
+    from floorplan_engine.service.db.session import make_engine, make_sessions
+
+    with make_sessions(make_engine())() as db:
+        target = acc.project_by_slug(db, project.name)
+        if target is None:
+            typer.secho(f"Проекта {project.name} нет в базе — access link", fg=typer.colors.RED)
+            raise typer.Exit(1)
+        try:
+            token = acc.create_invite(db, None, role, project=target, email=email, days=days)
+        except acc.AccessError as exc:
+            typer.secho(str(exc), fg=typer.colors.RED)
+            raise typer.Exit(1) from exc
+        db.commit()
+    public = os.environ.get("SHTROBA_PUBLIC_URL", "http://127.0.0.1:5173").rstrip("/")
+    typer.echo(f"{public}/?invite={token}")

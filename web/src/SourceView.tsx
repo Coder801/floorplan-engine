@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { base, enc, getText } from "./api";
 import { kindOf } from "./Drawer";
+import css from "./SourceView.module.scss";
+import ui from "./styles/ui.module.scss";
 import type { Project } from "./types";
 
 export function SourceView({ project, file, onBack }: { project: Project; file: string; onBack: () => void }) {
@@ -16,15 +18,15 @@ export function SourceView({ project, file, onBack }: { project: Project; file: 
     return () => { alive = false; };
   }, [url, kind]);
   let body: React.ReactNode;
-  if (kind === "pdf") body = <iframe className="source-frame" src={url} title={file} />;
-  else if (kind === "image") body = <img className="source-img" src={url} alt={file} />;
-  else if (kind === "text") body = <pre className="source-text">{text}</pre>;
-  else body = <div className="empty">Предпросмотра нет — откройте файл в новой вкладке</div>;
+  if (kind === "pdf") body = <iframe className={css.frame} src={url} title={file} />;
+  else if (kind === "image") body = <img className={css.img} src={url} alt={file} />;
+  else if (kind === "text") body = <pre className={css.text}>{text}</pre>;
+  else body = <div className={ui.empty}>Предпросмотра нет — откройте файл в новой вкладке</div>;
   return (
-    <div className="source">
-      <div className="source-bar">
+    <div className={css.source}>
+      <div className={css.bar}>
         <button onClick={onBack}>← К листу</button>
-        <span className="small" style={{ wordBreak: "break-word" }}>{file}</span>
+        <span className={css.name}>{file}</span>
       </div>
       {body}
     </div>

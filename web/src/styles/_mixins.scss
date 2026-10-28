@@ -1,0 +1,36 @@
+// Общее для модулей: ширины перелома, шрифты, повторяющиеся куски оформления.
+// Подключение: @use "<путь>/styles/mixins" as *;
+
+$narrow: 900px;   // боковая панель уходит под чертёж
+$phone: 560px;
+
+$mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+$brand: "Chakra Petch", sans-serif;
+
+// Плашка поверх чертежа или фона: карточка, группа кнопок, всплывашка
+@mixin raised($radius: 8px) {
+  background: var(--raise);
+  border: 1px solid var(--line);
+  border-radius: $radius;
+}
+
+// Кнопка без рамки и фона: крестик, стрелка, вкладка
+@mixin bare-button {
+  border: 0;
+  background: none;
+}
+
+// Список «название — значение» в две колонки (dl)
+@mixin pairs($gap) {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: $gap;
+  margin: 0;
+  dt { color: var(--muted); white-space: nowrap; }
+  dd { margin: 0; }
+}
+
+// Без анимации, если пользователь просил меньше движения
+@mixin no-motion {
+  @media (prefers-reduced-motion: reduce) { animation: none; }
+}

@@ -4,8 +4,11 @@
 // (из таблицы росписи) и слабые места. Закрыть — крестик, Esc или клик мимо аппаратов.
 
 import { useEffect } from "react";
+import { cx } from "../cx";
 import { useView, view } from "../store";
+import ui from "../styles/ui.module.scss";
 import type { Page, PanelData } from "../types";
+import css from "./DeviceCard.module.scss";
 
 export function DeviceCard({ page, panel }: { page: Page; panel: PanelData }) {
   const pinned = useView((s) => s.pinned);
@@ -37,18 +40,18 @@ export function DeviceCard({ page, panel }: { page: Page; panel: PanelData }) {
   if (g?.split_of) fields.push(["Линия", `часть ${g.split_of} — перегруз разделён на щите`]);
 
   return (
-    <div className="device-card" role="dialog" aria-label={`Аппарат ${dev.id}`}>
-      <div className="device-card-head">
-        {g?.color && <span className="dot" style={{ background: g.color }} aria-hidden="true" />}
+    <div className={css.card} role="dialog" aria-label={`Аппарат ${dev.id}`}>
+      <div className={css.head}>
+        {g?.color && <span className={ui.dot} style={{ background: g.color }} aria-hidden="true" />}
         <b>{dev.id}</b>
-        <span className="muted">{dev.title}</span>
+        <span className={cx(css.title, "muted")}>{dev.title}</span>
         <button aria-label="Закрыть" onClick={close}>×</button>
       </div>
       <dl>{fields.map(([k, v], i) => [<dt key={`t${i}`}>{k}</dt>, <dd key={`d${i}`}>{v}</dd>])}</dl>
       {loads.length > 0 && (
         <>
           <h4>Потребители · {loads.length}</h4>
-          <ul className="loads">
+          <ul className={css.loads}>
             {loads.map((r, i) => (
               <li key={i}><span>{r.cells[1]}</span><span className="muted">{r.cells[2]}</span>
                 <span className="mono">{r.cells[3]} Вт</span></li>
@@ -59,7 +62,7 @@ export function DeviceCard({ page, panel }: { page: Page; panel: PanelData }) {
       {warnings.length > 0 && (
         <>
           <h4>Слабые места</h4>
-          <ul className="warns">{warnings.map((w, i) => <li key={i}>{w.text}</li>)}</ul>
+          <ul className={css.warns}>{warnings.map((w, i) => <li key={i}>{w.text}</li>)}</ul>
         </>
       )}
     </div>

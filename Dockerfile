@@ -24,6 +24,9 @@ COPY pyproject.toml uv.lock README.md ./
 RUN uv sync --frozen --no-dev --no-install-project
 COPY src/ src/
 RUN uv sync --frozen --no-dev
+# Миграции базы — применяются при старте, если включён вход (deploy/start.sh)
+COPY alembic.ini ./
+COPY migrations/ migrations/
 
 COPY --from=web /web/dist /srv/web
 # Проекты в образе — начальные; рабочая папка — volume PROJECTS_DIR (правки wiring.yaml)

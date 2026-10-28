@@ -129,7 +129,8 @@ def test_estimate_project_writes_tables(tmp_path: Path) -> None:
     (project / "prices.yaml").write_text("items:\n  socket_box: 20\n  work.chase: 200\n", "utf-8")
     result = estimate_project(project)
     assert result.estimate is not None and result.estimate.total > 0
-    md, csv_path = result.files
+    md, csv_path, xlsx = result.files
+    assert xlsx.suffix == ".xlsx" and xlsx.stat().st_size > 0
     assert "Смета электрики: Кв" in md.read_text("utf-8")
     raw = csv_path.read_bytes()
     assert raw.startswith(b"\xef\xbb\xbf")  # BOM — Excel узнаёт UTF-8
@@ -195,7 +196,7 @@ def test_estimate_on_wiring_sheet(tmp_path: Path) -> None:
         lay.name: {e.dxf.text for e in lay if e.dxftype() == "TEXT"}
         for lay in sheet_layouts(readfile(path))
     }
-    wiring_tab = next(name for name in texts if name.startswith("03"))
+    wiring_tab = next(name for name in texts if name.endswith("Проводка"))
     assert "Смета электрики" in texts[wiring_tab]  # язык плана по умолчанию — ru
     assert not any("Смета электрики" in t for name, t in texts.items() if name != wiring_tab)
 
@@ -207,3 +208,60 @@ def test_box_price_falls_back_to_size_free_key() -> None:
     boxes = [ln for ln in est.lines if ln.key.startswith("junction_box.")]
     assert boxes and all(ln.price == 60 for ln in boxes)
     assert all("×" in ln.name or "Ø" in ln.name for ln in boxes)  # размер в наименовании
+
+
+def _eval_xlsx(path: Path) -> float:
+    """Пересчитать «Всего» книги сметы по её формулам (Excel под рукой нет)."""
+    import re
+
+    from openpyxl import load_workbook
+
+    ws = load_workbook(path).active
+    assert ws is not None
+    values: dict[str, float] = {}
+
+    def cell(ref: str) -> float:
+        if ref in values:
+            return values[ref]
+        v = ws[ref].value
+        if isinstance(v, str) and v.startswith("=IF("):
+            r = re.findall(r"\d+", v)[0]
+            price = ws[f"E{r}"].value
+            out = 0.0 if price is None else float(ws[f"D{r}"].value) * float(price)
+        elif isinstance(v, str) and v.startswith("=SUM("):
+            a, b = (int(x) for x in re.findall(r"F(\d+)", v))
+            out = sum(cell(f"F{k}") for k in range(a, b + 1))
+        elif isinstance(v, str) and v.startswith("="):
+            out = sum(cell(ref) for ref in re.findall(r"F\d+", v))
+        else:
+            out = float(v or 0)
+        values[ref] = out
+        return out
+
+    grand = next(
+        r for r in range(1, ws.max_row + 1) if str(ws[f"B{r}"].value or "").startswith("Усього")
+    )
+    return cell(f"F{grand}")
+
+
+def test_xlsx_formulas_give_estimate_total(tmp_path: Path) -> None:
+    wiring, elec = _wiring()
+    prices = PriceList.model_validate({"items": {"cable.3x2.5": 70, "work.cable": 30}})
+    est = build_estimate(wiring, elec, prices, "uk")
+    from floorplan_engine.estimate import write_xlsx
+
+    path = write_xlsx(est, tmp_path / "e.xlsx", "Кошторис", ["примітка"], "uk")
+    assert _eval_xlsx(path) == pytest.approx(est.total)
+    assert est.unpriced > 0  # позиции без цены — в книге, но в итог не входят
+
+
+def test_studio_prices_used_when_project_has_none(tmp_path: Path) -> None:
+    from floorplan_engine.pipeline import find_prices
+
+    project = tmp_path / "kv"
+    project.mkdir()
+    assert find_prices(project) is None
+    (tmp_path / "prices.yaml").write_text("items: {}\n", "utf-8")
+    assert find_prices(project) == tmp_path / "prices.yaml"
+    (project / "prices.yaml").write_text("items: {}\n", "utf-8")
+    assert find_prices(project) == project / "prices.yaml"  # свой прайс важнее студии

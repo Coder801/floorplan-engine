@@ -1,0 +1,20 @@
+// Подсказка объекта: у курсора или закреплённая в правом верхнем углу чертежа
+
+@use "./styles/mixins" as *;
+
+.tip {
+  @include raised;
+  position: absolute; z-index: 4; pointer-events: none;
+  padding: 10px 12px; max-width: 360px; font-size: 12px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, .18);
+  b { display: block; margin-bottom: 6px; font-size: 13px; }
+  dl { @include pairs(3px 12px); }
+}
+.docked { top: 60px; right: 12px; left: auto; max-width: 320px; pointer-events: auto; padding-right: 32px; }
+@media (max-width: $phone) { .docked { left: 8px; right: 8px; top: 56px; max-width: none; } }
+.close {
+  @include bare-button;
+  position: absolute; top: 4px; right: 4px; width: 24px; height: 24px; min-height: 0; padding: 0;
+  color: var(--muted); font-size: 16px;
+  &:hover { color: var(--text); }
+}

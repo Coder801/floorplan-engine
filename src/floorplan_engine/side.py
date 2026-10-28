@@ -18,7 +18,9 @@ from floorplan_engine.estimate import PriceList, build_estimate, estimate_table
 from floorplan_engine.fields import format_area
 from floorplan_engine.geometry import Contour
 from floorplan_engine.groups import group_rows, groups_table
+from floorplan_engine.lighting import switch_rows, switch_table
 from floorplan_engine.panel import BoardPanel, build_panel, color_of
+from floorplan_engine.point_numbers import point_rows, points_table
 from floorplan_engine.schema import Electrical, Plan
 from floorplan_engine.specification import specification_table
 from floorplan_engine.symbols import LEGEND_ORDER, symbol_key
@@ -30,8 +32,10 @@ from floorplan_engine.wiring import Wiring
 STAGE_OBJECTS: dict[str, frozenset[str]] = {
     "plan": frozenset({"room", "wall", "dimension", "opening"}),
     "electrical": frozenset({"point", "label", "board", "cable", "led_strip"}),
+    "lighting": frozenset({"point", "led_strip"}),
     "wiring": frozenset({"wire", "box", "board"}),
     "panel": frozenset({"device", "board"}),
+    "elevations": frozenset({"elevation"}),
 }
 
 TEXT: dict[str, dict[str, str]] = {
@@ -196,6 +200,28 @@ def legend_tables(elec: Electrical, language: Language) -> list[SideTable]:
     return out
 
 
+def points_side_table(plan: Plan, elec: Electrical) -> SideTable | None:
+    """Точки: строка → точки с этими номерами."""
+    table = points_table(plan, elec)
+    if table is None:
+        return None
+    keys = [tuple(f"point:{p}" for p in r.point_ids) for r in point_rows(plan, elec)]
+    return from_table(table, keys)
+
+
+def lighting_side_table(plan: Plan, elec: Electrical) -> SideTable | None:
+    """Выключатели: строка → выключатель и свет, который он включает."""
+    built = switch_table(plan, elec)
+    if built is None:
+        return None
+    table, notes = built
+    keys = []
+    strips = {s.id for s in elec.led_strips}
+    for r in switch_rows(plan, elec):
+        keys.append(tuple(f"led_strip:{i}" if i in strips else f"point:{i}" for i in r.point_ids))
+    return from_table(table, keys, notes)
+
+
 def group_side_table(plan: Plan, elec: Electrical) -> SideTable | None:
     """Группы щита: строка → точки и кабели группы."""
     built = groups_table(plan, elec)
@@ -210,9 +236,14 @@ def group_side_table(plan: Plan, elec: Electrical) -> SideTable | None:
 
 
 def wiring_tables(
-    wiring: Wiring, elec: Electrical, language: Language, prices: PriceList | None
+    wiring: Wiring,
+    elec: Electrical,
+    language: Language,
+    prices: PriceList | None,
+    quantities: Wiring | None = None,
 ) -> list[SideTable]:
-    """Кабели по группам (строка → линии и коробки группы) и смета или ведомость объёмов."""
+    """Кабели по группам (строка → линии и коробки группы) и смета или ведомость объёмов;
+    объёмы сметы — по quantities (wiring.estimate_wiring), None — по wiring."""
     table = wiring_table(wiring, language, group_colors(elec))
     keys = []
     for row in table.rows:
@@ -221,7 +252,7 @@ def wiring_tables(
         runs = [f"wire:{r.id}" for r in wiring.runs if r.group == group]
         boxes = [f"box:{b.id}" for b in wiring.boxes if b.group == group]
         keys.append(tuple(runs + boxes))
-    est = build_estimate(wiring, elec, prices or PriceList(), language)
+    est = build_estimate(quantities or wiring, elec, prices or PriceList(), language)
     sheet = estimate_table(est, language, priced=prices is not None)
     return [
         from_table(table, keys, wiring_notes(wiring, language)),
@@ -235,6 +266,7 @@ def side_tables(
     elec: Electrical | None,
     wiring: Wiring | None,
     prices: PriceList | None = None,
+    quantities: Wiring | None = None,
 ) -> dict[str, list[SideTable]]:
     """Таблицы боковой панели по теме листа (plan / electrical / wiring)."""
     lang = plan.language
@@ -244,12 +276,19 @@ def side_tables(
         groups = group_side_table(plan, elec)
         if groups is not None:
             tables.insert(0, groups)
+        points = points_side_table(plan, elec)
+        if points is not None:
+            tables.insert(0, points)
         spec = specification_table(elec, lang)
         if spec is not None:
             tables.append(from_table(spec))
         out["electrical"] = tables
+        lighting = lighting_side_table(plan, elec)
+        out["lighting"] = [lighting] if lighting is not None else []
+        if points is not None:
+            out["points"] = [points]
         if wiring is not None:
-            out["wiring"] = wiring_tables(wiring, elec, lang, prices)
+            out["wiring"] = wiring_tables(wiring, elec, lang, prices, quantities)
         panel = build_panel(plan, elec)
         if panel is not None:
             out["panel"] = panel_tables(panel, elec, lang)

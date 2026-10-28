@@ -1,0 +1,27 @@
+// «Скачать» — над чертежом справа сверху, как кнопки под ним
+
+@use "./styles/mixins" as *;
+
+// Сама — рамка для меню (absolute), menu.wrap не нужен
+.download { position: absolute; top: 12px; right: 12px; z-index: 5; }
+.download [role="menu"] { min-width: 300px; }  // подпись пункта — одной строкой
+.button {
+  display: inline-flex; align-items: center; gap: 8px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .08);
+}
+.icon {
+  width: 16px; height: 16px;
+  fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round;
+}
+// Формат файла — плашкой слева от подписи
+.badge {
+  font: 600 10px/1 $mono; letter-spacing: .04em;
+  padding: 4px 5px; border-radius: 4px; border: 1px solid var(--line); color: var(--muted);
+}
+
+// Узкий экран: только значок — место сверху занимает пейджер развёрток
+@media (max-width: $narrow) {
+  .download { top: 8px; right: 8px; }
+  .button { padding: 0 10px; gap: 4px; }
+  .label { display: none; }
+}

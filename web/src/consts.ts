@@ -19,7 +19,8 @@ export const LAYER: Record<string, string> = {
   "A-TEXT": "подписи плана", "A-SHEET": "рамка и штамп", "E-SOCKET": "розетки",
   "E-SWITCH": "выключатели", "E-LIGHT": "свет", "E-DATA": "слаботочка", "E-LED": "LED",
   "E-BOARD": "щит", "E-TEXT": "подписи электрики", "W-BOX": "коробки", "W-CABLE": "кабели",
-  "W-CABLE-FLOOR": "кабели по полу", "W-TEXT": "подписи проводки", "0": "прочее",
+  "W-CABLE-FLOOR": "кабели по полу", "W-TEXT": "подписи проводки", "E-LINK": "связи света",
+  "L-TEXT": "номера света", "0": "прочее",
 };
 export const OBJECT: Record<string, string> = {
   room: "Помещение", wall: "Стена", dimension: "Размеры стены", opening: "Проём",

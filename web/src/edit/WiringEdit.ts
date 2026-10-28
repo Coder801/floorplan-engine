@@ -38,8 +38,10 @@ export class WiringEdit {
   drag: Drag | null = null;
   history: Snapshot[] = [];
 
-  constructor(page: Page, items: DrawItem[], private readonly hidden: () => Set<string>) {
-    [this.k, this.tx, this.ty] = page.model!;
+  // model — переход модель → мм чертежа: у общего чертежа это лист base, а не лист проводки
+  constructor(page: Page, items: DrawItem[], private readonly layerOn: (layer: string) => boolean,
+              model = page.model!) {
+    [this.k, this.tx, this.ty] = model;
     // Правится то, что видно: линия в своей полосе пучка (lane), концы — в узлах щита,
     // коробки и точки; полоса сдвинута поперёк участка, поэтому отвод к узлу — под 90°
     const shown = (w: EditWire) => (w.lane ? simplifyPath([w.path[0], ...w.lane, w.path[w.path.length - 1]]) : w.path);
@@ -118,10 +120,9 @@ export class WiringEdit {
       if (Math.abs(mx - cx) <= half && Math.abs(my - cy) <= half) return { kind: "box", id };
     }
     let best: { id: string; i: number; d: number; own: boolean } | null = null;
-    const hidden = this.hidden();
     for (const [id, w] of this.wires) {
       const st = this.style.get(id);
-      if (st && hidden.has(st.l)) continue;
+      if (st && !this.layerOn(st.l)) continue;
       const pts = w.path.map((p) => this.toSheet(p));
       for (let i = 0; i + 1 < pts.length; i++) {
         const d = segDistance([mx, my], pts[i], pts[i + 1]);
@@ -266,11 +267,10 @@ export class WiringEdit {
       pts.forEach((p, n) => { const [x, y] = this.toSheet(p); if (n) ctx.lineTo(x, y); else ctx.moveTo(x, y); });
       ctx.stroke();
     };
-    const hidden = this.hidden();
     for (const [id, w] of this.wires) {
       if (!this.changed(w)) continue;
       const st = this.style.get(id);
-      if (st && hidden.has(st.l)) continue;
+      if (st && !this.layerOn(st.l)) continue;
       ctx.strokeStyle = screenColor(st ? st.c : "#000000");
       ctx.lineWidth = Math.max(st?.w ?? 0.25, px(CABLE_MIN_PX), minW);
       line(w.path);

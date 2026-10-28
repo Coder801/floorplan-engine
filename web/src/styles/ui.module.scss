@@ -1,0 +1,81 @@
+// Общие части интерфейса, которые встречаются в нескольких компонентах
+
+@use "mixins" as *;
+
+// Вместо чертежа или содержимого панели: пусто, загрузка, ошибка
+.empty { color: var(--muted); padding: 60px 24px; text-align: center; }
+.error { color: var(--critical); white-space: pre-wrap; padding: 24px; }
+
+// Ссылка, оформленная кнопкой (скачать DXF, войти)
+.btnLink {
+  display: inline-flex; align-items: center; min-height: 36px; padding: 0 12px;
+  border-radius: 6px; text-decoration: none;
+  background: var(--accent); color: var(--accent-text);
+}
+
+// Кружок цвета группы щита — как линии на чертеже
+.dot {
+  display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px;
+  vertical-align: 0;
+}
+
+// Сегменты: листы в шапке, файлы модели
+.segmented {
+  display: flex; flex-wrap: wrap; gap: 2px; padding: 3px; border-radius: 8px;
+  background: var(--soft);
+  > button { @include bare-button; color: var(--muted); min-height: 32px; }
+  > button.on {
+    background: var(--raise); color: var(--text); font-weight: 500;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, .12);
+  }
+}
+
+// Заголовок выдвижной панели и меню проектов
+.panelHead {
+  display: flex; align-items: center; gap: 4px; padding: 8px 16px 8px 8px;
+  border-bottom: 1px solid var(--line);
+  h2 { flex: 1; margin: 0; font-size: 14px; font-weight: 600; }
+  button { @include bare-button; min-width: 36px; min-height: 36px; font-size: 18px; line-height: 1; }
+}
+
+// Тело панели: своя прокрутка, заголовки разделов
+.panelBody {
+  min-height: 0; overflow: auto; padding: 12px 16px 24px;
+  h3 {
+    font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
+    color: var(--muted); margin: 18px 0 8px; font-weight: 600;
+    &:first-child { margin-top: 4px; }
+  }
+}
+
+// Кнопки и подсказка под чертежом (лист, 3D, щит)
+.toolbar {
+  position: absolute; left: 12px; bottom: 12px; right: 12px; z-index: 3;
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  pointer-events: none;
+  > * { pointer-events: auto; }
+  button[aria-pressed="true"], button.primary { background: var(--accent); color: var(--accent-text); }
+}
+.group {
+  @include raised;
+  display: flex; overflow: hidden;
+  // Только свои кнопки: всплывашка фильтра 3D внутри группы оформлена сама
+  > button { @include bare-button; border-radius: 0; min-width: 40px; }
+  > button + button, > span + button { border-left: 1px solid var(--line); }
+}
+.zoomValue { display: flex; align-items: center; padding: 0 8px; }
+.hint { font-size: 12px; color: var(--muted); }
+
+// Узкий экран: кнопки — одной полосой с прокруткой, подсказка про мышь не нужна
+@media (max-width: $narrow) {
+  .toolbar {
+    left: 8px; right: 8px; bottom: 8px;
+    flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none;
+    pointer-events: auto;
+    > * { flex: none; }
+  }
+  .hint { display: none; }
+}
+
+// 3D проводки — поверх холста листа
+.three { position: absolute; inset: 0; z-index: 1; background: var(--paper); }

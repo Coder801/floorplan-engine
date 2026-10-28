@@ -8,6 +8,7 @@ units: mm
 name: "Квартира 71 м²"
 language: uk
 default_wall_thickness: 400          # наружные стены по PDF ≈ 400
+ceiling_height: 3000                 # со слов заказчика, 2026-10-28
 rooms:
   - id: bath
     name: "Санвузол"
