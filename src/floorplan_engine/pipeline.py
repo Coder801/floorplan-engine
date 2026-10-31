@@ -13,11 +13,11 @@ from typing import Any
 from ezdxf.document import Drawing
 from ezdxf.filemanagement import readfile
 
-from floorplan_engine.artifact import export_artifact
-from floorplan_engine.assess import STAGE_FILES, StageResult, assess
-from floorplan_engine.draw_electrical import group_colors, group_key
-from floorplan_engine.draw_wiring import write_chases, write_journal
-from floorplan_engine.estimate import (
+from floorplan_engine.drawing.titleblock import FORMATS
+from floorplan_engine.drawing.wiring import write_chases, write_journal
+from floorplan_engine.electrical.chases import CHASE_CABLES, CHASE_SHARE, HOLE_CABLES
+from floorplan_engine.electrical.elevations import elevation_data
+from floorplan_engine.electrical.estimate import (
     ESTIMATE_CSV,
     ESTIMATE_MD,
     ESTIMATE_XLSX,
@@ -31,47 +31,41 @@ from floorplan_engine.estimate import (
     write_markdown,
     write_xlsx,
 )
-from floorplan_engine.estimate import text as estimate_text
-from floorplan_engine.intake import Stage
-from floorplan_engine.layers import drawing_scale
-from floorplan_engine.objects import (
+from floorplan_engine.electrical.estimate import text as estimate_text
+from floorplan_engine.electrical.groups import group_colors, group_key
+from floorplan_engine.electrical.panel import BoardPanel, build_panel, write_loads
+from floorplan_engine.electrical.wiring import END_ALLOWANCE, RESERVE, box_wiring, estimate_wiring
+from floorplan_engine.electrical.wiring_model import CHASE_NARROW, Wiring
+from floorplan_engine.epd.artifact import export_artifact
+from floorplan_engine.epd.objects import (
     describe_objects,
     line_chains,
     line_groups,
     wire_titles,
     wiring_handles,
 )
-from floorplan_engine.panel import build_panel, panel_data, write_loads
-from floorplan_engine.preview import paper_size, render_png, sheet_layouts
-from floorplan_engine.printing import SheetCheck, check_sheets, write_album
-from floorplan_engine.report import REPORT_JSON, REPORT_MD, render_markdown, to_json
-from floorplan_engine.scene3d import build_scene
-from floorplan_engine.schema import Electrical, SheetFormat, WiringEdits
-from floorplan_engine.sheets import build_project_document, document_scale, sheet_png_name
-from floorplan_engine.side import side_tables
-from floorplan_engine.thumbnail import PREVIEW_FILE, plan_thumbnail
-from floorplan_engine.titleblock import FORMATS
-from floorplan_engine.validate import (
+from floorplan_engine.epd.panel_data import panel_data
+from floorplan_engine.epd.scene3d import build_scene
+from floorplan_engine.epd.side import side_tables
+from floorplan_engine.epd.thumbnail import PREVIEW_FILE, plan_thumbnail
+from floorplan_engine.model.intake import Stage
+from floorplan_engine.model.panel_catalog import DeviceKind
+from floorplan_engine.model.scale import drawing_scale
+from floorplan_engine.model.schema import Electrical, SheetFormat, WiringEdits
+from floorplan_engine.sheets.document import build_project_document, document_scale, sheet_png_name
+from floorplan_engine.sheets.preview import paper_size, render_png, sheet_layouts
+from floorplan_engine.sheets.printing import SheetCheck, check_sheets, write_album
+from floorplan_engine.validation.assess import STAGE_FILES, StageResult, assess
+from floorplan_engine.validation.issues import (
     ELECTRICAL_FILE,
     WIRING_FILE,
     Issue,
-    Report,
     Severity,
     load_yaml,
     parse_model,
-    validate_project,
 )
-from floorplan_engine.wiring import (
-    CHASE_CABLES,
-    CHASE_NARROW,
-    CHASE_SHARE,
-    END_ALLOWANCE,
-    HOLE_CABLES,
-    RESERVE,
-    Wiring,
-    box_wiring,
-    estimate_wiring,
-)
+from floorplan_engine.validation.report import REPORT_JSON, REPORT_MD, render_markdown, to_json
+from floorplan_engine.validation.validate import Report, validate_project
 
 OUT_DIR = "out"
 PROJECT_FILE = "project.dxf"
@@ -129,6 +123,7 @@ class BuildResult:
     journal: Path | None = None  # кабельный журнал проводки через коробки (CSV)
     chases: Path | None = None  # ведомость штроб (CSV)
     loads: Path | None = None  # роспись потребителей щита (CSV)
+    estimate: list[Path] = field(default_factory=list)  # смета: md, csv, xlsx — как на листе
     price_issues: list[Issue] = field(default_factory=list)  # prices.yaml не прочитан
     sheets: list[Path] = field(default_factory=list)
 
@@ -263,6 +258,21 @@ def build_project(project: Path, previews: bool = False) -> BuildResult:
     if wiring is not None and elec is not None:
         quantities = estimate_wiring(report.plan, report.contours, elec, edits)
     tables = side_tables(report.plan, report.contours, elec, wiring, prices, quantities)
+    if quantities is not None and elec is not None and not result.price_issues:
+        # Смета файлами — та же, что на листе: Excel в просмотре не отстаёт от листов;
+        # прайс с ошибкой — смету не пишем (ошибки — в price_issues), старую убираем
+        _, result.estimate = write_estimate(
+            project,
+            assessment,
+            quantities,
+            elec,
+            prices or PriceList(),
+            find_prices(project),
+            panel,
+        )
+    else:
+        for name in (ESTIMATE_MD, ESTIMATE_CSV, ESTIMATE_XLSX):
+            (out / name).unlink(missing_ok=True)
     chains = line_chains(wiring) if wiring is not None else None
     groups = line_groups(wiring) if wiring is not None else None
     result.artifact = export_artifact(
@@ -276,6 +286,9 @@ def build_project(project: Path, previews: bool = False) -> BuildResult:
         edit,
         scene,
         panel_view,
+        elevation_data(report.plan, report.contours, elec, wiring, group_colors(elec))
+        if elec is not None
+        else None,
     )
     if previews:
         result.sheets = render_sheets(out)
@@ -456,18 +469,36 @@ def estimate_project(project: Path, prices_path: Path | None = None) -> Estimate
             result.issues += issues
             return result
         prices, result.prices = loaded, path
-    language = report.plan.language
-    est = build_estimate(wiring, report.electrical, prices, language)
-    result.estimate = est
-    notes = _estimate_notes(assessment, wiring, report.electrical, prices, result.prices)
-    title = estimate_text("title", language, name=report.plan.name)
-    out = project / OUT_DIR
-    result.files = [
-        write_markdown(est, out / ESTIMATE_MD, title, notes, language),
-        write_csv(est, out / ESTIMATE_CSV),
-        write_xlsx(est, out / ESTIMATE_XLSX, title, notes, language),
-    ]
+    panel = build_panel(report.plan, report.electrical)
+    result.estimate, result.files = write_estimate(
+        project, assessment, wiring, report.electrical, prices, result.prices, panel
+    )
     return result
+
+
+def write_estimate(
+    project: Path,
+    assessment: Assessment,
+    wiring: Wiring,
+    elec: Electrical,
+    prices: PriceList,
+    source: Path | None,
+    panel: BoardPanel | None,
+) -> tuple[Estimate, list[Path]]:
+    """Смета в out/: estimate.md, .csv и .xlsx (формулы) — из тех же объёмов, что на листе
+    проводки; щит — по составу листа «Щит» (panel). Пишут и estimate, и build."""
+    assert assessment.report.plan is not None
+    plan = assessment.report.plan
+    est = build_estimate(wiring, elec, prices, plan.language, panel)
+    notes = _estimate_notes(assessment, wiring, elec, prices, source)
+    title = estimate_text("title", plan.language, name=plan.name)
+    out = project / OUT_DIR
+    files = [
+        write_markdown(est, out / ESTIMATE_MD, title, notes, plan.language),
+        write_csv(est, out / ESTIMATE_CSV),
+        write_xlsx(est, out / ESTIMATE_XLSX, title, notes, plan.language),
+    ]
+    return est, files
 
 
 def _estimate_notes(
@@ -494,11 +525,15 @@ def _estimate_notes(
         estimate_text("note_crimp", lang),
     ]
     if elec.board is not None:
+        notes.append(estimate_text("note_panel", lang))
         notes.append(
             estimate_text(
                 "note_board_tail", lang, h=f"{elec.board.height:g}", e=f"{END_ALLOWANCE:g}"
             )
         )
+    if prices.board_kit and source is not None:
+        keys = ", ".join(k.value for k in DeviceKind)
+        notes.append(estimate_text("note_board_kit", lang, f=source.name, keys=keys))
     with_boxes = {b.group for b in wiring.boxes}
     direct = sorted({r.group for r in wiring.runs} - with_boxes, key=group_key)
     if direct:

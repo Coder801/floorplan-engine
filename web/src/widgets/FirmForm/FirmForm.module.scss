@@ -1,0 +1,38 @@
+// Форма фирмы: поля во всю ширину, вид — карточками-переключателями в две колонки,
+// город и телефон — в строку; на телефоне всё в одну колонку
+
+@use "@/shared/styles/mixins" as *;
+
+.form { display: grid; gap: 16px; }
+.field {
+  display: grid; gap: 6px;
+  > span { font-size: 13px; color: var(--muted); }
+  i { font-style: normal; }
+}
+.form input:not([type="radio"]) {
+  min-height: 44px; padding: 0 10px; min-width: 0; width: 100%;
+  font: inherit; color: var(--text); background: var(--raise);
+  border: 1px solid var(--line); border-radius: 8px;
+  &:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+}
+.kinds {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 0; padding: 0; border: 0;
+  legend { padding: 0; margin-bottom: 6px; font-size: 13px; color: var(--muted); }
+}
+.kind {
+  display: grid; align-content: start; gap: 4px; padding: 12px; cursor: pointer;
+  border: 1px solid var(--line); border-radius: 8px; background: var(--raise);
+  input { position: absolute; opacity: 0; pointer-events: none; }
+  &:hover { border-color: var(--muted); }
+  &:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+}
+.on { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.error { margin: 0; color: var(--critical); }
+.actions { display: flex; justify-content: space-between; gap: 8px; }
+.actions button { min-height: 44px; padding: 0 18px; border-radius: 8px; }
+.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+
+@media (max-width: $phone) {
+  .kinds, .pair { grid-template-columns: 1fr; }
+}

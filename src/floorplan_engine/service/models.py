@@ -7,7 +7,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from floorplan_engine.intake import Accept, TextAnswer
+from floorplan_engine.model.intake import Accept, TextAnswer
 
 
 class ProjectState(StrEnum):

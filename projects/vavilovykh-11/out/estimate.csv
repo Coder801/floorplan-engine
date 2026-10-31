@@ -4,15 +4,21 @@ material;cable.3x2.5;Кабель ВВГнг 3×2,5;м;217,9;70;15253,00
 material;cable.3x4;Кабель 3x4;м;12,6;;
 material;socket_box;Підрозетник;шт;63;20;1260,00
 material;junction_box.80;Коробка розподільча Ø80;шт;2;60;120,00
-material;junction_box.100x100;Коробка розподільча 100×100;шт;7;60;420,00
-material;junction_box.150x110;Коробка розподільча 150×110;шт;4;60;240,00
+material;junction_box.100x100;Коробка розподільча 100×100;шт;6;60;360,00
+material;junction_box_ip.100x100;Коробка розподільча IP44 100×100;шт;1;120;120,00
+material;junction_box.150x110;Коробка розподільча 150×110;шт;3;60;180,00
+material;junction_box_ip.150x110;Коробка розподільча IP44 150×110;шт;1;120;120,00
 material;crimp;Гільза і термоусадка (опресування);шт;55;8;440,00
 material;cable_fixing;Кріплення кабелю;шт;467;2;934,00
 material;board_enclosure;Корпус щита вбудований, 5 рядів, 60 мод.;шт;1;6000;6000,00
-material;breaker;Автомат 1P (на групу);шт;20;140;2800,00
-material;board_kit;Вступний автомат 2P 40 A;шт;1;500;500,00
-material;board_kit;Реле напруги;шт;1;1500;1500,00
-material;board_kit;ПЗВ 2P 40 A 30 мА;шт;2;1200;2400,00
+material;input.C63 2P;Вступний автомат, C63 2P;шт;1;;
+material;relay.63 А;Реле напруги, 63 А;шт;1;;
+material;breaker.C16;Автомат 1P C16;шт;12;140;1680,00
+material;diff.C16 30 мА;Дифавтомат 1P+N C16 30 мА;шт;3;;
+material;diff.C25 30 мА;Дифавтомат 1P+N C25 30 мА;шт;1;;
+material;feed.C32 2P;Живлення інвертора (AC IN), C32 2P;шт;1;;
+material;ats.АВР;АВР (автоматичне введення резерву), АВР;шт;1;;
+material;breaker.C10;Автомат 1P C10;шт;5;140;700,00
 material;socket;Розетка із заземленням;шт;42;;
 material;switch1;Вимикач одноклавішний;шт;14;;
 material;switch2;Вимикач двоклавішний;шт;1;;
@@ -23,6 +29,11 @@ material;frame.1;Рамка 1-постова;шт;34;;
 material;frame.2;Рамка 2-постова;шт;8;;
 material;frame.3;Рамка 3-постова;шт;3;;
 material;frame.4;Рамка 4-постова;шт;1;;
+material;downlight;Світильник точковий;шт;18;;
+material;pendant;Світильник підвісний;шт;3;;
+material;sconce;Бра;шт;2;;
+material;led_output;Вивід для підсвітки;шт;4;;
+material;led_strip;LED-підсвітка;м;7,84;;
 work;work.cable;Прокладання кабелю;м;364,3;30;10929,00
 work;work.chase;Штроба вузька, 1–2 кабелі;м;46,5;200;9300,00
 work;work.chase_wide;Штроба широка, 3–4 кабелі;м;15,2;300;4560,00
@@ -30,7 +41,7 @@ work;work.wall_hole;Свердління проходу крізь стіну;ш
 work;work.socket_box;Свердління і встановлення підрозетника;шт;63;100;6300,00
 work;work.junction_box;Монтаж коробки з опресуванням;шт;13;450;5850,00
 work;work.board_install;Встановлення щита;шт;1;2500;2500,00
-work;work.board_module;Збирання щита;мод.;28;120;3360,00
+work;work.board_module;Збирання щита;мод.;36;120;4320,00
 work;work.mechanism;Встановлення механізмів;шт;63;;
 work;work.marking;Маркування кінців кабелю;шт;164;10;1640,00
 work;work.insulation_test;Вимірювання опору ізоляції з протоколом;гр.;20;150;3000,00

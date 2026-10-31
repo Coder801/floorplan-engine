@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from floorplan_engine.schema import Plan
+from floorplan_engine.model.schema import Plan
 
 
 def make_plan(walls: list[dict[str, Any]], openings: list[dict[str, Any]] | None = None) -> Plan:

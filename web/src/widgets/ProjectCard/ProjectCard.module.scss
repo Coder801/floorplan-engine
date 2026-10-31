@@ -1,0 +1,53 @@
+// Карточка проекта — на экране приветствия и в меню проектов (ProjectsMenu)
+
+@use "@/shared/styles/mixins" as *;
+
+// Карточка: превью плана | текст
+.card {
+  display: grid; grid-template-rows: auto 1fr; align-content: start;
+  padding: 0; text-align: left; overflow: hidden;
+  border-radius: 12px; background: var(--panel); border: 1px solid var(--line);
+  transition: transform .15s, box-shadow .15s, border-color .15s;
+  &:hover, &:focus-visible {
+    transform: translateY(-2px); border-color: var(--hl);
+    box-shadow: 0 10px 28px rgba(0, 0, 0, .14); outline: none;
+  }
+  &.current { border-color: var(--hl); box-shadow: 0 0 0 1px var(--hl); }
+}
+
+// Превью: условный план (svg) или план из модели (out/preview.svg внутри div)
+.plan {
+  display: block; width: 100%; aspect-ratio: 5 / 3; padding: 14px;
+  background: var(--paper); border-bottom: 1px solid var(--line);
+}
+// Условный план — рисует ProjectCard.Plan
+.room { fill: var(--soft); stroke: var(--muted); stroke-width: 1.2; }
+.outline { fill: none; stroke: var(--text); stroke-width: 3; }
+.gap { stroke: var(--paper); stroke-width: 3.4; }
+.pt { fill: var(--hl); }
+.card:hover .outline { stroke: var(--hl); }
+
+// План из модели: SVG пишет ядро (thumbnail.py) с классами room, вида помещения (wet,
+// kitchen, outdoor, service, living), wall, window — они глобальные. Цвет вида — оттенок,
+// смешанный с фоном карточки: одни правила для светлой и тёмной темы. Координаты в мм, линии — без масштабирования толщины; рамка одна на
+// все карточки, план вписан по центру
+.real {
+  position: relative;
+  svg { position: absolute; inset: 14px; width: calc(100% - 28px); height: calc(100% - 28px); }
+  :global {
+    .room { fill: var(--soft); stroke: none; }
+    .wet { fill: color-mix(in srgb, #4e9bd6 32%, var(--soft)); }
+    .kitchen { fill: color-mix(in srgb, #e0a050 30%, var(--soft)); }
+    .outdoor { fill: color-mix(in srgb, #6fb37a 30%, var(--soft)); }
+    .service { fill: color-mix(in srgb, var(--muted) 22%, var(--soft)); }
+    .wall { fill: var(--text); stroke: none; }
+    .window { stroke: var(--paper); stroke-width: 1.5px; vector-effect: non-scaling-stroke; }
+  }
+}
+.card:hover .real :global(.wall) { fill: var(--hl); }
+
+.body { display: grid; align-content: start; gap: 4px; padding: 12px 16px 14px; }
+.title { font-size: 16px; font-weight: 600; }
+.stages { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.chip { font-size: 11px; padding: 1px 8px; border-radius: 10px; border: 1px solid currentColor; }
+.meta { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 6px; }

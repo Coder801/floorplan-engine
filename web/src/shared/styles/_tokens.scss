@@ -1,0 +1,26 @@
+// Цвета — CSS-переменные, а не переменные SCSS: тема переключается без пересборки
+// (palette.ts читает их же для холста и 3D). Светлая — тёплый белый; тёмная — палитра темы
+// «Dark 2026» из VS Code (extensions/theme-defaults/themes/2026-dark.json): фон редактора
+// #121314, боковые панели #191A1B, виджеты #202122, рамки #2A2B2C, акцент кнопок #297AA0.
+
+@mixin dark {
+  --bg: #121314; --panel: #191a1b; --raise: #202122; --text: #bfbfbf; --muted: #8c8c8c;
+  --line: #2a2b2c; --soft: #242526; --accent: #297aa0; --accent-text: #ffffff;
+  --hl: #48a0c7; --hl-row: #1d3946; --badge: #d43a2f;
+  --paper: #121314; --ink: #d4d4d4;
+  --critical: #f48771; --major: #cd861a; --minor: #8c8c8c; --ok: #86cf86;
+  color-scheme: dark;
+}
+
+:root {
+  --bg: #efebe2; --panel: #fbf8f2; --raise: #ffffff; --text: #29251f; --muted: #6b6357;
+  --line: #e1dacd; --soft: #f3efe7; --accent: #29251f; --accent-text: #fbf8f2;
+  --hl: #d2491a; --hl-row: #fbe3d6; --badge: #c62828;
+  --paper: #ffffff; --ink: none;
+  --critical: #b3261e; --major: #9a5b00; --minor: #6b6357; --ok: #2e6b45;
+  color-scheme: light;
+}
+:root[data-theme="dark"] { @include dark; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { @include dark; }
+}

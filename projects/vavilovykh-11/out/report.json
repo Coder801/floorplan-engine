@@ -61,7 +61,7 @@
       "unit": "mm",
       "options": [],
       "severity": "minor",
-      "state": "accepted"
+      "state": "answered"
     },
     {
       "id": "q3",
@@ -217,12 +217,6 @@
     }
   ],
   "issues": [
-    {
-      "file": "room.yaml",
-      "path": "rooms[1].openings[0].sill",
-      "severity": "warning",
-      "message": "не указана высота подоконника"
-    },
     {
       "file": "electrical.yaml",
       "path": "groups.QF8",

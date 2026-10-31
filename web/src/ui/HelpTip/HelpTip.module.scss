@@ -1,0 +1,19 @@
+// Значок «?» и всплывающая подсказка под ним, прижатая к правому краю (значок стоит у края
+// карточки — подсказка не вылезает за неё)
+
+.wrap { position: relative; display: inline-flex; }
+.button {
+  display: grid; place-items: center; width: 24px; height: 24px; min-height: 0; padding: 0;
+  border-radius: 50%; font-size: 13px; font-weight: 600; line-height: 1; color: var(--muted);
+  background: none; border: 1px solid var(--line);
+  &:hover, &[aria-expanded="true"] { color: var(--text); border-color: var(--muted); }
+  &:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+}
+.tip {
+  position: absolute; z-index: 5; top: calc(100% + 8px); right: 0; width: 260px;
+  padding: 10px 12px; border-radius: 8px; font-size: 13px; line-height: 1.5;
+  color: var(--text); background: var(--raise); border: 1px solid var(--line);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .12);
+  font-weight: 400; text-align: left; white-space: normal;
+}
+.left { right: auto; left: 0; }

@@ -1,0 +1,9 @@
+// Знак: уголки и буквы техническим гротеском
+
+@use "@/shared/styles/mixins" as *;
+
+.logo {
+  flex: none; overflow: visible;
+  path { fill: none; stroke: currentColor; stroke-width: 3; stroke-linecap: square; }
+  text { fill: currentColor; text-anchor: middle; font: 600 15px $brand; letter-spacing: -.02em; }
+}

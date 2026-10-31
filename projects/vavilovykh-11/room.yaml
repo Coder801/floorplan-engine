@@ -27,7 +27,7 @@ rooms:
       - { id: living_door_3, wall: w8, type: door, offset: 1000, width: 1000, hinge: start } # дверь в спальню
       - { id: living_door_4, wall: w8, type: door, offset: 4312, width: 1000, hinge: end }   # дверь на балкон
       - { id: living_door_5, wall: w5, type: door, offset: 416, width: 800, hinge: end, swing: out }  # входная (текст: 800, наружу); место и петли — PDF: проём 2761…3771, по центру
-      - { id: living_window_1, wall: w9, type: window, offset: 740, width: 2400 }  # текст: 2400; место — PDF: проём 410…2826, по центру
+      - { id: living_window_1, wall: w9, type: window, offset: 740, width: 2400, sill: 700 }  # подоконник — заказчик 2026-10-29; текст: 2400; место — PDF: проём 410…2826, по центру
 
   - id: bedroom
     name: "Спальня"
@@ -38,7 +38,7 @@ rooms:
       - { id: w3, length: 2700, thickness: 200 }   # w3: правая, с балконом
       - { id: w4, length: 3842, thickness: 120 }   # w4: нижняя, с гостиной
     openings:
-      - { id: bedroom_window_1, wall: w3, type: window, offset: 600, width: 2100 }    # стеклянная перегородка
+      - { id: bedroom_window_1, wall: w3, type: window, offset: 600, width: 2100, sill: 700 }    # стеклянная перегородка; подоконник — заказчик 2026-10-29
       - { id: bedroom_opening_1, wall: w4, type: opening, offset: 1962, width: 1000 }  # под дверь (полотно 900)
 
   - id: balcony
@@ -52,10 +52,11 @@ rooms:
     openings:
       - { id: balcony_opening_1, wall: w1, type: opening, offset: 0, width: 2100 }     # стеклянная перегородка (со стороны спальни)
       - { id: balcony_opening_2, wall: w4, type: opening, offset: 150, width: 1000 }   # под дверь (полотно 900)
-      - { id: balcony_window_1, wall: w3, type: window, offset: 100, width: 2400 }    # текст: 2400; место — PDF: остекление 3817…6347, по центру
+      - { id: balcony_window_1, wall: w3, type: window, offset: 100, width: 2400, sill: 700 }    # подоконник — заказчик 2026-10-29; текст: 2400; место — PDF: остекление 3817…6347, по центру
 
   - id: bathroom
     name: "Санвузол"
+    wet: true                      # вологе приміщення: коробки IP44 (заказчик 2026-10-31)
     origin: [30, 0]                # уступ вентканала 30 мм
     walls:
       - { id: w1, length: 1500, thickness: 330, bearing: true, turn: 270 }  # w1: левая у вентканала (300 + 30)

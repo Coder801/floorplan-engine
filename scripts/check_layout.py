@@ -11,9 +11,11 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from floorplan_engine.layers import drawing_scale
+from floorplan_engine.model.scale import drawing_scale
 from floorplan_engine.pipeline import assess_project, find_prices, load_prices
-from floorplan_engine.sheets import _draw, choose_paper_and_scale, place, view_size
+from floorplan_engine.sheets.document import choose_paper_and_scale
+from floorplan_engine.sheets.layout import place, view_size
+from floorplan_engine.sheets.stages import draw_stages
 
 
 def check(project: Path) -> bool:
@@ -24,7 +26,7 @@ def check(project: Path) -> bool:
     paper, scale = choose_paper_and_scale(report.plan, report.contours, report.electrical, prices)
     ok = True
     with drawing_scale(scale):
-        doc, specs = _draw(report.plan, report.contours, report.electrical, prices)
+        doc, specs = draw_stages(report.plan, report.contours, report.electrical, prices)
         for spec in specs:
             view = view_size(doc, spec)
             p = place(view, spec, paper)

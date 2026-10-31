@@ -1,0 +1,18 @@
+// Линейка внизу справа: полоса из пяти делений через одно и длина подписью
+
+@use "@/shared/styles/mixins" as *;
+
+.ruler {
+  @include raised;
+  margin-left: auto; display: flex; align-items: center; gap: 8px;
+  min-height: 40px; padding: 0 10px; font-size: 12px; pointer-events: none;
+}
+.bar {
+  display: grid; grid-template-columns: repeat(5, 1fr); height: 6px;
+  border: 1px solid var(--text);
+  i:nth-child(odd) { background: var(--text); }
+}
+
+@media (max-width: $narrow) {
+  .ruler { min-height: 36px; padding: 0 8px; }
+}

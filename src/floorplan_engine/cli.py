@@ -3,13 +3,15 @@ symbols."""
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated
 
 import typer
 
-from floorplan_engine.artifact import read_artifact, render_page_png
-from floorplan_engine.assess import STATUS_TEXT, StageResult
+from floorplan_engine.drawing.symbols import export_symbols
+from floorplan_engine.epd.artifact import read_artifact, render_page_png
+from floorplan_engine.model.schema import SheetFormat
 from floorplan_engine.pipeline import (
     ARTIFACT_FILE,
     OUT_DIR,
@@ -21,14 +23,14 @@ from floorplan_engine.pipeline import (
     print_project,
     render_sheets,
 )
-from floorplan_engine.report import STAGE_TEXT
-from floorplan_engine.schema import SheetFormat
-from floorplan_engine.sheets import sheet_png_name
-from floorplan_engine.symbols import export_symbols
-from floorplan_engine.validate import Report, Severity
+from floorplan_engine.sheets.document import sheet_png_name
+from floorplan_engine.validation.assess import STATUS_TEXT, StageResult
+from floorplan_engine.validation.issues import Severity
+from floorplan_engine.validation.report import STAGE_TEXT
+from floorplan_engine.validation.validate import Report
 
 if TYPE_CHECKING:
-    from floorplan_engine.service.auth import Auth
+    from floorplan_engine.service.api.auth import Auth
 
 app = typer.Typer(
     help="Чертежи DXF (план, электрика) из room.yaml / electrical.yaml.",
@@ -52,9 +54,34 @@ ElectricalModelOpt = Annotated[
 ]
 
 
+# Команды сервиса читают .env (вход Google, база, ключ API); сборка и проверка — нет, им
+# окружение не нужно, а тестам CLI не нужен чужой .env
+ENV_COMMANDS = frozenset({"serve", "view", "dev", "analyze", "access"})
+
+
 @app.callback()
-def main() -> None:
+def main(ctx: typer.Context) -> None:
     """floorplan-engine."""
+    if ctx.invoked_subcommand in ENV_COMMANDS:
+        load_env(Path(".env"))
+
+
+def load_env(path: Path) -> None:
+    """Переменные из .env в окружение (вход, база — .env.example): KEY=VALUE, # — комментарий,
+    кавычки вокруг значения снимаются. Уже заданное в окружении не перезаписывается."""
+    if not path.is_file():
+        return
+    for raw in path.read_text("utf-8").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = (part.strip() for part in line.removeprefix("export ").split("=", 1))
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+            value = value[1:-1]
+        elif " #" in value:
+            value = value.split(" #", 1)[0].rstrip()  # комментарий в конце строки
+        if key and key not in os.environ:
+            os.environ[key] = value
 
 
 def print_report(report: Report) -> None:
@@ -142,6 +169,8 @@ def build(
         typer.echo(f"  {result.chases} — ведомость штроб")
     if result.loads is not None:
         typer.echo(f"  {result.loads} — роспись потребителей щита")
+    if result.estimate:
+        typer.echo(f"  {result.estimate[-1]} — смета (и .md, .csv рядом)")
     for sheet_png in result.sheets:
         typer.echo(f"  {sheet_png}")
 
@@ -228,8 +257,8 @@ def serve(
     # Зависимости сервиса (группа service) нужны только этой команде
     import uvicorn
 
-    from floorplan_engine.service.app import create_app
-    from floorplan_engine.service.llm_analyzer import make_analyzer
+    from floorplan_engine.service.analysis.llm_analyzer import make_analyzer
+    from floorplan_engine.service.api.app import create_app
 
     app_ = create_app(data, make_analyzer(analyzer, model, effort, electrical_model))
     uvicorn.run(app_, host=host, port=port)
@@ -272,7 +301,7 @@ def view(
     (`cd web && npm run dev`), она ходит в этот API через прокси."""
     import uvicorn
 
-    from floorplan_engine.service.viewer import FRONT_HINT, create_viewer
+    from floorplan_engine.service.api.viewer import FRONT_HINT, create_viewer
 
     if not projects.is_dir():
         typer.echo(f"Папки {projects} нет", err=True)
@@ -295,7 +324,7 @@ def dev(
 
     import uvicorn
 
-    from floorplan_engine.service.viewer import create_viewer
+    from floorplan_engine.service.api.viewer import create_viewer
 
     if not projects.is_dir() or not (web / "package.json").is_file():
         typer.echo(
@@ -332,7 +361,7 @@ def analyze(
     round_no: Annotated[int, typer.Option("--round", help="Номер раунда")] = 1,
 ) -> None:
     """LLM-анализ папки проекта: source/ → intake.yaml и YAML этапов (затем — build)."""
-    from floorplan_engine.service.llm_analyzer import AnalyzerError, make_analyzer
+    from floorplan_engine.service.analysis.llm_analyzer import AnalyzerError, make_analyzer
 
     try:
         result = make_analyzer(analyzer, model, effort, electrical_model).analyze(project, round_no)
@@ -354,7 +383,7 @@ def pdf_facts(
     as_json: Annotated[bool, typer.Option("--json", help="JSON вместо Markdown")] = False,
 ) -> None:
     """Выжимка из PDF без LLM: масштаб листа, размеры, цепочки, надписи с координатами."""
-    from floorplan_engine.service.pdf_facts import describe, describe_json
+    from floorplan_engine.service.analysis.pdf_facts import describe, describe_json
 
     typer.echo(describe_json(pdf) if as_json else describe(pdf))
 
@@ -401,8 +430,9 @@ def symbols(
 
 
 def _viewer_auth() -> Auth | None:
-    """Вход в просмотр по окружению (SHTROBA_AUTH=on, service/auth.py); выключен — None."""
-    from floorplan_engine.service.auth import Auth, AuthConfig, ConfigError
+    """Вход в просмотр по окружению (SHTROBA_AUTH=on, service/api/auth.py); выключен — None."""
+    from floorplan_engine.service.api.auth import Auth, AuthConfig, ConfigError
+    from floorplan_engine.service.api.mail import LogMailer, mailer_from_env
     from floorplan_engine.service.db.session import make_engine, make_sessions
 
     try:
@@ -414,8 +444,15 @@ def _viewer_auth() -> Auth | None:
         return None
     google = "Google" if config.google else "без Google (нет GOOGLE_CLIENT_ID)"
     guest = ", гостевой вход для отладки" if config.visitor else ""
+    if config.dev_login:
+        guest += f", «Зайти для разработки» — как {config.superusers[0]}"
     typer.echo(f"Вход включён: {google}{guest}")
-    return Auth(config, make_sessions(make_engine()))
+    mailer = mailer_from_env(dict(os.environ), local=not config.secure)
+    if mailer is None:
+        typer.echo("Вход по коду на почту выключен: нет SMTP_HOST")
+    elif isinstance(mailer, LogMailer):
+        typer.echo("Вход по коду на почту: без SMTP — код в этом терминале")
+    return Auth(config, make_sessions(make_engine()), mailer=mailer)
 
 
 access_app = typer.Typer(help="Доступ к проектам просмотра: связь папки с базой, приглашения.")

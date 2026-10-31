@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import hashlib
+import re
 import secrets
 import uuid
 from collections.abc import Collection
@@ -206,8 +207,10 @@ def oauth_login(
 
 
 def set_account_type(session: Session, user: AppUser, kind: AccountType) -> Studio:
-    """Выбор при первом входе: pro — своя студия, client — личное пространство на один
-    проект; пользователь — владелец. Выбранный тип не меняется."""
+    """Пространство при первом входе: client — личное («Мой ремонт», один проект), pro —
+    фирма (регистрация с названием и видом — register_firm); пользователь — владелец. Тип
+    пространства — studio.kind, у пользователя account_type — подсказка стартового экрана;
+    выбранный тип не меняется."""
     if user.account_type is not None:
         raise AccessError("тип учётной записи уже выбран")
     user.account_type = kind
@@ -218,6 +221,54 @@ def set_account_type(session: Session, user: AppUser, kind: AccountType) -> Stud
     session.add(Membership(studio_id=studio.id, user_id=user.id, role="owner"))
     session.flush()
     return studio
+
+
+# Вид фирмы при регистрации: дизайн или проект, электромонтаж, ремонт и строительство,
+# частный мастер
+FIRM_KINDS = ("design", "electric", "construction", "master")
+PHONE_RE = re.compile(r"^\+?[\d\s()\-]{5,40}$")
+
+
+def register_firm(
+    session: Session, user: AppUser, name: str, business: str, city: str = "", phone: str = ""
+) -> Studio:
+    """Регистрация фирмы при первом входе (тип pro): название, вид, город и телефон;
+    пользователь — владелец. Фирма — одна на человека (несколько — позже)."""
+    name, city, phone = name.strip(), city.strip(), phone.strip()
+    if not name:
+        raise AccessError("Укажите название фирмы")
+    if len(name) > 200:
+        raise AccessError("Название фирмы — не длиннее 200 символов")
+    if business not in FIRM_KINDS:
+        raise AccessError("Выберите, чем занимается фирма")
+    if len(city) > 100:
+        raise AccessError("Город — не длиннее 100 символов")
+    if phone and not PHONE_RE.match(phone):
+        raise AccessError("Телефон — цифры, пробелы, скобки и «+»")
+    firm = session.scalar(
+        select(Studio)
+        .join(Membership, Membership.studio_id == Studio.id)
+        .where(Membership.user_id == user.id, Studio.kind == "studio")
+    )
+    if firm is not None:
+        raise AccessError(f"Вы уже в фирме «{firm.name}»")
+    studio = set_account_type(session, user, "pro")
+    studio.name, studio.business, studio.city, studio.phone = name, business, city, phone
+    session.flush()
+    audit(session, "firm_register", user=user, payload={"business": business})
+    return studio
+
+
+def user_space(session: Session, user: AppUser) -> Studio | None:
+    """Пространство пользователя для экрана: своё (фирма или личное) или фирма, где он
+    сотрудник."""
+    return own_studio(session, user) or session.scalar(
+        select(Studio)
+        .join(Membership, Membership.studio_id == Studio.id)
+        .where(Membership.user_id == user.id)
+        .order_by(Studio.created_at)
+        .limit(1)
+    )
 
 
 def own_studio(session: Session, user: AppUser) -> Studio | None:

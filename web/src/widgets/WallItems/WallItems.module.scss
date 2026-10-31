@@ -1,0 +1,33 @@
+// «На стене»: номер | что (и линия проводки) | отступ × высота; «На проводке →» — под строкой
+
+.wall { display: grid; gap: 10px; }
+
+.list {
+  list-style: none; margin: 0; padding: 0; font-size: 12px;
+  li {
+    display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; align-items: center;
+    column-gap: 8px; padding: 6px 6px; border-top: 1px solid var(--line); cursor: pointer;
+  }
+  li.head { cursor: default; border-top: 0; color: var(--muted); font-weight: 500; padding-bottom: 4px; }
+  li:not(.head):hover { background: var(--soft); }
+  li.lit, li.lit:hover { background: var(--hl-row); box-shadow: inset 3px 0 var(--hl); }
+}
+
+// Номер — плашкой цвета группы, как на развёртке
+.mark {
+  justify-self: start; min-width: 24px; padding: 2px 7px; border-radius: 999px;
+  color: #fff; font-weight: 600; text-align: center; background: var(--text);
+}
+.plain { background: var(--muted); }
+.box { background: none; color: #b3261e; border: 1.5px solid #b3261e; border-radius: 3px; padding: 1px 5px; }
+
+.name { display: grid; gap: 2px; }
+.line { color: var(--muted); }
+.where { color: var(--muted); white-space: nowrap; }
+
+.go {
+  grid-column: 2 / -1; justify-self: start; margin-top: 4px;
+  font-size: 12px; min-height: 26px; padding: 0 8px;
+  display: none;
+}
+li:hover .go, li.lit .go { display: inline-flex; align-items: center; }

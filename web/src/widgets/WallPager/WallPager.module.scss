@@ -1,0 +1,40 @@
+// Пейджер развёрток вверху по центру чертежа и список стен под ним
+
+@use "@/shared/styles/mixins" as *;
+
+.at { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); z-index: 4; }
+
+.pager {
+  @include raised;
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; overflow: hidden;
+  > button { @include bare-button; border-radius: 0; min-width: 40px; font-size: 16px; }
+  > button:disabled { opacity: .35; }
+  // Имя стены — кнопка списка: имя обрезается, номер и «▾» видны всегда
+  > .title {
+    display: flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 10px;
+    max-width: min(56vw, 480px); white-space: nowrap; font-size: 14px;
+    border-left: 1px solid var(--line); border-right: 1px solid var(--line);
+    &[aria-expanded="true"] { background: var(--soft); }
+  }
+}
+.name { overflow: hidden; text-overflow: ellipsis; }
+.caret { color: var(--muted); font-size: 11px; }
+
+// Список: по центру под пейджером, прокрутка; помещение — подзаголовком
+.list {
+  left: 50%; right: auto; transform: translateX(-50%);
+  width: max(100%, 280px); max-height: min(60vh, 520px); overflow-y: auto;
+  animation: none;
+  > .room + .room { border-top: 1px solid var(--line); padding-top: 4px; margin-top: 2px; }
+  button { grid-template-columns: minmax(0, 1fr) auto; min-height: 34px; }
+  button[aria-selected="true"] { background: var(--hl-row); box-shadow: inset 3px 0 var(--hl); }
+}
+.room { display: grid; gap: 2px; }
+.roomName { padding: 6px 10px 2px; font-size: 12px; font-weight: 600; color: var(--muted); }
+
+@media (max-width: $narrow) {
+  // Пейджер — слева, справа — «Скачать»
+  .at { left: 8px; top: 8px; transform: none; max-width: calc(100% - 84px); }
+  .pager > .title { max-width: none; }
+  .list { left: 0; transform: none; width: min(320px, calc(100vw - 16px)); }
+}

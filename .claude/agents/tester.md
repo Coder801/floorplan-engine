@@ -18,5 +18,8 @@ tools: Read, Edit, Write, Bash, Glob, Grep
 - Стиль — как в соседних тестах: короткий docstring по-русски, `from __future__ import
   annotations`, типы в сигнатурах (`mypy --strict` проверяет и `tests/`).
 
-В конце: `uv run pytest && uv run mypy && uv run ruff check . && uv run ruff format --check .`
+Тесты — в папке пакета модуля (`tests/<пакет>/test_<модуль>.py`), один файл на модуль, без
+пар `*_unit.py`.
+
+В конце: `uv run pytest && uv run mypy && uv run ruff check . && uv run ruff format --check . && uv run lint-imports`
 Отчёт: какие функции покрыты, какие ошибки найдены.

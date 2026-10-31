@@ -1,0 +1,27 @@
+// Вход по коду: поле и кнопка во всю ширину карточки, ссылки «другая почта» и «ещё раз» под ними
+
+@use "@/shared/styles/mixins" as *;
+
+.form {
+  display: grid; gap: 6px; width: 100%;
+  label { font-size: 13px; color: var(--muted); }
+  p { margin: 0; line-height: 1.5; }
+  input {
+    min-height: 36px; padding: 0 10px; min-width: 0;
+    font: inherit; color: var(--text); background: var(--raise);
+    border: 1px solid var(--line); border-radius: 6px;
+    &:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  }
+}
+.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+.stack { display: grid; gap: 10px; }
+.stack > input, .stack > button { width: 100%; min-height: 44px; border-radius: 8px; }
+.sent { font-size: 14px; }
+.code { font-family: $mono; font-size: 20px !important; letter-spacing: .4em; text-align: center; }
+.links { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 16px; margin-top: 2px; }
+.link {
+  @include bare-button; min-height: 28px; padding: 0; color: var(--muted);
+  text-decoration: underline; text-underline-offset: 3px;
+  &:disabled { text-decoration: none; }
+}
+.error { color: var(--critical); }

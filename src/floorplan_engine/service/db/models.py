@@ -62,6 +62,10 @@ class Studio(Base):
     id: Mapped[uuid.UUID] = _id()
     name: Mapped[str] = mapped_column(String(200))
     kind: Mapped[str] = mapped_column(String(20), default="studio")  # studio | personal
+    # Фирма (kind = studio) при регистрации: вид, город, телефон (access.register_firm)
+    business: Mapped[str | None] = mapped_column(String(20))  # design | electric | …
+    city: Mapped[str] = mapped_column(String(100), default="")
+    phone: Mapped[str] = mapped_column(String(40), default="")
     created_at: Mapped[datetime] = _created()
     profile: Mapped[StudioProfile | None] = relationship(back_populates="studio")
     projects: Mapped[list[Project]] = relationship(back_populates="studio")
@@ -107,6 +111,21 @@ class UserSession(Base):
     created_at: Mapped[datetime] = _created()
     last_seen_at: Mapped[datetime] = _created()
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class EmailCode(Base):
+    """Код входа на почту (db/email_codes.py): одноразовый, 6 цифр, здесь — только sha256
+    «email:код»; попытки ввода и время отправки — для ограничений."""
+
+    __tablename__ = "email_code"
+    __table_args__ = (Index("ix_email_code_email_created", "email", "created_at"),)
+    id: Mapped[uuid.UUID] = _id()
+    email: Mapped[str] = mapped_column(String(320))
+    code_hash: Mapped[str] = mapped_column(String(64))
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = _created()
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class Membership(Base):

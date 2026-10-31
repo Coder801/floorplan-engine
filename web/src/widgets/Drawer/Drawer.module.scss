@@ -1,0 +1,39 @@
+// Выдвижная панель шапки: выезжает справа поверх боковой панели — заголовок | тело
+
+@use "@/shared/styles/mixins" as *;
+
+.drawer {
+  position: absolute; inset: 0; z-index: 5;
+  display: grid; grid-template-rows: auto minmax(0, 1fr);
+  background: var(--panel); box-shadow: -8px 0 24px rgba(0, 0, 0, .12);
+  animation: drawer-in .2s ease-out;
+  @include no-motion;
+}
+.out {
+  animation: drawer-out .18s ease-in forwards;
+  @include no-motion;
+}
+// Узкий экран: на весь экран, а не в нижней шторке
+@media (max-width: $narrow) { .drawer { position: fixed; z-index: 30; } }
+@keyframes drawer-in { from { transform: translateX(100%); } to { transform: none; } }
+@keyframes drawer-out { from { transform: none; } to { transform: translateX(100%); } }
+
+// Вопрос, исходник, замечание проверки
+.card {
+  @include raised;
+  padding: 10px 12px; margin-bottom: 8px;
+  &.done { opacity: .7; }
+  &.lit { border-color: var(--hl); }
+}
+.sev { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; font-weight: 600; }
+.text { margin: 4px 0; }
+.file { margin: 4px 0; word-break: break-word; }
+.lead { margin-bottom: 10px; }
+.rowBtns { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
+
+// Этапы проекта — плитки в две колонки
+.stages { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.stage { @include raised; padding: 8px 10px; }
+
+.files { display: grid; gap: 4px; }
+.models { margin-bottom: 8px; }

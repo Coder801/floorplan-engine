@@ -18,14 +18,14 @@ from pathlib import Path
 
 import yaml
 
-from floorplan_engine.assess import Status
-from floorplan_engine.intake import ANSWERS_FILE, Accept, Answers, Stage, TextAnswer
+from floorplan_engine.model.intake import ANSWERS_FILE, Accept, Answers, Stage, TextAnswer
 from floorplan_engine.pipeline import OUT_DIR, BuildResult, build_project
-from floorplan_engine.report import REPORT_JSON
-from floorplan_engine.service.analyzer import MODEL_FILES, AnalysisResult, Analyzer
+from floorplan_engine.service.analysis.analyzer import MODEL_FILES, AnalysisResult, Analyzer
 from floorplan_engine.service.facts.gate import Gate, check_sources
 from floorplan_engine.service.models import AnswersIn, ProjectInfo, ProjectState, StageInfo
 from floorplan_engine.service.storage import SOURCE_DIR, Storage
+from floorplan_engine.validation.assess import Status
+from floorplan_engine.validation.report import REPORT_JSON
 
 MAX_ROUNDS = 3  # раундов вопросов; дальше — сборка по допущениям или «мало данных»
 log = logging.getLogger(__name__)

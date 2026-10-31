@@ -19,7 +19,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from floorplan_engine.service.analyzer import OPERATOR_FILES
+from floorplan_engine.service.analysis.analyzer import OPERATOR_FILES
 from floorplan_engine.service.models import ProjectInfo, ProjectState
 
 STATE_FILE = "service.json"

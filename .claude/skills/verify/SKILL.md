@@ -7,8 +7,9 @@ description: Полная проверка изменений Штробы бе�
 
 1. Код:
    ```bash
-   uv run pytest -q && uv run mypy && uv run ruff check . && uv run ruff format --check .
+   uv run pytest -q && uv run mypy && uv run ruff check . && uv run ruff format --check . && uv run lint-imports
    ```
+   `lint-imports` — слои пакета и запреты импортов (контракты в `pyproject.toml`).
    Если менялся фронт (`web/`): типы, тесты и сборка (в `web/dist`):
    ```bash
    cd web && npm run check && npm test && npm run build
@@ -19,7 +20,7 @@ description: Полная проверка изменений Штробы бе�
    for f in projects/*/source/*.pdf; do uv run floorplan-engine pdf-facts "$f"; done > after.md
    diff before.md after.md
    ```
-3. Если менялись листы (`sheets.py`, таблицы, легенда, штамп): собери проекты и проверь
+3. Если менялись листы (`sheets/document.py`, таблицы, легенда, штамп): собери проекты и проверь
    раскладку кодом — формат, масштаб, ничего не вылезло и не легло на план:
    ```bash
    uv run floorplan-engine build projects/<имя>

@@ -1,0 +1,40 @@
+// Шкала масштаба справа по центру чертежа (zoom.RAIL_PX — её место при «вписать»)
+
+@use "@/shared/styles/mixins" as *;
+
+.rail {
+  @include raised;
+  position: absolute; right: 12px; top: 50%; transform: translateY(-50%); z-index: 3;
+  display: grid; justify-items: center; width: 30px; overflow: visible;
+  > button { @include bare-button; width: 30px; min-width: 0; min-height: 32px; padding: 0; border-radius: 0; font-size: 16px; }
+  > button:first-child { border-radius: 8px 8px 0 0; }
+  > button:disabled { opacity: .35; }
+  > .fit { border-top: 1px solid var(--line); border-radius: 0 0 8px 8px; font-size: 14px; }
+}
+
+// Шкала: линия, пять позиций, ползунок; ползунок едет плавно
+.track {
+  position: relative; width: 30px; height: 240px; margin: 8px 0; cursor: pointer; touch-action: none;
+  outline: none;
+  &:focus-visible .thumb { box-shadow: 0 0 0 3px var(--hl-row); }
+}
+.line {
+  position: absolute; left: 50%; top: 0; bottom: 0; width: 2px; margin-left: -1px;
+  background: var(--line); border-radius: 1px;
+}
+.stop {
+  position: absolute; left: 50%; width: 8px; height: 2px; margin: 0 0 -1px -4px;
+  background: var(--muted); border-radius: 1px;
+}
+.passed { background: var(--text); }
+.thumb {
+  position: absolute; left: 50%; width: 12px; height: 12px; margin: 0 0 -6px -6px;
+  border-radius: 50%; background: var(--text);
+  transition: bottom .22s cubic-bezier(.33, 1, .68, 1);
+  @include no-motion;
+}
+
+@media (max-width: $narrow) {
+  .rail { right: 8px; }
+  .track { height: 160px; }
+}

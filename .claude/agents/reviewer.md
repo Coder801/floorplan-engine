@@ -17,7 +17,7 @@ tools: Read, Bash, Glob, Grep
 4. **Детерминизм.** Одинаковый проект → одинаковые DXF и `.epd` (без времени, случайностей,
    порядка словарей из множеств).
 5. **Документация.** CLAUDE.md, `docs/architecture.md`, `docs/status.md`,
-   `service/analyzer_prompt.md` соответствуют коду; правило изменено в обоих местах.
+   `service/analysis/analyzer_prompt.md` соответствуют коду; правило изменено в обоих местах.
 6. **Тесты.** Новое поведение покрыто; тесты не опираются на данные `projects/`.
 
 Можно запускать `uv run pytest`, `uv run mypy`, `uv run ruff check .`. Не запускай `analyze`.

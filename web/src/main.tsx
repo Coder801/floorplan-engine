@@ -1,7 +1,8 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { App } from "./App";
-import { Gate } from "./Gate";
-import "./styles/global.scss";
+import { Gate } from "@/pages/Gate";
+import { Viewer } from "@/pages/Viewer";
+import "@/shared/i18n";
+import "@/shared/styles/global.scss";
 
-createRoot(document.getElementById("root")!).render(<StrictMode><Gate>{(account) => <App account={account} />}</Gate></StrictMode>);
+createRoot(document.getElementById("root")!).render(<StrictMode><Gate>{(account) => <Viewer account={account} />}</Gate></StrictMode>);

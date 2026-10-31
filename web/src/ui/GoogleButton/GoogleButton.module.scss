@@ -1,0 +1,24 @@
+// Цвета — из правил Google для кнопки входа: светлая #FFF / рамка #747775 / текст #1F1F1F,
+// тёмная #131314 / рамка #8E918F / текст #E3E3E3; знак «G» — всегда цветной
+
+.button {
+  --g-bg: #ffffff; --g-line: #747775; --g-text: #1f1f1f; --g-hover: rgba(31, 31, 31, .08);
+  position: relative;
+  display: grid; grid-template-columns: 20px auto; justify-content: center; align-items: center;
+  gap: 12px; width: 100%; min-height: 44px; padding: 0 16px;
+  background: var(--g-bg); color: var(--g-text);
+  border: 1px solid var(--g-line); border-radius: 22px;
+  font-weight: 500; font-size: 14px; letter-spacing: .1px; text-decoration: none;
+  &:hover { background: linear-gradient(var(--g-hover), var(--g-hover)), var(--g-bg); }
+  &:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+}
+.mark { width: 20px; height: 20px; }
+
+:global(:root[data-theme="dark"]) .button {
+  --g-bg: #131314; --g-line: #8e918f; --g-text: #e3e3e3; --g-hover: rgba(227, 227, 227, .08);
+}
+@media (prefers-color-scheme: dark) {
+  :global(:root:not([data-theme="light"])) .button {
+    --g-bg: #131314; --g-line: #8e918f; --g-text: #e3e3e3; --g-hover: rgba(227, 227, 227, .08);
+  }
+}

@@ -28,6 +28,7 @@ packages = ["src/floorplan_engine"]
 [dependency-groups]
 dev = [
     "httpx2>=2.15.1",
+    "import-linter>=2.1",
     "mypy>=1.10",
     "pytest>=8.0",
     "ruff>=0.5",
@@ -82,3 +83,59 @@ ignore = ["RUF001", "RUF002", "RUF003"]
 [tool.uv]
 # Сервис (FastAPI) — отдельная группа: ядро и CLI от неё не зависят
 default-groups = ["dev", "service"]
+
+# Слои пакета и направление импортов (uv run lint-imports; входит в verify). Выше по списку —
+# может импортировать ниже, не наоборот; исключений нет — общее для слоёв выносится вниз
+[tool.importlinter]
+root_package = "floorplan_engine"
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "Слои: CLI → сервис → конвейер → .epd → листы → проверка → рисование → расчёты → модель"
+type = "layers"
+layers = [
+    "floorplan_engine.cli",
+    "floorplan_engine.service",
+    "floorplan_engine.pipeline",
+    "floorplan_engine.epd",
+    "floorplan_engine.sheets",
+    "floorplan_engine.validation",
+    "floorplan_engine.drawing",
+    "floorplan_engine.electrical",
+    "floorplan_engine.model",
+]
+
+[[tool.importlinter.contracts]]
+name = "Ядро не импортирует сервис"
+type = "forbidden"
+source_modules = [
+    "floorplan_engine.model",
+    "floorplan_engine.validation",
+    "floorplan_engine.electrical",
+    "floorplan_engine.drawing",
+    "floorplan_engine.sheets",
+    "floorplan_engine.epd",
+    "floorplan_engine.pipeline",
+]
+forbidden_modules = ["floorplan_engine.service"]
+
+[[tool.importlinter.contracts]]
+name = "Ядро без LLM, сети, базы и веб-сервера"
+type = "forbidden"
+source_modules = [
+    "floorplan_engine.model",
+    "floorplan_engine.validation",
+    "floorplan_engine.electrical",
+    "floorplan_engine.drawing",
+    "floorplan_engine.sheets",
+    "floorplan_engine.epd",
+    "floorplan_engine.pipeline",
+]
+forbidden_modules = ["anthropic", "fastapi", "httpx", "sqlalchemy", "alembic", "authlib", "uvicorn"]
+
+[[tool.importlinter.contracts]]
+name = "Модель, проверка и расчёты не рисуют DXF сами"
+type = "forbidden"
+source_modules = ["floorplan_engine.model", "floorplan_engine.validation", "floorplan_engine.electrical"]
+forbidden_modules = ["ezdxf"]
+allow_indirect_imports = true

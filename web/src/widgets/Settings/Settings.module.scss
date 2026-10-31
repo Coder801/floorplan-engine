@@ -1,0 +1,32 @@
+// Настройки: шестерёнка в шапке и панель под ней — разделы друг под другом
+
+@use "@/shared/styles/mixins" as *;
+
+.settings { grid-area: settings; }
+.gear { display: inline-grid; place-items: center; width: 40px; padding: 0; }
+.icon {
+  width: 18px; height: 18px;
+  fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round;
+}
+
+.panel {
+  width: min(320px, calc(100vw - 24px)); padding: 6px 14px 14px; gap: 0;
+  section { padding: 10px 0; border-top: 1px solid var(--line); display: grid; gap: 4px; }
+  section:first-child { border-top: 0; }
+  h3 {
+    margin: 0 0 4px; font-size: 11px; font-weight: 600; letter-spacing: .06em;
+    text-transform: uppercase; color: var(--muted);
+  }
+  p { margin: 0; }
+}
+.row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px; }
+.name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.themes > button { flex: 1; }
+
+// Язык: название | ▾ (в меню: название | ✓)
+.lang {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px;
+  width: 100%; text-align: left;
+}
+.langs { left: 0; right: 0; min-width: 0; }
+.langs > button { grid-template-columns: minmax(0, 1fr) auto; }

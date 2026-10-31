@@ -11,10 +11,12 @@ material;junction_box_ip.150x110;Коробка розподільча IP44 150�
 material;crimp;Гільза і термоусадка (опресування);шт;96;8;768,00
 material;cable_fixing;Кріплення кабелю;шт;977;2;1954,00
 material;board_enclosure;Корпус щита вбудований, 5 рядів, 60 мод.;шт;1;6000;6000,00
-material;breaker;Автомат 1P (на групу);шт;18;140;2520,00
-material;board_kit;Вступний автомат 2P 40 A;шт;1;500;500,00
-material;board_kit;Реле напруги;шт;1;1500;1500,00
-material;board_kit;ПЗВ 2P 40 A 30 мА;шт;2;1200;2400,00
+material;input.C63 2P;Вступний автомат, C63 2P;шт;1;;
+material;relay.63 А;Реле напруги, 63 А;шт;1;;
+material;breaker.C10;Автомат 1P C10;шт;5;140;700,00
+material;diff.C10 30 мА;Дифавтомат 1P+N C10 30 мА;шт;2;;
+material;breaker.C16;Автомат 1P C16;шт;8;140;1120,00
+material;diff.C16 30 мА;Дифавтомат 1P+N C16 30 мА;шт;3;;
 material;socket;Розетка із заземленням;шт;48;;
 material;switch1;Вимикач одноклавішний;шт;13;;
 material;switch2;Вимикач двоклавішний;шт;7;;
@@ -24,6 +26,13 @@ material;frame.1;Рамка 1-постова;шт;34;;
 material;frame.2;Рамка 2-постова;шт;14;;
 material;frame.3;Рамка 3-постова;шт;2;;
 material;frame.4;Рамка 4-постова;шт;1;;
+material;light;Світильник стельовий;шт;3;;
+material;downlight;Світильник точковий;шт;31;;
+material;pendant;Світильник підвісний;шт;3;;
+material;sconce;Бра;шт;11;;
+material;led_output;Вивід для підсвітки;шт;8;;
+material;outlet;Вивід кабелю до техніки;шт;6;;
+material;led_strip;LED-підсвітка;м;6,35;;
 work;work.cable;Прокладання кабелю;м;669,7;30;20091,00
 work;work.chase;Штроба вузька, 1–2 кабелі;м;85,8;200;17160,00
 work;work.chase_wide;Штроба широка, 3–4 кабелі;м;23,5;300;7050,00
@@ -31,7 +40,7 @@ work;work.wall_hole;Свердління проходу крізь стіну;ш
 work;work.socket_box;Свердління і встановлення підрозетника;шт;72;100;7200,00
 work;work.junction_box;Монтаж коробки з опресуванням;шт;23;450;10350,00
 work;work.board_install;Встановлення щита;шт;1;2500;2500,00
-work;work.board_module;Збирання щита;мод.;26;120;3120,00
+work;work.board_module;Збирання щита;мод.;28;120;3360,00
 work;work.mechanism;Встановлення механізмів;шт;72;;
 work;work.marking;Маркування кінців кабелю;шт;268;10;2680,00
 work;work.insulation_test;Вимірювання опору ізоляції з протоколом;гр.;18;150;2700,00
