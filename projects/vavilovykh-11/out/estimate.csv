@@ -1,7 +1,7 @@
 ﻿section;key;name;unit;qty;price;total
-material;cable.3x1.5;Кабель ВВГнг 3×1,5;м;188,4;45;8478,00
-material;cable.3x2.5;Кабель ВВГнг 3×2,5;м;217,9;70;15253,00
-material;cable.3x4;Кабель 3x4;м;12,6;;
+material;cable.3x1.5;Кабель ВВГнг 3×1,5;м;186,8;45;8406,00
+material;cable.3x2.5;Кабель ВВГнг 3×2,5;м;219,4;70;15358,00
+material;cable.3x4;Кабель 3x4;м;12,6;120;1512,00
 material;socket_box;Підрозетник;шт;63;20;1260,00
 material;junction_box.80;Коробка розподільча Ø80;шт;2;60;120,00
 material;junction_box.100x100;Коробка розподільча 100×100;шт;6;60;360,00
@@ -9,39 +9,42 @@ material;junction_box_ip.100x100;Коробка розподільча IP44 100�
 material;junction_box.150x110;Коробка розподільча 150×110;шт;3;60;180,00
 material;junction_box_ip.150x110;Коробка розподільча IP44 150×110;шт;1;120;120,00
 material;crimp;Гільза і термоусадка (опресування);шт;55;8;440,00
-material;cable_fixing;Кріплення кабелю;шт;467;2;934,00
+material;cable_fixing;Кріплення кабелю;шт;469;2;938,00
 material;board_enclosure;Корпус щита вбудований, 5 рядів, 60 мод.;шт;1;6000;6000,00
-material;input.C63 2P;Вступний автомат, C63 2P;шт;1;;
-material;relay.63 А;Реле напруги, 63 А;шт;1;;
+material;input.C63 2P;Вступний автомат, C63 2P;шт;1;850;850,00
+material;relay.63 А;Реле напруги, 63 А;шт;1;1900;1900,00
 material;breaker.C16;Автомат 1P C16;шт;12;140;1680,00
-material;diff.C16 30 мА;Дифавтомат 1P+N C16 30 мА;шт;3;;
-material;diff.C25 30 мА;Дифавтомат 1P+N C25 30 мА;шт;1;;
-material;feed.C32 2P;Живлення інвертора (AC IN), C32 2P;шт;1;;
-material;ats.АВР;АВР (автоматичне введення резерву), АВР;шт;1;;
+material;diff.C16 30 мА;Дифавтомат 1P+N C16 30 мА;шт;3;950;2850,00
+material;diff.C25 30 мА;Дифавтомат 1P+N C25 30 мА;шт;1;950;950,00
+material;feed.C32 2P;Живлення інвертора (AC IN), C32 2P;шт;1;500;500,00
+material;changeover.I-0-II;Обвідний перемикач: мережа / інвертор, I-0-II;шт;1;900;900,00
+material;output.C32 2P;Вихід інвертора (AC OUT), C32 2P;шт;1;500;500,00
 material;breaker.C10;Автомат 1P C10;шт;5;140;700,00
-material;socket;Розетка із заземленням;шт;42;;
-material;switch1;Вимикач одноклавішний;шт;14;;
-material;switch2;Вимикач двоклавішний;шт;1;;
-material;pass_switch;Вимикач прохідний;шт;2;;
-material;data;Розетка інтернет;шт;3;;
-material;tv;Розетка TV;шт;1;;
-material;frame.1;Рамка 1-постова;шт;34;;
-material;frame.2;Рамка 2-постова;шт;8;;
-material;frame.3;Рамка 3-постова;шт;3;;
-material;frame.4;Рамка 4-постова;шт;1;;
-material;downlight;Світильник точковий;шт;18;;
-material;pendant;Світильник підвісний;шт;3;;
-material;sconce;Бра;шт;2;;
-material;led_output;Вивід для підсвітки;шт;4;;
-material;led_strip;LED-підсвітка;м;7,84;;
-work;work.cable;Прокладання кабелю;м;364,3;30;10929,00
+material;dc_battery.125 А DC 2P;Автомат АКБ, 125 А DC 2P;шт;1;2600;2600,00
+material;dc_enclosure;Корпус щита АКБ Hager Golf VS112PD, 12 мод.;шт;1;1500;1500,00
+material;socket;Розетка із заземленням;шт;42;180;7560,00
+material;switch1;Вимикач одноклавішний;шт;14;150;2100,00
+material;switch2;Вимикач двоклавішний;шт;1;190;190,00
+material;pass_switch;Вимикач прохідний;шт;2;210;420,00
+material;data;Розетка інтернет;шт;3;250;750,00
+material;tv;Розетка TV;шт;1;220;220,00
+material;frame.1;Рамка 1-постова;шт;34;60;2040,00
+material;frame.2;Рамка 2-постова;шт;8;100;800,00
+material;frame.3;Рамка 3-постова;шт;3;140;420,00
+material;frame.4;Рамка 4-постова;шт;1;180;180,00
+material;downlight;Світильник точковий;шт;18;350;6300,00
+material;pendant;Світильник підвісний;шт;3;1500;4500,00
+material;sconce;Бра;шт;2;1200;2400,00
+material;led_output;Вивід для підсвітки;шт;4;150;600,00
+material;led_strip;LED-підсвітка;м;7,84;250;1960,00
+work;work.cable;Прокладання кабелю;м;364,2;30;10926,00
 work;work.chase;Штроба вузька, 1–2 кабелі;м;46,5;200;9300,00
-work;work.chase_wide;Штроба широка, 3–4 кабелі;м;15,2;300;4560,00
+work;work.chase_wide;Штроба широка, 3–4 кабелі;м;15;300;4500,00
 work;work.wall_hole;Свердління проходу крізь стіну;шт;5;150;750,00
 work;work.socket_box;Свердління і встановлення підрозетника;шт;63;100;6300,00
 work;work.junction_box;Монтаж коробки з опресуванням;шт;13;450;5850,00
 work;work.board_install;Встановлення щита;шт;1;2500;2500,00
-work;work.board_module;Збирання щита;мод.;36;120;4320,00
-work;work.mechanism;Встановлення механізмів;шт;63;;
+work;work.board_module;Збирання щита;мод.;37;120;4440,00
+work;work.mechanism;Встановлення механізмів;шт;63;120;7560,00
 work;work.marking;Маркування кінців кабелю;шт;164;10;1640,00
 work;work.insulation_test;Вимірювання опору ізоляції з протоколом;гр.;20;150;3000,00

@@ -1,0 +1,453 @@
+{
+  "project": "Квартира, вул. Вавілових, 11, кв. 216",
+  "stages": [
+    {
+      "stage": "plan",
+      "status": "questions",
+      "builds": true,
+      "reason": "",
+      "weight": 10,
+      "questions": [
+        "q1",
+        "q2",
+        "q3",
+        "q4"
+      ]
+    },
+    {
+      "stage": "electrical",
+      "status": "questions",
+      "builds": true,
+      "reason": "",
+      "weight": 4,
+      "questions": [
+        "q5",
+        "q6",
+        "q7",
+        "q8"
+      ]
+    },
+    {
+      "stage": "plumbing",
+      "status": "absent",
+      "builds": false,
+      "reason": "прилади на А-21/А-27 (ванна, унітаз з інсталяцією, умивальник, пральна і сушильна, посудомийна, бойлер, фільтри); лист А-27 (стор. 14) не розбирався — не в переліку сторінок",
+      "weight": 3,
+      "questions": [
+        "q9"
+      ]
+    },
+    {
+      "stage": "panel",
+      "status": "questions",
+      "builds": true,
+      "reason": "",
+      "weight": 10,
+      "questions": [
+        "panel_backup",
+        "panel_input",
+        "panel_reserve",
+        "panel_npe",
+        "panel_inverter",
+        "panel_battery",
+        "panel_pv",
+        "panel_dc_place"
+      ]
+    }
+  ],
+  "questions": [
+    {
+      "id": "q1",
+      "stage": "plan",
+      "text": "Усі розміри взято чистові (А-28, А-34: «з урахуванням оздоблювальних матеріалів»), перегородки — конструктив + 20 мм оздоблення на сторону (120 → 160, 240 → 280). Так і креслимо? Інакше — конструктивні розміри А-16 (кожна кімната на 40 мм більша).",
+      "also": [],
+      "answer": "text",
+      "options": [],
+      "severity": "major",
+      "state": "open"
+    },
+    {
+      "id": "q2",
+      "stage": "plan",
+      "text": "Двері санвузла: на плані монтажу А-19 проріз підписано 700 (Нпр=2050), у специфікації А-25 Д-02 — полотно 700, проріз 800. Узято 800 за специфікацією (плінтус на А-28 теж дає 800).",
+      "target": "rooms.bath.openings.bath_door_1.width",
+      "also": [
+        "rooms.hall.openings.hall_opening_4.width"
+      ],
+      "answer": "value",
+      "unit": "mm",
+      "options": [],
+      "assumption": 800.0,
+      "severity": "major",
+      "state": "open"
+    },
+    {
+      "id": "q3",
+      "stage": "plan",
+      "text": "Зняті за масштабом PDF (не підписані): вікно кухні — 1990 від кута з вентшахтою до простінка 560; вікно спальні на верхній стіні — впритул до кута з гардеробною; висота лоджії 2940 (обміри 2980 − оздоблення). Підтвердьте або пришліть обміри.",
+      "also": [],
+      "answer": "text",
+      "options": [],
+      "severity": "major",
+      "state": "open"
+    },
+    {
+      "id": "q4",
+      "stage": "plan",
+      "text": "Санвузол: нижня стіна за інсталяцією унітаза і нішею (ГКЛ 300, А-19: 495 | 495 | 730) і короб каналізаційної труби біля пілона в контур не внесені — контур узято по конструктиву (пілон 430 — у контурі). Залишити так (інсталяція — перешкода на етапі сантехніки)?",
+      "also": [],
+      "answer": "text",
+      "options": [],
+      "severity": "minor",
+      "state": "open"
+    },
+    {
+      "id": "q5",
+      "stage": "electrical",
+      "text": "Ел.щит і слабкострумовий щит біля входу (А-19, А-34): висота центру щита на листах не підписана. Узято 1700.",
+      "target": "board.height",
+      "also": [],
+      "answer": "value",
+      "unit": "mm",
+      "options": [],
+      "assumption": 1700.0,
+      "severity": "minor",
+      "state": "open"
+    },
+    {
+      "id": "q6",
+      "stage": "electrical",
+      "text": "Розеток на листі А-34 порахувано 55 (+4 INT), у специфікації А-35 — 57. Терморегулятори (4 шт. у специфікації) на листах електрики не показані — вони на плані опалення А-26 (не розбирався)? Пришліть, де стоять, або підтвердьте, що тепла підлога — окремим етапом.",
+      "also": [],
+      "answer": "text",
+      "options": [],
+      "severity": "minor",
+      "state": "open"
+    },
+    {
+      "id": "q7",
+      "stage": "electrical",
+      "text": "Вивід для вентилятора в гардеробній — на стелі (680 від низу, 980 від правої стіни, А-34). Схема точок на стелі для виводів не має: вивід прив'язано до правої стіни w7 на висоті стелі 2700. Залишити?",
+      "target": "points.wardrobe_outlet_1.height",
+      "also": [],
+      "answer": "value",
+      "unit": "mm",
+      "options": [],
+      "assumption": 2700.0,
+      "severity": "minor",
+      "state": "open"
+    },
+    {
+      "id": "q8",
+      "stage": "electrical",
+      "text": "Вимикачі: три перехресні «10» у спальні (біля дверей і біля ліжка з двох боків) вмикають бра праворуч (гр.10), три перехресні «5» (лоджія, кімната, передпокій) — стелю кімнати (гр.5) — так прочитано з номерів груп на А-33. Вимикачі 13+В і 16+В узято 2-клавішними (стеля + вентилятор); у специфікації 2-клавішних — 2, 1-клавішних — 10. Підтвердьте.",
+      "also": [],
+      "answer": "text",
+      "options": [],
+      "severity": "minor",
+      "state": "open"
+    },
+    {
+      "id": "q9",
+      "stage": "plumbing",
+      "text": "Сантехніка (лист А-27, стор. 14) у перелік сторінок не входила — plumbing.yaml не писався. Розбирати?",
+      "also": [],
+      "answer": "text",
+      "options": [],
+      "severity": "major",
+      "state": "open"
+    },
+    {
+      "id": "panel_backup",
+      "stage": "panel",
+      "text": "Нужен ли резерв питания? Сейчас — гибридный инвертор с АКБ (допущение): none — без резерва, inverter — инвертор, plug — генератор через силовую вилку",
+      "target": "panel.backup",
+      "also": [],
+      "answer": "choice",
+      "options": [
+        "none",
+        "inverter",
+        "plug"
+      ],
+      "assumption": "inverter",
+      "severity": "minor",
+      "state": "open"
+    },
+    {
+      "id": "panel_input",
+      "stage": "panel",
+      "text": "Вводной автомат по техусловиям? Сейчас 63 А (допущение); расчётный ток квартиры 73,2 А",
+      "target": "panel.input",
+      "also": [],
+      "answer": "value",
+      "unit": "А",
+      "options": [],
+      "assumption": 63.0,
+      "severity": "minor",
+      "state": "open"
+    },
+    {
+      "id": "panel_reserve",
+      "stage": "panel",
+      "text": "Что держать на резерве? Сейчас: QF1, QF3, QF5, QF7, QF11, QF12, QF13, QF19, QF20 — свет, холодильник, роутер, котёл, насос, ворота, розетки кухни (допущение). Список групп — panel.reserve",
+      "also": [],
+      "answer": "text",
+      "options": [],
+      "severity": "minor",
+      "state": "open"
+    },
+    {
+      "id": "panel_npe",
+      "stage": "panel",
+      "text": "Связывает ли инвертор N с PE в резервном режиме (встроенное реле N–PE, включается в настройках)? Без этой связи УЗО и дифавтоматы на резерве не сработают: no — поставим контактор N–PE",
+      "target": "panel.npe_relay",
+      "also": [],
+      "answer": "choice",
+      "options": [
+        "yes",
+        "no"
+      ],
+      "assumption": "yes",
+      "severity": "major",
+      "state": "open"
+    },
+    {
+      "id": "panel_inverter",
+      "stage": "panel",
+      "text": "Какой инвертор? Сейчас гибридный (допущение) — сам переключает сеть и АКБ, в щите обходной SA1. basic — без своего переключения: резерв через АВР",
+      "target": "panel.inverter",
+      "also": [],
+      "answer": "choice",
+      "options": [
+        "hybrid",
+        "basic"
+      ],
+      "assumption": "hybrid",
+      "severity": "minor",
+      "state": "open"
+    },
+    {
+      "id": "panel_battery",
+      "stage": "panel",
+      "text": "Напряжение АКБ инвертора? Сейчас 48 В (допущение): ток разряда 104,2 А при 5,00 кВт — автомат АКБ 125 А, кабель 2×35 мм²",
+      "target": "panel.battery_voltage",
+      "also": [],
+      "answer": "value",
+      "unit": "В",
+      "options": [],
+      "assumption": 48.0,
+      "severity": "minor",
+      "state": "open"
+    },
+    {
+      "id": "panel_pv",
+      "stage": "panel",
+      "text": "Есть ли солнечные панели? Сейчас нет (допущение). Число строк панелей на инвертор (0–2): у каждой — DC-автомат и УЗИП в щите АКБ",
+      "target": "panel.pv_strings",
+      "also": [],
+      "answer": "value",
+      "options": [],
+      "assumption": 0.0,
+      "severity": "minor",
+      "state": "open"
+    },
+    {
+      "id": "panel_dc_place",
+      "stage": "panel",
+      "text": "Где стоят инвертор, щит АКБ и АКБ? Сейчас — рядом с основным щитом (допущение): от этого — длина кабелей GRID, LOAD и АКБ",
+      "also": [],
+      "answer": "text",
+      "options": [],
+      "severity": "minor",
+      "state": "open"
+    }
+  ],
+  "issues": [
+    {
+      "file": "electrical.yaml",
+      "path": "points[24].offset",
+      "severity": "warning",
+      "message": "точка попадает в дверь (130–1030 мм на стене w3)"
+    },
+    {
+      "file": "electrical.yaml",
+      "path": "points[36].offset",
+      "severity": "warning",
+      "message": "точка попадает в окно (429–2734 мм на стене w1)"
+    },
+    {
+      "file": "electrical.yaml",
+      "path": "points[37].offset",
+      "severity": "warning",
+      "message": "точка попадает в окно (429–2734 мм на стене w1)"
+    },
+    {
+      "file": "electrical.yaml",
+      "path": "groups.QF1",
+      "severity": "warning",
+      "message": "QF1: нет марки кабеля — автомат подобран без проверки по сечению"
+    },
+    {
+      "file": "electrical.yaml",
+      "path": "groups.QF2",
+      "severity": "warning",
+      "message": "QF2: нет марки кабеля — автомат подобран без проверки по сечению"
+    },
+    {
+      "file": "electrical.yaml",
+      "path": "groups.QF3",
+      "severity": "warning",
+      "message": "QF3: нет марки кабеля — автомат подобран без проверки по сечению"
+    },
+    {
+      "file": "electrical.yaml",
+      "path": "groups.QF4",
+      "severity": "warning",
+      "message": "QF4: нет марки кабеля — автомат подобран без проверки по сечению"
+    },
+    {
+      "file": "electrical.yaml",
+      "path": "groups.QF5",
+      "severity": "warning",
+      "message": "QF5: нет марки кабеля — автомат подобран без проверки по сечению"
+    },
+    {
+      "file": "electrical.yaml",
+      "path": "groups.QF6",
+      "severity": "warning",
+      "message": "QF6: нет марки кабеля — автомат подобран без проверки по сечению"
+    },
+    {
+      "file": "electrical.yaml",
+      "path": "groups.QF7",
+      "severity": "warning",
+      "message": "QF7: нет марки кабеля — автомат подобран без проверки по сечению"
+    },
+    {
+      "file": "electrical.yaml",
+      "path": "groups.QF8",
+      "severity": "warning",
+      "message": "QF8: нет марки кабеля — автомат подобран без проверки по сечению"
+    },
+    {
+      "file": "electrical.yaml",
+      "path": "groups.QF9",
+      "severity": "warning",
+      "message": "QF9: нет марки кабеля — автомат подобран без проверки по сечению"
+    },
+    {
+      "file": "electrical.yaml",
+      "path": "groups.QF10",
+      "severity": "warning",
+      "message": "QF10: нет марки кабеля — автомат подобран без проверки по сечению"
+    },
+    {
+      "file": "electrical.yaml",
+      "path": "groups.QF11",
+      "severity": "warning",
+      "message": "QF11: нет марки кабеля — автомат подобран без проверки по сечению"
+    },
+    {
+      "file": "electrical.yaml",
+      "path": "groups.QF12",
+      "severity": "warning",
+      "message": "QF12: нет марки кабеля — автомат подобран без проверки по сечению"
+    },
+    {
+      "file": "electrical.yaml",
+      "path": "groups.QF13",
+      "severity": "warning",
+      "message": "QF13: нет марки кабеля — автомат подобран без проверки по сечению"
+    },
+    {
+      "file": "electrical.yaml",
+      "path": "groups.QF14",
+      "severity": "warning",
+      "message": "QF14: нет марки кабеля — автомат подобран без проверки по сечению"
+    },
+    {
+      "file": "electrical.yaml",
+      "path": "groups.QF15",
+      "severity": "warning",
+      "message": "QF15: нет марки кабеля — автомат подобран без проверки по сечению"
+    },
+    {
+      "file": "electrical.yaml",
+      "path": "groups.QF16",
+      "severity": "warning",
+      "message": "QF16: нет марки кабеля — автомат подобран без проверки по сечению"
+    },
+    {
+      "file": "electrical.yaml",
+      "path": "groups.QF17",
+      "severity": "warning",
+      "message": "QF17: нет марки кабеля — автомат подобран без проверки по сечению"
+    },
+    {
+      "file": "electrical.yaml",
+      "path": "groups.QF18",
+      "severity": "warning",
+      "message": "QF18: нет марки кабеля — автомат подобран без проверки по сечению"
+    },
+    {
+      "file": "electrical.yaml",
+      "path": "groups.QF19",
+      "severity": "warning",
+      "message": "QF19: нет марки кабеля — автомат подобран без проверки по сечению"
+    },
+    {
+      "file": "electrical.yaml",
+      "path": "groups.QF20",
+      "severity": "warning",
+      "message": "QF20: нет марки кабеля — автомат подобран без проверки по сечению"
+    },
+    {
+      "file": "electrical.yaml",
+      "path": "groups.QF21",
+      "severity": "warning",
+      "message": "QF21: нет марки кабеля — автомат подобран без проверки по сечению"
+    },
+    {
+      "file": "electrical.yaml",
+      "path": "groups.QF22",
+      "severity": "warning",
+      "message": "QF22: нет марки кабеля — автомат подобран без проверки по сечению"
+    },
+    {
+      "file": "electrical.yaml",
+      "path": "groups.QF23",
+      "severity": "warning",
+      "message": "QF23: нет марки кабеля — автомат подобран без проверки по сечению"
+    },
+    {
+      "file": "electrical.yaml",
+      "path": "panel",
+      "severity": "warning",
+      "message": "Расчётный ток квартиры 73,2 А больше вводного автомата 63 А"
+    },
+    {
+      "file": "electrical.yaml",
+      "path": "panel",
+      "severity": "warning",
+      "message": "Вводной автомат 63 А — допущение: уточните по техусловиям (panel.input)"
+    },
+    {
+      "file": "electrical.yaml",
+      "path": "panel",
+      "severity": "warning",
+      "message": "Мощность инвертора или генератора не задана (panel.backup_power) — резервная шина 7,88 кВт не проверена"
+    },
+    {
+      "file": "electrical.yaml",
+      "path": "panel",
+      "severity": "warning",
+      "message": "Резерв от инвертора: неизвестно, связан ли N с PE в резервном режиме — без этой связи УЗО и дифавтоматы на резерве не сработают (panel.npe_relay)"
+    },
+    {
+      "file": "electrical.yaml",
+      "path": "panel",
+      "severity": "warning",
+      "message": "АКБ 48 В — допущение: ток разряда 104,2 А, автомат и кабель АКБ — по нему; уточните (panel.battery_voltage)"
+    }
+  ]
+}

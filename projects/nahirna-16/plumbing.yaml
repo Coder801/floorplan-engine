@@ -1,0 +1,30 @@
+# Водопостачання і каналізація (docs/plumbing.md).
+# Источник приборов и высот: source/Електрика+сантехніка.pdf, лист 3 (водорозетки і випуски
+# точками, висоти підписані). Масштаба на листе нет — снят сверкой с листом 1 той же квартиры
+# (внутренняя ширина 12 165 мм): 19,05 мм/pt; места подводок — по точкам, округлены до 10 мм —
+# «# PDF, масштаб» (вопрос q7).
+# Стояки каналізації Д110 — source/План монтажу.pdf (лист 06), там же короб під інсталяцію 450×930.
+units: mm
+distribution: collector              # по умолчанию — лучевая от коллекторов
+route: floor
+risers:
+  - { id: riser_1, room: bath, at: [760, 1340], sewer: true }        # PDF, масштаб: у коробі (лист 06, лист 3 — кружок)
+  - { id: riser_2, room: living, at: [3980, 6170], sewer: true }     # PDF, масштаб: біля вентканалу кухні
+# Узел ввода — со слов заказчика 2026-11-02: в основном санузле, розводка над інсталяцією; от
+# узла холодная — в бойлер и по квартире, горячая — из бойлера (hot: false).
+input: { room: bath, wall: w5, offset: 470, height: 1300, hot: false }  # offset — середина інсталяції, height — над нею (h ≈ 1200): допущение, q12
+fixtures:
+  # --- Санвузол
+  - { id: bath_shower_1, room: bath, type: shower, wall: w5, offset: 1510, supply_height: 1100, drain_height: 0 }   # PDF, масштаб: змішувач на стіні, трап у підлозі (h 0)
+  - { id: bath_hygshower_1, room: bath, type: hygienic_shower, wall: w5, offset: 730, supply_height: 700 }          # PDF, масштаб: на коробі інсталяції
+  - { id: bath_wc_1, room: bath, type: wc_installation, wall: w5, offset: 430, supply_height: 900, drain_height: 220 }  # PDF, масштаб
+  - { id: bath_boiler_1, room: bath, type: boiler, wall: w5, offset: 100, supply_height: 1800 }                     # PDF, масштаб: над інсталяцією, холодна на вході
+  - { id: bath_sink_1, room: bath, type: sink, wall: w1, offset: 890, supply_height: 650, drain_height: 550 }       # PDF, масштаб: подвійна тумба, верхня
+  - { id: bath_sink_2, room: bath, type: sink, wall: w1, offset: 340, supply_height: 650, drain_height: 550 }       # PDF, масштаб: подвійна тумба, нижня
+  # --- Санвузол 2 (пральня)
+  - { id: bath2_washer_1, room: bath2, type: washer, wall: w2, offset: 1190, supply_height: 700, drain_height: 500 }  # PDF, масштаб
+  # --- Кухня (стіна кабінету)
+  - { id: kitchen_sink_1, room: living, type: kitchen_sink, wall: w3, offset: 1540, supply_height: 600, drain_height: 450 }      # PDF, масштаб
+  - { id: kitchen_dishwasher_1, room: living, type: dishwasher, wall: w3, offset: 1130, supply_height: 550, drain_height: 500 }  # PDF, масштаб: «ПМ»
+obstacles:
+  - { id: bath_inst_1, room: bath, type: installation, wall: w5, offset: 0, width: 930, depth: 450, height: 1200 }  # лист 06: 450 × 930, h ≈ 1200

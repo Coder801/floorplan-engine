@@ -1,0 +1,42 @@
+﻿section;key;name;unit;qty;price;total
+material;water.pipe16;Труба REHAU RAUTITAN flex 16;м;19,53;75;1464,75
+material;water.pipe20;Труба REHAU RAUTITAN flex 20;м;11,04;115;1269,60
+material;water.insulation;Теплоізоляція труби в стяжці;м;15,03;15;225,45
+material;water.outlet16;Водорозетка REHAU RAUTITAN 16-Rp½;шт;7;260;1820,00
+material;water.outlet20;Водорозетка REHAU RAUTITAN 20-Rp½;шт;4;330;1320,00
+material;water.elbow16;Кутник 90° REHAU RAUTITAN PX 16;шт;33;190;6270,00
+material;water.elbow20;Кутник 90° REHAU RAUTITAN PX 20;шт;21;260;5460,00
+material;water.tee20_16;Трійник REHAU RAUTITAN PX 20-16-20;шт;2;330;660,00
+material;water.tee20;Трійник REHAU RAUTITAN PX 20-20-20;шт;1;360;360,00
+material;water.eurocone16;Перехідник REHAU RAUTITAN 16-G¾ євроконус;шт;5;170;850,00
+material;water.eurocone20;Перехідник REHAU RAUTITAN 20-G¾ євроконус;шт;2;230;460,00
+material;water.adapter20;Перехідник REHAU RAUTITAN 20-R½ зовнішня різьба;шт;1;280;280,00
+material;water.sleeve16;Гільза монтажна REHAU RAUTITAN 16;шт;80;45;3600,00
+material;water.sleeve20;Гільза монтажна REHAU RAUTITAN 20;шт;56;60;3360,00
+material;water.collector;Колектор із кранами (за вихід);вых.;7;350;2450,00
+material;water.valve;Кран кульовий на вводі;шт;1;350;350,00
+material;water.filter;Фільтр грубого очищення;шт;1;450;450,00
+material;water.reducer;Редуктор тиску;шт;1;1500;1500,00
+material;water.boiler_kit;Група безпеки бойлера;шт;1;900;900,00
+material;water.fixing;Кріплення труби;шт;25;6;150,00
+material;sewer.pipe50;Труба каналізаційна Ø50;м;9,18;70;642,60
+material;sewer.pipe110;Труба каналізаційна Ø110;м;0,74;170;125,80
+material;sewer.bend50;Відвід 45° Ø50;шт;53;35;1855,00
+material;sewer.bend110;Відвід 45° Ø110;шт;6;70;420,00
+material;sewer.tee50;Трійник косий Ø50;шт;3;50;150,00
+material;sewer.tee110_50;Трійник косий 110×50;шт;1;90;90,00
+material;sewer.riser_tee;Трійник врізки в стояк Ø110;шт;2;600;1200,00
+material;sewer.reducer;Перехід 110→50;шт;1;40;40,00
+material;sewer.revision;Ревізія;шт;4;150;600,00
+material;sewer.fixing;Хомут каналізації;шт;9;15;135,00
+work;work.water_pipe;Прокладання труби водопостачання;м;27,79;120;3334,80
+work;work.sewer_pipe;Прокладання каналізації;м;9,02;200;1804,00
+work;work.water_outlet;Встановлення водорозетки;шт;11;350;3850,00
+work;work.input;Монтаж вузла вводу і колекторів;шт;1;2500;2500,00
+work;work.riser_tee;Врізка в стояк;шт;2;1200;2400,00
+work;work.wall_hole;Отвір у перегородці під труби;шт;4;150;600,00
+work;work.chase_pipe;Штроба під труби води;м;5,7;350;1995,00
+work;work.chase_sewer;Штроба під каналізацію;м;1,43;600;858,00
+work;work.chase_sewer_floor;Штроба в підлозі під каналізацію;м;3,57;500;1785,00
+work;work.sewer_box;Короб під каналізацію біля стіни;м;2,35;450;1057,50
+work;work.pressure_test;Опресування водопостачання;шт;1;1000;1000,00

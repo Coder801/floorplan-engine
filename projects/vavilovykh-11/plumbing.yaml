@@ -1,0 +1,23 @@
+# Водопостачання і каналізація (docs/plumbing.md). Источник: source/Діма і Аня електрика.pdf
+# (прилади меблями: ванна, унітаз, умивальник у тумбі, бойлер над пральною, мийка,
+# посудомийка; висоти розеток бойлера, пральної, посудомийки — підписані). Места приборов сняты
+# с векторов по масштабу листа и привязаны к стенам room.yaml — «# PDF, масштаб»; высоты
+# подводов не подписаны — типовые (допущение). Стояков на листах нет: стояк — допущением в
+# куті біля вентканалу, поруч з унітазом (вопрос q10).
+units: mm
+distribution: collector
+route: floor
+risers:
+  - { id: riser_1, room: bathroom, at: [60, 1560], sewer: true, water: true }   # допущение: кут біля вентканалу, q10
+fixtures:
+  # --- Санвузол
+  - { id: bathroom_wc_1, room: bathroom, type: wc, wall: w1, offset: 1250 }           # PDF, масштаб: унітаз з бачком
+  - { id: bathroom_bath_1, room: bathroom, type: bath, wall: w5, offset: 1980 }       # PDF, масштаб: змішувач у торці ванни
+  - { id: bathroom_sink_1, room: bathroom, type: sink, wall: w5, offset: 1100 }       # PDF, масштаб: у тумбі, під дзеркалом (LED w5 1100)
+  - { id: bathroom_washer_1, room: bathroom, type: washer, wall: w3, offset: 550 }    # PDF, масштаб: розетка пральної H=900
+  - { id: bathroom_boiler_1, room: bathroom, type: boiler, wall: w3, offset: 550 }    # PDF, масштаб: над пральною, розетка H=2000
+  # --- Кухня
+  - { id: kitchen_sink_1, room: living, type: kitchen_sink, wall: w1, offset: 860 }        # PDF, масштаб
+  - { id: kitchen_dishwasher_1, room: living, type: dishwasher, wall: w10, offset: 4420 }  # PDF, масштаб: «посудомийка», розетка H=100
+obstacles:
+  - { id: bathroom_tub_1, room: bathroom, type: bath, wall: w6, offset: 0, width: 1720, depth: 700 }  # PDF, масштаб: ванна вздовж зовнішньої стіни

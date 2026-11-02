@@ -1,0 +1,4 @@
+# Вариант проводки, выбранный в просмотре (docs/wiring-variants.md).
+mode: standard
+route: ceiling
+distribution: boxes

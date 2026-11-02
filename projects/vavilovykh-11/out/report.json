@@ -24,15 +24,33 @@
       ]
     },
     {
+      "stage": "plumbing",
+      "status": "questions",
+      "builds": true,
+      "reason": "",
+      "weight": 8,
+      "questions": [
+        "q10",
+        "q11",
+        "q12",
+        "q13"
+      ]
+    },
+    {
       "stage": "panel",
       "status": "questions",
       "builds": true,
       "reason": "",
-      "weight": 9,
+      "weight": 16,
       "questions": [
         "panel_backup",
         "panel_input",
         "panel_reserve",
+        "panel_npe",
+        "panel_inverter",
+        "panel_battery",
+        "panel_pv",
+        "panel_dc_place",
         "panel_split_QF8",
         "panel_cable_QF13"
       ]
@@ -157,6 +175,49 @@
       "state": "open"
     },
     {
+      "id": "q10",
+      "stage": "plumbing",
+      "text": "Стояків на листах немає. Стояк каналізації і води поставлено в кут біля вентканалу поруч з унітазом (допущення). Де стояки? Квадрат із хрестом у правому верхньому куті санвузла на плані електрики — шахта зі стояками? Місця приладів зняті за масштабом PDF — підтвердіть.",
+      "also": [],
+      "answer": "text",
+      "options": [],
+      "severity": "major",
+      "state": "open"
+    },
+    {
+      "id": "q11",
+      "stage": "plumbing",
+      "text": "На якій висоті від чистої підлоги вісь врізки в стояк каналізації?",
+      "target": "risers.riser_1.sewer_inlet",
+      "also": [],
+      "answer": "value",
+      "unit": "mm",
+      "options": [],
+      "assumption": 100.0,
+      "severity": "minor",
+      "state": "open"
+    },
+    {
+      "id": "q12",
+      "stage": "plumbing",
+      "text": "Ванна: випуск (≈100 мм від підлоги) не дотягує до стояка — 2,9 м по трубах, потрібен подіум близько 65 мм. Ставимо ванну на подіум чи стояк інде (див. q10)?",
+      "also": [],
+      "answer": "text",
+      "options": [],
+      "severity": "major",
+      "state": "open"
+    },
+    {
+      "id": "q13",
+      "stage": "plumbing",
+      "text": "Гаряча вода — від бойлера (він є на плані), централізованої ГВП немає? Висоти водорозеток, бойлера і випусків — типові («*» у таблиці «Сантехприлади»): моделі приладів?",
+      "also": [],
+      "answer": "text",
+      "options": [],
+      "severity": "minor",
+      "state": "open"
+    },
+    {
       "id": "panel_backup",
       "stage": "panel",
       "text": "Нужен ли резерв питания? Сейчас — гибридный инвертор с АКБ (допущение): none — без резерва, inverter — инвертор, plug — генератор через силовую вилку",
@@ -189,6 +250,71 @@
       "id": "panel_reserve",
       "stage": "panel",
       "text": "Что держать на резерве? Сейчас: QF1, QF2, QF3, QF4, QF5, QF18 — свет, холодильник, роутер, котёл, насос, ворота, розетки кухни (допущение). Список групп — panel.reserve",
+      "also": [],
+      "answer": "text",
+      "options": [],
+      "severity": "minor",
+      "state": "open"
+    },
+    {
+      "id": "panel_npe",
+      "stage": "panel",
+      "text": "Связывает ли инвертор N с PE в резервном режиме (встроенное реле N–PE, включается в настройках)? Без этой связи УЗО и дифавтоматы на резерве не сработают: no — поставим контактор N–PE",
+      "target": "panel.npe_relay",
+      "also": [],
+      "answer": "choice",
+      "options": [
+        "yes",
+        "no"
+      ],
+      "assumption": "yes",
+      "severity": "major",
+      "state": "open"
+    },
+    {
+      "id": "panel_inverter",
+      "stage": "panel",
+      "text": "Какой инвертор? Сейчас гибридный (допущение) — сам переключает сеть и АКБ, в щите обходной SA1. basic — без своего переключения: резерв через АВР",
+      "target": "panel.inverter",
+      "also": [],
+      "answer": "choice",
+      "options": [
+        "hybrid",
+        "basic"
+      ],
+      "assumption": "hybrid",
+      "severity": "minor",
+      "state": "open"
+    },
+    {
+      "id": "panel_battery",
+      "stage": "panel",
+      "text": "Напряжение АКБ инвертора? Сейчас 48 В (допущение): ток разряда 104,2 А при 5,00 кВт — автомат АКБ 125 А, кабель 2×35 мм²",
+      "target": "panel.battery_voltage",
+      "also": [],
+      "answer": "value",
+      "unit": "В",
+      "options": [],
+      "assumption": 48.0,
+      "severity": "minor",
+      "state": "open"
+    },
+    {
+      "id": "panel_pv",
+      "stage": "panel",
+      "text": "Есть ли солнечные панели? Сейчас нет (допущение). Число строк панелей на инвертор (0–2): у каждой — DC-автомат и УЗИП в щите АКБ",
+      "target": "panel.pv_strings",
+      "also": [],
+      "answer": "value",
+      "options": [],
+      "assumption": 0.0,
+      "severity": "minor",
+      "state": "open"
+    },
+    {
+      "id": "panel_dc_place",
+      "stage": "panel",
+      "text": "Где стоят инвертор, щит АКБ и АКБ? Сейчас — рядом с основным щитом (допущение): от этого — длина кабелей GRID, LOAD и АКБ",
       "also": [],
       "answer": "text",
       "options": [],
@@ -246,6 +372,78 @@
       "path": "panel",
       "severity": "warning",
       "message": "Мощность инвертора или генератора не задана (panel.backup_power) — резервная шина 1,06 кВт не проверена"
+    },
+    {
+      "file": "electrical.yaml",
+      "path": "panel",
+      "severity": "warning",
+      "message": "Резерв от инвертора: неизвестно, связан ли N с PE в резервном режиме — без этой связи УЗО и дифавтоматы на резерве не сработают (panel.npe_relay)"
+    },
+    {
+      "file": "electrical.yaml",
+      "path": "panel",
+      "severity": "warning",
+      "message": "АКБ 48 В — допущение: ток разряда 104,2 А, автомат и кабель АКБ — по нему; уточните (panel.battery_voltage)"
+    },
+    {
+      "file": "plumbing.yaml",
+      "path": "fixtures.bathroom_wc_1",
+      "severity": "warning",
+      "message": "Унитаз (Санвузол): канализация 0,6 м — по стене над полом (в стяжку не помещается): короб у стены, верх трубы до 170 мм от пола"
+    },
+    {
+      "file": "plumbing.yaml",
+      "path": "fixtures.bathroom_washer_1",
+      "severity": "warning",
+      "message": "Стиральная машина (Санвузол): канализация 0,8 м — по стене над полом (в стяжку не помещается): короб у стены, верх трубы до 120 мм от пола"
+    },
+    {
+      "file": "plumbing.yaml",
+      "path": "fixtures.bathroom_sink_1",
+      "severity": "warning",
+      "message": "Умывальник (Санвузол): канализация 0,6 м — по стене над полом (в стяжку не помещается): короб у стены, верх трубы до 161 мм от пола"
+    },
+    {
+      "file": "plumbing.yaml",
+      "path": "fixtures.bathroom_sink_1",
+      "severity": "warning",
+      "message": "Умывальник (Санвузол): у канализации 8 отводов 45° — нужна ревизия для прочистки"
+    },
+    {
+      "file": "plumbing.yaml",
+      "path": "fixtures.bathroom_bath_1",
+      "severity": "warning",
+      "message": "Ванна (Санвузол): не хватает перепада канализации — 2,8 м до стояка, при уклоне 0,025 нужно 70 мм, выпуск 100 мм над врезкой 100 мм: подиум 40 мм или ближе к стояку"
+    },
+    {
+      "file": "plumbing.yaml",
+      "path": "fixtures.bathroom_bath_1",
+      "severity": "warning",
+      "message": "Ванна (Санвузол): у канализации 7 отводов 45° — нужна ревизия для прочистки"
+    },
+    {
+      "file": "plumbing.yaml",
+      "path": "fixtures.kitchen_dishwasher_1",
+      "severity": "warning",
+      "message": "Посудомоечная машина (Зал-вітальня + коридор): канализация 0,1 м — по стене над полом (в стяжку не помещается): короб у стены, верх трубы до 174 мм от пола"
+    },
+    {
+      "file": "plumbing.yaml",
+      "path": "fixtures.kitchen_dishwasher_1",
+      "severity": "warning",
+      "message": "Посудомоечная машина (Зал-вітальня + коридор): у канализации 8 отводов 45° — нужна ревизия для прочистки"
+    },
+    {
+      "file": "plumbing.yaml",
+      "path": "fixtures.kitchen_sink_1",
+      "severity": "warning",
+      "message": "Мойка (Зал-вітальня + коридор): канализация 0,2 м — по стене над полом (в стяжку не помещается): короб у стены, верх трубы до 179 мм от пола"
+    },
+    {
+      "file": "plumbing.yaml",
+      "path": "fixtures.kitchen_sink_1",
+      "severity": "warning",
+      "message": "Мойка (Зал-вітальня + коридор): у канализации 10 отводов 45° — нужна ревизия для прочистки"
     }
   ]
 }

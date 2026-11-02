@@ -1,0 +1,45 @@
+kind,room,wall,offset_mm,length_m,cables,width,route,circuit,points
+point,bath,w2,215,0.30,1,narrow,ceiling,power,bath_outlet_1
+point,bath,w4,409,2.05,4,wide,ceiling,power,bath_socket_1 bath_socket_2 bath_socket_3 bath_switch_1
+point,bath,w4,950,1.20,1,narrow,ceiling,power,bath_led_output_1
+point,bath,w4,1461,2.60,1,narrow,ceiling,power,bath_led_output_2
+point,bath,w6,1520,1.30,3,wide,ceiling,power,bath_socket_4 bath_socket_5 bath_socket_6
+point,bedroom,w2,1499,2.40,1,narrow,ceiling,power,bedroom_socket_1
+point,bedroom,w3,475,1.80,2,narrow,ceiling,power,bedroom_socket_2 bedroom_switch_1
+point,bedroom,w3,812,1.30,2,narrow,ceiling,power,bedroom_outlet_1 bedroom_led_output_1
+point,bedroom,w3,1924,2.40,1,narrow,ceiling,power,bedroom_socket_3
+point,bedroom,w4,352,1.80,2,narrow,ceiling,power,bedroom_pass_switch_1 bedroom_switch_2
+point,bedroom,w6,1499,2.10,3,wide,ceiling,power,bedroom_sconce_2 bedroom_pass_switch_2 bedroom_socket_4
+point,bedroom,w6,4316,2.10,4,wide,ceiling,power,bedroom_pass_switch_3 bedroom_socket_5 bedroom_switch_3 bedroom_sconce_1
+point,cabinet,w2,1148,2.30,2,narrow,ceiling,power,cabinet_socket_2 cabinet_socket_1
+point,cabinet,w3,580,0.35,1,narrow,ceiling,power,cabinet_outlet_1
+point,cabinet,w4,999,2.10,3,wide,ceiling,power,cabinet_pass_switch_1 cabinet_socket_3 cabinet_switch_1
+point,cabinet,w4,2796,1.50,1,narrow,ceiling,power,cabinet_sconce_1
+point,hall,w1,348,2.20,2,narrow,ceiling,power,hall_socket_2 hall_socket_1
+point,hall,w1,3130,1.80,1,narrow,ceiling,power,hall_pass_switch_1
+point,hall,w2,1185,2.40,2,narrow,ceiling,power,hall_switch_1 hall_socket_3
+point,hall,w2,1606,1.20,1,narrow,ceiling,power,hall_outlet_1
+point,hall,w3,877,1.80,2,narrow,ceiling,power,hall_socket_4 hall_switch_2
+point,hall,w5,600,0.35,1,narrow,ceiling,power,hall_outlet_2
+point,hall,w5,849,2.40,1,narrow,ceiling,power,hall_socket_5
+point,hall,w5,1299,1.00,3,wide,ceiling,power,hall_socket_6 hall_socket_7 hall_socket_8
+point,hall,w5,2260,1.15,1,narrow,ceiling,power,hall_led_output_1
+point,hall,w5,2500,1.65,2,narrow,ceiling,power,hall_socket_9 hall_switch_3
+point,hall,w5,3000,2.00,2,narrow,ceiling,power,hall_socket_10 hall_socket_11
+point,hall,w6,499,1.65,1,narrow,ceiling,power,hall_socket_12
+point,hall,w6,1399,1.95,2,narrow,ceiling,power,hall_outlet_3 hall_outlet_4
+point,hall,w6,2300,1.65,1,narrow,ceiling,power,hall_socket_13
+point,hall,w7,121,1.80,3,wide,ceiling,power,hall_pass_switch_2 hall_switch_4 hall_switch_5
+point,hall,w7,2123,2.40,3,wide,ceiling,power,hall_pass_switch_3 hall_switch_6 hall_socket_14
+point,loggia,w1,249,1.80,3,wide,ceiling,power,loggia_pass_switch_1 loggia_socket_1 loggia_switch_1
+point,loggia,w1,949,2.40,1,narrow,ceiling,power,loggia_socket_2
+point,loggia,w2,1195,2.40,2,narrow,ceiling,power,loggia_switch_2 loggia_socket_3
+point,wardrobe,w4,761,2.40,1,narrow,ceiling,power,wardrobe_socket_1
+point,wardrobe,w4,1380,0.80,2,narrow,ceiling,power,wardrobe_socket_2 wardrobe_socket_3
+board,hall,w1,300,1.00,4,wide,ceiling,power,
+board,hall,w1,300,1.00,4,wide,ceiling,power,
+board,hall,w1,300,1.00,4,wide,ceiling,power,
+board,hall,w1,300,1.00,4,wide,ceiling,power,
+board,hall,w1,300,1.00,4,wide,ceiling,power,
+board,hall,w1,300,1.00,4,wide,ceiling,power,
+board,hall,w1,300,1.00,4,wide,ceiling,power,

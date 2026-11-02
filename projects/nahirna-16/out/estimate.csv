@@ -1,6 +1,6 @@
 ﻿section;key;name;unit;qty;price;total
-material;cable.3x1.5;Кабель ВВГнг 3×1,5;м;439,9;45;19795,50
-material;cable.3x2.5;Кабель ВВГнг 3×2,5;м;330,2;70;23114,00
+material;cable.3x1.5;Кабель ВВГнг 3×1,5;м;426,5;45;19192,50
+material;cable.3x2.5;Кабель ВВГнг 3×2,5;м;341,3;70;23891,00
 material;socket_box;Підрозетник;шт;72;20;1440,00
 material;junction_box.80;Коробка розподільча Ø80;шт;2;60;120,00
 material;junction_box_ip.80;Коробка розподільча IP44 Ø80;шт;1;120;120,00
@@ -9,38 +9,38 @@ material;junction_box_ip.100x100;Коробка розподільча IP44 100�
 material;junction_box.150x110;Коробка розподільча 150×110;шт;7;60;420,00
 material;junction_box_ip.150x110;Коробка розподільча IP44 150×110;шт;1;120;120,00
 material;crimp;Гільза і термоусадка (опресування);шт;96;8;768,00
-material;cable_fixing;Кріплення кабелю;шт;977;2;1954,00
+material;cable_fixing;Кріплення кабелю;шт;987;2;1974,00
 material;board_enclosure;Корпус щита вбудований, 5 рядів, 60 мод.;шт;1;6000;6000,00
-material;input.C63 2P;Вступний автомат, C63 2P;шт;1;;
-material;relay.63 А;Реле напруги, 63 А;шт;1;;
+material;input.C63 2P;Вступний автомат, C63 2P;шт;1;850;850,00
+material;relay.63 А;Реле напруги, 63 А;шт;1;1900;1900,00
 material;breaker.C10;Автомат 1P C10;шт;5;140;700,00
-material;diff.C10 30 мА;Дифавтомат 1P+N C10 30 мА;шт;2;;
+material;diff.C10 30 мА;Дифавтомат 1P+N C10 30 мА;шт;2;950;1900,00
 material;breaker.C16;Автомат 1P C16;шт;8;140;1120,00
-material;diff.C16 30 мА;Дифавтомат 1P+N C16 30 мА;шт;3;;
-material;socket;Розетка із заземленням;шт;48;;
-material;switch1;Вимикач одноклавішний;шт;13;;
-material;switch2;Вимикач двоклавішний;шт;7;;
-material;pass_switch;Вимикач прохідний;шт;3;;
-material;data;Розетка інтернет;шт;1;;
-material;frame.1;Рамка 1-постова;шт;34;;
-material;frame.2;Рамка 2-постова;шт;14;;
-material;frame.3;Рамка 3-постова;шт;2;;
-material;frame.4;Рамка 4-постова;шт;1;;
-material;light;Світильник стельовий;шт;3;;
-material;downlight;Світильник точковий;шт;31;;
-material;pendant;Світильник підвісний;шт;3;;
-material;sconce;Бра;шт;11;;
-material;led_output;Вивід для підсвітки;шт;8;;
-material;outlet;Вивід кабелю до техніки;шт;6;;
-material;led_strip;LED-підсвітка;м;6,35;;
-work;work.cable;Прокладання кабелю;м;669,7;30;20091,00
-work;work.chase;Штроба вузька, 1–2 кабелі;м;85,8;200;17160,00
-work;work.chase_wide;Штроба широка, 3–4 кабелі;м;23,5;300;7050,00
+material;diff.C16 30 мА;Дифавтомат 1P+N C16 30 мА;шт;3;950;2850,00
+material;socket;Розетка із заземленням;шт;48;180;8640,00
+material;switch1;Вимикач одноклавішний;шт;13;150;1950,00
+material;switch2;Вимикач двоклавішний;шт;7;190;1330,00
+material;pass_switch;Вимикач прохідний;шт;3;210;630,00
+material;data;Розетка інтернет;шт;1;250;250,00
+material;frame.1;Рамка 1-постова;шт;34;60;2040,00
+material;frame.2;Рамка 2-постова;шт;14;100;1400,00
+material;frame.3;Рамка 3-постова;шт;2;140;280,00
+material;frame.4;Рамка 4-постова;шт;1;180;180,00
+material;light;Світильник стельовий;шт;3;900;2700,00
+material;downlight;Світильник точковий;шт;31;350;10850,00
+material;pendant;Світильник підвісний;шт;3;1500;4500,00
+material;sconce;Бра;шт;11;1200;13200,00
+material;led_output;Вивід для підсвітки;шт;8;150;1200,00
+material;outlet;Вивід кабелю до техніки;шт;6;150;900,00
+material;led_strip;LED-підсвітка;м;6,35;250;1587,50
+work;work.cable;Прокладання кабелю;м;667,6;30;20028,00
+work;work.chase;Штроба вузька, 1–2 кабелі;м;85,2;200;17040,00
+work;work.chase_wide;Штроба широка, 3–4 кабелі;м;22,1;300;6630,00
 work;work.wall_hole;Свердління проходу крізь стіну;шт;11;150;1650,00
 work;work.socket_box;Свердління і встановлення підрозетника;шт;72;100;7200,00
 work;work.junction_box;Монтаж коробки з опресуванням;шт;23;450;10350,00
 work;work.board_install;Встановлення щита;шт;1;2500;2500,00
 work;work.board_module;Збирання щита;мод.;28;120;3360,00
-work;work.mechanism;Встановлення механізмів;шт;72;;
+work;work.mechanism;Встановлення механізмів;шт;72;120;8640,00
 work;work.marking;Маркування кінців кабелю;шт;268;10;2680,00
 work;work.insulation_test;Вимірювання опору ізоляції з протоколом;гр.;18;150;2700,00

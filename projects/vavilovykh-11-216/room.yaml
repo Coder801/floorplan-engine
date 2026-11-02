@@ -1,0 +1,99 @@
+# Квартира, вул. Вавілових 11, кв. 216. Джерело: source/ЖК_Будинок_на_Вавілових.pdf (SMIRNOVA interior design):
+# А-16 план обмірів (стор. 3), А-17 демонтаж (4), А-19 монтаж (6), А-21 меблі (8), А-24/А-25 двері (11, 12),
+# А-28 підлоги (15). Усі розміри — чистові (примітка листів: «з урахуванням оздоблювальних матеріалів»),
+# конструктивні розміри А-16 на 20 мм на сторону більші; товщини перегородок — конструктив + 40.
+# Загальна система координат: X — чистова грань лівої зовнішньої стіни спальні/лоджії, Y — чистова грань
+# нижньої зовнішньої стіни лоджії/кімнати. Висота стелі 2700 — зі слів замовника (2026-11-02).
+units: mm
+name: "Квартира, вул. Вавілових, 11, кв. 216"
+language: uk
+source: measured
+default_wall_thickness: 350        # зовнішні стіни: 320–420 на плані обмірів
+ceiling_height: 2700               # замовник; обміри до ремонту 2715–2810
+sheet:
+  object: "Квартира, вул. Вавілових, 11, кв. 216"
+rooms:
+  - id: bedroom
+    name: "Спальня"
+    origin: [20, 3240]
+    walls:
+      - { id: w1, length: 3260 }  # ліва зовнішня, вікно 2415
+      - { id: w2, length: 4165 }  # верхня зовнішня, вікно 2420 до кута з гардеробною
+      - { id: w3, length: 2125, thickness: 180, turn: 270 }  # права, з гардеробною (стара стіна 140 + оздоблення)
+      - { id: w4, length: 705, thickness: 170 }  # верх виступу біля коридору (низ гардеробної)
+      - { id: w5, length: 1135, thickness: 160 }  # права, з коридором: нова перегородка 120, двері Д-04
+      - { id: w6, length: 4870, thickness: 160 }  # нижня, з кімнатою (120) і лоджією (240 — у лоджії 280)
+    openings:
+      - { id: bedroom_window_1, wall: w1, type: window, offset: 610, width: 2415, sill: 720, height: 1280 }  # А-16: 630 від низу кімнати (чистове 610), Нпд=720 Нвк=2000
+      - { id: bedroom_window_2, wall: w2, type: window, offset: 1765, width: 2400, sill: 720, height: 1280 }  # А-16: 1785 | 2420 — до пілястри гардеробної (до кута); Нпд=720 Нвк=2000
+      - { id: bedroom_door_1, wall: w5, type: door, offset: 125, width: 900, height: 2150, hinge: start, swing: in }  # Д-04 Wпр=900 Нпр=2150, ліворуч всередину; А-19: 145 | 900 від стіни гардеробної
+  - id: cabinet
+    name: "Кімната (кабінет)"
+    origin: [1596, 20]
+    walls:
+      - { id: w1, length: 3060, thickness: 280 }  # ліва, з лоджією: балконний блок (двері 800 + вікно 700)
+      - { id: w2, length: 3294, thickness: 160 }  # верхня, зі спальнею
+      - { id: w3, length: 3060, thickness: 160 }  # права, з коридором: нова стіна на всю висоту, двері Д-03
+      - { id: w4, length: 3294 }  # нижня зовнішня
+    openings:
+      - { id: cabinet_window_1, wall: w1, type: window, offset: 1410, width: 700, sill: 740, height: 1240 }  # А-16: 1430 | 700 | 800 | 170 знизу; Нпд=740 Нвк=1980
+      - { id: cabinet_door_1, wall: w1, type: door, offset: 2110, width: 800, height: 2720, hinge: end, swing: in }  # балконні двері, Нпд=0 Нвк=2720; петлі зверху (А-21)
+      - { id: cabinet_door_2, wall: w3, type: door, offset: 130, width: 900, height: 2150, hinge: end, swing: in }  # Д-03 Wпр=900 Нпр=2150, праворуч всередину; А-19: 2050 | 900 від низу
+  - id: loggia
+    name: "Лоджія"
+    origin: [20, 20]
+    walls:
+      - { id: w1, length: 2940 }  # ліва зовнішня, вікно 2305
+      - { id: w2, length: 1295, thickness: 280 }  # верхня, зі спальнею
+      - { id: w3, length: 2940, thickness: 280 }  # права, з кімнатою (балконний блок)
+      - { id: w4, length: 1295 }  # нижня зовнішня
+    openings:
+      - { id: loggia_window_1, wall: w1, type: window, offset: 429, width: 2305, sill: 710, height: 1210 }  # А-16: 450 | 2305 | 225; Нпд=710 Нвк=1920
+      - { id: loggia_opening_1, wall: w3, type: opening, offset: 30, width: 800, height: 2720 }  # балконні двері з боку лоджії (двері — у кімнаті)
+      - { id: loggia_window_2, wall: w3, type: window, offset: 830, width: 700, sill: 740, height: 1240 }  # вікно балконного блоку з боку лоджії
+  - id: wardrobe
+    name: "Гардеробна"
+    origin: [4366, 4546]
+    walls:
+      - { id: w1, length: 1040, thickness: 180 }  # ліва, зі спальнею
+      - { id: w2, length: 190, thickness: 180, turn: 270 }  # низ пілястри у верхньому лівому куті
+      - { id: w3, length: 914, thickness: 370 }  # пілястра 190 + стіна зі спальнею
+      - { id: w4, length: 1730 }  # верхня зовнішня
+      - { id: w5, length: 1179, thickness: 570, turn: 270 }  # вентшахта 410 + стіна з кухнею
+      - { id: w6, length: 410, thickness: 160 }  # низ вентшахти
+      - { id: w7, length: 775, thickness: 160 }  # права, з кухнею
+      - { id: w8, length: 2330, thickness: 170 }  # нижня, з коридором: двері Д-05 (перенесений проріз)
+    openings:
+      - { id: wardrobe_door_1, wall: w8, type: door, offset: 610, width: 800, height: 2150, hinge: end, swing: out }  # Д-05 Wпр=800 Нпр=2150, ліворуч назовні; А-19: 140 | 800 (закладка) | 800 | 630
+  - id: hall
+    name: "Кухня-вітальня + передпокій"
+    origin: [5051, 20]
+    walls:
+      - { id: w1, length: 4355, thickness: 160 }  # ліва: нова перегородка 120 з кімнатою і спальнею, двері Д-03, Д-04; ел.щит
+      - { id: w2, length: 1805, thickness: 170, turn: 270 }  # низ гардеробної, двері Д-05
+      - { id: w3, length: 2125, thickness: 160 }  # ліва стіна кухні: гардеробна і вентшахта
+      - { id: w4, length: 2525 }  # верхня зовнішня, вікно
+      - { id: w5, length: 4159 }  # права зовнішня, кухонна лінія
+      - { id: w6, length: 2570, thickness: 160, turn: 270 }  # верх санвузла: варильна поверхня, витяжка
+      - { id: w7, length: 2321, thickness: 160 }  # ліва стіна санвузла з боку передпокою, двері Д-02
+      - { id: w8, length: 1760 }  # нижня зовнішня, вхідні двері Д-01
+    openings:
+      - { id: hall_opening_1, wall: w1, type: opening, offset: 2030, width: 900, height: 2150 }  # двері кімнати Д-03 з боку передпокою
+      - { id: hall_opening_2, wall: w1, type: opening, offset: 3330, width: 900, height: 2150 }  # двері спальні Д-04 з боку передпокою
+      - { id: hall_opening_3, wall: w2, type: opening, offset: 235, width: 800, height: 2150 }  # двері гардеробної Д-05 з боку передпокою
+      - { id: hall_window_1, wall: w4, type: window, offset: 0, width: 1990, sill: 720, height: 1280 }  # PDF, масштаб: вікно від кута з вентшахтою до простінка 560; Нпд=720 Нвк=2000
+      - { id: hall_opening_4, wall: w7, type: opening, offset: 241, width: 800, height: 2050 }  # двері санвузла Д-02 з боку передпокою
+      - { id: hall_door_1, wall: w8, type: door, offset: 170, width: 1010, height: 2150, hinge: end, swing: out }  # Д-01 існуючі вхідні 1010×2150, ліворуч назовні; А-16: 115 | 1010 | 190
+  - id: bath
+    name: "Санвузол"
+    wet: true                     # санвузол: коробки IP44
+    origin: [7402, 70]
+    walls:
+      - { id: w1, length: 1175, thickness: 590, turn: 270 }  # короб каналізаційної труби + пілон 430 (вирівняти в одній площині)
+      - { id: w2, length: 430, thickness: 160 }  # верх пілона
+      - { id: w3, length: 934, thickness: 160 }  # ліва, з передпокоєм: двері Д-02
+      - { id: w4, length: 2109, thickness: 160 }  # верхня, з кухнею
+      - { id: w5, length: 2109 }  # права зовнішня, ванна 1800×700
+      - { id: w6, length: 1679 }  # нижня зовнішня: інсталяція і ніша 300 (ГКЛ, не моделюються)
+    openings:
+      - { id: bath_door_1, wall: w3, type: door, offset: 55, width: 800, height: 2050, hinge: end, swing: out }  # Д-02 Wпр=800 Нпр=2050, праворуч назовні; А-28: плінтус 1264…2136 = проріз 1300…2100

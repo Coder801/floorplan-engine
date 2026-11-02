@@ -16,12 +16,12 @@ rooms:
     origin: [0, 2850]
     walls:
       - { id: w1, length: 1220 }                              # w1: левая наружная до короба (вверх)
-      - { id: w2, length: 1490, thickness: 230, turn: 270 }   # w2: низ короба (вправо)
-      - { id: w3, length: 230, thickness: 100, turn: 270 }    # w3: торец короба (вверх)
-      - { id: w4, length: 1490, thickness: 230 }              # w4: верх короба (влево)
+      - { id: w2, length: 1490, thickness: 230, turn: 270, partition: true }   # w2: низ короба (вправо); гіпсокартон, під нею можна вести труби — со слов заказчика 2026-11-02
+      - { id: w3, length: 230, thickness: 100, turn: 270, partition: true }    # w3: торец короба (вверх); гіпсокартон — со слов заказчика 2026-11-02
+      - { id: w4, length: 1490, thickness: 230, partition: true }              # w4: верх короба (влево); гіпсокартон — со слов заказчика 2026-11-02
       - { id: w5, length: 2000 }                              # w5: левая наружная над коробом (вверх)
       - { id: w6, length: 1830 }                              # w6: верхняя наружная
-      - { id: w7, length: 2590, thickness: 200, turn: 180 }   # w7: правая, с кабинетом (вниз)
+      - { id: w7, length: 2590, thickness: 200, turn: 180, partition: true }   # w7: правая, с кабинетом (вниз); ненесуча — со слов заказчика 2026-11-02
       - { id: w8, length: 860, thickness: 100 }               # w8: правая, с коридором (вниз)
       - { id: w9, length: 1830, thickness: 100 }              # w9: нижняя, с санвузлом 2
     openings:
@@ -43,7 +43,7 @@ rooms:
     name: "Кабінет"
     origin: [2030, 3810]
     walls:
-      - { id: w1, length: 2490, thickness: 200 }    # w1: левая, с санвузлом
+      - { id: w1, length: 2490, thickness: 200, partition: true }    # w1: левая, с санвузлом; ненесуча — со слов заказчика 2026-11-02
       - { id: w2, length: 3070 }                    # w2: верхняя наружная
       - { id: w3, length: 2490, thickness: 100 }    # w3: правая, с кухней
       - { id: w4, length: 3070, thickness: 100 }    # w4: нижняя, с коридором (влево)
