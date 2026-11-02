@@ -1,10 +1,11 @@
-// Запросы входа (service/api/auth.py): кто вошёл, код на почту, тип учётки, гость отладки,
-// приглашения
+// Запросы входа (service/api/auth.py): кто вошёл, Telegram (номер телефона), код на почту,
+// код доступа к проекту, тип учётки, гость отладки, приглашения
 
 export interface User {
   id: string;
   name: string;
   email: string | null;
+  phone: string | null;     // «+380…» — вход через Telegram
   account_type: "client" | "pro" | null;
   superuser: boolean;
   space: Space | null;      // своё пространство: фирма или «Мой ремонт»
@@ -22,12 +23,17 @@ export interface Space {
 }
 
 // auth: false — вход на сервере выключен (локальный просмотр), остальное не приходит
+// Вошли по коду доступа: один проект (папка и название), без учётки, только просмотр
+export interface CodeAccess { project: string | null; name: string }
+
 export interface Me {
   auth: boolean;
   user?: User | null;
   visitor?: boolean;
+  code?: CodeAccess | null;
   google?: boolean;
   email?: boolean;          // вход по коду на почту настроен
+  telegram?: boolean;       // бот Telegram для входа по номеру телефона настроен
   dev?: boolean;            // «Зайти для разработки» (локально, SHTROBA_DEV_LOGIN)
   visitor_allowed?: boolean;
 }
@@ -61,7 +67,18 @@ export const registerFirm = (firm: { name: string; business: FirmKind; city: str
 export const getInvite = (token: string) => call<Invite>(`/api/invites/${encodeURIComponent(token)}`);
 export const acceptInvite = (token: string) =>
   post<{ role: string; project: string | null }>(`/api/invites/${encodeURIComponent(token)}/accept`);
+// Код доступа к проекту от студии (access code): вход без учётки в этот проект
+export const loginByCode = (code: string) => post<{ ok: boolean; project: string | null }>("/api/auth/code", { code });
 export const startEmailLogin = (email: string, lang: string) =>
   post<{ sent: boolean; resend_in: number }>("/api/auth/email/start", { email, lang });
 export const verifyEmailLogin = (email: string, code: string) =>
   post<{ ok: boolean; invite_error: string | null }>("/api/auth/email/verify", { email, code });
+
+// Telegram: билет и ссылка на бота; затем опрос билета, пока бот не получит номер
+export interface TelegramTicket { token: string; url: string; expires_in: number }
+export const startTelegramLogin = (lang: string) => post<TelegramTicket>("/api/auth/telegram/start", { lang });
+export const telegramLoginStatus = (token: string, invite?: string | null) => {
+  const q = new URLSearchParams({ token });
+  if (invite) q.set("invite", invite);
+  return call<{ status: "pending" | "done"; invite_error?: string | null }>(`/api/auth/telegram/status?${q}`);
+};

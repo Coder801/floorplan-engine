@@ -18,6 +18,11 @@
   display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px;
   vertical-align: 0;
 }
+// Аппарат щита не на линии группы — квадрат цвета приглушённого текста
+.square {
+  display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 6px;
+  vertical-align: 0; background: var(--muted);
+}
 
 // Сегменты: листы в шапке, файлы модели
 .segmented {

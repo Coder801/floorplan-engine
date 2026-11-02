@@ -1,4 +1,5 @@
-// Геометрия правки трасс: точки — [x, y] в мм модели, трассы ортогональные.
+// Геометрия правки трасс: точки — [x, y] в мм модели. Трассы ортогональные, а в экономе
+// бывают и косые участки (routing.any_angle): такой участок сдвигается параллельно себе.
 // Те же правила, что routing.simplify / move_end в ядре.
 
 import { SNAP_MM } from "@/shared/consts";
@@ -8,6 +9,8 @@ export const snap = (v: number) => Math.round(v / SNAP_MM) * SNAP_MM;
 const same = (a: number, b: number) => Math.abs(a - b) < 0.01;
 export const samePt = (a: XY, b: XY) => same(a[0], b[0]) && same(a[1], b[1]);
 export const isH = (a: XY, b: XY) => Math.abs(a[1] - b[1]) <= Math.abs(a[0] - b[0]);
+// Участок вдоль оси (с допуском, как ORTHO в ядре)
+export const isAxis = (a: XY, b: XY) => Math.abs(a[0] - b[0]) <= 0.5 || Math.abs(a[1] - b[1]) <= 0.5;
 export const clamp = (v: number, a: number, b: number) => Math.min(Math.max(v, Math.min(a, b)), Math.max(a, b));
 
 // Без повторов и без точек на прямой
@@ -30,15 +33,24 @@ export function simplifyPath(path: XY[]): XY[] {
   return out;
 }
 
-// Сдвиг выделенных участков: горизонталь — на dy, вертикаль — на dx; соседние участки
-// удлиняются или укорачиваются, углы прямые. Концы линии пристёгнуты к коробке и точке:
-// сдвинутый крайний участок получает перпендикулярный отвод от конца
+// Сдвиг выделенных участков: горизонталь — на dy, вертикаль — на dx, косой участок (эконом) —
+// параллельно себе на проекцию сдвига на его нормаль; соседние участки удлиняются или
+// укорачиваются. Концы линии пристёгнуты к коробке и точке: сдвинутый крайний участок
+// получает отвод от конца
 export function dragPath(orig: XY[], segs: Set<number>, dx: number, dy: number): XY[] {
   const pts: XY[] = orig.map((p) => [p[0], p[1]]);
   for (const i of segs) {
-    const axis = isH(orig[i], orig[i + 1]) ? 1 : 0, d = axis ? dy : dx;
-    pts[i][axis] = orig[i][axis] + d;
-    pts[i + 1][axis] = orig[i + 1][axis] + d;
+    const a = orig[i], b = orig[i + 1];
+    if (!isAxis(a, b)) {
+      const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+      const nx = -(b[1] - a[1]) / len, ny = (b[0] - a[0]) / len, d = dx * nx + dy * ny;
+      pts[i] = [a[0] + nx * d, a[1] + ny * d];
+      pts[i + 1] = [b[0] + nx * d, b[1] + ny * d];
+      continue;
+    }
+    const axis = isH(a, b) ? 1 : 0, d = axis ? dy : dx;
+    pts[i][axis] = a[axis] + d;
+    pts[i + 1][axis] = b[axis] + d;
   }
   if (segs.has(0)) pts.unshift([orig[0][0], orig[0][1]]);
   if (segs.has(orig.length - 2)) pts.push([orig[orig.length - 1][0], orig[orig.length - 1][1]]);

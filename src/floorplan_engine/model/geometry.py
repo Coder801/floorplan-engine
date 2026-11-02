@@ -64,6 +64,7 @@ class WallSegment:
     length: float
     thickness: float
     bearing: bool
+    partition: bool = False  # ненесущая явно: сквозь неё трубы при любой толщине
 
     @property
     def outward(self) -> Vec:
@@ -150,6 +151,7 @@ def trace_contour(room: Room, default_thickness: float) -> Contour:
                 length=wall.length,
                 thickness=wall.thickness if wall.thickness is not None else default_thickness,
                 bearing=wall.bearing,
+                partition=wall.partition,
             )
         )
         # Внутренний угол 90° — поворот направо на 90°, 270° — налево на 90°

@@ -56,11 +56,13 @@
 }
 .notes { margin: 6px 0 0; padding-left: 16px; color: var(--muted); font-size: 12px; }
 
-// Слои: флажок | цвет | название | код слоя
-.layers label {
+// Слои: глаз | цвет | название | код слоя; скрытый слой — бледнее
+.layers { display: block; }
+.layer {
   display: grid; grid-template-columns: auto 14px minmax(0, 1fr) auto;
   align-items: center; gap: 10px; min-height: 34px; cursor: pointer;
 }
+.hiddenLayer > :not(:first-child) { opacity: .45; }
 .swatch { height: 4px; }
 .code { color: var(--muted); }
 
@@ -82,3 +84,11 @@
     .body { display: block; }
   }
 }
+
+// Вариант проводки строкой над таблицами: выбор — на вкладке «Общие сведения»
+.variant {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 6px; margin: 0 0 12px;
+  padding: 8px 10px; border-radius: 8px; background: var(--soft); font-size: 12px;
+}
+.change { @include bare-button; margin-left: auto; padding: 0; min-height: 0; color: var(--muted); text-decoration: underline; font-size: 12px; }
+.change:hover { color: var(--text); }

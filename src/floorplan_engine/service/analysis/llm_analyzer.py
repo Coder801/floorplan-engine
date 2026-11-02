@@ -40,6 +40,7 @@ if TYPE_CHECKING:
     from anthropic.types.beta import BetaOutputConfigParam
 
 from floorplan_engine.model.intake import ANSWERS_FILE, INTAKE_FILE, Answers, TextAnswer
+from floorplan_engine.model.plumbing import PLUMBING_FILE
 from floorplan_engine.service.analysis.analyzer import (
     MODEL_FILES,
     AnalysisResult,
@@ -441,17 +442,18 @@ class Step:
 
 
 PLAN_FILES = (INTAKE_FILE, ROOM_FILE)
-ELECTRICAL_FILES = (INTAKE_FILE, ELECTRICAL_FILE)
+ELECTRICAL_FILES = (INTAKE_FILE, ELECTRICAL_FILE, PLUMBING_FILE)
 PLAN_TASK = (
-    "Этот шаг — только план: пиши intake.yaml и room.yaml. Электрику напишет следующий шаг, "
-    "поэтому electrical.yaml не пиши, вопросов и записи этапа electrical в intake.yaml не "
-    "добавляй, текстовые ответы про электрику не разбирай."
+    "Этот шаг — только план: пиши intake.yaml и room.yaml. Электрику и сантехнику напишет "
+    "следующий шаг, поэтому electrical.yaml и plumbing.yaml не пиши, вопросов и записей этапов "
+    "electrical и plumbing в intake.yaml не добавляй, текстовые ответы про них не разбирай."
 )
 ELECTRICAL_TASK = (
-    "Этот шаг — только электрика. План уже готов (room.yaml ниже) — не меняй его, ссылайся на "
-    "его комнаты и стены. Пиши electrical.yaml и intake.yaml: сохрани все источники, этапы и "
-    "вопросы из текущего intake.yaml и добавь этап electrical и его вопросы; id вопросов "
-    "продолжай после последнего."
+    "Этот шаг — электрика и сантехника. План уже готов (room.yaml ниже) — не меняй его, "
+    "ссылайся на его комнаты и стены. Пиши electrical.yaml, plumbing.yaml (если в источниках "
+    "есть приборы или стояки) и intake.yaml: сохрани все источники, этапы и вопросы из текущего "
+    "intake.yaml и добавь этапы electrical и plumbing и их вопросы; id вопросов продолжай после "
+    "последнего."
 )
 
 

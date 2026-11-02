@@ -1,0 +1,77 @@
+// «Общие сведения» — документом по центру области чертежа, как смета: карточки разделов,
+// прокрутка — внутри области
+
+@use "@/shared/styles/mixins" as *;
+
+.stage { position: absolute; inset: 0; display: grid; grid-template-rows: minmax(0, 1fr) auto; background: var(--bg); }
+.body { overflow: auto; padding: 24px 16px 24px; }
+// Итог — внизу области, не прокручивается
+.dock { border-top: 1px solid var(--line); background: var(--paper); padding: 12px 16px; }
+.page { display: grid; gap: 16px; max-width: 960px; margin: 0 auto; }
+.head { h1 { margin: 0; font-size: 22px; font-weight: 500; } p { margin: 4px 0 0; } }
+.card {
+  @include raised(10px);
+  display: grid; gap: 12px; padding: 20px 24px;
+  h2 { margin: 0; font-size: 16px; font-weight: 600; }
+  h3 { margin: 6px 0 0; font-size: 13px; font-weight: 600; }
+  p { margin: 0; }
+}
+.pairs { @include pairs(6px 16px); font-size: 14px; }
+.table {
+  width: 100%; border-collapse: collapse; font-size: 13px;
+  th, td { padding: 6px 8px; border-top: 1px solid var(--line); text-align: left; vertical-align: top; }
+  th { color: var(--muted); font-weight: 500; border-top: 0; }
+  .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+}
+.scroll { overflow-x: auto; }
+.pickable tbody tr { cursor: pointer; }
+.pickable tbody tr:hover { background: var(--soft); }
+.picked td { background: var(--soft); box-shadow: inset 0 1px 0 var(--hl), inset 0 -1px 0 var(--hl); }  // отмечен, не рассчитан
+.edit input {
+  width: 72px; padding: 2px 6px; font: inherit; text-align: right; border-radius: 6px;
+  border: 1px solid var(--line); background: var(--paper); color: var(--text);
+  &.bad { border-color: var(--major); }
+}
+.error { color: var(--major); }
+.on td { background: var(--hl-row); font-weight: 600; }
+.tag {
+  margin-left: 6px; padding: 1px 6px; border-radius: 10px; font-size: 10px; font-weight: 400;
+  color: var(--muted); border: 1px solid var(--line); white-space: nowrap;
+}
+.line { font-size: 14px; line-height: 1.5; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.total {
+  display: grid; grid-template-columns: 1fr auto; grid-template-areas: "h btn" "sum btn" "note btn";
+  align-items: center; column-gap: 16px; max-width: 960px; margin: 0 auto;
+  h2 { grid-area: h; margin: 0; font-size: 13px; font-weight: 500; color: var(--muted); }
+  .sum { grid-area: sum; margin: 0; }
+  p:not(.sum) { grid-area: note; margin: 0; }
+  .primary { grid-area: btn; }
+}
+.hidden { visibility: hidden; }
+.sum { font-size: 24px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.primary {
+  min-height: 36px; min-width: 168px; padding: 0 14px; border: 0; border-radius: 6px;
+  background: var(--accent); color: var(--accent-text);
+}
+.side { @include pairs(8px 12px); font-size: 13px; }
+
+@media (max-width: $phone) { .card { padding: 16px; } .total { grid-template-columns: 1fr; grid-template-areas: "h" "sum" "note" "btn"; row-gap: 4px; } .primary { width: 100%; } }
+
+// Пересборка: блоки и подписи на местах, значения скрыты полосами-заглушками (skeleton) —
+// раскладка не прыгает, пока приходят новые данные
+.skeleton {
+  pointer-events: none; user-select: none;
+  .head p, dd, td, .line, .sum, .tag, .pairs dd {
+    color: transparent !important;
+    background: linear-gradient(90deg, var(--soft) 25%, var(--line) 50%, var(--soft) 75%) 0 0 / 200% 100%;
+    background-clip: content-box;
+    border-radius: 4px;
+    animation: shimmer 1.4s linear infinite;
+  }
+  .tag { border-color: transparent; }
+  .on td { font-weight: inherit; }
+  button { opacity: .5; }
+}
+@keyframes shimmer { to { background-position: -200% 0; } }
+@media (prefers-reduced-motion: reduce) { .skeleton { * { animation: none !important; } } }

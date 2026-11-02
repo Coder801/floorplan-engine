@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from floorplan_engine.service.db.models import (
@@ -34,16 +34,22 @@ from floorplan_engine.service.db.models import (
 
 AccountType = Literal["client", "pro"]
 # Роль в проекте: из студии (owner, designer, installer), из проекта (client, installer),
-# поддержка по support_grant, суперпользователь, гость отладки (visitor)
-Role = Literal["owner", "designer", "installer", "client", "support", "superuser", "visitor"]
-Action = Literal["view", "answer", "edit_wiring", "invite"]
+# поддержка по support_grant, суперпользователь, гость отладки (visitor), вход по коду
+# доступа к одному проекту (viewer, db/access_codes.py)
+Role = Literal[
+    "owner", "designer", "installer", "client", "support", "superuser", "visitor", "viewer"
+]
+Action = Literal["view", "answer", "edit_wiring", "choose_variant", "invite"]
 
 CAN: dict[Action, frozenset[str]] = {
     "view": frozenset(
-        {"owner", "designer", "installer", "client", "support", "superuser", "visitor"}
+        {"owner", "designer", "installer", "client", "support", "superuser", "visitor", "viewer"}
     ),
     "answer": frozenset({"owner", "designer", "client", "superuser"}),
     "edit_wiring": frozenset({"owner", "designer", "installer", "support", "superuser"}),
+    # Вариант проводки (docs/wiring-variants.md): выбирает тот, кто правит трассы — студия или
+    # хозяин «Моего ремонта» (owner своего пространства); клиент студии только смотрит
+    "choose_variant": frozenset({"owner", "designer", "installer", "support", "superuser"}),
     "invite": frozenset({"owner", "designer", "client", "superuser"}),
 }
 STUDIO_ROLES = frozenset({"owner", "designer", "installer"})
@@ -77,13 +83,19 @@ def new_token() -> str:
 
 @dataclass(frozen=True)
 class Principal:
-    """Кто делает запрос: пользователь базы или гость отладки (user is None)."""
+    """Кто делает запрос: пользователь базы, вошедший по коду доступа (user is None,
+    code_project — проект кода) или гость отладки (ни того, ни другого)."""
 
     user: AppUser | None
+    code_project: uuid.UUID | None = None
 
     @property
     def visitor(self) -> bool:
-        return self.user is None
+        return self.user is None and self.code_project is None
+
+    @property
+    def by_code(self) -> bool:
+        return self.user is None and self.code_project is not None
 
 
 VISITOR = Principal(None)
@@ -98,8 +110,11 @@ def can(role: str | None, action: Action) -> bool:
 
 def project_role(session: Session, who: Principal, project: Project | None) -> Role | None:
     """Роль в проекте или None — проекта не видно. Гость отладки видит всё (только чтение),
-    суперпользователь — всё; остальные — по студии, участию в проекте или доступу
-    поддержки. Проект вне базы (папка без строки) — только гостю и суперпользователю."""
+    суперпользователь — всё; вошедший по коду — только проект кода (viewer, только чтение);
+    остальные — по студии, участию в проекте или доступу поддержки. Проект вне базы (папка
+    без строки) — только гостю и суперпользователю."""
+    if who.by_code:
+        return "viewer" if project is not None and project.id == who.code_project else None
     if who.user is None:
         return "visitor"
     user = who.user
@@ -148,7 +163,11 @@ def _active_grant(
 
 
 def visible_slugs(session: Session, who: Principal, slugs: Collection[str]) -> set[str]:
-    """Какие папки проектов из slugs видны: гостю и суперпользователю — все."""
+    """Какие папки проектов из slugs видны: гостю и суперпользователю — все, вошедшему по
+    коду — проект кода."""
+    if who.by_code:
+        project = session.get(Project, who.code_project)
+        return {project.slug} & set(slugs) if project is not None and project.slug else set()
     if who.user is None or who.user.is_superuser:
         return set(slugs) if who.user is None or who.user.is_active else set()
     projects = session.scalars(select(Project).where(Project.slug.in_(list(slugs)))).all()
@@ -172,10 +191,12 @@ def oauth_login(
     email_verified: bool,
     name: str = "",
     superusers: Collection[str] = (),
+    phone: str | None = None,
 ) -> AppUser:
     """Пользователь по учётке провайдера; новой учётке — новый пользователь или, если
-    провайдер подтвердил email и он уже есть, тот же пользователь. superusers — email
-    владельцев платформы (из окружения)."""
+    провайдер подтвердил email или телефон (phone, «+380…» — вход через Telegram) и он уже
+    есть, тот же пользователь. superusers — email и телефоны владельцев платформы (из
+    окружения)."""
     email = email.strip().lower() if email else None
     account = session.scalar(
         select(OAuthAccount).where(
@@ -185,11 +206,15 @@ def oauth_login(
     user = session.get(AppUser, account.user_id) if account is not None else None
     if user is None and email and email_verified:
         user = session.scalar(select(AppUser).where(func.lower(AppUser.email) == email))
+    if user is None and phone:
+        user = session.scalar(select(AppUser).where(AppUser.phone == phone))
     if user is None:
         free = email if email and email_verified else None
-        user = AppUser(email=free, name=name)
+        user = AppUser(email=free, phone=phone, name=name)
         session.add(user)
         session.flush()
+    if phone and not user.phone:
+        user.phone = phone
     if account is None:
         session.add(
             OAuthAccount(
@@ -198,7 +223,8 @@ def oauth_login(
         )
     if not user.name and name:
         user.name = name
-    if user.email and user.email.lower() in {s.strip().lower() for s in superusers}:
+    owners = {s.strip().lower() for s in superusers}
+    if (user.email and user.email.lower() in owners) or (user.phone and user.phone in owners):
         user.is_superuser = True
     user.last_login_at = now()
     session.flush()
@@ -296,6 +322,33 @@ def client_projects(session: Session, user: AppUser) -> int:
     return int(personal or 0) + int(invited or 0)
 
 
+# studio.kind проектов, записанных в базу из командной строки до входа владельца
+UNOWNED_KIND = "unowned"
+
+
+def unowned_studio(session: Session) -> Studio:
+    """Студия «без владельца» (одна на базу, без участников): сюда попадают проекты, которые
+    записала командная строка до входа владельца (`access code`, `access link` без --owner).
+    При входе владельца (SHTROBA_OWNER) adopt_folders переводит их к нему."""
+    studio = session.scalar(select(Studio).where(Studio.kind == UNOWNED_KIND))
+    if studio is None:
+        studio = Studio(name="Без владельца", kind=UNOWNED_KIND)
+        session.add(studio)
+        session.flush()
+    return studio
+
+
+def create_project_unowned(session: Session, name: str, slug: str) -> Project:
+    """Строка проекта без владельца — чтобы выдать код доступа до того, как владелец вошёл."""
+    if project_by_slug(session, slug) is not None:
+        raise AccessError(f"проект {slug} уже в базе")
+    project = Project(studio_id=unowned_studio(session).id, name=name, slug=slug)
+    session.add(project)
+    session.flush()
+    audit(session, "project_create", project=project, payload={"unowned": True})
+    return project
+
+
 def create_project_for(session: Session, user: AppUser, name: str, slug: str) -> Project:
     """Новый проект в своей студии; у клиента — только один проект."""
     studio = own_studio(session, user)
@@ -311,6 +364,47 @@ def create_project_for(session: Session, user: AppUser, name: str, slug: str) ->
 
 
 # --- Сессии --------------------------------------------------------------------------
+
+
+def adopt_folders(
+    session: Session, owner: str, slugs: Collection[str]
+) -> tuple[list[str], str | None]:
+    """Папки проектов без строки в базе и проекты «без владельца» (create_project_unowned) — в
+    студию владельца (`SHTROBA_OWNER` — email или телефон «+380…»: зовёт вход,
+    `api/auth.Auth._adopt`). Повторный вызов ничего не меняет. Вернёт связанные slug и причину,
+    если связать нельзя: владелец ещё не входил, не выбрал тип учётной записи или у него «Мой
+    ремонт» с одним проектом."""
+    owner = owner.strip().lower()
+    user = session.scalar(
+        select(AppUser).where(or_(func.lower(AppUser.email) == owner, AppUser.phone == owner))
+    )
+    if user is None:
+        return [], f"нет пользователя {owner} — пусть сначала войдёт"
+    studio = own_studio(session, user)
+    if studio is None:
+        return [], f"{owner} ещё не выбрал тип учётной записи"
+    taken = set(session.scalars(select(Project.slug).where(Project.slug.in_(list(slugs)))))
+    linked: list[str] = []
+    for slug in sorted(set(slugs) - taken):
+        try:
+            create_project_for(session, user, slug, slug)
+        except AccessError as exc:
+            return linked, str(exc)
+        linked.append(slug)
+    unowned = session.scalars(
+        select(Project)
+        .join(Studio, Studio.id == Project.studio_id)
+        .where(Studio.kind == UNOWNED_KIND, Project.slug.in_(list(slugs)))
+        .order_by(Project.slug)
+    ).all()
+    for project in unowned:
+        if user.account_type == "client" and client_projects(session, user) >= 1:
+            return linked, "у хозяина квартиры — один проект"
+        project.studio_id = studio.id
+        session.flush()
+        audit(session, "project_adopt", user=user, project=project)
+        linked.append(project.slug or project.name)
+    return linked, None
 
 
 def create_session(session: Session, user: AppUser, user_agent: str = "") -> str:

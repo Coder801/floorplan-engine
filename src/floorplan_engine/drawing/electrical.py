@@ -10,7 +10,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 
 from ezdxf.enums import TextEntityAlignment
 from ezdxf.layouts.base import BaseLayout
@@ -34,7 +34,6 @@ from floorplan_engine.electrical.anchors import (
     stack_shifts,
     symbol_key,
 )
-from floorplan_engine.electrical.groups import group_colors
 from floorplan_engine.electrical.point_numbers import number_points, ranges
 from floorplan_engine.model.geometry import Contour, RoomGeometry, Vec, room_geometries
 from floorplan_engine.model.scale import sheet, sheet_scale
@@ -57,8 +56,6 @@ LABEL_FAR = 40  # рядом места нет — ищется до столь�
 LABEL_BAND_MM = 6.0  # насколько подпись может выйти за габарит плана, мм листа
 LEADER_MIN_MM = 3.0  # дальше этого от символа — подпись с выноской
 LW_LEADER = 13  # толщина выноски, сотые мм
-GROUP_SWATCH_MM = 6.0  # отрезок цвета группы в легенде
-LW_SWATCH = 50
 LED_INSET_MM = 1.0  # лента — чуть внутри помещения от грани стены
 LW_LED = 35
 
@@ -244,17 +241,27 @@ LEGEND_SYMBOL_X = 3.0
 
 @dataclass(frozen=True)
 class LegendRow:
-    """Строка легенды: символ блока (key), линия LED или заголовок/группа (только текст)."""
+    """Строка легенды: символ блока (key), линия LED или заголовок (только текст)."""
 
     text: str
     height: float  # мм листа
     step: float  # шаг от предыдущей строки, мм листа
     key: str | None = None
     led: bool = False
-    color: int | None = None  # группа: true color отрезка перед именем
+
+    @property
+    def tag(self) -> str | None:
+        """Объект легенды на листе (legend:<tag>) — по нему просмотр берёт значок для плашки."""
+        return LED_STRIP_KEY if self.led else self.key
+
+
+LED_STRIP_KEY = "led_strip"
 
 
 def legend_rows(elec: Electrical, language: Language = "ru") -> list[LegendRow]:
+    """Условные обозначения: заголовок, затем только значок и что он значит — символы точек,
+    что есть на листе, щит и LED-лента. Без количества (оно в «Точках») и без цветов групп
+    (они в «Группах»)."""
     rows = [LegendRow(tr("legend", language), TEXT_DIM_MM, 0.0)]
     present = {symbol_key(p) for p in elec.points}
     if elec.board is not None:
@@ -265,39 +272,22 @@ def legend_rows(elec: Electrical, language: Language = "ru") -> list[LegendRow]:
         rows.append(
             LegendRow(tr("legend_led_strip", language), TEXT_SMALL_MM, LEGEND_ROW, led=True)
         )
-    colors = group_colors(elec)
-    if colors:
-        rows.append(LegendRow(tr("groups", language), TEXT_DIM_MM, LEGEND_ROW * 1.5))
-    for group, color in colors.items():
-        # Только имя и цвет линии: назначение, кабель и точки — в таблице «Группы щита»
-        rows.append(LegendRow(group, TEXT_SMALL_MM, LEGEND_ROW * 0.7, color=color))
     return rows
 
 
 def legend_size(rows: Sequence[LegendRow]) -> tuple[float, float]:
     """Ширина и высота легенды на листе, мм (ширина — по метрикам шрифта)."""
     width = max(
-        (LEGEND_TEXT_X if r.key or r.led or r.color is not None else 0.0)
-        + text_width(r.text, r.height)
-        + TEXT_GAP
-        for r in rows
+        (LEGEND_TEXT_X if r.tag else 0.0) + text_width(r.text, r.height) + TEXT_GAP for r in rows
     )
     height = sum(r.step for r in rows) + rows[0].height + LEGEND_ROW / 2
     return width, height
 
 
-def split_legend(rows: Sequence[LegendRow]) -> tuple[list[LegendRow], list[LegendRow]]:
-    """Символы и группы — две отдельные колонки; заголовок групп становится первой строкой."""
-    k = next((i for i, r in enumerate(rows) if i and r.key is None and not r.led), len(rows))
-    groups = list(rows[k:])
-    if groups:
-        groups[0] = replace(groups[0], step=0.0)
-    return list(rows[:k]), groups
-
-
 def draw_legend(psp: BaseLayout, rows: Sequence[LegendRow], top_left: Vec) -> None:
     """Легенда на листе (мм листа) от левого верхнего угла: символы — те же блоки УГО,
-    уменьшенные в масштаб листа."""
+    уменьшенные в масштаб листа. Значок помечен объектом legend:<tag> (ids.py): из него
+    просмотр берёт примитивы для своей плашки легенды (epd/artifact.py), подпись — нет."""
     x0 = top_left.x
     y = top_left.y - rows[0].height
     left = TextEntityAlignment.MIDDLE_LEFT
@@ -309,21 +299,17 @@ def draw_legend(psp: BaseLayout, rows: Sequence[LegendRow], top_left: Vec) -> No
             depth = spec.depth
             sym_at = Vec(x0 + LEGEND_SYMBOL_X, y if on_ceiling else y - depth / 2)
             anchor = Anchor(sym_at, None if on_ceiling else Vec(0, 1), Vec(1, 0), depth)
-            if row.key == "board":
-                insert_symbol(psp, spec, anchor, xscale=6.0, yscale=BOARD_DEPTH)
-            else:
-                insert_symbol(psp, spec, anchor)
+            with tagged(psp, "legend", row.key):
+                if row.key == "board":
+                    insert_symbol(psp, spec, anchor, xscale=6.0, yscale=BOARD_DEPTH)
+                else:
+                    insert_symbol(psp, spec, anchor)
         if row.led:
-            psp.add_line(
-                (x0, y), (x0 + 6.0, y), dxfattribs={"layer": E_LED.name, "lineweight": LW_LED}
-            )
-        if row.color is not None:  # группа: отрезок её цвета, как линии на листе
-            psp.add_line(
-                (x0 + LEGEND_SYMBOL_X - GROUP_SWATCH_MM / 2, y),
-                (x0 + LEGEND_SYMBOL_X + GROUP_SWATCH_MM / 2, y),
-                dxfattribs={"layer": E_TEXT.name, "true_color": row.color, "lineweight": LW_SWATCH},
-            )
-        x = x0 + (LEGEND_TEXT_X if row.key or row.led or row.color is not None else 0.0)
+            with tagged(psp, "legend", LED_STRIP_KEY):
+                psp.add_line(
+                    (x0, y), (x0 + 6.0, y), dxfattribs={"layer": E_LED.name, "lineweight": LW_LED}
+                )
+        x = x0 + (LEGEND_TEXT_X if row.tag else 0.0)
         add_text(psp, row.text, Vec(x, y), row.height, E_TEXT.name, align=left, scale=1.0)
 
 

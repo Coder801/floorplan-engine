@@ -159,6 +159,7 @@ const RENDERERS: Record<string, Renderer> = {
   breaker: levers(1),
   input: levers(2),
   feed: levers(2),
+  output: levers(2),
   diff: withTest,
   rcd: withTest,
   relay: (pen, d, r) => {
@@ -213,6 +214,17 @@ const RENDERERS: Record<string, Renderer> = {
     rating(pen, d, r);
   },
 };
+
+// DC-аппараты щита АКБ: красная полоса по низу крышки (номинал — «125 А DC 2P») — не
+// спутать с автоматами сети
+const dc = (inner: Renderer): Renderer => (pen, d, r) => {
+  inner(pen, d, r);
+  pen.ctx.fillStyle = d.model.accent || "#c62828";
+  pen.ctx.fillRect(r.x + 2, mid(r) + FRONT / 2 - 1.8, r.w - 4, 1.4);
+};
+RENDERERS.dc_battery = dc(levers(2));
+RENDERERS.dc_breaker = dc(levers(2));
+RENDERERS.dc_spd = RENDERERS.spd;
 
 const fallback: Renderer = (pen, d, r) => { body(pen, d, r); rating(pen, d, r); };
 

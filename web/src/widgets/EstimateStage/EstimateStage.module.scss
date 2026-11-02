@@ -7,6 +7,7 @@
 .sheet {
   @include raised(10px);
   max-width: 960px; margin: 0 auto; padding: 24px 28px;
+  & + & { margin-top: 24px; }  // сметы этапов — одна под другой
 }
 .head {
   display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px;

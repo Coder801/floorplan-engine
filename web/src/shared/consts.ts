@@ -31,7 +31,9 @@ export const FLOW_WIDTH_PX = 4, FLOW_DASH_PX = 10, FLOW_GAP_PX = 7, FLOW_SPEED_P
 
 // 3D проводки
 export const CUT_HEIGHT_MM = 300;   // ближние стены в срезе — бортиком такой высоты
-export const CUT_DOT = 0.2;         // стена ближняя, если её помещение лежит дальше от камеры
+// Наружная стена — бортиком, если её нормаль в помещение смотрит от камеры сильнее этого
+// (скалярное произведение с взглядом; ребром — в полный рост); перегородка — бортиком всегда
+export const CUT_DOT = 0.2;
 export const WIRE_PX = 3, WIRE_SEL_PX = 4.5, WIRE_LIT_PX = 5;
 export const GHOST_ALPHA = 0.3;     // часть линии, закрытая стеной, — бледно, но видна
 export const WALL_ALPHA = 0.55, WALL_GHOST_ALPHA = 0.15;

@@ -1,7 +1,8 @@
-// Вход (service/api/auth.py): пока не вошли — карточка входа по центру (Google или код на
-// почту); первый вход — выбор «кто вы» в такой же карточке;
-// ссылка-приглашение (?invite=…) — принять после входа. Вход выключен на сервере
-// ({"auth": false}, локально) — страница открыта, как раньше.
+// Вход (service/api/auth.py): пока не вошли — карточка входа по центру (Telegram по номеру
+// телефона, Google или код на почту; внизу — код доступа к проекту от студии, без учётки);
+// первый вход — выбор «кто вы» в такой же карточке; ссылка-приглашение (?invite=…) — принять
+// после входа. Вход выключен на сервере ({"auth": false}, локально) — страница открыта, как
+// раньше.
 
 import { type ReactNode, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -11,9 +12,11 @@ import ui from "@/shared/styles/ui.module.scss";
 import { GoogleButton } from "@/ui/GoogleButton";
 import { HelpTip } from "@/ui/HelpTip";
 import { Logo } from "@/ui/Logo";
+import { CodeLogin } from "@/widgets/CodeLogin";
 import { EmailLogin } from "@/widgets/EmailLogin";
 import { FirmForm } from "@/widgets/FirmForm";
 import type { Account } from "@/widgets/Settings";
+import { TelegramLogin } from "@/widgets/TelegramLogin";
 import css from "./Gate.module.scss";
 
 const ROLES = ["client", "installer", "designer"] as const;
@@ -61,10 +64,11 @@ export function Gate({ children }: { children: (account: Account | null) => Reac
     f().then(refresh).catch((e: Error) => setError(e.message)).finally(() => setBusy(false));
   };
   const account: Account = {
-    name: me.user?.name || me.user?.email || (me.visitor ? t("gate.guest") : ""),
+    name: me.user?.name || me.user?.email || me.user?.phone || me.code?.name || (me.visitor ? t("gate.guest") : ""),
     plan: me.user?.account_type ?? null,
     space: me.user?.space?.kind === "studio" ? me.user.space.name : null,
     visitor: !me.user && !!me.visitor,
+    code: !me.user && !!me.code,
     logout: () => run(async () => { await logout(); cleanUrl(); }),
   };
 
@@ -108,9 +112,11 @@ export function Gate({ children }: { children: (account: Account | null) => Reac
       </div>
     );
   }
-  if (me.user || me.visitor) return <>{children(account)}</>;
+  if (me.user || me.visitor || me.code) return <>{children(account)}</>;
 
   const login = `/api/auth/google/login${token ? `?invite=${encodeURIComponent(token)}` : ""}`;
+  const ways = [me.telegram, me.google, me.email].filter(Boolean).length;
+  const or = <span className={css.or}>{t("gate.or")}</span>;
   return (
     <div className={css.gate}>
      <main className={css.card}>
@@ -118,7 +124,7 @@ export function Gate({ children }: { children: (account: Account | null) => Reac
       <header className={css.head}>
         <div className={css.titleRow}>
           <h1>{t("gate.title")}</h1>
-          {(me.google || me.email) && <HelpTip label={t("gate.whyNoPasswords")} text={t("gate.noPasswords")} />}
+          {ways > 0 && <HelpTip label={t("gate.whyNoPasswords")} text={t("gate.noPasswords")} />}
         </div>
         <p className="muted">{t("gate.subtitle")}</p>
       </header>
@@ -131,10 +137,19 @@ export function Gate({ children }: { children: (account: Account | null) => Reac
           {t("gate.acceptInvite")}
         </p>
       )}
+      {me.telegram && <TelegramLogin invite={token} onDone={() => void refresh()} />}
+      {me.telegram && me.google && or}
       {me.google && <GoogleButton href={login} label={t("gate.google")} />}
-      {me.google && me.email && <span className={css.or}>{t("gate.or")}</span>}
+      {(me.telegram || me.google) && me.email && or}
       {me.email && <EmailLogin onDone={() => void refresh()} />}
-      {!me.google && !me.email && <p className="muted">{t("gate.loginOff")}</p>}
+      {ways === 0 && <p className="muted">{t("gate.loginOff")}</p>}
+      <section className={css.byCode}>
+        <h2>{t("gate.code")}</h2>
+        <CodeLogin onDone={(project) => {
+          if (project) location.hash = encodeURIComponent(project);  // сразу в проект кода
+          void refresh();
+        }} />
+      </section>
       {me.dev && (
         <button className={css.dev} disabled={busy} onClick={() => run(devLogin)}>{t("gate.dev")}</button>
       )}

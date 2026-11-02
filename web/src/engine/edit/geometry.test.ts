@@ -44,3 +44,17 @@ describe("simplifyPath и segDistance", () => {
     expect(segDistance([150, 0], [0, 0], [100, 0])).toBeCloseTo(50);
   });
 });
+
+
+describe("dragPath: косой участок (эконом)", () => {
+  it("сдвигается параллельно себе на проекцию сдвига", () => {
+    const path: XY[] = [[0, 0], [0, 100], [100, 200], [100, 300]];
+    const out = dragPath(path, new Set([1]), 10, 0);
+    const [a, b] = [out[1], out[2]];
+    // направление то же (45°), сдвиг — 10·cos45° по нормали
+    expect(b[0] - a[0]).toBeCloseTo(100);
+    expect(b[1] - a[1]).toBeCloseTo(100);
+    expect(a[0]).toBeCloseTo(5);
+    expect(a[1]).toBeCloseTo(95);
+  });
+});

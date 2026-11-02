@@ -17,6 +17,7 @@ import { refreshPalette, screenColor } from "@/shared/palette";
 import { useView, view } from "@/shared/store";
 import ui from "@/shared/styles/ui.module.scss";
 import type { Elevation, Page, SideTable } from "@/shared/types";
+import { EyeToggle } from "@/ui/EyeToggle";
 import { WallItems } from "@/widgets/WallItems";
 import css from "./SidePanel.module.scss";
 
@@ -31,19 +32,26 @@ interface Props {
   wall?: Elevation | null;      // развёртка: вместо таблиц и слоёв — что на стене
   estimate?: SideTable | null;  // вкладка «Смета»: вместо таблиц и слоёв — итоги и примечания
   onWiring?: (key: string) => void;  // с развёртки — на лист проводки к линии объекта
+  // Вариант проводки — строкой над таблицами видов «Электрики» и «Сметы»; выбор — на вкладке
+  // «Общие сведения» (onOpen)
+  variant?: { label: string; onOpen: () => void } | null;
+  summary?: React.ReactNode;    // вкладка «Общие сведения»: итоги вместо таблиц и слоёв
   children?: React.ReactNode;  // выдвижная панель шапки — поверх боковой
 }
+
+// Вариант проводки меняет группы, щит и трассы — строка на всех видах «Электрики» и в «Смете»
+const VARIANT_STAGES = new Set(["electrical", "lighting", "wiring"]);
 
 // Слои есть у листа, нарисованного из примитивов: у щита (page.panel) — нет
 export const hasLayers = (page: Page | null) =>
   !!page && !page.panel && page.items.some((it) => !SHEET_ONLY.has(it.l));
 
-export function SidePanel({ tab, onTab, page, drawing, views, view: current, onView, wall, estimate, onWiring, children }: Props) {
+export function SidePanel({ tab, onTab, page, drawing, views, view: current, onView, wall, estimate, onWiring, variant, summary, children }: Props) {
   const { t } = useTranslation();
-  const tabs: SideTab[] = wall || estimate ? [] : SIDE_TABS.filter((k) => k !== "layers" || hasLayers(page));
+  const tabs: SideTab[] = wall || estimate || summary ? [] : SIDE_TABS.filter((k) => k !== "layers" || hasLayers(page));
   const shown = tabs.includes(tab) ? tab : "tables";
   const [open, setOpen] = useState(false);  // узкий экран: шторка развёрнута
-  const hasViews = !estimate && !!views && views.length > 1;
+  const hasViews = !estimate && !summary && !!views && views.length > 1;
   return (
     <aside className={css.side} data-open={open || undefined}>
       <div className={cx(css.bar, !hasViews && css.barEmpty)}>
@@ -54,7 +62,7 @@ export function SidePanel({ tab, onTab, page, drawing, views, view: current, onV
                       className={cx(v.index === current && ui.on)} onClick={() => onView?.(v.index)}>{v.label}</button>
             ))}
           </div>
-        ) : <span className={css.title}>{wall ? t("side.onWall") : estimate ? t("estimate.totals") : tabs.length > 1 ? t("side.tablesAndLayers") : t(`side.${shown}`)}</span>}
+        ) : <span className={css.title}>{wall ? t("side.onWall") : summary ? t("overview.side") : estimate ? t("estimate.totals") : tabs.length > 1 ? t("side.tablesAndLayers") : t(`side.${shown}`)}</span>}
         <button className={css.toggle} aria-expanded={open} aria-label={open ? t("side.collapse") : t("side.tablesAndLayers")}
                 onClick={() => setOpen(!open)}>{open ? "▾" : "▴"}</button>
       </div>
@@ -67,7 +75,14 @@ export function SidePanel({ tab, onTab, page, drawing, views, view: current, onV
         </div>
       )}
       <div className={cx(ui.panelBody, css.body)}>
-        {wall ? <WallItems wall={wall} onWiring={onWiring} />
+        {!wall && !summary && variant && (estimate || (VARIANT_STAGES.has(page?.stage ?? "") && shown === "tables")) && (
+          <p className={css.variant}>
+            <span className="muted">{t("variant.current")}</span> {variant.label}
+            <button className={css.change} onClick={variant.onOpen}>{t("variant.change")}</button>
+          </p>
+        )}
+        {summary ? summary
+          : wall ? <WallItems wall={wall} onWiring={onWiring} />
           : estimate ? <EstimateTotals table={estimate} />
           : shown === "layers" ? <Layers page={page} drawing={drawing} /> : <Tables page={page} />}
       </div>
@@ -125,9 +140,11 @@ function TableView({ t, id, rowHover, hoverKeys, onRow, onPick }: {
                   onPointerLeave={r.keys ? () => onRow(null, null) : undefined}
                   onClick={onPick && r.keys?.length ? () => onPick(r.keys!) : undefined}>
                 {r.cells.map((c, i) => (
-                  <td key={i} className={i === 0 && r.color ? css.mark : al(i)}>
-                    {/* Группа щита — кружок её цвета, как линии на чертеже */}
+                  <td key={i} className={i === 0 && (r.color || r.marker) ? css.mark : al(i)}>
+                    {/* Группа щита — кружок её цвета, как линии на чертеже; аппарат не на
+                        линии (ввод, реле, резерв, щит АКБ) — квадрат */}
                     {i === 0 && r.color && <span className={ui.dot} style={{ background: r.color }} aria-hidden="true" />}
+                    {i === 0 && !r.color && r.marker === "square" && <span className={ui.square} aria-hidden="true" />}
                     {c}
                   </td>
                 ))}
@@ -173,15 +190,18 @@ function Layers({ page, drawing }: { page: Page | null; drawing: Drawing | null 
     if (own.has(l) === on) set.delete(l); else set.add(l);
     view.set(own.has(l) ? { hidden: set } : { extra: set });
   };
-  const row = (l: string) => (
-    <label key={l} htmlFor={`layer-${l}`}>
-      <input type="checkbox" id={`layer-${l}`} checked={layerShown(own, hidden, extra, l)}
-             onChange={(e) => toggle(l, e.target.checked)} />
-      <span className={css.swatch} aria-hidden="true" style={{ background: screenColor(colors.get(l)!) }} />
-      {label("layer", l)}
-      <span className={cx(css.code, "mono")}>{l}</span>
-    </label>
-  );
+  // Строка слоя: глаз (как в Photoshop) | цвет | название | код; клик по строке — тоже
+  const row = (l: string) => {
+    const shown = layerShown(own, hidden, extra, l);
+    return (
+      <div key={l} className={cx(css.layer, !shown && css.hiddenLayer)} onClick={() => toggle(l, !shown)}>
+        <EyeToggle on={shown} what={label("layer", l)} onToggle={() => toggle(l, !shown)} />
+        <span className={css.swatch} aria-hidden="true" style={{ background: screenColor(colors.get(l)!) }} />
+        {label("layer", l)}
+        <span className={cx(css.code, "mono")}>{l}</span>
+      </div>
+    );
+  };
   const mine = [...colors.keys()].filter((l) => own.has(l)).sort();
   const rest = [...colors.keys()].filter((l) => !own.has(l)).sort();
   return (

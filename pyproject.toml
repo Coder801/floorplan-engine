@@ -91,7 +91,7 @@ root_package = "floorplan_engine"
 include_external_packages = true
 
 [[tool.importlinter.contracts]]
-name = "Слои: CLI → сервис → конвейер → .epd → листы → проверка → рисование → расчёты → модель"
+name = "Слои: CLI → сервис → конвейер → .epd → листы → проверка → рисование → сантехника → электрика → модель"
 type = "layers"
 layers = [
     "floorplan_engine.cli",
@@ -101,6 +101,7 @@ layers = [
     "floorplan_engine.sheets",
     "floorplan_engine.validation",
     "floorplan_engine.drawing",
+    "floorplan_engine.plumbing",
     "floorplan_engine.electrical",
     "floorplan_engine.model",
 ]
@@ -112,6 +113,7 @@ source_modules = [
     "floorplan_engine.model",
     "floorplan_engine.validation",
     "floorplan_engine.electrical",
+    "floorplan_engine.plumbing",
     "floorplan_engine.drawing",
     "floorplan_engine.sheets",
     "floorplan_engine.epd",
@@ -126,6 +128,7 @@ source_modules = [
     "floorplan_engine.model",
     "floorplan_engine.validation",
     "floorplan_engine.electrical",
+    "floorplan_engine.plumbing",
     "floorplan_engine.drawing",
     "floorplan_engine.sheets",
     "floorplan_engine.epd",
@@ -136,6 +139,11 @@ forbidden_modules = ["anthropic", "fastapi", "httpx", "sqlalchemy", "alembic", "
 [[tool.importlinter.contracts]]
 name = "Модель, проверка и расчёты не рисуют DXF сами"
 type = "forbidden"
-source_modules = ["floorplan_engine.model", "floorplan_engine.validation", "floorplan_engine.electrical"]
+source_modules = [
+    "floorplan_engine.model",
+    "floorplan_engine.validation",
+    "floorplan_engine.electrical",
+    "floorplan_engine.plumbing",
+]
 forbidden_modules = ["ezdxf"]
 allow_indirect_imports = true

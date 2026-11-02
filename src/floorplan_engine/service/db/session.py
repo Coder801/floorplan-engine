@@ -1,4 +1,5 @@
-"""Подключение к базе: адрес — DATABASE_URL (см. .env.example), в тестах — SQLite в памяти."""
+"""Подключение к базе (только Postgres): адрес — DATABASE_URL (см. .env.example); схему
+строят миграции Alembic, в тестах — tests/service/conftest.py."""
 
 from __future__ import annotations
 
@@ -6,8 +7,6 @@ import os
 
 from sqlalchemy import Engine, create_engine
 from sqlalchemy.orm import Session, sessionmaker
-
-from floorplan_engine.service.db.models import Base
 
 DEFAULT_URL = (
     "postgresql+psycopg://floorplan_engine:floorplan_engine@localhost:5433/floorplan_engine"
@@ -29,8 +28,3 @@ def make_engine(url: str | None = None) -> Engine:
 
 def make_sessions(engine: Engine) -> sessionmaker[Session]:
     return sessionmaker(engine, expire_on_commit=False)
-
-
-def create_tables(engine: Engine) -> None:
-    """Все таблицы разом — для тестов и пустой SQLite; в Postgres — миграции Alembic."""
-    Base.metadata.create_all(engine)

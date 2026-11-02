@@ -4,13 +4,20 @@
 дверей (не ближе CLEARANCE к стенам), стены и окна закрыты. Путь — кратчайший по сетке
 со штрафом TURN_COST за каждый поворот: так трасса идёт прямыми участками под 90°.
 Путь считается один раз от источника (щит, коробка) сразу до всех его целей.
+
+Под любым углом (any_angle — эконом, docs/wiring-variants.md): поиск — в восемь сторон без
+штрафа за поворот, затем путь натягивается (pull): углы срезаются, где прямой отрезок
+целиком в свободной области не ближе CLEARANCE к стенам. Подход к точке на стене — как
+обычно, перпендикулярно стене. Это только для потолка и пола: по стенам трасса всегда
+вертикальна (штробы — chases.py).
 """
 
 from __future__ import annotations
 
 import heapq
 import itertools
-from collections.abc import Sequence
+import math
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
 import numpy as np
@@ -26,6 +33,10 @@ CLEARANCE = 150.0  # мм — трасса не ближе к стенам (пр
 # на стене и прохода в проёме
 TURN_COST = 400.0  # мм — штраф за поворот
 DIRS = ((1, 0), (0, 1), (-1, 0), (0, -1))
+DIAGONALS = ((1, 1), (-1, 1), (-1, -1), (1, -1))
+# Восемь направлений по кругу: соседние отличаются на 45° (канализация — search45)
+DIRS8 = ((1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0), (-1, -1), (0, -1), (1, -1))
+BEND_COST = TURN_COST / 2  # мм — штраф за отвод 45°
 
 
 def free_area(geoms: Sequence[RoomGeometry]) -> BaseGeometry:
@@ -59,6 +70,10 @@ class Grid:
     nx: int
     ny: int
     free: list[bool]
+    inner: BaseGeometry | None = None  # область не ближе CLEARANCE к стенам — для pull
+    penalty: dict[int, float] | None = None  # доплата за вход в ячейку, мм (сантехника)
+    mult: list[float] | None = None  # цена мм шага в ячейку (канализация: у стены дешевле)
+    tag: list[int] | None = None  # вид ячейки для отсечения в поиске (канализация, network)
 
     @classmethod
     def of(cls, area: BaseGeometry) -> Grid:
@@ -70,7 +85,9 @@ class Grid:
         ys = miny + STEP / 2 + np.arange(ny) * STEP
         gx, gy = np.meshgrid(xs, ys)  # [iy, ix]
         mask = shapely.contains_xy(inner, gx.ravel(), gy.ravel())
-        return cls(minx + STEP / 2, miny + STEP / 2, nx, ny, [bool(v) for v in mask])
+        # Чуть шире самой полосы: отрезок по краю ячеек — не «сквозь стену» из-за округления
+        shapely.prepare(near := inner.buffer(1.0))
+        return cls(minx + STEP / 2, miny + STEP / 2, nx, ny, [bool(v) for v in mask], near)
 
     def free_points(self) -> list[Vec]:
         """Центры свободных ячеек: места внутри области не ближе CLEARANCE к стенам."""
@@ -99,6 +116,54 @@ class Grid:
                 return best
         raise ValueError("на плане нет свободного места для трассы")
 
+    def search_any(self, start: int) -> tuple[dict[int, int], dict[int, float]]:
+        """Дейкстра в восемь сторон без штрафа за поворот (any_angle): состояние — ячейка
+        (направление 0), как у search, чтобы path и cost были общими. По диагонали — только
+        если обе соседние ячейки свободны: угол стены не срезается."""
+        dist: dict[int, float] = {start * 4: 0.0}
+        prev: dict[int, int] = {start * 4: -1}
+        heap: list[tuple[float, int]] = [(0.0, start * 4)]
+        diagonal = STEP * math.sqrt(2)
+        while heap:
+            cost, state = heapq.heappop(heap)
+            if cost > dist.get(state, float("inf")):
+                continue
+            iy, ix = divmod(state // 4, self.nx)
+            for dx, dy in (*DIRS, *DIAGONALS):
+                jx, jy = ix + dx, iy + dy
+                if not (0 <= jx < self.nx and 0 <= jy < self.ny):
+                    continue
+                if not self.free[jy * self.nx + jx]:
+                    continue
+                side_a, side_b = self.free[iy * self.nx + jx], self.free[jy * self.nx + ix]
+                if dx and dy and not (side_a and side_b):
+                    continue
+                ns = (jy * self.nx + jx) * 4
+                c = cost + (diagonal if dx and dy else STEP)
+                if c < dist.get(ns, float("inf")):
+                    dist[ns] = c
+                    prev[ns] = state
+                    heapq.heappush(heap, (c, ns))
+        return prev, dist
+
+    def pull(self, cells: Sequence[Vec]) -> list[Vec]:
+        """Натянуть путь по ячейкам: от каждой вершины — к самой дальней, до которой прямой
+        отрезок не выходит из полосы не ближе CLEARANCE к стенам."""
+        if self.inner is None or len(cells) <= 2:
+            return list(cells)
+        out = [cells[0]]
+        i = 0
+        while i < len(cells) - 1:
+            j = len(cells) - 1
+            while j > i + 1:
+                seg = shapely.LineString([cells[i].as_tuple(), cells[j].as_tuple()])
+                if self.inner.covers(seg):
+                    break
+                j -= 1
+            out.append(cells[j])
+            i = j
+        return out
+
     def search(self, start: int) -> tuple[dict[int, int], dict[int, float]]:
         """Дейкстра по состояниям (ячейка, направление): предки и стоимость состояний."""
         dist: dict[int, float] = {}
@@ -123,6 +188,8 @@ class Grid:
                 if not self.free[nxt]:
                     continue
                 c = cost + STEP + (TURN_COST if nd != d else 0.0)
+                if self.penalty is not None:
+                    c += self.penalty.get(nxt, 0.0)
                 ns = nxt * 4 + nd
                 if c < dist.get(ns, float("inf")):
                     dist[ns] = c
@@ -130,14 +197,77 @@ class Grid:
                     heapq.heappush(heap, (c, ns))
         return prev, dist
 
-    def path(self, prev: dict[int, int], dist: dict[int, float], target: int) -> list[Vec]:
-        states = [target * 4 + d for d in range(4) if target * 4 + d in prev]
+    def search45(
+        self,
+        start: int,
+        bend: float = BEND_COST,
+        prune: Callable[[int, float], bool] | None = None,
+        start_len: float = 0.0,
+    ) -> tuple[dict[int, int], dict[int, float]]:
+        """Дейкстра по состояниям (ячейка, одно из восьми направлений DIRS8): за шаг
+        направление меняется не больше чем на 45° (отвод 45°, штраф bend), поворот на
+        90° — два отвода через шаг по диагонали. По диагонали — только если обе соседние
+        ячейки свободны. Состояние — ячейка · 8 + направление (path(..., ndirs=8)).
+        Шаг стоит длину × mult ячейки (нет mult — 1) плюс penalty. prune(ячейка, длина) —
+        ячейка недоступна при такой геометрической длине пути от старта (start_len — уже
+        пройдено до стартовой ячейки): канализация, что там уже не помещается в стяжку."""
+        dist: dict[int, float] = {}
+        prev: dict[int, int] = {}
+        glen: dict[int, float] = {}
+        heap: list[tuple[float, int]] = []
+        for d in range(8):
+            s = start * 8 + d
+            dist[s] = 0.0
+            prev[s] = -1
+            glen[s] = start_len
+            heapq.heappush(heap, (0.0, s))
+        diagonal = STEP * math.sqrt(2)
+        while heap:
+            cost, state = heapq.heappop(heap)
+            if cost > dist.get(state, float("inf")):
+                continue
+            cell, d = divmod(state, 8)
+            iy, ix = divmod(cell, self.nx)
+            for nd in ((d + 7) % 8, d, (d + 1) % 8):
+                dx, dy = DIRS8[nd]
+                jx, jy = ix + dx, iy + dy
+                if not (0 <= jx < self.nx and 0 <= jy < self.ny):
+                    continue
+                nxt = jy * self.nx + jx
+                if not self.free[nxt]:
+                    continue
+                if (
+                    dx
+                    and dy
+                    and not (self.free[iy * self.nx + jx] and self.free[jy * self.nx + ix])
+                ):
+                    continue
+                step = diagonal if dx and dy else STEP
+                length = glen[state] + step
+                if prune is not None and prune(nxt, length):
+                    continue
+                k = self.mult[nxt] if self.mult is not None else 1.0
+                c = cost + step * k + (bend if nd != d else 0.0)
+                if self.penalty is not None:
+                    c += self.penalty.get(nxt, 0.0)
+                ns = nxt * 8 + nd
+                if c < dist.get(ns, float("inf")):
+                    dist[ns] = c
+                    prev[ns] = state
+                    glen[ns] = length
+                    heapq.heappush(heap, (c, ns))
+        return prev, dist
+
+    def path(
+        self, prev: dict[int, int], dist: dict[int, float], target: int, ndirs: int = 4
+    ) -> list[Vec]:
+        states = [target * ndirs + d for d in range(ndirs) if target * ndirs + d in prev]
         if not states:
             raise ValueError("цель недостижима: помещение отрезано стенами без проёмов")
         state = min(states, key=lambda s: dist[s])
         cells = []
         while state != -1:
-            cells.append(state // 4)
+            cells.append(state // ndirs)
             state = prev[state]
         return [self.center(c) for c in reversed(cells)]
 
@@ -205,13 +335,16 @@ class End:
 
 
 class Router:
-    """Трассы от одного источника до многих целей в заданной области."""
+    """Трассы от одного источника до многих целей в заданной области. any_angle — под любым
+    углом (эконом): кратчайший путь натягивается, а не идёт под 90°."""
 
-    def __init__(self, area: BaseGeometry, source: End) -> None:
+    def __init__(self, area: BaseGeometry, source: End, any_angle: bool = False) -> None:
         self.grid = Grid.of(area)
         self.source = source
+        self.any_angle = any_angle
         self.start = self.grid.nearest_free(source.node)
-        self.prev, self.dist = self.grid.search(self.start)
+        search = self.grid.search_any if any_angle else self.grid.search
+        self.prev, self.dist = search(self.start)
 
     def cost(self, node: Vec) -> float:
         """Стоимость трассы до точки (с поворотами); недостижимо — бесконечность."""
@@ -222,10 +355,18 @@ class Router:
     def route(self, target: End) -> list[Vec]:
         cell = self.grid.nearest_free(target.node)
         middle = self.grid.path(self.prev, self.dist, cell)
+        if self.any_angle:
+            middle = self.grid.pull(middle)
         head = _join(self.source.node, middle[0], self.source.vertical_wall)
         tail = list(reversed(_join(target.node, middle[-1], target.vertical_wall)))
         return simplify([*head, *middle, *tail])
 
 
 def length(path: Sequence[Vec]) -> float:
-    return sum(abs(b.x - a.x) + abs(b.y - a.y) for a, b in itertools.pairwise(path))
+    """Длина трассы по плану; участки — под любым углом (у прямых углов — то же самое)."""
+    return sum(math.hypot(b.x - a.x, b.y - a.y) for a, b in itertools.pairwise(path))
+
+
+def is_ortho(path: Sequence[Vec], tol: float = 0.5) -> bool:
+    """Все участки — по осям (стандарт и премиум)."""
+    return all(abs(a.x - b.x) <= tol or abs(a.y - b.y) <= tol for a, b in itertools.pairwise(path))

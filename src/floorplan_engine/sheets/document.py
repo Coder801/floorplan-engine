@@ -27,11 +27,13 @@ from floorplan_engine.drawing.titleblock import (
     draw_sheet,
     format_candidates,
 )
-from floorplan_engine.electrical.estimate import PriceList
+from floorplan_engine.electrical.pricing import Prices
 from floorplan_engine.model.geometry import Contour, Vec
+from floorplan_engine.model.plumbing import Plumbing
 from floorplan_engine.model.scale import DEFAULT_SCALE, SCALES, drawing_scale, sheet_scale
 from floorplan_engine.model.schema import Electrical, Plan, WiringEdits
 from floorplan_engine.model.texts import TEXTS, tr
+from floorplan_engine.plumbing.network import Network, build_network
 from floorplan_engine.sheets.layout import (
     VIEW_MARGIN,
     Panel,
@@ -63,6 +65,7 @@ SHEET_SLUGS = {
     "tab_lighting": "lighting",
     "tab_wiring": "wiring",
     "tab_panel": "panel",
+    "tab_plumbing": "plumbing",
     "tab_points": "points",
     "tab_elevations": "elevations",
 }
@@ -162,15 +165,16 @@ def choose_paper_and_scale(
     plan: Plan,
     contours: dict[str, Contour],
     elec: Electrical | None,
-    prices: PriceList | None = None,
+    prices: Prices | None = None,
     edits: WiringEdits | None = None,
+    plumbing: tuple[Plumbing, Network] | None = None,
 ) -> tuple[Paper, float]:
     """Бумага комплекта — наименьшая, на которой у всех листов помещаются таблицы и легенда,
     а план в 1:50 или крупнее занимает не больше VIEW_FILL_MAX своей секции (формат из
     room.yaml — только он). Масштаб — тот, при котором самый тесный план ближе всего
     к VIEW_FILL, не больше VIEW_FILL_MAX."""
     with drawing_scale(DEFAULT_SCALE):
-        draft, all_specs = draw_stages(plan, contours, elec, prices, edits)
+        draft, all_specs = draw_stages(plan, contours, elec, prices, edits, plumbing)
         views = {s.tab_key: view_parts(draft, s) for s in all_specs if s.body is None}
     papers = format_candidates(plan.sheet.format)
     specs = all_specs
@@ -202,7 +206,7 @@ def choose_paper_and_scale(
         best = min(fitting, key=lambda s: abs(worst(paper, s) - VIEW_FILL), default=SCALES[-1])
         for scale in [s for s in SCALES if s >= best]:
             with drawing_scale(scale):
-                real, real_specs = draw_stages(plan, contours, elec, prices, edits)
+                real, real_specs = draw_stages(plan, contours, elec, prices, edits, plumbing)
                 shown = [s for s in fit_specs(real_specs, paper) if s.body is None]
                 if all(fill(view_size(real, s), plan_region(s, paper)) <= 1.0 for s in shown):
                     return paper, scale
@@ -220,15 +224,18 @@ def build_project_document(
     contours: dict[str, Contour],
     elec: Electrical | None = None,
     today: date | None = None,
-    prices: PriceList | None = None,
+    prices: Prices | None = None,
     edits: WiringEdits | None = None,
+    plumbing: Plumbing | None = None,
 ) -> Drawing:
     """Один DXF: модель со всеми этапами и лист на каждый этап; формат и масштаб — общие.
-    prices — прайс проекта для сметы на листе проводки; None — ведомость объёмов без цен.
-    edits — ручные правки проводки (wiring.yaml)."""
-    paper, scale = choose_paper_and_scale(plan, contours, elec, prices, edits)
+    prices — цены сметы на листе проводки (прайс поверх сервиса цен); None — ведомость
+    объёмов без цен.
+    edits — ручные правки проводки (wiring.yaml); plumbing — сантехника (лист «Сантехника»)."""
+    water = (plumbing, build_network(plan, contours, plumbing)) if plumbing is not None else None
+    paper, scale = choose_paper_and_scale(plan, contours, elec, prices, edits, water)
     with drawing_scale(scale):
-        doc, specs = draw_stages(plan, contours, elec, prices, edits)
+        doc, specs = draw_stages(plan, contours, elec, prices, edits, water)
         specs = fit_specs(specs, paper)
         main_no = 1  # лист, чьи таблицы продолжаются
         for no, spec in enumerate(specs, 1):

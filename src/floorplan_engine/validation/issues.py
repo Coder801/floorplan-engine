@@ -15,6 +15,7 @@ from pydantic import BaseModel, ValidationError
 ROOM_FILE = "room.yaml"
 ELECTRICAL_FILE = "electrical.yaml"
 WIRING_FILE = "wiring.yaml"  # ручные правки проводки из просмотра (линии, коробки)
+VARIANT_FILE = "variant.yaml"  # вариант проводки, выбранный в просмотре (режим, трасса)
 STUDIO_FILE = "studio.yaml"  # профиль студии — в папке над проектами
 M = TypeVar("M", bound=BaseModel)
 

@@ -7,7 +7,7 @@ import { buildDrawing, DRAWING_STAGES } from "@/engine/sheet/drawing";
 import { downloadSheetPng } from "@/engine/sheet/paint";
 import { wallPages, wallSheet } from "@/engine/sheet/walls";
 import { Welcome } from "@/pages/Welcome";
-import { base, enc, getManifest, getPage, getProject, listProjects } from "@/shared/api";
+import { base, enc, getManifest, getPage, getProject, listProjects, saveVariant } from "@/shared/api";
 import { DRAWER_TABS, SIDE_TABS, type DrawerTab, type SideTab, type Theme } from "@/shared/consts";
 import { cx } from "@/shared/cx";
 import { label } from "@/shared/i18n";
@@ -15,7 +15,7 @@ import { applyTheme, remember, remembered, savedTheme } from "@/shared/palette";
 import { resetSelection, view } from "@/shared/store";
 import ui from "@/shared/styles/ui.module.scss";
 import { sheetTabs, tabOf, VIEWS } from "@/shared/tabs";
-import type { ManifestPage, Page, Project, ProjectSummary, Scene } from "@/shared/types";
+import type { ManifestPage, Overview, Page, Project, ProjectSummary, Scene, Variants } from "@/shared/types";
 import { watchRebuild } from "@/shared/rebuild";
 import { watchBuild } from "@/shared/version";
 import { Boundary } from "@/ui/Boundary";
@@ -23,7 +23,10 @@ import { Logo } from "@/ui/Logo";
 import { DownloadMenu } from "@/widgets/DownloadMenu";
 import { Drawer } from "@/widgets/Drawer";
 import { ElevationStage } from "@/widgets/ElevationStage";
-import { EstimateStage } from "@/widgets/EstimateStage";
+import { EstimateStage, type EstimateItem } from "@/widgets/EstimateStage";
+import { OverviewStage, OverviewSummary } from "@/widgets/OverviewStage";
+import { RebuildModal } from "@/widgets/RebuildModal";
+import { parseKey } from "@/widgets/VariantPicker/variants";
 import { PanelStage } from "@/widgets/PanelStage";
 import { ProjectsMenu } from "@/widgets/ProjectsMenu";
 import { type Account, Settings } from "@/widgets/Settings";
@@ -68,8 +71,19 @@ export function Viewer({ account = null }: { account?: Account | null }) {
   const [more, setMore] = useState(false);  // телефон: действия шапки — меню «⋯»
   const [source, setSource] = useState<string | null>(null);  // файл source/, открытый вместо листа
   const [estimate, setEstimate] = useState(false);  // вкладка «Смета» (страница проводки, ключ estimate)
+  const [info, setInfo] = useState(false);  // вкладка «Общие сведения» (манифест: overview, variants)
+  const [overview, setOverview] = useState<Overview | null>(null);
   const [theme, setTheme] = useState<Theme>(savedTheme);
   const [reloads, setReloads] = useState(0);
+  // Пересборка того же проекта: прежние данные остаются на экране под заглушками, пока не придут новые
+  const [refreshing, setRefreshing] = useState(false);
+  const [shown, setShown] = useState(0);  // reloads, с которыми нарисован чертёж: ключ Boundary меняется вместе с данными
+  const reloadsRef = useRef(0);
+  reloadsRef.current = reloads;
+  const prevProject = useRef<string | null>(null);
+  const [variants, setVariants] = useState<Variants | null>(null);  // варианты проводки (манифест)
+  const [choosing, setChoosing] = useState(false);  // вариант сохраняется и проект пересобирается
+  const [saving, setSaving] = useState(false);  // правки трасс сохраняются и проект пересобирается
   const [outdated, setOutdated] = useState(false);  // после открытия вкладки выложили новую версию
   const stage = useRef<StageHandle>(null);
 
@@ -122,15 +136,22 @@ export function Viewer({ account = null }: { account?: Account | null }) {
   const placed = useRef<string | null>(null);
   useEffect(() => {
     if (!current || sheet === null || placed.current !== current) return;
-    remember(`place:${current}`, JSON.stringify({ sheet, estimate }));
-  }, [current, sheet, estimate]);
+    remember(`place:${current}`, JSON.stringify({ sheet, estimate, info }));
+  }, [current, sheet, estimate, info]);
 
   // Проект: список, отчёт, листы; reloads — перечитать после сохранения правок или пересборки
   useEffect(() => {
     let alive = true;
-    placed.current = null;
-    setProject(null); setPages([]); setPage(null); setLoaded(null); setDrawn([]); setElevs([]); setScene(null);
-    setError(null); setSource(null); setEstimate(false);
+    const again = !!current && prevProject.current === current && placed.current === current;
+    prevProject.current = current;
+    if (again) {
+      setRefreshing(true);  // тот же проект: ничего не сбрасываем, чтобы блоки не пропадали
+    } else {
+      placed.current = null;
+      setProject(null); setPages([]); setPage(null); setLoaded(null); setDrawn([]); setElevs([]); setScene(null);
+      setError(null); setSource(null); setEstimate(false); setInfo(false); setOverview(null);
+      setRefreshing(false); setShown(reloadsRef.current);
+    }
     cache.current = new Map();
     listProjects().then((l) => alive && setList(l)).catch(() => {});
     if (!current) return;
@@ -139,19 +160,23 @@ export function Viewer({ account = null }: { account?: Account | null }) {
         const p = await getProject(current);
         if (!alive) return;
         setProject(p);
-        if (!p.artifact) return;
+        if (!p.artifact) { setRefreshing(false); return; }
         const m = await getManifest(current);
         if (!alive) return;
         // Ведомость точек — для печати; в просмотре она в боковой панели листа электрики
         const shown = m.pages.filter((pg) => pg.stage !== "points");
         setPages(shown);
+        setVariants(m.variants ?? null);
+        setOverview(m.overview ?? null);
         const saved = savedPlace(current);
         const has = (i: unknown) => shown.some((pg) => pg.index === i);
         setSheet((s) => (has(saved?.sheet) ? saved!.sheet : has(s) ? s : shown[0]?.index ?? null));
-        setEstimate(!!saved?.estimate && shown.some((pg) => pg.stage === "wiring" && pg.index === saved.sheet));
+        setEstimate(!!saved?.estimate && shown.some((pg) => (pg.stage === "wiring" || pg.stage === "plumbing") && pg.index === saved.sheet));
+        // Первый заход в проект — «Общие сведения»; дальше — где был
+        setInfo(saved === null || saved.info);
         placed.current = current;
       } catch (e) {
-        if (alive) setError((e as Error).message);
+        if (alive) { setError((e as Error).message); setRefreshing(false); }
       }
     })();
     return () => { alive = false; };
@@ -164,6 +189,8 @@ export function Viewer({ account = null }: { account?: Account | null }) {
   // Развёртки — постранично по стенам: листы вкладки грузятся вместе, и с ними лист со сценой
   const elevSheets = useMemo(() => pages.filter((pg) => pg.stage === "elevations").map((pg) => pg.index), [pages]);
   const sceneSheet = pages.find((pg) => pg.stage === "wiring")?.index;
+  // Смета сантехники — на странице «Сантехника»; без проводки вкладка «Смета» открывает её
+  const estimateSheet = sceneSheet ?? pages.find((pg) => pg.stage === "plumbing")?.index;
 
   useEffect(() => {
     if (!current || sheet === null || !pages.length) return;
@@ -191,10 +218,11 @@ export function Viewer({ account = null }: { account?: Account | null }) {
       resetSelection(pgs.length > 1 && was.length === pgs.length && was.every((p, i) => p === pgs[i]));
       setPage(pgs[want.indexOf(sheet)]);
       setLoaded(sheet);
+      setShown(reloadsRef.current); setRefreshing(false);
       // Те же страницы — тот же чертёж: холст, масштаб и сдвиг остаются
       const own = walls ? [pgs[want.indexOf(sheet)]] : pgs;
       setDrawn((prev) => (prev.length === own.length && prev.every((p, i) => p === own[i]) ? prev : own));
-    }, (e) => alive && setError((e as Error).message));
+    }, (e) => alive && (setError((e as Error).message), setRefreshing(false)));
     return () => { alive = false; };
   }, [current, sheet, pages, drawingSheets, elevSheets, sceneSheet]);
 
@@ -211,7 +239,7 @@ export function Viewer({ account = null }: { account?: Account | null }) {
 
   // Другой лист — сразу без подсказки, 3D и правки, не дожидаясь загрузки страницы
   const openSheet = (index: number) => {
-    setEstimate(false);
+    setEstimate(false); setInfo(false);
     if (source) { setSource(null); resetSelection(); setSheet(index); return; }
     if (page && index === sheet) {  // лист уже открыт: правки не терять, из 3D — на лист
       if (view.get().show3d) view.set({ show3d: false, pinned: null, selected: null, neighbors: null, tip: null });
@@ -225,10 +253,16 @@ export function Viewer({ account = null }: { account?: Account | null }) {
     view.set({ goto: key });
     openSheet(sceneSheet);
   };
-  // «Смета» — не лист: страница проводки (там ключ estimate) без чертежа
-  const openEstimate = sceneSheet === undefined ? undefined : () => {
-    openSheet(sceneSheet);
+  // «Смета» — не лист: страница проводки (там ключ estimate) без чертежа; смета сантехники —
+  // со страницы «Сантехника», она того же чертежа и уже загружена (drawn)
+  const openEstimate = estimateSheet === undefined ? undefined : () => {
+    openSheet(estimateSheet);
     setEstimate(true);
+  };
+  // «Общие сведения» — не лист: страница из манифеста; лист под ней остаётся загруженным
+  const openInfo = () => {
+    if (!confirmLeave()) return;
+    setSource(null); setEstimate(false); setInfo(true);
   };
   const showSide = (tab: SideTab) => { setSide(tab); remember("side", tab); };
   // Та же кнопка — закрыть (панель уезжает), другая — открыть её
@@ -243,13 +277,25 @@ export function Viewer({ account = null }: { account?: Account | null }) {
   const showSource = (file: string) => { if (confirmLeave()) setSource(file); };
   const saved = (notes: string[]) => {
     setBanners(notes.length ? [`wiring.yaml: ${notes.join("; ")}`] : []);
+    setRefreshing(true);
     setReloads((n) => n + 1);
+    setSaving(false);
+  };
+
+  // Другой вариант проводки: несохранённые правки трасс — только с подтверждения
+  const chooseVariant = (v: { mode: string; route: string; distribution: string }, ceiling?: number) => {
+    if (!current || !confirmLeave()) return;
+    setChoosing(true);
+    saveVariant(current, ceiling === undefined ? v : { ...v, ceiling_height: ceiling })
+      .then(() => saved([]))
+      .catch((e: Error) => setBanners([t("variant.failed", { message: e.message })]))
+      .finally(() => setChoosing(false));
   };
 
   // Продолжения (развёртки) — одна вкладка, страницы — внутри чертежа; электрика, освещение
   // и проводка — одна вкладка, вид — переключателем справа (SidePanel)
   const tabs = sheetTabs(pages);
-  const tab = source || estimate ? null : tabOf(tabs, sheet);
+  const tab = source || estimate || info ? null : tabOf(tabs, sheet);
   const stageOf = (i: number) => pages.find((pg) => pg.index === i)?.stage ?? "";
   const views = tab?.views ? tab.pages.map((i) => ({ index: i, label: label("views", stageOf(i)) })) : null;
   // Вкладка с видами открывается на последнем выбранном виде
@@ -292,6 +338,11 @@ export function Viewer({ account = null }: { account?: Account | null }) {
   }, []);
 
   const openQs = unresolved(project);
+  // Вариант проводки строкой в боковой панели листов: «Стандарт · По потолку · Через коробки»
+  const activeVariant = variants ? parseKey(variants.active) : null;
+  const variantLabel = activeVariant
+    ? [t(`variant.modes.${activeVariant.mode}`), t(`variant.routes.${activeVariant.route}`), t("variant.distributions.boxes")].join(" · ")
+    : null;
   const warn = project?.stale
     ? t("app.stale", { name: project.name })
     : project && !project.report ? t("app.notBuilt", { name: project.name }) : null;
@@ -304,11 +355,19 @@ export function Viewer({ account = null }: { account?: Account | null }) {
   else if (error) main = <div className={ui.error}>{error}</div>;
   else if (source && project) main = <SourceView project={project} file={source} onBack={() => setSource(null)} />;
   else if (project && !project.artifact) main = <div className={ui.empty}>{t("app.noArtifact")}</div>;
+  else if (info && project) {
+    main = <OverviewStage overview={overview} variants={variants} project={project} openQuestions={openQs}
+                          canChoose={project.can?.choose_variant ?? true} busy={choosing} refreshing={refreshing || choosing} onChoose={chooseVariant}
+                          onEstimate={openEstimate} onDrawer={(k) => { setDrawer(k); setClosing(false); }} />;
+  }
   else if (estimate && page && project) {
-    main = page.estimate
-      ? <EstimateStage table={page.estimate}
-                       xlsx={project.files.includes("estimate.xlsx") ? `${base(current)}/out/estimate.xlsx` : null} />
-      : <div className={ui.empty}>{t("estimate.none")}</div>;
+    const xlsx = (f: string) => (project.files.includes(f) ? `${base(current)}/out/${f}` : null);
+    const items: EstimateItem[] = [];
+    const wiring = [page, ...drawn].find((p) => p.stage === "wiring" && p.estimate);
+    const water = [page, ...drawn].find((p) => p.stage === "plumbing" && p.estimate);
+    if (wiring?.estimate) items.push({ table: wiring.estimate, xlsx: xlsx("estimate.xlsx") });
+    if (water?.estimate) items.push({ table: water.estimate, xlsx: xlsx("plumbing-estimate.xlsx") });
+    main = items.length ? <EstimateStage items={items} /> : <div className={ui.empty}>{t("estimate.none")}</div>;
   }
   else if (page && project && page.panel) {
     main = <PanelStage ref={stage} page={page} panel={page.panel} />;
@@ -318,12 +377,14 @@ export function Viewer({ account = null }: { account?: Account | null }) {
     main = <ElevationStage ref={stage} elevation={wall.data} withMap={!!scene} />;
   } else if (page && project && drawing) {
     main = <SheetStage ref={stage} page={wallPage ?? page} drawing={drawing} project={project.name}
-                       onSaved={saved} onBanner={(b) => setBanners([b])} />;
+                       editable={project.can?.edit_wiring ?? true}
+                       onSaved={saved} onBusy={setSaving} onBanner={(b) => setBanners([b])} />;
   }
-  if (page && project && main) main = <Boundary key={`${current}/${drawn.length > 1 ? "drawing" : loaded}/${reloads}`}>{main}</Boundary>;
+  if (page && project && main) main = <Boundary key={`${current}/${drawn.length > 1 ? "drawing" : loaded}/${shown}`}>{main}</Boundary>;
 
   return (
     <div className={css.app}>
+      {(choosing || saving) && <RebuildModal />}
       {!current && <Welcome list={list} onOpen={(name) => { location.hash = encodeURIComponent(name); }} />}
       {menu && (
         <ProjectsMenu list={list} current={current} closing={menu === "closing"}
@@ -340,6 +401,10 @@ export function Viewer({ account = null }: { account?: Account | null }) {
           </span>
         </button>
         <nav className={cx(ui.segmented, css.sheets)} aria-label={t("app.sheets")}>
+          {/* Вкладка есть у любого собранного проекта: сборка без сведений (старый код) — с подсказкой пересобрать */}
+          {project?.artifact && pages.length > 0 && (
+            <button className={cx(info && ui.on)} onClick={openInfo}>{t("overview.tab")}</button>
+          )}
           {tabs.map((tb) => (
             <button key={tb.pages[0]} className={cx(tb === tab && ui.on)}
                     title={tb.pages.length > 1 && !tb.views ? t("app.pages", { n: tb.pages.length }) : undefined}
@@ -381,18 +446,18 @@ export function Viewer({ account = null }: { account?: Account | null }) {
       <main id="stage" className={css.stage}>
         {main}
         {/* Скачать: PNG листа (весь лист, не больше A3 150 dpi) и DXF проекта */}
-        {project && current && !estimate && (
+        {project && current && !estimate && !info && (
           <DownloadMenu
             onPng={page && !source && !estimate && !loading ? () => downloadSheetPng(page, `${current}-${page.name}.png`) : null}
             dxf={project.dxf ? { href: `${base(current)}/out/${enc(project.dxf)}`, name: project.dxf } : null} />
         )}
-        {loading && (
+        {loading && !info && (
           <div className={css.loader} role="status" aria-live="polite">
             <span className={css.spinner} aria-hidden="true" />
             <span className="small muted">{project ? t("app.loadingSheet") : t("app.loadingProject")}</span>
           </div>
         )}
-        {wall && page && !loading ? (
+        {wall && page && !loading && !info && !estimate && !source ? (
           <>
             {/* Развёртки: одна страница — одна стена, имя — список всех стен; внизу слева — где она в квартире */}
             <WallPager walls={walls} at={wallAt} onTurn={turn} onPick={openWall} />
@@ -410,7 +475,9 @@ export function Viewer({ account = null }: { account?: Account | null }) {
       <SidePanel tab={side} onTab={showSide} page={source ? null : page} drawing={source ? null : drawing}
                  estimate={estimate && !source ? page?.estimate ?? null : null}
                  views={views} view={sheet} onView={openSheet}
-                 wall={!source && !loading ? wall?.data ?? null : null} onWiring={toWiring}>
+                 wall={!source && !loading ? wall?.data ?? null : null} onWiring={toWiring}
+                 variant={variantLabel ? { label: variantLabel, onOpen: openInfo } : null}
+                 summary={info && !source ? <OverviewSummary variants={variants} plumbing={overview?.plumbing?.estimate} openQuestions={openQs} refreshing={refreshing || choosing} /> : undefined}>
         {drawer && project && (
           <Drawer tab={drawer} project={project} shownSource={source} onSource={showSource}
                   closing={closing} onClose={closeDrawer} onClosed={drawerClosed} />
@@ -420,11 +487,11 @@ export function Viewer({ account = null }: { account?: Account | null }) {
   );
 }
 
-// Где был открыт проект в этом браузере: лист и вкладка «Смета» (place:<проект>)
-function savedPlace(name: string): { sheet: number; estimate: boolean } | null {
+// Где был открыт проект в этом браузере: лист, вкладка «Смета» или «Общие сведения» (place:<проект>)
+function savedPlace(name: string): { sheet: number; estimate: boolean; info: boolean } | null {
   try {
-    const v = JSON.parse(remembered(`place:${name}`) || "null") as { sheet?: unknown; estimate?: unknown } | null;
-    return v && typeof v.sheet === "number" ? { sheet: v.sheet, estimate: v.estimate === true } : null;
+    const v = JSON.parse(remembered(`place:${name}`) || "null") as { sheet?: unknown; estimate?: unknown; info?: unknown } | null;
+    return v && typeof v.sheet === "number" ? { sheet: v.sheet, estimate: v.estimate === true, info: v.info === true } : null;
   } catch {
     return null;
   }

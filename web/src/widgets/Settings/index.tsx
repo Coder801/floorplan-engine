@@ -16,6 +16,7 @@ export interface Account {
   plan: "client" | "pro" | null;
   space?: string | null;  // название фирмы (у «Моего ремонта» — нет)
   visitor: boolean;
+  code?: boolean;         // вошли по коду доступа к проекту (без учётки)
   logout: () => void;
 }
 
@@ -29,7 +30,7 @@ interface Props {
 export function Settings({ account, theme, onTheme }: Props) {
   const { open, toggle, ref } = usePopover<HTMLDivElement>();
   const { t } = useTranslation();
-  const plan = account?.visitor ? "guest" : account?.plan ?? "none";
+  const plan = account?.visitor ? "guest" : account?.code ? "code" : account?.plan ?? "none";
   return (
     <div ref={ref} className={cx(menu.wrap, css.settings)}>
       <button className={css.gear} aria-label={t("settings.title")} title={t("settings.title")} aria-haspopup="dialog"

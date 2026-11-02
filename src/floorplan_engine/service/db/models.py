@@ -13,7 +13,7 @@ from datetime import UTC, datetime
 from typing import Any, ClassVar
 
 from sqlalchemy import (
-    JSON,
+    BigInteger,
     Boolean,
     CheckConstraint,
     DateTime,
@@ -31,8 +31,8 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
-# JSON: в Postgres — jsonb (индексы и запросы внутрь), в SQLite — текст с JSON
-Json = JSON().with_variant(JSONB(), "postgresql")
+# JSON — jsonb: индексы и запросы внутрь (база только Postgres)
+Json = JSONB()
 
 
 def now() -> datetime:
@@ -73,11 +73,13 @@ class Studio(Base):
 
 class AppUser(Base):
     """Пользователь (user — служебное слово Postgres). Паролей нет: вход через OAuth
-    (oauth_account). email может быть пустым — не каждый провайдер его отдаёт."""
+    (oauth_account). email может быть пустым — не каждый провайдер его отдаёт; phone — из
+    входа через Telegram (db/telegram_login.py), «+380…»."""
 
     __tablename__ = "app_user"
     id: Mapped[uuid.UUID] = _id()
     email: Mapped[str | None] = mapped_column(String(320), unique=True)
+    phone: Mapped[str | None] = mapped_column(String(20), unique=True)
     name: Mapped[str] = mapped_column(String(200), default="")
     # client — хозяин квартиры, pro — студия или монтажник; None — ещё не выбрал
     account_type: Mapped[str | None] = mapped_column(String(10))
@@ -123,6 +125,25 @@ class EmailCode(Base):
     email: Mapped[str] = mapped_column(String(320))
     code_hash: Mapped[str] = mapped_column(String(64))
     attempts: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = _created()
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class LoginTicket(Base):
+    """Вход через Telegram (db/telegram_login.py): страница выдаёт ссылку
+    t.me/<бот>?start=<токен>, бот по «/start токен» запоминает чат, по контакту — телефон;
+    страница опрашивает билет и входит. В базе — только sha256 токена."""
+
+    __tablename__ = "login_ticket"
+    __table_args__ = (Index("ix_login_ticket_chat", "chat_id", "created_at"),)
+    id: Mapped[uuid.UUID] = _id()
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    lang: Mapped[str] = mapped_column(String(5), default="ru")
+    chat_id: Mapped[int | None] = mapped_column(BigInteger)
+    telegram_user_id: Mapped[str | None] = mapped_column(String(32))
+    phone: Mapped[str | None] = mapped_column(String(20))
+    name: Mapped[str] = mapped_column(String(200), default="")
     created_at: Mapped[datetime] = _created()
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -194,7 +215,6 @@ class ProjectMember(Base):
             "user_id",
             unique=True,
             postgresql_where=text("role = 'client'"),
-            sqlite_where=text("role = 'client'"),
         ),
     )
     project_id: Mapped[uuid.UUID] = mapped_column(
@@ -237,6 +257,27 @@ class Invite(Base):
     )
     accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class AccessCode(Base):
+    """Код доступа к проекту (db/access_codes.py): студия выдаёт код, человек вводит его на
+    экране входа и смотрит этот один проект без учётки (только чтение). В базе — только
+    sha256 кода; label — кому выдан, для списка."""
+
+    __tablename__ = "access_code"
+    __table_args__ = (Index("ix_access_code_project", "project_id", "created_at"),)
+    id: Mapped[uuid.UUID] = _id()
+    project_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("project.id", ondelete="CASCADE"))
+    code_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    label: Mapped[str] = mapped_column(String(200), default="")
+    created_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("app_user.id", ondelete="SET NULL")
+    )
+    created_at: Mapped[datetime] = _created()
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    uses: Mapped[int] = mapped_column(Integer, default=0)
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class SupportGrant(Base):

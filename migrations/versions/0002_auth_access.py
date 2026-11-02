@@ -103,7 +103,6 @@ def upgrade() -> None:
         ["user_id"],
         unique=True,
         postgresql_where=sa.text("role = 'client'"),
-        sqlite_where=sa.text("role = 'client'"),
     )
     op.create_table(
         "invite",

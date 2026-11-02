@@ -1,0 +1,13 @@
+// Глаз видимости слоя: без рамки, серый; скрытый слой — бледнее и перечёркнут
+
+@use "@/shared/styles/mixins" as *;
+
+.eye {
+  @include bare-button;
+  display: inline-grid; place-items: center; width: 28px; height: 28px; min-width: 0;
+  padding: 0; border-radius: 4px; color: inherit; cursor: pointer;
+  svg { fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; }
+  &:hover { background: var(--soft); }
+  &:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+}
+.off { color: var(--muted); opacity: .7; }

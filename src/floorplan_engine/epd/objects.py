@@ -14,7 +14,7 @@ from typing import Any
 from floorplan_engine.drawing.wiring import lay_out
 from floorplan_engine.electrical.anchors import symbol_key
 from floorplan_engine.electrical.boxes import BOX_CLEARANCE, BOX_TITLES, box_wall
-from floorplan_engine.electrical.elevations import behind_text, wall_elevations
+from floorplan_engine.electrical.elevations import WaterMap, behind_text, wall_elevations
 from floorplan_engine.electrical.panel import BoardPanel, build_panel
 from floorplan_engine.electrical.panel_text import amps, kw
 from floorplan_engine.electrical.wiring import RESERVE
@@ -98,6 +98,7 @@ TEXT: dict[str, dict[str, str]] = {
     "warning": {"ru": "Внимание", "uk": "Увага"},
     "behind": {"ru": "За стеной", "uk": "За стіною"},
     "points_on_wall": {"ru": "Точек", "uk": "Точок"},
+    "water_on_wall": {"ru": "Подводов воды и выпусков", "uk": "Підводів води і випусків"},
 }
 CARD_LOADS = 8  # потребителей в карточке аппарата, остальные — «ещё N»
 
@@ -132,8 +133,10 @@ def describe_objects(
     contours: dict[str, Contour],
     elec: Electrical | None = None,
     wiring: Wiring | None = None,
+    water: WaterMap | None = None,
 ) -> dict[str, ObjectInfo]:
-    """Карточки всех объектов модели по ключу «тип:id»."""
+    """Карточки всех объектов модели по ключу «тип:id»; water — подводы сантехники по стенам
+    (у развёрток — и стены, где есть только сантехника)."""
     lang = plan.language
     out: dict[str, ObjectInfo] = {}
     height_assumed = "ceiling_height" not in plan.model_fields_set
@@ -179,14 +182,16 @@ def describe_objects(
     if elec is not None:
         out.update(_electrical(plan, elec, wiring))
         # Развёртки: имя (пейджер и подсказка просмотра) и что за стеной
-        for e in wall_elevations(plan, contours, elec, wiring):
+        for e in wall_elevations(plan, contours, elec, wiring, water=water):
+            rows = [
+                (text("length", lang), _mm(e.length)),
+                (text("behind", lang), behind_text(e, lang)),
+                (text("points_on_wall", lang), str(len(e.points))),
+            ]
+            if e.water:
+                rows.append((text("water_on_wall", lang), str(len(e.water))))
             out[f"elevation:{e.key}"] = ObjectInfo(
-                tr("elev_card", lang, room=e.room_name, n=e.index),
-                (
-                    (text("length", lang), _mm(e.length)),
-                    (text("behind", lang), behind_text(e, lang)),
-                    (text("points_on_wall", lang), str(len(e.points))),
-                ),
+                tr("elev_card", lang, room=e.room_name, n=e.index), tuple(rows)
             )
         panel = build_panel(plan, elec)
         if panel is not None:

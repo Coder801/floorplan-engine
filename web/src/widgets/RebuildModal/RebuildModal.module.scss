@@ -1,0 +1,28 @@
+@use "sass:math";
+
+// Вуаль на весь экран (поверх шапки и панелей) и карточка по центру
+.veil {
+  position: fixed; inset: 0; z-index: 100;
+  display: grid; place-content: center;
+  background: color-mix(in srgb, var(--paper) 60%, transparent);
+  cursor: progress;
+}
+.modal {
+  display: grid; justify-items: center; gap: 10px; padding: 24px 32px; max-width: 320px; text-align: center;
+  background: var(--paper); color: var(--hl);
+  border: 1px solid var(--line); border-radius: 12px;
+  box-shadow: 0 8px 32px rgb(0 0 0 / .2);
+  outline: none;
+  b { color: inherit; font-weight: 600; }
+}
+.icon { display: block; }
+// Кнопки калькулятора: волна по диагонали, как lds-grid (задержка = −0,4 с на шаг строки + столбца)
+.key {
+  fill: currentColor; stroke: none;
+  animation: pulse 1.2s linear infinite;
+  @for $i from 0 through 8 {
+    &:nth-child(#{$i + 3}) { animation-delay: #{-0.4s * (math.div($i, 3) - math.div($i, 3) % 1 + $i % 3)}; }
+  }
+}
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }
+@media (prefers-reduced-motion: reduce) { .key { animation: none; } }

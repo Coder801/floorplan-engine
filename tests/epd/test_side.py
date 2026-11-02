@@ -10,7 +10,14 @@ from pathlib import Path
 from floorplan_engine.drawing.tables import Column, Table
 from floorplan_engine.epd.artifact import export_artifact
 from floorplan_engine.epd.objects import describe_objects
-from floorplan_engine.epd.side import STAGE_OBJECTS, drop_column, from_table, side_tables
+from floorplan_engine.epd.side import (
+    STAGE_OBJECTS,
+    drop_column,
+    from_table,
+    legend_entries,
+    side_legends,
+    side_tables,
+)
 from floorplan_engine.sheets.document import build_project_document, sheet_slug
 from tests.epd.test_objects import _model
 
@@ -74,14 +81,41 @@ def test_side_tables_link_rows_to_objects() -> None:
     qf2 = {f"wire:{r.id}" for r in wiring.runs if r.group == "QF2"}
     assert qf2 <= set(groups["QF2"])
     assert not qf2 & set(groups["QF3"])
-    points_t, symbols = tables["electrical"][:2]
-    # «Точки»: номер на плане → вид и высота; строка ведёт к своим точкам
+    # «Электрика»: только «Точки» (номер на плане → вид, высота, количество; строка ведёт
+    # к своим точкам); легенда — не таблица, а плашка на чертеже (side_legends)
+    (points_t,) = tables["electrical"]
     assert any("point:s1" in r.keys for r in points_t.rows)
     # «Группы» — на проводке: строка ведёт и к точкам, и к линиям группы
     assert "point:s1" in groups["QF2"]
     assert not any(t.title.startswith("Групп") for t in tables["electrical"])
-    socket = next(r for r in symbols.rows if "point:s1" in r.keys)
-    assert socket.cells[1] == "4"  # s1 ×2, s2, s3
+
+
+def test_panel_devices_in_sections_square_marker_off_line() -> None:
+    plan, contours, elec, wiring = _model()
+    devices = side_tables(plan, contours, elec, wiring)["panel"][0]
+    sections = [r.cells[1] for r in devices.rows if r.section]
+    assert sections == ["Ввод и резерв", "Линии групп", "Щит АКБ"]  # резерв — инвертор*
+    by_id = {r.cells[0]: r for r in devices.rows if not r.section}
+    assert by_id["QS1"].marker == "square" and by_id["QB1"].marker == "square"
+    assert by_id["QF2"].marker is None and by_id["QF2"].color is not None  # кружок группы
+    assert by_id["QF2"].as_dict().get("marker") is None
+    assert by_id["QS3"].as_dict()["marker"] == "square"
+    # Раздел «Линии групп» — только аппараты групп
+    rows = list(devices.rows)
+    start = next(k for k, r in enumerate(rows) if r.cells[1] == "Линии групп")
+    end = next(k for k, r in enumerate(rows) if r.cells[1] == "Щит АКБ")
+    assert all(r.color is not None for r in rows[start + 1 : end])
+
+
+def test_legend_entries_only_symbol_and_meaning() -> None:
+    plan, _, elec, _ = _model()
+    entries = legend_entries(elec, plan.language)
+    assert [e.key for e in entries] == ["socket", "board"]
+    assert entries[0].text == "Розетка с заземлением"
+    assert not any("QF" in e.text or e.text.isdigit() for e in entries)  # без групп и количества
+    legends = side_legends(elec, plan.language)
+    assert set(legends) == {"electrical", "lighting"}
+    assert legends["lighting"] == []  # света в модели нет
 
 
 def test_epd_page_has_view_stage_tables_and_theme_objects(tmp_path: Path) -> None:
@@ -93,9 +127,20 @@ def test_epd_page_has_view_stage_tables_and_theme_objects(tmp_path: Path) -> Non
         tmp_path / "p.epd",
         describe_objects(plan, contours, elec, wiring),
         side_tables(plan, contours, elec, wiring),
+        legends=side_legends(elec, plan.language),
     )
     with zipfile.ZipFile(path) as zf:
         pages = [json.loads(zf.read(f"pages/0{k}.json")) for k in (1, 2, 3, 4)]
+    # Легенда страницы электрики: подпись и примитивы значка с листа; на листе эти
+    # примитивы больше не объекты
+    legend = {e["key"]: e for e in pages[1]["legend"]}
+    assert set(legend) == {"socket", "board"} and "legend" not in pages[0]
+    assert legend["socket"]["text"] == "Розетка с заземлением"
+    assert all(
+        e["items"] and all("d" in it and "o" not in it for it in e["items"])
+        for e in legend.values()
+    )
+    assert not any(it.get("o", "").startswith("legend:") for it in pages[1]["items"])
     assert [p["stage"] for p in pages] == ["plan", "electrical", "wiring", "panel"]
     for page in pages:
         x0, y0, x1, y1 = page["view"]

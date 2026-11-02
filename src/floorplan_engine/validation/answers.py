@@ -24,6 +24,7 @@ from floorplan_engine.model.intake import (
     get_target,
     set_target,
 )
+from floorplan_engine.model.plumbing import PLUMBING_FILE
 from floorplan_engine.model.schema import (
     Electrical,
     Plan,
@@ -44,7 +45,11 @@ from floorplan_engine.validation.plan import (
     validate_plan,
 )
 
-STAGE_FILE = {Stage.PLAN: ROOM_FILE, Stage.ELECTRICAL: ELECTRICAL_FILE}
+STAGE_FILE = {
+    Stage.PLAN: ROOM_FILE,
+    Stage.ELECTRICAL: ELECTRICAL_FILE,
+    Stage.PLUMBING: PLUMBING_FILE,
+}
 
 
 def load_optional(path: Path, model: type[M]) -> tuple[M | None, list[Issue]]:

@@ -22,6 +22,12 @@ def run_offline() -> None:
 
 
 def run_online() -> None:
+    given = context.config.attributes.get("connection")  # тесты: своя база (tests/service)
+    if given is not None:
+        context.configure(connection=given, target_metadata=target_metadata)
+        with context.begin_transaction():
+            context.run_migrations()
+        return
     with make_engine().connect() as connection:
         context.configure(connection=connection, target_metadata=target_metadata)
         with context.begin_transaction():

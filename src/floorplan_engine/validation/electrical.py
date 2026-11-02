@@ -83,7 +83,7 @@ def _above_ceiling(elec: Electrical, plan: Plan, file: str) -> list[Issue]:
     ]
 
 
-def _check_wall_anchor(
+def check_wall_anchor(
     plan: Plan, room_id: str, wall: str, offset: float, path: str, file: str
 ) -> list[Issue]:
     room = next((r for r in plan.rooms if r.id == room_id), None)
@@ -122,7 +122,7 @@ def _check_point(
 ) -> list[Issue]:
     issues = _check_height(pt.height, f"{path}.height", file)
     if pt.wall is not None and pt.offset is not None:
-        return issues + _check_wall_anchor(plan, pt.room, pt.wall, pt.offset, path, file)
+        return issues + check_wall_anchor(plan, pt.room, pt.wall, pt.offset, path, file)
     room = next((r for r in plan.rooms if r.id == pt.room), None)
     if room is None:
         known = ", ".join(r.id for r in plan.rooms)
@@ -199,13 +199,13 @@ def validate_electrical(
     if elec.board is not None:
         b = elec.board
         issues += _check_height(b.height, "board.height", file)
-        issues += _check_wall_anchor(plan, b.room, b.wall, b.offset, "board", file)
+        issues += check_wall_anchor(plan, b.room, b.wall, b.offset, "board", file)
         issues += _check_board_width(plan, b, file)
     for s, strip in enumerate(elec.led_strips):
         # Конец ленты должен лежать на стене; попадание в проём здесь не ошибка
         issues += [
             replace(i, path=i.path.replace(".offset", ".end"))
-            for i in _check_wall_anchor(
+            for i in check_wall_anchor(
                 plan, strip.room, strip.wall, strip.end, f"led_strips[{s}]", file
             )
             if i.severity is Severity.ERROR

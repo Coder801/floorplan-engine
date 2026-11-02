@@ -28,7 +28,7 @@ from __future__ import annotations
 import json
 import re
 import zipfile
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -52,7 +52,7 @@ from floorplan_engine import __version__
 from floorplan_engine.drawing.ids import object_id
 from floorplan_engine.drawing.layers import A_VPORT
 from floorplan_engine.epd.objects import ObjectInfo, page_objects
-from floorplan_engine.epd.side import STAGE_OBJECTS, SideTable
+from floorplan_engine.epd.side import STAGE_OBJECTS, LegendEntry, SideTable
 from floorplan_engine.model.schema import Plan
 from floorplan_engine.sheets.document import sheet_slug
 from floorplan_engine.sheets.preview import (
@@ -209,6 +209,21 @@ def record_page(doc: Drawing, layout: Paperspace) -> dict[str, Any]:
     return page
 
 
+def legend_items(
+    items: list[dict[str, Any]], entries: Sequence[LegendEntry]
+) -> list[dict[str, Any]]:
+    """Легенда страницы для плашки просмотра: подпись и примитивы значка с листа (помечены
+    legend:<key> в electrical.draw_legend, мм листа). С примитивов листа метка снимается:
+    это не объект проекта, подсказки и подсветки у него нет."""
+    by_key: dict[str, list[dict[str, Any]]] = {}
+    for item in items:
+        kind, _, key = item.get("o", "").partition(":")
+        if kind == "legend":
+            del item["o"]
+            by_key.setdefault(key, []).append(dict(item))
+    return [{"key": e.key, "text": e.text, "items": by_key.get(e.key, [])} for e in entries]
+
+
 def _viewports(layout: Paperspace) -> Iterable[Any]:
     """Видовые экраны чертежа; служебный видовой экран листа (id 1) не в счёт."""
     for vp in layout.query("VIEWPORT"):
@@ -286,6 +301,9 @@ def export_artifact(
     scene: dict[str, Any] | None = None,
     panel: dict[str, Any] | None = None,
     elevations: list[dict[str, Any]] | None = None,
+    legends: dict[str, list[LegendEntry]] | None = None,
+    variants: dict[str, Any] | None = None,
+    overview: dict[str, Any] | None = None,
 ) -> Path:
     """Записать .epd: манифест и по странице на каждый лист документа. objects — карточки
     объектов для подсказок (objects.describe_objects): в страницу — только её объекты
@@ -295,13 +313,19 @@ def export_artifact(
     для подсветки соседей выделенной линии (objects.line_groups); edit — что можно
     править на листе проводки (objects.wiring_handles); scene — 3D-сцена проводки
     (scene3d.build_scene); panel — щит для своего показа в просмотре (panel_data.panel_data);
-    elevations — развёртки данными (elevations.elevation_data): на лист — те, что на нём."""
+    elevations — развёртки данными (elevations.elevation_data): на лист — те, что на нём;
+    legends — легенда по теме листа (side.side_legends) для плашки просмотра: подписи
+    отсюда, значки — примитивы legend:<key> с самого листа; variants — варианты проводки
+    (pipeline.variant_block): выбранный и сводка всех — в манифест; overview — общие сведения
+    о проекте (overview.overview_data) для первой вкладки просмотра — тоже в манифест."""
     pages = []
     path.parent.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(path, "w") as zf:
         for no, layout in enumerate(sheet_layouts(doc), 1):
             page = record_page(doc, layout)
             stage = page.get("stage")
+            if legends and stage in legends:
+                page["legend"] = legend_items(page["items"], legends[stage])
             if objects:
                 keys = {item["o"] for item in page["items"] if "o" in item}
                 if stage in STAGE_OBJECTS:
@@ -311,6 +335,8 @@ def export_artifact(
                 page["tables"] = [t.as_dict() for t in tables[stage]]
             if tables and stage == "wiring" and tables.get("estimate"):
                 page["estimate"] = tables["estimate"][0].as_dict()  # вкладка «Смета»
+            if tables and stage == "plumbing" and tables.get("plumbing_estimate"):
+                page["estimate"] = tables["plumbing_estimate"][0].as_dict()
             if chains and stage == "wiring":
                 drawn = {item["o"] for item in page["items"] if "o" in item}
                 page["chains"] = {
@@ -349,6 +375,8 @@ def export_artifact(
             "project": {"name": plan.name, "language": plan.language},
             "units": "mm",
             "pages": pages,
+            **({"variants": variants} if variants else {}),
+            **({"overview": overview} if overview else {}),
         }
         _write(zf, MANIFEST, manifest)
     return path

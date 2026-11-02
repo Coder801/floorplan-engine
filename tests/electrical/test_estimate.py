@@ -20,6 +20,7 @@ from floorplan_engine.electrical.estimate import (
     unknown_keys,
 )
 from floorplan_engine.electrical.panel import build_panel, device_name
+from floorplan_engine.electrical.pricing import Prices
 from floorplan_engine.electrical.wiring import RESERVE, box_wiring
 from floorplan_engine.model.schema import Electrical, Plan
 from floorplan_engine.pipeline import build_project, estimate_project
@@ -135,16 +136,21 @@ def test_estimate_project_writes_tables(tmp_path: Path) -> None:
     (project / "room.yaml").write_text(yaml.safe_dump(room, allow_unicode=True), "utf-8")
     (project / "electrical.yaml").write_text(yaml.safe_dump(ELEC, allow_unicode=True), "utf-8")
 
+    # Без prices.yaml все цены — от сервиса цен (имитация), смета всё равно с итогом
     no_prices = estimate_project(project)
-    assert no_prices.estimate is not None and no_prices.estimate.total == 0
-    assert no_prices.estimate.unpriced == len(no_prices.estimate.lines)
+    est = no_prices.estimate
+    assert est is not None and est.total > 0 and est.unpriced == 0
+    assert est.from_service == len(est.lines) and no_prices.prices is None
+    assert "Все цены — из сервиса цен" in no_prices.files[0].read_text("utf-8")
 
     (project / "prices.yaml").write_text("items:\n  socket_box: 20\n  work.chase: 200\n", "utf-8")
     result = estimate_project(project)
     assert result.estimate is not None and result.estimate.total > 0
+    assert result.estimate.from_service == len(result.estimate.lines) - 2  # свой прайс поверх
     md, csv_path, xlsx = result.files
     assert xlsx.suffix == ".xlsx" and xlsx.stat().st_size > 0
-    assert "Смета электрики: Кв" in md.read_text("utf-8")
+    text = md.read_text("utf-8")
+    assert "Смета электрики: Кв" in text and "из сервиса цен (пока имитация" in text
     raw = csv_path.read_bytes()
     assert raw.startswith(b"\xef\xbb\xbf")  # BOM — Excel узнаёт UTF-8
     assert "socket_box;Подрозетник;шт;4;20;80,00" in raw.decode("utf-8-sig")
@@ -212,7 +218,7 @@ def test_estimate_on_wiring_sheet(tmp_path: Path) -> None:
     plan = make_plan(RECT, [DOOR])
     _, contours = validate_plan(plan)
     elec = Electrical.model_validate(ELEC)
-    prices = PriceList.model_validate({"items": {"socket_box": 20}})
+    prices = Prices(PriceList.model_validate({"items": {"socket_box": 20}}))
     path = tmp_path / "project.dxf"
     build_project_document(plan, contours, elec, prices=prices).saveas(path, encoding="utf-8")
     texts = {
@@ -431,6 +437,23 @@ def test_panel_from_board_sheet_priced_by_kind() -> None:
     assert keys.index("board_enclosure") < keys.index(devices[0].key)  # аппараты — за корпусом
 
 
+def test_battery_box_in_estimate() -> None:
+    """Щит АКБ инвертора — в смете за аппаратами щита: автомат АКБ и корпус с артикулом."""
+    plan = make_plan(RECT, [DOOR])
+    _, contours = validate_plan(plan)
+    elec = Electrical.model_validate(ELEC)
+    wiring = box_wiring(plan, contours, elec)
+    assert wiring is not None
+    panel = build_panel(plan, elec)
+    assert panel is not None and panel.dc is not None
+    est = build_estimate(wiring, elec, PriceList(), "ru", panel)
+    keys = [ln.key for ln in est.lines]
+    assert "dc_battery.125 А DC 2P" in keys
+    box = next(ln for ln in est.lines if ln.key == "dc_enclosure")
+    assert box.name == "Корпус щита АКБ Hager Golf VS112PD, 12 мод."
+    assert keys.index("dc_battery.125 А DC 2P") < keys.index("dc_enclosure")
+
+
 def test_fixtures_and_led_in_estimate() -> None:
     """Светильники, выводы и LED-лента — в смете, названия — как в условных обозначениях."""
     wiring, _ = _wiring()
@@ -458,3 +481,35 @@ def test_mechanism_hint_says_price_tbd_only_without_price() -> None:
     line = next(ln for ln in priced.lines if ln.key == "work.mechanism")
     assert line.hint == "Установка розеток, выключателей, интернет- и ТВ-выводов"
     assert all(ln.hint is None for ln in priced.lines if ln.key != "work.mechanism")
+
+
+def test_conduit_floor_always_ceiling_only_premium() -> None:
+    """Гофра (docs/wiring-variants.md): по полу — всегда, вся линия; по потолку — в премиуме,
+    только участок по потолку; диаметр — по сечению кабеля."""
+    from floorplan_engine.electrical.estimate import conduit_diameter, conduit_mm, quantities
+
+    assert [conduit_diameter(m) for m in ("3x1.5", "3x2.5", "3x4", "5x10", "UTP")] == [
+        16,
+        20,
+        25,
+        32,
+        20,
+    ]
+    wiring, elec = _wiring()
+    run = wiring.runs[0]
+    assert conduit_mm(run, "standard") == 0  # по потолку в стандарте — без гофры
+    assert conduit_mm(run, "proper") == run.plan_mm  # премиум: участок по потолку
+    assert not any(k.startswith("conduit.") for k in quantities(wiring, elec))
+    proper = quantities(wiring, elec.model_copy(update={"mode": "proper"}))
+    assert any(k.startswith("conduit.") for k in proper) and proper["work.conduit"] > 0
+
+    floor_elec = elec.model_copy(update={"route": "floor"})
+    plan = make_plan(RECT, [DOOR])
+    _, contours = validate_plan(plan)
+    floor = box_wiring(plan, contours, floor_elec)
+    assert floor is not None and any(r.route == "floor" for r in floor.runs)
+    q = quantities(floor, floor_elec)
+    total = sum(v for k, v in q.items() if k.startswith("conduit."))
+    # по полу — вся линия с запасом; освещение идёт по потолку (в стандарте — без гофры)
+    expected = sum(r.length_mm for r in floor.runs if r.route == "floor") / 1000 * (1 + RESERVE)
+    assert total == pytest.approx(expected, abs=0.3)

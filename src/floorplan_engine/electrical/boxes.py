@@ -1,7 +1,8 @@
-"""Где стоит распаечная коробка: места на стене группы (шаг BOX_STEP, не ближе BOX_CLEARANCE
-к углам), охват веток по трассе (branch_reach), веер линий (fan_angle) — коробка на потолке,
+"""Где стоит распаечная коробка: на потолке — в центре своих точек, не ближе
+routing.CLEARANCE к стенам (place_ceiling_box); у трасс по полу — на стене (шаг BOX_STEP,
+не ближе BOX_CLEARANCE к углам, place_box). Охват веток по трассе (branch_reach),
 типоразмер по числу линий (box_size), деление точек по зонам (split_points), перенос
-коробки вдоль стены по правке из просмотра (moved_anchor)."""
+коробки по правке из просмотра (moved_anchor)."""
 
 from __future__ import annotations
 
@@ -9,9 +10,11 @@ import math
 from collections.abc import Callable, Sequence
 
 from shapely.geometry import Point
+from shapely.ops import nearest_points
 
 from floorplan_engine.electrical.anchors import Anchor
 from floorplan_engine.electrical.routing import (
+    CLEARANCE,
     End,
     Grid,
     Router,
@@ -32,8 +35,9 @@ BOX_LARGE = ("190x140", 10)
 BOX_ORDER = (*(k for k, _ in BOX_SIZES), BOX_LARGE[0])
 BOX_TITLES = {"80": "Ø80", "100x100": "100×100", "150x110": "150×110", "190x140": "190×140"}
 BOX_BRANCHES = BOX_SIZES[-1][1] - 1  # веток на коробку: одна линия — питающая от щита
-FAN_ANGLE = 90.0  # градусов: линии из коробки на стене расходятся шире — коробка на потолок
-ON_WALL = 50.0  # мм: точка на линии стены коробки — «на её стене»
+# Места на потолке, где ветки длиннее самых коротких не больше чем на эту долю, считаются
+# равными — из них коробка встаёт ближе к центру своих точек
+CENTER_SLACK = 0.1
 
 
 def _manhattan(a: Vec, b: Vec) -> float:
@@ -60,11 +64,11 @@ def _box_candidates(g: RoomGeometry, depth: float) -> list[Anchor]:
 Reach = Callable[[Vec], float]
 
 
-def branch_reach(g: RoomGeometry, targets: Sequence[Anchor]) -> Reach:
+def branch_reach(g: RoomGeometry, targets: Sequence[Anchor], any_angle: bool = False) -> Reach:
     """Сумма путей от места до точек по трассе внутри помещения (с поворотами), а не по
     прямой: коробка не встанет за перегородку от своих точек."""
     area = room_area(g)
-    routers = [Router(area, anchor_end(t)) for t in targets]
+    routers = [Router(area, anchor_end(t), any_angle) for t in targets]
     return lambda p: sum(r.cost(p) for r in routers)
 
 
@@ -105,40 +109,29 @@ def split_points(points: Sequence[Vec], cap: int) -> list[list[int]]:
     return split(idx)
 
 
-def fan_angle(box: Anchor, targets: Sequence[Anchor]) -> float:
-    """На сколько градусов расходятся линии из коробки на стене к её точкам: наибольший угол
-    между направлениями на точки. Все точки на стене коробки (ряд розеток под ней) — 0."""
-    assert box.wall_dir is not None
-    d = box.wall_dir
-
-    def on_wall(t: Anchor) -> bool:
-        v = t.pos - box.pos
-        return abs(d.x * v.y - d.y * v.x) < ON_WALL
-
-    if all(on_wall(t) for t in targets):
-        return 0.0
-    angles = [math.atan2(t.node.y - box.node.y, t.node.x - box.node.x) for t in targets]
-    widest = 0.0
-    for a in angles:
-        for b in angles:
-            diff = abs(a - b) % (2 * math.pi)
-            widest = max(widest, min(diff, 2 * math.pi - diff))
-    return math.degrees(widest)
-
-
 def place_ceiling_box(
-    g: RoomGeometry, board: Router, reach: Reach, taken: Sequence[Vec], depth: float
+    g: RoomGeometry, reach: Reach, targets: Sequence[Anchor], taken: Sequence[Vec], depth: float
 ) -> Anchor | None:
-    """Коробка на потолке: место внутри помещения не ближе CLEARANCE к стенам, где путь от
-    щита плюс ветки до точек наименьшие (ближе к середине точек — к центру помещения)."""
-    best: tuple[float, Vec] | None = None
-    for p in Grid.of(room_area(g)).free_points():
-        if any(_manhattan(p, t) < BOX_SPACING for t in taken):
-            continue
-        cost = board.cost(p) + reach(p)
-        if best is None or cost < best[0] - 1e-6:
-            best = (cost, p)
-    return None if best is None else Anchor(best[1], None, None, depth)
+    """Коробка на потолке: место внутри помещения не ближе CLEARANCE к стенам в центре своих
+    точек. Из мест, где ветки до точек по трассе не длиннее самых коротких на CENTER_SLACK, —
+    ближайшее к середине точек: путь от щита место не выбирает (одна питающая линия не
+    тянет коробку к стене со стороны щита)."""
+    spots = [
+        (reach(p), p)
+        for p in Grid.of(room_area(g)).free_points()
+        if all(_manhattan(p, t) >= BOX_SPACING for t in taken)
+    ]
+    if not spots:
+        return None
+    limit = min(c for c, _ in spots) * (1 + CENTER_SLACK) + 1e-6
+    mid = Vec(
+        sum(t.node.x for t in targets) / len(targets),
+        sum(t.node.y for t in targets) / len(targets),
+    )
+    _, best = min(
+        ((c, p) for c, p in spots if c <= limit), key=lambda s: ((s[1] - mid).length(), s[0])
+    )
+    return Anchor(best, None, None, depth)
 
 
 def box_wall(g: RoomGeometry, anchor: Anchor) -> WallSegment | None:
@@ -159,10 +152,18 @@ def box_wall(g: RoomGeometry, anchor: Anchor) -> WallSegment | None:
 
 def moved_anchor(g: RoomGeometry, anchor: Anchor, at: Vec) -> Anchor | None:
     """Новое место коробки: на стене — проекция на её стену, не ближе BOX_CLEARANCE к углам;
-    на потолке — точка, если она внутри помещения. None — места нет."""
+    на потолке — точка внутри помещения, а ближе CLEARANCE к стенам — ближайшее место на этом
+    расстоянии. None — места нет."""
     if anchor.inward is None:
-        inside = room_area(g).contains(Point(at.x, at.y))
-        return Anchor(at, None, None, anchor.depth) if inside else None
+        area = room_area(g)
+        pt = Point(at.x, at.y)
+        if not area.contains(pt):
+            return None
+        inner = area.buffer(-CLEARANCE, join_style="mitre")
+        if not inner.is_empty and not inner.contains(pt):
+            near = nearest_points(inner, pt)[0]
+            at = Vec(near.x, near.y)
+        return Anchor(at, None, None, anchor.depth)
     seg = box_wall(g, anchor)
     if seg is None or seg.length < 2 * BOX_CLEARANCE:
         return None

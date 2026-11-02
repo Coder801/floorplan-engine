@@ -19,7 +19,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -107,6 +107,24 @@ class BoardView:
 
 
 @dataclass(frozen=True)
+class WaterView:
+    """Водорозетка или выпуск на стене — их считает сантехника (plumbing/rows.water_views):
+    x — от начала стены, y — ось от пола, мм; number — номер прибора на листе «Сантехника»."""
+
+    fixture: str
+    number: int
+    kind: str  # cold | hot | sewer
+    x: float
+    y: float
+    d: int  # Ø, мм
+    assumed: bool  # высота типовая
+    names: dict[str, str] = field(default_factory=dict)  # прибор словами: ru, uk
+
+
+WaterMap = Mapping[tuple[str, str], Sequence[WaterView]]  # (помещение, стена) → подводы
+
+
+@dataclass(frozen=True)
 class WallElevation:
     room: str
     room_name: str
@@ -122,6 +140,7 @@ class WallElevation:
     board: BoardView | None = None
     behind: tuple[tuple[str, int | None], ...] = ()  # за стеной: (помещение, номер его стены)
     back: tuple[PointView, ...] = ()  # выводы на обратной стороне стены (x — с этой стороны)
+    water: tuple[WaterView, ...] = ()  # водорозетки и выпуски сантехники
 
     @property
     def key(self) -> str:
@@ -132,6 +151,7 @@ class WallElevation:
         """Верх чертежа: потолок или, если что-то стоит выше потолка (ошибка данных или
         потолок не тот), — это место с запасом."""
         tops = [p.y + 100.0 for p in self.points] + [b.y + b.size / 2 for b in self.boxes]
+        tops += [w.y + 100.0 for w in self.water]
         if self.board is not None:
             tops.append(self.board.y + self.board.height / 2)
         return max([self.height, *tops])
@@ -143,6 +163,7 @@ class WallElevation:
     def heights(self) -> list[float]:
         """Отметки от пола для размеров: точки, щит, коробки (без повторов, по возрастанию)."""
         ys = {round(p.y) for p in self.points} | {round(b.y) for b in self.boxes}
+        ys |= {round(w.y) for w in self.water}
         if self.board is not None:
             ys.add(round(self.board.y))
         return sorted(float(y) for y in ys)
@@ -150,6 +171,7 @@ class WallElevation:
     def offsets(self) -> list[float]:
         """Отступы от начала стены: точки, щит, коробки (без повторов, по возрастанию)."""
         xs = {round(p.x) for p in self.points} | {round(b.x) for b in self.boxes}
+        xs |= {round(w.x) for w in self.water}
         if self.board is not None:
             xs.add(round(self.board.x))
         return sorted(float(x) for x in xs)
@@ -169,8 +191,10 @@ def wall_elevations(
     elec: Electrical,
     wiring: Wiring | None,
     ceiling_default: float = 2700.0,
+    water: WaterMap | None = None,
 ) -> list[WallElevation]:
-    """Развёртки стен с электрикой — по помещениям и обходу стен."""
+    """Развёртки стен с электрикой и сантехникой (water — подводы приборов по стенам) — по
+    помещениям и обходу стен."""
     ceiling = wiring.ceiling_height if wiring is not None else ceiling_default
     assumed = wiring.height_assumed if wiring is not None else True
     numbers = number_points(plan, elec)
@@ -214,8 +238,10 @@ def wall_elevations(
     for room in plan.rooms:
         for k, wall in enumerate(room.walls, 1):
             w = walls.get((room.id, wall.id))
-            if w is None:
+            wet = tuple(sorted((water or {}).get((room.id, wall.id), ()), key=lambda v: v.x))
+            if w is None and not wet:
                 continue
+            w = w or _Wall()
             seg = geoms[room.id].contour.segments[k - 1]
             openings = _openings(room, wall.id, ceiling)
             out.append(
@@ -234,6 +260,7 @@ def wall_elevations(
                     w.board,
                     behind(geoms[room.id], seg, list(geoms.values())),
                     _back_points(seg, room.id, geoms, elec, numbers),
+                    wet,
                 )
             )
     return out
@@ -245,6 +272,7 @@ def elevation_data(
     elec: Electrical,
     wiring: Wiring | None,
     colors: dict[str, int],
+    water: WaterMap | None = None,
 ) -> list[dict[str, Any]]:
     """Развёртки данными для своего показа в просмотре (ключ elevations страницы, как щит):
     стена, проёмы, штробы, щит, коробки и точки — с номером листа электрики, названием,
@@ -323,6 +351,20 @@ def elevation_data(
                 for b in e.boxes
             ],
             "points": pts,
+            "water": [
+                {
+                    "fixture": v.fixture,
+                    "key": f"fixture:{v.fixture}",
+                    "name": v.names.get(lang, v.fixture),
+                    "n": v.number,
+                    "kind": v.kind,
+                    "x": r(v.x),
+                    "y": r(v.y),
+                    "d": v.d,
+                    "assumed": v.assumed,
+                }
+                for v in e.water
+            ],
             "back": [
                 {
                     "id": p.id,
@@ -347,7 +389,7 @@ def elevation_data(
             }
         return data
 
-    elevations = wall_elevations(plan, contours, elec, wiring)
+    elevations = wall_elevations(plan, contours, elec, wiring, water=water)
     ceiling = elevations[0].height if elevations else 2700.0
     done = {(e.room, e.wall): content(e) for e in elevations}
     geoms = {g.room.id: g for g in room_geometries(plan, contours)}

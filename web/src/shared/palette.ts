@@ -2,12 +2,13 @@
 
 import { THEMES, type Theme } from "./consts";
 
-export const palette = { ink: "none", paper: "#ffffff", hl: "#d2491a" };
+export const palette = { ink: "none", paper: "#ffffff", hl: "#d2491a", pin: "#1f6fb5" };
 
 const cssVar = (name: string) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 
 export function refreshPalette() {
   palette.ink = cssVar("--ink"); palette.paper = cssVar("--paper"); palette.hl = cssVar("--hl");
+  palette.pin = cssVar("--pin") || palette.pin;
 }
 
 export const isDark = () => !!palette.ink && palette.ink !== "none";

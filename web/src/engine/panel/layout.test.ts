@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { PanelData, PanelDevice } from "@/shared/types";
-import { bestLayout, busSegments, layout, MODULE, PAD, splitRows, termX } from "./layout";
+import type { PanelDc, PanelData, PanelDevice, PanelEnclosure } from "@/shared/types";
+import { busSegments, fan, groupPath, LABEL_STEP, layout, MODULE, splitRows, termX } from "./layout";
 
 const dev = (id: string, modules: number, extra: Partial<PanelDevice> = {}): PanelDevice => ({
   id, key: `device:${id}`, kind: "breaker", label: "C16", title: id,
@@ -9,12 +9,26 @@ const dev = (id: string, modules: number, extra: Partial<PanelDevice> = {}): Pan
   ...extra,
 });
 
-const data = (devices: PanelDevice[], external = false): PanelData => ({
-  name: "ЩР", phases: 1, scheme: "standard", input: { label: "C40", assumed: true }, devices, groups: {},
+// Hager Golf VS212PD / VS318PD — как в panel_catalog.ENCLOSURES
+const golf = (rows: number, perRow: 12 | 18): PanelEnclosure => ({
+  id: `hager.VS${rows}${perRow}PD`, brand: "hager", series: "Golf", article: `VS${rows}${perRow}PD`,
+  title: `Hager Golf VS${rows}${perRow}PD`, rows, per_row: perRow, width: perRow === 12 ? 282 : 390,
+  height: [252, 377, 500, 647][rows - 1], depth: 99, pitch: 125, body: "#f6f6f3",
+});
+
+const data = (devices: PanelDevice[], enclosure: PanelEnclosure | null = golf(2, 12), external = false): PanelData => ({
+  name: "ЩР", phases: 1, scheme: "standard", input: { label: "C40", assumed: true }, enclosure, devices,
+  groups: Object.fromEntries(devices.filter((d) => d.group).map((d) => [d.group!, {} as never])),
   totals: { installed: 0, demand: 1, calculated: 0, current: 0, modules: 0 }, warnings: [],
   texts: { title: "", grid: "", reserve: "" },
   ...(external ? { external: { id: "XP1", kind: "plug", title: "", to: "SA1", feed: null } } : {}),
 });
+
+// Щит как с бэка: рейка у каждого аппарата
+const rowed = (rows: PanelDevice[][]) => rows.flatMap((r, k) => r.map((d) => ({ ...d, row: k })));
+
+const groups = (n: number, kind = "breaker", modules = 1) =>
+  Array.from({ length: n }, (_, k) => dev(`QF${k}`, modules, { kind, group: `QF${k}` }));
 
 describe("раскладка щита", () => {
   it("аппарат не делится между рейками, порядок сохраняется", () => {
@@ -34,45 +48,93 @@ describe("раскладка щита", () => {
     ]);
   });
 
-  it("ширина аппарата — из модели, ряды друг под другом", () => {
-    const l = layout(data([dev("a", 2), dev("b", 1), dev("c", 12)]), 12);
+  it("корпус — габарит щита из каталога, рейка — по центру, рейки — по шагу корпуса", () => {
+    const l = layout(data(rowed([[dev("QS1", 2, { kind: "input" })], groups(12)]), golf(3, 12)));
+    expect(l.box.w).toBe(282);
+    expect(l.box.h).toBe(500);
+    expect(l.railX).toBeCloseTo((282 - 12 * MODULE) / 2);
+    expect(l.rails).toHaveLength(3);  // и пустая
+    expect(l.rails[1] - l.rails[0]).toBe(125);
+    expect((l.rails[0] + l.rails[2]) / 2).toBeCloseTo(l.box.y + l.box.h / 2);
+  });
+
+  it("рейка аппарата — с бэка; ширина — из модели", () => {
+    const l = layout(data(rowed([[dev("a", 2), dev("b", 1)], [dev("c", 12)]])));
     const [a, b, c] = l.placed;
     expect(b.x).toBeCloseTo(a.x + 2 * MODULE);
     expect(c.row).toBe(1);
     expect(c.y).toBeGreaterThan(a.y + a.h);
-    expect(l.box.w).toBeCloseTo(12 * MODULE + 2 * PAD);
   });
 
-  it("внешний аппарат резерва — справа от корпуса", () => {
-    const l = layout(data([dev("a", 2)], true), 12);
+  it("аппараты не выходят за корпус, пучок не налезает на следующую рейку", () => {
+    for (const [enc, rows] of [
+      [golf(2, 12), [[dev("QS1", 2, { kind: "input" }), dev("KV1", 3, { kind: "relay", model: { ...dev("x", 3).model, height: 90 } })], groups(12)]],
+      [golf(3, 18), [[dev("QS1", 2, { kind: "input" })], groups(18), groups(9, "diff", 2)]],
+      [golf(4, 12), [[dev("QS1", 2, { kind: "input" })], groups(12), groups(12), groups(6, "diff", 2)]],
+    ] as const) {
+      const l = layout(data(rowed(rows.map((r) => [...r])), enc));
+      for (const p of l.placed) {
+        expect(p.x).toBeGreaterThanOrEqual(l.box.x);
+        expect(p.x + p.w).toBeLessThanOrEqual(l.box.x + l.box.w);
+        expect(p.y).toBeGreaterThanOrEqual(l.box.y);
+        expect(p.y + p.h).toBeLessThanOrEqual(l.box.y + l.box.h);
+      }
+      l.rows.forEach((row, r) => {
+        const next = l.rows[r + 1];
+        expect(row.gutterBottom).toBeLessThanOrEqual(next ? next.top : l.n.y);
+        expect(row.pitch).toBeGreaterThan(0);
+      });
+    }
+  });
+
+  it("внешний аппарат резерва — справа от корпуса, подписи — под ним", () => {
+    const l = layout(data(rowed([[dev("SA1", 3, { kind: "changeover" })], groups(4)]), golf(2, 12), true));
     expect(l.external!.x).toBeGreaterThan(l.box.x + l.box.w);
     expect(l.width).toBeGreaterThan(l.box.w);
-  });
-
-  it("узкое высокое окно — рейка уже, широкое низкое — шире", () => {
-    const d = data(Array.from({ length: 40 }, (_, k) => dev(`q${k}`, 1)));
-    expect(bestLayout(d, 400, 2000).perRow).toBe(12);
-    expect(bestLayout(d, 2000, 400).perRow).toBe(24);
+    for (const p of l.placed.filter((q) => q.label !== null)) {
+      expect(p.label!).toBeGreaterThan(l.external!.y + l.external!.h);
+    }
   });
 
   it("шина — отдельно основная и резервная", () => {
-    const l = layout(data([dev("a", 1), dev("b", 1), dev("r", 1, { reserve: true })]), 12);
-    const segs = [0, 1].flatMap((r) => busSegments(l.placed.filter((p) => p.row === r)));
+    const l = layout(data(rowed([[dev("a", 1), dev("b", 1), dev("r", 1, { reserve: true })]])));
+    const segs = busSegments(l.placed.filter((p) => p.row === 0));
     expect(segs).toHaveLength(2);
     expect(segs[1][2]).toBe(true);
   });
 
-  it("общие аппараты — не на гребёнке групп; дорожки групп — под рейкой, у левого ниже", () => {
-    const l = layout(data([dev("QS1", 2, { kind: "input" }), dev("a", 1, { group: "a" }), dev("b", 1, { group: "b" })]), 12);
+  it("провода групп — тонким пучком под рейкой, у левого ниже; подписи — по порядку проводов", () => {
+    const l = layout(data(rowed([[dev("QS1", 2, { kind: "input" })], groups(12)])));
     expect(busSegments(l.placed.filter((p) => p.row === 0))).toHaveLength(0);
-    const [a, b] = l.placed.filter((p) => p.row === 1);
-    expect(busSegments([a, b])[0][0]).toBeCloseTo(a.x);
-    expect(b.lane!).toBeGreaterThan(b.y + b.h);
-    expect(a.lane!).toBeGreaterThan(b.lane!);
+    const row = l.placed.filter((p) => p.row === 1);
+    expect(row[0].lane!).toBeGreaterThan(row[11].lane!);
+    expect(row[11].lane!).toBeGreaterThan(row[11].y + row[11].h);
+    expect(l.rows[1].pitch).toBeLessThanOrEqual(3);
+    // Сверху вниз по проводам — сверху вниз по подписям, не ближе шага: веер без пересечений
+    const byLane = [...row].sort((a, b) => a.lane! - b.lane!);
+    byLane.slice(1).forEach((p, k) => expect(p.label! - byLane[k].label!).toBeGreaterThanOrEqual(LABEL_STEP - 1e-9));
+    // Внутри корпуса провод горизонтален; за корпусом — к подписи
+    const path = groupPath(l, row[0]);
+    expect(path[2][1]).toBe(row[0].lane);
+    expect(path[2][0]).toBeGreaterThan(l.box.x + l.box.w);
+    expect(path[3]).toEqual([l.labelX - 3, row[0].label]);
+  });
+
+  it("веер подписей: свободные — у своего провода, слипшиеся — группой по центру", () => {
+    expect(fan([0, 100], 10, -Infinity)).toEqual([0, 100]);
+    expect(fan([50, 51, 52], 10, -Infinity)).toEqual([41, 51, 61]);
+    expect(fan([50, 51, 52], 10, 45)).toEqual([45, 55, 65]);
+  });
+
+  it("без корпуса в данных (старый .epd) — корпус по месту", () => {
+    const l = layout(data(groups(30), null));
+    expect(l.enclosure.per_row).toBe(18);
+    expect(l.rows).toHaveLength(2);
+    for (const p of l.placed) expect(p.x + p.w).toBeLessThanOrEqual(l.box.x + l.box.w);
   });
 
   it("шина PE — над первой рейкой, N — под последней, обе в корпусе", () => {
-    const l = layout(data(Array.from({ length: 20 }, (_, k) => dev(`q${k}`, 1))), 12);
+    const l = layout(data(rowed([groups(12), groups(8)])));
     const last = l.rows[l.rows.length - 1];
     expect(l.pe.y + l.pe.h).toBeLessThan(l.rows[0].top);
     expect(l.pe.y).toBeGreaterThan(l.box.y);
@@ -81,12 +143,39 @@ describe("раскладка щита", () => {
   });
 
   it("клеммник — по клемме на группу, ввод и запас; клеммы внутри корпуса клеммника", () => {
-    const d = data([dev("a", 1, { group: "a" }), dev("b", 1, { group: "b" })]);
-    d.groups = { a: {} as never, b: {} as never };
-    const l = layout(d, 12);
+    const l = layout(data(rowed([groups(2)])));
     expect(l.terminals).toBe(4);
     expect(termX(l.pe, 0)).toBeGreaterThan(l.pe.x);
     expect(termX(l.pe, l.terminals)).toBeLessThan(l.pe.x + l.pe.w);
     expect(l.pe.x + l.pe.w).toBeLessThan(l.box.x + l.box.w);
+  });
+
+  it("щит АКБ — справа от подписей, под инвертором; дорожки без пересечений, АКБ под корпусом", () => {
+    const dcDevs = rowed([[dev("QB1", 3, { kind: "dc_battery" }), dev("QP1", 2, { kind: "dc_breaker" }),
+                           dev("FP1", 3, { kind: "dc_spd" })]]);
+    const dc: PanelDc = {
+      enclosure: golf(1, 12), devices: dcDevs, pv_strings: 1,
+      battery: { voltage: 48, voltage_assumed: true, capacity: null, power: 5, power_assumed: true,
+                 current: 104.2, rating: 125, cable: 35 },
+      texts: { title: "", battery: "", pv: "" },
+    };
+    const d = data(rowed([[dev("QS1", 2, { kind: "input" }), dev("SA1", 3, { kind: "changeover" })], groups(6)]),
+                   golf(2, 12), true);
+    d.external = { id: "U1", kind: "inverter", title: "", to: "SA1", feed: null };
+    d.dc = dc;
+    const l = layout(d);
+    const x = l.dc!;
+    expect(x.box.x).toBeGreaterThan(l.labelX + 290);
+    expect(x.box.x).toBeGreaterThan(l.external!.x + l.external!.w);
+    expect(x.lanes).toHaveLength(4);  // АКБ + −, строка + −
+    // Правый провод — дорожка выше, все дорожки — между инвертором и корпусом
+    x.lanes.slice(1).forEach((y, k) => expect(y).toBeLessThan(x.lanes[k]));
+    expect(Math.min(...x.lanes)).toBeGreaterThan(l.external!.y + l.external!.h);
+    expect(Math.max(...x.lanes)).toBeLessThan(x.box.y);
+    for (const p of x.placed) expect(p.x + p.w).toBeLessThanOrEqual(x.box.x + x.box.w);
+    expect(x.battery.y).toBeGreaterThan(Math.max(...x.pvLanes));
+    expect(l.height).toBeGreaterThan(x.battery.y + x.battery.h);
+    // Подписи групп — ниже дорожек щита АКБ
+    for (const p of l.placed.filter((q) => q.label !== null)) expect(p.label!).toBeGreaterThan(Math.max(...x.lanes));
   });
 });

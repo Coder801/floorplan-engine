@@ -12,9 +12,10 @@ from pathlib import Path
 from typing import Protocol
 
 from floorplan_engine.model.intake import ANSWERS_FILE, INTAKE_FILE
+from floorplan_engine.model.plumbing import PLUMBING_FILE
 from floorplan_engine.validation.issues import ROOM_FILE
 
-MODEL_FILES = (INTAKE_FILE, ROOM_FILE, "electrical.yaml")
+MODEL_FILES = (INTAKE_FILE, ROOM_FILE, "electrical.yaml", PLUMBING_FILE)
 # Что оператор может загрузить готовым: модель и накопленные ответы (эталонные проекты)
 OPERATOR_FILES = (*MODEL_FILES, ANSWERS_FILE)
 

@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator
 from datetime import timedelta
 
 import pytest
@@ -11,15 +10,6 @@ from sqlalchemy.orm import Session
 
 from floorplan_engine.service.db import access as acc
 from floorplan_engine.service.db import email_codes as codes
-from floorplan_engine.service.db.session import create_tables, make_engine, make_sessions
-
-
-@pytest.fixture
-def db() -> Iterator[Session]:
-    engine = make_engine("sqlite://")
-    create_tables(engine)
-    with make_sessions(engine)() as s:
-        yield s
 
 
 def test_normalize_email() -> None:

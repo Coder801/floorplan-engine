@@ -121,7 +121,7 @@ def test_electrical_is_a_separate_step(tmp_path: Path) -> None:
     plan, elec = FakeBackend([plan_reply]), FakeBackend([elec_reply])
     result = LlmAnalyzer(lambda: plan, lambda: elec).analyze(project, 1)
     assert result.calls == 2
-    assert "только план" in plan.prompts[0] and "только электрика" in elec.prompts[0]
+    assert "только план" in plan.prompts[0] and "электрика и сантехника" in elec.prompts[0]
     assert "--- room.yaml" in elec.prompts[0]  # электрика видит готовый план
     # Каждый шаг пишет только свои файлы
     assert yaml.safe_load((project / "room.yaml").read_text("utf-8")) == ROOM

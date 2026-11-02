@@ -234,7 +234,8 @@ class Bundle:
 
 
 def segments(paths: Sequence[Sequence[Vec]]) -> list[Segment]:
-    """Участки трасс вдоль осей; косые участки (их у трассировки нет) пропускаются."""
+    """Участки трасс вдоль осей; косые участки (эконом, routing.any_angle) в пучки не
+    собираются: линии из коробки к точкам расходятся веером, по одной полосе они не идут."""
     out: list[Segment] = []
     for k, path in enumerate(paths):
         for i, (a, b) in enumerate(itertools.pairwise(path)):

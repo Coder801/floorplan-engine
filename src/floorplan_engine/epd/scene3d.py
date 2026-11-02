@@ -6,7 +6,10 @@
 - Стены — призмы по участкам контура (внутренняя грань → внешние углы, как на плане), от
   пола до потолка; над дверью и проёмом — перемычка, под окном — подоконная часть. Общая
   перегородка — один кусок с нормалями в обе комнаты (normals): по ним просмотр срезает
-  стены, что стоят между камерой и помещением.
+  стены, что стоят между камерой и помещением. Нормали — у всех кусков физической стены
+  (тело, перемычка, подоконник, куски стены соседа за ней) одни и те же. Угол на стыке
+  перегородки с наружной стеной — у наружной: перегородка в срезе бортиком не оставляет в
+  ней выреза, периметр сплошной.
 - Трасса: подъём от источника (щит, коробка) до плоскости трассы — потолок или пол (route
   floor), путь по плану в этой плоскости, спуск к точке. Совпадающие трассы — пучком, кабели
   в PITCH_MM друг от друга (на листе полосы шире — это приём чертежа, не место в квартире).
@@ -19,6 +22,7 @@
 
 from __future__ import annotations
 
+import itertools
 from collections.abc import Sequence
 from typing import Any
 
@@ -94,38 +98,58 @@ def _assumed_opening(op: Opening) -> bool:
 
 class _Walls:
     """Куски стен без наложений: общий кусок перегородки — один, с нормалями обеих комнат.
-    Наложение — по плану и по высоте сразу: под- и надоконная части одного окна не дубли."""
+    Наложение — по плану и по высоте сразу: под- и надоконная части одного окна не дубли.
+    Нормали — у физической стены целиком (unified): подоконник, тело и перемычка одной стены
+    и стены соседа за ней срезаются в просмотре одинаково, а не каждый кусок по-своему."""
 
-    def __init__(self) -> None:
+    def __init__(self, links: Sequence[tuple[str, str]]) -> None:
         self.pieces: list[dict[str, Any]] = []
         self.shapes: list[tuple[BaseGeometry, tuple[float, float]]] = []
+        self.links = links  # ключи стен, общих для двух комнат (_shared)
+        self.normals: dict[str, list[list[float]]] = {}  # нормали по ключу стены
 
     def add(self, key: str, geom: BaseGeometry, z: tuple[float, float], normal: Vec) -> None:
         n = [round(normal.x, 6) + 0.0, round(normal.y, 6) + 0.0]  # без -0.0
+        if n not in self.normals.setdefault(key, []):
+            self.normals[key].append(n)  # и у стены, целиком накрытой куском соседа
         geom = shapely.make_valid(geom)
-        overlap = []
-        for piece, (shape, zz) in zip(self.pieces, self.shapes, strict=True):
-            if zz[0] >= z[1] - 1.0 or z[0] >= zz[1] - 1.0:
-                continue  # одно над другим
-            common = shape.intersection(geom).area
-            if common <= MIN_AREA_MM2:
-                continue
-            overlap.append(shape)
-            # Общая стена — заметная доля куска и нормаль навстречу своей (перегородка двух
-            # комнат смотрит в обе стороны). Угол соседней стены — стык, не в счёт, даже если
-            # у короткого куска он большой: иначе стена получает чужую нормаль и «срез»
-            # прячет её, когда она дальняя
-            own = piece["normals"][0]
-            facing = n[0] * own[0] + n[1] * own[1] < -OPPOSITE
-            shared = common > SHARED_SHARE * min(shape.area, geom.area)
-            if shared and facing and n not in piece["normals"]:
-                piece["normals"].append(n)
+        overlap = [
+            shape
+            for shape, zz in self.shapes
+            if zz[0] < z[1] - 1.0
+            and z[0] < zz[1] - 1.0  # не одно над другим
+            and shape.intersection(geom).area > MIN_AREA_MM2
+        ]
         rest = geom.difference(unary_union(overlap)) if overlap else geom
         rings = _rings(rest)
         if not rings:
             return
         self.shapes.append((rest, z))
         self.pieces.append({"key": key, "polys": rings, "z": [z[0], z[1]], "normals": [n]})
+
+    def unified(self) -> list[dict[str, Any]]:
+        """Куски с нормалями всей физической стены: стена помещения (все её куски) и стены
+        соседей, общие с ней, — одна стена; у каждого куска — все их нормали. Иначе
+        подоконник или перемычка, не перекрывшиеся с куском соседа, остаются с одной
+        нормалью и в срезе стоят в полный рост над срезанным телом."""
+        parent: dict[str, str] = {}
+
+        def root(k: str) -> str:
+            parent.setdefault(k, k)
+            while parent[k] != k:
+                parent[k] = parent[parent[k]]
+                k = parent[k]
+            return k
+
+        for a, b in self.links:
+            parent[root(a)] = root(b)
+        normals: dict[str, list[list[float]]] = {}
+        for key, own in self.normals.items():
+            group = normals.setdefault(root(key), [])
+            group += [n for n in own if n not in group]
+        for piece in self.pieces:
+            piece["normals"] = list(normals[root(piece["key"])])
+        return self.pieces
 
 
 def _wall_quad(g: RoomGeometry, seg: WallSegment) -> BaseGeometry:
@@ -149,6 +173,20 @@ def _wall_body(g: RoomGeometry, seg: WallSegment, outline: BaseGeometry) -> Base
     return shapely.make_valid(rect).intersection(outline)
 
 
+def _shared(bodies: Sequence[tuple[str, BaseGeometry, Vec]]) -> list[tuple[str, str]]:
+    """Общие стены двух комнат: тела накладываются заметной долей куска и нормали смотрят
+    навстречу (перегородка двух комнат — в обе стороны). Угол соседней стены — стык, не в
+    счёт, даже если у короткого куска он большой: иначе стена получает чужую нормаль и
+    «срез» прячет её, когда она дальняя."""
+    links = []
+    for (ka, ga, na), (kb, gb, nb) in itertools.combinations(bodies, 2):
+        if na.dot(nb) >= -OPPOSITE:
+            continue
+        if ga.intersection(gb).area > SHARED_SHARE * min(ga.area, gb.area):
+            links.append((ka, kb))
+    return links
+
+
 def _strip(seg: WallSegment, op: Opening) -> Polygon:
     """Проём во всю толщину стены (с запасом — потом пересекается с куском стены)."""
     a, b = seg.point_at(op.offset), seg.point_at(op.offset + op.width)
@@ -157,19 +195,25 @@ def _strip(seg: WallSegment, op: Opening) -> Polygon:
 
 
 def _walls(geoms: Sequence[RoomGeometry], ceiling: float) -> list[dict[str, Any]]:
-    walls = _Walls()
     outline = unary_union([_wall_quad(g, seg) for g in geoms for seg in g.contour.segments])
-    for g in geoms:
-        for seg in g.contour.segments:
-            key = f"wall:{g.room.id}.{seg.id}"
-            quad = _wall_body(g, seg, outline)
-            ops = [o for o in g.room.openings if o.wall == seg.id]
-            strips = [_strip(seg, o).intersection(quad) for o in ops]
-            walls.add(key, quad.difference(unary_union(strips)), (0.0, ceiling), seg.inward)
-            for op, strip in zip(ops, strips, strict=True):
-                for span in _opening_span(op, ceiling):
-                    walls.add(key, strip, span, seg.inward)
-    return walls.pieces
+    bodies = [
+        (f"wall:{g.room.id}.{seg.id}", g, seg, _wall_body(g, seg, outline))
+        for g in geoms
+        for seg in g.contour.segments
+    ]
+    links = _shared([(key, quad, seg.inward) for key, _, seg, quad in bodies])
+    partitions = {key for pair in links for key in pair}
+    walls = _Walls(links)
+    # Наружные стены — первыми: угол на стыке с перегородкой достаётся им (_wall_body), и
+    # когда перегородка в срезе бортиком, стена по периметру остаётся сплошной
+    for key, g, seg, quad in sorted(bodies, key=lambda b: b[0] in partitions):
+        ops = [o for o in g.room.openings if o.wall == seg.id]
+        strips = [_strip(seg, o).intersection(quad) for o in ops]
+        walls.add(key, quad.difference(unary_union(strips)), (0.0, ceiling), seg.inward)
+        for op, strip in zip(ops, strips, strict=True):
+            for span in _opening_span(op, ceiling):
+                walls.add(key, strip, span, seg.inward)
+    return walls.unified()
 
 
 def _face(a: Anchor) -> Vec:

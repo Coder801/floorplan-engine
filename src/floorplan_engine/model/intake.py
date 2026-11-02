@@ -43,7 +43,7 @@ ANSWERS_FILE = "answers.yaml"
 
 
 class Stage(StrEnum):
-    """Этапы проекта; построение пока есть у plan и electrical."""
+    """Этапы проекта; построение есть у plan, electrical (с panel) и plumbing."""
 
     PLAN = "plan"
     ELECTRICAL = "electrical"

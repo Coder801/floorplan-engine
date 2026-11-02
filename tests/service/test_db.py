@@ -1,24 +1,22 @@
-"""База сервиса: схема и репозитории на SQLite в памяти (Postgres в тестах не нужен)."""
+"""База сервиса на Postgres (tests/service/conftest.py): схема из миграций совпадает с
+моделями, репозитории."""
 
 from __future__ import annotations
 
-from collections.abc import Iterator
-
 import pytest
+from alembic.autogenerate import compare_metadata
+from alembic.runtime.migration import MigrationContext
+from sqlalchemy import Engine
 from sqlalchemy.orm import Session
 
 from floorplan_engine.service.db import repositories as repo
 from floorplan_engine.service.db.models import Base
-from floorplan_engine.service.db.session import create_tables, make_engine, make_sessions
 from floorplan_engine.service.facts.analysis import Dimension, PageFacts
 
 
 @pytest.fixture
-def session() -> Iterator[Session]:
-    engine = make_engine("sqlite://")
-    create_tables(engine)
-    with make_sessions(engine)() as s:
-        yield s
+def session(db: Session) -> Session:
+    return db
 
 
 def test_schema_has_all_tables() -> None:
@@ -26,9 +24,16 @@ def test_schema_has_all_tables() -> None:
         "studio", "app_user", "membership", "studio_profile", "symbol", "project", "source",
         "facts_page", "model_version", "round", "question", "answer", "build", "build_file",
         "price_list", "usage", "oauth_account", "user_session", "project_member", "invite",
-        "support_grant", "audit_event", "email_code",
+        "support_grant", "audit_event", "email_code", "login_ticket", "access_code",
     }  # fmt: skip
     assert set(Base.metadata.tables) == expected
+
+
+def test_migrations_match_models(pg: Engine) -> None:
+    """Схема после миграций — ровно то, что в моделях: забытая миграция или поле — здесь."""
+    with pg.connect() as conn:
+        diff = compare_metadata(MigrationContext.configure(conn), Base.metadata)
+    assert diff == []
 
 
 def test_source_is_not_added_twice(session: Session) -> None:
@@ -78,5 +83,5 @@ def test_database_url_uses_psycopg(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setenv("DATABASE_URL", "postgresql://u:p@host:5432/db")
     assert database_url() == "postgresql+psycopg://u:p@host:5432/db"
-    monkeypatch.setenv("DATABASE_URL", "sqlite:///x.db")
-    assert database_url() == "sqlite:///x.db"
+    monkeypatch.setenv("DATABASE_URL", "postgres://u:p@host:5432/db")  # так даёт Railway
+    assert database_url() == "postgresql+psycopg://u:p@host:5432/db"

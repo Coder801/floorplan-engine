@@ -22,7 +22,7 @@ export function DeviceCard({ page, panel }: { page: Page; panel: PanelData }) {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  const dev = pinned ? panel.devices.find((d) => d.key === pinned) : undefined;
+  const dev = pinned ? [...panel.devices, ...(panel.dc?.devices || [])].find((d) => d.key === pinned) : undefined;
   if (!dev) return null;
   const g = dev.group ? panel.groups[dev.group] : undefined;
   const [devices, consumers] = page.tables || [];

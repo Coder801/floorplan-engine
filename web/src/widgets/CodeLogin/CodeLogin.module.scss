@@ -1,0 +1,21 @@
+// Вход по коду доступа: поле кода и кнопка во всю ширину карточки, как у входа по почте
+
+@use "@/shared/styles/mixins" as *;
+
+.form {
+  display: grid; gap: 6px; width: 100%;
+  label { font-size: 13px; color: var(--muted); }
+  p { margin: 0; line-height: 1.5; }
+  input {
+    min-height: 36px; padding: 0 10px; min-width: 0;
+    font: inherit; color: var(--text); background: var(--raise);
+    border: 1px solid var(--line); border-radius: 6px;
+    &:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  }
+}
+.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+.stack { display: grid; gap: 10px; }
+.stack > input, .stack > button { width: 100%; min-height: 44px; border-radius: 8px; }
+.code { font-family: $mono; font-size: 20px !important; letter-spacing: .2em; text-align: center; }
+.note { font-size: 13px; color: var(--muted); }
+.error { color: var(--critical); }

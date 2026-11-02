@@ -1,6 +1,6 @@
 """Вопросы этапа «Щит» (panel_*): резерв, ввод, состав резервной шины, разделённая на щите
-группа, кабель тяжёлого прибора. Составляет код; ответы — в answers.yaml, накладывает
-answers.apply_auto_answers."""
+группа, кабель тяжёлого прибора; у инвертора — АКБ, солнечные панели, место щита АКБ.
+Составляет код; ответы — в answers.yaml, накладывает answers.apply_auto_answers."""
 
 from __future__ import annotations
 
@@ -68,6 +68,8 @@ def panel_questions(elec: Electrical, panel: BoardPanel) -> list[Question]:
                 "котёл, насос, ворота, розетки кухни (допущение). Список групп — panel.reserve",
             )
         )
+    if panel.dc is not None:
+        out += _dc_questions(elec, panel)
     for g in panel.groups:
         if g.split_of == g.group:
             lines = [x for x in panel.groups if x.split_of == g.group]
@@ -101,4 +103,75 @@ def panel_questions(elec: Electrical, panel: BoardPanel) -> list[Question]:
                     f"{cable} и автомат {need} А — или укажите мощность прибора (power у точки)",
                 )
             )
+    return out
+
+
+def _dc_questions(elec: Electrical, panel: BoardPanel) -> list[Question]:
+    """Щит АКБ: напряжение АКБ, строки панелей — если не заданы; место инвертора и АКБ —
+    всегда, пока не отвечено (на плане его нет)."""
+    assert panel.dc is not None
+    dc, setup, out = panel.dc, elec.panel, []
+    if setup.npe_relay is None:
+        out.append(
+            Question(
+                id=f"{AUTO_PREFIX}npe",
+                stage=Stage.PANEL,
+                target="panel.npe_relay",
+                answer="choice",
+                options=["yes", "no"],
+                assumption="yes",
+                text="Связывает ли инвертор N с PE в резервном режиме (встроенное реле N–PE, "
+                "включается в настройках)? Без этой связи УЗО и дифавтоматы на резерве не "
+                "сработают: no — поставим контактор N–PE",
+            )
+        )
+    if setup.inverter is None:
+        switch = "АВР KM1" if any(d.id == "KM1" for d in panel.devices) else "обходной SA1"
+        out.append(
+            Question(
+                id=f"{AUTO_PREFIX}inverter",
+                stage=Stage.PANEL,
+                target="panel.inverter",
+                answer="choice",
+                options=["hybrid", "basic"],
+                assumption="hybrid",
+                text=f"Какой инвертор? Сейчас гибридный (допущение) — сам переключает сеть и АКБ, "
+                f"в щите {switch}. basic — без своего переключения: резерв через АВР",
+            )
+        )
+    if setup.battery_voltage is None:
+        out.append(
+            Question(
+                id=f"{AUTO_PREFIX}battery",
+                stage=Stage.PANEL,
+                target="panel.battery_voltage",
+                answer="value",
+                unit="В",
+                assumption=float(dc.voltage),
+                text=f"Напряжение АКБ инвертора? Сейчас {dc.voltage} В (допущение): ток разряда "
+                f"{amps(dc.current)} А при {kw(dc.power * 1000)} кВт — автомат АКБ {dc.rating} А, "
+                f"кабель 2×{dc.cable:g} мм²",
+            )
+        )
+    if setup.pv_strings is None:
+        out.append(
+            Question(
+                id=f"{AUTO_PREFIX}pv",
+                stage=Stage.PANEL,
+                target="panel.pv_strings",
+                answer="value",
+                assumption=0.0,
+                text="Есть ли солнечные панели? Сейчас нет (допущение). Число строк панелей "
+                "на инвертор (0–2): у каждой — DC-автомат и УЗИП в щите АКБ",
+            )
+        )
+    out.append(
+        Question(
+            id=f"{AUTO_PREFIX}dc_place",
+            stage=Stage.PANEL,
+            severity=QSeverity.MINOR,
+            text="Где стоят инвертор, щит АКБ и АКБ? Сейчас — рядом с основным щитом "
+            "(допущение): от этого — длина кабелей GRID, LOAD и АКБ",
+        )
+    )
     return out

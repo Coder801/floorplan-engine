@@ -1,4 +1,4 @@
-// Один чертёж на листы с планом (план, электрика, освещение, проводка): примитивы всех листов
+// Один чертёж на листы с планом (план, электрика, освещение, проводка, сантехника): примитивы всех листов
 // в координатах одного листа (base, первый по порядку) — по их model. Слой берётся с первого
 // листа, где он есть в видовом экране: стены и размеры — с плана, точки — с электрики, связи —
 // с освещения, кабели — с проводки; те же слои на других листах — копии и не повторяются.
@@ -9,8 +9,9 @@ import { SHEET_ONLY } from "@/shared/consts";
 import type { Box, Item, ObjectCard, Page, Scene } from "@/shared/types";
 import { bbox, inView, viewOf } from "./paint";
 
-// Листы одного чертежа; щит, развёртки и ведомость — сами по себе
-export const DRAWING_STAGES = new Set(["plan", "electrical", "lighting", "wiring"]);
+// Листы одного чертежа (сантехника — тоже: стены с плана, трубы — свои слои); щит, развёртки
+// и ведомость — сами по себе
+export const DRAWING_STAGES = new Set(["plan", "electrical", "lighting", "wiring", "plumbing"]);
 
 // С листа-источника на base: x' = f·x + dx, y' = f·y + dy (мм листа)
 export interface Shift { f: number; dx: number; dy: number }

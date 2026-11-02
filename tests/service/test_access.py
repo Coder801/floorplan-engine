@@ -4,7 +4,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator
 from datetime import timedelta
 
 import pytest
@@ -13,15 +12,6 @@ from sqlalchemy.orm import Session
 
 from floorplan_engine.service.db import access as acc
 from floorplan_engine.service.db.models import AppUser, Project, ProjectMember, UserSession
-from floorplan_engine.service.db.session import create_tables, make_engine, make_sessions
-
-
-@pytest.fixture
-def db() -> Iterator[Session]:
-    engine = make_engine("sqlite://")
-    create_tables(engine)
-    with make_sessions(engine)() as s:
-        yield s
 
 
 def user(db: Session, sub: str, kind: acc.AccountType | None = None) -> AppUser:
@@ -192,3 +182,58 @@ def test_register_firm(db: Session) -> None:
     personal = user(db, "flat", "client")
     space = acc.user_space(db, personal)
     assert space is not None and space.kind == "personal" and space.business is None
+
+
+def test_adopt_folders_links_new_slugs_once(db: Session) -> None:
+    """Вход владельца: папки без строки — ему; повторно — ничего; чужие строки не трогаются."""
+    linked, reason = acc.adopt_folders(db, "owner@example.com", ["kv1", "kv2"])
+    assert linked == [] and reason is not None and "owner@example.com" in reason  # не входил
+    u = user(db, "owner")
+    linked, reason = acc.adopt_folders(db, "owner@example.com", ["kv1"])
+    assert linked == [] and "тип" in (reason or "")  # тип учётки не выбран
+    acc.set_account_type(db, u, "pro")
+    other = user(db, "other", "pro")
+    acc.create_project_for(db, other, "Чужой", "kv2")
+    linked, reason = acc.adopt_folders(db, "Owner@Example.com", ["kv2", "kv1", "kv3"])
+    assert (linked, reason) == (["kv1", "kv3"], None)
+    kv1, kv2 = acc.project_by_slug(db, "kv1"), acc.project_by_slug(db, "kv2")
+    assert kv1 is not None and kv2 is not None
+    assert role(db, u, kv1) == "owner"
+    assert role(db, u, kv2) is None  # осталась у other
+    assert acc.adopt_folders(db, "owner@example.com", ["kv1", "kv2", "kv3"]) == ([], None)
+
+
+def test_adopt_folders_takes_unowned_projects(db: Session) -> None:
+    """Проект, записанный командной строкой без владельца (код доступа до входа), при входе
+    владельца переходит в его студию; чужие и уже свои — не трогаются."""
+    kv1 = acc.create_project_unowned(db, "kv1", "kv1")
+    assert acc.unowned_studio(db).id == kv1.studio_id
+    with pytest.raises(acc.AccessError, match="уже в базе"):
+        acc.create_project_unowned(db, "kv1", "kv1")
+    u = user(db, "owner", "pro")
+    assert role(db, u, kv1) is None
+    linked, reason = acc.adopt_folders(db, "owner@example.com", ["kv1", "kv2"])
+    assert (linked, reason) == (["kv2", "kv1"], None)
+    assert role(db, u, kv1) == "owner"
+    assert acc.adopt_folders(db, "owner@example.com", ["kv1", "kv2"]) == ([], None)
+
+
+def test_adopt_folders_client_gets_one_project(db: Session) -> None:
+    user(db, "home", "client")
+    linked, reason = acc.adopt_folders(db, "home@example.com", ["b", "a"])
+    assert linked == ["a"] and reason is not None  # второй проект хозяину квартиры нельзя
+
+
+def test_personal_owner_chooses_variant_studio_client_does_not(db: Session) -> None:
+    """«Мой ремонт» — хозяин своего пространства: выбирает вариант и правит трассы; клиент
+    студии — только смотрит (docs/wiring-variants.md)."""
+    home = user(db, "home", "client")
+    own = acc.create_project_for(db, home, "Моя квартира", "home")
+    assert acc.can(role(db, home, own), "choose_variant")
+    assert acc.can(role(db, home, own), "edit_wiring")
+    studio = user(db, "studio", "pro")
+    flat = acc.create_project_for(db, studio, "Кв", "kv")
+    guest = user(db, "guest")
+    acc.accept_invite(db, guest, acc.create_invite(db, studio, "client", project=flat))
+    assert role(db, guest, flat) == "client"
+    assert not acc.can("client", "choose_variant") and not acc.can("client", "edit_wiring")

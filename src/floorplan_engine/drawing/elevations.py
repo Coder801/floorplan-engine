@@ -35,6 +35,7 @@ CHASE_LOW = 0xCFE3F3
 BACK = 0xB0A99D  # выводы с обратной стороны стены — бледно
 LOW = 0x1F6FB2  # слаботочка
 BOX = 0xB3261E
+WATER = {"cold": 0x1F77B4, "hot": 0xD62728, "sewer": 0x8C564B}  # как на листе «Сантехника»
 
 LW_FLOOR = 50
 LW_WALL = 25
@@ -277,6 +278,32 @@ def _draw(
         labels[key] = ([*nums, p.number], max(half, r + pitch * (p.posts - 1) / 2))
     for (cx, cy), (nums, half) in labels.items():
         _label(ranges(nums), Vec(cx, cy), half, taken, text, DARK)
+    # Сантехника: подъём трубы от пола цветом сети, водорозетка — кружок с заливкой, выпуск —
+    # кружок по диаметру трубы; номер прибора — как на листе «Сантехника» (* — высота типовая)
+    fixtures: dict[str, tuple[Vec, float, int, bool]] = {}
+    for v in e.water:
+        c = at(v.x, v.y)
+        color = WATER[v.kind]
+        rr = max(v.d / 2 / scale, MIN_SYMBOL) if v.kind == "sewer" else max(15.0 / scale, 0.6)
+        line(Vec(c.x, floor), Vec(c.x, c.y - rr), LW_WALL, color)
+        dashed(Vec(c.x + rr, c.y), Vec(x0 + w, c.y))
+        if v.kind == "sewer":
+            psp.add_circle(
+                c.as_tuple(),
+                rr,
+                dxfattribs={"layer": E_ELEV.name, "lineweight": LW_FLOOR, "true_color": color},
+            )
+        else:
+            hatch = psp.add_hatch(dxfattribs={"layer": E_ELEV.name, "true_color": color})
+            hatch.set_solid_fill(rgb=RGB.from_hex(f"#{color:06x}"))
+            hatch.paths.add_edge_path().add_arc(c.as_tuple(), rr, 0, 360)
+        taken.append((c.x - rr, c.y - rr, c.x + rr, c.y + rr))
+        top_c, top_r, _, assumed = fixtures.get(v.fixture, (c, rr, v.number, v.assumed))
+        if c.y >= top_c.y:
+            top_c, top_r = c, rr
+        fixtures[v.fixture] = (top_c, top_r, v.number, assumed or v.assumed)
+    for c, rr, number, assumed in fixtures.values():
+        _label(f"{number}{'*' if assumed else ''}", c, rr, taken, text, WATER["sewer"])
     # Номера выводов той стороны — после своих: место у символа — сначала своим
     for p in e.back:
         c = at(p.x, p.y)

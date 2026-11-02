@@ -181,6 +181,7 @@ def draw_device(layout: BaseLayout, d: Device, x: float, top: float, m: float, c
         DeviceKind.INPUT,
         DeviceKind.RCD,
         DeviceKind.FEED,
+        DeviceKind.OUTPUT,
     ):
         poles = 1 if d.kind is DeviceKind.DIFF else d.modules
         for k in range(poles):
@@ -202,7 +203,7 @@ def draw_device(layout: BaseLayout, d: Device, x: float, top: float, m: float, c
             (cx, mid), 0.9 * m, dxfattribs={"layer": E_PANEL.name, "lineweight": LW_DEV}
         )
         _line(layout, [Vec(cx, mid), Vec(cx, mid + 0.8 * m)], DARK, LW_WIRE)
-        _text(layout, "I    0    II", Vec(cx, mid + 1.35 * m), th * 0.8)
+        _text(layout, "I    0    II", Vec(cx, mid + 1.35 * m), th)
     else:  # АВР
         _rect(layout, x + 0.3 * m, mid - 0.6 * m, x1 - 0.3 * m, mid + 0.6 * m, true_color=GREY)
         _text(layout, "ATS", Vec((x + x1) / 2, mid), th)
@@ -414,7 +415,8 @@ def device_rows(panel: BoardPanel, language: Language) -> list[tuple[Device, tup
     """Строки таблицы: аппарат → (поз., назначение, аппарат, кабель, P, I)."""
     groups = {g.group: g for g in panel.groups}
     out: list[tuple[Device, tuple[str, ...]]] = []
-    for d in panel.devices:
+    dc = panel.dc
+    for d in panel.all_devices:
         g = groups.get(d.group or "")
         star = ASSUMED if d.assumed else ""
         if g is not None:
@@ -422,6 +424,10 @@ def device_rows(panel: BoardPanel, language: Language) -> list[tuple[Device, tup
             purpose = g.purpose + (ASSUMED if g.purpose_assumed else "")
             p = kw(g.power) + (ASSUMED if g.assumed else "")
             out.append((d, (d.id, purpose, f"{kind} {d.label}{star}", g.cable, p, amps(g.current))))
+        elif dc is not None and d.kind is DeviceKind.DC_BATTERY:  # кабель и ток АКБ
+            v = f"{dc.voltage} В" + (ASSUMED if dc.voltage_assumed else "")
+            cable = f"2×{dc.cable:g} мм²"
+            out.append((d, (d.id, f"{d.title}, {v}", d.label + star, cable, "", amps(dc.current))))
         else:
             out.append((d, (d.id, d.title, d.label + star, "", "", "")))
     return out

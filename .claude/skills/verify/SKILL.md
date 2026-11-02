@@ -5,9 +5,11 @@ description: Полная проверка изменений Штробы бе�
 
 # Проверка изменений
 
-1. Код:
+1. Код (тесты базы сервиса — на Postgres: сначала `docker compose up -d db`; без него они
+   пропускаются, а `TEST_REQUIRE_DB=1` делает пропуск ошибкой — так и запускай):
    ```bash
-   uv run pytest -q && uv run mypy && uv run ruff check . && uv run ruff format --check . && uv run lint-imports
+   docker compose up -d db
+   TEST_REQUIRE_DB=1 uv run pytest -q && uv run mypy && uv run ruff check . && uv run ruff format --check . && uv run lint-imports
    ```
    `lint-imports` — слои пакета и запреты импортов (контракты в `pyproject.toml`).
    Если менялся фронт (`web/`): типы, тесты и сборка (в `web/dist`):

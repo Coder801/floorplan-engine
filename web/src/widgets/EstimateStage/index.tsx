@@ -1,6 +1,7 @@
-// Вкладка «Смета»: смета электрики во всю ширину (ключ estimate страницы проводки) — разделы,
-// позиции, итоги; без прайса — ведомость объёмов. Excel — тот же расчёт файлом (build пишет
-// out/estimate.xlsx). На печати смета — на листе проводки.
+// Вкладка «Смета»: сметы во всю ширину одна под другой — электрики (ключ estimate страницы
+// проводки) и сантехники (страницы «Сантехника»): разделы, позиции, итоги; без прайса —
+// ведомость объёмов. Excel — тот же расчёт файлом (build пишет out/estimate.xlsx и
+// out/plumbing-estimate.xlsx). На печати смета — на листе своего этапа.
 
 import { useTranslation } from "react-i18next";
 import { cx } from "@/shared/cx";
@@ -9,11 +10,20 @@ import type { SideTable } from "@/shared/types";
 import { HelpTip } from "@/ui/HelpTip";
 import css from "./EstimateStage.module.scss";
 
-export function EstimateStage({ table, xlsx }: { table: SideTable; xlsx: string | null }) {
+export interface EstimateItem { table: SideTable; xlsx: string | null }
+
+export function EstimateStage({ items }: { items: EstimateItem[] }) {
+  return (
+    <div className={css.stage}>
+      {items.map((it) => <Estimate key={it.table.title} table={it.table} xlsx={it.xlsx} />)}
+    </div>
+  );
+}
+
+function Estimate({ table, xlsx }: EstimateItem) {
   const { t } = useTranslation();
   const al = (i: number) => (table.align[i] === "left" ? undefined : css.num);
   return (
-    <div className={css.stage}>
       <article className={css.sheet}>
         <header className={css.head}>
           <h1>{table.title}</h1>
@@ -47,6 +57,5 @@ export function EstimateStage({ table, xlsx }: { table: SideTable; xlsx: string 
         </table>
         {!!table.notes?.length && <ul className={css.notes}>{table.notes.map((n, i) => <li key={i}>{n}</li>)}</ul>}
       </article>
-    </div>
   );
 }

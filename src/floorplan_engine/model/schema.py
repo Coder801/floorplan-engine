@@ -18,7 +18,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from floorplan_engine.model.panel_catalog import BRANDS
+from floorplan_engine.model.panel_catalog import BRANDS, ENCLOSURE_BY_ARTICLE
 from floorplan_engine.model.texts import Language
 
 ID_PATTERN = r"^[A-Za-z0-9_\-]+$"
@@ -41,6 +41,17 @@ class Wall(StrictModel):
         default=None, gt=0, description="Толщина, мм; по умолчанию default_wall_thickness"
     )
     bearing: bool = Field(default=False, description="Несущая стена (штрихуется)")
+    partition: bool = Field(
+        default=False,
+        description="Ненесущая перегородка любой толщины (из источника или со слов заказчика): "
+        "трубы сквозь неё можно",
+    )
+
+    @model_validator(mode="after")
+    def _bearing_or_partition(self) -> Wall:
+        if self.bearing and self.partition:
+            raise ValueError("стена не может быть и несущей (bearing), и перегородкой (partition)")
+        return self
 
 
 class OpeningType(StrEnum):
@@ -118,6 +129,10 @@ class Studio(StrictModel):
     organization: str = Field(default="", description="Графа 9: организация")
     stage: str = Field(default="", max_length=3, description="Графа 6: стадия (П, Р)")
     signatures: list[Signature] = Field(default_factory=list, max_length=8)
+
+
+CEILING_MIN = 2000  # высота потолка, мм: правка в просмотре — от 2 до 4 м
+CEILING_MAX = 4000
 
 
 class Plan(StrictModel):
@@ -287,7 +302,7 @@ class PanelSetup(StrictModel):
     input: int | None = Field(default=None, gt=0, description="Вводной автомат, А")
     power: float | None = Field(default=None, gt=0, description="Выделенная мощность, кВт")
     voltage_relay: bool | None = Field(
-        default=None, description="Реле напряжения; по умолчанию — кроме economy"
+        default=None, description="Реле напряжения; по умолчанию — во всех схемах"
     )
     spd: bool | None = Field(default=None, description="УЗИП; по умолчанию — только premium")
     backup: Literal["none", "inverter", "plug"] | None = Field(
@@ -296,13 +311,43 @@ class PanelSetup(StrictModel):
         "через силовую вилку; не задан — вопрос, допущение inverter",
     )
     ats: bool | None = Field(
-        default=None, description="АВР вместо ручного переключателя; по умолчанию — кроме economy"
+        default=None,
+        description="АВР вместо ручного переключателя; по умолчанию — только у инвертора без "
+        "своего переключения (inverter: basic)",
+    )
+    inverter: Literal["hybrid", "basic"] | None = Field(
+        default=None,
+        description="Инвертор: hybrid — сам переключает сеть и АКБ (резерв — обходным "
+        "переключателем), basic — без своего переключения (резерв — через АВР); не задан — "
+        "hybrid (допущение)",
+    )
+    npe_relay: bool | None = Field(
+        default=None,
+        description="Связь N–PE в резервном режиме есть (реле инвертора или контактор); "
+        "не задано — вопрос: без неё УЗО на резерве не сработают",
     )
     brand: str = Field(
         default="generic", description="Бренд аппаратов щита — модели из каталога (panel_catalog)"
     )
+    enclosure: str | None = Field(
+        default=None,
+        description="Корпус щита — артикул из каталога (panel_catalog, «VS218PD»); не задан — "
+        "самый маленький, куда помещаются аппараты",
+    )
     backup_power: float | None = Field(
         default=None, gt=0, description="Мощность инвертора или генератора, кВт"
+    )
+    battery_voltage: Literal[12, 24, 48] | None = Field(
+        default=None, description="Напряжение АКБ инвертора, В; не задано — 48 (допущение)"
+    )
+    battery_capacity: float | None = Field(
+        default=None, gt=0, description="Ёмкость АКБ, кВт·ч — только из источника"
+    )
+    pv_strings: int | None = Field(
+        default=None,
+        ge=0,
+        le=2,
+        description="Строк солнечных панелей на инвертор (0–2); не задано — панелей нет (вопрос)",
     )
     reserve: list[str] = Field(
         default_factory=list,
@@ -318,8 +363,19 @@ class PanelSetup(StrictModel):
             raise ValueError("система TT пока не поддерживается: earthing: TN-C-S или TN-S")
         if self.reserve and self.backup == "none":
             raise ValueError("reserve — только с резервом (backup: inverter | plug)")
+        dc: tuple[object, ...] = (self.battery_voltage, self.battery_capacity, self.pv_strings)
+        dc += (self.inverter, self.npe_relay)
+        if self.backup in ("none", "plug") and any(v is not None for v in dc):
+            raise ValueError(
+                "battery_voltage, battery_capacity, pv_strings, inverter, npe_relay — только "
+                "с инвертором "
+                "(backup: inverter)"
+            )
         if self.brand not in BRANDS:
             raise ValueError(f"бренда «{self.brand}» нет в каталоге: {', '.join(sorted(BRANDS))}")
+        if self.enclosure is not None and self.enclosure not in ENCLOSURE_BY_ARTICLE:
+            names = ", ".join(ENCLOSURE_BY_ARTICLE)
+            raise ValueError(f"щита «{self.enclosure}» нет в каталоге: {names}")
         return self
 
 
@@ -335,6 +391,11 @@ class Electrical(StrictModel):
         description="Раскладка: economy — меньше автоматов; standard — помещения отдельными "
         "группами; proper — по правильному",
     )
+    route: Literal["ceiling", "floor"] | None = Field(
+        default=None,
+        description="Трасса групп без своего кабеля в cables: floor — по полу в стяжке; "
+        "нет — по потолку. Ставит вариант проводки (variant.yaml) или источник",
+    )
     groups: dict[str, Group] = Field(
         default_factory=dict, description="Группы щита по имени (QF4): назначение, автомат"
     )
@@ -347,23 +408,15 @@ class Electrical(StrictModel):
 
 # --- Ручные правки проводки (wiring.yaml) ------------------------------------
 
-ORTHO_TOL = 0.5  # мм: участок ручной трассы — по оси, если концы расходятся не больше
-
 
 class WireEdit(StrictModel):
     """Трасса линии, перетянутая в просмотре: точки в мм модели, от источника к цели.
-    from / to — сверка: если линия с этим id теперь идёт не так, правка не применяется."""
+    from / to — сверка: если линия с этим id теперь идёт не так, правка не применяется.
+    Участки под углом — только в экономе: проверяет сборка (wiring._manual_runs)."""
 
     from_: str = Field(alias="from", description="board или id коробки")
     to: str = Field(description="id коробки или точки")
     path: list[tuple[float, float]] = Field(min_length=2)
-
-    @model_validator(mode="after")
-    def _ortho(self) -> WireEdit:
-        for k, (a, b) in enumerate(zip(self.path, self.path[1:], strict=False)):
-            if abs(a[0] - b[0]) > ORTHO_TOL and abs(a[1] - b[1]) > ORTHO_TOL:
-                raise ValueError(f"участок {k + 1} трассы не по оси: углы только прямые")
-        return self
 
 
 class BoxEdit(StrictModel):
@@ -382,3 +435,43 @@ class WiringEdits(StrictModel):
 
     wires: dict[str, WireEdit] = Field(default_factory=dict)
     boxes: dict[str, BoxEdit] = Field(default_factory=dict)
+
+
+WireRoute = Literal["ceiling", "floor"]
+Distribution = Literal["boxes"]  # loop — шлейф через подрозетники, позже (docs/wiring-variants.md)
+
+
+class Variant(StrictModel):
+    """variant.yaml — вариант проводки, выбранный в просмотре (docs/wiring-variants.md):
+    режим, трасса и разводка. Точки — из проекта и в вариантах не меняются. Высота потолка
+    (мм) — правка со страницы «Общие сведения»: накладывается на room.yaml, исходный не меняется."""
+
+    mode: ElectricalMode = "standard"
+    route: WireRoute = "ceiling"
+    distribution: Distribution = "boxes"
+    ceiling_height: float | None = Field(default=None, ge=CEILING_MIN, le=CEILING_MAX)
+
+    @property
+    def key(self) -> str:
+        """«economy-floor-boxes» — ключ правок трасс этого варианта в wiring.yaml."""
+        return f"{self.mode}-{self.route}-{self.distribution}"
+
+
+class WiringFile(StrictModel):
+    """wiring.yaml: правки трасс по вариантам (variants: {ключ варианта: правки}). wires и
+    boxes верхнего уровня — правки, записанные до вариантов: они относятся к варианту
+    «как в проекте» (variants.default_variant)."""
+
+    wires: dict[str, WireEdit] = Field(default_factory=dict)
+    boxes: dict[str, BoxEdit] = Field(default_factory=dict)
+    variants: dict[str, WiringEdits] = Field(default_factory=dict)
+
+    def edits_for(self, key: str, default_key: str) -> WiringEdits | None:
+        """Правки варианта; у варианта по умолчанию — и правки до вариантов."""
+        edits = self.variants.get(key)
+        if key == default_key and (self.wires or self.boxes):
+            base = edits or WiringEdits()
+            edits = WiringEdits(
+                wires={**self.wires, **base.wires}, boxes={**self.boxes, **base.boxes}
+            )
+        return edits if edits is not None and (edits.wires or edits.boxes) else None

@@ -98,18 +98,22 @@ uv run floorplan-engine symbols symbols/                               # бло�
 сечением от 4 мм², выводы к технике и слаботочка идут от щита без коробок (`direct`).
 
 Смета этапа стоит на его CAD-листе: смета электрики — на листе проводки, под таблицей «Группы»
-(`build`); в просмотре — вкладка «Смета» со ссылкой на Excel. Есть `prices.yaml` — с ценами и итогами; нет — ведомость объёмов без цен. Таблица
+(`build`); в просмотре — вкладка «Смета» со ссылкой на Excel. Смета всегда с ценами и итогами:
+цены даёт сервис цен (решение 2026-11-01 — внешний API или микросервис, который собирает цены
+с сайтов поставщиков; пока его место занимает имитация с типовыми ценами, `electrical/pricing.py`,
+такие строки помечены «из сервиса цен (пока имитация)»), а `prices.yaml` — поправки поверх. Таблица
 одна и та же в DXF, в просмотре и в PNG листа.
 
-Цены — в `prices.yaml` в папке проекта; нет его — общий прайс студии `projects/prices.yaml`
-(рядом со `studio.yaml`), один на все проекты. Цена за единицу по ключу позиции (ключи — `LINES`
+Свои цены — в `prices.yaml` в папке проекта; нет его — общий прайс студии `projects/prices.yaml`
+(рядом со `studio.yaml`), один на все проекты; ключ прайса важнее цены сервиса, даже если в прайсе
+он без номинала (`diff` против `diff.C16 30 мА` сервиса). Цена за единицу по ключу позиции (ключи — `LINES`
 в `electrical/estimate.py`, кабель — `cable.<марка>`), своё наименование — `{ price, name }`. Щит в смете — по составу листа «Щит»: строка на вид и номинал
 аппарата, цена — по виду (`breaker`, `diff`, `rcd`, `input`, `relay`, `spd`, `changeover`, `ats`,
 `feed`), уточнение по номиналу — `breaker.C16`. `board_kit` больше не используется (старый прайс с ним
 читается, смета напоминает перенести цены на ключи). Позиция без цены остаётся в смете с пометкой
 «нет цены» и в итог не входит; неизвестный ключ — ошибка с путём `items.<ключ>`. Светильники, выводы
 и LED-лента (м) — в смете (`light`, `downlight`, `pendant`, `sconce`, `led_output`, `outlet`,
-`led_strip`); профиля и блоков питания LED в модели нет.
+`led_strip`); профиля и блоков питания LED в модели нет. Гофротруба — `conduit.<Ø>` и работа `work.conduit`: по полу всегда, по потолку в премиуме (`docs/wiring-variants.md`).
 
 ```yaml
 currency: грн
@@ -162,7 +166,9 @@ items:
 просмотре), и пересобирает их. Проекты, которых нет в образе, не трогаются. Правки трасс на
 сервере в git не попадают, и `wiring.yaml` с сервера важнее, чем из git: чтобы сервер взял
 версию из git, удалите файл на volume.
-Авторизации нет: кто знает адрес, видит проекты и может править трассы.
+Вход (`SHTROBA_AUTH=on`, переменные — `.env.example`, порядок — `docs/database.md`): при старте
+`start.sh` применяет миграции; папки проектов попадают в студию владельца `SHTROBA_OWNER` при
+его входе. Без входа кто знает адрес, видит проекты и может править трассы.
 
 ```bash
 docker build -t floorplan-view . && docker run -p 8080:8080 floorplan-view   # http://localhost:8080
@@ -199,6 +205,7 @@ projects/kv42/
   answers.yaml       # ответы на вопросы
   room.yaml          # план
   electrical.yaml    # электрика (необязателен)
+  plumbing.yaml      # вода и канализация (необязателен, docs/plumbing.md)
   wiring.yaml        # ручные правки проводки из просмотра (необязателен)
   source/            # исходные фото и заметки
   out/               # project.dxf, project.epd, report.md, report.json; artifact/NN-<лист>.png — render-artifact
@@ -326,6 +333,7 @@ walls:
 | `walls[].turn` | | Внутренний угол к следующей стене; по умолчанию 90 |
 | `walls[].thickness` | | Толщина, мм |
 | `walls[].bearing` | | `true` — несущая, штрихуется |
+| `walls[].partition` | | `true` — ненесущая перегородка толще 150 мм (только из источника): сквозь неё можно вести трубы |
 | `openings[].id` | да | Уникален в проекте: `kitchen_door_1` |
 | `openings[].wall` | да | `id` стены |
 | `openings[].type` | да | `door` / `window` / `opening` (проём без заполнения) |
@@ -369,6 +377,30 @@ cables:
 | `cables[].from`, `to` | `board` или `id` точки |
 | `cables[].route` | `wall` / `floor` / `ceiling` — где идёт кабель; рисуется всегда под 90° |
 | `cables[].cable` | Марка или сечение для подписи, например `3x2.5` |
+
+## Формат plumbing.yaml
+
+Вода и канализация — подробно в [docs/plumbing.md](docs/plumbing.md), схема — `model/plumbing.py`.
+
+```yaml
+distribution: collector       # collector (лучевая, по умолчанию) | tee (тройниковая)
+risers:
+  - { id: riser_1, room: bath, at: [760, 1340], sewer: true, water: false }
+input: { room: bath, wall: w1, offset: 300, hot: true }   # узел ввода; нет — у стояка
+fixtures:
+  - { id: bath_wc_1, room: bath, type: wc_installation, wall: w5, offset: 450 }
+  - { id: bath_sink_1, room: bath, type: sink, wall: w1, offset: 1030 }
+obstacles:
+  - { id: bath_inst_1, room: bath, type: installation, wall: w5, offset: 0, width: 930, depth: 450 }
+```
+
+| Поле | Что |
+| --- | --- |
+| `risers[].at` | Центр стояка, мм от `origin` помещения; `sewer` — Д110, `water` — стояки воды рядом, `sewer_inlet` — ось врезки от пола (нет — 100 допущением) |
+| `fixtures[].type` | `wc`, `wc_installation`, `sink`, `kitchen_sink`, `bath`, `shower`, `washer`, `dishwasher`, `boiler`, `hygienic_shower` |
+| `fixtures[].wall`, `offset` | Стена и отступ до середины подводки (у ванны и душа — стена смесителя) |
+| `fixtures[].supply_height`, `drain_height` | Ось водорозеток и выпуска от пола; нет — типовые со «*» |
+| `obstacles[]` | `installation`, `bath`, `shower_tray`, `box`, `cabinet`, `column`, `other`: у стены (`wall`, `offset` до края, `width`, `depth`) или `rect: [x0, y0, x1, y1]` от `origin` |
 
 ## Вопросы и отчёт: intake.yaml, answers.yaml
 

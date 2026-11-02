@@ -18,6 +18,7 @@ import type { Zoom } from "@/shared/zoom";
 import { ScaleBar } from "@/ui/ScaleBar";
 import { ZoomRail } from "@/ui/ZoomRail";
 import { Filter3D } from "@/widgets/Filter3D";
+import { Legend } from "@/widgets/Legend";
 import type { Scene3DApi } from "@/widgets/Scene3D";
 import { Tip } from "@/widgets/Tip";
 
@@ -32,12 +33,14 @@ interface Props {
   page: Page;
   drawing: Drawing;
   project: string;
+  editable?: boolean;            // можно править трассы (нет — клиент студии: кнопки нет)
   onSaved: (notes: string[]) => void;
+  onBusy?: (busy: boolean) => void;  // идёт сохранение и пересборка — интерфейс блокирует страница
   onBanner: (text: string) => void;
 }
 
 
-export const SheetStage = forwardRef<StageHandle, Props>(function SheetStage({ page, drawing, project, onSaved, onBanner }, ref) {
+export const SheetStage = forwardRef<StageHandle, Props>(function SheetStage({ page, drawing, project, editable = true, onSaved, onBusy, onBanner }, ref) {
   const { t } = useTranslation();
   const wrap = useRef<HTMLElement | null>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -45,6 +48,7 @@ export const SheetStage = forwardRef<StageHandle, Props>(function SheetStage({ p
   const scene = useRef<Scene3DApi | null>(null);
   const index = useMemo(() => new PageIndex(page, drawing.objects), [page, drawing]);
   const [zoom, setZoom] = useState<Zoom>({ step: 0, label: "100%", pxPerMm: null });
+  const [zoom3d, setZoom3d] = useState<Zoom>({ step: 0, label: "100%", pxPerMm: null });
   const [saving, setSaving] = useState(false);
   const [, tick] = useReducer((n: number) => n + 1, 0);  // правка изменилась — перерисовать кнопки
   const { editMode, show3d, wallMode } = useView((s) => s);
@@ -108,12 +112,12 @@ export const SheetStage = forwardRef<StageHandle, Props>(function SheetStage({ p
       ed.sel.clear(); tick(); sv.draw();
       return;
     }
-    sv.saved = true; setSaving(true);
+    sv.saved = true; setSaving(true); onBusy?.(true);
     try {
       const answer = await saveWiring(project, body);
       onSaved(answer.notes || []);
     } catch (e) {
-      sv.saved = false; setSaving(false);
+      sv.saved = false; setSaving(false); onBusy?.(false);
       onBanner(t("sheet.saveFailed", { message: (e as Error).message }));
     }
   };
@@ -135,12 +139,13 @@ export const SheetStage = forwardRef<StageHandle, Props>(function SheetStage({ p
       <canvas ref={canvas} tabIndex={0} aria-label={t("sheet.canvas")} />
       {in3d && (
         <Suspense fallback={<div className={cx(ui.three, ui.empty)}>{t("sheet.loading3d")}</div>}>
-          <Scene3D scene={scene3d!} index={index} own={own} layerOf={layerOf} apiRef={scene} onZoom={() => {}} />
+          <Scene3D scene={scene3d!} index={index} own={own} layerOf={layerOf} apiRef={scene} onZoom={setZoom3d} />
         </Suspense>
       )}
       <Tip index={index} />
-      <ZoomRail zoom={zoom} onStep={(s) => sv?.zoomTo(s)} onFit={fit} fitLabel={t("sheet.fit")}
-                free={in3d ? { onZoom: (d) => scene.current?.zoomBy(d > 0 ? 1.25 : 1 / 1.25) } : undefined} />
+      {!in3d && page.legend && <Legend entries={page.legend} />}
+      <ZoomRail zoom={in3d ? zoom3d : zoom} onFit={fit} fitLabel={t("sheet.fit")}
+                onStep={(s) => (in3d ? scene.current?.zoomTo(s) : sv?.zoomTo(s))} />
       <div className={ui.toolbar}>
         {scene3d && (
           <div className={ui.group}>
@@ -154,7 +159,7 @@ export const SheetStage = forwardRef<StageHandle, Props>(function SheetStage({ p
           </div>
         )}
         {in3d && <Filter3D scene={scene3d!} index={index} />}
-        {ed && !in3d && (
+        {ed && !in3d && editable && (
           <div className={ui.group}>
             <button aria-pressed={editMode} title={t("sheet.editTitle")} onClick={toggleEdit}>{t("sheet.edit")}</button>
             {editMode && (

@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+import yaml
 from ezdxf.document import Drawing
 from ezdxf.filemanagement import readfile
 
@@ -25,6 +26,7 @@ from floorplan_engine.electrical.estimate import (
     PRICES_FILE,
     Estimate,
     PriceList,
+    PriceSource,
     build_estimate,
     unknown_keys,
     write_csv,
@@ -34,6 +36,8 @@ from floorplan_engine.electrical.estimate import (
 from floorplan_engine.electrical.estimate import text as estimate_text
 from floorplan_engine.electrical.groups import group_colors, group_key
 from floorplan_engine.electrical.panel import BoardPanel, build_panel, write_loads
+from floorplan_engine.electrical.pricing import MockPriceService, Prices, price_notes
+from floorplan_engine.electrical.variants import all_variants, variant_summary
 from floorplan_engine.electrical.wiring import END_ALLOWANCE, RESERVE, box_wiring, estimate_wiring
 from floorplan_engine.electrical.wiring_model import CHASE_NARROW, Wiring
 from floorplan_engine.epd.artifact import export_artifact
@@ -44,20 +48,32 @@ from floorplan_engine.epd.objects import (
     wire_titles,
     wiring_handles,
 )
+from floorplan_engine.epd.overview import overview_data
 from floorplan_engine.epd.panel_data import panel_data
+from floorplan_engine.epd.plumbing import plumbing_objects, plumbing_scene, plumbing_tables
 from floorplan_engine.epd.scene3d import build_scene
-from floorplan_engine.epd.side import side_tables
+from floorplan_engine.epd.side import side_legends, side_tables
 from floorplan_engine.epd.thumbnail import PREVIEW_FILE, plan_thumbnail
 from floorplan_engine.model.intake import Stage
 from floorplan_engine.model.panel_catalog import DeviceKind
+from floorplan_engine.model.plumbing import PLUMBING_FILE, Plumbing
 from floorplan_engine.model.scale import drawing_scale
-from floorplan_engine.model.schema import Electrical, SheetFormat, WiringEdits
+from floorplan_engine.model.schema import Electrical, SheetFormat, Variant, WiringEdits, WiringFile
+from floorplan_engine.plumbing.estimate import LINES as PLUMBING_LINES
+from floorplan_engine.plumbing.estimate import MOCK_PRICES as PLUMBING_MOCK_PRICES
+from floorplan_engine.plumbing.estimate import RESERVE as PLUMBING_RESERVE
+from floorplan_engine.plumbing.estimate import build_estimate as build_plumbing_estimate
+from floorplan_engine.plumbing.estimate import text as plumbing_estimate_text
+from floorplan_engine.plumbing.network import Network, build_network, routes_json
+from floorplan_engine.plumbing.rows import water_views
 from floorplan_engine.sheets.document import build_project_document, document_scale, sheet_png_name
 from floorplan_engine.sheets.preview import paper_size, render_png, sheet_layouts
 from floorplan_engine.sheets.printing import SheetCheck, check_sheets, write_album
+from floorplan_engine.validation.answers import load_optional
 from floorplan_engine.validation.assess import STAGE_FILES, StageResult, assess
 from floorplan_engine.validation.issues import (
     ELECTRICAL_FILE,
+    VARIANT_FILE,
     WIRING_FILE,
     Issue,
     Severity,
@@ -124,6 +140,8 @@ class BuildResult:
     chases: Path | None = None  # ведомость штроб (CSV)
     loads: Path | None = None  # роспись потребителей щита (CSV)
     estimate: list[Path] = field(default_factory=list)  # смета: md, csv, xlsx — как на листе
+    plumbing_estimate: list[Path] = field(default_factory=list)  # смета сантехники
+    sewer_routes: Path | None = None  # трассы канализации (JSON, формат ТЗ трассировки)
     price_issues: list[Issue] = field(default_factory=list)  # prices.yaml не прочитан
     sheets: list[Path] = field(default_factory=list)
 
@@ -138,17 +156,33 @@ def assess_project(project: Path) -> Assessment:
 
 
 def _sheet_inputs(
-    project: Path, assessment: Assessment
-) -> tuple[Electrical | None, PriceList | None, list[Issue]]:
-    """Что идёт на листы, кроме плана: электрика (если этап строится) и прайс сметы."""
+    project: Path, assessment: Assessment, service: PriceSource | None
+) -> tuple[Electrical | None, Prices | None, list[Issue]]:
+    """Что идёт на листы, кроме плана: электрика (если этап строится) и цены смет — прайс
+    проекта или студии (если есть и читается) поверх сервиса цен; цены нужны и без электрики,
+    если строится сантехника."""
     report = assessment.report
     elec_status = assessment.status(Stage.ELECTRICAL)
     elec = report.electrical if elec_status is not None and elec_status.status.builds else None
+    if elec is None and plumbing_of(assessment) is None:
+        return None, None, []
     price_path = find_prices(project)
-    if elec is None or price_path is None:
-        return elec, None, []
-    prices, issues = load_prices(price_path)
-    return elec, prices, issues
+    own, issues = load_prices(price_path) if price_path is not None else (None, [])
+    return elec, Prices(own, service), issues
+
+
+def plumbing_of(assessment: Assessment) -> Plumbing | None:
+    """Сантехника, если её этап строится (plumbing.yaml без ошибок, вопросы не мешают)."""
+    status = assessment.status(Stage.PLUMBING)
+    if status is None or not status.status.builds:
+        return None
+    return assessment.report.plumbing
+
+
+def price_service(given: PriceSource | None) -> PriceSource:
+    """Сервис цен для смет: переданный клиент (service/, позже) или имитация — она знает и
+    позиции сантехники (plumbing/estimate.MOCK_PRICES)."""
+    return given if given is not None else MockPriceService(extra=PLUMBING_MOCK_PRICES)
 
 
 def write_report(out: Path, assessment: Assessment, fallback_name: str) -> list[Path]:
@@ -188,10 +222,13 @@ def render_sheets(out: Path) -> list[Path]:
     ]
 
 
-def build_project(project: Path, previews: bool = False) -> BuildResult:
+def build_project(
+    project: Path, previews: bool = False, prices_from: PriceSource | None = None
+) -> BuildResult:
     """Оценить проект, записать отчёт и, если план можно строить, собрать DXF и артефакт .epd
     из этапов, которые можно строить. Листы показываются из .epd (canvas); PNG из DXF —
-    только с previews=True, иначе старые out/sheets/*.png удаляются."""
+    только с previews=True, иначе старые out/sheets/*.png удаляются. prices_from — сервис
+    цен для сметы; None — имитация (pricing.MockPriceService)."""
     assessment = assess_project(project)
     out = project / OUT_DIR
     result = BuildResult(assessment, write_report(out, assessment, project.name))
@@ -199,9 +236,14 @@ def build_project(project: Path, previews: bool = False) -> BuildResult:
         return result
     report = assessment.report
     assert report.plan is not None
-    elec, prices, result.price_issues = _sheet_inputs(project, assessment)
+    elec, prices, result.price_issues = _sheet_inputs(
+        project, assessment, price_service(prices_from)
+    )
     edits = report.wiring_edits
-    doc = build_project_document(report.plan, report.contours, elec, prices=prices, edits=edits)
+    plumbing = plumbing_of(assessment)
+    doc = build_project_document(
+        report.plan, report.contours, elec, prices=prices, edits=edits, plumbing=plumbing
+    )
     saved = save_checked(doc, out / PROJECT_FILE)
     result.dxf = out / PROJECT_FILE
     # Превью для карточки проекта в просмотре
@@ -247,17 +289,47 @@ def build_project(project: Path, previews: bool = False) -> BuildResult:
             result.report_files = write_report(out, assessment, project.name)
     else:
         loads.unlink(missing_ok=True)
+    net = build_network(report.plan, report.contours, plumbing) if plumbing is not None else None
+    if net is not None and net.weak:
+        report.issues += [
+            Issue(
+                PLUMBING_FILE, w.target and f"fixtures.{w.target}", w.text["ru"], Severity.WARNING
+            )
+            for w in net.weak
+        ]
+        result.report_files = write_report(out, assessment, project.name)
+    routes = out / SEWER_ROUTES_FILE
+    if net is not None and plumbing is not None:
+        result.plumbing_estimate = write_plumbing_estimate(
+            project, assessment, net, plumbing, prices or Prices(), find_prices(project)
+        )
+        routes.write_text(
+            json.dumps(routes_json(net), ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+        )
+        result.sewer_routes = routes
+    else:
+        for name in PLUMBING_ESTIMATE_FILES:
+            (out / name).unlink(missing_ok=True)
+        routes.unlink(missing_ok=True)
     panel_view = None
     if panel is not None:
         assert elec is not None
         board = elec.board.name if elec.board is not None else "ЩР"
         panel_view = panel_data(panel, group_colors(elec), board, report.plan.language)
     # Артефакт — из записанного файла: ровно то, что откроет AutoCAD
-    objects = describe_objects(report.plan, report.contours, elec, wiring)
+    water = water_views(plumbing, net) if plumbing is not None and net is not None else None
+    objects = describe_objects(report.plan, report.contours, elec, wiring, water)
+    if net is not None and plumbing is not None:
+        objects |= plumbing_objects(report.plan, plumbing, net)
     quantities = None
     if wiring is not None and elec is not None:
         quantities = estimate_wiring(report.plan, report.contours, elec, edits)
     tables = side_tables(report.plan, report.contours, elec, wiring, prices, quantities)
+    if net is not None and plumbing is not None:
+        tables |= plumbing_tables(report.plan, plumbing, net, prices)
+        if scene is not None:
+            ceiling = wiring.ceiling_height if wiring is not None else report.plan.ceiling_height
+            scene |= plumbing_scene(net, ceiling)
     if quantities is not None and elec is not None and not result.price_issues:
         # Смета файлами — та же, что на листе: Excel в просмотре не отстаёт от листов;
         # прайс с ошибкой — смету не пишем (ошибки — в price_issues), старую убираем
@@ -266,7 +338,7 @@ def build_project(project: Path, previews: bool = False) -> BuildResult:
             assessment,
             quantities,
             elec,
-            prices or PriceList(),
+            prices or Prices(),
             find_prices(project),
             panel,
         )
@@ -286,9 +358,29 @@ def build_project(project: Path, previews: bool = False) -> BuildResult:
         edit,
         scene,
         panel_view,
-        elevation_data(report.plan, report.contours, elec, wiring, group_colors(elec))
+        elevation_data(
+            report.plan,
+            report.contours,
+            elec,
+            wiring,
+            group_colors(elec),
+            water,
+        )
         if elec is not None
         else None,
+        side_legends(elec, report.plan.language) if elec is not None else None,
+        variant_block(report, prices) if elec is not None and prices is not None else None,
+        overview_data(
+            report.plan,
+            report.contours,
+            elec,
+            panel,
+            plumbing,
+            net,
+            build_plumbing_estimate(net, plumbing, prices or Prices(), report.plan.language)
+            if net is not None and plumbing is not None
+            else None,
+        ),
     )
     if previews:
         result.sheets = render_sheets(out)
@@ -298,36 +390,129 @@ def build_project(project: Path, previews: bool = False) -> BuildResult:
     return result
 
 
+def variant_block(report: Report, prices: Prices) -> dict[str, Any] | None:
+    """Варианты проводки для просмотра (манифест .epd, ключ variants): выбранный, «как в
+    проекте» и сводка каждого — смета, кабель, аппараты, штробы — без чертежей."""
+    source, chosen, default = report.source_electrical, report.variant, report.default_variant
+    if report.plan is None or source is None or chosen is None or default is None:
+        return None
+    wiring_file = report.wiring_file or WiringFile()
+    items = []
+    for variant in all_variants():
+        edits = wiring_file.edits_for(variant.key, default.key)
+        summary = variant_summary(report.plan, report.contours, source, variant, edits, prices)
+        if summary is not None:
+            items.append(summary.as_dict())
+    return {"active": chosen.key, "default": default.key, "items": items}
+
+
+def save_variant(project: Path, data: dict[str, Any]) -> list[Issue]:
+    """Вариант проводки из просмотра — в variant.yaml: {mode, route, distribution, ceiling_height?}.
+    Нет ceiling_height — прежняя высота остаётся. Ошибки —
+    с путём к полю, файл тогда не меняется."""
+    path = project / VARIANT_FILE
+    if "ceiling_height" not in data:  # смена варианта не сбрасывает высоту потолка
+        old, _ = load_optional(path, Variant)
+        if old is not None and old.ceiling_height is not None:
+            data = {**data, "ceiling_height": old.ceiling_height}
+    variant, issues = parse_model(Variant, data, VARIANT_FILE)
+    if variant is None:
+        return issues
+    path.write_text(
+        "# Вариант проводки и высота потолка, выбранные в просмотре (docs/wiring-variants.md).\n"
+        + yaml.safe_dump(
+            variant.model_dump(exclude_none=True), allow_unicode=True, sort_keys=False
+        ),
+        encoding="utf-8",
+    )
+    return []
+
+
 def save_wiring_edits(project: Path, changes: dict[str, Any]) -> list[Issue]:
-    """Правки проводки из просмотра — в wiring.yaml проекта: changes = {"wires": {id: правка
-    или None}, "boxes": {...}}; None убирает правку (линия — снова автотрасса). Пустые правки —
-    файла нет. Ошибки — с путём к полю, файл тогда не меняется."""
+    """Правки проводки из просмотра — в wiring.yaml проекта, в раздел выбранного варианта
+    (variants.<ключ>): changes = {"wires": {id: правка или None}, "boxes": {...}}; None
+    убирает правку (линия — снова автотрасса). Правки до вариантов (wires и boxes верхнего
+    уровня) при правке варианта «как в проекте» переезжают в его раздел. Нет правок — нет
+    файла. Ошибки — с путём к полю, файл тогда не меняется."""
     path = project / WIRING_FILE
-    data: dict[str, Any] = {"wires": {}, "boxes": {}}
+    report = validate_project(project)
+    # Электрика не читается — варианта нет: правки — по-старому, вне разделов вариантов
+    key = report.variant.key if report.variant is not None else None
+    default_key = report.default_variant.key if report.default_variant is not None else None
+    current = WiringFile()
     if path.exists():
         raw, issues = load_yaml(path)
         if issues and raw is None and path.stat().st_size:
             return issues
         if isinstance(raw, dict):
-            data.update({k: dict(raw.get(k) or {}) for k in ("wires", "boxes")})
+            parsed, issues = parse_model(WiringFile, raw, WIRING_FILE)
+            if parsed is None:
+                return issues
+            current = parsed
+    if key is None or default_key is None:
+        edits = WiringEdits(wires=current.wires, boxes=current.boxes)
+    else:
+        edits = current.edits_for(key, default_key) or WiringEdits()
+    data: dict[str, Any] = {
+        "wires": {k: v.model_dump(by_alias=True) for k, v in edits.wires.items()},
+        "boxes": {k: v.model_dump() for k, v in edits.boxes.items()},
+    }
     for kind in ("wires", "boxes"):
-        for key, value in (changes.get(kind) or {}).items():
+        for name, value in (changes.get(kind) or {}).items():
             if value is None:
-                data[kind].pop(key, None)
+                data[kind].pop(name, None)
             else:
-                data[kind][key] = value
-    edits, issues = parse_model(WiringEdits, data, WIRING_FILE)
-    if edits is None:
+                data[kind][name] = value
+    new, issues = parse_model(WiringEdits, data, WIRING_FILE)
+    if new is None:
         return issues
-    if not edits.wires and not edits.boxes:
+    variants = dict(current.variants)
+    if key is None:
+        result = WiringFile(wires=new.wires, boxes=new.boxes, variants=variants)
+    else:
+        variants[key] = new
+        keep_legacy = key != default_key  # правки до вариантов — у варианта «как в проекте»
+        result = WiringFile(
+            wires=current.wires if keep_legacy else {},
+            boxes=current.boxes if keep_legacy else {},
+            variants={k: v for k, v in variants.items() if v.wires or v.boxes},
+        )
+    if not (result.wires or result.boxes or result.variants):
         path.unlink(missing_ok=True)
         return []
-    path.write_text(dump_wiring_edits(edits), encoding="utf-8")
+    path.write_text(dump_wiring_file(result), encoding="utf-8")
     return []
 
 
+def dump_wiring_file(data: WiringFile) -> str:
+    """wiring.yaml с вариантами: правки до вариантов (если остались), затем variants."""
+    head = [
+        "# Ручные правки проводки из просмотра (floorplan-engine view), мм модели, по вариантам",
+        "# проводки (variants.<режим-трасса-разводка>). Удалить запись — вернуть автотрассу.",
+    ]
+    body: list[str] = []
+    legacy = WiringEdits(wires=data.wires, boxes=data.boxes)
+    if legacy.wires or legacy.boxes:
+        body += _edit_lines(legacy, "")
+    if data.variants:
+        body.append("variants:")
+        for key in sorted(data.variants):
+            body.append(f"  {json.dumps(key)}:")
+            body += _edit_lines(data.variants[key], "    ")
+    return "\n".join(head + body) + "\n"
+
+
 def dump_wiring_edits(edits: WiringEdits) -> str:
-    """wiring.yaml: по строке на коробку и на линию, точки трассы — в одну строку."""
+    """Правки одного варианта (wiring.yaml до вариантов): по строке на коробку и на линию."""
+    head = [
+        "# Ручные правки проводки из просмотра (floorplan-engine view), мм модели.",
+        "# Остальное строится автоматически; удалить запись — вернуть автотрассу.",
+    ]
+    return "\n".join(head + _edit_lines(edits, "")) + "\n"
+
+
+def _edit_lines(edits: WiringEdits, indent: str) -> list[str]:
+    """Строки правок с отступом: по строке на коробку и на линию, точки трассы — в одну строку."""
 
     def xy(p: tuple[float, float]) -> str:
         return f"[{p[0]:g}, {p[1]:g}]"
@@ -335,22 +520,21 @@ def dump_wiring_edits(edits: WiringEdits) -> str:
     def q(text: str) -> str:  # строка JSON — это и строка YAML, с любыми символами
         return json.dumps(text, ensure_ascii=False)
 
-    lines = [
-        "# Ручные правки проводки из просмотра (floorplan-engine view), мм модели.",
-        "# Остальное строится автоматически; удалить запись — вернуть автотрассу.",
-    ]
+    lines = []
     if edits.boxes:
-        lines.append("boxes:")
+        lines.append(f"{indent}boxes:")
         for bid, b in sorted(edits.boxes.items()):
             lines.append(
-                f"  {q(bid)}: {{ room: {q(b.room)}, group: {q(b.group)}, at: {xy(b.at)} }}"
+                f"{indent}  {q(bid)}: {{ room: {q(b.room)}, group: {q(b.group)}, at: {xy(b.at)} }}"
             )
     if edits.wires:
-        lines.append("wires:")
+        lines.append(f"{indent}wires:")
         for wid, w in sorted(edits.wires.items(), key=lambda kv: _natural(kv[0])):
             path = ", ".join(xy(p) for p in w.path)
-            lines.append(f"  {q(wid)}: {{ from: {q(w.from_)}, to: {q(w.to)}, path: [{path}] }}")
-    return "\n".join(lines) + "\n"
+            lines.append(
+                f"{indent}  {q(wid)}: {{ from: {q(w.from_)}, to: {q(w.to)}, path: [{path}] }}"
+            )
+    return lines
 
 
 def _natural(key: str) -> tuple[str, int]:
@@ -383,7 +567,9 @@ class PrintResult:
         return [w for c in self.checks for w in c.warnings()]
 
 
-def print_project(project: Path, paper: SheetFormat = "auto") -> PrintResult:
+def print_project(
+    project: Path, paper: SheetFormat = "auto", prices_from: PriceSource | None = None
+) -> PrintResult:
     """PDF-альбом листов в натуральную величину (printing.py). paper="auto" — комплект как
     при сборке (out/project.dxf → out/album.pdf; сборки нет — ошибка); заданный формат —
     листы раскладываются заново под него: out/print-A3.dxf и out/album-A3.pdf."""
@@ -401,7 +587,7 @@ def print_project(project: Path, paper: SheetFormat = "auto") -> PrintResult:
         if not assessment.plan_builds or plan is None:
             result.issues.append(Issue("room.yaml", "", "план не строится — см. check"))
             return result
-        elec, prices, result.issues = _sheet_inputs(project, assessment)
+        elec, prices, result.issues = _sheet_inputs(project, assessment, price_service(prices_from))
         sheet = plan.sheet.model_copy(update={"format": paper})
         doc = build_project_document(
             plan.model_copy(update={"sheet": sheet}),
@@ -409,6 +595,7 @@ def print_project(project: Path, paper: SheetFormat = "auto") -> PrintResult:
             elec,
             prices=prices,
             edits=assessment.report.wiring_edits,
+            plumbing=plumbing_of(assessment),
         )
         result.dxf = out / f"print-{paper}.dxf"
         doc = save_checked(doc, result.dxf)
@@ -422,6 +609,51 @@ def print_project(project: Path, paper: SheetFormat = "auto") -> PrintResult:
     title = plan.name if plan is not None else project.name
     result.pdf = write_album(doc, pdf, title)
     return result
+
+
+SEWER_ROUTES_FILE = "sewer-routes.json"  # трассы канализации: участки, зоны, высоты, ошибки
+PLUMBING_ESTIMATE_FILES = (
+    "plumbing-estimate.md",
+    "plumbing-estimate.csv",
+    "plumbing-estimate.xlsx",
+)
+
+
+def write_plumbing_estimate(
+    project: Path,
+    assessment: Assessment,
+    net: Network,
+    plumbing: Plumbing,
+    prices: Prices,
+    source: Path | None,
+) -> list[Path]:
+    """Смета сантехники в out/: plumbing-estimate.md, .csv и .xlsx — та же, что на листе
+    «Сантехника». Пишет build."""
+    plan = assessment.report.plan
+    assert plan is not None
+    lang = plan.language
+    est = build_plumbing_estimate(net, plumbing, prices, lang)
+    if prices.priced:
+        notes = price_notes(est, prices, lang, f=source.name if source else PRICES_FILE, note=True)
+    else:
+        notes = [estimate_text("note_no_prices", lang, f=PRICES_FILE)]
+    notes += [
+        plumbing_estimate_text("note_pipes", lang, pct=round(PLUMBING_RESERVE * 100)),
+        plumbing_estimate_text("note_input", lang),
+        plumbing_estimate_text("note_excluded", lang),
+    ]
+    status = assessment.status(Stage.PLUMBING)
+    if status is not None and status.open_questions:
+        ids = ", ".join(q.id for q in status.open_questions)
+        notes.append(plumbing_estimate_text("note_questions", lang, ids=ids))
+    title = plumbing_estimate_text("title", lang, name=plan.name)
+    out = project / OUT_DIR
+    md, csv_, xlsx = (out / name for name in PLUMBING_ESTIMATE_FILES)
+    return [
+        write_markdown(est, md, title, notes, lang),
+        write_csv(est, csv_),
+        write_xlsx(est, xlsx, title, notes, lang),
+    ]
 
 
 def find_prices(project: Path) -> Path | None:
@@ -441,14 +673,17 @@ def load_prices(path: Path) -> tuple[PriceList | None, list[Issue]]:
     prices, issues = parse_model(PriceList, data, path.name)
     if prices is None:
         return None, issues
-    bad = [Issue(path.name, f"items.{k}", "нет такой позиции сметы") for k in unknown_keys(prices)]
+    keys = [k for k in unknown_keys(prices) if k not in PLUMBING_LINES]
+    bad = [Issue(path.name, f"items.{k}", "нет такой позиции сметы") for k in keys]
     return (None, bad) if bad else (prices, [])
 
 
-def estimate_project(project: Path, prices_path: Path | None = None) -> EstimateResult:
+def estimate_project(
+    project: Path, prices_path: Path | None = None, prices_from: PriceSource | None = None
+) -> EstimateResult:
     """Смета электрики: объёмы из модели, цены — из prices.yaml проекта, иначе из общего
-    прайса студии (find_prices), или из prices_path. Нет прайса — смета с объёмами без цен.
-    Пишет out/estimate.md, estimate.csv и estimate.xlsx."""
+    прайса студии (find_prices), или из prices_path, поверх сервиса цен (prices_from; None —
+    имитация). Пишет out/estimate.md, estimate.csv и estimate.xlsx."""
     assessment = assess_project(project)
     result = EstimateResult(assessment)
     report = assessment.report
@@ -462,13 +697,14 @@ def estimate_project(project: Path, prices_path: Path | None = None) -> Estimate
         result.issues.append(Issue("electrical.yaml", "board", "нет щита или точек с группами"))
         return result
     path = prices_path or find_prices(project)
-    prices = PriceList()
+    own: PriceList | None = None
     if path is not None and path.exists():
-        loaded, issues = load_prices(path)
-        if loaded is None:
+        own, issues = load_prices(path)
+        if own is None:
             result.issues += issues
             return result
-        prices, result.prices = loaded, path
+        result.prices = path
+    prices = Prices(own, price_service(prices_from))
     panel = build_panel(report.plan, report.electrical)
     result.estimate, result.files = write_estimate(
         project, assessment, wiring, report.electrical, prices, result.prices, panel
@@ -481,7 +717,7 @@ def write_estimate(
     assessment: Assessment,
     wiring: Wiring,
     elec: Electrical,
-    prices: PriceList,
+    prices: Prices,
     source: Path | None,
     panel: BoardPanel | None,
 ) -> tuple[Estimate, list[Path]]:
@@ -490,7 +726,7 @@ def write_estimate(
     assert assessment.report.plan is not None
     plan = assessment.report.plan
     est = build_estimate(wiring, elec, prices, plan.language, panel)
-    notes = _estimate_notes(assessment, wiring, elec, prices, source)
+    notes = _estimate_notes(assessment, est, wiring, elec, prices, source)
     title = estimate_text("title", plan.language, name=plan.name)
     out = project / OUT_DIR
     files = [
@@ -503,18 +739,17 @@ def write_estimate(
 
 def _estimate_notes(
     assessment: Assessment,
+    est: Estimate,
     wiring: Wiring,
     elec: Electrical,
-    prices: PriceList,
+    prices: Prices,
     source: Path | None,
 ) -> list[str]:
     """Откуда цены, какие допущения в объёмах и что в смету не входит."""
     assert assessment.report.plan is not None
     lang = assessment.report.plan.language
-    if source is not None:
-        date = f" ({prices.date})" if prices.date else ""
-        note = f" — {prices.note}" if prices.note else ""
-        notes = [estimate_text("note_prices", lang, f=source.name, date=date, note=note)]
+    if prices.priced:
+        notes = price_notes(est, prices, lang, f=source.name if source else PRICES_FILE, note=True)
     else:
         notes = [estimate_text("note_no_prices", lang, f=PRICES_FILE)]
     notes += [
@@ -524,6 +759,8 @@ def _estimate_notes(
         estimate_text("note_fixing", lang, step=f"{FIXING_STEP:g}"),
         estimate_text("note_crimp", lang),
     ]
+    if any(ln.key.startswith("conduit.") for ln in est.lines):
+        notes.append(estimate_text("note_conduit", lang))
     if elec.board is not None:
         notes.append(estimate_text("note_panel", lang))
         notes.append(
@@ -531,7 +768,7 @@ def _estimate_notes(
                 "note_board_tail", lang, h=f"{elec.board.height:g}", e=f"{END_ALLOWANCE:g}"
             )
         )
-    if prices.board_kit and source is not None:
+    if prices.own is not None and prices.own.board_kit and source is not None:
         keys = ", ".join(k.value for k in DeviceKind)
         notes.append(estimate_text("note_board_kit", lang, f=source.name, keys=keys))
     with_boxes = {b.group for b in wiring.boxes}

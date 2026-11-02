@@ -1,5 +1,5 @@
-// Вход: карточка по центру страницы (знак, заголовок, Google, «или», почта); выбор «кто вы» —
-// в такой же карточке, пошире
+// Вход: карточка по центру страницы (знак, заголовок, Telegram, «или», Google, «или», почта; внизу —
+// код доступа к проекту отдельным блоком); выбор «кто вы» — в такой же карточке, пошире
 
 @use "@/shared/styles/mixins" as *;
 
@@ -35,6 +35,11 @@
   display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px;
   font-size: 12px; color: var(--muted);
   &::before, &::after { content: ""; border-top: 1px solid var(--line); }
+}
+// Код доступа к проекту — своим блоком под чертой: это не учётка, а ключ к одному проекту
+.byCode {
+  display: grid; gap: 10px; padding-top: 16px; border-top: 1px solid var(--line);
+  h2 { margin: 0; font-size: 15px; font-weight: 500; }
 }
 .visitor { width: 100%; }
 // Вход для разработки — только локально: пунктирная рамка, чтобы не путать с настоящим входом

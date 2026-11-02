@@ -18,16 +18,22 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 
 from floorplan_engine.model.intake import QSeverity, Question, Stage
+from floorplan_engine.model.plumbing import PLUMBING_FILE
 from floorplan_engine.validation.issues import ELECTRICAL_FILE, ROOM_FILE
 from floorplan_engine.validation.validate import Report
 
 GEOMETRY_FIELDS = frozenset({"length", "turn", "origin", "start_angle"})
 PLACEMENT_FIELDS = frozenset({"offset", "width", "wall", "ceiling", "start", "end", "room"})
+SAFETY_FIELDS = frozenset({"npe_relay"})  # защита людей — вопрос важный
 WEIGHTS = {QSeverity.CRITICAL: 0, QSeverity.MAJOR: 3, QSeverity.MINOR: 1}
 WEIGHT_LIMIT = 12
 
 # Этапы, которые уже умеем строить, и их файлы
-STAGE_FILES = {Stage.PLAN: ROOM_FILE, Stage.ELECTRICAL: ELECTRICAL_FILE}
+STAGE_FILES = {
+    Stage.PLAN: ROOM_FILE,
+    Stage.ELECTRICAL: ELECTRICAL_FILE,
+    Stage.PLUMBING: PLUMBING_FILE,
+}
 DEPENDS_ON = {
     Stage.ELECTRICAL: Stage.PLAN,
     Stage.FURNITURE: Stage.PLAN,
@@ -71,7 +77,7 @@ def severity(q: Question) -> QSeverity:
     name = q.target.rsplit(".", 1)[-1]
     if name in GEOMETRY_FIELDS:
         return QSeverity.CRITICAL if q.assumption is None else QSeverity.MAJOR
-    if name in PLACEMENT_FIELDS:
+    if name in PLACEMENT_FIELDS or name in SAFETY_FIELDS:
         return QSeverity.MAJOR
     return QSeverity.MINOR
 
@@ -91,8 +97,14 @@ class StageResult:
         return sum(1 for q in self.open_questions if severity(q) is level)
 
 
+# Этапы, которые в отчёте всегда (их нет — «нет файла»); остальные — если о них что-то известно
+ALWAYS = frozenset({Stage.PLAN, Stage.ELECTRICAL})
+
+
 def _stages_in_play(report: Report) -> list[Stage]:
-    present = set(STAGE_FILES)
+    present = set(ALWAYS)
+    if report.plumbing is not None or any(i.file == PLUMBING_FILE for i in report.issues):
+        present.add(Stage.PLUMBING)
     if report.intake is not None:
         present |= set(report.intake.stages)
     present |= {q.stage for q in report.questions}
@@ -113,8 +125,10 @@ def assess(report: Report) -> list[StageResult]:
         results[stage] = result
         note = intake.stages.get(stage) if intake else None
         file = STAGE_FILES.get(stage)
-        has_model = (stage is Stage.PLAN and report.plan is not None) or (
-            stage is Stage.ELECTRICAL and report.electrical is not None
+        has_model = (
+            (stage is Stage.PLAN and report.plan is not None)
+            or (stage is Stage.ELECTRICAL and report.electrical is not None)
+            or (stage is Stage.PLUMBING and report.plumbing is not None)
         )
         errors = [i for i in report.errors if file is not None and i.file in (file,)]
         parent = DEPENDS_ON.get(stage)

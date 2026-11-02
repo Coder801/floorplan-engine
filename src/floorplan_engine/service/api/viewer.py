@@ -14,6 +14,7 @@ GET /api/projects/{name}/model/{file}   YAML модели
 GET /api/projects/{name}/sheets         манифест листов из out/project.epd
 GET /api/projects/{name}/sheets/{n}     лист n (1, 2…): векторные примитивы для canvas
 POST /api/projects/{name}/wiring        правки проводки → wiring.yaml и пересборка
+POST /api/projects/{name}/variant       вариант проводки → variant.yaml и пересборка
 GET /api/auth/me                        кто вошёл ({"auth": false} — вход выключен)
 
 Вход (service/api/auth.py) включается окружением SHTROBA_AUTH=on: тогда список проектов — только
@@ -46,15 +47,36 @@ from floorplan_engine.pipeline import (
     PROJECT_FILE,
     AuditError,
     build_project,
+    save_variant,
     save_wiring_edits,
 )
 from floorplan_engine.service.api.auth import Auth
-from floorplan_engine.validation.issues import ELECTRICAL_FILE, ROOM_FILE, WIRING_FILE
+from floorplan_engine.service.db import access as acc
+from floorplan_engine.validation.issues import (
+    ELECTRICAL_FILE,
+    ROOM_FILE,
+    VARIANT_FILE,
+    WIRING_FILE,
+)
 from floorplan_engine.validation.report import REPORT_JSON
 
 FRONT_HINT = "страница — проект web/: cd web && npm run dev → http://127.0.0.1:5173"
 SOURCE_DIR = "source"
-MODEL_FILES = (ROOM_FILE, ELECTRICAL_FILE, INTAKE_FILE, ANSWERS_FILE, WIRING_FILE)
+MODEL_FILES = (ROOM_FILE, ELECTRICAL_FILE, INTAKE_FILE, ANSWERS_FILE, WIRING_FILE, VARIANT_FILE)
+
+
+def project_folders(root: Path) -> list[Path]:
+    """Папки проектов в root: не скрытые, с YAML модели или собранным out/ (прайс студии и
+    прочие файлы рядом — не проекты). Их же связывает с владельцем вход (auth.Auth._adopt)."""
+    return sorted(
+        p
+        for p in root.iterdir()
+        if p.is_dir()
+        and not p.name.startswith(".")
+        and (any((p / f).exists() for f in MODEL_FILES) or (p / OUT_DIR).is_dir())
+    )
+
+
 # Во вкладках — ещё прайс сметы; на «сборка устарела» он не влияет (смета — отдельная команда)
 SHOWN_FILES = (*MODEL_FILES, PRICES_FILE)
 
@@ -99,6 +121,7 @@ def create_viewer(root: Path, auth: Auth | None = None) -> FastAPI:
     """API просмотра папки root; auth — вход и доступ (None — всё открыто, локально)."""
     app = FastAPI(title="Штроба · просмотр", version="0.1.0")
     if auth is not None:
+        auth.folders = lambda: [p.name for p in project_folders(root)]
         auth.install(app)
     else:
 
@@ -125,18 +148,18 @@ def create_viewer(root: Path, auth: Auth | None = None) -> FastAPI:
 
     @app.get("/api/projects")
     def projects(request: Request) -> list[dict[str, Any]]:
-        folders = sorted(p for p in root.iterdir() if p.is_dir() and not p.name.startswith("."))
+        folders = project_folders(root)
         if auth is not None:
             shown = auth.visible(request, [p.name for p in folders])
             folders = [p for p in folders if p.name in shown]
-        return [
-            _summary(p)
-            for p in folders
-            if any((p / f).exists() for f in MODEL_FILES) or (p / OUT_DIR).is_dir()
-        ]
+        return [_summary(p) for p in folders]
+
+    def allowed(request: Request, action: acc.Action) -> bool:
+        """Право в проекте: вход выключен — всё можно; иначе по роли (auth.check)."""
+        return auth is None or acc.can(getattr(request.state, "role", None), action)
 
     @app.get("/api/projects/{name}")
-    def project(name: str) -> dict[str, Any]:
+    def project(name: str, request: Request) -> dict[str, Any]:
         path = project_dir(name)
         report_path = path / OUT_DIR / REPORT_JSON
         report = json.loads(report_path.read_text("utf-8")) if report_path.exists() else None
@@ -169,6 +192,11 @@ def create_viewer(root: Path, auth: Auth | None = None) -> FastAPI:
                 if isinstance(s, dict)
             ],
             "model": [f for f in SHOWN_FILES if (path / f).exists()],
+            # Что можно пришедшему: править трассы и выбирать вариант (студия, «Мой ремонт»)
+            "can": {
+                "edit_wiring": allowed(request, "edit_wiring"),
+                "choose_variant": allowed(request, "choose_variant"),
+            },
         }
 
     def artifact(name: str) -> zipfile.ZipFile:
@@ -214,6 +242,20 @@ def create_viewer(root: Path, auth: Auth | None = None) -> FastAPI:
             raise HTTPException(500, str(exc)) from exc
         notes = [i for i in result.assessment.report.issues if i.file == WIRING_FILE]
         return {"built": result.built, "notes": [f"{i.path}: {i.message}" for i in notes]}
+
+    @app.post("/api/projects/{name}/variant")
+    def choose_variant(name: str, data: Annotated[dict[str, Any], Body()]) -> dict[str, Any]:
+        """Вариант проводки: {mode, route, distribution} → variant.yaml, затем пересборка.
+        Правки трасс у каждого варианта свои (wiring.yaml, variants)."""
+        path = project_dir(name)
+        issues = save_variant(path, data)
+        if issues:
+            raise HTTPException(422, "; ".join(f"{i.path}: {i.message}" for i in issues))
+        try:
+            result = build_project(path)
+        except AuditError as exc:
+            raise HTTPException(500, str(exc)) from exc
+        return {"built": result.built, "notes": []}
 
     @app.get("/api/projects/{name}/out/{rel:path}")
     def out_file(name: str, rel: str) -> FileResponse:

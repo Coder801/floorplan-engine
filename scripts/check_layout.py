@@ -11,22 +11,42 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+from floorplan_engine.electrical.pricing import Prices
 from floorplan_engine.model.scale import drawing_scale
-from floorplan_engine.pipeline import assess_project, find_prices, load_prices
+from floorplan_engine.pipeline import (
+    assess_project,
+    find_prices,
+    load_prices,
+    plumbing_of,
+    price_service,
+)
+from floorplan_engine.plumbing.network import build_network
 from floorplan_engine.sheets.document import choose_paper_and_scale
 from floorplan_engine.sheets.layout import place, view_size
 from floorplan_engine.sheets.stages import draw_stages
 
 
 def check(project: Path) -> bool:
-    report = assess_project(project).report
+    assessment = assess_project(project)
+    report = assessment.report
     assert report.plan is not None, f"{project}: план не строится"
+    plumbing = plumbing_of(assessment)
+    water = (
+        (plumbing, build_network(report.plan, report.contours, plumbing))
+        if plumbing is not None
+        else None
+    )
     prices_path = find_prices(project)
-    prices = load_prices(prices_path)[0] if prices_path is not None else None
-    paper, scale = choose_paper_and_scale(report.plan, report.contours, report.electrical, prices)
+    own = load_prices(prices_path)[0] if prices_path is not None else None
+    prices = Prices(own, price_service(None))  # как при сборке: прайс поверх сервиса цен
+    paper, scale = choose_paper_and_scale(
+        report.plan, report.contours, report.electrical, prices, plumbing=water
+    )
     ok = True
     with drawing_scale(scale):
-        doc, specs = draw_stages(report.plan, report.contours, report.electrical, prices)
+        doc, specs = draw_stages(
+            report.plan, report.contours, report.electrical, prices, plumbing=water
+        )
         for spec in specs:
             view = view_size(doc, spec)
             p = place(view, spec, paper)

@@ -20,6 +20,9 @@ export interface Filter3D {
 export const shown3d = (f: Filter3D, group: string | null | undefined, room: string | null | undefined) =>
   (!f.groups || (!!group && f.groups.has(group))) && (!f.room || room === f.room);
 
+// Слои развёртки: электрика (точки, коробки, щит, штробы, выводы соседа) и вода
+export interface WallLayers { electrical: boolean; water: boolean }
+
 export interface ViewState {
   hover: string | null;             // объект под курсором (лист или 3D)
   lit: Set<string> | null;          // объекты строки таблицы под курсором
@@ -35,6 +38,7 @@ export interface ViewState {
   filter3d: Filter3D;               // 3D: только эти группы QF и помещение
   themeTick: number;                // сменилась тема — перекрасить
   goto: string | null;              // открыть лист сразу на этом объекте (с развёртки — на проводку)
+  wallLayers: WallLayers;           // что видно на развёртке (глаз в таблице «На стене»)
 }
 
 type Listener = () => void;
@@ -43,6 +47,7 @@ let state: ViewState = {
   hover: null, lit: null, selected: null, neighbors: null, tip: null, pinned: null,
   hidden: new Set(), extra: new Set(), editMode: false, show3d: false, wallMode: "cut",
   filter3d: { groups: null, room: null }, themeTick: 0, goto: null,
+  wallLayers: { electrical: true, water: true },
 };
 const listeners = new Set<Listener>();
 

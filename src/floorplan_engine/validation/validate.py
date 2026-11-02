@@ -15,6 +15,7 @@ from typing import Any
 
 from floorplan_engine.electrical.lines import split_by_lines
 from floorplan_engine.electrical.panel_questions import AUTO_PREFIX
+from floorplan_engine.electrical.variants import apply_variant, default_variant
 from floorplan_engine.model.geometry import (
     Contour,
 )
@@ -27,10 +28,13 @@ from floorplan_engine.model.intake import (
     Stage,
     index_path,
 )
+from floorplan_engine.model.plumbing import PLUMBING_FILE, Plumbing
 from floorplan_engine.model.schema import (
     Electrical,
     Plan,
+    Variant,
     WiringEdits,
+    WiringFile,
 )
 from floorplan_engine.validation.answers import (
     STAGE_FILE,
@@ -44,6 +48,7 @@ from floorplan_engine.validation.issues import (
     ELECTRICAL_FILE,
     ROOM_FILE,
     STUDIO_FILE,
+    VARIANT_FILE,
     WIRING_FILE,
     Issue,
     QuestionState,
@@ -52,6 +57,7 @@ from floorplan_engine.validation.issues import (
     parse_model,
 )
 from floorplan_engine.validation.plan import validate_plan
+from floorplan_engine.validation.plumbing import validate_plumbing
 
 
 @dataclass
@@ -59,12 +65,19 @@ class Report:
     issues: list[Issue] = field(default_factory=list)
     plan: Plan | None = None
     electrical: Electrical | None = None
+    plumbing: Plumbing | None = None  # plumbing.yaml — вода и канализация
     contours: dict[str, Contour] = field(default_factory=dict)
     intake: Intake | None = None
     # open — нет ответа; answered — значение подставлено; accepted — оставлено допущение;
     # text — текстовый ответ ждёт анализатора
     question_states: dict[str, QuestionState] = field(default_factory=dict)
-    wiring_edits: WiringEdits | None = None  # wiring.yaml; сверка с проводкой — при сборке
+    wiring_edits: WiringEdits | None = None  # правки выбранного варианта; сверка — при сборке
+    wiring_file: WiringFile | None = None  # wiring.yaml целиком: правки всех вариантов
+    # Вариант проводки (docs/wiring-variants.md): выбранный в просмотре (variant.yaml) или
+    # «как в проекте»; source_electrical — электрика из electrical.yaml до варианта
+    variant: Variant | None = None
+    default_variant: Variant | None = None
+    source_electrical: Electrical | None = None
     # Вопросы щита, составленные кодом по расчёту (panel_questions.panel_questions), id «panel_…»
     auto_questions: list[Question] = field(default_factory=list)
 
@@ -120,12 +133,13 @@ def validate_project(project_dir: Path) -> Report:
         report.issues += issues
         if data is not None:
             raw[Stage.PLAN] = data
-    elec_path = project_dir / ELECTRICAL_FILE
-    if elec_path.exists():
-        data, issues = load_yaml(elec_path)
-        report.issues += issues
-        if data is not None:
-            raw[Stage.ELECTRICAL] = data
+    for stage, name in ((Stage.ELECTRICAL, ELECTRICAL_FILE), (Stage.PLUMBING, PLUMBING_FILE)):
+        path = project_dir / name
+        if path.exists():
+            data, issues = load_yaml(path)
+            report.issues += issues
+            if data is not None:
+                raw[stage] = data
     report.issues += apply_studio(project_dir.parent / STUDIO_FILE, raw)
     if intake is not None:
         report.question_states, issues = apply_answers(intake, answers or Answers(), raw)
@@ -167,16 +181,41 @@ def _validate_stages(report: Report, raw: dict[Stage, Any], project_dir: Path) -
     report.issues += issues
     if plan is None:
         return
+    chosen, issues = load_optional(project_dir / VARIANT_FILE, Variant)
+    report.issues += [
+        Issue(i.file, i.path, f"{i.message} — вариант «как в проекте»", Severity.WARNING)
+        for i in issues
+    ]
+    if chosen is not None and chosen.ceiling_height is not None:
+        # Правка из просмотра: поле считается заданным (не допущение 2700)
+        plan = plan.model_copy(update={"ceiling_height": chosen.ceiling_height})
     report.plan = plan
     issues, report.contours = validate_plan(plan)
     report.issues += issues
+    _validate_electrical(report, raw, project_dir, plan, chosen)
+    if Stage.PLUMBING in raw:
+        plumbing, issues = parse_model(Plumbing, raw[Stage.PLUMBING], PLUMBING_FILE)
+        report.issues += issues
+        if plumbing is not None:
+            report.plumbing = plumbing
+            report.issues += validate_plumbing(
+                plumbing, plan, report.contours, report.source_electrical
+            )
 
+
+def _validate_electrical(
+    report: Report, raw: dict[Stage, Any], project_dir: Path, plan: Plan, chosen: Variant | None
+) -> None:
     if Stage.ELECTRICAL not in raw:
         return
     elec, issues = parse_model(Electrical, raw[Stage.ELECTRICAL], ELECTRICAL_FILE)
     report.issues += issues
     if elec is None:
         return
+    report.source_electrical = elec
+    report.default_variant = default_variant(elec)
+    report.variant = chosen or report.default_variant
+    elec = apply_variant(elec, report.variant)
     report.electrical = elec
     elec_issues = validate_electrical(elec, plan, report.contours)
     report.issues += elec_issues
@@ -184,9 +223,11 @@ def _validate_stages(report: Report, raw: dict[Stage, Any], project_dir: Path) -
         # premium и proper: у каждой линии от щита — своя группа (lines.py)
         report.electrical = split_by_lines(plan, report.contours, elec)
     # Ошибка в правках проводки сборку не останавливает: проводка строится автоматически
-    edits, issues = load_optional(project_dir / WIRING_FILE, WiringEdits)
+    wiring_file, issues = load_optional(project_dir / WIRING_FILE, WiringFile)
     report.issues += [
         Issue(i.file, i.path, f"{i.message} — правки проводки не применены", Severity.WARNING)
         for i in issues
     ]
-    report.wiring_edits = edits
+    report.wiring_file = wiring_file
+    if wiring_file is not None:
+        report.wiring_edits = wiring_file.edits_for(report.variant.key, report.default_variant.key)

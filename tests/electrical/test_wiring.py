@@ -117,7 +117,7 @@ def test_topology_board_box_point_only() -> None:
 def test_run_length_parts() -> None:
     w = _wiring(make_plan(RECT, [DOOR]), _elec())
     s2 = next(r for r in w.runs if r.target == "s2")
-    assert s2.vertical_mm == pytest.approx(BOX_BELOW_CEILING + 2700 - 300)
+    assert s2.vertical_mm == pytest.approx(2700 - 300)  # коробка на потолке — без спуска
     assert s2.ends_mm == 2 * END_ALLOWANCE
     plan_mm = sum(abs(b.x - a.x) + abs(b.y - a.y) for a, b in itertools.pairwise(s2.path))
     assert s2.plan_mm == pytest.approx(plan_mm)
@@ -126,7 +126,7 @@ def test_run_length_parts() -> None:
         abs(b.x - a.x) < 1e-6 or abs(b.y - a.y) < 1e-6 for a, b in itertools.pairwise(s2.path)
     )
     l1 = next(r for r in w.runs if r.target == "l1")
-    assert l1.vertical_mm == pytest.approx(BOX_BELOW_CEILING)  # потолочная точка — без спуска
+    assert l1.vertical_mm == 0.0  # коробка и светильник на потолке — без спусков
 
 
 def test_ceiling_height_default_is_assumption() -> None:
@@ -137,7 +137,7 @@ def test_ceiling_height_default_is_assumption() -> None:
     w2 = _wiring(plan, _elec())
     assert not w2.height_assumed
     s2 = next(r for r in w2.runs if r.target == "s2")
-    assert s2.vertical_mm == pytest.approx(BOX_BELOW_CEILING + 3000 - 300)
+    assert s2.vertical_mm == pytest.approx(3000 - 300)
 
 
 def test_mark_from_model_or_assumed() -> None:
@@ -491,18 +491,22 @@ def test_lanes_keep_clear_of_walls() -> None:
     assert 50 + shifts[0] == pytest.approx(10.0) and 50 + shifts[-1] == pytest.approx(90.0)
 
 
-def test_fan_angle_ignores_row_on_box_wall() -> None:
-    from floorplan_engine.electrical.anchors import Anchor
-    from floorplan_engine.electrical.boxes import fan_angle
+def test_ceiling_box_in_center_of_its_points() -> None:
+    """Коробка по потолку — в центре своих точек, а не у стены со стороны щита."""
+    plan = make_plan(RECT, [DOOR])
+    pts = [
+        _wall("s1", "socket", "w1", 1500, 300, "QF1"),
+        _wall("s2", "socket", "w3", 1500, 300, "QF1"),
+    ]
+    elec = Electrical.model_validate(
+        {"points": pts, "board": {"room": "r", "wall": "w4", "offset": 500, "height": 1700}}
+    )
+    (box,) = _wiring(plan, elec).boxes
+    assert box.on_ceiling
+    assert abs(box.anchor.node.x - 2000) <= 100 and abs(box.anchor.node.y - 1500) <= 100
 
-    box = Anchor(Vec(1000, 0), Vec(0, 1), Vec(1, 0), 10.0)  # на нижней стене, в комнату — вверх
-    row = [Anchor(Vec(x, 0), Vec(0, 1), Vec(1, 0), 10.0) for x in (300, 1800)]
-    assert fan_angle(box, row) == 0.0  # ряд розеток под коробкой — коробка остаётся на стене
-    spread = [*row, Anchor(Vec(0, 2000), Vec(1, 0), Vec(0, 1), 10.0)]
-    assert fan_angle(box, spread) >= 90.0
 
-
-def test_fanned_box_goes_to_ceiling_inside_room() -> None:
+def test_ceiling_route_box_is_on_ceiling_away_from_walls() -> None:
     from floorplan_engine.electrical.routing import CLEARANCE
 
     plan = make_plan(RECT, [DOOR])
@@ -590,12 +594,12 @@ def test_switch_outside_room_goes_into_its_light_box() -> None:
 # --- Ручные правки (wiring.yaml) ---------------------------------------------
 
 
-def _edited(edits: dict[str, Any]) -> Any:
+def _edited(edits: dict[str, Any], elec: Electrical | None = None) -> Any:
     from floorplan_engine.model.schema import WiringEdits
 
     plan = make_plan(RECT, [DOOR])
     _, contours = validate_plan(plan)
-    wiring = box_wiring(plan, contours, _elec(), WiringEdits.model_validate(edits))
+    wiring = box_wiring(plan, contours, elec or _elec(), WiringEdits.model_validate(edits))
     assert wiring is not None
     return wiring
 
@@ -621,14 +625,16 @@ def test_stale_wire_edit_is_ignored() -> None:
 
 
 def test_wall_box_slides_along_its_wall() -> None:
-    auto = _wiring(make_plan(RECT, [DOOR]), _elec())
+    # Коробка на стене — только у трассы по полу
+    elec = _elec().model_copy(update={"route": "floor"})
+    auto = _wiring(make_plan(RECT, [DOOR]), elec)
     box = next(b for b in auto.boxes if not b.on_ceiling)
     a = box.anchor
     assert a.wall_dir is not None and a.inward is not None
     # Далеко вдоль стены и в сторону от неё — коробка у конца стены, на стене
     far = a.pos + a.wall_dir * 100000 + a.inward * 700
     edit = {"room": box.room, "group": box.group, "at": list(far.as_tuple())}
-    w = _edited({"boxes": {box.id: edit}})
+    w = _edited({"boxes": {box.id: edit}}, elec)
     moved = next(b for b in w.boxes if b.id == box.id)
     assert moved.anchor.inward == a.inward
     assert abs((moved.anchor.pos - a.pos).cross(a.wall_dir)) < 1e-6  # на той же стене
@@ -652,6 +658,8 @@ def test_ceiling_box_moves_only_inside_room() -> None:
     box = Anchor(Vec(1000, 1000), None, None, 75.0)
     assert moved_anchor(g, box, Vec(2000, 1500)) == Anchor(Vec(2000, 1500), None, None, 75.0)
     assert moved_anchor(g, box, Vec(-5000, -5000)) is None
+    # К стене ближе 150 мм — на 150 мм от неё
+    assert moved_anchor(g, box, Vec(50, 1500)) == Anchor(Vec(150, 1500), None, None, 75.0)
 
 
 def test_stale_box_edit_is_ignored() -> None:
@@ -662,13 +670,50 @@ def test_stale_box_edit_is_ignored() -> None:
     assert w.edit_notes[0][0] == f"boxes.{box.id}"
 
 
-def test_wire_edit_must_be_orthogonal() -> None:
-    from pydantic import ValidationError
+def test_diagonal_wire_edit_only_in_economy() -> None:
+    """Участок правки под углом: в стандарте не применяется (предупреждение), в экономе —
+    применяется (docs/wiring-variants.md)."""
+    from floorplan_engine.model.schema import WiringEdits
 
-    from floorplan_engine.model.schema import WireEdit
+    plan = make_plan(RECT, [DOOR])
+    _, contours = validate_plan(plan)
+    auto = _wiring(plan, _elec())
+    run = next(r for r in auto.runs if r.target == "s1")
+    a, b = run.path[0], run.path[-1]
+    path = [[a.x, a.y], [1500, 1500], [b.x, b.y]]  # напрямую через середину комнаты
+    edits = WiringEdits.model_validate(
+        {"wires": {run.id: {"from": run.source, "to": "s1", "path": path}}}
+    )
+    standard = box_wiring(plan, contours, _elec(), edits)
+    assert standard is not None and not standard.edited
+    [(where, msg)] = standard.edit_notes
+    assert where == f"wires.{run.id}" and "экономе" in msg
+    economy_elec = _elec().model_copy(update={"mode": "economy"})
+    economy = box_wiring(plan, contours, economy_elec, edits)
+    assert economy is not None and economy.edited == {f"wire:{run.id}"}
 
-    with pytest.raises(ValidationError, match="прямые"):
-        WireEdit.model_validate({"from": "board", "to": "s1", "path": [[0, 0], [100, 100]]})
+
+def test_economy_routes_shorter_at_any_angle() -> None:
+    """Эконом: по потолку кратчайшим путём под любым углом, не ближе 150 мм к стенам;
+    стандарт — под прямыми углами. В эконом-варианте кабеля не больше."""
+    from shapely.geometry import LineString
+
+    from floorplan_engine.electrical.routing import CLEARANCE, free_area, is_ortho
+    from floorplan_engine.model.geometry import room_geometries
+
+    plan = make_plan(RECT, [DOOR])
+    _, contours = validate_plan(plan)
+    standard = _wiring(plan, _elec())
+    economy = _wiring(plan, _elec().model_copy(update={"mode": "economy"}))
+    assert all(is_ortho(r.path) for r in standard.runs)
+    assert any(not is_ortho(r.path) for r in economy.runs)  # есть участки под углом
+    assert sum(r.plan_mm for r in economy.runs) < sum(r.plan_mm for r in standard.runs)
+    # Срезанные участки не заходят в полосу у стен (кроме подхода к точке у самой стены)
+    inner = free_area(room_geometries(plan, contours)).buffer(-CLEARANCE + 2)
+    for r in economy.runs:
+        for p, q in itertools.pairwise(r.path[1:-1]):
+            if abs(p.x - q.x) > 1 and abs(p.y - q.y) > 1:
+                assert inner.covers(LineString([p.as_tuple(), q.as_tuple()]))
 
 
 def test_wiring_handles_lane_follows_path() -> None:
@@ -767,3 +812,39 @@ def test_by_mark_sums_meters_sorted_by_mark() -> None:
 def test_empty_wiring_totals_are_zero() -> None:
     w = _bare_wiring()
     assert w.chase_mm == 0 and w.chase_length(wide=True) == 0 and w.by_mark() == {}
+
+
+def test_floor_route_never_rises_through_the_room() -> None:
+    """Трасса по полу: к потолочной точке кабель идёт по потолку — группа освещения целиком
+    по потолку, а в смешанной группе ветка поднимается по стене от коробки и идёт по
+    потолку. Подъёма от пола посреди комнаты нет (решение 2026-11-01)."""
+    plan = make_plan(RECT, [DOOR])
+    _, contours = validate_plan(plan)
+    light = {"id": "l1", "room": "r", "type": "downlight", "ceiling": [1500, 2000]}
+    points = [
+        {**light, "group": "QF1"},
+        _wall("k1", "switch", "w3", 2500, 900, "QF1"),
+        {**light, "id": "l2", "ceiling": [1000, 1000], "group": "QF2"},  # смешанная группа
+        _wall("s1", "socket", "w3", 500, 300, "QF2"),
+        _wall("s2", "socket", "w3", 1500, 300, "QF2"),
+    ]
+    elec = Electrical.model_validate(
+        {
+            "points": points,
+            "route": "floor",
+            "board": {"room": "r", "wall": "w1", "offset": 500, "height": 1700},
+        }
+    )
+    wiring = box_wiring(plan, contours, elec)
+    assert wiring is not None
+    ceiling_points = {"l1", "l2"}
+    for r in wiring.runs:
+        if r.target in ceiling_points:
+            assert r.route == "ceiling" and r.rise_end_mm == 0
+    assert {r.route for r in wiring.runs if r.group == "QF1"} == {"ceiling"}  # освещение
+    qf2 = [r for r in wiring.runs if r.group == "QF2"]
+    assert {r.route for r in qf2 if r.target in {"s1", "s2"}} == {"floor"}  # розетки — по полу
+    up = next(r for r in qf2 if r.target == "l2")
+    box = next(b for b in wiring.boxes if b.id == up.source)
+    assert box.route == "floor"  # коробка у пола, ветка к светильнику — вверх по стене
+    assert up.rise_start_mm == pytest.approx(plan.ceiling_height - box.rise_mm)

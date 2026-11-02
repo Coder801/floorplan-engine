@@ -13,7 +13,7 @@ import { Pinch } from "@/engine/sheet/pinch";
 import { FIT_SHRINK } from "@/shared/consts";
 import { palette, refreshPalette, screenColor } from "@/shared/palette";
 import { view } from "@/shared/store";
-import type { ElevWall, Elevation, XY } from "@/shared/types";
+import type { ElevWall, Elevation, PipeKind, XY } from "@/shared/types";
 import { clampStep, Glide, PinchSteps, RAIL_PX, WheelSteps, ZOOM_STEPS, zoomLabel, type Zoom } from "@/shared/zoom";
 import { apply, flatToIso, invert, isoBounds, isoScene, wallOutline, type Affine, type IsoScene, type Mat } from "./iso";
 import { badgePlaces, spread, type Rect } from "./layout";
@@ -36,6 +36,8 @@ const LOW = new Set(["data", "tv"]);
 
 const INK = "#29251f", GREY = "#9a9288", LIGHT = "#d9d3c8", BACK = "#b0a99d";
 const CHASE = "#e4ded3", CHASE_LOW = "#cfe3f3", BOX = "#b3261e", LOW_INK = "#1f6fb2";
+// Сантехника — цвета сетей, как на листе «Сантехника» (drawing/plumbing.COLORS)
+export const WATER: Record<PipeKind, string> = { cold: "#1f77b4", hot: "#d62728", sewer: "#8c564b" };
 
 interface Hit { key: string; r: Rect; inv: Affine | null }  // inv — экран → плоский вид стены
 
@@ -78,7 +80,7 @@ export class ElevationView {
     let seen: unknown[] = [];
     this.cleanup.push(view.subscribe(() => {
       const s = view.get();
-      const now = [s.hover, s.lit, s.pinned, s.themeTick];
+      const now = [s.hover, s.lit, s.pinned, s.themeTick, s.wallLayers];
       if (now.some((v, i) => v !== seen[i])) { seen = now; this.draw(); }
     }));
     this.bind();
@@ -258,8 +260,11 @@ export class ElevationView {
     const seen = (x: number) => x >= o.from - 1 && x <= o.to + 1;
     const edge = o.rulers === "left" ? x0 : x1;  // край со шкалой высот
     const taken: Rect[] = [];
-    const points = e.points.filter((p) => seen(p.x)), boxes = e.boxes.filter((b) => seen(b.x));
-    const board = e.board && seen(e.board.x) ? e.board : null;
+    const layers = view.get().wallLayers;
+    const elec = layers.electrical;
+    const points = elec ? e.points.filter((p) => seen(p.x)) : [];
+    const boxes = elec ? e.boxes.filter((b) => seen(b.x)) : [];
+    const board = elec && e.board && seen(e.board.x) ? e.board : null;
     const last = <T extends { key: string }>(xs: T[]) => [...xs.filter((x) => !lit.has(x.key)), ...xs.filter((x) => lit.has(x.key))];
 
     ctx.save();
@@ -277,7 +282,7 @@ export class ElevationView {
     }
 
     // Штробы — под всем
-    for (const c of e.chases) {
+    for (const c of elec ? e.chases : []) {
       const half = Math.max(((c.wide ? 50 : 30) / 2) * s, 1.5);
       ctx.fillStyle = screenColor(c.low ? CHASE_LOW : CHASE);
       ctx.fillRect(this.sx(c.x) - half, this.sy(c.y1), 2 * half, (c.y1 - c.y0) * s);
@@ -321,7 +326,7 @@ export class ElevationView {
     }
 
     // Выводы с обратной стороны — бледно, без размеров
-    if (o.back) for (const p of d.back) this.symbol(p.type, p.posts, this.sx(p.x), this.sy(p.y), r, pitch, BACK, 1, false);
+    if (o.back && elec) for (const p of d.back) this.symbol(p.type, p.posts, this.sx(p.x), this.sy(p.y), r, pitch, BACK, 1, false);
 
     // Пунктир от точек к шкалам — под символами
     if (o.rulers) {
@@ -366,8 +371,33 @@ export class ElevationView {
       this.hit(p.key, rect);
     }
 
+    // Сантехника: подъём трубы от пола цветом сети, водорозетка — кружок с заливкой, выпуск —
+    // кольцо по диаметру; номер прибора (лист «Сантехника») — плашкой у верхнего подвода
+    const water = layers.water ? (e.water ?? []).filter((v) => seen(v.x)) : [];
+    const fixtures = new Map<string, { key: string; n: number; assumed: boolean; rect: Rect }>();
+    for (const v of water) {
+      const cx = this.sx(v.x), cy = this.sy(v.y);
+      const on = lit.has(v.key);
+      const color = on ? palette.hl : WATER[v.kind];
+      const rr = v.kind === "sewer" ? Math.max((v.d / 2) * s, 4) : Math.max(15 * s, 3);
+      this.line(cx, floor, cx, cy + rr, color, on ? 2.4 : 1.6);
+      if (o.rulers) this.line(o.rulers === "left" ? cx - rr : cx + rr, cy, edge, cy, on ? palette.hl : GREY, 0.8, [3, 3]);
+      ctx.beginPath(); ctx.arc(cx, cy, rr, 0, 2 * Math.PI);
+      if (v.kind === "sewer") { ctx.strokeStyle = screenColor(color); ctx.lineWidth = on ? 3 : 2; ctx.stroke(); }
+      else { ctx.fillStyle = screenColor(color); ctx.fill(); }
+      const rect: Rect = [cx - rr, cy - rr, cx + rr, cy + rr];
+      taken.push(rect);
+      this.hit(v.key, rect);
+      const was = fixtures.get(v.fixture);
+      if (!was || rect[1] < was.rect[1]) fixtures.set(v.fixture, { key: v.key, n: v.n, assumed: v.assumed || !!was?.assumed, rect });
+      else if (v.assumed) was.assumed = true;
+    }
+
     // Шкалы — до номеров: их место занято
-    if (o.rulers) taken.push(this.ordinatesX(e, floor, x0, x1), this.ordinatesY(e, edge, floor, top, o.rulers === "left" ? -1 : 1));
+    if (o.rulers) {
+      const shown = { ...e, points, boxes, board: board ?? undefined, water };
+      taken.push(this.ordinatesX(shown, floor, x0, x1), this.ordinatesY(shown, edge, floor, top, o.rulers === "left" ? -1 : 1));
+    }
 
     // Номера: плашка цвета группы у символа, где свободно (места — в порядке модели, чтобы не
     // прыгали); рисуются подсвеченные последними — поверх тех, что их закрывали
@@ -375,6 +405,7 @@ export class ElevationView {
     const labels = [
       ...points.map((p) => ({ key: p.key, text: String(p.n), color: p.color || INK, box: false, anchor: blocks.get(p.key)! })),
       ...boxes.map((b) => ({ key: b.key, text: b.label, color: BOX, box: true, anchor: boxRects.get(b.key)! })),
+      ...[...fixtures.values()].map((f) => ({ key: f.key, text: `${f.n}${f.assumed ? "*" : ""}`, color: WATER.sewer, box: false, anchor: f.rect })),
     ].map((l) => ({ ...l, w: ctx.measureText(l.text).width + 10 }));
     const places = badgePlaces(labels, BADGE_PX + 6, taken);
     for (const l of last(labels.map((l, k) => ({ ...l, at: places[k] })))) {
@@ -384,7 +415,7 @@ export class ElevationView {
       this.hit(l.key, l.at);
     }
     // Номера выводов той стороны — бледно, после своих
-    if (o.back) {
+    if (o.back && elec) {
       for (const p of d.back) {
         const cx = this.sx(p.x) + r + (pitch * (p.posts - 1)) / 2 + 3;
         this.text(String(p.n), cx, this.sy(p.y), LABEL_PX, BACK);
@@ -459,6 +490,7 @@ export class ElevationView {
     const xs = new Set<number>([0, d.length]);
     for (const p of d.points) xs.add(Math.round(p.x));
     for (const b of d.boxes) xs.add(Math.round(b.x));
+    for (const v of d.water ?? []) xs.add(Math.round(v.x));
     if (d.board) xs.add(Math.round(d.board.x));
     const values = [...xs].sort((a, b) => a - b);
     const wanted = values.map((v) => this.sx(v));
@@ -478,6 +510,7 @@ export class ElevationView {
     const ys = new Set<number>([height]);
     for (const p of d.points) ys.add(Math.round(p.y));
     for (const b of d.boxes) ys.add(Math.round(b.y));
+    for (const v of d.water ?? []) ys.add(Math.round(v.y));
     if (d.board) ys.add(Math.round(d.board.y));
     const values = [...ys].sort((a, b) => b - a);  // сверху вниз — по экрану по возрастанию
     const wanted = values.map((v) => this.sy(v));

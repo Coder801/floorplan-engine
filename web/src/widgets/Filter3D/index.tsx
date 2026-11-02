@@ -10,6 +10,7 @@ import { screenColor } from "@/shared/palette";
 import { useView, view } from "@/shared/store";
 import ui from "@/shared/styles/ui.module.scss";
 import type { Scene } from "@/shared/types";
+import { EyeToggle } from "@/ui/EyeToggle";
 import css from "./Filter3D.module.scss";
 
 // QF2 < QF10, QF8 < QF8.2
@@ -57,12 +58,13 @@ export function Filter3D({ scene, index }: { scene: Scene; index: PageIndex }) {
             <button onClick={() => set({ groups: new Set() })}>{t("filter3d.none")}</button>
           </div>
           {groups.map(([g, c]) => (
-            <label key={g} className={css.row}>
-              <input type="checkbox" checked={!filter.groups || filter.groups.has(g)} onChange={() => toggle(g)} />
+            <div key={g} className={cx(css.row, filter.groups && !filter.groups.has(g) && css.hidden)}
+                 onClick={() => toggle(g)}>
+              <EyeToggle on={!filter.groups || filter.groups.has(g)} what={g} onToggle={() => toggle(g)} />
               <span className={css.swatch} style={{ background: screenColor(c) }} />
               <span className="mono">{g}</span>
-              <button className={css.only} title={t("filter3d.onlyGroup", { group: g })} onClick={(e) => { e.preventDefault(); only(g); }}>{t("filter3d.only")}</button>
-            </label>
+              <button className={css.only} title={t("filter3d.onlyGroup", { group: g })} onClick={(e) => { e.stopPropagation(); only(g); }}>{t("filter3d.only")}</button>
+            </div>
           ))}
         </div>,
         document.getElementById("stage")!,

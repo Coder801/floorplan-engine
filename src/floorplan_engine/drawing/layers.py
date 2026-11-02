@@ -45,6 +45,7 @@ def text_width(text: str, height: float = 1.0) -> float:
 CABLE_LINETYPE = "E_CABLE_DASH"
 LED_LINETYPE = "E_LED_DASH"
 FLOOR_LINETYPE = "W_FLOOR_DASHDOT"
+SURFACE_LINETYPE = "P_SURFACE_DASH"  # канализация по стене над полом (в коробе)
 
 TEXT_DIM_MM = 2.5  # размеры
 TEXT_SMALL_MM = 2.0  # подписи электрики, площади
@@ -105,9 +106,24 @@ L_TEXT = LayerSpec("L-TEXT", 7, "Освещение: номера светиль
 LW_LINK = 18  # толщина связи выключателя, сотые мм
 LIGHTING_LAYERS = (E_LINK, L_TEXT)
 E_ELEV = LayerSpec("E-ELEV", 7, "Развёртки стен: стена, проёмы, точки, коробки, штробы, размеры")
+P_COLD = LayerSpec("P-COLD", 5, "Холодная вода (В1)")
+P_HOT = LayerSpec("P-HOT", 1, "Горячая вода (Т3)")
+P_SEWER = LayerSpec("P-SEWER", 34, "Канализация (К1)")
+P_FIXT = LayerSpec("P-FIXT", 7, "Сантехприборы: номера и водорозетки")
+P_RISER = LayerSpec("P-RISER", 7, "Стояки, узел ввода, коллекторы")
+P_OBST = LayerSpec("P-OBST", 8, "Препятствия: инсталляция, ванна, поддон, короб")
+P_SYMB = LayerSpec("P-SYMB", 8, "Сантехприборы контуром: ванна, душ, унитаз… (типовой размер)")
+P_TEXT = LayerSpec("P-TEXT", 7, "Подписи сантехники: диаметры, уклоны")
+PLUMBING_LAYERS = (P_COLD, P_HOT, P_SEWER, P_FIXT, P_RISER, P_OBST, P_SYMB, P_TEXT, A_SHEET)
 ALL_LAYERS = tuple(
     dict.fromkeys(
-        PLAN_LAYERS + ELECTRICAL_LAYERS + LIGHTING_LAYERS + WIRING_LAYERS + PANEL_LAYERS + (E_ELEV,)
+        PLAN_LAYERS
+        + ELECTRICAL_LAYERS
+        + LIGHTING_LAYERS
+        + WIRING_LAYERS
+        + PANEL_LAYERS
+        + (E_ELEV,)
+        + PLUMBING_LAYERS
     )
 )
 
@@ -145,6 +161,13 @@ def _add_linetypes(doc: Drawing) -> None:
             LED_LINETYPE,
             pattern=[dash + gap, dash, -gap],
             description="LED - - - -",
+        )
+    if SURFACE_LINETYPE not in doc.linetypes:
+        dash, gap = sheet(3.0), sheet(1.2)
+        doc.linetypes.add(
+            SURFACE_LINETYPE,
+            pattern=[dash + gap, dash, -gap],
+            description="Над полом у стены — — —",
         )
     if FLOOR_LINETYPE not in doc.linetypes:
         dash, dot, gap = sheet(6.0), sheet(0.5), sheet(1.5)

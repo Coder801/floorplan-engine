@@ -5,14 +5,25 @@
 epd/panel_data.py). Потребители и автоматы групп — electrical/loads.py, вопросы этапа —
 electrical/panel_questions.py, надписи — electrical/panel_text.py.
 
-- Состав щита — по схеме (`panel.scheme`, решение 2026-10-27): economy — ввод и группы,
-  мокрые зоны под одним УЗО, резерв — ручным переключателем; standard — плюс реле напряжения,
-  мокрые зоны дифавтоматами, резерв через АВР; premium — плюс УЗИП, все группы
-  дифавтоматами, характеристика B (кроме моторной нагрузки — C).
+- Состав щита — по схеме (`panel.scheme`, решение 2026-10-27): economy — ввод, реле
+  напряжения и группы, мокрые зоны под одним УЗО; standard — мокрые зоны дифавтоматами;
+  premium — плюс УЗИП, все группы дифавтоматами, характеристика B (кроме моторной
+  нагрузки — C). Реле напряжения — во всех схемах (решение 2026-11-01).
 - Резерв (`panel.backup`) — от схемы отдельно: не задан — гибридный инвертор допущением
-  и вопрос. Резервная шина — свет, холодильник, роутер, котёл, насос, ворота, розетки кухни.
+  и вопрос. Переключатель — по источнику: гибридный инвертор сам переключает сеть и АКБ —
+  обходной переключатель, инвертор без своего переключения (`inverter: basic`) — АВР,
+  генератор — перекидной рубильник; выход инвертора — своим автоматом (QS3). Связь N–PE в
+  резервном режиме (`npe_relay`) не задана или нет — слабое место: УЗО на резерве не
+  сработают. Резервная шина — свет, холодильник, роутер, котёл, насос, ворота, розетки кухни.
 - Слабые места — автомат больше, чем держит кабель, тяжёлый потребитель в общей группе,
   расчётный ток выше вводного, нет селективности, резерв меньше нагрузки.
+- Щит АКБ (`DcBox`) — у гибридного инвертора отдельным боксом рядом с ним: автомат АКБ
+  по току разряда, автоматы и УЗИП строк солнечных панелей (`panel.pv_strings`); напряжение
+  АКБ и мощность инвертора без данных — 48 В и 5 кВт допущением. Резервные группы остаются
+  в основном щите — за АВР или переключателем.
+- Корпус — реальный щит каталога (`panel.enclosure` или самый маленький, куда влезают
+  аппараты): рейки по видам аппаратов (`panel_rows`), аппарат не делится между рейками и не
+  выходит за корпус; не влез ни в один — корпус по месту и замечание.
 """
 
 from __future__ import annotations
@@ -33,7 +44,15 @@ from floorplan_engine.electrical.loads import (
     rating_for,
 )
 from floorplan_engine.electrical.panel_text import KIND_NAME, amps, kw, text
-from floorplan_engine.model.panel_catalog import CatalogModel, DeviceKind, model_for
+from floorplan_engine.model.panel_catalog import (
+    ENCLOSURE_BY_ARTICLE,
+    ENCLOSURES,
+    CatalogModel,
+    DeviceKind,
+    Enclosure,
+    fitted_enclosure,
+    model_for,
+)
 from floorplan_engine.model.schema import Electrical, PanelScheme, Plan
 from floorplan_engine.model.texts import Language
 
@@ -91,6 +110,9 @@ class BoardPanel:
     warnings: tuple[Warning, ...]
     power_limit: float | None  # выделенная мощность, кВт
     backup_power: float | None
+    enclosure: Enclosure | None = None  # корпус щита; None — до подбора
+    rows: tuple[tuple[Device, ...], ...] = ()  # аппараты по рейкам корпуса, сверху вниз
+    dc: DcBox | None = None  # щит АКБ у инвертора; без инвертора — None
 
     @property
     def calculated(self) -> float:
@@ -103,6 +125,70 @@ class BoardPanel:
     @property
     def reserve_power(self) -> float:
         return sum(g.power for g in self.groups if g.reserved)
+
+    @property
+    def all_devices(self) -> tuple[Device, ...]:
+        """Аппараты щита и щита АКБ — для таблицы аппаратов и сметы."""
+        return self.devices + (self.dc.devices if self.dc is not None else ())
+
+
+INVERTER_KW = 5.0  # мощность инвертора без данных (допущение)
+BATTERY_V = 48  # напряжение АКБ без данных (допущение)
+DC_RATINGS = (63, 80, 100, 125, 160, 200, 250)  # ряд DC-автоматов АКБ, А
+# Медный одножильный кабель АКБ по автомату (короткий, до 3 м), мм²
+BATTERY_CABLE = {63: 16, 80: 25, 100: 25, 125: 35, 160: 50, 200: 70, 250: 95}
+PV_A = 16  # автомат строки панелей, А DC
+
+
+@dataclass(frozen=True)
+class DcBox:
+    """Щит АКБ у гибридного инвертора: АКБ, автомат АКБ, строки солнечных панелей."""
+
+    devices: tuple[Device, ...]
+    enclosure: Enclosure
+    rows: tuple[tuple[Device, ...], ...]
+    voltage: int  # В
+    voltage_assumed: bool
+    capacity: float | None  # кВт·ч
+    power: float  # мощность инвертора, кВт
+    power_assumed: bool
+    current: float  # ток разряда АКБ на полной мощности, А
+    rating: int  # автомат АКБ, А
+    cable: float  # сечение кабеля АКБ, мм²
+    pv_strings: int
+
+
+def build_dc(elec: Electrical, lang: Language) -> DcBox:
+    """Щит АКБ: ток разряда — мощность инвертора на напряжение АКБ; автомат — ближайший
+    из ряда с запасом 10 %, кабель — по автомату; строка панелей — автомат и УЗИП."""
+    setup = elec.panel
+    voltage = setup.battery_voltage or BATTERY_V
+    power = setup.backup_power or INVERTER_KW
+    amps_ = power * 1000 / voltage
+    rating = next((r for r in DC_RATINGS if r >= amps_ * 1.1), DC_RATINGS[-1])
+    devices = [Device("QB1", DeviceKind.DC_BATTERY, f"{rating} А DC 2P", text("dc_battery", lang))]
+    strings = setup.pv_strings or 0
+    for k in range(1, strings + 1):
+        devices.append(
+            Device(f"QP{k}", DeviceKind.DC_BREAKER, f"{PV_A} А DC 2P", text("dc_pv", lang, n=k))
+        )
+        devices.append(Device(f"FP{k}", DeviceKind.DC_SPD, "PV 1000 В", text("dc_spd", lang, n=k)))
+    devices = [replace(d, brand=setup.brand) for d in devices]
+    enclosure, rows, _ = choose_enclosure(devices)
+    return DcBox(
+        tuple(devices),
+        enclosure,
+        tuple(tuple(r) for r in rows),
+        voltage,
+        setup.battery_voltage is None,
+        setup.battery_capacity,
+        power,
+        setup.backup_power is None,
+        amps_,
+        rating,
+        BATTERY_CABLE[rating],
+        strings,
+    )
 
 
 MODE_SCHEME: dict[str, PanelScheme] = {
@@ -175,9 +261,13 @@ def build_panel(plan: Plan, elec: Electrical) -> BoardPanel | None:
     installed = sum(g.power for g in groups)
     demand = demand_factor(installed / 1000)
     inp = Breaker("C", setup.input or INPUT_A, setup.input is None)
-    relay = setup.voltage_relay if setup.voltage_relay is not None else scheme != "economy"
+    # Реле напряжения — во всех схемах (решение 2026-11-01): защищает и квартиру, и вход
+    # инвертора от обрыва нуля
+    relay = setup.voltage_relay if setup.voltage_relay is not None else True
     spd = setup.spd if setup.spd is not None else scheme == "premium"
-    ats = setup.ats if setup.ats is not None else scheme != "economy"
+    # АВР — только у инвертора без своего переключения; гибридный сам переключает сеть и
+    # АКБ — ему обходной переключатель; генератор по вилке запускают руками — переключатель
+    ats = setup.ats if setup.ats is not None else backup == "inverter" and setup.inverter == "basic"
 
     devices = [Device("QS1", DeviceKind.INPUT, f"{inp.label} 2P", text("input", lang))]
     if relay:
@@ -200,6 +290,10 @@ def build_panel(plan: Plan, elec: Electrical) -> BoardPanel | None:
             devices.append(
                 Device("SA1", DeviceKind.CHANGEOVER, "I-0-II", text(key, lang), reserve=True)
             )
+        if backup == "inverter":  # выход инвертора — своим автоматом до АВР или переключателя
+            devices.append(
+                Device("QS3", DeviceKind.OUTPUT, f"C{SOCKETS_A * 2} 2P", text("inverter_out", lang))
+            )
         rcds = sum(1 for d in devices if d.kind is DeviceKind.RCD)
         devices += _group_devices(reserved, scheme, True, lang, rcds)
 
@@ -217,14 +311,85 @@ def build_panel(plan: Plan, elec: Electrical) -> BoardPanel | None:
         setup.power,
         setup.backup_power,
     )
-    return replace(panel, warnings=tuple(weak_spots(panel, relay)))
+    enclosure, rows, fit_note = choose_enclosure(panel.devices, setup.enclosure)
+    dc = build_dc(elec, lang) if backup == "inverter" else None
+    panel = replace(panel, enclosure=enclosure, rows=tuple(tuple(r) for r in rows), dc=dc)
+    warnings = weak_spots(panel, relay, setup.npe_relay)
+    if fit_note is not None:
+        warnings.append(fit_note)
+    return replace(panel, warnings=tuple(warnings))
+
+
+# Общие аппараты — в таком порядке на своей рейке; дальше рейки автоматов (и УЗО), ниже —
+# дифавтоматов (двойная гребёнка L + N)
+COMMON_KINDS = (
+    DeviceKind.INPUT,
+    DeviceKind.RELAY,
+    DeviceKind.SPD,
+    DeviceKind.CHANGEOVER,
+    DeviceKind.ATS,
+    DeviceKind.OUTPUT,
+    DeviceKind.FEED,
+)
+
+
+def row_kind(d: Device) -> str:
+    """Рейка аппарата: common — общие, double — дифавтоматы, single — остальное."""
+    if d.kind in COMMON_KINDS:
+        return "common"
+    return "double" if d.kind is DeviceKind.DIFF else "single"
+
+
+def panel_rows(devices: Sequence[Device], per_row: int) -> list[list[Device]] | None:
+    """Аппараты по рейкам корпуса: общие, автоматы, дифавтоматы — каждый вид со своей рейки,
+    внутри вида — по порядку (основные, потом резервные); аппарат не делится между рейками.
+    Аппарат шире рейки — None."""
+    rows: list[list[Device]] = []
+    for kind in ("common", "single", "double"):
+        devs = [d for d in devices if row_kind(d) == kind]
+        if kind == "common":
+            devs.sort(key=lambda d: COMMON_KINDS.index(d.kind))
+        used = per_row + 1
+        for d in devs:
+            if d.modules > per_row:
+                return None
+            if used + d.modules > per_row:
+                rows.append([])
+                used = 0
+            rows[-1].append(d)
+            used += d.modules
+    return rows
+
+
+def choose_enclosure(
+    devices: Sequence[Device], article: str | None = None
+) -> tuple[Enclosure, list[list[Device]], Warning | None]:
+    """Корпус щита и аппараты по его рейкам. Задан артикул и аппараты влезают — он; иначе
+    самый маленький щит каталога, куда влезают (меньше модулей, потом ниже), с замечанием,
+    если заданный не подошёл; не влезают никуда — корпус по месту и замечание."""
+    asked = ENCLOSURE_BY_ARTICLE.get(article) if article else None
+    order = sorted(ENCLOSURES, key=lambda e: (e.modules, e.height))
+    if asked is not None:
+        order.insert(0, asked)
+    for enc in order:
+        rows = panel_rows(devices, enc.per_row)
+        if rows is not None and len(rows) <= enc.rows:
+            note = None
+            if asked is not None and enc is not asked:
+                note = Warning("major", _both("w_enclosure", a=asked.article, b=enc.article))
+            return enc, rows, note
+    per_row = max(24, *(d.modules for d in devices))
+    rows = panel_rows(devices, per_row) or [list(devices)]
+    total = sum(d.modules for d in devices)
+    note = Warning("major", _both("w_enclosure_none", m=total))
+    return fitted_enclosure(len(rows), per_row), rows, note
 
 
 def _both(key: str, **kw_: object) -> dict[str, str]:
     return {lang: text(key, lang, **kw_) for lang in ("ru", "uk")}
 
 
-def weak_spots(panel: BoardPanel, relay: bool) -> list[Warning]:
+def weak_spots(panel: BoardPanel, relay: bool, npe: bool | None = True) -> list[Warning]:
     """Слабые места щита: сначала по группам, потом по вводу и резерву."""
     out: list[Warning] = []
     for g in panel.groups:
@@ -294,6 +459,11 @@ def weak_spots(panel: BoardPanel, relay: bool) -> list[Warning]:
             )
         if panel.backup == "plug":
             out.append(Warning("minor", _both("w_plug")))
+    if panel.backup == "inverter" and not npe:
+        out.append(Warning("major", _both("w_npe_unknown" if npe is None else "w_npe_no")))
+    if panel.dc is not None and panel.dc.voltage_assumed:
+        dc = panel.dc
+        out.append(Warning("minor", _both("w_battery", v=dc.voltage, a=amps(dc.current))))
     return out
 
 

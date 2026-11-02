@@ -26,7 +26,8 @@ uv run alembic revision --autogenerate -m "что изменилось"
 | Модуль | Что в нём |
 | --- | --- |
 | `service/db/models.py` | Таблицы (SQLAlchemy 2). JSON — `jsonb` в Postgres, текст в SQLite |
-| `service/db/session.py` | Подключение: `DATABASE_URL`, `make_engine`, `make_sessions`, `create_tables` (тесты) |
+| `service/db/session.py` | Подключение: `DATABASE_URL`, `make_engine`, `make_sessions`. База — только Postgres (решение 2026-11-01): схему строят миграции, `create_tables` и SQLite убраны |
+| `tests/service/conftest.py` | Тесты базы — на Postgres из `docker-compose.yml`, своя база `floorplan_engine_test` (`TEST_DATABASE_URL`, имя обязано кончаться на `_test` — она пересоздаётся): миграции вверх, вниз до нуля и снова вверх, после теста таблицы очищаются; `test_db.test_migrations_match_models` сверяет схему миграций с моделями. Postgres не запущен — пропуск, `TEST_REQUIRE_DB=1` — ошибка |
 | `service/db/repositories.py` | Проекты, источники (без повторов по sha256), кэш выжимок по версии алгоритма, версии модели, расход LLM. Функции не делают commit — транзакцией управляет вызывающий |
 | `migrations/` | Alembic: `env.py`, `versions/0001_initial.py` |
 
@@ -92,6 +93,16 @@ erDiagram
     uuid invited_by FK
     timestamp expires_at
     timestamp accepted_at
+  }
+  ACCESS_CODE {
+    uuid id PK "новое: код доступа к проекту"
+    uuid project_id FK
+    string code_hash UK
+    string label "кому выдан"
+    uuid created_by FK
+    timestamp expires_at
+    timestamp revoked_at
+    int uses
   }
   USER_SESSION {
     uuid id PK "новое"
@@ -230,6 +241,7 @@ erDiagram
   PROJECT ||--o{ SUPPORT_GRANT : "кому открыт"
   STUDIO ||--o{ INVITE : "приглашения в студию"
   PROJECT ||--o{ INVITE : "приглашения в проект"
+  PROJECT ||--o{ ACCESS_CODE : "коды доступа"
   STUDIO ||--o| STUDIO_PROFILE : "штамп"
   STUDIO ||--o{ SYMBOL : "библиотека УГО"
   STUDIO ||--o{ PROJECT : "проекты"
@@ -290,8 +302,8 @@ erDiagram
 
 ### Вход (решения пользователя 2026-10-28)
 
-- **Без паролей: Google или код на почту.** Apple не делаем ($99 в год), другие
-  провайдеры — строкой в `oauth_account`. Новая учётка провайдера с подтверждённым email,
+- **Без паролей: Telegram по номеру телефона, Google или код на почту.** Apple не делаем
+  ($99 в год), другие провайдеры — строкой в `oauth_account`. Новая учётка провайдера с подтверждённым email,
   который уже есть, — тот же пользователь; неподтверждённый email не привязывается.
 - **Код на почту** (решение 2026-10-31): email → 6 цифр в письме → вход. Код подтверждает
   почту, поэтому вход по коду — учётка провайдера `email` с подтверждённым адресом: тот же
@@ -300,6 +312,16 @@ erDiagram
   (`email_code`) — только sha256 «email:код». Письма — SMTP (`SMTP_HOST`…, любой сервис:
   Resend, Postmark, SES); без SMTP на http (локально) код пишется в терминал сервера, на
   https вход по коду выключен. Ограничения по IP — пока нет (до выхода к пользователям).
+- **Телефон через Telegram** (решение 2026-11-01, основной вход для клиентов; SMS и Viber —
+  позже, при клиентах без Telegram): страница просит билет (`login_ticket`, sha256 токена,
+  10 минут, одноразовый) и открывает `t.me/<бот>?start=<токен>`; человек жмёт Start и кнопку
+  «Поделиться номером» — бот получает его контакт (номер подтверждён самим Telegram, чужой
+  контакт отклоняется), ставит номер в билет; страница опрашивает билет и входит. Учётка —
+  провайдер `telegram` с `app_user.phone` («+380…»): тот же номер — тот же пользователь.
+  `SHTROBA_SUPERUSERS` и `SHTROBA_OWNER` принимают телефоны наравне с почтой. Бот —
+  `TELEGRAM_BOT_TOKEN` (`api/telegram.py`): на https — вебхук с секретом в заголовке, ставится
+  при старте; локально на http сервер сам опрашивает Bot API в фоне. Правила на базе —
+  `db/telegram_login.py`, миграция `0005`.
 - **Два типа учётки** (`account_type`, выбор при первом входе, не меняется): `client` —
   хозяин квартиры, личное пространство (`studio.kind = personal`) на один проект, может
   загрузить свой план сам и позвать монтажника; `pro` — студия или монтажник, своя студия,
@@ -309,6 +331,18 @@ erDiagram
 - **Приглашение** (`invite`) — одноразовая ссылка на 7 дней `…/?invite=<токен>`; ключ —
   сама ссылка, email не сверяется (студия видит, кто принял). Хозяин квартиры зовёт в свой
   проект только монтажника.
+- **Код доступа к проекту** (`access_code`, решение 2026-11-02): студия выдаёт код
+  `floorplan-engine access code projects/<имя> [--label "Иван"] [--days 30]` и передаёт его
+  человеку как есть — в переписке или на словах. На экране входа внизу — поле «Код от студии»:
+  ввёл — открылся этот один проект, только чтение (роль `viewer`: ни ответов, ни правки
+  трасс, ни выбора варианта). Учётки не появляется: в подписанной cookie — id кода, каждый
+  запрос проверяет, что код не отозван и не истёк. Код — 8 знаков без 0/O и 1/I, показывается
+  как «XXXX-XXXX», в базе только sha256; действует 30 дней (до 365), входов сколько угодно.
+  Проекта ещё нет в базе (владелец не входил) — `access code` записывает его «без
+  владельца» (студия `kind = unowned`, без участников; то же — `access link` без `--owner`),
+  при входе владельца `adopt_folders` переводит такие проекты к нему. Список — `access
+  codes`, отзыв — `access revoke-code <имя> <id>` (входы кончаются со следующего запроса). Чужой, отозванный и истёкший код отвечают одинаково; больше 20
+  неверных кодов с адреса за 10 минут — 429. Выдача из просмотра (кнопка у проекта) — позже.
 - **Вход для разработки** (`SHTROBA_DEV_LOGIN=1`, решение 2026-10-31): кнопка «Зайти для
   разработки» — вход без Google и письма под первым адресом `SHTROBA_SUPERUSERS` (полные
   права, не только чтение). Только http (локально): на https или в Railway `production`
@@ -324,14 +358,20 @@ erDiagram
 | --- | --- |
 | `service/db/access.py` | Правила: роль в проекте (`project_role`), права (`can`), пользователи OAuth, тип учётки, сессии, приглашения, доступ поддержки, журнал |
 | `service/db/email_codes.py` | Код на почту: выдать (`issue_code`, частота), проверить (`check_code`, срок, попытки) |
+| `service/db/access_codes.py` | Код доступа к проекту: выдать (`issue_code`), вход (`use_code`), проверка на каждом запросе (`active_code`), список и отзыв (`list_codes`, `revoke_code`) |
+| `service/db/telegram_login.py`, `service/api/telegram.py` | Вход через Telegram: билеты (`issue_ticket`, `bind_chat`, `confirm_phone`, `claim_ticket`, номер — `normalize_phone`); бот — клиент Bot API, разбор обновлений (`handle_update`), вебхук или опрос |
 | `service/api/mail.py` | Письмо с кодом на языке страницы: SMTP или лог (локально) |
-| `service/api/auth.py` | Веб: настройки из окружения (`AuthConfig.from_env`), Google через Authlib, код на почту (`/api/auth/email/start`, `/verify`), маршруты `/api/auth/*` и `/api/invites/*`, проверка доступа к `/api/projects/{имя}/…` (нет входа — 401, чужой проект — 404, нет права — 403) |
-| `web/src/pages/Gate`, `widgets/EmailLogin`, `shared/auth.ts` | Экран входа (Google, код на почту), выбор «кто вы», принятие приглашения, «Выйти» |
+| `service/api/auth.py` | Веб: настройки из окружения (`AuthConfig.from_env`), Google через Authlib, код на почту (`/api/auth/email/start`, `/verify`), код доступа (`/api/auth/code`, подбор — `CodeLimiter`), маршруты `/api/auth/*` и `/api/invites/*`, проверка доступа к `/api/projects/{имя}/…` (нет входа — 401, чужой проект — 404, нет права — 403) |
+| `web/src/pages/Gate`, `widgets/TelegramLogin`, `widgets/EmailLogin`, `widgets/CodeLogin`, `shared/auth.ts` | Экран входа (Telegram, Google, код на почту, код доступа к проекту), выбор «кто вы», принятие приглашения, «Выйти» |
 
 Пока проекты живут в папках, строка `project` связана с папкой по `slug`:
 `floorplan-engine access link projects/<имя> --owner <email>` (владелец уже входил и выбрал
-тип), ссылка-приглашение — `floorplan-engine access invite projects/<имя> --role client`.
-Папка без строки в базе видна только суперпользователю и гостю.
+тип), ссылка-приглашение — `floorplan-engine access invite projects/<имя> --role client`,
+код доступа без учётки — `floorplan-engine access code projects/<имя>`.
+Папка без строки в базе видна только суперпользователю и гостю. На сервере связывает сам
+вход (решение 2026-11-01): пользователь с почтой `SHTROBA_OWNER` входит или выбирает «Фирма» —
+все папки без строки уходят в его студию (`access.adopt_folders` из `Auth._adopt`); новые папки
+после деплоя подхватываются при следующем входе. Ни консоли, ни перезапуска не нужно.
 
 Окружение — в `.env.example` и docstring `service/api/auth.py`. Локально — файл `.env` в корне
 репозитория: его читают команды сервиса (`view`, `dev`, `serve`, `access`, `analyze`;

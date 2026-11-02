@@ -37,6 +37,17 @@ export async function getText(path: string): Promise<string> {
 
 export interface SaveAnswer { built: boolean; notes: string[] }
 
+// Вариант проводки и высота потолка (мм) → variant.yaml и пересборка проекта
+export async function saveVariant(
+  name: string, variant: { mode: string; route: string; distribution: string; ceiling_height?: number },
+): Promise<SaveAnswer> {
+  const r = await fetch(`${base(name)}/variant`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(variant),
+  });
+  if (!r.ok) throw new Error(`${r.status}: ${await detail(r)}`);
+  return (await r.json()) as SaveAnswer;
+}
+
 // Правки проводки → wiring.yaml и пересборка проекта
 export async function saveWiring(name: string, body: unknown): Promise<SaveAnswer> {
   const r = await fetch(`${base(name)}/wiring`, {

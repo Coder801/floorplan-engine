@@ -36,6 +36,18 @@ describe("sheetTabs", () => {
     expect(tabs.map((t) => t.stage)).toEqual(["plan", "electrical", "panel"]);
   });
 
+  it("сантехника — своя вкладка после щита, не вид электрики", () => {
+    const tabs = sheetTabs([
+      page(2, "02 Електрика", "electrical"),
+      page(4, "04 Проводка", "wiring"),
+      page(5, "05 Щит", "panel"),
+      page(6, "06 Сантехніка", "plumbing"),
+    ]);
+    expect(tabs.map((t) => [t.stage, t.pages, t.views])).toEqual([
+      ["electrical", [2, 4], true], ["panel", [5], false], ["plumbing", [6], false],
+    ]);
+  });
+
   it("развёртки — страницы, а не виды", () => {
     const [t] = sheetTabs([page(7, "07", "elevations"), page(8, "08", "elevations")]);
     expect(t.views).toBe(false);

@@ -3,7 +3,7 @@
 относится. Наведение на объект подсвечивает его строку, наведение на строку — объекты.
 
 Здесь же — какие объекты «свои» для темы листа: подсказки на листе проводки — только
-у проводки, на плане — только у плана.
+у проводки, на плане — только у плана; и легенда для плашки просмотра (legend_entries).
 """
 
 from __future__ import annotations
@@ -11,24 +11,24 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass, field, replace
 
+from floorplan_engine.drawing.electrical import legend_rows
 from floorplan_engine.drawing.fields import format_area
-from floorplan_engine.drawing.lighting import switch_rows, switch_table
+from floorplan_engine.drawing.lighting import lighting_model, switch_rows, switch_table
 from floorplan_engine.drawing.panel import ASSUMED, devices_table, panel_notes
 from floorplan_engine.drawing.schedules import (
     estimate_table,
     groups_table,
     points_table,
 )
-from floorplan_engine.drawing.symbols import LEGEND_ORDER
 from floorplan_engine.drawing.tables import Mark, Table
 from floorplan_engine.drawing.wiring import wiring_notes
-from floorplan_engine.electrical.anchors import symbol_key
-from floorplan_engine.electrical.estimate import PRICES_FILE, PriceList, build_estimate
+from floorplan_engine.electrical.estimate import build_estimate
 from floorplan_engine.electrical.estimate import text as estimate_text
 from floorplan_engine.electrical.groups import group_colors, group_rows
 from floorplan_engine.electrical.groups import text as groups_text
 from floorplan_engine.electrical.panel import BoardPanel, build_panel, color_of
 from floorplan_engine.electrical.point_numbers import point_rows
+from floorplan_engine.electrical.pricing import Prices, price_notes
 from floorplan_engine.electrical.wiring_model import Wiring
 from floorplan_engine.model.geometry import Contour
 from floorplan_engine.model.schema import Electrical, Plan
@@ -42,18 +42,19 @@ STAGE_OBJECTS: dict[str, frozenset[str]] = {
     "wiring": frozenset({"wire", "box", "board"}),
     "panel": frozenset({"device", "board"}),
     "elevations": frozenset({"elevation"}),
+    "plumbing": frozenset({"fixture", "pipe", "riser", "collector", "obstacle"}),
 }
 
 TEXT: dict[str, dict[str, str]] = {
-    "symbols": {"ru": "Условные обозначения", "uk": "Умовні позначення"},
-    "symbol": {"ru": "Обозначение", "uk": "Позначення"},
-    "qty": {"ru": "Кол.", "uk": "Кільк."},
     "consumers": {"ru": "Роспись потребителей", "uk": "Розпис споживачів"},
     "group": {"ru": "Группа", "uk": "Група"},
     "consumer": {"ru": "Потребитель", "uk": "Споживач"},
     "room": {"ru": "Помещение", "uk": "Приміщення"},
     "watts": {"ru": "P, Вт", "uk": "P, Вт"},
     "total": {"ru": "Установленная", "uk": "Встановлена"},
+    "common": {"ru": "Ввод и резерв", "uk": "Введення і резерв"},
+    "lines": {"ru": "Линии групп", "uk": "Лінії груп"},
+    "dc": {"ru": "Щит АКБ", "uk": "Щит АКБ"},
 }
 
 
@@ -68,6 +69,7 @@ class SideRow:
     section: bool = False  # заголовок раздела (смета): одна непустая ячейка
     color: str | None = None  # цвет группы «#rrggbb» — кружок у первой ячейки
     hint: str | None = None  # пояснение к строке (смета): значок «i» у наименования
+    marker: str | None = None  # значок у первой ячейки без цвета: square — аппарат не на линии
 
     def as_dict(self) -> dict[str, object]:
         out: dict[str, object] = {"cells": list(self.cells)}
@@ -75,6 +77,8 @@ class SideRow:
             out["hint"] = self.hint
         if self.color:
             out["color"] = self.color
+        if self.marker:
+            out["marker"] = self.marker
         if self.keys:
             out["keys"] = list(self.keys)
         if self.section:
@@ -180,31 +184,26 @@ def room_table(plan: Plan, contours: dict[str, Contour]) -> SideTable:
     )
 
 
-def legend_tables(elec: Electrical, language: Language) -> list[SideTable]:
-    """Условные обозначения с количеством и группы: строка → точки, кабели, щит."""
-    by_symbol: dict[str, list[str]] = {}
-    counts: dict[str, int] = {}
-    for p in elec.points:
-        key = symbol_key(p)
-        by_symbol.setdefault(key, []).append(f"point:{p.id}")
-        counts[key] = counts.get(key, 0) + p.count
-    if elec.board is not None:
-        by_symbol["board"] = ["board:board"]
-        counts["board"] = 1
-    symbols = tuple(
-        SideRow((tr(f"symbol_{k}", language), str(counts[k])), tuple(by_symbol[k]))
-        for k in LEGEND_ORDER
-        if k in by_symbol
-    )
-    out = [
-        SideTable(
-            text("symbols", language),
-            (text("symbol", language), text("qty", language)),
-            ("left", "center"),
-            symbols,
-        )
-    ]
-    return out
+@dataclass(frozen=True)
+class LegendEntry:
+    """Строка легенды просмотра: значок — объект legend:<key> на листе, и что он значит."""
+
+    key: str
+    text: str
+
+
+def legend_entries(elec: Electrical, language: Language) -> list[LegendEntry]:
+    """Легенда для плашки просмотра — те же строки, что на листе (electrical.legend_rows),
+    без заголовка: только значок и подпись, без количества и цветов групп."""
+    return [LegendEntry(r.tag, r.text) for r in legend_rows(elec, language) if r.tag]
+
+
+def side_legends(elec: Electrical, language: Language) -> dict[str, list[LegendEntry]]:
+    """Легенда по теме листа: электрика — все символы листа, освещение — только свет."""
+    return {
+        "electrical": legend_entries(elec, language),
+        "lighting": legend_entries(lighting_model(elec), language),
+    }
 
 
 def points_side_table(plan: Plan, elec: Electrical) -> SideTable | None:
@@ -262,19 +261,18 @@ def estimate_side_table(
     wiring: Wiring,
     elec: Electrical,
     language: Language,
-    prices: PriceList | None,
+    prices: Prices | None,
     panel: BoardPanel | None = None,
 ) -> SideTable:
-    """Смета (с прайсом) или ведомость объёмов — для вкладки «Смета» просмотра (ключ estimate
-    страницы проводки); на печати — тот же расчёт на листе проводки (stages.wiring_panels)."""
-    est = build_estimate(wiring, elec, prices or PriceList(), language, panel)
+    """Смета (цены — прайс поверх сервиса цен) или ведомость объёмов (prices None) — для
+    вкладки «Смета» просмотра (ключ estimate страницы проводки); на печати — тот же расчёт
+    на листе проводки (stages.wiring_panels)."""
+    priced = prices is not None and prices.priced
+    est = build_estimate(wiring, elec, prices or Prices(), language, panel)
     notes = [estimate_text("note_panel", language)] if panel is not None else []
-    if prices is not None:
-        date = f" ({prices.date})" if prices.date else ""
-        notes.insert(0, estimate_text("sheet_prices", language, f=PRICES_FILE, date=date))
-        if est.unpriced:
-            notes.append(estimate_text("unpriced", language, n=est.unpriced, f=PRICES_FILE))
-    table = from_table(estimate_table(est, language, priced=prices is not None), notes=notes)
+    if prices is not None and priced:
+        notes = price_notes(est, prices, language) + notes
+    table = from_table(estimate_table(est, language, priced=priced), notes=notes)
     hints = {ln.name: ln.hint for ln in est.lines if ln.hint}
     rows = tuple(
         replace(r, hint=hints.get(r.cells[1])) if len(r.cells) > 1 else r for r in table.rows
@@ -287,7 +285,7 @@ def side_tables(
     contours: dict[str, Contour],
     elec: Electrical | None,
     wiring: Wiring | None,
-    prices: PriceList | None = None,
+    prices: Prices | None = None,
     quantities: Wiring | None = None,
 ) -> dict[str, list[SideTable]]:
     """Таблицы боковой панели по теме листа (plan / electrical / wiring / panel …) и смета
@@ -295,11 +293,9 @@ def side_tables(
     lang = plan.language
     out = {"plan": [room_table(plan, contours)]}
     if elec is not None:
-        tables = legend_tables(elec, lang)
+        # «Электрика»: «Точки» — вид, высота и количество; легенда — плашкой на чертеже
         points = points_side_table(plan, elec)
-        if points is not None:
-            tables.insert(0, points)
-        out["electrical"] = tables
+        out["electrical"] = [points] if points is not None else []
         lighting = lighting_side_table(plan, elec)
         out["lighting"] = [lighting] if lighting is not None else []
         if points is not None:
@@ -319,9 +315,10 @@ def panel_tables(panel: BoardPanel, elec: Electrical, language: Language) -> lis
     потребителей по группам. Закупка аппаратов — в смете (вкладка «Смета»)."""
     colors = group_colors(elec)
     table = devices_table(panel, language, colors)
-    keys = [(d.key,) for d in panel.devices]
+    keys = [(d.key,) for d in panel.all_devices]
     # Назначение в панели не помещается — оно в карточке аппарата по клику на строку
-    out = [drop_column(from_table(table, keys, panel_notes(panel, language)), 1)]
+    devices = drop_column(from_table(table, keys, panel_notes(panel, language)), 1)
+    out = [replace(devices, rows=_device_sections(panel, devices.rows, language))]
     rows = []
     for g in panel.groups:
         c = color_of(g.group, colors)
@@ -347,3 +344,28 @@ def panel_tables(panel: BoardPanel, elec: Electrical, language: Language) -> lis
         )
     )
     return out
+
+
+def _device_sections(
+    panel: BoardPanel, rows: Sequence[SideRow], language: Language
+) -> tuple[SideRow, ...]:
+    """Аппараты щита разделами: ввод и резерв (не на линии — квадратный значок), линии
+    групп (кружок цвета группы), щит АКБ (квадратный значок). Строки — по одной на аппарат
+    в порядке panel.all_devices."""
+    by_id = dict(zip((d.id for d in panel.all_devices), rows, strict=True))
+    dc = {d.id for d in panel.dc.devices} if panel.dc is not None else set()
+    parts = (
+        ("common", [d for d in panel.devices if d.group is None]),
+        ("lines", [d for d in panel.devices if d.group is not None]),
+        ("dc", [d for d in panel.all_devices if d.id in dc]),
+    )
+    width = len(rows[0].cells) if rows else 0
+    out: list[SideRow] = []
+    for key, devs in parts:
+        if not devs:
+            continue
+        out.append(SideRow(("", text(key, language), *[""] * (width - 2)), section=True))
+        for d in devs:
+            row = by_id[d.id]
+            out.append(row if d.group is not None else replace(row, marker="square"))
+    return tuple(out)

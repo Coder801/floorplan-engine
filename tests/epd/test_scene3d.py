@@ -6,6 +6,8 @@ import itertools
 from typing import Any
 
 import pytest
+from shapely.geometry import Polygon
+from shapely.ops import unary_union
 
 from floorplan_engine.electrical.wiring import box_wiring
 from floorplan_engine.epd.scene3d import FLOOR_Z_MM, build_scene
@@ -87,7 +89,10 @@ def test_window_with_given_height_keeps_lintel() -> None:
     assert scene["assumed"]["openings"] == ["o1"]  # только дверь
 
 
-def test_shared_partition_is_one_piece_with_both_normals() -> None:
+def _two_rooms(openings_a: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
+    """Стены двух комнат 4000×3000 рядом, общая перегородка — a.w3 и b.w1."""
+    from floorplan_engine.epd.scene3d import _walls
+    from floorplan_engine.model.geometry import room_geometries
     from floorplan_engine.model.schema import Plan
 
     def room(rid: str, x: float) -> dict[str, Any]:
@@ -99,17 +104,54 @@ def test_shared_partition_is_one_piece_with_both_normals() -> None:
             "name": "т",
             "default_wall_thickness": 100,
             "source": "text",
-            "rooms": [room("a", 0), room("b", 4100)],
+            "rooms": [{**room("a", 0), "openings": openings_a or []}, room("b", 4100)],
         }
     )
     _, contours = validate_plan(plan)
-    from floorplan_engine.epd.scene3d import _walls
-    from floorplan_engine.model.geometry import room_geometries
+    return _walls(room_geometries(plan, contours), 2700)
 
-    walls = _walls(room_geometries(plan, contours), 2700)
+
+def test_shared_partition_is_one_piece_with_both_normals() -> None:
+    walls = _two_rooms()
     shared = [w for w in walls if len(w["normals"]) == 2]
     assert len(shared) == 1
     assert sorted(shared[0]["normals"]) == [[-1.0, 0.0], [1.0, 0.0]]
+
+
+def test_all_pieces_of_a_shared_wall_share_normals() -> None:
+    """Окно в перегородке описано только в одной комнате: подоконник и перемычка лежат в
+    полосе проёма, с которой тело соседа не перекрывается, — но это та же стена, и срез в
+    просмотре должен опускать её целиком, а не оставлять подоконник в полный рост."""
+    window = {
+        "id": "o1",
+        "wall": "w3",
+        "type": "window",
+        "offset": 1000,
+        "width": 1200,
+        "sill": 700,
+        "height": 1300,
+    }
+    walls = _two_rooms([window])
+    pieces = [w for w in walls if w["key"] in ("wall:a.w3", "wall:b.w1")]
+    assert sorted(tuple(w["z"]) for w in pieces) == [(0.0, 700.0), (0.0, 2700), (2000.0, 2700)]
+    assert all(sorted(w["normals"]) == [[-1.0, 0.0], [1.0, 0.0]] for w in pieces)
+    others = [w for w in walls if w["key"] not in ("wall:a.w3", "wall:b.w1")]
+    assert all(len(w["normals"]) == 1 for w in others)
+
+
+def test_outer_wall_keeps_corner_at_partition() -> None:
+    """Угол на стыке перегородки с наружной стеной — у наружной: в срезе перегородка
+    бортиком, а периметр без выреза. Перегородка — только между комнатами (y 0…3000),
+    наружная стена понизу — сплошная от угла до угла."""
+    walls = _two_rooms()
+    partition = [w for w in walls if len(w["normals"]) == 2]
+    ys = [y for w in partition for ring in w["polys"] for x, y in ring[0]]
+    assert min(ys) == pytest.approx(0) and max(ys) == pytest.approx(3000)
+    bottom = unary_union(
+        [Polygon(ring[0]) for w in walls if w["key"].endswith(".w4") for ring in w["polys"]]
+    )
+    assert bottom.geom_type == "Polygon"  # без разрыва над стыком x 4000…4100
+    assert bottom.bounds == pytest.approx((0, -100, 8100, 0))  # углы квартиры — у w1 и b.w3
 
 
 def test_corner_does_not_give_wall_a_foreign_normal() -> None:

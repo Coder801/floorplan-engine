@@ -7,6 +7,8 @@ from ezdxf import bbox
 from ezdxf.document import Drawing
 from ezdxf.filemanagement import readfile
 
+from floorplan_engine.drawing.electrical import legend_rows, legend_size
+from floorplan_engine.drawing.ids import object_id
 from floorplan_engine.model.scale import SCALES
 from floorplan_engine.model.schema import Electrical
 from floorplan_engine.sheets.document import build_project_document, sheet_png_name
@@ -128,13 +130,53 @@ def test_new_point_types_and_led_strip(tmp_path: Path) -> None:
     } <= names
     assert len(msp.query('LINE[layer=="E-LED"]')) == 1  # лента на плане
     legend = sheet_layouts(doc)[1]
-    assert len(legend.query('LINE[layer=="E-LED"]')) == 1  # строка легенды — на листе
+    (led_row,) = legend.query('LINE[layer=="E-LED"]')  # строка легенды — на листе
+    assert object_id(led_row) == ("legend", "led_strip")  # значок — для плашки просмотра
+    assert {object_id(i) for i in legend.query("INSERT") if i.dxf.name == "E_PENDANT"} == {
+        ("legend", "pendant")
+    }
     # Символы стопки разведены: интернет стоит дальше от стены, чем розетка
     sock = next(
         i for i in msp.query("INSERT") if i.dxf.name == "E_SOCKET" and i.dxf.insert.y < 3500
     )
     data = next(i for i in msp.query("INSERT") if i.dxf.name == "E_DATA" and i.dxf.insert.y < 3500)
     assert data.dxf.insert.x > sock.dxf.insert.x
+
+
+def test_legend_rows_only_symbol_and_meaning() -> None:
+    """Легенда — значок и что он значит: без количества и без цветов групп (они в
+    «Точках» и «Группах»)."""
+    elec, _ = _rect_plan_elec(
+        {
+            "points": [
+                {
+                    "id": "a",
+                    "room": "r",
+                    "wall": "w1",
+                    "offset": 500,
+                    "type": "socket",
+                    "height": 300,
+                    "group": "QF1",
+                },
+                {
+                    "id": "b",
+                    "room": "r",
+                    "wall": "w1",
+                    "offset": 900,
+                    "type": "switch",
+                    "height": 900,
+                    "group": "QF2",
+                },
+            ],
+            "board": {"room": "r", "wall": "w2", "offset": 500, "height": 1700},
+        }
+    )
+    rows = legend_rows(elec)
+    assert rows[0].text == "Условные обозначения" and rows[0].tag is None
+    assert [r.tag for r in rows[1:]] == ["socket", "switch", "board"]
+    assert not any("QF" in r.text for r in rows)
+    width, height = legend_size(rows)
+    assert width > 0 and height > 0
 
 
 @pytest.mark.parametrize(

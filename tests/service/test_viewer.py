@@ -134,8 +134,8 @@ def test_save_wiring_edits(root: Path) -> None:
     assert '"wire_1": { from: "board", to: "s1", path: [[0, 0], [0, 100], [50, 100]] }' in text
     assert client.get("/api/projects").json()[0]["stale"] is False  # пересобрано после записи
 
-    diagonal = {"from": "board", "to": "s1", "path": [[0, 0], [50, 100]]}
-    r = client.post("/api/projects/kv1/wiring", json={"wires": {"wire_2": diagonal}})
+    broken = {"from": "board", "to": "s1", "path": [[0, 0]]}  # меньше двух точек
+    r = client.post("/api/projects/kv1/wiring", json={"wires": {"wire_2": broken}})
     assert r.status_code == 422 and "wires.wire_2" in r.json()["detail"]
     assert path.read_text("utf-8") == text  # файл не тронут
 
@@ -153,3 +153,18 @@ def test_api_only(root: Path) -> None:
     about = client.get("/").json()
     assert "web/" in about["front"]  # страница — отдельный проект, не в пакете
     assert client.get("/static/app/index.html").status_code == 404
+
+
+def test_choose_variant_open_viewer(root: Path) -> None:
+    """Вход выключен — всё можно; вариант → variant.yaml, ошибка — 422 с путём к полю."""
+    client = TestClient(create_viewer(root))
+    assert client.get("/api/projects/kv1").json()["can"] == {
+        "edit_wiring": True,
+        "choose_variant": True,
+    }
+    bad = client.post("/api/projects/kv1/variant", json={"route": "air"})
+    assert bad.status_code == 422 and "route" in bad.json()["detail"]
+    ok = client.post("/api/projects/kv1/variant", json={"mode": "economy", "route": "floor"})
+    assert ok.status_code == 200
+    text = (root / "kv1" / "variant.yaml").read_text("utf-8")
+    assert "mode: economy" in text and "route: floor" in text

@@ -29,10 +29,11 @@ from __future__ import annotations
 
 import csv
 import math
+import re
 from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
+from typing import Literal, Protocol
 
 from openpyxl import Workbook
 from openpyxl.comments import Comment
@@ -42,7 +43,7 @@ from pydantic import Field
 from floorplan_engine.electrical.boxes import BOX_ORDER, BOX_TITLES
 from floorplan_engine.electrical.panel import BoardPanel, device_name
 from floorplan_engine.electrical.wiring import RESERVE
-from floorplan_engine.electrical.wiring_model import Wiring
+from floorplan_engine.electrical.wiring_model import Run, Wiring
 from floorplan_engine.model.panel_catalog import DeviceKind
 from floorplan_engine.model.schema import Electrical, PointType, StrictModel
 from floorplan_engine.model.texts import Language, tr
@@ -55,6 +56,7 @@ XLSX_MONEY = "#,##0.00"
 XLSX_QTY = "#,##0.0##"
 XLSX_EDIT_FILL = "FFF4D6"  # ячейки, которые правят руками: цена и количество
 FIXING_STEP = 400.0  # мм: шаг креплений кабеля по трассе
+CONDUIT_SIZES = ((1.5, 16), (2.5, 20), (6.0, 25), (1e9, 32))  # сечение, мм² → гофра Ø, мм
 SWITCHES = frozenset({PointType.SWITCH, PointType.PASS_SWITCH})
 # Механизмы в подрозетнике: на каждый пост — подрозетник, на блок — рамка
 MOUNTED = frozenset(
@@ -68,6 +70,7 @@ Section = Literal["material", "work"]
 # щита — <вид>.<номинал> (breaker.C16); нет цены с параметром — берётся цена без него
 LINES: dict[str, tuple[Section, str, str, str]] = {
     "cable": ("material", "м", "Кабель {mark}", "Кабель {mark}"),
+    "conduit": ("material", "м", "Гофротруба ПВХ Ø{n}", "Гофротруба ПВХ Ø{n}"),
     "socket_box": ("material", "шт", "Подрозетник", "Підрозетник"),
     "junction_box": ("material", "шт", "Коробка распаечная {mark}", "Коробка розподільча {mark}"),
     "junction_box_ip": (
@@ -94,6 +97,11 @@ LINES: dict[str, tuple[Section, str, str, str]] = {
     "changeover": ("material", "шт", "Переключатель резерва", "Перемикач резерву"),
     "ats": ("material", "шт", "АВР", "АВР"),
     "feed": ("material", "шт", "Автомат питания инвертора", "Автомат живлення інвертора"),
+    "output": ("material", "шт", "Автомат выхода инвертора", "Автомат виходу інвертора"),
+    "dc_battery": ("material", "шт", "Автомат АКБ DC", "Автомат АКБ DC"),
+    "dc_breaker": ("material", "шт", "Автомат строки панелей DC", "Автомат рядка панелей DC"),
+    "dc_spd": ("material", "шт", "УЗИП DC", "ПЗІП DC"),
+    "dc_enclosure": ("material", "шт", "Корпус щита АКБ", "Корпус щита АКБ"),
     "socket": ("material", "шт", "Розетка с заземлением", "Розетка із заземленням"),
     "switch1": ("material", "шт", "Выключатель одноклавишный", "Вимикач одноклавішний"),
     "switch2": ("material", "шт", "Выключатель двухклавишный", "Вимикач двоклавішний"),
@@ -110,6 +118,7 @@ LINES: dict[str, tuple[Section, str, str, str]] = {
     "outlet": ("material", "шт", "", ""),
     "led_strip": ("material", "м", "", ""),
     "work.cable": ("work", "м", "Прокладка кабеля", "Прокладання кабелю"),
+    "work.conduit": ("work", "м", "Укладка кабеля в гофротрубу", "Укладання кабелю в гофротрубу"),
     "work.chase": (
         "work",
         "м",
@@ -165,7 +174,18 @@ HINTS: dict[str, dict[str, str]] = {
     },
 }
 PRICE_TBD = {"ru": "Цена уточняется", "uk": "Ціна уточнюється"}
-PARAM_KEYS = ("cable", "frame", "junction_box", "junction_box_ip", *(k.value for k in DeviceKind))
+PRICE_SERVICE = {
+    "ru": "Цена — из сервиса цен (пока имитация, не рыночная)",
+    "uk": "Ціна — із сервісу цін (поки імітація, не ринкова)",
+}
+PARAM_KEYS = (
+    "cable",
+    "conduit",
+    "frame",
+    "junction_box",
+    "junction_box_ip",
+    *(k.value for k in DeviceKind),
+)
 # Светильники и выводы: ключ → название в texts (как в условных обозначениях)
 FIXTURES = {
     "light": "symbol_light",
@@ -206,6 +226,14 @@ TEXT: dict[str, dict[str, str]] = {
         "ru": "Цен нет: {f} не найден — смета только с объёмами",
         "uk": "Цін немає: {f} не знайдено — кошторис лише з обсягами",
     },
+    "note_service": {
+        "ru": "Цены {n} поз. — из сервиса цен (пока имитация, не рыночные цены); остальные — {f}",
+        "uk": "Ціни {n} поз. — із сервісу цін (поки імітація, не ринкові ціни); решта — {f}",
+    },
+    "note_service_all": {
+        "ru": "Все цены — из сервиса цен (пока имитация, не рыночные цены): {f} нет",
+        "uk": "Усі ціни — із сервісу цін (поки імітація, не ринкові ціни): {f} немає",
+    },
     "note_cable": {
         "ru": "Кабель — с запасом {pct} %; прокладка — по фактической длине",
         "uk": "Кабель — із запасом {pct} %; прокладання — за фактичною довжиною",
@@ -233,6 +261,12 @@ TEXT: dict[str, dict[str, str]] = {
     "note_wet": {
         "ru": "Коробки во влажных помещениях — IP44: {n} шт",
         "uk": "Коробки у вологих приміщеннях — IP44: {n} шт",
+    },
+    "note_conduit": {
+        "ru": "Гофротруба: по полу — всегда, вся линия до точки; по потолку — в премиуме, "
+        "участок по потолку (спуски в штробах — без гофры); диаметр — по сечению кабеля",
+        "uk": "Гофротруба: по підлозі — завжди, уся лінія до точки; по стелі — у преміумі, "
+        "ділянка по стелі (спуски в штробах — без гофри); діаметр — за перерізом кабелю",
     },
     "note_fixing": {
         "ru": "Крепления кабеля — шаг {step} мм",
@@ -301,6 +335,31 @@ class PriceList(StrictModel):
         item = self.items.get(key)
         return Price(price=item) if isinstance(item, int | float) else item
 
+    def lookup(self, key: str) -> Quote:
+        """Цена по ключу, а с параметром — и без него («cable.3x4» → «cable»)."""
+        base, param = split_key(key)
+        exact = self.price(key)
+        return Quote(exact or (self.price(base) if param else None), exact, service=False)
+
+
+@dataclass(frozen=True)
+class Quote:
+    """Ответ источника цен: цена, цена ровно по ключу (своё наименование — из неё) и признак,
+    что цена от сервиса цен (pricing.py), а не из прайса."""
+
+    price: Price | None
+    exact: Price | None
+    service: bool
+
+
+class PriceSource(Protocol):
+    """Откуда смета берёт цены: прайс (PriceList), сервис цен или их склейка (pricing.Prices)."""
+
+    @property
+    def currency(self) -> str: ...
+
+    def lookup(self, key: str) -> Quote: ...
+
 
 def split_key(key: str) -> tuple[str, str]:
     """«cable.3x1.5» → («cable», «3x1.5»); ключ без параметра → (ключ, «»)."""
@@ -322,6 +381,7 @@ class Line:
     qty: float
     price: float | None  # None — в прайсе нет
     hint: str | None = None  # пояснение к позиции (HINTS)
+    service: bool = False  # цена — от сервиса цен (имитация), не из прайса
 
     @property
     def total(self) -> float | None:
@@ -344,12 +404,40 @@ class Estimate:
     def unpriced(self) -> int:
         return sum(1 for ln in self.lines if ln.price is None)
 
+    @property
+    def from_service(self) -> int:
+        return sum(1 for ln in self.lines if ln.service)
+
+
+def conduit_diameter(mark: str) -> int:
+    """Гофротруба по марке кабеля, мм: до 1,5 мм² — Ø16, до 2,5 — Ø20, до 6 — Ø25, больше —
+    Ø32; марку не разобрать (слаботочка) — Ø20."""
+    m = re.search(r"[x×]\s*([\d.,]+)", mark)
+    section = float(m.group(1).replace(",", ".")) if m else 2.5
+    return next((d for limit, d in CONDUIT_SIZES if section <= limit), CONDUIT_SIZES[-1][1])
+
+
+def conduit_mm(run: Run, mode: str) -> float:
+    """Сколько линии — в гофре (решение 2026-11-01, docs/wiring-variants.md): по полу — всегда,
+    вся линия со подъёмом до точки; по потолку — только в премиуме (proper), участок по
+    потолку, спуски в штробах — без гофры."""
+    if run.route == "floor":
+        return run.length_mm
+    return run.plan_mm if mode == "proper" else 0.0
+
 
 def quantities(wiring: Wiring, elec: Electrical) -> dict[str, float]:
     """Объёмы по ключам позиций (без цен)."""
     q: dict[str, float] = {}
     for mark, m in wiring.by_mark().items():
         q[f"cable.{mark}"] = round(m * (1 + RESERVE), 1)
+    conduit: dict[int, float] = {}
+    for r in wiring.runs:
+        d = conduit_diameter(r.mark)
+        conduit[d] = conduit.get(d, 0.0) + conduit_mm(r, elec.mode)
+    for d in sorted(conduit):
+        if conduit[d] > 0:
+            q[f"conduit.{d}"] = round(conduit[d] / 1000 * (1 + RESERVE), 1)
     mounted = [p for p in elec.points if p.type in MOUNTED]
     posts = sum(p.count for p in mounted)
     q["socket_box"] = posts
@@ -389,6 +477,9 @@ def quantities(wiring: Wiring, elec: Electrical) -> dict[str, float]:
     if led_m:
         q["led_strip"] = round(led_m, 2)
     q["work.cable"] = round(sum(r.length_mm for r in wiring.runs) / 1000, 1)
+    in_conduit = sum(conduit_mm(r, elec.mode) for r in wiring.runs)
+    if in_conduit > 0:
+        q["work.conduit"] = round(in_conduit / 1000, 1)
     q["work.chase"] = round(wiring.chase_length(wide=False) / 1000, 1)
     q["work.chase_wide"] = round(wiring.chase_length(wide=True) / 1000, 1)
     q["work.wall_hole"] = len(wiring.holes)
@@ -405,12 +496,13 @@ def quantities(wiring: Wiring, elec: Electrical) -> dict[str, float]:
 def build_estimate(
     wiring: Wiring,
     elec: Electrical,
-    prices: PriceList,
+    prices: PriceSource,
     language: Language = "ru",
     panel: BoardPanel | None = None,
 ) -> Estimate:
     """Смета: позиция на каждый объём. Щит — по составу листа «Щит» (panel): строка на вид и
-    номинал аппарата, сборка — по модулям состава; щита нет — автомат на группу."""
+    номинал аппарата, сборка — по модулям состава; щита нет — автомат на группу. prices —
+    прайс или склейка прайса с сервисом цен (pricing.Prices)."""
     q = quantities(wiring, elec)
     if panel is not None:
         q.pop("breaker", None)
@@ -421,15 +513,11 @@ def build_estimate(
         items.insert(at, ("work.board_module", modules))
         q = dict(items)
 
-    def price(key: str) -> Price | None:
-        base, param = split_key(key)
-        return prices.price(key) or (prices.price(base) if param else None)
-
     def line(key: str, qty: float, name: str | None = None) -> Line:
         base, param = split_key(key)
         section, unit, ru, uk = LINES[base]
-        p = price(key)
-        exact = prices.price(key)
+        quote = prices.lookup(key)
+        p, exact = quote.price, quote.exact
         if exact and exact.name:
             name = exact.name
         elif p and p.name and name is None:
@@ -443,17 +531,28 @@ def build_estimate(
         hint = HINTS.get(base, {}).get(language)
         if hint and p is None:
             hint = f"{hint}. {PRICE_TBD[language]}"
-        return Line(section, key, name, unit, qty, p.price if p else None, hint)
+        if quote.service and p is not None:
+            hint = f"{hint}. {PRICE_SERVICE[language]}" if hint else PRICE_SERVICE[language]
+        return Line(section, key, name, unit, qty, p.price if p else None, hint, quote.service)
 
-    lines = [line(k, v) for k, v in q.items()]
+    names: dict[str, str] = {}
+    if panel is not None and panel.enclosure is not None:  # корпус — щит с листа «Щит»
+        enc = panel.enclosure
+        base = LINES["board_enclosure"][2 if language == "ru" else 3]
+        names["board_enclosure"] = f"{base} {enc.title}, {enc.modules} мод."
+    lines = [line(k, v, names.get(k)) for k, v in q.items()]
     if panel is not None:
         # Аппараты щита — по видам и номиналам, в порядке щита; рядом с корпусом
         counts: dict[tuple[str, str], tuple[str, int]] = {}
-        for d in panel.devices:
+        for d in panel.all_devices:
             key = f"{d.kind.value}.{d.label}"
             name, n = counts.get((key, d.label), (device_name(d, language), 0))
             counts[(key, d.label)] = (name, n + 1)
         devices = [line(key, n, name) for (key, _), (name, n) in counts.items()]
+        if panel.dc is not None:  # корпус щита АКБ — за аппаратами
+            enc = panel.dc.enclosure
+            base = LINES["dc_enclosure"][2 if language == "ru" else 3]
+            devices.append(line("dc_enclosure", 1, f"{base} {enc.title}, {enc.modules} мод."))
         at = next((k + 1 for k, ln in enumerate(lines) if ln.key == "board_enclosure"), len(lines))
         lines[at:at] = devices
     lines.sort(key=lambda ln: 0 if ln.section == "material" else 1)

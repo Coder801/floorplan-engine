@@ -20,14 +20,15 @@
 }
 .head { display: flex; gap: 4px; margin-bottom: 4px; }
 
-// Строка группы: флажок | цвет | QF | «только» (видно при наведении)
+// Строка группы: глаз | цвет | QF | «только» (видно при наведении); скрытая — бледнее
 .row {
   display: grid; grid-template-columns: auto 10px minmax(0, 1fr) auto;
-  align-items: center; gap: 8px; padding: 3px 4px; border-radius: 4px;
+  align-items: center; gap: 8px; padding: 3px 4px; border-radius: 4px; cursor: pointer;
   &:hover { background: var(--soft); }
   &:hover .only { visibility: visible; }
 }
 .swatch { height: 10px; border-radius: 50%; }
+.hidden > :not(:first-child):not(.only) { opacity: .45; }
 .pop .only { @include bare-button; color: var(--muted); font-size: 11px; visibility: hidden; }
 // Без наведения (палец) — «только» видно всегда
 @media (hover: none) { .pop .only { visibility: visible; } }

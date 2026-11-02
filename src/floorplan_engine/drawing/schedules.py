@@ -132,9 +132,11 @@ ESTIMATE_ROW_H = 5.5  # мм листа: строка сметы на листе
 ESTIMATE_HEADER_H = 8.0
 
 
-def estimate_table(est: Estimate, language: Language, priced: bool) -> Table:
+def estimate_table(
+    est: Estimate, language: Language, priced: bool, title: str | None = None
+) -> Table:
     """Смета на лист: разделы, их итоги и «Всего»; без прайса — ведомость объёмов
-    (только количества)."""
+    (только количества). title — своё название (смета сантехники); нет — электрики."""
 
     def t(key: str, **values: object) -> str:
         return estimate_text(key, language, **values)
@@ -175,7 +177,8 @@ def estimate_table(est: Estimate, language: Language, priced: bool) -> Table:
             subtotal = t("section_total", s=t(section).lower())
             rows.append(("", subtotal, "", "", "", format_number(est.subtotal(section))))
     total = ("", t("total"), "", "", "", format_number(est.total)) if priced else None
-    title = t("sheet_title") if priced else t("sheet_volumes")
+    if title is None:
+        title = t("sheet_title") if priced else t("sheet_volumes")
     return Table(
         title, tuple(columns), tuple(rows), total, row_h=ESTIMATE_ROW_H, header_h=ESTIMATE_HEADER_H
     )

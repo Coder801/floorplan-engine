@@ -30,7 +30,11 @@ from floorplan_engine.validation.report import STAGE_TEXT
 from floorplan_engine.validation.validate import Report
 
 if TYPE_CHECKING:
+    from fastapi import FastAPI
+    from sqlalchemy.orm import Session
+
     from floorplan_engine.service.api.auth import Auth
+    from floorplan_engine.service.db.models import Project
 
 app = typer.Typer(
     help="Чертежи DXF (план, электрика) из room.yaml / electrical.yaml.",
@@ -107,6 +111,12 @@ def print_report(report: Report) -> None:
             f"  электрика: {len(e.points)} точек, {len(e.cables)} трасс, "
             f"щит {'есть' if e.board else 'нет'}"
         )
+    if report.plumbing is not None:
+        w = report.plumbing
+        typer.echo(
+            f"  сантехника: {len(w.fixtures)} приборов, {len(w.risers)} стояков, "
+            f"препятствий {len(w.obstacles)}, разводка {w.distribution}"
+        )
     n_err, n_warn = len(report.errors), len(report.warnings)
     if report.ok:
         typer.secho(f"OK: ошибок нет, предупреждений {n_warn}", fg=typer.colors.GREEN)
@@ -171,6 +181,10 @@ def build(
         typer.echo(f"  {result.loads} — роспись потребителей щита")
     if result.estimate:
         typer.echo(f"  {result.estimate[-1]} — смета (и .md, .csv рядом)")
+    if result.plumbing_estimate:
+        typer.echo(f"  {result.plumbing_estimate[-1]} — смета сантехники (и .md, .csv рядом)")
+    if result.sewer_routes is not None:
+        typer.echo(f"  {result.sewer_routes} — трассы канализации (участки, зоны, высоты, ошибки)")
     for sheet_png in result.sheets:
         typer.echo(f"  {sheet_png}")
 
@@ -276,6 +290,8 @@ def estimate(
     result = estimate_project(project, prices)
     if result.prices is not None:
         typer.echo(f"Цены: {result.prices}")
+    if result.estimate is not None and result.estimate.from_service:
+        typer.echo(f"Сервис цен (имитация): {result.estimate.from_service} поз.")
     for issue in result.issues:
         typer.secho(str(issue), fg=typer.colors.RED)
     if result.estimate is None:
@@ -310,6 +326,17 @@ def view(
     uvicorn.run(create_viewer(projects, _viewer_auth()), host=host, port=port)
 
 
+DEV_PROJECTS_ENV = "SHTROBA_DEV_PROJECTS"  # папка проектов для API `dev` (между перезапусками)
+
+
+def dev_viewer() -> FastAPI:
+    """Приложение API для `dev`: uvicorn зовёт фабрику заново после каждого перезапуска по
+    правке кода, папку проектов берёт из окружения."""
+    from floorplan_engine.service.api.viewer import create_viewer
+
+    return create_viewer(Path(os.environ.get(DEV_PROJECTS_ENV, "projects")), _viewer_auth())
+
+
 @app.command()
 def dev(
     projects: Annotated[Path, typer.Option(help="Папка собранных проектов")] = Path("projects"),
@@ -317,14 +344,14 @@ def dev(
     web: Annotated[Path, typer.Option(help="Папка фронта")] = Path("web"),
 ) -> None:
     """Просмотр одной командой для разработки: API (`view`) и страница web/ (`npm run dev`,
-    http://127.0.0.1:5173) с перезагрузкой при правках; Ctrl+C останавливает оба."""
+    http://127.0.0.1:5173). Оба перезагружаются при правках: страница — Vite, API — uvicorn
+    следит за кодом пакета и перезапускается сам (иначе после правок Python пересборки шли бы
+    старым кодом). Ctrl+C останавливает оба."""
     import os
     import shutil
     import subprocess
 
     import uvicorn
-
-    from floorplan_engine.service.api.viewer import create_viewer
 
     if not projects.is_dir() or not (web / "package.json").is_file():
         typer.echo(
@@ -341,8 +368,16 @@ def dev(
     env = {**os.environ, "API_URL": f"http://127.0.0.1:{port}"}
     front = subprocess.Popen([npm, "run", "dev"], cwd=web, env=env)
     typer.echo(f"Страница: http://127.0.0.1:5173 · API: http://127.0.0.1:{port}/api")
+    os.environ[DEV_PROJECTS_ENV] = str(projects.resolve())  # фабрика API читает после перезапуска
     try:
-        uvicorn.run(create_viewer(projects, _viewer_auth()), host="127.0.0.1", port=port)
+        uvicorn.run(
+            "floorplan_engine.cli:dev_viewer",
+            factory=True,
+            host="127.0.0.1",
+            port=port,
+            reload=True,
+            reload_dirs=[str(Path(__file__).resolve().parent)],
+        )
     finally:
         front.terminate()
         try:
@@ -433,6 +468,7 @@ def _viewer_auth() -> Auth | None:
     """Вход в просмотр по окружению (SHTROBA_AUTH=on, service/api/auth.py); выключен — None."""
     from floorplan_engine.service.api.auth import Auth, AuthConfig, ConfigError
     from floorplan_engine.service.api.mail import LogMailer, mailer_from_env
+    from floorplan_engine.service.api.telegram import telegram_from_env
     from floorplan_engine.service.db.session import make_engine, make_sessions
 
     try:
@@ -452,30 +488,48 @@ def _viewer_auth() -> Auth | None:
         typer.echo("Вход по коду на почту выключен: нет SMTP_HOST")
     elif isinstance(mailer, LogMailer):
         typer.echo("Вход по коду на почту: без SMTP — код в этом терминале")
-    return Auth(config, make_sessions(make_engine()), mailer=mailer)
+    bot = telegram_from_env(dict(os.environ))
+    if bot is None:
+        typer.echo("Вход через Telegram выключен: нет TELEGRAM_BOT_TOKEN")
+    else:
+        how = "вебхук" if config.secure else "опрос Bot API из этого процесса"
+        typer.echo(f"Вход через Telegram: бот настроен, {how}")
+    return Auth(config, make_sessions(make_engine()), mailer=mailer, telegram=bot)
 
 
-access_app = typer.Typer(help="Доступ к проектам просмотра: связь папки с базой, приглашения.")
+access_app = typer.Typer(
+    help="Доступ к проектам просмотра: связь папки с базой, приглашения, коды доступа."
+)
 app.add_typer(access_app, name="access")
 
 
 @access_app.command("link")
 def access_link(
     project: ProjectArg,
-    owner: Annotated[str, typer.Option(help="Email владельца (уже входил и выбрал тип)")],
+    owner: Annotated[
+        str | None,
+        typer.Option(help="Email владельца (уже входил и выбрал тип); нет — без владельца"),
+    ] = None,
 ) -> None:
-    """Связать папку проекта с базой: проект в студии владельца, slug — имя папки."""
+    """Связать папку проекта с базой: проект в студии владельца, slug — имя папки. Без
+    --owner — проект «без владельца»: код доступа выдать уже можно, владелец (SHTROBA_OWNER)
+    заберёт проект при входе."""
     from floorplan_engine.service.db import access as acc
     from floorplan_engine.service.db.models import AppUser
     from floorplan_engine.service.db.session import make_engine, make_sessions
 
     with make_sessions(make_engine())() as db:
+        if acc.project_by_slug(db, project.name) is not None:
+            typer.secho(f"Проект {project.name} уже в базе", fg=typer.colors.YELLOW)
+            raise typer.Exit(1)
+        if owner is None:
+            acc.create_project_unowned(db, project.name, project.name)
+            db.commit()
+            typer.echo(f"Проект {project.name} — в базе без владельца")
+            return
         user = db.query(AppUser).filter(AppUser.email == owner.strip().lower()).one_or_none()
         if user is None:
             typer.secho(f"Нет пользователя {owner} — пусть сначала войдёт", fg=typer.colors.RED)
-            raise typer.Exit(1)
-        if acc.project_by_slug(db, project.name) is not None:
-            typer.secho(f"Проект {project.name} уже в базе", fg=typer.colors.YELLOW)
             raise typer.Exit(1)
         try:
             acc.create_project_for(db, user, project.name, project.name)
@@ -512,3 +566,80 @@ def access_invite(
         db.commit()
     public = os.environ.get("SHTROBA_PUBLIC_URL", "http://127.0.0.1:5173").rstrip("/")
     typer.echo(f"{public}/?invite={token}")
+
+
+def _db_project(db: Session, project: Path, create: bool = False) -> Project:
+    """Строка проекта в базе по папке; нет — выход с подсказкой или, с create, строка без
+    владельца (владелец заберёт её при входе)."""
+    from floorplan_engine.service.db import access as acc
+
+    target = acc.project_by_slug(db, project.name)
+    if target is None and create:
+        target = acc.create_project_unowned(db, project.name, project.name)
+        typer.echo(f"Проект {project.name} записан в базу без владельца", err=True)
+    if target is None:
+        typer.secho(f"Проекта {project.name} нет в базе — access link", fg=typer.colors.RED)
+        raise typer.Exit(1)
+    return target
+
+
+@access_app.command("code")
+def access_code(
+    project: ProjectArg,
+    label: Annotated[str, typer.Option(help="Кому выдан (для списка кодов)")] = "",
+    days: Annotated[int, typer.Option(help="Срок кода, дней")] = 30,
+) -> None:
+    """Код доступа к проекту: человек вводит его на экране входа и смотрит этот проект
+    (только чтение, без учётки). Показывается один раз — в базе только хеш. Проекта нет в
+    базе — записывается без владельца."""
+    from floorplan_engine.service.db import access as acc
+    from floorplan_engine.service.db import access_codes
+    from floorplan_engine.service.db.session import make_engine, make_sessions
+
+    with make_sessions(make_engine())() as db:
+        target = _db_project(db, project, create=True)
+        try:
+            code = access_codes.issue_code(db, target, None, label=label, days=days)
+        except acc.AccessError as exc:
+            typer.secho(str(exc), fg=typer.colors.RED)
+            raise typer.Exit(1) from exc
+        db.commit()
+    typer.echo(code)
+
+
+@access_app.command("codes")
+def access_codes_list(project: ProjectArg) -> None:
+    """Коды доступа проекта: id, кому, срок, входов, отозван ли."""
+    from floorplan_engine.service.db import access_codes
+    from floorplan_engine.service.db.session import make_engine, make_sessions
+
+    with make_sessions(make_engine())() as db:
+        target = _db_project(db, project)
+        rows = access_codes.list_codes(db, target)
+        if not rows:
+            typer.echo("Кодов нет — access code")
+            return
+        for r in rows:
+            state = "отозван" if r.revoked_at else f"до {r.expires_at:%Y-%m-%d}"
+            who = f" {r.label}" if r.label else ""
+            typer.echo(f"{str(r.id)[:8]}{who}: {state}, входов {r.uses}")
+
+
+@access_app.command("revoke-code")
+def access_revoke_code(
+    project: ProjectArg, code_id: Annotated[str, typer.Argument(help="id кода или его начало")]
+) -> None:
+    """Отозвать код доступа: входы по нему кончаются сразу."""
+    from floorplan_engine.service.db import access as acc
+    from floorplan_engine.service.db import access_codes
+    from floorplan_engine.service.db.session import make_engine, make_sessions
+
+    with make_sessions(make_engine())() as db:
+        target = _db_project(db, project)
+        try:
+            row = access_codes.revoke_code(db, target, code_id)
+        except acc.AccessError as exc:
+            typer.secho(str(exc), fg=typer.colors.RED)
+            raise typer.Exit(1) from exc
+        db.commit()
+    typer.echo(f"Код {str(row.id)[:8]} отозван")

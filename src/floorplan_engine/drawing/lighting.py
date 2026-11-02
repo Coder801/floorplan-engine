@@ -74,6 +74,14 @@ def is_lighting(p: ElectricalPoint) -> bool:
     return p.type in LIGHT_TYPES or p.type in SWITCH_TYPES
 
 
+def lighting_model(elec: Electrical) -> Electrical:
+    """Электрика только света — светильники, выключатели и ленты, без щита: легенда листа
+    «Освещение» и его плашки в просмотре."""
+    return elec.model_copy(
+        update={"points": [p for p in elec.points if is_lighting(p)], "board": None}
+    )
+
+
 # Слова подписи выключателя → какой свет он включает (основы слов, ru и uk)
 KEYWORDS: tuple[tuple[tuple[str, ...], frozenset[PointType]], ...] = (
     (("бра",), frozenset({PointType.SCONCE})),

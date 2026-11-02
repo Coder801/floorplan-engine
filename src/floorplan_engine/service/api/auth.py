@@ -14,7 +14,16 @@ docs/database.md, «Вход»).
   SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, MAIL_FROM   письма с кодом входа (mail.py);
                                без SMTP на http (локально) код — в лог сервера, на https —
                                входа по коду нет
-  SHTROBA_SUPERUSERS           email владельцев платформы через запятую
+  TELEGRAM_BOT_TOKEN           бот для входа по номеру телефона (api/telegram.py); нет — кнопки
+                               «Войти через Telegram» нет. На https бот ходит вебхуком
+                               <SHTROBA_PUBLIC_URL>/api/auth/telegram/webhook, на http (локально)
+                               сервер сам опрашивает Bot API
+  Код доступа к проекту (db/access_codes.py) настройки не требует: его выдаёт команда
+  `floorplan-engine access code projects/<имя>`, вход — /api/auth/code.
+  SHTROBA_SUPERUSERS           email или телефоны («+380…») владельцев платформы через запятую
+  SHTROBA_OWNER                email или телефон владельца проектов из папок: при его входе и
+                               выборе «Фирма» папки без строки в базе уходят в его студию
+                               (access.adopt_folders)
   SHTROBA_DEV_LOGIN=1          «Зайти для разработки»: вход без Google и письма под первым
                                адресом SHTROBA_SUPERUSERS; только http (локально), не production
   SHTROBA_VISITOR=1            «Войти как гость» без входа — только для отладки: видит все
@@ -24,7 +33,10 @@ docs/database.md, «Вход»).
 
 from __future__ import annotations
 
+import logging
 import os
+import time
+import uuid
 from collections.abc import Awaitable, Callable, Collection, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
@@ -38,15 +50,23 @@ from sqlalchemy.orm import Session, sessionmaker
 from starlette.concurrency import run_in_threadpool
 from starlette.middleware.sessions import SessionMiddleware
 
+from floorplan_engine.service.api import telegram
 from floorplan_engine.service.api.mail import Mailer, MailError, send_code
 from floorplan_engine.service.db import access as acc
+from floorplan_engine.service.db import access_codes
 from floorplan_engine.service.db import email_codes as codes
-from floorplan_engine.service.db.models import AppUser
+from floorplan_engine.service.db import telegram_login as tg
+from floorplan_engine.service.db.models import AppUser, Project
 
+log = logging.getLogger(__name__)
 COOKIE = "shtroba_session"
+WEBHOOK_PATH = "/api/auth/telegram/webhook"
 GOOGLE_METADATA = "https://accounts.google.com/.well-known/openid-configuration"
 # Без входа: сам вход, приглашения (посмотреть, куда зовут), описание API
 OPEN_PREFIXES = ("/api/auth/", "/api/invites/")
+# Подбор кода доступа: не больше CODE_TRIES неверных кодов с одного адреса за CODE_WINDOW секунд
+CODE_TRIES = 20
+CODE_WINDOW = 600
 
 
 class ConfigError(RuntimeError):
@@ -62,6 +82,7 @@ class AuthConfig:
     superusers: tuple[str, ...] = ()
     visitor: bool = False
     dev_login: bool = False  # «Зайти для разработки» — под первым суперпользователем
+    owner: str | None = None  # SHTROBA_OWNER: чьи папки проектов без строки в базе
 
     @property
     def google(self) -> bool:
@@ -90,7 +111,7 @@ class AuthConfig:
                 "включайте его в отдельном окружении (staging)"
             )
         superusers = tuple(
-            e.strip().lower() for e in env.get("SHTROBA_SUPERUSERS", "").split(",") if e.strip()
+            identity(e) for e in env.get("SHTROBA_SUPERUSERS", "").split(",") if e.strip()
         )
         dev = env.get("SHTROBA_DEV_LOGIN", "").lower() in {"1", "on", "true"}
         if dev and (
@@ -113,7 +134,46 @@ class AuthConfig:
             superusers=superusers,
             visitor=visitor,
             dev_login=dev,
+            owner=identity(env["SHTROBA_OWNER"]) if env.get("SHTROBA_OWNER", "").strip() else None,
         )
+
+
+class CodeLimiter:
+    """Неверные коды доступа по адресам клиента, в памяти процесса: CODE_TRIES за CODE_WINDOW
+    секунд, дальше — 429. Код — 40 бит, перебор без этого и так не по силам, но лишние
+    попытки нам ни к чему."""
+
+    def __init__(self, tries: int = CODE_TRIES, window: float = CODE_WINDOW) -> None:
+        self.tries, self.window = tries, window
+        self._fails: dict[str, list[float]] = {}
+
+    def blocked(self, key: str, t: float | None = None) -> bool:
+        t = time.monotonic() if t is None else t
+        recent = [f for f in self._fails.get(key, ()) if f > t - self.window]
+        if recent:
+            self._fails[key] = recent
+        else:
+            self._fails.pop(key, None)
+        return len(recent) >= self.tries
+
+    def fail(self, key: str, t: float | None = None) -> None:
+        t = time.monotonic() if t is None else t
+        self._fails.setdefault(key, []).append(t)
+
+
+def client_ip(request: Request) -> str:
+    """Адрес клиента: за прокси (Railway, Caddy) — первый из X-Forwarded-For."""
+    forwarded = request.headers.get("x-forwarded-for", "")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "?"
+
+
+def identity(value: str) -> str:
+    """Кто это из окружения: телефон — как «+380…», email — в нижнем регистре (так они
+    записаны у пользователя)."""
+    value = value.strip()
+    return tg.normalize_phone(value) if tg.is_phone(value) else value.lower()
 
 
 def _user_json(db: Session, user: AppUser) -> dict[str, Any]:
@@ -123,6 +183,7 @@ def _user_json(db: Session, user: AppUser) -> dict[str, Any]:
         "id": str(user.id),
         "name": user.name,
         "email": user.email,
+        "phone": user.phone,
         "account_type": user.account_type,
         "superuser": user.is_superuser,
         "space": None
@@ -144,6 +205,10 @@ class Auth:
     sessions: sessionmaker[Session]
     oauth: OAuth = field(default_factory=OAuth)
     mailer: Mailer | None = None  # письма с кодом входа; None — входа по коду нет
+    telegram: telegram.TelegramApi | None = None  # бот для входа по телефону; None — нет кнопки
+    folders: Callable[[], Collection[str]] | None = None  # папки проектов (ставит create_viewer)
+    limiter: CodeLimiter = field(default_factory=CodeLimiter)  # подбор кода доступа
+    _bot_name: str | None = field(default=None, init=False, repr=False)
 
     def __post_init__(self) -> None:
         if self.config.google:
@@ -161,6 +226,45 @@ class Auth:
             yield s
             s.commit()
 
+    def _adopt(self, db: Session, user: AppUser) -> None:
+        """Владелец папок (SHTROBA_OWNER) вошёл или выбрал тип учётки — папки без строки в
+        базе в его студию. Не владелец, нет папок или тип ещё не выбран — ничего."""
+        owner = self.config.owner
+        if owner and self.folders is not None and owner in (user.email, user.phone):
+            acc.adopt_folders(db, owner, self.folders())
+
+    # --- Telegram ------------------------------------------------------------------------
+
+    def bot_name(self) -> str:
+        """Имя бота для ссылки t.me/<имя> — один раз у Bot API."""
+        assert self.telegram is not None
+        if self._bot_name is None:
+            self._bot_name = self.telegram.get_me()
+        return self._bot_name
+
+    def webhook_secret(self) -> str:
+        return acc.token_hash(f"telegram:{self.config.secret}")
+
+    def handle_update(self, update: dict[str, Any]) -> None:
+        """Обновление от бота (вебхук или опрос) — в правила входа, в своей транзакции."""
+        assert self.telegram is not None
+        with self.db() as db:
+            telegram.handle_update(db, self.telegram, update)
+
+    def start_telegram(self) -> None:
+        """При старте сервера: на https — вебхук, на http — опрос Bot API в фоне."""
+        if self.telegram is None:
+            return
+        if self.config.secure:
+            try:
+                self.telegram.set_webhook(
+                    self.config.public_url + WEBHOOK_PATH, self.webhook_secret()
+                )
+            except Exception as exc:  # сеть: вход без Telegram, остальное работает
+                log.warning("Telegram setWebhook: %s", exc)
+        else:
+            telegram.start_polling(self.telegram, self.handle_update)
+
     # --- кто пришёл ------------------------------------------------------------------
 
     def principal(self, db: Session, request: Request) -> acc.Principal | None:
@@ -169,9 +273,23 @@ class Auth:
             user = acc.session_user(db, token)
             if user is not None:
                 return acc.Principal(user)
+        code_id = request.session.get("code")
+        if code_id:
+            code = access_codes.active_code(db, uuid.UUID(code_id))
+            if code is not None:
+                return acc.Principal(None, code_project=code.project_id)
         if self.config.visitor and request.session.get("visitor"):
             return acc.VISITOR
         return None
+
+    def _code_json(self, db: Session, who: acc.Principal | None) -> dict[str, Any] | None:
+        """Вошедший по коду: проект кода (папка и название) для шапки и открытия проекта."""
+        if who is None or not who.by_code:
+            return None
+        project = db.get(Project, who.code_project)
+        if project is None:
+            return None
+        return {"project": project.slug, "name": project.name}
 
     def visible(self, request: Request, slugs: Collection[str]) -> set[str]:
         """Папки проектов, которые видит пришедший (для списка проектов)."""
@@ -199,6 +317,8 @@ class Auth:
             action: acc.Action = "view"
             if request.method == "POST" and parts[-1] == "wiring":
                 action = "edit_wiring"
+            elif request.method == "POST" and parts[-1] == "variant":
+                action = "choose_variant"
             if not acc.can(role, action):
                 return JSONResponse({"detail": "нет права на это действие"}, status_code=403)
             if role == "support" and project is not None:
@@ -228,6 +348,8 @@ class Auth:
             https_only=self.config.secure,
         )
         app.include_router(self.router())
+        if self.telegram is not None:
+            app.router.on_startup.append(self.start_telegram)
 
     def _set_cookie(self, response: Response, token: str) -> None:
         response.set_cookie(
@@ -253,8 +375,10 @@ class Auth:
                     "auth": True,
                     "user": _user_json(db, user) if user is not None else None,
                     "visitor": who is not None and who.visitor,
+                    "code": self._code_json(db, who),
                     "google": cfg.google,
                     "email": self.mailer is not None,
+                    "telegram": self.telegram is not None,
                     "dev": cfg.dev_login,
                     "visitor_allowed": cfg.visitor,
                 }
@@ -334,6 +458,71 @@ class Auth:
             self._set_cookie(response, token)
             return response
 
+        @r.post("/api/auth/telegram/start")
+        def telegram_start(lang: str = Body("ru", embed=True)) -> dict[str, Any]:
+            """Билет входа и ссылка на бота; страница открывает её и опрашивает status."""
+            if self.telegram is None:
+                raise HTTPException(503, "вход через Telegram не настроен (TELEGRAM_BOT_TOKEN)")
+            try:
+                bot = self.bot_name()
+            except Exception as exc:  # Bot API недоступен
+                raise HTTPException(503, "бот Telegram сейчас недоступен") from exc
+            with self.db() as db:
+                token = tg.issue_ticket(db, lang)
+            return {
+                "token": token,
+                "url": f"https://t.me/{bot}?start={token}",
+                "expires_in": tg.TICKET_MINUTES * 60,
+            }
+
+        @r.get("/api/auth/telegram/status")
+        def telegram_status(request: Request, token: str, invite: str | None = None) -> Response:
+            """Опрос билета: номер ещё не пришёл — pending; пришёл — вход, cookie сессии;
+            билет устарел — 410."""
+            if self.telegram is None:
+                raise HTTPException(503, "вход через Telegram не настроен (TELEGRAM_BOT_TOKEN)")
+            with self.db() as db:
+                try:
+                    ticket = tg.claim_ticket(db, token)
+                except acc.AccessError as exc:
+                    raise HTTPException(410, str(exc)) from exc
+                if ticket is None:
+                    return JSONResponse({"status": "pending"})
+                info = {"sub": ticket.telegram_user_id, "phone": ticket.phone, "name": ticket.name}
+            session_token, error = self._finish_login(
+                info, invite, request.headers.get("user-agent", ""), tg.PROVIDER
+            )
+            response = JSONResponse({"status": "done", "invite_error": error})
+            self._set_cookie(response, session_token)
+            return response
+
+        @r.post(WEBHOOK_PATH)
+        async def telegram_webhook(request: Request) -> dict[str, bool]:
+            """Обновления от Bot API (https); секрет — в заголовке, его ставит setWebhook."""
+            given = request.headers.get("x-telegram-bot-api-secret-token", "")
+            if self.telegram is None or given != self.webhook_secret():
+                raise HTTPException(403, "не бот")
+            update = await request.json()
+            await run_in_threadpool(self.handle_update, update)
+            return {"ok": True}
+
+        @r.post("/api/auth/code")
+        def code_login(request: Request, code: str = Body(..., embed=True)) -> dict[str, Any]:
+            """Вход по коду доступа к проекту: код действует — в подписанной cookie id кода,
+            дальше каждый запрос проверяет, что код не отозван. Учётки не появляется."""
+            ip = client_ip(request)
+            if self.limiter.blocked(ip):
+                raise HTTPException(429, "Слишком много неверных кодов — попробуйте позже")
+            with self.db() as db:
+                try:
+                    row = access_codes.use_code(db, code)
+                except acc.AccessError as exc:
+                    self.limiter.fail(ip)
+                    raise HTTPException(400, str(exc)) from exc
+                project = db.get(Project, row.project_id)
+                request.session["code"] = str(row.id)
+                return {"ok": True, "project": project.slug if project else None}
+
         @r.post("/api/auth/dev")
         def dev_login(request: Request) -> Response:
             """Вход для разработки: под первым суперпользователем, без Google и письма."""
@@ -377,6 +566,7 @@ class Auth:
                     acc.set_account_type(db, who.user, kind)
                 except acc.AccessError as exc:
                     raise HTTPException(409, str(exc)) from exc
+                self._adopt(db, who.user)
                 return _user_json(db, who.user)
 
         @r.post("/api/auth/firm")
@@ -396,6 +586,7 @@ class Auth:
                     acc.register_firm(db, who.user, name, business, city, phone)
                 except acc.AccessError as exc:
                     raise HTTPException(409, str(exc)) from exc
+                self._adopt(db, who.user)
                 return _user_json(db, who.user)
 
         @r.get("/api/invites/{token}")
@@ -438,10 +629,12 @@ class Auth:
                 bool(info.get("email_verified")),
                 str(info.get("name") or ""),
                 superusers=self.config.superusers,
+                phone=info.get("phone"),
             )
             if invite:
                 try:
                     acc.accept_invite(db, user, invite)
                 except acc.AccessError as exc:
                     error = str(exc)
+            self._adopt(db, user)
             return acc.create_session(db, user, user_agent), error
