@@ -14,7 +14,7 @@ import { FIT_SHRINK } from "@/shared/consts";
 import { palette, refreshPalette, screenColor } from "@/shared/palette";
 import { view } from "@/shared/store";
 import type { ElevWall, Elevation, PipeKind, XY } from "@/shared/types";
-import { clampStep, Glide, PinchSteps, RAIL_PX, WheelSteps, ZOOM_STEPS, zoomLabel, type Zoom } from "@/shared/zoom";
+import { clampStep, Glide, LAST_STEP, PinchSteps, RAIL_PX, WheelSteps, type Zoom, ZOOM_STEPS, zoomLabel } from "@/shared/zoom";
 import { apply, flatToIso, invert, isoBounds, isoScene, wallOutline, type Affine, type IsoScene, type Mat } from "./iso";
 import { badgePlaces, spread, type Rect } from "./layout";
 
@@ -203,7 +203,11 @@ export class ElevationView {
     });
     this.on("pointercancel", (ev) => { this.pinch.up(ev); end(); });
     this.on("pointerleave", () => { if (view.get().hover) view.set({ hover: null }); });
-    this.on("dblclick", () => this.fit());
+    // Двойной клик — на шаг крупнее в точку клика; на последнем шаге — вписать целиком
+    this.on("dblclick", (ev) => {
+      const r = this.canvas.getBoundingClientRect();
+      if (this.step >= LAST_STEP) this.fit(); else this.zoomStep(1, ev.clientX - r.left, ev.clientY - r.top);
+    });
   }
 
   private lit(): Set<string> {

@@ -19,7 +19,7 @@ import { FIT_SHRINK, REDUCED_MOTION, VIEW_PAD } from "@/shared/consts";
 import { palette, refreshPalette, screenColor } from "@/shared/palette";
 import { view } from "@/shared/store";
 import type { PanelData } from "@/shared/types";
-import { clampStep, Glide, PinchSteps, RAIL_PX, WheelSteps, ZOOM_STEPS, zoomLabel, type Zoom } from "@/shared/zoom";
+import { clampStep, Glide, LAST_STEP, PinchSteps, RAIL_PX, WheelSteps, type Zoom, ZOOM_STEPS, zoomLabel } from "@/shared/zoom";
 import { clip, plate, rendererFor, SCREW, shade, text, type Pen } from "./catalog";
 import { BACKUP, busSegments, CHAIN, groupPath, LABEL_STEP, LABELS, layout, MODULE, TERM, termX,
          type PanelLayout, type Placed, type Rect, type Row } from "./layout";
@@ -181,7 +181,11 @@ export class PanelView {
       view.set({ pinned: hit ? hit.dev.key : null });
     });
     this.on("pointercancel", (ev) => { this.pinch.up(ev); end(); });
-    this.on("dblclick", () => this.fit());
+    // Двойной клик — на шаг крупнее в точку клика; на последнем шаге — вписать целиком
+    this.on("dblclick", (ev) => {
+      const r = this.canvas.getBoundingClientRect();
+      if (this.step >= LAST_STEP) this.fit(); else this.zoomStep(1, ev.clientX - r.left, ev.clientY - r.top);
+    });
   }
 
   draw() {

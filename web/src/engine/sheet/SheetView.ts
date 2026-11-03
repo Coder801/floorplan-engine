@@ -13,7 +13,7 @@ import { expand, PageIndex } from "@/shared/page";
 import { palette, refreshPalette, screenColor } from "@/shared/palette";
 import { view } from "@/shared/store";
 import type { Page } from "@/shared/types";
-import { clampStep, Glide, PinchSteps, RAIL_PX, stepBelow, WheelSteps, ZOOM_STEPS, zoomLabel, type Zoom } from "@/shared/zoom";
+import { clampStep, Glide, LAST_STEP, PinchSteps, RAIL_PX, stepBelow, WheelSteps, ZOOM_STEPS, zoomLabel, type Zoom } from "@/shared/zoom";
 import { layerShown, sceneOf, type Drawing, type DrawingItem } from "./drawing";
 import { inBox, paint, type DrawItem } from "./paint";
 import { Pinch } from "./pinch";
@@ -131,6 +131,11 @@ export class SheetView {
 
   // Соседний шаг масштаба у точки (x, y) экрана; за крайние — нет
   zoomStep(dir: number, x = (this.w - RAIL_PX) / 2, y = this.h / 2) { this.zoomTo(this.step + dir, x, y); }
+
+  // Двойной клик: на шаг крупнее к точке (x, y) экрана; крупнее некуда — вписать целиком
+  zoomIn({ x, y }: { x: number; y: number }) {
+    if (this.step >= LAST_STEP) this.fit(); else this.zoomStep(1, x, y);
+  }
 
   // Шаг масштаба — плавно, точка (x, y) экрана стоит на месте
   zoomTo(step: number, x = (this.w - RAIL_PX) / 2, y = this.h / 2) {
@@ -351,12 +356,8 @@ export class SheetView {
     });
     this.on("pointercancel", (ev) => { this.pinch.up(ev); this.stop(); });
     this.on("pointerleave", () => this.setHover(null));
-    // Двойной клик по объекту — навести на его линию; мимо — весь чертёж
-    this.on("dblclick", (ev) => {
-      const o = this.objectAt(ev);
-      if (o) this.select(o, true);
-      else this.fit();
-    });
+    // Двойной клик — на шаг крупнее в точку клика; на последнем шаге — весь чертёж
+    this.on("dblclick", (ev) => this.zoomIn(this.toSheet(ev)));
   }
 
   private stop() {
