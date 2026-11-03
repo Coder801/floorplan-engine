@@ -4,12 +4,13 @@
 // страница кнопкой «Пересчитать» (variant.yaml и пересборка, api.saveVariant). Строит все
 // варианты код: здесь только сводка.
 // Нельзя выбирать (клиент студии) — то же самое без кнопок, с пояснением.
+// Трасса одна в проекте (electrical.yaml routes: [ceiling]) — вместо переключателя текст.
 
 import { useTranslation } from "react-i18next";
 import { cx } from "@/shared/cx";
 import ui from "@/shared/styles/ui.module.scss";
 import type { VariantMode, VariantRoute, Variants, VariantSummary } from "@/shared/types";
-import { MODES, ROUTES, findVariant, parseKey } from "./variants";
+import { MODES, availableRoutes, findVariant, parseKey } from "./variants";
 import css from "./VariantPicker.module.scss";
 
 // Чем режимы отличаются в расчёте (docs/wiring-variants.md): трассы, автоматы, щит, гофра
@@ -34,6 +35,7 @@ export function VariantPicker({ variants, canChoose, busy, pending, onPick }: Pr
     onPick(mode === active.mode && route === active.route ? null : { mode, route });
   };
   const current = findVariant(variants, active.mode, active.route);
+  const routes = availableRoutes(variants);
   return (
     <section className={css.picker} aria-busy={busy}>
       <h3>{t("variant.title")}</h3>
@@ -69,8 +71,11 @@ export function VariantPicker({ variants, canChoose, busy, pending, onPick }: Pr
       </details>
       <div className={css.row}>
         <span className="small muted">{t("variant.route")}</span>
+        {routes.length === 1 ? (
+          <span>{t(`variant.routes.${routes[0]}`)} <span className="small muted">· {t("variant.routeOnly")}</span></span>
+        ) : (
         <div className={ui.segmented} role="radiogroup" aria-label={t("variant.route")}>
-          {ROUTES.map((route) => (
+          {routes.map((route) => (
             <button key={route} role="radio" aria-checked={route === chosen.route}
                     className={cx(route === chosen.route && ui.on, pending && route === active.route && css.was)}
                     disabled={!canChoose || busy}
@@ -81,6 +86,7 @@ export function VariantPicker({ variants, canChoose, busy, pending, onPick }: Pr
             </button>
           ))}
         </div>
+        )}
       </div>
       <div className={css.row}>
         <span className="small muted">{t("variant.distribution")}</span>

@@ -15,7 +15,11 @@ from typing import Any
 
 from floorplan_engine.electrical.lines import split_by_lines
 from floorplan_engine.electrical.panel_questions import AUTO_PREFIX
-from floorplan_engine.electrical.variants import apply_variant, default_variant
+from floorplan_engine.electrical.variants import (
+    apply_variant,
+    default_variant,
+    project_routes,
+)
 from floorplan_engine.model.geometry import (
     Contour,
 )
@@ -214,6 +218,17 @@ def _validate_electrical(
         return
     report.source_electrical = elec
     report.default_variant = default_variant(elec)
+    if chosen is not None and chosen.route not in project_routes(elec):
+        report.issues.append(
+            Issue(
+                VARIANT_FILE,
+                "route",
+                f"трассы «{chosen.route}» в проекте нет (electrical.yaml routes) — "
+                "вариант «как в проекте»",
+                Severity.WARNING,
+            )
+        )
+        chosen = None
     report.variant = chosen or report.default_variant
     elec = apply_variant(elec, report.variant)
     report.electrical = elec

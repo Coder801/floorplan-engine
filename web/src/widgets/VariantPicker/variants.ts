@@ -15,3 +15,10 @@ export function parseKey(key: string): { mode: VariantMode; route: VariantRoute 
 
 export const findVariant = (v: Variants, mode: VariantMode, route: VariantRoute): VariantSummary | undefined =>
   v.items.find((s) => s.mode === mode && s.route === route && s.distribution === "boxes");
+
+// Трассы, которые есть в проекте: сводка строится только по ним (electrical.yaml routes).
+// Пустая сводка — обе, чтобы переключатель не пропал
+export function availableRoutes(v: Variants): VariantRoute[] {
+  const present = ROUTES.filter((route) => v.items.some((s) => s.route === route));
+  return present.length ? present : ROUTES;
+}

@@ -1,4 +1,4 @@
-# Штроба — знаем, что в стене (пакет `floorplan_engine`, CLI `floorplan-engine`)
+# Shtroba — знаем, что в стене (пакет `floorplan_engine`, CLI `floorplan-engine`)
 
 Инструмент делает DXF-чертежи (план помещения, электрика) из YAML-описания.
 Распознавание фото и текста делаешь ты: читаешь фото или описание и пишешь `room.yaml` /
@@ -36,6 +36,7 @@ uv run floorplan-engine facts-bench projects/<имя>/source/x.pdf # точно�
 uv run floorplan-engine preview projects/<имя>               # PNG листов из DXF (отладка ezdxf)
 docker compose up -d db && uv run alembic upgrade head  # база сервиса (docs/database.md), только Postgres
 TEST_REQUIRE_DB=1 uv run pytest && uv run mypy && uv run ruff check . && uv run ruff format --check . && uv run lint-imports
+uv run cz bump --dry-run                                # релиз: версия по коммитам, CHANGELOG, тег (docs/development.md)
 ```
 
 Slash-команды: `/plan`, `/electrical`, `/check`, `/review`, `/commit` (в `.claude/commands/`).
@@ -265,6 +266,9 @@ group, at }`), по вариантам проводки (`variants.<режим-�
   светильнику — по стене вверх и по потолку (в объёме комнаты кабеля нет).
   `route` верхнего уровня electrical.yaml — то же для групп без своего кабеля (вся квартира по
   полу); тоже только из источника. Вариант проводки из просмотра ставит трассу сам.
+  `routes: [ceiling]` — трассы, допустимые в проекте: по полу проводки не будет, вариантов по
+  полу код не строит и в просмотре их нет. Только со слов заказчика или из источника; нет —
+  обе трассы.
 - Отдельные линии без коробок (`direct`) код определяет сам: сечение от 4 мм², группа только
   из `outlet`, слаботочка. `direct: true` пиши явно для остального (регуляторы тёплого пола).
 - `wet: true` у помещения в room.yaml — санузел, ванная, прачечная: коробки там IP44.

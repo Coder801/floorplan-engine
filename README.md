@@ -1,4 +1,4 @@
-# Штроба (floorplan-engine)
+# Shtroba (floorplan-engine)
 
 Чертежи DXF для AutoCAD и BricsCAD — план помещения и электрика — по описанию в YAML.
 YAML по фото с размерами или по текстовому описанию составляет Claude Code в этом
@@ -61,6 +61,7 @@ uv run floorplan-engine print projects/kv42 --paper A3                  # PDF-а
 uv run floorplan-engine analyze projects/kv42                          # LLM-анализ source/ → YAML
 uv run floorplan-engine pdf-facts projects/kv42/source/plan.pdf        # выжимка из PDF без LLM
 uv run floorplan-engine symbols symbols/                               # блоки УГО в отдельные DXF
+uv run cz bump --dry-run                                               # релиз: версия по коммитам, CHANGELOG, тег (docs/development.md)
 ```
 
 `build` сначала проверяет проект. При ошибках не создаётся ни одного файла, код выхода 1.
@@ -376,6 +377,7 @@ cables:
 | `cables[].id` | Обязателен, уникален в проекте: `cable_1` |
 | `cables[].from`, `to` | `board` или `id` точки |
 | `cables[].route` | `wall` / `floor` / `ceiling` — где идёт кабель; рисуется всегда под 90° |
+| `routes` | Трассы, допустимые в проекте: `[ceiling]` — по полу проводки не будет, вариантов по полу нет; нет поля — обе |
 | `cables[].cable` | Марка или сечение для подписи, например `3x2.5` |
 
 ## Формат plumbing.yaml

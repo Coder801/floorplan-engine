@@ -1,7 +1,8 @@
 """Варианты проводки (docs/wiring-variants.md): режим (эконом, стандарт, премиум), трасса
 (потолок, пол) и разводка (через коробки; шлейф через подрозетники — позже). Точки — из
-проекта, вариант меняет только то, как тянуть. Строятся все варианты: выбранный — листами,
-остальные — сводкой для сравнения (variant_summary), без чертежей.
+проекта, вариант меняет только то, как тянуть. Строятся все варианты проекта
+(project_variants: без трасс, которых в проекте не будет — electrical.yaml routes):
+выбранный — листами, остальные — сводкой для сравнения (variant_summary), без чертежей.
 
 Вариант «как в проекте» (default_variant) — режим и трассы из electrical.yaml как есть;
 у остальных трасса одна на все кабели.
@@ -38,6 +39,17 @@ def all_variants() -> list[Variant]:
         Variant(mode=m, route=r, distribution=d)
         for m, r, d in product(MODES, ROUTES, DISTRIBUTIONS)
     ]
+
+
+def project_routes(elec: Electrical) -> tuple[WireRoute, ...]:
+    """Трассы, допустимые в проекте: electrical.yaml routes, нет — все."""
+    return ROUTES if elec.routes is None else tuple(r for r in ROUTES if r in elec.routes)
+
+
+def project_variants(elec: Electrical) -> list[Variant]:
+    """Варианты проекта: все, кроме трасс, которых в проекте не будет (routes)."""
+    routes = project_routes(elec)
+    return [v for v in all_variants() if v.route in routes]
 
 
 def default_variant(elec: Electrical) -> Variant:

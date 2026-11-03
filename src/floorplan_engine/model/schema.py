@@ -396,6 +396,12 @@ class Electrical(StrictModel):
         description="Трасса групп без своего кабеля в cables: floor — по полу в стяжке; "
         "нет — по потолку. Ставит вариант проводки (variant.yaml) или источник",
     )
+    routes: list[Literal["ceiling", "floor"]] | None = Field(
+        default=None,
+        min_length=1,
+        description="Трассы, допустимые в проекте (варианты проводки): [ceiling] — по полу "
+        "проводки не будет. Нет — обе; только со слов заказчика или из источника",
+    )
     groups: dict[str, Group] = Field(
         default_factory=dict, description="Группы щита по имени (QF4): назначение, автомат"
     )
@@ -404,6 +410,18 @@ class Electrical(StrictModel):
     cables: list[Cable] = Field(default_factory=list)
     led_strips: list[LedStrip] = Field(default_factory=list)
     panel: PanelSetup = Field(default_factory=PanelSetup, description="Щит в лицо: схема, ввод")
+
+    @model_validator(mode="after")
+    def _routes(self) -> Electrical:
+        if self.routes is None:
+            return self
+        if len(set(self.routes)) != len(self.routes):
+            raise ValueError("routes: трассы не повторяются")
+        if self.route is not None and self.route not in self.routes:
+            raise ValueError(f"route: {self.route} — такой трассы нет в routes {list(self.routes)}")
+        if "floor" not in self.routes and any(c.route == "floor" for c in self.cables):
+            raise ValueError(f"cables: трасса floor не входит в routes {list(self.routes)}")
+        return self
 
 
 # --- Ручные правки проводки (wiring.yaml) ------------------------------------

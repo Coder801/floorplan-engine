@@ -9,13 +9,16 @@ import zipfile
 from pathlib import Path
 from typing import Any
 
+import pytest
 import yaml
+from pydantic import ValidationError
 
 from floorplan_engine.electrical.pricing import MockPriceService, Prices
 from floorplan_engine.electrical.variants import (
     all_variants,
     apply_variant,
     default_variant,
+    project_variants,
     variant_summary,
 )
 from floorplan_engine.model.schema import Electrical, Variant, WireEdit, WiringEdits, WiringFile
@@ -25,6 +28,7 @@ from floorplan_engine.pipeline import (
     save_variant,
     save_wiring_edits,
 )
+from floorplan_engine.validation.issues import Severity
 from floorplan_engine.validation.plan import validate_plan
 from tests.conftest import make_plan
 from tests.electrical.test_estimate import DOOR, ELEC, RECT
@@ -40,6 +44,25 @@ def test_all_variants_and_keys() -> None:
     keys = [v.key for v in all_variants()]
     assert len(keys) == len(set(keys)) == 6  # 3 режима × 2 трассы × 1 разводка
     assert "economy-floor-boxes" in keys and "proper-ceiling-boxes" in keys
+
+
+def test_project_routes_limit_variants() -> None:
+    assert project_variants(_elec()) == all_variants()
+    ceiling_only = project_variants(_elec(routes=["ceiling"]))
+    assert [v.key for v in ceiling_only] == [
+        "economy-ceiling-boxes", "standard-ceiling-boxes", "proper-ceiling-boxes"
+    ]  # fmt: skip
+
+
+def test_routes_must_agree_with_route_and_cables() -> None:
+    with pytest.raises(ValidationError, match="route"):
+        _elec(routes=["ceiling"], route="floor")
+    cables = [{"id": "c1", "from": "board", "to": ["s1"], "cable": "3x2.5", "route": "floor"}]
+    with pytest.raises(ValidationError, match="cables"):
+        _elec(routes=["ceiling"], cables=cables)
+    with pytest.raises(ValidationError, match="повторяются"):
+        _elec(routes=["ceiling", "ceiling"])
+    assert _elec(routes=["floor"], route="floor").routes == ["floor"]
 
 
 def test_default_variant_keeps_project_as_is() -> None:
@@ -166,3 +189,23 @@ def test_build_writes_variant_summaries_to_manifest(tmp_path: Path) -> None:
     assert block["default"] == "standard-ceiling-boxes"
     assert {i["key"] for i in block["items"]} == {v.key for v in all_variants()}
     assert all(i["total"] > 0 and i["devices"] > 0 for i in block["items"])
+
+
+def test_project_without_floor_builds_only_ceiling_variants(tmp_path: Path) -> None:
+    """routes: [ceiling] — вариант по полу из variant.yaml не применяется (предупреждение),
+    в манифесте только варианты по потолку."""
+    project = _project(tmp_path)
+    elec_path = project / "electrical.yaml"
+    data = yaml.safe_load(elec_path.read_text(encoding="utf-8"))
+    elec_path.write_text(yaml.safe_dump({**data, "routes": ["ceiling"]}, allow_unicode=True))
+    save_variant(project, {"mode": "economy", "route": "floor"})
+    report = assess_project(project).report
+    assert report.variant is not None and report.variant.key == "standard-ceiling-boxes"
+    warning = [i for i in report.issues if i.severity is Severity.WARNING and i.path == "route"]
+    assert warning and "floor" in warning[0].message
+    result = build_project(project)
+    assert result.artifact is not None
+    with zipfile.ZipFile(result.artifact) as zf:
+        block = json.loads(zf.read("manifest.json"))["variants"]
+    assert block["active"] == "standard-ceiling-boxes"
+    assert {i["route"] for i in block["items"]} == {"ceiling"} and len(block["items"]) == 3

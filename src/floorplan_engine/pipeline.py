@@ -37,7 +37,7 @@ from floorplan_engine.electrical.estimate import text as estimate_text
 from floorplan_engine.electrical.groups import group_colors, group_key
 from floorplan_engine.electrical.panel import BoardPanel, build_panel, write_loads
 from floorplan_engine.electrical.pricing import MockPriceService, Prices, price_notes
-from floorplan_engine.electrical.variants import all_variants, variant_summary
+from floorplan_engine.electrical.variants import project_variants, variant_summary
 from floorplan_engine.electrical.wiring import END_ALLOWANCE, RESERVE, box_wiring, estimate_wiring
 from floorplan_engine.electrical.wiring_model import CHASE_NARROW, Wiring
 from floorplan_engine.epd.artifact import export_artifact
@@ -398,7 +398,7 @@ def variant_block(report: Report, prices: Prices) -> dict[str, Any] | None:
         return None
     wiring_file = report.wiring_file or WiringFile()
     items = []
-    for variant in all_variants():
+    for variant in project_variants(source):  # без трасс, которых в проекте нет (routes)
         edits = wiring_file.edits_for(variant.key, default.key)
         summary = variant_summary(report.plan, report.contours, source, variant, edits, prices)
         if summary is not None:
