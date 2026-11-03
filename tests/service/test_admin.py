@@ -103,9 +103,9 @@ def test_project_access_from_admin(auth: Auth, tmp_path: Path) -> None:
     code = boss.post(f"{base}/codes", json={"label": "Иван"}).json()["code"]
     assert len(code) == 9 and code[4] == "-"
     detail = boss.get(base).json()
-    assert detail["codes"][0]["label"] == "Иван" and detail["codes"][0]["active"] is True
+    assert detail["codes"][0]["label"] == "Иван" and detail["codes"][0]["state"] == "active"
     revoked = boss.delete(f"{base}/codes/{detail['codes'][0]['id']}").json()
-    assert revoked["codes"][0]["active"] is False
+    assert revoked["codes"][0]["state"] == "revoked"
 
     boss.post(f"{base}/invites", json={"role": "installer", "email": "i@x.io"})
     invite = boss.get(base).json()["invites"][0]
@@ -114,18 +114,19 @@ def test_project_access_from_admin(auth: Auth, tmp_path: Path) -> None:
     assert boss.get(base).json()["invites"][0]["state"] == "revoked"
 
     granted = boss.post(f"{base}/support", json={"user": dev_id, "reason": "щит"}).json()
-    assert granted["support"][0]["active"] is True
+    assert granted["support"][0]["state"] == "active"
     with auth.db() as db:
         project = acc.project_by_slug(db, "kv1")
         d = acc.session_user(db, dev)
         assert acc.project_role(db, acc.Principal(d), project) == "support"
-    assert boss.delete(f"{base}/support/{dev_id}").json()["support"][0]["active"] is False
+    assert boss.delete(f"{base}/support/{dev_id}").json()["support"][0]["state"] == "revoked"
     assert boss.delete(f"{base}/members/{flat_id}").json()["members"] == []
 
-    actions = [e["action"] for e in boss.get(f"/api/admin/events?project={p1}").json()]
-    assert {"admin_member_add", "code_issue", "admin_invite_revoke", "support_revoke"} <= set(
-        actions
-    )
+    log = boss.get(f"/api/admin/events?project={p1}").json()
+    actions = {e["action"] for e in log}
+    assert {"admin_member_add", "code_issue", "admin_invite_revoke", "support_revoke"} <= actions
+    added = next(e for e in log if e["action"] == "admin_member_add")
+    assert added["subject"]["name"] == "flat" and added["user"]["email"] == "boss@example.com"
 
 
 def test_block_ends_sessions(auth: Auth, tmp_path: Path) -> None:

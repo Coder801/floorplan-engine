@@ -21,8 +21,8 @@ from sqlalchemy.orm import Session
 from floorplan_engine.service.db.access import (
     AccessError,
     Principal,
-    _aware,
     audit,
+    aware,
     can,
     now,
     project_role,
@@ -143,7 +143,7 @@ def active_code(session: Session, code_id: uuid.UUID) -> AccessCode | None:
 
 
 def _alive(row: AccessCode) -> bool:
-    return row.revoked_at is None and _aware(row.expires_at) > now()
+    return row.revoked_at is None and aware(row.expires_at) > now()
 
 
 def list_codes(session: Session, project: Project) -> list[AccessCode]:

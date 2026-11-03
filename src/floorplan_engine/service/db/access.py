@@ -68,7 +68,7 @@ def now() -> datetime:
     return datetime.now(UTC)
 
 
-def _aware(t: datetime) -> datetime:
+def aware(t: datetime) -> datetime:
     """SQLite returns time without a zone: treat it as UTC."""
     return t if t.tzinfo is not None else t.replace(tzinfo=UTC)
 
@@ -160,7 +160,7 @@ def _active_grant(
         )
     ).all()
     t = now()
-    return next((g for g in grants if _aware(g.expires_at) > t), None)
+    return next((g for g in grants if aware(g.expires_at) > t), None)
 
 
 def visible_projects(session: Session, who: Principal) -> Select[Project]:
@@ -488,7 +488,7 @@ def create_session(session: Session, user: AppUser, user_agent: str = "") -> str
 def session_user(session: Session, token: str) -> AppUser | None:
     """User by session token; None for an expired session or a blocked user."""
     row = session.scalar(select(UserSession).where(UserSession.token_hash == token_hash(token)))
-    if row is None or _aware(row.expires_at) <= now():
+    if row is None or aware(row.expires_at) <= now():
         return None
     user = session.get(AppUser, row.user_id)
     if user is None or not user.is_active:
@@ -570,7 +570,7 @@ def find_invite(session: Session, token: str) -> Invite:
         raise AccessError("приглашение не найдено или отозвано")
     if invite.accepted_at is not None:
         raise AccessError("приглашение уже принято")
-    if _aware(invite.expires_at) <= now():
+    if aware(invite.expires_at) <= now():
         raise AccessError("срок приглашения истёк — попросите новое")
     return invite
 

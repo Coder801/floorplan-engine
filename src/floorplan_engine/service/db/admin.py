@@ -20,8 +20,8 @@ from floorplan_engine.service.db.access import (
     PROJECT_ROLES,
     STUDIO_ROLES,
     AccessError,
-    _aware,
     audit,
+    aware,
     client_projects,
     end_all_sessions,
     now,
@@ -46,11 +46,18 @@ EVENTS_LIMIT = 200
 
 
 def _time(t: datetime | None) -> str | None:
-    return _aware(t).isoformat() if t is not None else None
+    return aware(t).isoformat() if t is not None else None
 
 
-def _alive(expires_at: datetime, revoked_at: datetime | None) -> bool:
-    return revoked_at is None and _aware(expires_at) > now()
+def _state(
+    expires_at: datetime, revoked_at: datetime | None, accepted_at: datetime | None = None
+) -> str:
+    """State of an invite, a code or a support grant: accepted | revoked | active | expired."""
+    if accepted_at is not None:
+        return "accepted"
+    if revoked_at is not None:
+        return "revoked"
+    return "active" if aware(expires_at) > now() else "expired"
 
 
 def get(session: Session, model: type[Any], id_: str) -> Any:
@@ -228,21 +235,12 @@ def projects(session: Session) -> list[dict[str, Any]]:
 
 
 def _invite(session: Session, i: Invite) -> dict[str, Any]:
-    state = (
-        "accepted"
-        if i.accepted_at is not None
-        else "revoked"
-        if i.revoked_at is not None
-        else "active"
-        if _aware(i.expires_at) > now()
-        else "expired"
-    )
     accepted = session.get(AppUser, i.accepted_by) if i.accepted_by else None
     return {
         "id": str(i.id),
         "role": i.role,
         "email": i.email,
-        "state": state,
+        "state": _state(i.expires_at, i.revoked_at, i.accepted_at),
         "created": _time(i.created_at),
         "expires": _time(i.expires_at),
         "accepted_by": user_brief(accepted) if accepted is not None else None,
@@ -279,7 +277,7 @@ def project_detail(session: Session, project: Project) -> dict[str, Any]:
             {
                 "id": str(c.id),
                 "label": c.label,
-                "active": _alive(c.expires_at, c.revoked_at),
+                "state": _state(c.expires_at, c.revoked_at),
                 "uses": c.uses,
                 "created": _time(c.created_at),
                 "expires": _time(c.expires_at),
@@ -292,7 +290,7 @@ def project_detail(session: Session, project: Project) -> dict[str, Any]:
             {
                 "user": user_brief(u),
                 "reason": g.reason,
-                "active": _alive(g.expires_at, g.revoked_at),
+                "state": _state(g.expires_at, g.revoked_at),
                 "expires": _time(g.expires_at),
             }
             for g, u in grants
@@ -306,19 +304,22 @@ def events(
     user: AppUser | None = None,
     limit: int = EVENTS_LIMIT,
 ) -> list[dict[str, Any]]:
-    """Audit log, newest first: all, of a project or of a user (as the author)."""
+    """Audit log, newest first: all, of a project or of a user (as the author). People named in
+    the payload by id ("user", "to") come back as `subject` with a name, studios as `studio`."""
     query = select(AuditEvent).order_by(AuditEvent.created_at.desc()).limit(min(limit, 1000))
     if project is not None:
         query = query.where(AuditEvent.project_id == project.id)
     if user is not None:
         query = query.where(AuditEvent.user_id == user.id)
     rows = list(session.scalars(query))
-    people = {
-        u.id: u
-        for u in session.scalars(
-            select(AppUser).where(AppUser.id.in_({r.user_id for r in rows if r.user_id}))
-        )
+    ids = {r.user_id for r in rows if r.user_id} | {
+        i for r in rows if (i := _payload_id(r.payload, "user", "to")) is not None
     }
+    people = {u.id: u for u in session.scalars(select(AppUser).where(AppUser.id.in_(ids)))}
+    studio_ids = {i for r in rows if (i := _payload_id(r.payload, "studio")) is not None}
+    names = dict(
+        session.execute(select(Studio.id, Studio.name).where(Studio.id.in_(studio_ids))).all()
+    )
     slugs = dict(
         session.execute(
             select(Project.id, Project.slug).where(
@@ -333,10 +334,28 @@ def events(
             "at": _time(r.created_at),
             "user": user_brief(people[r.user_id]) if r.user_id in people else None,
             "project": slugs.get(r.project_id) if r.project_id else None,
+            "subject": user_brief(people[i])
+            if (i := _payload_id(r.payload, "user", "to")) in people
+            else None,
+            "studio": {"id": str(i), "name": names[i]}
+            if (i := _payload_id(r.payload, "studio")) in names
+            else None,
             "payload": r.payload,
         }
         for r in rows
     ]
+
+
+def _payload_id(payload: dict[str, Any], *keys: str) -> uuid.UUID | None:
+    """The first id under keys in an event payload; None if there is none or it is not an id."""
+    for key in keys:
+        value = payload.get(key)
+        if isinstance(value, str):
+            try:
+                return uuid.UUID(value)
+            except ValueError:
+                continue
+    return None
 
 
 # --- Changes ---------------------------------------------------------------------------

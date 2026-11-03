@@ -18,7 +18,7 @@ from datetime import datetime, timedelta
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from floorplan_engine.service.db.access import AccessError, _aware, new_token, now, token_hash
+from floorplan_engine.service.db.access import AccessError, aware, new_token, now, token_hash
 from floorplan_engine.service.db.models import LoginTicket
 
 PROVIDER = "telegram"
@@ -57,7 +57,7 @@ def issue_ticket(session: Session, lang: str = "ru", t: datetime | None = None) 
 
 
 def _alive(ticket: LoginTicket | None, t: datetime) -> LoginTicket | None:
-    if ticket is None or ticket.used_at is not None or _aware(ticket.expires_at) <= t:
+    if ticket is None or ticket.used_at is not None or aware(ticket.expires_at) <= t:
         return None
     return ticket
 

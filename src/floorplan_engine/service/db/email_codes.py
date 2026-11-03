@@ -19,7 +19,7 @@ from datetime import datetime, timedelta
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from floorplan_engine.service.db.access import AccessError, _aware, now, token_hash
+from floorplan_engine.service.db.access import AccessError, aware, now, token_hash
 from floorplan_engine.service.db.models import EmailCode
 
 PROVIDER = "email"
@@ -65,11 +65,11 @@ def issue_code(session: Session, email: str, t: datetime | None = None) -> str:
         )
     )
     if recent:
-        wait = CODE_RESEND_SECONDS - (t - _aware(recent[0].created_at)).total_seconds()
+        wait = CODE_RESEND_SECONDS - (t - aware(recent[0].created_at)).total_seconds()
         if wait > 0:
             raise TooSoonError("Код уже отправлен — новый можно запросить позже", int(wait) + 1)
     if len(recent) >= CODE_PER_HOUR:
-        oldest = min(_aware(r.created_at) for r in recent)
+        oldest = min(aware(r.created_at) for r in recent)
         wait = 3600 - (t - oldest).total_seconds()
         raise TooSoonError("Слишком много кодов на этот адрес — попробуйте позже", int(wait) + 1)
     for row in session.scalars(
@@ -102,7 +102,7 @@ def check_code(session: Session, email: str, code: str, t: datetime | None = Non
         .order_by(EmailCode.created_at.desc())
         .limit(1)
     )
-    if row is None or _aware(row.expires_at) <= t or row.attempts >= CODE_ATTEMPTS:
+    if row is None or aware(row.expires_at) <= t or row.attempts >= CODE_ATTEMPTS:
         raise AccessError("Код устарел — запросите новый")
     if not hmac.compare_digest(row.code_hash, _hash(email, code)):
         row.attempts += 1
