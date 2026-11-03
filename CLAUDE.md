@@ -503,7 +503,10 @@ group, at }`), по вариантам проводки (`variants.<режим-�
     `rejected`). Разбор не знает формата файла: новое распознавание пиши в `analysis.py`,
     новый формат — новым адаптером.
     `objects.py` — файлы по ключу из базы (`ObjectStore`; пока папка на volume —
-    `LocalObjectStore`, R2/S3 потом; ключи — `source_key`, `build_key`);
+    `LocalObjectStore`, R2/S3 потом; ключи — `source_key`, `build_key`); `project_store.py` —
+    проект из базы: последняя версия модели, прайс и профиль студии — во временную папку
+    (`workdir`), сборка ядром и `out/` — в хранилище (`build`: строки `build`, `build_file`; одна
+    сборка проекта за раз — блокировка Postgres);
     `db/` — база сервиса (SQLAlchemy 2, Postgres; миграции — `migrations/`, Alembic): таблицы,
     подключение, репозитории; к `Workflow` пока не подключена, план переезда — `docs/database.md`.
     `db/access.py` — доступ: роль в проекте, права, OAuth-пользователи, тип учётки (client —
