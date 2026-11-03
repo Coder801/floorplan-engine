@@ -16,21 +16,22 @@ import type { StageHandle } from "@/widgets/SheetStage";
 interface Props {
   page: Page;
   panel: PanelData;
+  language?: string;  // язык проекта (манифест) — для подписей, которых нет в старом .epd
 }
 
 
-export const PanelStage = forwardRef<StageHandle, Props>(function PanelStage({ page, panel }, ref) {
+export const PanelStage = forwardRef<StageHandle, Props>(function PanelStage({ page, panel, language }, ref) {
   const { t } = useTranslation();
   const canvas = useRef<HTMLCanvasElement>(null);
   const pv = useRef<PanelView | null>(null);
   const [zoom, setZoom] = useState<Zoom>({ step: 0, label: "100%", pxPerMm: null });
 
   useEffect(() => {
-    const v = new PanelView(canvas.current!, canvas.current!.parentElement!, panel);
+    const v = new PanelView(canvas.current!, canvas.current!.parentElement!, panel, language);
     v.onZoom = (z) => setZoom((p) => (p.step === z.step && p.pxPerMm === z.pxPerMm ? p : z));
     pv.current = v;
     return () => { v.destroy(); pv.current = null; };
-  }, [panel]);
+  }, [panel, language]);
 
   useImperativeHandle(ref, () => ({
     pending: () => 0,

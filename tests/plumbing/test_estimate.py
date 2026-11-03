@@ -5,6 +5,7 @@ from collections.abc import Sequence
 from floorplan_engine.electrical.pricing import MockPriceService, Prices
 from floorplan_engine.model.geometry import Vec
 from floorplan_engine.model.plumbing import Plumbing
+from floorplan_engine.model.texts import Language
 from floorplan_engine.plumbing.estimate import (
     LINES,
     MOCK_PRICES,
@@ -59,8 +60,8 @@ def test_no_prices_is_volumes() -> None:
 
 
 def test_units_follow_language() -> None:
-    def unit(language: str) -> str:
-        est = build_estimate(_net(), PLUMBING, Prices(), language)  # type: ignore[arg-type]
+    def unit(language: Language) -> str:
+        est = build_estimate(_net(), PLUMBING, Prices(), language)
         return next(ln.unit for ln in est.lines if ln.key == "water.collector")
 
     assert unit("ru") == "вых." and unit("uk") == "вих."

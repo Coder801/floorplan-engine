@@ -72,7 +72,7 @@ export class PanelView {
   private readonly pinch = new Pinch();
 
   constructor(private readonly canvas: HTMLCanvasElement, private readonly wrap: HTMLElement,
-              readonly data: PanelData) {
+              readonly data: PanelData, private readonly language?: string) {
     this.ctx = canvas.getContext("2d")!;
     this.font = getComputedStyle(document.body).fontFamily || "sans-serif";
     this.lay = layout(data);
@@ -641,7 +641,8 @@ export class PanelView {
     ctx.beginPath(); ctx.roundRect(dx, dy, dw, dh, 2); ctx.fill();
     text(pen, `${b.voltage} V  ▮▮▮▮▯`, dx + dw / 2, dy + dh / 2, 7, "#173b33");
     const v = `${b.voltage} В${b.voltage_assumed ? "*" : ""}`;
-    const kwh = data.texts.kwh ?? "кВт·год";  // старый .epd — без единицы на языке проекта
+    // Старый .epd — без единицы в texts: по языку проекта из манифеста
+    const kwh = data.texts.kwh ?? (this.language === "uk" ? "кВт·год" : "кВт·ч");
     const cap = b.capacity ? ` · ${String(b.capacity).replace(".", ",")} ${kwh}` : "";
     text(pen, `${data.texts.battery} ${v}${cap}`, r.x + r.w / 2, r.y + r.h * 0.42 + 2, 6.5, "#e8e8e6");
     // Рёбра на нижней части

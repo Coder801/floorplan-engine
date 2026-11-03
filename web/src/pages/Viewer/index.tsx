@@ -370,7 +370,7 @@ export function Viewer({ account = null }: { account?: Account | null }) {
     main = items.length ? <EstimateStage items={items} /> : <div className={ui.empty}>{t("estimate.none")}</div>;
   }
   else if (page && project && page.panel) {
-    main = <PanelStage ref={stage} page={page} panel={page.panel} />;
+    main = <PanelStage ref={stage} page={page} panel={page.panel} language={overview?.language} />;
   } else if (page && project && !page.items?.length) {
     main = <div className={ui.error}>{t("app.nothingToDraw", { name: page.name })}</div>;
   } else if (page && project && wall?.data && elevSheets.includes(loaded ?? -1)) {
