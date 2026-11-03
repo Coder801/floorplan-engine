@@ -106,18 +106,17 @@ def test_chain_goes_to_nearest() -> None:
     assert [k for k, _ in order] == ["near", "mid", "far"]
 
 
-def test_arc_link_draws_arcs_between_points() -> None:
-    """Связь — дуги между соседними точками: выпуклость у всех вершин, кроме последней."""
+def test_line_link_draws_straight_segments() -> None:
+    """Связь — прямые отрезки между соседними точками одной полилинией, без дуг (2026-11-03)."""
     from ezdxf.entities.lwpolyline import LWPolyline
     from ezdxf.filemanagement import new
 
-    from floorplan_engine.drawing.lighting import LINK_BULGE, arc_link
+    from floorplan_engine.drawing.lighting import line_link
     from floorplan_engine.model.geometry import Vec
 
     msp = new().modelspace()
-    arc_link(msp, [Vec(0, 0), Vec(1000, 0), Vec(1000, 1000)], {"layer": "E-LINK"})
+    line_link(msp, [Vec(0, 0), Vec(1000, 0), Vec(1000, 1000)], {"layer": "E-LINK"})
     (pl,) = msp.query("LWPOLYLINE")
     assert isinstance(pl, LWPolyline)
-    bulges = [b for *_, b in pl.get_points("xyb")]
-    assert bulges == [LINK_BULGE, LINK_BULGE, 0.0]
-    assert 0 < LINK_BULGE < 1  # дуга меньше полуокружности
+    assert [(x, y) for x, y, *_ in pl.get_points("xy")] == [(0, 0), (1000, 0), (1000, 1000)]
+    assert all(b == 0.0 for *_, b in pl.get_points("xyb"))

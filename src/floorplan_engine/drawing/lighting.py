@@ -6,14 +6,14 @@ CLAUDE.md), и включает свет своей группы в своём �
 у двухклавишного выключателя код не знает, какая клавиша что включает.
 
 На листе — стены и проёмы, символы света и выключателей (слои E-SWITCH, E-LIGHT, E-LED),
-связи (E-LINK, пунктир дугами: выключатель → ближайший светильник → следующий…; дуга —
-чтобы связь не путалась с кабелем, тот идёт по прямым под 90°), номера точек —
+связи (E-LINK, пунктир прямыми: выключатель → ближайший светильник → следующий…; от
+кабеля связь отличает пунктир и слой — кабель идёт под 90°, связь — напрямую; решение
+2026-11-03: дуг нет), номера точек —
 как на листе электрики, только у света и выключателей (L-TEXT), таблица «Выключатели».
 """
 
 from __future__ import annotations
 
-import math
 from collections.abc import Sequence
 from dataclasses import dataclass
 
@@ -146,18 +146,9 @@ def switch_links(elec: Electrical) -> list[SwitchLink]:
     return sorted(out, key=lambda lk: order[lk.switch])
 
 
-# Изгиб связи: дуга на столько градусов (у всех связей — в одну сторону)
-LINK_SWEEP_DEG = 40.0
-LINK_BULGE = math.tan(math.radians(LINK_SWEEP_DEG) / 4)  # выпуклость вершины LWPOLYLINE
-
-
-def arc_link(msp: Modelspace, points: Sequence[Vec], attribs: dict[str, object]) -> None:
-    """Связь через точки — дугами между соседними (выпуклость у каждой вершины, кроме последней)."""
-    msp.add_lwpolyline(
-        [(v.x, v.y, LINK_BULGE if k < len(points) - 1 else 0.0) for k, v in enumerate(points)],
-        format="xyb",
-        dxfattribs=attribs,
-    )
+def line_link(msp: Modelspace, points: Sequence[Vec], attribs: dict[str, object]) -> None:
+    """Связь через точки — прямыми отрезками между соседними, одной полилинией."""
+    msp.add_lwpolyline([(v.x, v.y) for v in points], format="xy", dxfattribs=attribs)
 
 
 def chain(start: Vec, targets: Sequence[tuple[str, Vec]]) -> list[tuple[str, Vec]]:
@@ -188,8 +179,8 @@ def draw_lighting(
         c = strip_area(strip, geoms).centroid
         spots[strip.id] = Vec(c.x, c.y)
 
-    # Как на плане освещения: свет одного набора — одной цепочкой дуг, от выключателя — одна
-    # дуга к ближайшему светильнику набора
+    # Как на плане освещения: свет одного набора — одной цепочкой прямых, от выключателя —
+    # один отрезок к ближайшему светильнику набора
     links = switch_links(elec)
     attribs = {"layer": E_LINK.name, "lineweight": LW_LINK}
     drawn: set[frozenset[str]] = set()
@@ -204,10 +195,10 @@ def draw_lighting(
             head = min(targets, key=lambda tv: ((tv[1] - start).length(), tv[0]))
             path = chain(head[1], [tv for tv in targets if tv[0] != head[0]])
             with tagged(msp, "light_set", ",".join(sorted(key))):
-                arc_link(msp, [head[1], *(v for _, v in path)], attribs)
+                line_link(msp, [head[1], *(v for _, v in path)], attribs)
         nearest = min(targets, key=lambda tv: ((tv[1] - start).length(), tv[0]))
         with tagged(msp, "switch_link", link.switch):
-            arc_link(msp, [start, nearest[1]], attribs)
+            line_link(msp, [start, nearest[1]], attribs)
 
     lights = [p for p in elec.points if is_lighting(p)]
     symbols = [symbol_area(anchors[p.id]) for p in lights]
