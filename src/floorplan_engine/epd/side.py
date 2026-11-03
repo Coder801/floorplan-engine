@@ -1,9 +1,10 @@
-"""Таблицы листов для боковой панели просмотра: те же данные, что в таблицах на листе,
-текстом, и у каждой строки — объекты чертежа (ключи «тип:id», как в XDATA), к которым она
-относится. Наведение на объект подсвечивает его строку, наведение на строку — объекты.
+"""Sheet tables for the viewer side panel: the same data as the tables on the sheet, as text,
+and each row has the drawing objects it refers to (keys "type:id", as in XDATA). Hovering an
+object highlights its row, hovering a row highlights its objects.
 
-Здесь же — какие объекты «свои» для темы листа: подсказки на листе проводки — только
-у проводки, на плане — только у плана; и легенда для плашки просмотра (legend_entries).
+This module also defines which objects belong to a sheet topic: hints on the wiring sheet
+only for wiring, on the plan only for the plan; and the legend for the viewer badge
+(legend_entries).
 """
 
 from __future__ import annotations
@@ -34,7 +35,7 @@ from floorplan_engine.model.geometry import Contour
 from floorplan_engine.model.schema import Electrical, Plan
 from floorplan_engine.model.texts import Language, tr
 
-# Тема листа (sheets.SHEET_SLUGS) → типы объектов, у которых на нём есть подсказка
+# Sheet topic (sheets.SHEET_SLUGS) → object types that get hints on it
 STAGE_OBJECTS: dict[str, frozenset[str]] = {
     "plan": frozenset({"room", "wall", "dimension", "opening"}),
     "electrical": frozenset({"point", "label", "board", "cable", "led_strip"}),
@@ -65,11 +66,11 @@ def text(key: str, language: Language) -> str:
 @dataclass(frozen=True)
 class SideRow:
     cells: tuple[str, ...]
-    keys: tuple[str, ...] = ()  # объекты чертежа этой строки
-    section: bool = False  # заголовок раздела (смета): одна непустая ячейка
-    color: str | None = None  # цвет группы «#rrggbb» — кружок у первой ячейки
-    hint: str | None = None  # пояснение к строке (смета): значок «i» у наименования
-    marker: str | None = None  # значок у первой ячейки без цвета: square — аппарат не на линии
+    keys: tuple[str, ...] = ()  # drawing objects of this row
+    section: bool = False  # section heading (estimate): one non-empty cell
+    color: str | None = None  # group colour "#rrggbb": a dot at the first cell
+    hint: str | None = None  # row note (estimate): an "i" icon next to the name
+    marker: str | None = None  # icon of an uncoloured first cell: square = off-line device
 
     def as_dict(self) -> dict[str, object]:
         out: dict[str, object] = {"cells": list(self.cells)}
@@ -90,7 +91,7 @@ class SideRow:
 class SideTable:
     title: str
     columns: tuple[str, ...]
-    align: tuple[str, ...]  # center | left, как на листе
+    align: tuple[str, ...]  # center | left, as on the sheet
     rows: tuple[SideRow, ...]
     total: tuple[str, ...] | None = None
     notes: tuple[str, ...] = field(default=())
@@ -112,8 +113,8 @@ class SideTable:
 def from_table(
     table: Table, keys: Sequence[tuple[str, ...]] = (), notes: Sequence[str] = ()
 ) -> SideTable:
-    """Таблица листа текстом. Ячейки-поля AutoCAD (площади) сюда не попадают — для них
-    своя сборка (room_table)."""
+    """Sheet table as text. AutoCAD field cells (areas) are not included: they have their own
+    builder (room_table)."""
 
     def cells(row: Sequence[object]) -> tuple[str, ...]:
         assert all(isinstance(c, str | Mark) for c in row), "ячейка-поле: соберите отдельно"
@@ -142,7 +143,7 @@ def from_table(
 
 
 def drop_column(table: SideTable, index: int) -> SideTable:
-    """Таблица без колонки index; подпись итога из неё переходит в первую ячейку итога."""
+    """Table without the index column; its total caption moves into the first total cell."""
 
     def cut(cells: Sequence[str]) -> tuple[str, ...]:
         return tuple(c for k, c in enumerate(cells) if k != index)
@@ -162,7 +163,7 @@ def drop_column(table: SideTable, index: int) -> SideTable:
 
 
 def room_table(plan: Plan, contours: dict[str, Contour]) -> SideTable:
-    """Экспликация: те же строки, что на листе; площадь — как покажет поле AutoCAD."""
+    """Room schedule: the same rows as on the sheet; area as the AutoCAD field will show it."""
     lang = plan.language
     rows = []
     total = 0.0
@@ -186,20 +187,20 @@ def room_table(plan: Plan, contours: dict[str, Contour]) -> SideTable:
 
 @dataclass(frozen=True)
 class LegendEntry:
-    """Строка легенды просмотра: значок — объект legend:<key> на листе, и что он значит."""
+    """Viewer legend row: the icon is the legend:<key> object on the sheet, and what it means."""
 
     key: str
     text: str
 
 
 def legend_entries(elec: Electrical, language: Language) -> list[LegendEntry]:
-    """Легенда для плашки просмотра — те же строки, что на листе (electrical.legend_rows),
-    без заголовка: только значок и подпись, без количества и цветов групп."""
+    """Legend for the viewer badge: the same rows as on the sheet (electrical.legend_rows), without
+    the heading: only icon and caption, no counts and no group colours."""
     return [LegendEntry(r.tag, r.text) for r in legend_rows(elec, language) if r.tag]
 
 
 def side_legends(elec: Electrical, language: Language) -> dict[str, list[LegendEntry]]:
-    """Легенда по теме листа: электрика — все символы листа, освещение — только свет."""
+    """Legend by sheet topic: electrical has all symbols of the sheet, lighting only lights."""
     return {
         "electrical": legend_entries(elec, language),
         "lighting": legend_entries(lighting_model(elec), language),
@@ -207,7 +208,7 @@ def side_legends(elec: Electrical, language: Language) -> dict[str, list[LegendE
 
 
 def points_side_table(plan: Plan, elec: Electrical) -> SideTable | None:
-    """Точки: строка → точки с этими номерами."""
+    """Points: row → points with these numbers."""
     table = points_table(plan, elec)
     if table is None:
         return None
@@ -216,7 +217,7 @@ def points_side_table(plan: Plan, elec: Electrical) -> SideTable | None:
 
 
 def lighting_side_table(plan: Plan, elec: Electrical) -> SideTable | None:
-    """Выключатели: строка → выключатель и свет, который он включает."""
+    """Switches: row → the switch and the lights it turns on."""
     built = switch_table(plan, elec)
     if built is None:
         return None
@@ -235,8 +236,8 @@ def group_side_table(
     panel: BoardPanel | None = None,
     extra: Sequence[str] = (),
 ) -> SideTable | None:
-    """«Группы»: строка → точки, кабели, линии и коробки группы. В узкой панели — без
-    колонки «Точек» (она на листе): иначе не помещается мощность."""
+    """The "Groups": row → points, cables, lines and boxes of the group. In the narrow panel the
+    "Points" column is dropped (it is on the sheet): otherwise the power does not fit."""
     built = groups_table(plan, elec, wiring, panel)
     if built is None:
         return None
@@ -264,9 +265,9 @@ def estimate_side_table(
     prices: Prices | None,
     panel: BoardPanel | None = None,
 ) -> SideTable:
-    """Смета (цены — прайс поверх сервиса цен) или ведомость объёмов (prices None) — для
-    вкладки «Смета» просмотра (ключ estimate страницы проводки); на печати — тот же расчёт
-    на листе проводки (stages.wiring_panels)."""
+    """Estimate (prices from the list on top of the price service) or bill of quantities (prices
+    None), for the viewer "Estimate" tab (key estimate of the wiring page); for print the same
+    calculation is on the wiring sheet (stages.wiring_panels)."""
     priced = prices is not None and prices.priced
     est = build_estimate(wiring, elec, prices or Prices(), language, panel)
     notes = [estimate_text("note_panel", language)] if panel is not None else []
@@ -288,12 +289,12 @@ def side_tables(
     prices: Prices | None = None,
     quantities: Wiring | None = None,
 ) -> dict[str, list[SideTable]]:
-    """Таблицы боковой панели по теме листа (plan / electrical / wiring / panel …) и смета
-    (estimate) — на страницу проводки отдельным ключом, для вкладки «Смета» просмотра."""
+    """Side panel tables by sheet topic (plan / electrical / wiring / panel …) and the estimate
+    (estimate) as a separate key on the wiring page, for the viewer "Estimate" tab."""
     lang = plan.language
     out = {"plan": [room_table(plan, contours)]}
     if elec is not None:
-        # «Электрика»: «Точки» — вид, высота и количество; легенда — плашкой на чертеже
+        # "Electrical": "Points" has kind, height and count; the legend is a badge on the drawing
         points = points_side_table(plan, elec)
         out["electrical"] = [points] if points is not None else []
         lighting = lighting_side_table(plan, elec)
@@ -311,12 +312,12 @@ def side_tables(
 
 
 def panel_tables(panel: BoardPanel, elec: Electrical, language: Language) -> list[SideTable]:
-    """Лист «Щит»: аппараты с нагрузкой и слабыми местами (строка → аппарат) и роспись
-    потребителей по группам. Закупка аппаратов — в смете (вкладка «Смета»)."""
+    """The "Panel" sheet: devices with load and weak spots (row → device) and the load list by
+    group. Device purchase is in the estimate ("Estimate" tab)."""
     colors = group_colors(elec)
     table = devices_table(panel, language, colors)
     keys = [(d.key,) for d in panel.all_devices]
-    # Назначение в панели не помещается — оно в карточке аппарата по клику на строку
+    # The purpose does not fit in the panel: it is in the device card shown on row click
     devices = drop_column(from_table(table, keys, panel_notes(panel, language)), 1)
     out = [replace(devices, rows=_device_sections(panel, devices.rows, language))]
     rows = []
@@ -349,9 +350,9 @@ def panel_tables(panel: BoardPanel, elec: Electrical, language: Language) -> lis
 def _device_sections(
     panel: BoardPanel, rows: Sequence[SideRow], language: Language
 ) -> tuple[SideRow, ...]:
-    """Аппараты щита разделами: ввод и резерв (не на линии — квадратный значок), линии
-    групп (кружок цвета группы), щит АКБ (квадратный значок). Строки — по одной на аппарат
-    в порядке panel.all_devices."""
+    """Panel devices by section: supply and backup (not on a line, square icon), group lines
+    (dot in the group colour), battery box (square icon). One row per device in
+    panel.all_devices order."""
     by_id = dict(zip((d.id for d in panel.all_devices), rows, strict=True))
     dc = {d.id for d in panel.dc.devices} if panel.dc is not None else set()
     parts = (

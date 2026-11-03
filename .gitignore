@@ -5,9 +5,9 @@ __pycache__/
 .ruff_cache/
 *.egg-info/
 
-# Данные сервиса (проекты, раунды, результаты)
+# Service data (projects, rounds, results)
 data/
 
-# Локальные настройки (пароль базы)
+# Local settings (database password)
 .env
 .DS_Store

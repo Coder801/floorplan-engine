@@ -1,9 +1,9 @@
-"""Таблицы базы сервиса (SQLAlchemy 2): Postgres в работе, SQLite в тестах.
+"""Service database tables (SQLAlchemy 2): Postgres in production, SQLite in tests.
 
-Схема — как на ER-диаграмме в docs/database.md. YAML остаётся форматом модели проекта:
-база хранит его версии (model_version), а ядро по-прежнему собирает чертёж из папки.
-Файлы (источники, DXF, .epd, PNG, образцы УГО) — в объектном хранилище: в базе только ключ
-object_key.
+The schema follows the ER diagram in docs/database.md. YAML stays the project model format:
+the database stores its versions (model_version), and the core still builds the drawing from
+a folder. Files (sources, DXF, .epd, PNG, symbol samples) live in object storage: the database
+holds only the object_key.
 """
 
 from __future__ import annotations
@@ -31,7 +31,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
-# JSON — jsonb: индексы и запросы внутрь (база только Postgres)
+# JSON is jsonb: indexes and queries inside it (Postgres only)
 Json = JSONB()
 
 
@@ -51,18 +51,18 @@ def _created() -> Mapped[datetime]:
     return mapped_column(DateTime(timezone=True), default=now)
 
 
-# --- Студии и доступ (docs/database.md, «Доступ» и «Вход») ----------------------------
+# --- Studios and access (docs/database.md, "Access" and "Login") --------------------------
 
 
 class Studio(Base):
-    """Пространство проектов: студия или монтажник (`studio`) либо личное пространство
-    хозяина квартиры (`personal`, один проект). Граница доступа — студия."""
+    """Project workspace: a studio or installer (`studio`), or the personal workspace of a flat
+    owner (`personal`, one project). The access boundary is the studio."""
 
     __tablename__ = "studio"
     id: Mapped[uuid.UUID] = _id()
     name: Mapped[str] = mapped_column(String(200))
     kind: Mapped[str] = mapped_column(String(20), default="studio")  # studio | personal
-    # Фирма (kind = studio) при регистрации: вид, город, телефон (access.register_firm)
+    # Firm (kind = studio) at registration: kind, city, phone (access.register_firm)
     business: Mapped[str | None] = mapped_column(String(20))  # design | electric | …
     city: Mapped[str] = mapped_column(String(100), default="")
     phone: Mapped[str] = mapped_column(String(40), default="")
@@ -72,25 +72,25 @@ class Studio(Base):
 
 
 class AppUser(Base):
-    """Пользователь (user — служебное слово Postgres). Паролей нет: вход через OAuth
-    (oauth_account). email может быть пустым — не каждый провайдер его отдаёт; phone — из
-    входа через Telegram (db/telegram_login.py), «+380…»."""
+    """User (user is a reserved word in Postgres). No passwords: login through OAuth
+    (oauth_account). email may be empty, not every provider returns it; phone comes from the
+    Telegram login (db/telegram_login.py), "+380…"."""
 
     __tablename__ = "app_user"
     id: Mapped[uuid.UUID] = _id()
     email: Mapped[str | None] = mapped_column(String(320), unique=True)
     phone: Mapped[str | None] = mapped_column(String(20), unique=True)
     name: Mapped[str] = mapped_column(String(200), default="")
-    # client — хозяин квартиры, pro — студия или монтажник; None — ещё не выбрал
+    # client is a flat owner, pro is a studio or installer; None means not chosen yet
     account_type: Mapped[str | None] = mapped_column(String(10))
-    is_superuser: Mapped[bool] = mapped_column(Boolean, default=False)  # видит всё
+    is_superuser: Mapped[bool] = mapped_column(Boolean, default=False)  # sees everything
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = _created()
 
 
 class OAuthAccount(Base):
-    """Учётка у провайдера входа (google, …), привязанная к пользователю."""
+    """Account at a login provider (google, …), linked to a user."""
 
     __tablename__ = "oauth_account"
     __table_args__ = (UniqueConstraint("provider", "provider_user_id"),)
@@ -103,7 +103,7 @@ class OAuthAccount(Base):
 
 
 class UserSession(Base):
-    """Сессия входа: в cookie — случайный токен, здесь — только его sha256."""
+    """Login session: the cookie holds a random token, the table only its sha256."""
 
     __tablename__ = "user_session"
     id: Mapped[uuid.UUID] = _id()
@@ -116,8 +116,8 @@ class UserSession(Base):
 
 
 class EmailCode(Base):
-    """Код входа на почту (db/email_codes.py): одноразовый, 6 цифр, здесь — только sha256
-    «email:код»; попытки ввода и время отправки — для ограничений."""
+    """E-mail login code (db/email_codes.py): one-time, 6 digits, only the sha256 of "email:code" is
+    stored; entry attempts and send time are kept for limits."""
 
     __tablename__ = "email_code"
     __table_args__ = (Index("ix_email_code_email_created", "email", "created_at"),)
@@ -131,9 +131,9 @@ class EmailCode(Base):
 
 
 class LoginTicket(Base):
-    """Вход через Telegram (db/telegram_login.py): страница выдаёт ссылку
-    t.me/<бот>?start=<токен>, бот по «/start токен» запоминает чат, по контакту — телефон;
-    страница опрашивает билет и входит. В базе — только sha256 токена."""
+    """Telegram login (db/telegram_login.py): the page gives the link t.me/<bot>?start=<token>, the
+    bot remembers the chat on "/start token" and the phone on contact; the page polls the ticket
+    and logs in. Only the sha256 of the token is stored."""
 
     __tablename__ = "login_ticket"
     __table_args__ = (Index("ix_login_ticket_chat", "chat_id", "created_at"),)
@@ -162,7 +162,7 @@ class Membership(Base):
 
 
 class StudioProfile(Base):
-    """Профиль студии — то, что сейчас лежит в projects/studio.yaml."""
+    """Studio profile: what currently lives in projects/studio.yaml."""
 
     __tablename__ = "studio_profile"
     studio_id: Mapped[uuid.UUID] = mapped_column(
@@ -175,7 +175,7 @@ class StudioProfile(Base):
 
 
 class Symbol(Base):
-    """Образец УГО студии для распознавания точек электрики на листах."""
+    """Studio symbol sample for recognising electrical points on sheets."""
 
     __tablename__ = "symbol"
     id: Mapped[uuid.UUID] = _id()
@@ -184,7 +184,7 @@ class Symbol(Base):
     object_key: Mapped[str] = mapped_column(Text)
 
 
-# --- Проект и источники -------------------------------------------------------------
+# --- Project and sources -------------------------------------------------------------
 
 
 class Project(Base):
@@ -192,9 +192,9 @@ class Project(Base):
     id: Mapped[uuid.UUID] = _id()
     studio_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("studio.id", ondelete="CASCADE"))
     name: Mapped[str] = mapped_column(String(200))
-    # Папка проекта в просмотре (projects/<slug>) — пока проекты живут в папках
+    # Project folder in the viewer (projects/<slug>), while projects live in folders
     slug: Mapped[str | None] = mapped_column(String(100), unique=True)
-    # Состояние — значения service.models.ProjectState
+    # State: values of service.models.ProjectState
     state: Mapped[str] = mapped_column(String(20), default="created")
     message: Mapped[str] = mapped_column(Text, default="")
     round: Mapped[int] = mapped_column(Integer, default=0)
@@ -205,8 +205,8 @@ class Project(Base):
 
 
 class ProjectMember(Base):
-    """Доступ к одному проекту: клиент (хозяин квартиры) или монтажник со стороны.
-    Клиент — только в одном проекте (частичный уникальный индекс)."""
+    """Access to one project: a client (flat owner) or an outside installer.
+    A client is in one project only (partial unique index)."""
 
     __tablename__ = "project_member"
     __table_args__ = (
@@ -231,7 +231,7 @@ class ProjectMember(Base):
 
 
 class Invite(Base):
-    """Приглашение ссылкой — в студию или в проект; в базе только sha256 токена."""
+    """Invite link to a studio or a project; only the sha256 of the token is stored."""
 
     __tablename__ = "invite"
     __table_args__ = (
@@ -245,7 +245,7 @@ class Invite(Base):
         ForeignKey("project.id", ondelete="CASCADE")
     )
     role: Mapped[str] = mapped_column(String(20))
-    email: Mapped[str | None] = mapped_column(String(320))  # кому отправили — для списка
+    email: Mapped[str | None] = mapped_column(String(320))  # who it was sent to, for the list
     token_hash: Mapped[str] = mapped_column(String(64), unique=True)
     invited_by: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("app_user.id", ondelete="SET NULL")
@@ -260,9 +260,9 @@ class Invite(Base):
 
 
 class AccessCode(Base):
-    """Код доступа к проекту (db/access_codes.py): студия выдаёт код, человек вводит его на
-    экране входа и смотрит этот один проект без учётки (только чтение). В базе — только
-    sha256 кода; label — кому выдан, для списка."""
+    """Project access code (db/access_codes.py): the studio issues a code, a person enters it on the
+    login screen and views that one project without an account (read only). Only the sha256 of
+    the code is stored; label says who it was given to, for the list."""
 
     __tablename__ = "access_code"
     __table_args__ = (Index("ix_access_code_project", "project_id", "created_at"),)
@@ -281,7 +281,9 @@ class AccessCode(Base):
 
 
 class SupportGrant(Base):
-    """Доступ разработчика к чужому проекту: выдаёт владелец студии, с причиной и сроком."""
+    """Developer access to someone else's project: granted by the studio owner, with a reason and
+    a term.
+    """
 
     __tablename__ = "support_grant"
     id: Mapped[uuid.UUID] = _id()
@@ -297,7 +299,7 @@ class SupportGrant(Base):
 
 
 class AuditEvent(Base):
-    """Журнал: входы, ответы, правки трасс, сборки, приглашения, скачивания, поддержка."""
+    """Audit log: logins, answers, route edits, builds, invites, downloads, support."""
 
     __tablename__ = "audit_event"
     __table_args__ = (Index("ix_audit_event_project", "project_id", "created_at"),)
@@ -328,9 +330,9 @@ class Source(Base):
 
 
 class FactsPage(Base):
-    """Выжимка страницы источника (facts.analysis.to_dict) — кэш по хешу и версии алгоритма.
-    Сводка (масштаб, число размеров, уверенность) — колонками: по ней работает порог
-    «не удалось» и запросы по всем проектам."""
+    """Source page digest (facts.analysis.to_dict), cached by hash and algorithm version.
+    The summary (scale, number of dimensions, confidence) is in columns: the "failed" gate and
+    cross-project queries use it."""
 
     __tablename__ = "facts_page"
     __table_args__ = (UniqueConstraint("source_id", "page", "algo_version"),)
@@ -348,11 +350,11 @@ class FactsPage(Base):
     created_at: Mapped[datetime] = _created()
 
 
-# --- Модель, вопросы, сборки ------------------------------------------------------
+# --- Model, questions, builds ------------------------------------------------------
 
 
 class ModelVersion(Base):
-    """Версия модели проекта: тексты YAML, кто и когда их записал."""
+    """Project model version: YAML texts, who wrote them and when."""
 
     __tablename__ = "model_version"
     __table_args__ = (UniqueConstraint("project_id", "version"),)
@@ -363,7 +365,7 @@ class ModelVersion(Base):
     electrical_yaml: Mapped[str | None] = mapped_column(Text)
     intake_yaml: Mapped[str | None] = mapped_column(Text)
     answers_yaml: Mapped[str | None] = mapped_column(Text)
-    wiring_yaml: Mapped[str | None] = mapped_column(Text)  # правки трасс из просмотра
+    wiring_yaml: Mapped[str | None] = mapped_column(Text)  # route edits from the viewer
     author: Mapped[str] = mapped_column(String(20))  # analyzer | user | operator
     user_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("app_user.id", ondelete="SET NULL")
@@ -388,7 +390,7 @@ class Question(Base):
     __table_args__ = (UniqueConstraint("round_id", "qid"),)
     id: Mapped[uuid.UUID] = _id()
     round_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("round.id", ondelete="CASCADE"))
-    qid: Mapped[str] = mapped_column(String(20))  # q1, q2… из intake.yaml
+    qid: Mapped[str] = mapped_column(String(20))  # q1, q2… from intake.yaml
     stage: Mapped[str] = mapped_column(String(20))
     target: Mapped[str | None] = mapped_column(Text)
     severity: Mapped[str] = mapped_column(String(10))  # critical | major | minor
@@ -409,7 +411,7 @@ class Answer(Base):
 
 
 class Build(Base):
-    """Прогон build_project по версии модели: отчёт (report.json) и статус."""
+    """A build_project run for a model version: report (report.json) and status."""
 
     __tablename__ = "build"
     id: Mapped[uuid.UUID] = _id()
@@ -423,20 +425,20 @@ class Build(Base):
 
 
 class BuildFile(Base):
-    """Файл сборки: dxf, epd, png, estimate, csv — сам файл в объектном хранилище."""
+    """Build file: dxf, epd, png, estimate, csv; the file itself is in object storage."""
 
     __tablename__ = "build_file"
     id: Mapped[uuid.UUID] = _id()
     build_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("build.id", ondelete="CASCADE"))
     kind: Mapped[str] = mapped_column(String(20))
-    name: Mapped[str] = mapped_column(Text)  # путь внутри out/: project.dxf, estimate.csv…
+    name: Mapped[str] = mapped_column(Text)  # path inside out/: project.dxf, estimate.csv…
     object_key: Mapped[str] = mapped_column(Text)
     build: Mapped[Build] = relationship(back_populates="files")
 
 
 class PriceList(Base):
-    """Прайс — то, что сейчас лежит в prices.yaml: свой у проекта или общий у студии
-    (projects/prices.yaml)."""
+    """Price list: what currently lives in prices.yaml, the project's own or the studio's shared
+    one (projects/prices.yaml)."""
 
     __tablename__ = "price_list"
     __table_args__ = (
@@ -459,7 +461,7 @@ class PriceList(Base):
 
 
 class Usage(Base):
-    """Расход LLM — то, что сейчас пишется в usage.jsonl проекта; основа биллинга."""
+    """LLM usage: what is currently written to the project's usage.jsonl; the basis for billing."""
 
     __tablename__ = "usage"
     id: Mapped[uuid.UUID] = _id()

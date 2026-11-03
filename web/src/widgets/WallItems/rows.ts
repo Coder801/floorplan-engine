@@ -1,17 +1,17 @@
-// Строки таблицы «На стене» по разделам: электрика — точки по номерам листа электрики,
-// коробки и щит; вода — водорозетки и выпуски по номерам листа «Сантехника» (холодная,
-// горячая, канализация). Подписи — снаружи (переводы), здесь только сборка.
+// Rows of the "On the wall" table by section: electrical has points by electrical sheet number,
+// boxes and the panel; water has water outlets and drains by "Plumbing" sheet number (cold,
+// hot, sewer). Labels come from outside (translations); this only assembles the rows.
 
 import type { Elevation, PipeKind } from "@/shared/types";
 
 export interface Row {
-  id: string;            // ключ строки React: у прибора несколько подводов
-  key: string;           // объект развёртки (подсветка): point:…, box:…, fixture:…
-  mark: string;          // номер точки или прибора, «К3», «ЩР»
-  color: string | null;  // плашка номера — цвет группы или сети
+  id: string;            // React row key: a fixture has several supplies
+  key: string;           // elevation object (highlight): point:…, box:…, fixture:…
+  mark: string;          // point or fixture number, "К3", "ЩР"
+  color: string | null;  // number badge: group or network colour
   name: string;
-  where: string;         // отступ × высота, мм
-  line: string | null;   // «QF4 · от К3» или «Холодная вода · Ø16»
+  where: string;         // offset × height, mm
+  line: string | null;   // "QF4 · от К3" or "Холодная вода · Ø16"
   box?: boolean;
 }
 

@@ -1,1 +1,1 @@
-"""Тесты сервиса: API, вход, база, анализ и разбор источников."""
+"""Service tests: API, login, database, analysis and source parsing."""

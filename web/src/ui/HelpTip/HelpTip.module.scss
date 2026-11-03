@@ -1,5 +1,5 @@
-// Значок «?» и всплывающая подсказка под ним, прижатая к правому краю (значок стоит у края
-// карточки — подсказка не вылезает за неё)
+// A "?" icon with a tooltip below it, aligned to the right edge (the icon sits at the card
+// edge, so the tooltip does not overflow it)
 
 .wrap { position: relative; display: inline-flex; }
 .button {

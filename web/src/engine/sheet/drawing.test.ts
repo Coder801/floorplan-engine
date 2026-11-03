@@ -4,7 +4,7 @@ import { buildDrawing, drawingLayers, layerShown, objectLayers, shiftOf } from "
 
 const item = (l: string, d: string, o?: string): Item => ({ k: "s", c: "#000000", l, d, o });
 
-// Лист 100×100 с видовым экраном 10…90; model — сдвиг модели на листе
+// A 100×100 sheet with a 10…90 viewport; model is the model offset on the sheet
 const page = (name: string, tx: number, items: Item[], extra: Partial<Page> = {}): Page => ({
   name, format: "A4", size: [100, 100], background: "#ffffff", items,
   view: [10 + tx, 10, 90 + tx, 90], model: [0.02, tx, 100], ...extra,
@@ -21,7 +21,7 @@ describe("shiftOf", () => {
     const a = page("a", 0, [], { model: [0.02, 0, 100] });
     const b = page("b", 0, [], { model: [0.01, 10, 50] });
     const s = shiftOf(b, a);
-    // точка модели (1000, 1000): на b — (20, 40), на a — (20, 80)
+    // model point (1000, 1000): (20, 40) on b, (20, 80) on a
     expect(s.f * 20 + s.dx).toBeCloseTo(20);
     expect(s.f * 40 + s.dy).toBeCloseTo(80);
   });
@@ -30,7 +30,7 @@ describe("shiftOf", () => {
 describe("buildDrawing", () => {
   const plan = page("plan", 0, [
     item("A-WALL", "M20 20L80 20"), item("A-DIMS", "M20 15L80 15", "dimension:w1"),
-    item("A-SHEET", "M0 0L100 0"), item("A-TEXT", "M95 95L99 99"),  // рамка и текст вне вида
+    item("A-SHEET", "M0 0L100 0"), item("A-TEXT", "M95 95L99 99"),  // frame and text outside the view
   ], { objects: { "dimension:w1": { title: "Размер", rows: [] } } });
   const elec = page("electrical", 30, [
     item("A-WALL", "M50 20L110 20"), item("E-SOCKET", "M60 30L62 30", "point:s1"),

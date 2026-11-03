@@ -1,6 +1,6 @@
-# База сервиса для разработки: uv run floorplan-engine … с DATABASE_URL из .env (см. .env.example)
-#   docker compose up -d db        — поднять
-#   uv run alembic upgrade head    — создать или обновить таблицы
+# Service database for development: uv run floorplan-engine … with DATABASE_URL from .env (see .env.example)
+#   docker compose up -d db        — start
+#   uv run alembic upgrade head    — create or update the tables
 services:
   db:
     image: postgres:17
@@ -10,7 +10,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-floorplan_engine}
       POSTGRES_DB: ${POSTGRES_DB:-floorplan_engine}
     ports:
-      - "${POSTGRES_PORT:-5433}:5432"  # 5432 часто занят другими проектами
+      - "${POSTGRES_PORT:-5433}:5432"  # 5432 is often taken by other projects
     volumes:
       - floorplan-engine-pgdata:/var/lib/postgresql/data
     healthcheck:

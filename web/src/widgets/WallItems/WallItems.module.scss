@@ -1,5 +1,5 @@
-// «На стене»: разделы «Электрика» и «Вода» с глазом видимости; строка — номер | что (и линия
-// проводки или сеть и Ø) | отступ × высота; «На проводке →» — под строкой
+// "On the wall": "Electrical" and "Water" sections with a visibility eye; a row is number | what
+// (plus the wiring line, or the network and Ø) | offset × height; "On wiring →" under the row
 
 .wall { display: grid; gap: 10px; }
 
@@ -8,7 +8,7 @@
   display: flex; align-items: center; gap: 6px; margin: 4px 0 0; font-size: 13px; font-weight: 600;
 }
 .count { color: var(--muted); font-weight: 400; }
-// Слой скрыт на развёртке — строки бледные
+// The layer is hidden on the elevation: rows are faint
 .off .list { opacity: .45; }
 
 .list {
@@ -22,7 +22,7 @@
   li.lit, li.lit:hover { background: var(--hl-row); box-shadow: inset 3px 0 var(--hl); }
 }
 
-// Номер — плашкой цвета группы, как на развёртке
+// The number as a badge in the group colour, as on the elevation
 .mark {
   justify-self: start; min-width: 24px; padding: 2px 7px; border-radius: 999px;
   color: #fff; font-weight: 600; text-align: center; background: var(--text);

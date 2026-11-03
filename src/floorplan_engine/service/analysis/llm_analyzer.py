@@ -1,22 +1,22 @@
-"""LLM-анализатор: источники проекта → intake.yaml и YAML этапов через Claude.
+"""LLM analyzer: project sources → intake.yaml and stage YAML through Claude.
 
-Два бэкенда за одним интерфейсом:
+Two backends behind one interface:
 
-- `ClaudeCodeBackend` — `claude -p` по подписке Claude (разработка, тесты). Источники модель
-  читает сама инструментом Read из папки проекта.
-- `ApiBackend` — Anthropic API по ключу (`ANTHROPIC_API_KEY`), продукт. Источники уходят
-  в запрос документами (PDF) и изображениями.
+- `ClaudeCodeBackend`: `claude -p` on a Claude subscription (development, tests). The model
+  reads the sources itself with the Read tool from the project folder.
+- `ApiBackend`: the Anthropic API with a key (`ANTHROPIC_API_KEY`), for the product. Sources
+  are sent in the request as documents (PDF) and images.
 
-К каждому PDF оба бэкенда прикладывают выжимку `pdf_facts`: масштаб, размеры, цепочки и
-надписи с координатами. Её считает код, модели остаётся смысл.
+Both backends attach the `pdf_facts` digest to every PDF: scale, dimensions, chains and labels
+with coordinates. Code computes it, the model is left with the meaning.
 
-Анализ идёт одним шагом или двумя: план, затем электрика другой (более дешёвой) моделью —
-второй шаг получает готовый room.yaml и пишет только electrical.yaml и вопросы этапа.
+Analysis runs in one step or two: the plan, then electrical with another (cheaper) model; the
+second step gets the finished room.yaml and writes only electrical.yaml and its stage questions.
 
-Модель отвечает конвертом (структурированный вывод): полные тексты файлов модели, id
-разобранных текстовых ответов и короткий итог. YAML проверяет ядро; ошибки проверки
-возвращаются модели в том же разговоре, не больше FIX_ATTEMPTS раз. Каждый вызов пишется
-в usage.jsonl проекта: токены, стоимость, длительность.
+The model answers with an envelope (structured output): full texts of the model files, ids of
+handled text answers and a short summary. The core validates the YAML; validation errors go
+back to the model in the same conversation, at most FIX_ATTEMPTS times. Every call is logged
+in the project's usage.jsonl: tokens, cost, duration.
 """
 
 from __future__ import annotations
@@ -52,13 +52,13 @@ from floorplan_engine.validation.issues import ELECTRICAL_FILE, ROOM_FILE, Issue
 from floorplan_engine.validation.validate import validate_project
 
 DEFAULT_MODEL = "claude-opus-5-5"
-DEFAULT_EFFORT = "medium"  # замер 2026-10-20: почти как high, быстрее и дешевле
+DEFAULT_EFFORT = "medium"  # measured 2026-10-20: almost as good as high, faster and cheaper
 FIX_ATTEMPTS = 2
 USAGE_FILE = "usage.jsonl"
 SOURCE_DIR = "source"
 PROMPT = (Path(__file__).parent / "analyzer_prompt.md").read_text(encoding="utf-8")
 
-# $ за 1M токенов: ввод, вывод, чтение кэша, запись кэша (5 мин, ×1,25 ввода)
+# $ per 1M tokens: input, output, cache read, cache write (5 min, ×1.25 of input)
 PRICES: dict[str, tuple[float, float, float, float]] = {
     "claude-opus-5-5": (4.0, 20.0, 0.20, 5.0),
     "claude-sonnet-5-5": (2.0, 10.0, 0.20, 2.5),
@@ -88,7 +88,7 @@ ENVELOPE_SCHEMA: dict[str, Any] = {
 
 IMAGE_TYPES = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png"}
 IMAGE_TYPES |= {".webp": "image/webp", ".gif": "image/gif"}
-MAX_REQUEST_BYTES = 30 * 1024 * 1024  # лимит запроса API — 32 МБ, base64 раздувает на 4/3
+MAX_REQUEST_BYTES = 30 * 1024 * 1024  # API request limit is 32 MB, base64 inflates by 4/3
 
 
 class AnalyzerError(RuntimeError):
@@ -102,7 +102,7 @@ class Usage:
     output_tokens: int = 0
     cache_read_tokens: int = 0
     cache_write_tokens: int = 0
-    cost_usd: float | None = None  # None — цены модели нет в PRICES
+    cost_usd: float | None = None  # None means the model's price is not in PRICES
     seconds: float = 0.0
 
     def priced(self) -> Usage:
@@ -127,11 +127,11 @@ class Backend(Protocol):
     name: str
 
     def start(self, project: Path, prompt: str) -> Reply:
-        """Первое сообщение раунда: источники + контекст."""
+        """First message of a round: sources + context."""
         ...
 
     def follow_up(self, project: Path, prompt: str) -> Reply:
-        """Продолжение того же разговора: ошибки проверки."""
+        """Continuation of the same conversation: validation errors."""
         ...
 
 
@@ -143,12 +143,14 @@ def facts_text(path: Path, name: str) -> str:
     return f"Выжимка из {name} (посчитана кодом по векторам PDF):\n\n{describe(path, name)}"
 
 
-# --- Бэкенд: claude -p (подписка) ---------------------------------------------
+# --- Backend: claude -p (subscription) ---------------------------------------
 
 
 @dataclass
 class ClaudeCodeBackend:
-    """`claude -p` в папке проекта. Ключ API из окружения убирается — работает подписка."""
+    """`claude -p` in the project folder. The API key is removed from the environment so the
+    subscription is used.
+    """
 
     model: str = DEFAULT_MODEL
     effort: str = DEFAULT_EFFORT
@@ -156,7 +158,7 @@ class ClaudeCodeBackend:
     timeout_s: float = 30 * 60
     name: str = "claude-code"
     _session: str | None = field(default=None, repr=False)
-    _spent: float = field(default=0.0, repr=False)  # total_cost_usd сессии на прошлом вызове
+    _spent: float = field(default=0.0, repr=False)  # session total_cost_usd at the previous call
 
     def _run(self, project: Path, prompt: str, resume: str | None) -> Reply:
         exe = shutil.which("claude")
@@ -179,7 +181,7 @@ class ClaudeCodeBackend:
             self.effort,
             "--append-system-prompt-file",
             str(prompt_file),
-            # Модель только читает источники; писать файлы и запускать команды нельзя
+            # The model only reads the sources; writing files and running commands is not allowed
             "--allowedTools",
             "Read",
             "--permission-mode",
@@ -213,7 +215,7 @@ class ClaudeCodeBackend:
         if data.get("is_error") or "structured_output" not in data:
             raise AnalyzerError(f"claude -p: {data.get('result') or data.get('subtype')}")
         self._session = data.get("session_id")
-        # С --resume total_cost_usd — нарастающий итог сессии, а не цена этого вызова
+        # With --resume, total_cost_usd is the running session total, not the price of this call
         total = data.get("total_cost_usd")
         cost = None if total is None else total - self._spent
         self._spent = total if total is not None else self._spent
@@ -247,12 +249,12 @@ class ClaudeCodeBackend:
         return self._run(project, prompt, self._session)
 
 
-# --- Бэкенд: Anthropic API (ключ) ---------------------------------------------
+# --- Backend: Anthropic API (key) ---------------------------------------------
 
 
 @dataclass
 class ApiBackend:
-    """Anthropic API: источники — документами и изображениями в запросе."""
+    """Anthropic API: sources go in the request as documents and images."""
 
     model: str = DEFAULT_MODEL
     effort: str = DEFAULT_EFFORT
@@ -295,7 +297,7 @@ class ApiBackend:
         return blocks
 
     def _call(self) -> Reply:
-        import anthropic  # зависимость группы service — нужна только этому бэкенду
+        import anthropic  # a service group dependency, needed only by this backend
 
         client = anthropic.Anthropic()
         output_config = {
@@ -306,7 +308,8 @@ class ApiBackend:
         with client.beta.messages.stream(
             model=self.model,
             max_tokens=self.max_tokens,
-            # Отказ классификатора — повтор на рекомендованной модели, не пустой ответ
+            # A classifier refusal is retried on the recommended model, not treated as an empty
+            # answer
             betas=["server-side-fallback-2026-07-01"],
             fallbacks="default",
             system=[{"type": "text", "text": PROMPT, "cache_control": {"type": "ephemeral"}}],
@@ -342,7 +345,7 @@ class ApiBackend:
         return self._call()
 
 
-# --- Анализатор -----------------------------------------------------------------
+# --- Analyzer -------------------------------------------------------------------
 
 
 def _read(path: Path) -> str | None:
@@ -350,7 +353,7 @@ def _read(path: Path) -> str | None:
 
 
 def round_prompt(project: Path, round_no: int, task: str = "") -> str:
-    """Контекст раунда: задание шага, текущая модель, текстовые ответы, ошибки проверки."""
+    """Round context: step task, current model, text answers, validation errors."""
     parts = [f"Раунд {round_no}."]
     if task:
         parts.append(task)
@@ -412,7 +415,7 @@ def _apply(project: Path, envelope: dict[str, Any], files: tuple[str, ...]) -> l
 
 
 def _model_errors(project: Path, files: tuple[str, ...]) -> list[Issue]:
-    """Ошибки в файлах, которые шаг может исправить."""
+    """Errors in files the step can fix."""
     return [e for e in validate_project(project).errors if e.file in files]
 
 
@@ -436,8 +439,8 @@ def _log(project: Path, round_no: int, backend: str, attempt: int, usage: Usage)
 
 @dataclass(frozen=True)
 class Step:
-    files: tuple[str, ...]  # файлы, которые шаг пишет; остальное из ответа отбрасывается
-    task: str  # задание шага в промпте раунда; пусто — вся модель
+    files: tuple[str, ...]  # files the step writes; the rest of the answer is dropped
+    task: str  # step task in the round prompt; empty means the whole model
     make_backend: Callable[[], Backend]
 
 
@@ -460,9 +463,9 @@ ELECTRICAL_TASK = (
 @dataclass
 class LlmAnalyzer:
     reads_sources = True
-    # Новый бэкенд на каждый шаг анализа: в нём состояние разговора, а проекты идут параллельно
+    # A new backend per analysis step: it holds the conversation state, and projects run in parallel
     make_backend: Callable[[], Backend]
-    # Отдельная модель электрики: тогда анализ — два шага, план и электрика
+    # A separate electrical model makes the analysis two steps: plan and electrical
     make_electrical: Callable[[], Backend] | None = None
 
     def steps(self) -> list[Step]:
@@ -477,7 +480,7 @@ class LlmAnalyzer:
         cost, calls, summaries = 0.0, 0, []
         for step in self.steps():
             if step.files == ELECTRICAL_FILES and not (project / ROOM_FILE).exists():
-                break  # плана нет — электрику не к чему привязать
+                break  # no plan: nothing to attach electrical to
             step_cost, step_calls, summary = self._step(project, round_no, step)
             cost, calls = cost + step_cost, calls + step_calls
             summaries.append(summary)
@@ -501,7 +504,7 @@ class LlmAnalyzer:
                     break
                 errors_text = "\n".join(f"- {e}" for e in errors)
             if attempt == FIX_ATTEMPTS:
-                break  # ошибки останутся в отчёте, проект уйдёт в needs_model
+                break  # errors stay in the report, the project goes to needs_model
             reply = backend.follow_up(
                 project,
                 "Проверка нашла ошибки. Исправь их и верни исправленные файлы целиком:\n"
@@ -516,9 +519,9 @@ def make_analyzer(
     effort: str = DEFAULT_EFFORT,
     electrical_model: str | None = None,
 ) -> Analyzer:
-    """manual — модель загружает оператор; claude-code — подписка; api — ключ.
+    """manual: an operator uploads the model; claude-code: subscription; api: key.
 
-    electrical_model — электрику пишет отдельным шагом эта модель (например, Sonnet)."""
+    electrical_model: this model writes electrical in a separate step (for example, Sonnet)."""
     if kind == "manual":
         return ManualAnalyzer()
     backends: dict[str, Callable[[str], Backend]] = {

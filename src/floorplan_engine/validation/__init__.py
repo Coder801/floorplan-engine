@@ -1,2 +1,2 @@
-"""Проверка модели: правила и сообщения с путём к полю, вес вопросов и статус этапов,
-отчёт out/report.md."""
+"""Model validation: rules and messages with a field path, question weights and stage status,
+the out/report.md report."""

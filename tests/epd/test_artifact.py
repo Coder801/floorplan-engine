@@ -71,16 +71,16 @@ def test_artifact_round_trip(tmp_path: Path) -> None:
     for meta, page in zip(manifest["pages"], pages, strict=True):
         width, height = page["size"]
         assert meta["size"] == page["size"] and page["format"].startswith("A")
-        assert {item["k"] for item in page["items"]} == {"s", "f"}  # линии и залитые буквы
+        assert {item["k"] for item in page["items"]} == {"s", "f"}  # lines and filled letters
         for item in page["items"]:
             assert ("w" in item) == (item["k"] == "s")
             vertices = _vertices(item["d"], height)
-            # Всё в пределах листа (с запасом на толщину линии)
+            # Everything within the sheet (with a margin for line width)
             assert vertices[:, 0].min() >= -1 and vertices[:, 0].max() <= width + 1
             assert vertices[:, 1].min() >= -1 and vertices[:, 1].max() <= height + 1
     layers = {item["l"] for item in pages[1]["items"]}
     assert {"A-WALL", "E-SOCKET", "A-SHEET"} <= layers
-    assert "A-DIMS" not in layers  # заморожен в видовом экране листа электрики
+    assert "A-DIMS" not in layers  # frozen in the electrical sheet viewport
 
 
 def test_model_transform_maps_model_to_sheet(tmp_path: Path) -> None:
@@ -90,13 +90,13 @@ def test_model_transform_maps_model_to_sheet(tmp_path: Path) -> None:
     _, pages = read_artifact(export_artifact(doc, plan, tmp_path / "project.epd"))
     k, tx, ty = pages[0]["model"]
     assert k == pytest.approx(1 / document_scale(doc))
-    # Внутренний угол комнаты (0, 0) и (3000 вверх, 4000 вправо) — на краях стен листа
+    # The inner room corner (0, 0) and (3000 up, 4000 right) are at the wall edges on the sheet
     walls = [it for it in pages[0]["items"] if it.get("o", "").startswith("wall:")]
     pts = np.concatenate([_vertices(it["d"], 0) for it in walls])
-    xs, ys = pts[:, 0], -pts[:, 1]  # parse_path с высотой 0 переворачивает y — вернуть
+    xs, ys = pts[:, 0], -pts[:, 1]  # parse_path with height 0 flips y: flip it back
     assert xs.min() < tx < xs.max() and xs.min() < k * 4000 + tx < xs.max()
     assert ys.min() < ty < ys.max() and ys.min() < ty - k * 3000 < ys.max()
-    assert "edit" not in pages[0]  # правка — только на листе проводки
+    assert "edit" not in pages[0]  # editing only on the wiring sheet
 
 
 def test_artifact_is_deterministic_and_compressed(tmp_path: Path) -> None:

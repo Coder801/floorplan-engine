@@ -1,8 +1,8 @@
-"""Где стоит распаечная коробка: на потолке — в центре своих точек, не ближе
-routing.CLEARANCE к стенам (place_ceiling_box); у трасс по полу — на стене (шаг BOX_STEP,
-не ближе BOX_CLEARANCE к углам, place_box). Охват веток по трассе (branch_reach),
-типоразмер по числу линий (box_size), деление точек по зонам (split_points), перенос
-коробки по правке из просмотра (moved_anchor)."""
+"""Where a junction box goes: on the ceiling, at the centre of its points, at least
+routing.CLEARANCE from walls (place_ceiling_box); for floor routes, on a wall (step BOX_STEP,
+at least BOX_CLEARANCE from corners, place_box). Branch reach along the route
+(branch_reach), box size by number of lines (box_size), splitting points into zones
+(split_points), moving a box after an edit in the viewer (moved_anchor)."""
 
 from __future__ import annotations
 
@@ -23,20 +23,20 @@ from floorplan_engine.electrical.routing import (
 from floorplan_engine.model.geometry import RoomGeometry, Vec, WallSegment
 from floorplan_engine.model.scale import sheet
 
-BOX_STEP = 100.0  # мм: шаг перебора мест коробки вдоль стены
-BOX_CLEARANCE = 150.0  # мм: от угла и от проёма до коробки
-BOX_SPACING = 200.0  # мм: коробки разных групп в помещении не ближе этого
-BOX_SIZE_MM = 2.5  # сторона квадрата коробки, мм листа
-# Типоразмеры коробок и сколько линий (вводов) в них заводить — по нижней границе
-# практики (решение 2026-10-25); 190×140 — только в крайнем случае
-# Ключ — для прайса (junction_box.100x100), название — для сметы и подсказок
+BOX_STEP = 100.0  # mm: step for trying box spots along the wall
+BOX_CLEARANCE = 150.0  # mm: from a corner and from an opening to the box
+BOX_SPACING = 200.0  # mm: boxes of different groups in a room are at least this far apart
+BOX_SIZE_MM = 2.5  # box square side, sheet mm
+# Box sizes and how many lines (entries) to bring into each, at the low end of common
+# practice (decision 2026-10-25); 190×140 only as a last resort
+# The key is for the price list (junction_box.100x100), the name for the estimate and hints
 BOX_SIZES: tuple[tuple[str, int], ...] = (("80", 3), ("100x100", 6), ("150x110", 8))
 BOX_LARGE = ("190x140", 10)
 BOX_ORDER = (*(k for k, _ in BOX_SIZES), BOX_LARGE[0])
 BOX_TITLES = {"80": "Ø80", "100x100": "100×100", "150x110": "150×110", "190x140": "190×140"}
-BOX_BRANCHES = BOX_SIZES[-1][1] - 1  # веток на коробку: одна линия — питающая от щита
-# Места на потолке, где ветки длиннее самых коротких не больше чем на эту долю, считаются
-# равными — из них коробка встаёт ближе к центру своих точек
+BOX_BRANCHES = BOX_SIZES[-1][1] - 1  # branches per box: one line is the feed from the panel
+# Ceiling spots whose branches are at most this fraction longer than the shortest count as
+# equal; among them the box goes closest to the centre of its points
 CENTER_SLACK = 0.1
 
 
@@ -60,20 +60,20 @@ def _box_candidates(g: RoomGeometry, depth: float) -> list[Anchor]:
     return out
 
 
-# Стоимость веток из места коробки до её точек: сумма путей по трассе в обход стен
+# Cost of branches from a box spot to its points: sum of route paths around walls
 Reach = Callable[[Vec], float]
 
 
 def branch_reach(g: RoomGeometry, targets: Sequence[Anchor], any_angle: bool = False) -> Reach:
-    """Сумма путей от места до точек по трассе внутри помещения (с поворотами), а не по
-    прямой: коробка не встанет за перегородку от своих точек."""
+    """Sum of paths from the spot to the points along the route inside the room (with turns), not in
+    a straight line: a box will not end up behind a partition from its points."""
     area = room_area(g)
     routers = [Router(area, anchor_end(t), any_angle) for t in targets]
     return lambda p: sum(r.cost(p) for r in routers)
 
 
 def place_box(g: RoomGeometry, board: Router, reach: Reach, taken: Sequence[Vec]) -> Anchor | None:
-    """Место на стене, где путь от щита плюс ветки до точек наименьшие."""
+    """Wall spot where the path from the panel plus the branches to the points is smallest."""
     best: tuple[float, Anchor] | None = None
     for cand in _box_candidates(g, sheet(BOX_SIZE_MM)):
         if any(_manhattan(cand.node, t) < BOX_SPACING for t in taken):
@@ -85,14 +85,14 @@ def place_box(g: RoomGeometry, board: Router, reach: Reach, taken: Sequence[Vec]
 
 
 def box_size(lines: int) -> str:
-    """Коробка под число линий (питающая + ветки) — по нижней границе вводов; 190×140 —
-    только если линий больше, чем у 150×110 (на практике — не бывает: группа делится)."""
+    """Box for the number of lines (feed + branches), at the low end of entries; 190×140 only if
+    there are more lines than a 150×110 takes (in practice never: the group gets split)."""
     return next((name for name, cap in BOX_SIZES if lines <= cap), BOX_LARGE[0])
 
 
 def split_points(points: Sequence[Vec], cap: int) -> list[list[int]]:
-    """Точки по зонам не больше cap в каждой: деление пополам (с учётом числа зон) по более
-    протяжённой оси — соседние точки попадают в одну коробку."""
+    """Points split into zones of at most cap each: halving (with the number of zones in mind) along
+    the longer axis, so neighbouring points end up in one box."""
     idx = list(range(len(points)))
 
     def split(part: list[int]) -> list[list[int]]:
@@ -112,10 +112,11 @@ def split_points(points: Sequence[Vec], cap: int) -> list[list[int]]:
 def place_ceiling_box(
     g: RoomGeometry, reach: Reach, targets: Sequence[Anchor], taken: Sequence[Vec], depth: float
 ) -> Anchor | None:
-    """Коробка на потолке: место внутри помещения не ближе CLEARANCE к стенам в центре своих
-    точек. Из мест, где ветки до точек по трассе не длиннее самых коротких на CENTER_SLACK, —
-    ближайшее к середине точек: путь от щита место не выбирает (одна питающая линия не
-    тянет коробку к стене со стороны щита)."""
+    """Ceiling box: a spot inside the room at least CLEARANCE from walls at the centre of its
+    points.
+    Among spots whose route branches to the points are at most CENTER_SLACK longer than the
+    shortest, take the one closest to the middle of the points: the path from the panel does not
+    choose the spot (one feed line does not pull the box towards the panel's wall)."""
     spots = [
         (reach(p), p)
         for p in Grid.of(room_area(g)).free_points()
@@ -135,7 +136,7 @@ def place_ceiling_box(
 
 
 def box_wall(g: RoomGeometry, anchor: Anchor) -> WallSegment | None:
-    """Стена, на которой стоит коробка (символ); на потолке — None."""
+    """Wall the box stands on (symbol); None on the ceiling."""
     if anchor.wall_dir is None:
         return None
     for seg in g.contour.segments:
@@ -151,9 +152,9 @@ def box_wall(g: RoomGeometry, anchor: Anchor) -> WallSegment | None:
 
 
 def moved_anchor(g: RoomGeometry, anchor: Anchor, at: Vec) -> Anchor | None:
-    """Новое место коробки: на стене — проекция на её стену, не ближе BOX_CLEARANCE к углам;
-    на потолке — точка внутри помещения, а ближе CLEARANCE к стенам — ближайшее место на этом
-    расстоянии. None — места нет."""
+    """New box spot: on a wall, the projection onto its wall, at least BOX_CLEARANCE from corners;
+    on the ceiling, a point inside the room, and if it is closer than CLEARANCE to walls, the
+    nearest spot at that distance. None if there is no room."""
     if anchor.inward is None:
         area = room_area(g)
         pt = Point(at.x, at.y)

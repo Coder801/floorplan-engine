@@ -1,19 +1,19 @@
-"""Развёртки стен (решение 2026-10-28, P1): что монтажник делает на каждой стене.
+"""Wall elevations (decision 2026-10-28, P1): what the installer does on each wall.
 
-Стена — вид изнутри помещения: слева — начало стены по обходу, справа — конец (обход по
-часовой стрелке по внутреннему контуру, поэтому изнутри отступ всегда растёт слева
-направо); снизу — пол, сверху — потолок. На стене: проёмы, точки (номер — как на листе
-электрики), щит, распаечные коробки, штробы (спуски от потолка или подъёмы от пола).
-Только стены, на которых есть точки, щит, коробки или штробы.
+A wall is seen from inside the room: the wall start (in walk order) is on the left, the end on
+the right (the walk is clockwise along the inner outline, so from inside the offset always
+grows left to right); the floor is at the bottom, the ceiling at the top. On the wall:
+openings, points (numbered as on the electrical sheet), panel, junction boxes, chases (drops
+from the ceiling or rises from the floor). Only walls with points, a panel, boxes or chases.
 
-Общая перегородка двух помещений — две развёртки, по одной с каждой стороны (каждая изнутри
-своего помещения). Чтобы их не путать, у развёртки — что за стеной (behind): соседнее
-помещение и номер его стены — обратной стороны этой, или «вне квартиры». Выводы соседа на
-обратной стороне (back) — на своём месте, как видно с этой стороны: сверлить насквозь
-или ставить спина к спине.
+A partition shared by two rooms has two elevations, one from each side (each from inside its
+own room). To tell them apart, an elevation states what is behind the wall (behind): the
+neighbouring room and the number of its wall on the other side, or "outside the flat". The
+neighbour's outlets on the far side (back) are shown in place, as seen from this side: drill
+through or mount back to back.
 
-Новых расчётов нет: точки и щит — из модели, коробки и штробы — из wiring.py, высоты
-проёмов без данных — те же допущения, что в 3D (scene3d).
+No new calculations: points and panel come from the model, boxes and chases from wiring.py,
+opening heights without data use the same assumptions as in 3D (scene3d).
 """
 
 from __future__ import annotations
@@ -46,12 +46,12 @@ from floorplan_engine.model.schema import (
 )
 from floorplan_engine.model.texts import Language, tr
 
-BOARD_HEIGHT_MM = 400.0  # высота щита на развёртке: в модели её нет — допущение
-POST_PITCH_MM = 71.0  # шаг постов в рамке
+BOARD_HEIGHT_MM = 400.0  # panel height on the elevation: not in the model, an assumption
+POST_PITCH_MM = 71.0  # post step in a frame
 BOX_DEFAULT_MM = 100.0
-BEHIND_PROBE_MM = 50.0  # насколько за внешней гранью стены искать соседнее помещение
-FACE_TOLERANCE_MM = 30.0  # грань соседа — не дальше от внешней грани этой стены
-BEHIND_STEP_MM = 500.0  # шаг пробных точек вдоль стены: сосед за частью длинной стены — тоже
+BEHIND_PROBE_MM = 50.0  # how far past the outer wall face to look for a neighbouring room
+FACE_TOLERANCE_MM = 30.0  # neighbour face no farther than this from this wall's outer face
+BEHIND_STEP_MM = 500.0  # probe step along the wall (neighbour behind part of a wall)
 
 
 @dataclass(frozen=True)
@@ -59,14 +59,14 @@ class OpeningView:
     kind: str  # door | window | opening
     x0: float
     x1: float
-    y0: float  # низ: 0 у двери, подоконник у окна
-    y1: float  # верх
-    assumed: bool  # высоты нет в room.yaml — типовая
+    y0: float  # bottom: 0 for a door, sill for a window
+    y1: float  # top
+    assumed: bool  # height not in room.yaml, typical value
 
 
 @dataclass(frozen=True)
 class PointView:
-    """Точка на стене: середина символа (x — от начала стены, y — от пола), мм."""
+    """Point on the wall: symbol centre (x from the wall start, y from the floor), mm."""
 
     id: str
     number: int
@@ -79,49 +79,50 @@ class PointView:
 @dataclass(frozen=True)
 class BoxView:
     id: str
-    label: str  # «К3»
+    label: str  # "К3"
     x: float
     y: float
-    size: float  # сторона, мм
+    size: float  # side, mm
 
 
 @dataclass(frozen=True)
 class ChaseView:
-    """Штроба: вертикаль x, от y0 до y1 (y0 < y1), мм; wide — больше двух кабелей."""
+    """Chase: vertical at x, from y0 to y1 (y0 < y1), mm; wide means more than two cables."""
 
     x: float
     y0: float
     y1: float
     cables: int
     wide: bool
-    low: bool  # слаботочная (интернет, TV)
+    low: bool  # low-voltage (internet, TV)
 
 
 @dataclass(frozen=True)
 class BoardView:
     name: str
-    x: float  # середина
-    y: float  # середина
+    x: float  # centre
+    y: float  # centre
     width: float
     height: float
 
 
 @dataclass(frozen=True)
 class WaterView:
-    """Водорозетка или выпуск на стене — их считает сантехника (plumbing/rows.water_views):
-    x — от начала стены, y — ось от пола, мм; number — номер прибора на листе «Сантехника»."""
+    """Water outlet or drain on the wall, computed by plumbing (plumbing/rows.water_views):
+    x from the wall start, y is the axis from the floor, mm; number is the fixture number on the
+    "Plumbing" sheet."""
 
     fixture: str
     number: int
     kind: str  # cold | hot | sewer
     x: float
     y: float
-    d: int  # Ø, мм
-    assumed: bool  # высота типовая
-    names: dict[str, str] = field(default_factory=dict)  # прибор словами: ru, uk
+    d: int  # Ø, mm
+    assumed: bool  # typical height
+    names: dict[str, str] = field(default_factory=dict)  # fixture in words: ru, uk
 
 
-WaterMap = Mapping[tuple[str, str], Sequence[WaterView]]  # (помещение, стена) → подводы
+WaterMap = Mapping[tuple[str, str], Sequence[WaterView]]  # (room, wall) → supplies
 
 
 @dataclass(frozen=True)
@@ -129,18 +130,18 @@ class WallElevation:
     room: str
     room_name: str
     wall: str
-    index: int  # номер стены в обходе, с 1
+    index: int  # wall number in the walk, from 1
     length: float
-    height: float  # высота потолка
+    height: float  # ceiling height
     height_assumed: bool
     openings: tuple[OpeningView, ...] = ()
     points: tuple[PointView, ...] = ()
     boxes: tuple[BoxView, ...] = ()
     chases: tuple[ChaseView, ...] = ()
     board: BoardView | None = None
-    behind: tuple[tuple[str, int | None], ...] = ()  # за стеной: (помещение, номер его стены)
-    back: tuple[PointView, ...] = ()  # выводы на обратной стороне стены (x — с этой стороны)
-    water: tuple[WaterView, ...] = ()  # водорозетки и выпуски сантехники
+    behind: tuple[tuple[str, int | None], ...] = ()  # behind the wall: (room, its wall number)
+    back: tuple[PointView, ...] = ()  # outlets on the far side of the wall (x from this side)
+    water: tuple[WaterView, ...] = ()  # plumbing water outlets and drains
 
     @property
     def key(self) -> str:
@@ -148,8 +149,9 @@ class WallElevation:
 
     @property
     def top(self) -> float:
-        """Верх чертежа: потолок или, если что-то стоит выше потолка (ошибка данных или
-        потолок не тот), — это место с запасом."""
+        """Top of the drawing: the ceiling or, if something is above the ceiling (bad data or a
+        wrong
+        ceiling), that spot with a margin."""
         tops = [p.y + 100.0 for p in self.points] + [b.y + b.size / 2 for b in self.boxes]
         tops += [w.y + 100.0 for w in self.water]
         if self.board is not None:
@@ -157,11 +159,11 @@ class WallElevation:
         return max([self.height, *tops])
 
     def above_ceiling(self) -> list[str]:
-        """Точки выше потолка — id."""
+        """Ids of points above the ceiling."""
         return [p.id for p in self.points if p.y > self.height]
 
     def heights(self) -> list[float]:
-        """Отметки от пола для размеров: точки, щит, коробки (без повторов, по возрастанию)."""
+        """Heights from the floor for dimensions: points, panel, boxes (unique, ascending)."""
         ys = {round(p.y) for p in self.points} | {round(b.y) for b in self.boxes}
         ys |= {round(w.y) for w in self.water}
         if self.board is not None:
@@ -169,7 +171,7 @@ class WallElevation:
         return sorted(float(y) for y in ys)
 
     def offsets(self) -> list[float]:
-        """Отступы от начала стены: точки, щит, коробки (без повторов, по возрастанию)."""
+        """Offsets from the wall start: points, panel, boxes (unique, ascending)."""
         xs = {round(p.x) for p in self.points} | {round(b.x) for b in self.boxes}
         xs |= {round(w.x) for w in self.water}
         if self.board is not None:
@@ -193,8 +195,8 @@ def wall_elevations(
     ceiling_default: float = 2700.0,
     water: WaterMap | None = None,
 ) -> list[WallElevation]:
-    """Развёртки стен с электрикой и сантехникой (water — подводы приборов по стенам) — по
-    помещениям и обходу стен."""
+    """Elevations of walls with electrical and plumbing items (water is fixture supplies by wall),
+    by room and wall walk order."""
     ceiling = wiring.ceiling_height if wiring is not None else ceiling_default
     assumed = wiring.height_assumed if wiring is not None else True
     numbers = number_points(plan, elec)
@@ -218,17 +220,17 @@ def wall_elevations(
             g = geoms.get(box.room)
             seg = box_wall(g, box.anchor) if g is not None else None
             if g is None or seg is None:
-                continue  # на потолке — не на стене
+                continue  # on the ceiling, not on a wall
             x = (box.anchor.pos - seg.start).dot(seg.direction)
             y = box.rise_mm if box.route == "floor" else ceiling - box.rise_mm
             side = _box_side(box.size)
             walls[(box.room, seg.id)].boxes.append(BoxView(box.id, box.label, x, y, side))
-            # Штроба от коробки до плоскости трассы
+            # Chase from the box to the route plane
             y0, y1 = (0.0, y) if box.route == "floor" else (y, ceiling)
             walls[(box.room, seg.id)].chases.append(ChaseView(x, y0, y1, 1, False, False))
         for c in wiring.chases:
             if not c.wall:
-                continue  # у коробки — нарисована выше
+                continue  # at a box: drawn higher up
             y0, y1 = (0.0, c.length_mm) if c.route == "floor" else (ceiling - c.length_mm, ceiling)
             walls[(c.room, c.wall)].chases.append(
                 ChaseView(c.offset, y0, y1, c.cables, c.wide, c.circuit != "power")
@@ -274,12 +276,12 @@ def elevation_data(
     colors: dict[str, int],
     water: WaterMap | None = None,
 ) -> list[dict[str, Any]]:
-    """Развёртки данными для своего показа в просмотре (ключ elevations страницы, как щит):
-    стена, проёмы, штробы, щит, коробки и точки — с номером листа электрики, названием,
-    группой и коробкой, от которой к точке идёт линия проводки (связь с листом проводки).
-    Ключи объектов — как на листах (point:<id>, box:<id>, board:board). Ещё — внутренняя
-    грань на плане (face: где стоять, чтобы видеть стену, — мини-схема) и соседние стены в
-    углах (left, right: внутренний угол turn и что на соседней стене — для изометрии)."""
+    """Elevations as data for their own view in the viewer (page key elevations, like the panel):
+    wall, openings, chases, panel, boxes and points, with the electrical sheet number, name,
+    group and the box the wiring line to the point comes from (link to the wiring sheet).
+    Object keys match the sheets (point:<id>, box:<id>, board:board). Also the inner face on the
+    plan (face: where to stand to see the wall, for a mini map) and the neighbouring walls at the
+    corners (left, right: inner turn angle and what is on the neighbouring wall, for isometry)."""
     lang = plan.language
     points = {p.id: p for p in elec.points}
     boxes = {b.id: b for b in wiring.boxes} if wiring is not None else {}
@@ -395,8 +397,8 @@ def elevation_data(
     geoms = {g.room.id: g for g in room_geometries(plan, contours)}
 
     def neighbour(room: Room, k: int, turn: float) -> dict[str, Any]:
-        """Соседняя стена в углу (k — её индекс в обходе, с 0): угол и что на ней. Стена
-        без электрики — только проёмы."""
+        """Neighbouring wall at a corner (k is its walk index, from 0): the angle and what is on it.
+        A wall without electrical items has openings only."""
         wall = room.walls[k % len(room.walls)]
         side = done.get((room.id, wall.id))
         if side is None:
@@ -427,9 +429,9 @@ def elevation_data(
             "height": r(e.height),
             "height_assumed": e.height_assumed,
             "top": r(e.top),
-            # Внутренняя грань на плане (мм модели, как сцена 3D): начало — левый угол
+            # Inner face on the plan (model mm, like the 3D scene): the start is the left corner
             "face": [[r(seg.start.x), r(seg.start.y)], [r(seg.end.x), r(seg.end.y)]],
-            # Углы к соседним стенам: слева — к предыдущей по обходу, справа — к следующей
+            # Corners to neighbouring walls: left to the previous in the walk, right to the next
             "left": neighbour(room, k - 1, room.walls[k - 1].turn),
             "right": neighbour(room, k + 1, room.walls[k].turn),
         }
@@ -438,12 +440,12 @@ def elevation_data(
 
 
 def behind_text(e: WallElevation, language: Language) -> str:
-    """Что за стеной — словами: «Спальня (стена 2); Балкон» или «вне квартиры»."""
+    """What is behind the wall, in words: "Спальня (стена 2); Балкон" or "вне квартиры"."""
     names = [
         tr("elev_behind_wall", language, room=room, n=n) if n is not None else room
         for room, n in e.behind
     ]
-    return "; ".join(names) if names else tr("elev_outside", language)  # в именах бывают запятые
+    return "; ".join(names) if names else tr("elev_outside", language)  # names may contain commas
 
 
 def _back_points(
@@ -453,8 +455,9 @@ def _back_points(
     elec: Electrical,
     numbers: dict[str, int],
 ) -> tuple[PointView, ...]:
-    """Выводы соседних помещений на обратной стороне стены seg: точка на стене соседа по
-    той же грани — в координатах этой стены (отступ от её левого угла, вид изнутри)."""
+    """Outlets of neighbouring rooms on the far side of wall seg: a point on the neighbour's wall
+    along the same face, in this wall's coordinates (offset from its left corner, view from
+    inside)."""
     out: list[PointView] = []
     for g in geoms.values():
         if g.room.id == room:
@@ -475,16 +478,16 @@ def _back_points(
 
 
 def _posts(p: ElectricalPoint) -> int:
-    """Постов в рамке: у розеток и слаботочки — count, у остального — один."""
+    """Posts in a frame: count for sockets and low-voltage, one for everything else."""
     return p.count if p.type in (PointType.SOCKET, PointType.DATA, PointType.TV) else 1
 
 
 def behind(
     g: RoomGeometry, seg: WallSegment, geoms: Sequence[RoomGeometry]
 ) -> tuple[tuple[str, int | None], ...]:
-    """Что за стеной seg помещения g: соседние помещения (по точкам за внешней гранью вдоль
-    всей стены — перегородка бывает общей не целиком, за длинной стеной — несколько
-    помещений) и номер стены соседа по той же грани; пусто — за стеной не помещение квартиры."""
+    """What is behind wall seg of room g: neighbouring rooms (probed beyond the outer face along the
+    whole wall: a partition may be shared only in part, a long wall may have several rooms behind
+    it) and the neighbour's wall number on the same face; empty means no room of the flat behind."""
     out: list[tuple[str, int | None]] = []
     n = max(3, round(seg.length / BEHIND_STEP_MM))
     for k in range(n):
@@ -500,8 +503,8 @@ def behind(
 
 
 def _facing_segments(seg: WallSegment, other: RoomGeometry) -> list[WallSegment]:
-    """Стены соседа — обратная сторона seg: идут навстречу по внешней грани seg и
-    перекрываются с ней вдоль стены."""
+    """Neighbour walls on the far side of seg: they run the opposite way along seg's outer face and
+    overlap it along the wall."""
     far = seg.start + seg.outward * seg.thickness
     out: list[WallSegment] = []
     for o in other.contour.segments:
@@ -517,7 +520,7 @@ def _facing_segments(seg: WallSegment, other: RoomGeometry) -> list[WallSegment]
 
 
 def _facing(seg: WallSegment, other: RoomGeometry) -> int | None:
-    """Номер (с 1) первой стены соседа — обратной стороны seg."""
+    """Number (from 1) of the neighbour's first wall on the far side of seg."""
     found = _facing_segments(seg, other)
     return found[0].index + 1 if found else None
 
@@ -531,7 +534,7 @@ def _openings(room: Room, wall: str, ceiling: float) -> tuple[OpeningView, ...]:
 
 
 def _box_side(size: str) -> float:
-    """Сторона коробки на развёртке по типоразмеру: «100x100» → 100, «80» (круглая) → 80."""
+    """Box side on the elevation by size: "100x100" → 100, "80" (round) → 80."""
     try:
         return float(size.split("x")[0])
     except ValueError:

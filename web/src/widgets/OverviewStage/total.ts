@@ -1,14 +1,14 @@
-// Итог проекта на вкладке «Общие сведения»: смета электрики выбранного варианта проводки
-// (variants) плюс смета сантехники (overview.plumbing.estimate) — сантехника от варианта не
-// зависит. Нет ни одной сметы — итога нет.
+// Project total on the "Overview" tab: the electrical estimate of the chosen wiring variant
+// (variants) plus the plumbing estimate (overview.plumbing.estimate); plumbing does not depend
+// on the variant. No estimate at all means no total.
 import type { OverviewPlumbing, VariantSummary } from "@/shared/types";
 
 export interface ProjectTotal {
   total: number;
   currency: string;
-  electrical?: number;  // нет — электрики в проекте нет
-  plumbing?: number;    // нет — сантехники нет
-  unpriced: number;     // позиций без цены в обеих сметах
+  electrical?: number;  // missing: the project has no electrical
+  plumbing?: number;    // missing: no plumbing
+  unpriced: number;     // items without a price in both estimates
 }
 
 export function projectTotal(variant?: VariantSummary, plumbing?: OverviewPlumbing["estimate"]): ProjectTotal | null {

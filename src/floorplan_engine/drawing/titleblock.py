@@ -1,12 +1,12 @@
-"""Рамка листа и основная надпись (штамп) по ДСТУ Б А.2.4-4:2009.
+"""Sheet frame and title block per DSTU B A.2.4-4:2009.
 
-Рамка — додаток Е: поле для підшивки 20 мм слева, 5 мм с остальных сторон.
-Основная надпись — форма 3 (додаток Д), 185 × 55 мм, в правом нижнем углу рамки;
-дополнительные графы 20–22 — на поле для підшивки, 26 «Копіював» и 27 «Формат» — под рамкой.
-Форматы листов — ГОСТ 2.301, на который ссылается ДСТУ (графа 27).
-Рамка и штамп рисуются на листе (paperspace) в мм листа, 1:1. Формат подбирается так,
-чтобы содержимое листа (вид модели и панели справа от него) поместилось над основной
-надписью или слева от неё.
+The frame follows annex E: a 20 mm binding margin on the left, 5 mm on the other sides.
+The title block is form 3 (annex D), 185 × 55 mm, in the bottom-right corner of the frame;
+extra boxes 20–22 go on the binding margin, 26 "Копіював" and 27 "Формат" below the frame.
+Paper sizes follow GOST 2.301, which DSTU refers to (box 27).
+Frame and title block are drawn on the sheet (paperspace) in sheet mm, 1:1. The paper size is
+chosen so that the sheet content (model view and the panels to its right) fits above the
+title block or to its left.
 """
 
 from __future__ import annotations
@@ -24,7 +24,7 @@ from floorplan_engine.drawing.layers import A_SHEET, TEXT_STYLE, text_width
 from floorplan_engine.model.schema import SheetFormat, SheetInfo
 from floorplan_engine.model.texts import Language, tr
 
-# Короткая × длинная сторона, мм
+# Short × long side, mm
 FORMATS: dict[str, tuple[float, float]] = {
     "A4": (210.0, 297.0),
     "A3": (297.0, 420.0),
@@ -32,58 +32,58 @@ FORMATS: dict[str, tuple[float, float]] = {
     "A1": (594.0, 841.0),
     "A0": (841.0, 1189.0),
 }
-FRAME_LEFT = 20.0  # поле для подшивки
+FRAME_LEFT = 20.0  # binding margin
 FRAME_MARGIN = 5.0
 STAMP_W = 185.0
 STAMP_H = 55.0
-PADDING = 20.0  # от рамки и штампа до чертежа, таблиц и легенды
-LW_THICK = 50  # 0,5 мм — основная линия
-LW_THIN = 18  # 0,18 мм — тонкая
-# Высоты текста — ряд ГОСТ 2.304 (2,5; 3,5; 5); меньше 2,5 не уменьшаем, дальше — сжатие
+PADDING = 20.0  # from the frame and title block to the drawing, tables and legend
+LW_THICK = 50  # 0.5 mm: thick line
+LW_THIN = 18  # 0.18 mm: thin line
+# Text heights from the GOST 2.304 series (2.5; 3.5; 5); never below 2.5, compress instead
 TEXT_LABEL_MM = 2.5
 TEXT_FIELD_MM = 3.5
 TEXT_CODE_MM = 5.0
 TEXT_MIN_MM = 2.5
-CELL_PAD = 1.0  # от линий графы до текста с каждой стороны, мм
-LINE_PITCH = 1.6  # шаг строк в высотах текста (две строки в графе 15 мм)
-# Графы 20–22 снизу вверх: «Інв. № ор.», «Підпис і дата», «Зам. інв. №» — высота, мм
+CELL_PAD = 1.0  # from the box lines to the text on each side, mm
+LINE_PITCH = 1.6  # line step in text heights (two lines in a 15 mm box)
+# Boxes 20–22 from bottom to top: "Інв. № ор.", "Підпис і дата", "Зам. інв. №"; height, mm
 INV_ROWS = (("inv_original", 25.0), ("inv_signature", 35.0), ("inv_replaced", 25.0))
 INV_LABEL_W = 5.0
 INV_VALUE_W = 7.0
 
-Region = tuple[float, float, float, float]  # x0, y0, x1, y1 в мм листа
+Region = tuple[float, float, float, float]  # x0, y0, x1, y1 in sheet mm
 
 
 @dataclass(frozen=True)
 class SheetLayout:
     format: str
-    width: float  # мм листа, с учётом ориентации
+    width: float  # sheet mm, orientation applied
     height: float
-    region: Region  # поле внутри рамки
-    fits: bool  # содержимое поместилось
+    region: Region  # area inside the frame
+    fits: bool  # the content fits
 
     @property
     def paper_prefix(self) -> str:
-        """Начало имени бумаги «DWG To PDF.pc3»: ezdxf допишет «_(420.00_x_297.00_MM)»."""
+        """Start of the paper name "DWG To PDF.pc3": ezdxf appends "_(420.00_x_297.00_MM)"."""
         return f"ISO_full_bleed_{self.format}"
 
 
 @dataclass(frozen=True)
 class StampText:
-    """Что пишется в основной надписи конкретного листа."""
+    """What goes into the title block of a particular sheet."""
 
     info: SheetInfo
-    object_name: str  # графа 2
-    image: str  # графа 4
-    sheet_no: int = 1  # графа 7
-    sheets: int = 1  # графа 8
-    today: date | None = None  # дата подписей по умолчанию
+    object_name: str  # box 2
+    image: str  # box 4
+    sheet_no: int = 1  # box 7
+    sheets: int = 1  # box 8
+    today: date | None = None  # default signature date
     language: Language = "ru"
 
 
 def format_candidates(fmt: SheetFormat) -> list[tuple[str, float, float]]:
-    """Форматы по возрастанию: (имя, ширина, высота); горизонтальный раньше вертикального.
-    A4 — только вертикальный. Заданный формат — только он, в двух ориентациях."""
+    """Paper sizes in ascending order: (name, width, height); landscape before portrait.
+    A4 is portrait only. A given size is used alone, in both orientations."""
     names = list(FORMATS) if fmt == "auto" else [fmt]
     out: list[tuple[str, float, float]] = []
     for name in names:
@@ -96,18 +96,18 @@ def format_candidates(fmt: SheetFormat) -> list[tuple[str, float, float]]:
 
 
 def frame_region(width: float, height: float) -> Region:
-    """Поле внутри рамки листа (штамп — в его правом нижнем углу)."""
+    """Area inside the sheet frame (the title block sits in its bottom-right corner)."""
     return FRAME_LEFT, FRAME_MARGIN, width - FRAME_MARGIN, height - FRAME_MARGIN
 
 
-# --- Отрисовка ---------------------------------------------------------------
+# --- Drawing -----------------------------------------------------------------
 
 
 class _Pen:
-    """Рисование в мм листа со сдвигом (dx, dy) — началом графы.
+    """Drawing in sheet mm shifted by (dx, dy), the box origin.
 
-    layer — слой примитивов: A-SHEET на листе, «0» внутри блока штампа (наследует слой
-    вставки).
+    layer is the primitive layer: A-SHEET on the sheet, "0" inside the title block (inherits the
+    insert layer).
     """
 
     def __init__(self, target: BaseLayout, dx: float = 0, dy: float = 0, layer: str = ""):
@@ -140,7 +140,9 @@ class _Pen:
         rotation: float = 0.0,
         width: float | None = None,
     ) -> None:
-        """width — сколько мм есть у текста вдоль строки: не влезает — уменьшаем и сжимаем."""
+        """width is how many mm the text has along the line: if it does not fit, shrink and
+        compress.
+        """
         if not text:
             return
         factor = 1.0
@@ -155,9 +157,9 @@ class _Pen:
 
 
 def fit_line(text: str, width: float, preferred: float) -> tuple[float, float]:
-    """Высота и коэффициент ширины, при которых текст в одну строку помещается в width мм
-    (по метрикам шрифта): сначала уменьшаем высоту до TEXT_MIN_MM, потом сжимаем по ширине."""
-    natural = text_width(text)  # ширина при высоте 1 мм
+    """Height and width factor that make one line of text fit into width mm (by font metrics):
+    first reduce the height down to TEXT_MIN_MM, then compress the width."""
+    natural = text_width(text)  # width at 1 mm height
     if natural == 0:
         return preferred, 1.0
     height = max(min(TEXT_MIN_MM, preferred), min(preferred, width / natural))
@@ -167,7 +169,7 @@ def fit_line(text: str, width: float, preferred: float) -> tuple[float, float]:
 
 @dataclass(frozen=True)
 class Line:
-    """Строка значения в графе: текст, высота, коэффициент ширины, сдвиг от центра по Y."""
+    """Value line in a box: text, height, width factor, Y offset from the centre."""
 
     text: str
     height: float
@@ -176,8 +178,8 @@ class Line:
 
 
 def fit_cell(text: str, width: float, preferred: float, lines: int = 1) -> list[Line]:
-    """Разложить значение по графе шириной width мм: одна строка, а если она не влезает
-    без уменьшения и графа позволяет (lines = 2) — две строки по границе слова."""
+    """Lay a value out in a box width mm wide: one line, or, if it does not fit without shrinking
+    and the box allows it (lines = 2), two lines split at a word boundary."""
     height, factor = fit_line(text, width, preferred)
     single = [Line(text, height, factor)]
     words = text.split()
@@ -188,7 +190,7 @@ def fit_cell(text: str, width: float, preferred: float, lines: int = 1) -> list[
     longest = max(text_width(top), text_width(bottom))
     h2 = max(min(TEXT_MIN_MM, preferred), min(preferred, width / longest))
     if h2 * min(1.0, width / (longest * h2)) <= height * factor:
-        return single  # на две строки не крупнее
+        return single  # two lines no larger than
     dy = h2 * LINE_PITCH / 2
     return [
         Line(s, h2, min(1.0, width / (text_width(s) * h2)), d)
@@ -197,14 +199,14 @@ def fit_cell(text: str, width: float, preferred: float, lines: int = 1) -> list[
 
 
 def draw_frame(psp: Paperspace, layout: SheetLayout, language: Language = "ru") -> None:
-    """Граница формата (тонкая), рамка (основная), графы 26–27 под ней и 20–22 слева."""
+    """Paper border (thin), frame (thick), boxes 26–27 below it and 20–22 on the left."""
     pen = _Pen(psp)
     w, h = layout.width, layout.height
     pen.rect(0, 0, w, h, thick=False)
     pen.rect(FRAME_LEFT, FRAME_MARGIN, w - FRAME_MARGIN, h - FRAME_MARGIN)
     under = FRAME_MARGIN / 2
     stamp_x0 = w - FRAME_MARGIN - STAMP_W
-    pen.text(tr("copied", language), stamp_x0 + 85, under)  # графа 26 — под графой 4
+    pen.text(tr("copied", language), stamp_x0 + 85, under)  # box 26 sits under box 4
     pen.text(
         tr("format", language, name=layout.format),
         w - FRAME_MARGIN,
@@ -215,7 +217,7 @@ def draw_frame(psp: Paperspace, layout: SheetLayout, language: Language = "ru") 
 
 
 def draw_binding_columns(pen: _Pen, language: Language) -> None:
-    """Дополнительные графы 20–22 на поле для підшивки: подпись 5 мм + значение 7 мм."""
+    """Extra boxes 20–22 on the binding margin: a 5 mm caption + a 7 mm value."""
     x1 = FRAME_LEFT
     x0, xm = x1 - INV_LABEL_W - INV_VALUE_W, x1 - INV_VALUE_W
     y = FRAME_MARGIN
@@ -227,13 +229,13 @@ def draw_binding_columns(pen: _Pen, language: Language) -> None:
         y += height
 
 
-# --- Основная надпись: блок с атрибутами --------------------------------------
+# --- Title block: block with attributes ---------------------------------------
 
 
 @dataclass(frozen=True)
 class StampField:
-    """Атрибут штампа: тег, границы графы по X (x0, x1), центр графы по Y, высота графы,
-    высота текста. Графа в две строки (lines = 2) — два атрибута: TAG и TAG_2."""
+    """Title block attribute: tag, box X bounds (x0, x1), box Y centre, box height, text height.
+    A two-line box (lines = 2) has two attributes: TAG and TAG_2."""
 
     tag: str
     x0: float
@@ -247,7 +249,7 @@ class StampField:
 
     @property
     def width(self) -> float:
-        """Сколько мм есть у текста: графа без отступов от линий."""
+        """How many mm the text has: the box minus padding from the lines."""
         return self.x1 - self.x0 - 2 * CELL_PAD
 
     @property
@@ -286,11 +288,11 @@ STAMP_BLOCK = "STAMP_F3"
 
 
 def define_stamp_block(doc: Drawing, language: Language) -> None:
-    """Неизменная часть основной надписи формы 3 (линии и подписи граф) + атрибуты граф.
+    """Fixed part of the form 3 title block (lines and box captions) + box attributes.
 
-    Левая часть 65 мм — изменения и подписи, правая 120 мм сверху вниз: графа 1 — 10 мм,
-    графа 2 — 15, графа 3 со «Стадія / Аркуш / Аркушів» (15 / 15 / 20) — 15,
-    графы 4 и 9 (70 / 50) — 15.
+    The left part (65 mm) holds revisions and signatures; the right part (120 mm) from top to
+    bottom: box 1 is 10 mm, box 2 is 15, box 3 with "Стадія / Аркуш / Аркушів" (15 / 15 / 20)
+    is 15, boxes 4 and 9 (70 / 50) are 15.
     """
     if STAMP_BLOCK in doc.blocks:
         return
@@ -298,7 +300,7 @@ def define_stamp_block(doc: Drawing, language: Language) -> None:
     pen = _Pen(block, layer="0")
     pen.rect(0, 0, STAMP_W, STAMP_H)
     pen.line(65, 0, 65, STAMP_H)
-    # Левая часть: 2 строки изменений, шапка, 8 строк подписей — по 5 мм
+    # Left part: 2 revision rows, header, 8 signature rows, 5 mm each
     for i in range(1, 11):
         y = 5.0 * i
         pen.line(0, y, 65, y, thick=y in (40.0, 45.0))
@@ -316,7 +318,7 @@ def define_stamp_block(doc: Drawing, language: Language) -> None:
     )
     for key, x0, x1 in header:
         pen.text(tr(key, language), (x0 + x1) / 2, 42.5, width=x1 - x0 - 2 * CELL_PAD)
-    # Правая часть: графы 1, 2, 3 + стадия/лист/листов, 4 + 9
+    # Right part: boxes 1, 2, 3 + stage/sheet/sheets, 4 + 9
     for y in (15, 30, 45):
         pen.line(65, y, STAMP_W, y)
     pen.line(135, 0, 135, 30)
@@ -331,7 +333,7 @@ def define_stamp_block(doc: Drawing, language: Language) -> None:
         pen.text(tr(key, language), (x0 + x1) / 2, 27.5, width=x1 - x0 - 2 * CELL_PAD)
     for f in STAMP_FIELDS:
         for k, tag in enumerate(f.tags):
-            y = f.y - k * f.height * LINE_PITCH  # вторая строка — под первой
+            y = f.y - k * f.height * LINE_PITCH  # second line under the first
             block.add_attdef(
                 tag,
                 insert=(f.anchor_x, y),
@@ -348,7 +350,7 @@ def stamp_values(stamp: StampText) -> dict[str, str]:
         "BUILDING": info.building,
         "IMAGE": stamp.image,
         "STAGE": info.stage,
-        # Графа 7 — если листов больше одного, графа 8 — только на первом листе
+        # Box 7 only when there is more than one sheet, box 8 only on the first sheet
         "SHEET": str(stamp.sheet_no) if stamp.sheets > 1 else "",
         "SHEETS": str(stamp.sheets) if stamp.sheet_no == 1 else "",
         "ORG": info.organization,
@@ -363,8 +365,8 @@ def stamp_values(stamp: StampText) -> dict[str, str]:
 
 
 def draw_stamp(psp: Paperspace, layout: SheetLayout, stamp: StampText) -> Insert:
-    """Вставка блока штампа в правый нижний угол рамки. Значение раскладывается по графе
-    (fit_cell): уменьшается, сжимается или переносится на вторую строку — за линии не выходит."""
+    """Insert the title block into the bottom-right corner of the frame. Each value is fitted to its
+    box (fit_cell): shrunk, compressed or wrapped to a second line; it never crosses the lines."""
     doc = psp.doc
     assert doc is not None
     define_stamp_block(doc, stamp.language)
@@ -389,6 +391,6 @@ def draw_stamp(psp: Paperspace, layout: SheetLayout, stamp: StampText) -> Insert
 
 
 def draw_sheet(psp: Paperspace, layout: SheetLayout, stamp: StampText) -> None:
-    """Рамка и основная надпись на листе."""
+    """Frame and title block on the sheet."""
     draw_frame(psp, layout, stamp.language)
     draw_stamp(psp, layout, stamp)

@@ -1,56 +1,64 @@
 ---
-description: План помещения по фото или тексту → projects/<имя>/room.yaml, таблица размеров, после подтверждения check + build
-argument-hint: <путь к фото | текстовое описание> [имя проекта]
+description: Room plan from a photo or text → projects/<name>/room.yaml, a size table, then check + build after confirmation
+argument-hint: <path to photo | text description> [project name]
 allowed-tools: Read, Write, Edit, Glob, Bash(uv run floorplan-engine:*), Bash(mkdir:*), Bash(cp:*), Bash(ls:*)
 ---
 
-Создай план помещения по входным данным: $ARGUMENTS
+Create a room plan from the input: $ARGUMENTS
 
-Следуй правилам из CLAUDE.md. Главное: только размеры с фото или из текста, без оценки на глаз и без подгонки.
+Follow the rules in CLAUDE.md. Above all: only sizes from the photo or the text, no estimating by
+eye and no adjusting to fit.
 
-## 1. Вход и папка проекта
-- Если в аргументах есть путь к существующему изображению (jpg/png/heic/webp), это фото: `source: photo`.
-- Если на изображении рисунок от руки (эскиз, план на бумаге или поверх фото) — не разбирай его
-  (правило 6 в CLAUDE.md): `room.yaml` не пиши, только `intake.yaml` с источником
-  `note: "рисунок от руки — не разбирается"` и critical-вопросом «пришлите чертёж (PDF, DWG)
-  или обмерный план». Скажи об этом пользователю.
-  Иначе это текстовое описание: `source: text`. Если пользователь говорит, что мерил сам: `source: measured`.
-- Имя проекта: из аргументов, если указано; иначе придумай короткое латиницей и назови его.
-  Если `projects/<имя>/` уже существует — спроси, перезаписывать ли, и не трогай файлы до ответа.
-- Создай `projects/<имя>/source/` и `projects/<имя>/out/`. Фото скопируй в `source/`.
-  Текстовое описание сохрани дословно в `source/notes.md`.
+## 1. Input and project folder
+- If the arguments contain a path to an existing image (jpg/png/heic/webp), it is a photo:
+  `source: photo`.
+- If the image is a hand drawing (a sketch, a plan on paper or drawn over a photo), do not parse it
+  (rule 6 in CLAUDE.md): do not write `room.yaml`, only `intake.yaml` with the source marked
+  `note: "рисунок от руки — не разбирается"` and a critical question "please send a drawing (PDF,
+  DWG) or a measured plan". Tell the user.
+  Otherwise it is a text description: `source: text`. If the user says they measured it
+  themselves: `source: measured`.
+- Project name: from the arguments if given; otherwise make up a short Latin name and state it.
+  If `projects/<name>/` already exists, ask whether to overwrite it and do not touch any files until
+  you get an answer.
+- Create `projects/<name>/source/` and `projects/<name>/out/`. Copy the photo into `source/`.
+  Save a text description word for word in `source/notes.md`.
 
-## 2. Распознавание
-- Открой фото через Read. Выпиши **только числа, которые на нём написаны**, и к чему каждое относится.
-- Построй обход: `origin` — левый нижний внутренний угол, стены по часовой стрелке по внутреннему
-  контуру, первая — вверх. Для каждого угла определи `turn`: 90 или 270 для входящего.
-- Проёмы: стена, тип (door / window / opening), `offset` от начала стены по направлению обхода,
-  `width`, для окон — `sill`, если написан.
-- Чего не видно или что неоднозначно — вопрос в `intake.yaml` (с `target`, `assumption`, `also`
-  по правилам CLAUDE.md), без выдуманных чисел. Нет геометрии совсем — только `intake.yaml`.
-- Сам проверь замыкание: сложи проекции стен по X и Y.
+## 2. Recognition
+- Open the photo with Read. Write down **only the numbers written on it**, and what each refers to.
+- Build the walk: `origin` is the bottom-left inner corner, walls go clockwise along the inner
+  outline, the first one goes up. For each corner set `turn`: 90, or 270 for a reflex corner.
+- Openings: wall, type (door / window / opening), `offset` from the wall start along the walk,
+  `width`, and `sill` for windows if it is written.
+- Anything not visible or ambiguous becomes a question in `intake.yaml` (with `target`,
+  `assumption`, `also` per CLAUDE.md), never an invented number. With no geometry at all, write only
+  `intake.yaml`.
+- Check the closure yourself: add up the wall projections on X and Y.
 
-## 3. Покажи и остановись
-Запиши черновик `room.yaml` и покажи:
-1. Таблицу **«id стены → направление → длина → толщина → источник (фото / текст / допущение)»**.
-2. Таблицу проёмов: id, стена (id), тип, offset, width, sill, источник.
-3. Расчёт замыкания: Σ по X, Σ по Y.
-4. Вопросы из `intake.yaml`: id, вопрос, поле, что сейчас в модели, вес (critical / major / minor).
-5. Допущения: толщина по умолчанию, открывание дверей и т. п.
+## 3. Show and stop
+Write a draft `room.yaml` and show:
+1. A table **"wall id → direction → length → thickness → source (photo / text / assumption)"**.
+2. A table of openings: id, wall (id), type, offset, width, sill, source.
+3. The closure check: Σ on X, Σ on Y.
+4. Questions from `intake.yaml`: id, question, field, what the model holds now, weight
+   (critical / major / minor).
+5. Assumptions: default thickness, door swing, and so on.
 
-**Дальше не иди.** Жди подтверждения или исправлений. Исправления вноси в `room.yaml`
-и показывай таблицу снова.
+**Do not go further.** Wait for confirmation or corrections. Apply corrections to `room.yaml` and
+show the table again.
 
-## 4. После подтверждения
-1. `uv run floorplan-engine check projects/<имя>`.
-   При ошибке не меняй числа сам: покажи невязку и предложенные варианты и спроси, какой размер неверный.
-2. `uv run floorplan-engine build projects/<имя>`.
-3. Запусти `uv run floorplan-engine render-artifact projects/<имя>`, открой лист плана
-   `projects/<имя>/out/artifact/01-plan.png` через Read и проверь:
-   - контур замкнут, стены на месте;
-   - каждый проём на своей стене, со своей стороны, нужной ширины; дуга двери открывается куда нужно;
-   - размеры читаются и совпадают с таблицей;
-   - подписи не налезают друг на друга.
-   Если что-то не так — найди причину в YAML, покажи её и спроси, прежде чем менять.
-4. Итог: пути к файлам, площади помещений, статус этапов и открытые вопросы из
-   `out/report.md`, допущения списком.
+## 4. After confirmation
+1. Run `uv run floorplan-engine check projects/<name>`.
+   If there is an error, do not change numbers yourself: show the closure error and the suggested
+   options and ask which size is wrong.
+2. Run `uv run floorplan-engine build projects/<name>`.
+3. Run `uv run floorplan-engine render-artifact projects/<name>`, open the plan sheet
+   `projects/<name>/out/artifact/01-plan.png` with Read and check that:
+   - the outline is closed and the walls are in place;
+   - each opening is on its wall, on the right side, at the right width; the door arc opens the
+     right way;
+   - dimensions are readable and match the table;
+   - labels do not overlap each other.
+   If something is wrong, find the cause in the YAML, show it and ask before changing anything.
+4. Result: file paths, room areas, stage status and open questions from `out/report.md`, and the
+   assumptions as a list.

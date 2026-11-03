@@ -1,6 +1,6 @@
-"""Вход в просмотр (service/api/auth.py): настройки из окружения, гость отладки, проверка доступа
-к проектам, приглашения. Вход Google — ответом провайдера (Auth._finish_login): обмен кода
-с Google без ключей не проверить."""
+"""Viewer login (service/api/auth.py): settings from the environment, debug guest, project access
+checks, invites. Google login via the provider answer (Auth._finish_login): exchanging the
+code with Google cannot be tested without keys."""
 
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ ENV = {"SHTROBA_AUTH": "on", "SHTROBA_SECRET": SECRET, "SHTROBA_PUBLIC_URL": "ht
 
 
 def test_config_from_env() -> None:
-    assert AuthConfig.from_env({}) is None  # вход выключен — просмотр открыт, как раньше
+    assert AuthConfig.from_env({}) is None  # login off: the viewer is open, as before
     config = AuthConfig.from_env({**ENV, "SHTROBA_SUPERUSERS": "A@b.c, d@e.f"})
     assert config is not None and not config.google and not config.visitor
     assert config.superusers == ("a@b.c", "d@e.f")
@@ -75,7 +75,7 @@ def test_closed_without_login_and_open_auth_routes(auth: Auth, root: Path) -> No
         "dev": False,
         "visitor_allowed": True,
     }
-    assert client.get("/api/auth/google/login").status_code == 503  # ключей Google нет
+    assert client.get("/api/auth/google/login").status_code == 503  # no Google keys
 
 
 def test_visitor_sees_all_read_only(auth: Auth, root: Path) -> None:
@@ -85,6 +85,8 @@ def test_visitor_sees_all_read_only(auth: Auth, root: Path) -> None:
     names = {p["name"] for p in client.get("/api/projects").json()}
     assert names == {"kv1", "kv2", "folder-only"}
     assert client.post("/api/projects/kv1/wiring", json={}).status_code == 403
+    assert client.get("/api/prices").json()["editable"] is False  # reads, does not edit
+    assert client.post("/api/prices", json={"items": {}}).status_code == 403
     client.post("/api/auth/logout")
     assert client.get("/api/projects").status_code == 401
 
@@ -110,7 +112,7 @@ def test_roles_filter_projects_and_actions(auth: Auth, root: Path) -> None:
     info = client.get(f"/api/invites/{invite}").json()
     assert info == {"role": "client", "project": "Кв 1"}
 
-    # Клиент входит по приглашению: видит только свой проект, трассы не правит
+    # A client logs in by invite: sees only their project, does not edit routes
     client_token, error = _login(auth, "flat-owner", invite)
     assert error is None
     client.cookies.set(COOKIE, client_token)
@@ -118,21 +120,25 @@ def test_roles_filter_projects_and_actions(auth: Auth, root: Path) -> None:
     assert me["account_type"] == "client"
     assert [p["name"] for p in client.get("/api/projects").json()] == ["kv1"]
     assert client.get("/api/projects/kv1").status_code == 200
-    assert client.get("/api/projects/kv2").status_code == 404  # чужой — как будто нет
+    assert client.get("/api/projects/kv2").status_code == 404  # someone else's: hidden
     assert client.get("/api/projects/folder-only").status_code == 404
     assert client.post("/api/projects/kv1/wiring", json={}).status_code == 403
-    # Клиент студии вариант не выбирает и трассы не правит — и страница это знает
+    assert client.get("/api/prices").status_code == 403  # the studio price list is not theirs
+    # A studio client neither chooses the variant nor edits routes, and the page knows it
     assert client.post("/api/projects/kv1/variant", json={}).status_code == 403
     assert client.get("/api/projects/kv1").json()["can"] == {
         "edit_wiring": False,
         "choose_variant": False,
     }
 
-    # Студия видит свои проекты, но не папку вне базы; выбирает вариант и правит трассы
+    # The studio sees its projects but not a folder outside the database; chooses the variant and
+    # edits routes
     client.cookies.set(COOKIE, studio_token)
     assert client.get("/api/projects/kv1").json()["can"]["choose_variant"] is True
     assert {p["name"] for p in client.get("/api/projects").json()} == {"kv1", "kv2"}
-    assert client.get(f"/api/invites/{invite}").status_code == 404  # уже принято
+    assert client.get("/api/prices").json()["editable"] is True
+    assert client.post("/api/prices", json={"items": {"work.chase": 90}}).status_code == 200
+    assert client.get(f"/api/invites/{invite}").status_code == 404  # already accepted
 
 
 def test_account_type_and_bad_invite(auth: Auth, root: Path) -> None:
@@ -140,7 +146,7 @@ def test_account_type_and_bad_invite(auth: Auth, root: Path) -> None:
     token, _ = _login(auth, "newbie")
     client.cookies.set(COOKIE, token)
     assert client.get("/api/auth/me").json()["user"]["account_type"] is None
-    # Фирма — только регистрацией с названием и видом
+    # A firm only through registration with a name and a kind
     assert client.post("/api/auth/account-type", json={"type": "pro"}).status_code == 422
     bad = client.post("/api/auth/firm", json={"name": " ", "business": "electric"})
     assert bad.status_code == 409 and "название" in bad.json()["detail"]
@@ -164,7 +170,7 @@ def test_open_viewer_reports_auth_off(root: Path) -> None:
 
 
 class _Outbox:
-    """Почтальон для тестов: письма — в список."""
+    """Test mailer: e-mails go into a list."""
 
     def __init__(self) -> None:
         self.sent: list[tuple[str, str, str]] = []
@@ -178,14 +184,14 @@ class _Outbox:
 
 def test_mailer_from_env() -> None:
     assert isinstance(mailer_from_env({}, local=True), LogMailer)
-    assert mailer_from_env({}, local=False) is None  # в работе без SMTP — входа по коду нет
+    assert mailer_from_env({}, local=False) is None  # in production without SMTP: no code login
     smtp = mailer_from_env({"SMTP_HOST": "smtp.x", "SMTP_USER": "u@x"}, local=False)
     assert isinstance(smtp, SmtpMailer) and smtp.port == 587 and smtp.sender == "u@x"
 
 
 def test_email_code_login(auth: Auth, root: Path) -> None:
-    """Код на почту → вход: cookie сессии, тот же пользователь, что с Google по этому email;
-    неверный код — 400, частый запрос — 429; без почтальона — 503."""
+    """E-mail code → login: a session cookie, the same user as with Google for this e-mail; a wrong
+    code gives 400, too frequent requests 429; no mailer gives 503."""
     outbox = _Outbox()
     auth.mailer = outbox
     client = TestClient(create_viewer(root, auth))
@@ -208,7 +214,7 @@ def test_email_code_login(auth: Auth, root: Path) -> None:
     me = client.get("/api/auth/me").json()["user"]
     assert me["email"] == "ann@example.com"
 
-    # Google с тем же подтверждённым адресом — тот же пользователь
+    # Google with the same confirmed address is the same user
     with auth.db() as db:
         google = acc.oauth_login(db, "google", "ann", "ann@example.com", True)
         assert str(google.id) == me["id"]
@@ -220,8 +226,8 @@ def test_email_code_login(auth: Auth, root: Path) -> None:
 
 
 def test_access_code_login(auth: Auth, root: Path) -> None:
-    """Код доступа: вход без учётки в один проект, только чтение; отзыв — сразу 401;
-    много неверных кодов с одного адреса — 429."""
+    """Access code: login without an account to one project, read only; revocation gives 401 at
+    once; many wrong codes from one address give 429."""
     studio_token, _ = _login(auth, "studio")
     with auth.db() as db:
         studio = acc.session_user(db, studio_token)
@@ -264,11 +270,11 @@ def test_code_limiter_window() -> None:
     limiter.fail("a", 0)
     limiter.fail("a", 1)
     assert limiter.blocked("a", 2) and not limiter.blocked("b", 2)
-    assert not limiter.blocked("a", 12)  # старые промахи забыты
+    assert not limiter.blocked("a", 12)  # old misses are forgotten
 
 
 def test_dev_login_config() -> None:
-    """Вход для разработки — только локально и только при суперпользователе."""
+    """Development login only locally and only with a superuser."""
     env = {**ENV, "SHTROBA_DEV_LOGIN": "1", "SHTROBA_SUPERUSERS": "Dev@x.io"}
     config = AuthConfig.from_env(env)
     assert config is not None and config.dev_login
@@ -281,7 +287,7 @@ def test_dev_login_config() -> None:
 
 
 def test_dev_login(pg: Engine, root: Path) -> None:
-    """«Зайти для разработки» — сессия первого суперпользователя; выключен — 403."""
+    """The "Log in for development" button opens a session of the first superuser; off gives 403."""
     engine = pg
     config = AuthConfig(SECRET, "http://t", superusers=("dev@x.io",), dev_login=True)
     client = TestClient(create_viewer(root, Auth(config, make_sessions(engine))))
@@ -298,30 +304,32 @@ def test_dev_login(pg: Engine, root: Path) -> None:
 
 
 def test_owner_login_adopts_project_folders(pg: Engine, root: Path) -> None:
-    """SHTROBA_OWNER: папки без строки в базе — в студию владельца при его входе и выборе
-    «Фирма»; другие пользователи папок не получают."""
+    """SHTROBA_OWNER: folders without a database row go to the owner's studio when they log in and
+    choose "Firm"; other users do not get the folders."""
     engine = pg
     auth = Auth(AuthConfig(SECRET, "http://t", owner="boss@example.com"), make_sessions(engine))
     client = TestClient(create_viewer(root, auth))
     token, _ = _login(auth, "guest")
     with auth.db() as db:
-        assert acc.project_by_slug(db, "kv1") is None  # чужой вход — ничего
+        assert acc.project_by_slug(db, "kv1") is None  # someone else logs in: nothing
     token, _ = _login(auth, "boss")
     with auth.db() as db:
-        assert acc.project_by_slug(db, "kv1") is None  # владелец без типа учётки — рано
+        assert acc.project_by_slug(db, "kv1") is None  # owner without an account type: too early
     client.cookies.set(COOKIE, token)
     r = client.post("/api/auth/firm", json={"name": "Штроба", "business": "electric"})
     assert r.status_code == 200
     assert {p["name"] for p in client.get("/api/projects").json()} == {"kv1", "kv2", "folder-only"}
-    _folder(root, "kv3")  # новая папка после деплоя — при следующем входе
+    _folder(root, "kv3")  # a new folder after deploy: on the next login
     _login(auth, "boss")
     with auth.db() as db:
         assert acc.project_by_slug(db, "kv3") is not None
-        assert len(db.query(Project).all()) == 4  # повторный вход ничего не дублирует
+        assert len(db.query(Project).all()) == 4  # logging in again duplicates nothing
 
 
 def test_fixed_codes_from_env() -> None:
-    """SHTROBA_ACCESS_CODES: «папка=КОД» через запятую, код как в базе; кривая запись — ошибка."""
+    """SHTROBA_ACCESS_CODES: "folder=CODE" comma-separated, the code as in the database; a
+    malformed entry is an error.
+    """
     config = AuthConfig.from_env({**ENV, "SHTROBA_ACCESS_CODES": " kv1=abcd-2345, kv2=WXYZ 6789 ,"})
     assert config is not None and config.fixed_codes == (("kv1", "ABCD2345"), ("kv2", "WXYZ6789"))
     for bad in ("kv1", "=ABCD-2345", "kv1=ABCD-234O"):
@@ -330,12 +338,12 @@ def test_fixed_codes_from_env() -> None:
 
 
 def test_fixed_codes_seeded_at_startup(pg: Engine, root: Path) -> None:
-    """Постоянный код при старте сервера — в базе: проект без строки записан «без владельца»,
-    по коду открывается только он; повторный старт ничего не дублирует."""
+    """A permanent code goes to the database on server start: a project without a row is written as
+    "no owner", the code opens only that project; a restart duplicates nothing."""
     engine = pg
     config = AuthConfig(SECRET, "http://t", fixed_codes=(("kv1", "ABCD2345"),))
     app = create_viewer(root, Auth(config, make_sessions(engine)))
-    for _ in range(2):  # два старта — одна строка кода
+    for _ in range(2):  # two starts, one code row
         with TestClient(app) as client:
             r = client.post("/api/auth/code", json={"code": "abcd-2345"})
             assert r.status_code == 200 and r.json()["project"] == "kv1"
@@ -347,8 +355,8 @@ def test_fixed_codes_seeded_at_startup(pg: Engine, root: Path) -> None:
 
 
 def test_fixed_codes_skip_unknown_folder_and_taken_code(pg: Engine, root: Path) -> None:
-    """Папки нет (опечатка в SHTROBA_ACCESS_CODES) или код уже у другого проекта — строка
-    проекта не создаётся, остальные коды записываются."""
+    """No folder (a typo in SHTROBA_ACCESS_CODES) or the code already belongs to another project: no
+    project row is created, the other codes are written."""
     codes = (("kv-typo", "ABCD2345"), ("kv1", "WXYZ6789"), ("kv2", "WXYZ6789"))
     config = AuthConfig(SECRET, "http://t", fixed_codes=codes)
     app = create_viewer(root, Auth(config, make_sessions(pg)))

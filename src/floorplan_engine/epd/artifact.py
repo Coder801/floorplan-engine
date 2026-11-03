@@ -1,26 +1,26 @@
-"""Артефакт проекта `.epd` — инструкции для постраничного построения проекта в кабинете.
+"""The project artifact `.epd`: instructions for building the project page by page in the viewer.
 
-Один zip-файл (deflate):
+One zip file (deflate):
 
-    manifest.json        версия формата, проект, список страниц
-    pages/NN.json        страница: размер листа и примитивы
+    manifest.json        format version, project, list of pages
+    pages/NN.json        a page: sheet size and primitives
 
-Страница строится из листа project.dxf тем же движком ezdxf, что и PNG-превью: видовые
-экраны, блоки, размеры, штриховки, типы линий и текст уже развёрнуты в контуры. Кабинету
-не нужны ни шрифты, ни знание DXF — только рисовать пути.
+A page is built from a sheet of project.dxf by the same ezdxf engine as the PNG preview:
+viewports, blocks, dimensions, hatches, line types and text are already expanded into
+outlines. The viewer needs no fonts and no DXF knowledge, it only draws paths.
 
-Примитив страницы:
+Page primitive:
 
-    {"k": "s" | "f",      обводка (stroke) | заливка (fill, правило nonzero)
-     "c": "#rrggbb",      цвет (может быть #rrggbbaa)
-     "w": 0.25,           толщина линии, мм — только у "s"
-     "l": "A-WALL",       слой DXF (можно прятать слои в кабинете)
-     "o": "wall:living.w3", объект проекта «тип:id» (ids.py); нет у рамки, штампа, таблиц
-     "d": "M10 20L30 40"} путь в синтаксисе SVG path: M, L, Q, C, Z
+    {"k": "s" | "f",      stroke | fill (nonzero rule)
+     "c": "#rrggbb",      colour (may be #rrggbbaa)
+     "w": 0.25,           line width, mm, only for "s"
+     "l": "A-WALL",       DXF layer (layers can be hidden in the viewer)
+     "o": "wall:living.w3", project object "type:id" (ids.py); absent on frame, title block, tables
+     "d": "M10 20L30 40"} path in SVG path syntax: M, L, Q, C, Z
 
-Координаты — мм листа, начало в левом верхнем углу, ось Y вниз (как в SVG и canvas),
-округление до 0,01 мм. Подряд идущие примитивы одного стиля склеены в один путь.
-Сборка детерминирована: одинаковый проект — побайтно одинаковый файл.
+Coordinates are sheet mm, origin at the top-left corner, Y axis down (as in SVG and canvas),
+rounded to 0.01 mm. Consecutive primitives of the same style are merged into one path.
+The build is deterministic: the same project gives a byte-identical file.
 """
 
 from __future__ import annotations
@@ -68,7 +68,7 @@ from floorplan_engine.sheets.preview import (
 FORMAT_NAME = "floorplan-engine/epd"
 FORMAT_VERSION = 1
 MANIFEST = "manifest.json"
-# Фиксированная дата записей zip — для побайтной повторяемости
+# Fixed zip entry date, for byte-identical output
 _ZIP_DATE = (1980, 1, 1, 0, 0, 0)
 _PAPER_FORMAT = re.compile(r"_(A\d)_")
 
@@ -80,10 +80,10 @@ def _num(value: float) -> str:
 
 @dataclass
 class PageRecorder(BackendInterface):
-    """Бэкенд движка ezdxf: собирает примитивы страницы вместо рисования."""
+    """ezdxf engine backend: collects page primitives instead of drawing."""
 
-    height: float  # высота листа, мм — для переворота оси Y
-    objects: dict[str, str] = field(default_factory=dict)  # хэндл → «тип:id»
+    height: float  # sheet height, mm, to flip the Y axis
+    objects: dict[str, str] = field(default_factory=dict)  # handle → "type:id"
     items: list[dict[str, Any]] = field(default_factory=list)
 
     def _xy(self, v: Vec2) -> str:
@@ -153,7 +153,7 @@ class PageRecorder(BackendInterface):
         self._add("s", self._path(path), properties)
 
     def draw_filled_paths(self, paths: Iterable[BkPath2d], properties: BackendProperties) -> None:
-        # Внешние контуры против часовой, отверстия (буквы «о», «а») — по часовой: nonzero
+        # Outer contours counter-clockwise, holes (letters "o", "a") clockwise: nonzero
         d = "".join(self._path(p, close=True) for p in orient_paths(list(paths)))
         self._add("f", d, properties)
 
@@ -165,7 +165,7 @@ class PageRecorder(BackendInterface):
         self._add("f", d, properties)
 
     def draw_image(self, image_data: ImageData, properties: BackendProperties) -> None:
-        # Растровых изображений в наших чертежах нет
+        # Our drawings contain no raster images
         pass
 
     def clear(self) -> None:
@@ -177,14 +177,14 @@ class PageRecorder(BackendInterface):
 
 def record_page(doc: Drawing, layout: Paperspace) -> dict[str, Any]:
     width, height = paper_size(layout)
-    # Объекты модели и листа: схема щита нарисована прямо на листе
+    # Model and sheet objects: the panel diagram is drawn directly on the sheet
     objects = {
         e.dxf.handle: f"{oid[0]}:{oid[1]}"
         for e in (*doc.modelspace(), *layout)
         if (oid := object_id(e)) is not None
     }
     recorder = PageRecorder(height, objects)
-    # Толщины — как в DXF, в мм листа
+    # Line widths as in the DXF, in sheet mm
     config = Configuration(lineweight_policy=LineweightPolicy.ABSOLUTE)
     draw_sheet_layout(doc, layout, recorder, config)
     match = _PAPER_FORMAT.search(layout.dxf_layout.dxf.paper_size)
@@ -197,7 +197,7 @@ def record_page(doc: Drawing, layout: Paperspace) -> dict[str, Any]:
     }
     stage = sheet_slug(layout.name)
     view = view_rect(layout, height)
-    if view is None and stage in ("panel", "elevations"):  # схема на листе — по её объектам
+    if view is None and stage in ("panel", "elevations"):  # a diagram on the sheet: by its objects
         view = objects_rect(recorder.items)
     if view is not None:
         page["view"] = view
@@ -212,9 +212,9 @@ def record_page(doc: Drawing, layout: Paperspace) -> dict[str, Any]:
 def legend_items(
     items: list[dict[str, Any]], entries: Sequence[LegendEntry]
 ) -> list[dict[str, Any]]:
-    """Легенда страницы для плашки просмотра: подпись и примитивы значка с листа (помечены
-    legend:<key> в electrical.draw_legend, мм листа). С примитивов листа метка снимается:
-    это не объект проекта, подсказки и подсветки у него нет."""
+    """Page legend for the viewer badge: caption and icon primitives from the sheet (tagged
+    legend:<key> in electrical.draw_legend, sheet mm). The tag is removed from the sheet
+    primitives: this is not a project object and gets no hint or highlight."""
     by_key: dict[str, list[dict[str, Any]]] = {}
     for item in items:
         kind, _, key = item.get("o", "").partition(":")
@@ -225,15 +225,15 @@ def legend_items(
 
 
 def _viewports(layout: Paperspace) -> Iterable[Any]:
-    """Видовые экраны чертежа; служебный видовой экран листа (id 1) не в счёт."""
+    """Drawing viewports; the sheet's service viewport (id 1) does not count."""
     for vp in layout.query("VIEWPORT"):
         if vp.dxf.get("id", 0) != 1 and vp.dxf.layer == A_VPORT.name:
             yield vp
 
 
 def model_transform(layout: Paperspace, height: float) -> list[float] | None:
-    """Из мм модели в мм листа: [k, tx, ty] — x листа = k·x + tx, y листа = ty − k·y
-    (ось Y листа вниз). Нужен, чтобы править трассы проводки в мм модели."""
+    """From model mm to sheet mm: [k, tx, ty]: sheet x = k·x + tx, sheet y = ty − k·y
+    (sheet Y axis points down). Needed to edit wiring routes in model mm."""
     for vp in _viewports(layout):
         k = vp.dxf.height / vp.dxf.view_height
         c, v = vp.dxf.center, vp.dxf.view_center_point
@@ -242,8 +242,8 @@ def model_transform(layout: Paperspace, height: float) -> list[float] | None:
 
 
 def view_rect(layout: Paperspace, height: float) -> list[float] | None:
-    """Видовой экран чертежа на листе: [x0, y0, x1, y1] в мм листа, начало — левый верхний
-    угол (как у примитивов). Служебный видовой экран листа (id 1) не в счёт."""
+    """Drawing viewport on the sheet: [x0, y0, x1, y1] in sheet mm, origin at the top-left corner
+    (as for primitives). The sheet's service viewport (id 1) does not count."""
     for vp in _viewports(layout):
         cx, cy = vp.dxf.center.x, vp.dxf.center.y
         w, h = vp.dxf.width, vp.dxf.height
@@ -257,12 +257,13 @@ def view_rect(layout: Paperspace, height: float) -> list[float] | None:
 
 
 _NUMBER = re.compile(r"-?\d+(?:\.\d+)?")
-SCHEME_MARGIN = 6.0  # мм листа вокруг схемы в области показа
+SCHEME_MARGIN = 6.0  # sheet mm around the diagram in the view area
 
 
 def objects_rect(items: list[dict[str, Any]]) -> list[float] | None:
-    """Область схемы без видового экрана (щит): рамка всех примитивов с объектом и подписью
-    над ними, с полем; объектов нет — None."""
+    """Diagram area without a viewport (panel): the bounding box of all primitives with an object
+    and
+    the labels above them, plus a margin; None if there are no objects."""
     xs: list[float] = []
     ys: list[float] = []
     for item in items:
@@ -274,7 +275,7 @@ def objects_rect(items: list[dict[str, Any]]) -> list[float] | None:
     if not xs:
         return None
     m = SCHEME_MARGIN
-    # Сверху — ещё на заголовок щита: он без объекта
+    # Extra room on top for the panel heading: it has no object
     return [_round(min(xs) - m), _round(min(ys) - 2 * m), _round(max(xs) + m), _round(max(ys) + m)]
 
 
@@ -305,19 +306,20 @@ def export_artifact(
     variants: dict[str, Any] | None = None,
     overview: dict[str, Any] | None = None,
 ) -> Path:
-    """Записать .epd: манифест и по странице на каждый лист документа. objects — карточки
-    объектов для подсказок (objects.describe_objects): в страницу — только её объекты
-    и только темы листа (side.STAGE_OBJECTS). tables — таблицы боковой панели по теме
-    листа (side.side_tables). chains — линии для выделения по клику на листе проводки
-    (objects.line_chains): в страницу — только нарисованные на ней; groups — состав групп
-    для подсветки соседей выделенной линии (objects.line_groups); edit — что можно
-    править на листе проводки (objects.wiring_handles); scene — 3D-сцена проводки
-    (scene3d.build_scene); panel — щит для своего показа в просмотре (panel_data.panel_data);
-    elevations — развёртки данными (elevations.elevation_data): на лист — те, что на нём;
-    legends — легенда по теме листа (side.side_legends) для плашки просмотра: подписи
-    отсюда, значки — примитивы legend:<key> с самого листа; variants — варианты проводки
-    (pipeline.variant_block): выбранный и сводка всех — в манифест; overview — общие сведения
-    о проекте (overview.overview_data) для первой вкладки просмотра — тоже в манифест."""
+    """Write the .epd: the manifest and one page per document sheet. objects are object cards for
+    hints (objects.describe_objects): a page gets only its own objects and only those of the sheet
+    topic (side.STAGE_OBJECTS). tables are side panel tables for the sheet topic
+    (side.side_tables). chains are lines to highlight on click on the wiring sheet
+    (objects.line_chains): a page gets only those drawn on it; groups is the group membership
+    for highlighting neighbours of the selected line (objects.line_groups); edit is what can be
+    edited on the wiring sheet (objects.wiring_handles); scene is the 3D wiring scene
+    (scene3d.build_scene); panel is the panel for its own view in the viewer
+    (panel_data.panel_data); elevations are elevations as data (elevations.elevation_data): a
+    sheet gets the ones on it; legends is the legend for the sheet topic (side.side_legends) for
+    the viewer badge: captions from here, icons are the legend:<key> primitives from the sheet
+    itself; variants are the wiring variants (pipeline.variant_block): the chosen one and a
+    summary of all go into the manifest; overview is the project overview
+    (overview.overview_data) for the first viewer tab, also in the manifest."""
     pages = []
     path.parent.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(path, "w") as zf:
@@ -334,7 +336,7 @@ def export_artifact(
             if tables and stage in tables:
                 page["tables"] = [t.as_dict() for t in tables[stage]]
             if tables and stage == "wiring" and tables.get("estimate"):
-                page["estimate"] = tables["estimate"][0].as_dict()  # вкладка «Смета»
+                page["estimate"] = tables["estimate"][0].as_dict()  # "Estimate" tab
             if tables and stage == "plumbing" and tables.get("plumbing_estimate"):
                 page["estimate"] = tables["plumbing_estimate"][0].as_dict()
             if chains and stage == "wiring":
@@ -383,7 +385,7 @@ def export_artifact(
 
 
 def read_artifact(path: Path) -> tuple[dict[str, Any], list[dict[str, Any]]]:
-    """Манифест и страницы по порядку; проверяет формат и версию."""
+    """Manifest and pages in order; checks format and version."""
     with zipfile.ZipFile(path) as zf:
         manifest = json.loads(zf.read(MANIFEST))
         if manifest.get("format") != FORMAT_NAME:
@@ -396,7 +398,7 @@ def read_artifact(path: Path) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     return manifest, pages
 
 
-# --- Эталонный рендер: страница .epd → PNG без DXF и ezdxf --------------------
+# --- Reference render: .epd page → PNG without DXF and ezdxf -----------------
 
 _TOKEN = re.compile(r"[MLQCZ]|-?\d+(?:\.\d+)?")
 _ARGS = {"M": 2, "L": 2, "Q": 4, "C": 6, "Z": 0}
@@ -409,7 +411,7 @@ _CODES: dict[str, list[np.uint8]] = {
 
 
 def parse_path(d: str, height: float) -> MplPath:
-    """Путь SVG (M, L, Q, C, Z — абсолютные, ось Y вниз) → путь matplotlib (ось Y вверх)."""
+    """SVG path (M, L, Q, C, Z, absolute, Y axis down) → matplotlib path (Y axis up)."""
     tokens = _TOKEN.findall(d)
     vertices: list[tuple[float, float]] = []
     codes: list[np.uint8] = []
@@ -438,7 +440,7 @@ def render_page_png(page: dict[str, Any], png_path: Path, dpi: int = PREVIEW_DPI
     fig = plt.figure(figsize=(width * scale, height * scale), dpi=dpi)
     try:
         ax = fig.add_axes((MARGIN, MARGIN, 1 - 2 * MARGIN, 1 - 2 * MARGIN))
-        # Толщина: мм листа → пункты на картинке
+        # Line width: sheet mm → points in the image
         points_per_mm = scale * (1 - 2 * MARGIN) * 72
         for item in page["items"]:
             path = parse_path(item["d"], height)

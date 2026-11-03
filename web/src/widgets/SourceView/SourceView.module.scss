@@ -1,4 +1,4 @@
-// Исходник на месте чертежа: полоса с кнопкой «К листу» | файл во всю оставшуюся высоту
+// Source in place of the drawing: a strip with the "Back to sheet" button | the file in the rest of the height
 
 .source { position: absolute; inset: 0; display: grid; grid-template-rows: auto minmax(0, 1fr); }
 .bar {

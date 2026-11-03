@@ -1,6 +1,6 @@
-// Настройки — шестерёнка в шапке: аккаунт (кто вошёл, «Выйти»), план (тип учётки), тема
-// и язык интерфейса (i18n: украинский, русский, английский; выбор запоминается); внизу —
-// версия и стадия продукта с номером сборки (shared/version.ts)
+// Settings, a gear in the header: account (who is logged in, "Log out"), plan (account type),
+// theme and interface language (i18n: Ukrainian, Russian, English; the choice is remembered);
+// at the bottom the product version and stage with the build number (shared/version.ts)
 
 import { useTranslation } from "react-i18next";
 import { THEMES, type Theme } from "@/shared/consts";
@@ -12,13 +12,13 @@ import menu from "@/shared/styles/menu.module.scss";
 import ui from "@/shared/styles/ui.module.scss";
 import css from "./Settings.module.scss";
 
-// Кто вошёл — из Gate; вход выключен (локальный просмотр) — null
+// Who is logged in, from Gate; null if login is off (local viewing)
 export interface Account {
   name: string;
   plan: "client" | "pro" | null;
-  space?: string | null;  // название фирмы (у «Моего ремонта» — нет)
+  space?: string | null;  // firm name ("Мой ремонт" has none)
   visitor: boolean;
-  code?: boolean;         // вошли по коду доступа к проекту (без учётки)
+  code?: boolean;         // logged in by a project access code (no account)
   logout: () => void;
 }
 
@@ -80,7 +80,7 @@ export function Settings({ account, theme, onTheme }: Props) {
   );
 }
 
-// Язык интерфейса: кнопка с названием и меню языков; смена — сразу, без перезагрузки
+// Interface language: a button with the name and a language menu; switches right away, no reload
 function LanguageSelect() {
   const { open, setOpen, toggle, ref } = usePopover<HTMLDivElement>();
   const { t, i18n } = useTranslation();

@@ -1,20 +1,21 @@
-"""ID объектов проекта внутри DXF: XDATA приложения FLOORPLAN_ENGINE на каждом примитиве модели.
+"""Project object IDs inside the DXF: XDATA of application FLOORPLAN_ENGINE on every model
+primitive.
 
-Метка — тип объекта и его id из YAML:
+A tag is the object type and its id from YAML:
 
-    room       id комнаты          контур площади, название, площадь
-    wall       комната.стена       грани, откосы, штриховка («living.w3»)
-    dimension  комната.стена       размеры стены
-    opening    id проёма           створка, дуга, окно, подпись подоконника
-    point      id точки            символ (вставка блока с атрибутами ID, H, GROUP)
-    label      id точек через «,»  подпись группы соседних точек
-    board      board               щит и его подпись
-    cable      id кабеля           трасса и её подпись
-    led_strip  id ленты            лента и её подпись
+    room       room id             area outline, name, area
+    wall       room.wall           faces, reveals, hatch ("living.w3")
+    dimension  room.wall           wall dimensions
+    opening    opening id          leaf, swing arc, window, sill label
+    point      point id            symbol (block insert with attributes ID, H, GROUP)
+    label      point ids with ","  label of a group of neighbouring points
+    board      board               panel and its label
+    cable      cable id            route and its label
+    led_strip  strip id            strip and its label
 
-AutoCAD сохраняет XDATA при копировании, переносе, растяжении и в DWG. По меткам
-команда update сопоставит правки в AutoCAD с моделью, а кабинет — примитивы страницы
-с объектами проекта.
+AutoCAD keeps XDATA on copy, move, stretch and in DWG. The update command will match
+AutoCAD edits to the model by these tags, and the viewer matches page primitives to
+project objects.
 """
 
 from __future__ import annotations
@@ -27,7 +28,7 @@ from ezdxf.entities.dxfentity import DXFEntity
 from ezdxf.layouts.base import BaseLayout
 
 APP_ID = "FLOORPLAN_ENGINE"
-_CODE = 1000  # строка XDATA
+_CODE = 1000  # XDATA string
 
 
 def register_app(doc: Drawing) -> None:
@@ -40,7 +41,7 @@ def set_object_id(entity: DXFEntity, kind: str, object_id: str) -> None:
 
 
 def object_id(entity: DXFEntity) -> tuple[str, str] | None:
-    """(тип, id) из метки FLOORPLAN_ENGINE или None, если примитив не наш."""
+    """(type, id) from the FLOORPLAN_ENGINE tag, or None if the primitive is not ours."""
     if not entity.has_xdata(APP_ID):
         return None
     values = [str(tag.value) for tag in entity.get_xdata(APP_ID) if tag.code == _CODE]
@@ -51,7 +52,7 @@ def object_id(entity: DXFEntity) -> tuple[str, str] | None:
 
 @contextmanager
 def tagged(layout: BaseLayout, kind: str, object_id: str) -> Iterator[None]:
-    """Пометить всё, что добавлено в layout внутри блока with."""
+    """Tag everything added to layout inside the with block."""
     start = len(layout)
     yield
     for k in range(start, len(layout)):

@@ -74,10 +74,10 @@ def _statuses(path: Path) -> dict[Stage, Status]:
     ("fields", "expected"),
     [
         ({"target": "rooms.r.walls.w2.length", "assumption": 4000}, QSeverity.MAJOR),
-        ({"target": "rooms.r.walls.w2.length"}, QSeverity.CRITICAL),  # значения нет
+        ({"target": "rooms.r.walls.w2.length"}, QSeverity.CRITICAL),  # no value
         ({"target": "rooms.r.openings.win.offset"}, QSeverity.MAJOR),
         ({"target": "rooms.r.openings.win.sill"}, QSeverity.MINOR),
-        ({"severity": "critical"}, QSeverity.CRITICAL),  # общий вопрос — вес от анализатора
+        ({"severity": "critical"}, QSeverity.CRITICAL),  # general: analyzer weight
     ],
 )
 def test_severity_rules(fields: dict[str, Any], expected: QSeverity) -> None:
@@ -124,7 +124,7 @@ def test_accept_and_text_answers(tmp_path: Path, answer: str, state: str) -> Non
     report = validate_project(path)
     assert report.question_states == {"q": state}
     (plan,) = [r for r in assess(report) if r.stage is Stage.PLAN]
-    # Текстовый ответ ждёт анализатора — вопрос остаётся открытым
+    # A text answer waits for the analyzer: the question stays open
     assert bool(plan.open_questions) is (state == "text")
 
 
@@ -174,7 +174,7 @@ def test_critical_question_stops_plan_and_blocks_electrical(tmp_path: Path) -> N
 
 
 def test_too_many_questions_is_insufficient(tmp_path: Path) -> None:
-    n = WEIGHT_LIMIT // 3 + 1  # важные по 3
+    n = WEIGHT_LIMIT // 3 + 1  # major ones count 3 each
     questions = [{**_q(severity="major"), "id": f"q{k}"} for k in range(n)]
     assert (
         _statuses(_project(tmp_path, {"questions": questions}))[Stage.PLAN] is Status.INSUFFICIENT
@@ -185,7 +185,7 @@ def test_only_intake_without_plan(tmp_path: Path) -> None:
     intake = {"questions": [_q(severity="critical", text="Нет ни одного размера")]}
     path = _project(tmp_path, intake, **{"room.yaml": None, "electrical.yaml": None})
     report = validate_project(path)
-    assert report.ok  # нет room.yaml — не ошибка, если есть intake
+    assert report.ok  # no room.yaml is not an error if there is an intake
     assert _statuses(path)[Stage.PLAN] is Status.INSUFFICIENT
 
 
@@ -274,7 +274,7 @@ def test_get_target_returns_list_field_as_is() -> None:
         ("rooms.bath.walls.w1.length", "нет объекта с id «bath»"),
         ("plan.rooms", "нет поля «plan»"),
         ("name.x.y", "не объект и не список"),
-        ("rooms.kitchen", "«rooms» — не объект"),  # последний шаг — в списке
+        ("rooms.kitchen", "«rooms» — не объект"),  # the last step is in the list
         ("rooms.kitchen.walls.w1.length.x", "не объект"),
     ],
 )
@@ -339,6 +339,6 @@ def test_index_path_missing_dict_keys_stay_named() -> None:
 
 
 def test_index_path_unknown_id_raises_stop_iteration() -> None:
-    # validate._question_paths ловит именно StopIteration
+    # validate._question_paths catches exactly StopIteration
     with pytest.raises(StopIteration):
         index_path(_data(), "rooms.bath.walls")

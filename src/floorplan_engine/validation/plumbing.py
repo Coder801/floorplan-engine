@@ -1,6 +1,6 @@
-"""Проверка сантехники (plumbing.yaml): ссылки на помещения и стены, привязка приборов,
-узла ввода и препятствий к стене, стояки в помещении (или в его стене), id по проекту,
-приборы вне мокрых помещений, нет стояка канализации при приборах с выпуском."""
+"""Plumbing check (plumbing.yaml): references to rooms and walls, anchoring of fixtures, the
+supply unit and obstacles to walls, risers inside a room (or in its wall), project-wide ids,
+fixtures outside wet rooms, a missing sewer riser when fixtures have drains."""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ from floorplan_engine.validation.electrical import check_wall_anchor
 from floorplan_engine.validation.issues import ROOM_FILE, Issue, Severity
 from floorplan_engine.validation.plan import duplicates
 
-RISER_SLACK_MM = 100.0  # стояк в стене: не дальше толщины стены и этого запаса от помещения
+RISER_SLACK_MM = 100.0  # riser in a wall: at most wall thickness + this from the room
 
 
 def _room(plan: Plan, room_id: str, path: str, file: str) -> Issue | None:

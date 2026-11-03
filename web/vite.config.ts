@@ -1,7 +1,7 @@
-// Фронт просмотра — самостоятельный проект: сборка в web/dist, свои серверы разработки
-// и предпросмотра. API — `floorplan-engine view` (по умолчанию порт 8000; другой адрес —
-// API_URL=http://127.0.0.1:8765 npm run dev). Запросы /api идут к нему через прокси:
-// CORS не нужен; при выкладке так же — обратный прокси (nginx и т. п.).
+// The viewer frontend is a standalone project: it builds into web/dist and has its own dev and
+// preview servers. The API is `floorplan-engine view` (port 8000 by default; another address:
+// API_URL=http://127.0.0.1:8765 npm run dev). /api requests go to it through a proxy, so no
+// CORS is needed; deployment does the same with a reverse proxy (nginx and the like).
 import { execFile } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { basename, dirname } from "node:path";
@@ -11,11 +11,11 @@ import { defineConfig, type Plugin } from "vite";
 
 const api = { "/api": process.env.API_URL || "http://127.0.0.1:8000" };
 
-// Номер сборки: зашит в бандл (__BUILD_ID__) и лежит рядом в dist/version.json. Вкладка,
-// открытая до деплоя, сверяет их и показывает «Доступна новая версия» (version.ts)
+// Build number: baked into the bundle (__BUILD_ID__) and placed next to it in dist/version.json.
+// A tab opened before a deploy compares them and shows "A new version is available" (version.ts)
 const BUILD_ID = process.env.BUILD_ID || new Date().toISOString().replace(/[-:.TZ]/g, "");
-// Версия продукта — из package.json (та же, что у пакета Python: tests/test_version.py);
-// показывается в настройках (__APP_VERSION__)
+// The product version comes from package.json (the same as the Python package:
+// tests/test_version.py); shown in settings (__APP_VERSION__)
 const APP_VERSION = (JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8")) as { version: string }).version;
 const version = (): Plugin => ({
   name: "version",
@@ -25,8 +25,8 @@ const version = (): Plugin => ({
   },
 });
 
-// Правка .scss в разработке — переписать типы модулей (scripts/css-types.mjs): новый класс
-// сразу виден в редакторе, опечатка — ошибкой
+// A .scss change in development rewrites the module types (scripts/css-types.mjs): a new class
+// shows up in the editor at once, a typo is an error
 const cssTypes = (): Plugin => ({
   name: "css-types",
   apply: "serve",
@@ -37,28 +37,28 @@ const cssTypes = (): Plugin => ({
 
 export default defineConfig({
   plugins: [react(), version(), cssTypes()],
-  // @/… — от src: компоненты по группам (pages, widgets, ui), общее (shared), холсты (engine)
+  // @/… is relative to src: components by group (pages, widgets, ui), shared code (shared), canvases (engine)
   resolve: { alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) } },
   define: {
     __BUILD_ID__: JSON.stringify(process.env.NODE_ENV === "production" ? BUILD_ID : "dev"),
     __APP_VERSION__: JSON.stringify(APP_VERSION),
   },
-  // Стили — SCSS-модули рядом с компонентами: .row-btns в файле → styles.rowBtns в коде
+  // Styles are SCSS modules next to components: .row-btns in the file → styles.rowBtns in code
   css: {
     modules: { localsConvention: "camelCaseOnly" },
     preprocessorOptions: { scss: { api: "modern-compiler" } },
   },
   build: {
     chunkSizeWarningLimit: 1500,
-    // Компонент — папка с index.tsx: чанк по имени папки (Scene3D-…js), а не «index-…js»
+    // A component is a folder with index.tsx: the chunk is named after the folder (Scene3D-…js), not "index-…js"
     rollupOptions: {
       output: {
         chunkFileNames: (c) => `assets/${c.name === "index" && c.facadeModuleId
           ? basename(dirname(c.facadeModuleId)) : "[name]"}-[hash].js`,
       },
     },
-  },  // 3D (three.js) — отдельный файл, грузится по кнопке
-  // 127.0.0.1, как у API: «localhost» Node может отдать только по IPv6 (::1)
+  },  // 3D (three.js) is a separate file, loaded on the button
+  // 127.0.0.1, like the API: Node may serve "localhost" only over IPv6 (::1)
   server: { host: "127.0.0.1", port: 5173, proxy: api },
   preview: { host: "127.0.0.1", port: 4173, proxy: api },
 });

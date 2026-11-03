@@ -1,4 +1,6 @@
-"""Смета электрики: объёмы из модели, цены из прайса, позиции без цены."""
+"""Electrical estimate: quantities from the model, prices from the price list, items without a
+price.
+"""
 
 from __future__ import annotations
 
@@ -9,11 +11,15 @@ import pytest
 import yaml
 
 from floorplan_engine.electrical.estimate import (
+    LINES,
+    SECTIONS,
     Estimate,
     Line,
     Price,
     PriceList,
+    Section,
     build_estimate,
+    edit_price_items,
     format_number,
     quantities,
     split_key,
@@ -71,20 +77,20 @@ def test_quantities_from_model() -> None:
     q = quantities(wiring, elec)
     for mark, m in wiring.by_mark().items():
         assert q[f"cable.{mark}"] == pytest.approx(round(m * (1 + RESERVE), 1))
-    assert q["socket_box"] == 4  # 2 + 1 розетки + выключатель
+    assert q["socket_box"] == 4  # 2 + 1 sockets + a switch
     assert q["frame.1"] == 2 and q["frame.2"] == 1
     assert q["switch2"] == 1 and q["socket"] == 3
     boxes = len(wiring.boxes)
     assert sum(v for k, v in q.items() if k.startswith("junction_box.")) == boxes
-    assert all(f"junction_box.{b.size}" in q for b in wiring.boxes)  # по типоразмерам
-    assert q["crimp"] == 3 * boxes + 2  # двухклавишный выключатель от коробки
+    assert all(f"junction_box.{b.size}" in q for b in wiring.boxes)  # by size
+    assert q["crimp"] == 3 * boxes + 2  # two-key switch from a box
     assert q["breaker"] == 2
     narrow, wide = wiring.chase_length(wide=False), wiring.chase_length(wide=True)
     assert narrow + wide == pytest.approx(wiring.chase_mm)
     assert q["work.chase"] == pytest.approx(round(narrow / 1000, 1))
     assert q.get("work.chase_wide", 0) == pytest.approx(round(wide / 1000, 1))
-    assert q["work.marking"] == 2 * len(wiring.runs)  # бирка на каждом конце
-    assert q["work.insulation_test"] == 2  # по силовым группам
+    assert q["work.marking"] == 2 * len(wiring.runs)  # a tag at each end
+    assert q["work.insulation_test"] == 2  # per power group
     assert q["work.cable"] == pytest.approx(round(sum(r.length_mm for r in wiring.runs) / 1000, 1))
 
 
@@ -97,7 +103,7 @@ def test_prices_and_unpriced_lines() -> None:
                 "work.board_module": 100,
                 "socket_box": {"price": 20, "name": "Підрозетник Kopos"},
             },
-            "board_kit": [{"name": "Реле", "price": 1500, "modules": 2}],  # устарело
+            "board_kit": [{"name": "Реле", "price": 1500, "modules": 2}],  # deprecated
         }
     )
     est = build_estimate(wiring, elec, prices, "uk")
@@ -106,12 +112,12 @@ def test_prices_and_unpriced_lines() -> None:
     box = next(ln for k, ln in by_key.items() if k.startswith("junction_box."))
     assert box.price is None and est.unpriced > 0
     module = by_key["work.board_module"]
-    # Без состава щита — автомат на группу; board_kit не участвует
+    # Without a panel set: one breaker per group; board_kit is not used
     assert module.qty == 2 and module.total == 200
     assert not any(ln.key == "board_kit" for ln in est.lines)
     assert est.total == pytest.approx(sum(ln.total or 0 for ln in est.lines))
     sections = [ln.section for ln in est.lines]
-    assert sections == sorted(sections, key=lambda s: s != "material")  # сначала материалы
+    assert sections == sorted(sections, key=SECTIONS.index)  # materials, rough, finishing
     assert unknown_keys(PriceList.model_validate({"items": {"cabel.3x1.5": 1, "frame.2": 5}})) == [
         "cabel.3x1.5"
     ]
@@ -136,7 +142,8 @@ def test_estimate_project_writes_tables(tmp_path: Path) -> None:
     (project / "room.yaml").write_text(yaml.safe_dump(room, allow_unicode=True), "utf-8")
     (project / "electrical.yaml").write_text(yaml.safe_dump(ELEC, allow_unicode=True), "utf-8")
 
-    # Без prices.yaml все цены — от сервиса цен (имитация), смета всё равно с итогом
+    # Without prices.yaml all prices come from the price service (mock); the estimate still has a
+    # total
     no_prices = estimate_project(project)
     est = no_prices.estimate
     assert est is not None and est.total > 0 and est.unpriced == 0
@@ -146,13 +153,13 @@ def test_estimate_project_writes_tables(tmp_path: Path) -> None:
     (project / "prices.yaml").write_text("items:\n  socket_box: 20\n  work.chase: 200\n", "utf-8")
     result = estimate_project(project)
     assert result.estimate is not None and result.estimate.total > 0
-    assert result.estimate.from_service == len(result.estimate.lines) - 2  # свой прайс поверх
+    assert result.estimate.from_service == len(result.estimate.lines) - 2  # own price list on top
     md, csv_path, xlsx = result.files
     assert xlsx.suffix == ".xlsx" and xlsx.stat().st_size > 0
     text = md.read_text("utf-8")
     assert "Смета электрики: Кв" in text and "из сервиса цен (пока имитация" in text
     raw = csv_path.read_bytes()
-    assert raw.startswith(b"\xef\xbb\xbf")  # BOM — Excel узнаёт UTF-8
+    assert raw.startswith(b"\xef\xbb\xbf")  # BOM: Excel recognises UTF-8
     assert "socket_box;Подрозетник;шт;4;20;80,00" in raw.decode("utf-8-sig")
 
     (project / "prices.yaml").write_text("items:\n  sockt_box: 20\n", "utf-8")
@@ -160,8 +167,8 @@ def test_estimate_project_writes_tables(tmp_path: Path) -> None:
     assert bad.estimate is None
     assert any(i.file == "prices.yaml" and i.path == "items.sockt_box" for i in bad.issues)
 
-    # build пишет ту же смету: Excel в просмотре не отстаёт от листов; прайс с ошибкой —
-    # сметы нет (ошибки — в price_issues)
+    # build writes the same estimate, so the Excel in the viewer matches the sheets; a price list
+    # with errors gives no estimate (errors go to price_issues)
     (project / "prices.yaml").write_text("items:\n  socket_box: 20\n", "utf-8")
     built = build_project(project)
     assert [f.name for f in built.estimate] == ["estimate.md", "estimate.csv", "estimate.xlsx"]
@@ -194,22 +201,23 @@ def test_estimate_table_with_and_without_prices() -> None:
     table = estimate_table(priced, "uk", priced=True)
     assert table.title == "Кошторис електрики" and len(table.columns) == 6
     names = [r[1] for r in table.rows]
-    assert names[0] == "Матеріали" and "Роботи" in names
-    assert "Разом: матеріали" in names and "Разом: роботи" in names
+    assert names[0] == "Матеріали" and "Чорнові роботи" in names and "Чистові роботи" in names
+    assert "Разом: матеріали" in names and "Разом: чорнові роботи" in names
+    assert "Разом: чистові роботи" in names
     assert table.total is not None and table.total[1] == "Усього"
     socket_box = next(r for r in table.rows if r[1] == "Підрозетник")
-    assert socket_box[4] == "20" and socket_box[5] == "80"  # 4 поста × 20
+    assert socket_box[4] == "20" and socket_box[5] == "80"  # 4 posts × 20
     unpriced = next(r for r in table.rows if r[1] == "Розетка із заземленням")
     assert unpriced[4] == unpriced[5] == "—"
 
     volumes = estimate_table(build_estimate(wiring, elec, PriceList(), "uk"), "uk", priced=False)
     assert volumes.title == "Відомість обсягів електрики"
-    assert len(volumes.columns) == 4 and volumes.total is None  # без цен и итогов
+    assert len(volumes.columns) == 4 and volumes.total is None  # no prices and no totals
     assert not any(str(r[1]).startswith("Разом") for r in volumes.rows)
 
 
 def test_estimate_on_wiring_sheet(tmp_path: Path) -> None:
-    """Смета стоит на CAD-листе проводки — тем же текстом, что в таблице."""
+    """The estimate sits on the wiring CAD sheet with the same text as in the table."""
     from ezdxf.filemanagement import readfile
 
     from floorplan_engine.sheets.document import build_project_document
@@ -226,7 +234,7 @@ def test_estimate_on_wiring_sheet(tmp_path: Path) -> None:
         for lay in sheet_layouts(readfile(path))
     }
     wiring_tab = next(name for name in texts if name.endswith("Проводка"))
-    assert "Смета электрики" in texts[wiring_tab]  # язык плана по умолчанию — ru
+    assert "Смета электрики" in texts[wiring_tab]  # the plan language defaults to ru
     assert not any("Смета электрики" in t for name, t in texts.items() if name != wiring_tab)
 
 
@@ -236,11 +244,11 @@ def test_box_price_falls_back_to_size_free_key() -> None:
     est = build_estimate(wiring, elec, prices, "uk")
     boxes = [ln for ln in est.lines if ln.key.startswith("junction_box.")]
     assert boxes and all(ln.price == 60 for ln in boxes)
-    assert all("×" in ln.name or "Ø" in ln.name for ln in boxes)  # размер в наименовании
+    assert all("×" in ln.name or "Ø" in ln.name for ln in boxes)  # size in the name
 
 
 def _eval_xlsx(path: Path) -> float:
-    """Пересчитать «Всего» книги сметы по её формулам (Excel под рукой нет)."""
+    """Recompute the "Total" of the estimate workbook from its formulas (no Excel at hand)."""
     import re
 
     from openpyxl import load_workbook
@@ -281,7 +289,7 @@ def test_xlsx_formulas_give_estimate_total(tmp_path: Path) -> None:
 
     path = write_xlsx(est, tmp_path / "e.xlsx", "Кошторис", ["примітка"], "uk")
     assert _eval_xlsx(path) == pytest.approx(est.total)
-    assert est.unpriced > 0  # позиции без цены — в книге, но в итог не входят
+    assert est.unpriced > 0  # items without a price are in the workbook but not in the total
 
 
 def test_studio_prices_used_when_project_has_none(tmp_path: Path) -> None:
@@ -293,7 +301,7 @@ def test_studio_prices_used_when_project_has_none(tmp_path: Path) -> None:
     (tmp_path / "prices.yaml").write_text("items: {}\n", "utf-8")
     assert find_prices(project) == tmp_path / "prices.yaml"
     (project / "prices.yaml").write_text("items: {}\n", "utf-8")
-    assert find_prices(project) == project / "prices.yaml"  # свой прайс важнее студии
+    assert find_prices(project) == project / "prices.yaml"  # own price list beats the studio one
 
 
 @pytest.mark.parametrize(
@@ -353,9 +361,8 @@ def test_price_list_defaults() -> None:
     assert prices.currency == "грн" and prices.items == {} and prices.board_kit == []
 
 
-def _line(section: str, qty: float, price: float | None, key: str = "k") -> Line:
-    assert section in ("material", "work")
-    return Line("material" if section == "material" else "work", key, key, "шт", qty, price)
+def _line(section: Section, qty: float, price: float | None, key: str = "k") -> Line:
+    return Line(section, key, key, "шт", qty, price)
 
 
 @pytest.mark.parametrize(
@@ -370,15 +377,30 @@ def test_estimate_subtotals_skip_unpriced_lines() -> None:
         (
             _line("material", 2, 10.0),
             _line("material", 1, None),
-            _line("work", 3, 5.0),
-            _line("work", 4, None),
+            _line("rough", 3, 5.0),
+            _line("rough", 4, None),
+            _line("finish", 2, 7.0),
         ),
         "грн",
     )
     assert est.subtotal("material") == 20
-    assert est.subtotal("work") == 15
-    assert est.total == 35
+    assert est.subtotal("rough") == 15 and est.subtotal("finish") == 14
+    assert est.work == 29
+    assert est.total == 49
     assert est.unpriced == 2
+
+
+def test_works_split_into_rough_and_finish() -> None:
+    """Rough work is before finishing (chases, cable, boxes, panel enclosure, test); finishing is
+    after (filling the panel with devices, fitting devices). Materials are one section."""
+    works = {k: v[0] for k, v in LINES.items() if k.startswith("work.")}
+    assert {k for k, s in works.items() if s == "finish"} == {"work.board_module", "work.mechanism"}
+    assert all(s == "rough" for k, s in works.items() if s != "finish")
+    assert all(v[0] == "material" for k, v in LINES.items() if not k.startswith("work."))
+    wiring, elec = _wiring()
+    est = build_estimate(wiring, elec, PriceList(), "ru")
+    by_key = {ln.key: ln.section for ln in est.lines}
+    assert by_key["work.chase"] == "rough" and by_key["work.mechanism"] == "finish"
 
 
 def test_empty_estimate_is_zero() -> None:
@@ -405,8 +427,9 @@ def test_num_format(value: float, digits: int, text: str) -> None:
 
 
 def test_panel_from_board_sheet_priced_by_kind() -> None:
-    """Щит в смете — состав листа «Щит»: строка на вид и номинал, как в закупке; цена — по
-    виду, уточнение — по номиналу; сборка — по модулям состава; автомата на группу нет."""
+    """The panel in the estimate is the "Panel" sheet set: a row per kind and rating, as in the
+    purchase list; price by kind, refined by rating; assembly by the set's modules; no breaker per
+    group."""
     plan = make_plan(RECT, [DOOR])
     _, contours = validate_plan(plan)
     elec = Electrical.model_validate(ELEC)
@@ -422,7 +445,7 @@ def test_panel_from_board_sheet_priced_by_kind() -> None:
         ln for ln in est.lines if split_key(ln.key)[0] in {d.kind.value for d in panel.devices}
     ]
     names = {device_name(d, "ru") for d in panel.devices}
-    assert {ln.name for ln in devices} == names  # те же названия, что в закупке
+    assert {ln.name for ln in devices} == names  # the same names as in the purchase list
     assert sum(ln.qty for ln in devices) == len(panel.devices)
     by_name = {ln.name: ln for ln in devices}
     for d in panel.devices:
@@ -433,12 +456,14 @@ def test_panel_from_board_sheet_priced_by_kind() -> None:
             assert ln.price == 500
     assert next(ln for ln in est.lines if ln.key == "work.board_module").qty == panel.modules
     keys = [ln.key for ln in est.lines]
-    assert "breaker" not in keys  # автомат «на группу» — только без щита
-    assert keys.index("board_enclosure") < keys.index(devices[0].key)  # аппараты — за корпусом
+    assert "breaker" not in keys  # "per group" breaker only without a panel
+    assert keys.index("board_enclosure") < keys.index(devices[0].key)  # devices after the enclosure
 
 
 def test_battery_box_in_estimate() -> None:
-    """Щит АКБ инвертора — в смете за аппаратами щита: автомат АКБ и корпус с артикулом."""
+    """The inverter battery box is in the estimate after the panel devices: battery breaker and an
+    enclosure with an article number.
+    """
     plan = make_plan(RECT, [DOOR])
     _, contours = validate_plan(plan)
     elec = Electrical.model_validate(ELEC)
@@ -455,7 +480,7 @@ def test_battery_box_in_estimate() -> None:
 
 
 def test_fixtures_and_led_in_estimate() -> None:
-    """Светильники, выводы и LED-лента — в смете, названия — как в условных обозначениях."""
+    """Lights, outputs and LED strip are in the estimate, named as in the legend."""
     wiring, _ = _wiring()
     outlet = _pt("o1", "outlet", 2000, 2200, "QF2")
     led = {"id": "led1", "room": "r", "wall": "w1", "start": 0, "end": 1500}
@@ -470,7 +495,7 @@ def test_fixtures_and_led_in_estimate() -> None:
 
 
 def test_mechanism_hint_says_price_tbd_only_without_price() -> None:
-    """У установки механизмов — пояснение; «цена уточняется» — только пока цены нет."""
+    """Device fitting has a note; "price to be confirmed" only while there is no price."""
     wiring, elec = _wiring()
     open_ = build_estimate(wiring, elec, PriceList(), "uk")
     line = next(ln for ln in open_.lines if ln.key == "work.mechanism")
@@ -484,8 +509,8 @@ def test_mechanism_hint_says_price_tbd_only_without_price() -> None:
 
 
 def test_conduit_floor_always_ceiling_only_premium() -> None:
-    """Гофра (docs/wiring-variants.md): по полу — всегда, вся линия; по потолку — в премиуме,
-    только участок по потолку; диаметр — по сечению кабеля."""
+    """Conduit (docs/wiring-variants.md): on the floor always, the whole line; on the ceiling in
+    premium, only the ceiling part; the diameter follows the cable cross-section."""
     from floorplan_engine.electrical.estimate import conduit_diameter, conduit_mm, quantities
 
     assert [conduit_diameter(m) for m in ("3x1.5", "3x2.5", "3x4", "5x10", "UTP")] == [
@@ -497,8 +522,8 @@ def test_conduit_floor_always_ceiling_only_premium() -> None:
     ]
     wiring, elec = _wiring()
     run = wiring.runs[0]
-    assert conduit_mm(run, "standard") == 0  # по потолку в стандарте — без гофры
-    assert conduit_mm(run, "proper") == run.plan_mm  # премиум: участок по потолку
+    assert conduit_mm(run, "standard") == 0  # ceiling in standard: no conduit
+    assert conduit_mm(run, "proper") == run.plan_mm  # premium: the ceiling part
     assert not any(k.startswith("conduit.") for k in quantities(wiring, elec))
     proper = quantities(wiring, elec.model_copy(update={"mode": "proper"}))
     assert any(k.startswith("conduit.") for k in proper) and proper["work.conduit"] > 0
@@ -510,6 +535,42 @@ def test_conduit_floor_always_ceiling_only_premium() -> None:
     assert floor is not None and any(r.route == "floor" for r in floor.runs)
     q = quantities(floor, floor_elec)
     total = sum(v for k, v in q.items() if k.startswith("conduit."))
-    # по полу — вся линия с запасом; освещение идёт по потолку (в стандарте — без гофры)
+    # on the floor the whole line with margin; lighting runs on the ceiling (no conduit in standard)
     expected = sum(r.length_mm for r in floor.runs if r.route == "floor") / 1000 * (1 + RESERVE)
     assert total == pytest.approx(expected, abs=0.3)
+
+
+PRICES_TEXT = """# прайс студии
+currency: грн
+items:
+  # Материалы
+  socket_box: 20
+  board_enclosure: { price: 6000, name: "Корпус" }
+  work.cable: 30                 # по потолку
+  # work.mechanism — впишите цену
+board_kit: []
+"""
+
+
+def test_edit_price_items_keeps_comments() -> None:
+    out = edit_price_items(
+        PRICES_TEXT,
+        {"work.cable": 25.5, "board_enclosure": 6500, "socket_box": None, "work.mechanism": 90},
+    )
+    cable = "  work.cable: 25.5                 # по потолку"
+    assert cable in out
+    assert 'board_enclosure: { price: 6500, name: "Корпус" }' in out
+    assert "socket_box" not in out
+    assert "# прайс студии" in out and "# work.mechanism — впишите цену" in out
+    # A new key goes after the last value of items, before the next section
+    lines = out.splitlines()
+    assert lines.index("  work.mechanism: 90") < lines.index("board_kit: []")
+    assert lines.index("  work.mechanism: 90") > lines.index(
+        "  work.cable: 25.5                 # по потолку"
+    )
+
+
+def test_edit_price_items_without_items_section() -> None:
+    assert edit_price_items("currency: грн\n", {"work.chase": 100}) == (
+        "currency: грн\nitems:\n  work.chase: 100\n"
+    )

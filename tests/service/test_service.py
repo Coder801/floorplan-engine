@@ -35,7 +35,7 @@ def _q(qid: str, **fields: Any) -> dict[str, Any]:
 
 @pytest.fixture
 def client(tmp_path: Path) -> TestClient:
-    # Фоновые задачи TestClient выполняет сразу после ответа — состояние видно следующим GET
+    # TestClient runs background tasks right after the response, so the next GET sees the state
     return TestClient(create_app(tmp_path / "data"))
 
 
@@ -68,7 +68,7 @@ def _state(client: TestClient, pid: str) -> dict[str, Any]:
 
 def test_full_cycle(client: TestClient, tmp_path: Path) -> None:
     pid = _create(client)
-    # Ручной анализатор без модели — ждём оператора
+    # Manual analyzer without a model: waiting for the operator
     assert client.post(f"/projects/{pid}/analyze").status_code == 202
     assert _state(client, pid)["state"] == "needs_model"
 
@@ -83,7 +83,7 @@ def test_full_cycle(client: TestClient, tmp_path: Path) -> None:
     client.post(f"/projects/{pid}/analyze")
     info = _state(client, pid)
     assert info["state"] == "needs_answers" and info["round"] == 1
-    # Черновик уже собран: план строится по допущению
+    # A draft is already built: the plan builds on an assumption
     assert {"report.md", "report.json", "project.dxf", "project.epd"} <= set(info["files"])
 
     questions = client.get(f"/projects/{pid}/questions").json()
@@ -104,11 +104,11 @@ def test_full_cycle(client: TestClient, tmp_path: Path) -> None:
     }
     dxf = client.get(f"/projects/{pid}/files/project.dxf")
     assert dxf.status_code == 200 and dxf.content.startswith(b"  0\nSECTION")
-    epd = client.get(f"/projects/{pid}/files/project.epd")  # листы — из .epd, PNG не пишутся
+    epd = client.get(f"/projects/{pid}/files/project.epd")  # sheets from .epd, no PNGs
     assert epd.status_code == 200 and epd.content.startswith(b"PK")
     assert client.get(f"/projects/{pid}/files/sheets/01-plan.png").status_code == 404
 
-    # История раундов и ответ, наложенный на модель
+    # Round history and the answer applied to the model
     project = tmp_path / "data" / pid
     assert (project / "rounds" / "001" / "answers.json").exists()
     assert (project / "rounds" / "002" / "report.json").exists()
@@ -123,7 +123,7 @@ def test_errors(client: TestClient) -> None:
         f"/projects/{pid}/model/evil.py", content="x", headers={"content-type": "text/yaml"}
     )
     assert bad_name.status_code == 400
-    # Ответы до вопросов
+    # Answers before questions
     assert client.post(f"/projects/{pid}/answers", json={"answers": {"q1": 1}}).status_code == 409
     _put(client, pid, "room.yaml", ROOM)
     _put(client, pid, "intake.yaml", {"questions": [_q("q1", answer="text", severity="minor")]})
@@ -137,7 +137,7 @@ def test_errors(client: TestClient) -> None:
 def test_model_errors_need_model(client: TestClient) -> None:
     pid = _create(client)
     room = ROOM["rooms"][0]
-    broken = {**ROOM, "rooms": [{**room, "walls": room["walls"][:3]}]}  # контур не замкнут
+    broken = {**ROOM, "rooms": [{**room, "walls": room["walls"][:3]}]}  # outline not closed
     _put(client, pid, "room.yaml", broken)
     client.post(f"/projects/{pid}/analyze")
     info = _state(client, pid)
@@ -152,7 +152,7 @@ def test_critical_without_geometry_is_insufficient_after_rounds(client: TestClie
     info = _state(client, pid)
     assert info["state"] == "needs_answers"
     assert info["stages"][0]["status"] == "insufficient"
-    # Текстовый ответ уходит анализатору; ручной анализатор ждёт оператора
+    # A text answer goes to the analyzer; the manual analyzer waits for the operator
     client.post(f"/projects/{pid}/answers", json={"answers": {"q1": {"text": "размеров нет"}}})
     info = _state(client, pid)
     assert info["state"] == "needs_model" and "q1" in info["message"]
@@ -168,7 +168,7 @@ def test_rounds_are_limited(client: TestClient) -> None:
         assert _state(client, pid)["state"] == "needs_answers"
         client.post(f"/projects/{pid}/answers", json={"answers": {f"q{k}": {"accept": True}}})
     info = _state(client, pid)
-    # После 3 раундов — сборка по допущениям, оставшиеся вопросы в отчёте
+    # After 3 rounds: a build on assumptions, remaining questions in the report
     assert info["state"] == "ready" and "допущениям" in info["message"], info
     assert info["stages"][0]["open_questions"] == 2
 
@@ -216,7 +216,7 @@ def test_model_uploaded_with_sources(client: TestClient) -> None:
     pid = info["id"]
     assert "accept" in client.get(f"/projects/{pid}/model/answers.yaml").text
     client.post(f"/projects/{pid}/analyze")
-    # Ответ из answers.yaml уже наложен: открытых вопросов нет
+    # The answer from answers.yaml is already applied: no open questions
     assert _state(client, pid)["state"] == "ready"
 
 

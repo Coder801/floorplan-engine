@@ -1,10 +1,10 @@
-"""Отрисовка электрики: розетки, выключатели, светильники, щит, легенда.
+"""Electrical drawing: sockets, switches, lights, panel, legend.
 
-Трассы кабелей здесь не рисуются — только на листе проводки (drawing/wiring.py), чтобы
-на чертеже был один способ разводки. Кабели модели дают группам марку кабеля.
+Cable routes are not drawn here, only on the wiring sheet (drawing/wiring.py), so the
+drawing shows a single way of routing. Model cables give groups their cable type.
 
-Все точки привязаны к стенам плана (room + wall + offset) или к потолку комнаты
-(ceiling — от origin комнаты). Символы — вставки блоков из symbols.py.
+Every point is tied to a plan wall (room + wall + offset) or to the room ceiling
+(ceiling: from the room origin). Symbols are block inserts from symbols.py.
 """
 
 from __future__ import annotations
@@ -49,14 +49,14 @@ from floorplan_engine.model.texts import Language, tr
 
 LABEL_GAP_MM = 1.0
 LINE_STEP_MM = TEXT_SMALL_MM * 1.5
-LABEL_CLUSTER_GAP = 250.0  # мм: соседние точки на стене ближе этого подписываются вместе
-LABEL_PROBE_MM = 1.0  # шаг перебора мест подписи, мм листа
-LABEL_REACH = 12  # сколько шагов подпись может уйти от символа (вдоль стены и от неё)
-LABEL_FAR = 40  # рядом места нет — ищется до стольких шагов, с выноской
-LABEL_BAND_MM = 6.0  # насколько подпись может выйти за габарит плана, мм листа
-LEADER_MIN_MM = 3.0  # дальше этого от символа — подпись с выноской
-LW_LEADER = 13  # толщина выноски, сотые мм
-LED_INSET_MM = 1.0  # лента — чуть внутри помещения от грани стены
+LABEL_CLUSTER_GAP = 250.0  # mm: wall points closer than this share one label
+LABEL_PROBE_MM = 1.0  # step for trying label positions, sheet mm
+LABEL_REACH = 12  # steps a label may move from its symbol (along the wall and away)
+LABEL_FAR = 40  # no room nearby: search up to this many steps, with a leader
+LABEL_BAND_MM = 6.0  # how far a label may stick out of the plan extent, sheet mm
+LEADER_MIN_MM = 3.0  # farther than this from the symbol: label with a leader
+LW_LEADER = 13  # leader line weight, 1/100 mm
+LED_INSET_MM = 1.0  # LED strip sits slightly inside the room from the wall face
 LW_LED = 35
 
 
@@ -68,7 +68,7 @@ def insert_symbol(
     yscale: float = 1.0,
     attribs: dict[str, str] | None = None,
 ) -> None:
-    """Вставка блока УГО; attribs — значения невидимых атрибутов ID, H, GROUP (в модели)."""
+    """Insert a symbol block; attribs: values of the invisible attributes ID, H, GROUP (model)."""
     ref = msp.add_blockref(
         spec.block,
         anchor.pos.as_tuple(),
@@ -81,8 +81,8 @@ def insert_symbol(
     )
     if attribs is not None:
         ref.add_auto_attribs(attribs)
-        # Щит растянут под свою ширину: атрибуты с ним растянулись бы на десятки метров
-        # и раздули габарит вида. Атрибуты невидимы — им нужен обычный размер в точке вставки
+        # The panel is stretched to its own width: attributes would stretch to tens of metres
+        # with it and inflate the view extent. Invisible attributes need a normal size at the insert
         for attrib in ref.attribs:
             attrib.dxf.height = sheet(TEXT_SMALL_MM)
             attrib.dxf.width = 1.0
@@ -94,12 +94,12 @@ def point_attribs(pt: ElectricalPoint) -> dict[str, str]:
     return {"ID": pt.id, "H": height, "GROUP": pt.group or ""}
 
 
-# --- Подписи -----------------------------------------------------------------
+# --- Labels ------------------------------------------------------------------
 
 
 def label_clusters(points: Sequence[ElectricalPoint]) -> list[list[int]]:
-    """Точки одной стены, идущие подряд с шагом не больше LABEL_CLUSTER_GAP, — одна подпись.
-    Потолочные точки подписываются каждая отдельно."""
+    """Points on one wall that follow each other at most LABEL_CLUSTER_GAP apart share one label.
+    Ceiling points are labelled one by one."""
     by_wall: dict[tuple[str, str], list[int]] = {}
     out: list[list[int]] = []
     for k, pt in enumerate(points):
@@ -122,8 +122,8 @@ def label_clusters(points: Sequence[ElectricalPoint]) -> list[list[int]]:
 
 
 def symbol_area(a: Anchor, half: float | None = None) -> BaseGeometry:
-    """Габарит символа для размещения подписей: у стены — от стены на depth, шириной в
-    две глубины (или 2 × half); на потолке — квадрат по радиусу."""
+    """Symbol extent for label placement: at a wall, depth away from the wall and two depths wide
+    (or 2 × half); on the ceiling, a square by radius."""
     if a.inward is None:
         r = a.depth
         return box(a.pos.x - r, a.pos.y - r, a.pos.x + r, a.pos.y + r)
@@ -135,7 +135,7 @@ def symbol_area(a: Anchor, half: float | None = None) -> BaseGeometry:
 
 
 def strip_area(strip: LedStrip, geoms: dict[str, RoomGeometry]) -> BaseGeometry:
-    """LED-лента — линия вдоль стены: подписи на неё не ложатся."""
+    """LED strip is a line along the wall: labels must not sit on it."""
     seg = room_geometry(geoms, strip.room).contour.segment(strip.wall)
     a = seg.point_at(strip.start) + seg.inward * sheet(LED_INSET_MM)
     b = seg.point_at(strip.end) + seg.inward * sheet(LED_INSET_MM)
@@ -143,7 +143,7 @@ def strip_area(strip: LedStrip, geoms: dict[str, RoomGeometry]) -> BaseGeometry:
 
 
 def _opening_areas(geoms: Sequence[RoomGeometry]) -> list[BaseGeometry]:
-    """Зоны проёмов: открывание дверей и окна (остекление в толще стены)."""
+    """Opening zones: door swings and windows (glazing inside the wall thickness)."""
     out: list[BaseGeometry] = []
     for g in geoms:
         for op in g.room.openings:
@@ -168,8 +168,8 @@ def label_placer(
     symbols: Sequence[BaseGeometry],
     strips: Sequence[BaseGeometry] = (),
 ) -> LabelPlacer:
-    """Размещение подписей листа: символы — препятствия для подписи и выноски, проёмы и
-    LED-ленты — только для подписи."""
+    """Place the sheet labels: symbols block both the label and its leader, openings and LED strips
+    block only the label."""
     metrics = Metrics(
         line_h=sheet(TEXT_SMALL_MM),
         step=sheet(LINE_STEP_MM),
@@ -181,7 +181,7 @@ def label_placer(
     )
     walls = unary_union([p.polygon for g in geoms for p in wall_pieces(g)])
     zones = [*_opening_areas(geoms), *strips]
-    # За контур квартиры — только в полосе LABEL_BAND_MM у плана: иначе вид листа растёт
+    # Outside the flat outline only within LABEL_BAND_MM of the plan: otherwise the sheet view grows
     frame = box(*unary_union([walls, *zones]).bounds).buffer(
         sheet(LABEL_BAND_MM), join_style="mitre"
     )
@@ -205,8 +205,8 @@ def place_label(
     room: str | None = None,
     layer: str = E_TEXT.name,
 ) -> None:
-    """Горизонтальная подпись у символа в свободном месте (labels.py); далеко — с выноской.
-    layer — слой подписи (лист освещения — свой)."""
+    """Horizontal label next to a symbol in a free spot (labels.py); far away, with a leader.
+    layer is the label layer (the lighting sheet has its own)."""
     lines = [s for s in lines if s]
     if not lines:
         return
@@ -231,27 +231,29 @@ def draw_led_strip(msp: Modelspace, strip: LedStrip, geoms: dict[str, RoomGeomet
         add_text(msp, strip.note, mid, TEXT_SMALL_MM, E_TEXT.name, seg.angle_deg)
 
 
-# --- Легенда -----------------------------------------------------------------
+# --- Legend ------------------------------------------------------------------
 
 
-LEGEND_ROW = 9.0  # мм листа
-LEGEND_TEXT_X = 9.0  # от левого края легенды до подписи
+LEGEND_ROW = 9.0  # sheet mm
+LEGEND_TEXT_X = 9.0  # from the legend left edge to the caption
 LEGEND_SYMBOL_X = 3.0
 
 
 @dataclass(frozen=True)
 class LegendRow:
-    """Строка легенды: символ блока (key), линия LED или заголовок (только текст)."""
+    """Legend row: a block symbol (key), an LED line or a heading (text only)."""
 
     text: str
-    height: float  # мм листа
-    step: float  # шаг от предыдущей строки, мм листа
+    height: float  # sheet mm
+    step: float  # step from the previous row, sheet mm
     key: str | None = None
     led: bool = False
 
     @property
     def tag(self) -> str | None:
-        """Объект легенды на листе (legend:<tag>) — по нему просмотр берёт значок для плашки."""
+        """Legend object on the sheet (legend:<tag>): the viewer takes the icon for its badge
+        from it.
+        """
         return LED_STRIP_KEY if self.led else self.key
 
 
@@ -259,9 +261,9 @@ LED_STRIP_KEY = "led_strip"
 
 
 def legend_rows(elec: Electrical, language: Language = "ru") -> list[LegendRow]:
-    """Условные обозначения: заголовок, затем только значок и что он значит — символы точек,
-    что есть на листе, щит и LED-лента. Без количества (оно в «Точках») и без цветов групп
-    (они в «Группах»)."""
+    """Legend: a heading, then only the icon and what it means: point symbols present on the sheet,
+    the panel and the LED strip. No counts (they are in "Points") and no group colours
+    (they are in "Groups")."""
     rows = [LegendRow(tr("legend", language), TEXT_DIM_MM, 0.0)]
     present = {symbol_key(p) for p in elec.points}
     if elec.board is not None:
@@ -276,7 +278,7 @@ def legend_rows(elec: Electrical, language: Language = "ru") -> list[LegendRow]:
 
 
 def legend_size(rows: Sequence[LegendRow]) -> tuple[float, float]:
-    """Ширина и высота легенды на листе, мм (ширина — по метрикам шрифта)."""
+    """Legend width and height on the sheet, mm (width from font metrics)."""
     width = max(
         (LEGEND_TEXT_X if r.tag else 0.0) + text_width(r.text, r.height) + TEXT_GAP for r in rows
     )
@@ -285,9 +287,9 @@ def legend_size(rows: Sequence[LegendRow]) -> tuple[float, float]:
 
 
 def draw_legend(psp: BaseLayout, rows: Sequence[LegendRow], top_left: Vec) -> None:
-    """Легенда на листе (мм листа) от левого верхнего угла: символы — те же блоки УГО,
-    уменьшенные в масштаб листа. Значок помечен объектом legend:<tag> (ids.py): из него
-    просмотр берёт примитивы для своей плашки легенды (epd/artifact.py), подпись — нет."""
+    """Legend on the sheet (sheet mm) from the top-left corner: the symbols are the same symbol
+    blocks scaled to the sheet. The icon is tagged as object legend:<tag> (ids.py): the viewer
+    takes the primitives for its legend badge from it (epd/artifact.py), the caption is not."""
     x0 = top_left.x
     y = top_left.y - rows[0].height
     left = TextEntityAlignment.MIDDLE_LEFT
@@ -313,7 +315,7 @@ def draw_legend(psp: BaseLayout, rows: Sequence[LegendRow], top_left: Vec) -> No
         add_text(psp, row.text, Vec(x, y), row.height, E_TEXT.name, align=left, scale=1.0)
 
 
-# --- Сборка ------------------------------------------------------------------
+# --- Assembly ----------------------------------------------------------------
 
 
 def draw_electrical(
@@ -346,8 +348,8 @@ def draw_electrical(
     placer = label_placer(geoms_list, symbols, strips)
     numbers = number_points(plan, elec)
     for cluster in label_clusters(elec.points):
-        # У символа — только номера (вид и высота — в таблице «Точки»); подпись — по центру
-        # группы, за самым далёким от стены символом
+        # The symbol carries only numbers (kind and height are in the "Points" table); the label is
+        # centred on the group, past the symbol farthest from the wall
         lines = [ranges([numbers[elec.points[k].id] for k in cluster])]
         first, last = anchors[cluster[0]], anchors[cluster[-1]]
         deepest = max(

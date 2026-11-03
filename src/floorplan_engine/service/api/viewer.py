@@ -1,29 +1,33 @@
-"""API просмотра собранных проектов из папки projects/ (команда `view`).
+"""API for viewing built projects from the projects/ folder (the `view` command).
 
-Проекты собираются в Claude Code (`/plan`, `/electrical`, `build`); здесь их показывают:
-этапы, вопросы с ответами, замечания, листы, файлы out/, источники и YAML модели. Анализа
-и ответов нет. Одна запись — правки проводки: линии и коробки, перетянутые на листе
-проводки, пишутся в wiring.yaml проекта, и проект пересобирается (решение 2026-10-27).
+Projects are built in Claude Code (`/plan`, `/electrical`, `build`); here they are shown:
+stages, questions with answers, remarks, sheets, out/ files, sources and model YAML. There is
+no analysis and no answering. Writes: wiring edits — lines and boxes dragged on the wiring
+sheet are written to the project's wiring.yaml and the project is rebuilt (decision
+2026-10-27), the wiring variant (variant.yaml), and the studio price list — prices of works
+from the studio price page go to prices.yaml next to the projects (decision 2026-11-03).
 
-GET /                                   что это за сервис и где страница
-GET /api/projects                       список проектов
-GET /api/projects/{name}                проект: отчёт, ответы, файлы
-GET /api/projects/{name}/out/{path}     файл из out/
-GET /api/projects/{name}/source/{path}  источник из source/
-GET /api/projects/{name}/model/{file}   YAML модели
-GET /api/projects/{name}/sheets         манифест листов из out/project.epd
-GET /api/projects/{name}/sheets/{n}     лист n (1, 2…): векторные примитивы для canvas
-POST /api/projects/{name}/wiring        правки проводки → wiring.yaml и пересборка
-POST /api/projects/{name}/variant       вариант проводки → variant.yaml и пересборка
-GET /api/auth/me                        кто вошёл ({"auth": false} — вход выключен)
+GET /                                   what this service is and where the page is
+GET /api/projects                       list of projects
+GET /api/projects/{name}                project: report, answers, files
+GET /api/projects/{name}/out/{path}     a file from out/
+GET /api/projects/{name}/source/{path}  a source from source/
+GET /api/projects/{name}/model/{file}   model YAML
+GET /api/projects/{name}/sheets         sheet manifest from out/project.epd
+GET /api/projects/{name}/sheets/{n}     sheet n (1, 2…): vector primitives for canvas
+POST /api/projects/{name}/wiring        wiring edits → wiring.yaml and rebuild
+POST /api/projects/{name}/variant       wiring variant → variant.yaml and rebuild
+GET /api/prices                         studio price page: works, own price, market spread
+POST /api/prices                        studio price edits → prices.yaml next to the projects
+GET /api/auth/me                        who is logged in ({"auth": false} means login is off)
 
-Вход (service/api/auth.py) включается окружением SHTROBA_AUTH=on: тогда список проектов — только
-видимые пришедшему, а запросы к проекту проверяются по его роли (db/access.py).
+Login (service/api/auth.py) is turned on by SHTROBA_AUTH=on: then the project list holds only
+what the caller can see, and project requests are checked against their role (db/access.py).
 
-Страница просмотра — отдельный проект web/ (React + TypeScript, решение 2026-10-27): он
-обращается к этому API по /api через прокси (Vite в разработке, обратный прокси при выкладке).
-Здесь — только API: ни HTML, ни статики. Листы рисуются в браузере (canvas) прямо из
-артефакта .epd — PNG для показа не нужны.
+The viewer page is a separate project, web/ (React + TypeScript, decision 2026-10-27): it calls
+this API at /api through a proxy (Vite in development, a reverse proxy in deployment). This is
+API only: no HTML and no static files. Sheets are drawn in the browser (canvas) straight from
+the .epd artifact; no PNGs are needed for display.
 """
 
 from __future__ import annotations
@@ -48,6 +52,8 @@ from floorplan_engine.pipeline import (
     PROJECT_FILE,
     AuditError,
     build_project,
+    price_page,
+    save_prices,
     save_variant,
     save_wiring_edits,
 )
@@ -67,8 +73,10 @@ MODEL_FILES = (ROOM_FILE, ELECTRICAL_FILE, INTAKE_FILE, ANSWERS_FILE, WIRING_FIL
 
 
 def project_folders(root: Path) -> list[Path]:
-    """Папки проектов в root: не скрытые, с YAML модели или собранным out/ (прайс студии и
-    прочие файлы рядом — не проекты). Их же связывает с владельцем вход (auth.Auth._adopt)."""
+    """Project folders in root: not hidden, with model YAML or a built out/ (the studio price list
+    and
+    other files next to them are not projects). Login links these same folders to an owner
+    (auth.Auth._adopt)."""
     return sorted(
         p
         for p in root.iterdir()
@@ -78,12 +86,13 @@ def project_folders(root: Path) -> list[Path]:
     )
 
 
-# Во вкладках — ещё прайс сметы; на «сборка устарела» он не влияет (смета — отдельная команда)
+# Tabs also show the estimate price list; it does not affect "build is stale" (estimate is a
+# separate command)
 SHOWN_FILES = (*MODEL_FILES, PRICES_FILE)
 
 
 def _files(folder: Path) -> list[str]:
-    """Файлы папки (рекурсивно), пути от неё; без скрытых."""
+    """Folder files (recursive), paths relative to it; hidden ones skipped."""
     if not folder.is_dir():
         return []
     return sorted(
@@ -109,17 +118,19 @@ def _summary(project: Path) -> dict[str, Any]:
         "name": project.name,
         "title": report.get("project") or project.name,
         "built": built,
-        # Модель правили после сборки: на листах старое состояние
+        # The model was edited after the build: the sheets show the old state
         "stale": built is not None and bool(model_times) and max(model_times) > built,
         "stages": report.get("stages", []),
         "open_questions": sum(1 for q in questions if q.get("state") == "open"),
-        # Превью плана для карточки: GET /api/projects/{name}/out/preview.svg
+        # Plan preview for the card: GET /api/projects/{name}/out/preview.svg
         "preview": (project / OUT_DIR / PREVIEW_FILE).exists(),
     }
 
 
 def create_viewer(root: Path, auth: Auth | None = None) -> FastAPI:
-    """API просмотра папки root; auth — вход и доступ (None — всё открыто, локально)."""
+    """Viewer API for folder root; auth is login and access (None means everything is open,
+    locally).
+    """
     app = FastAPI(title=f"{BRAND} · просмотр", version=__version__)
     if auth is not None:
         auth.folders = lambda: [p.name for p in project_folders(root)]
@@ -132,7 +143,7 @@ def create_viewer(root: Path, auth: Auth | None = None) -> FastAPI:
 
     def project_dir(name: str) -> Path:
         path = root / name
-        # Только прямые подпапки root: имя без разделителей и точек в начале
+        # Only direct subfolders of root: a name without separators or a leading dot
         if "/" in name or "\\" in name or name.startswith(".") or not path.is_dir():
             raise HTTPException(404, f"проекта {name} нет")
         return path
@@ -156,7 +167,9 @@ def create_viewer(root: Path, auth: Auth | None = None) -> FastAPI:
         return [_summary(p) for p in folders]
 
     def allowed(request: Request, action: acc.Action) -> bool:
-        """Право в проекте: вход выключен — всё можно; иначе по роли (auth.check)."""
+        """Project permission: with login off everything is allowed; otherwise by role
+        (auth.check).
+        """
         return auth is None or acc.can(getattr(request.state, "role", None), action)
 
     @app.get("/api/projects/{name}")
@@ -183,7 +196,7 @@ def create_viewer(root: Path, auth: Auth | None = None) -> FastAPI:
             "dxf": PROJECT_FILE if PROJECT_FILE in out else None,
             "files": [f for f in out if "/" not in f],
             "sources": _files(path / SOURCE_DIR),
-            # Что разобрано (intake.yaml, sources): файл от source/ и пометка разбора
+            # What was parsed (intake.yaml, sources): file relative to source/ and the parse note
             "parsed": [
                 {
                     "file": str(s.get("file", "")).removeprefix(f"{SOURCE_DIR}/"),
@@ -193,7 +206,7 @@ def create_viewer(root: Path, auth: Auth | None = None) -> FastAPI:
                 if isinstance(s, dict)
             ],
             "model": [f for f in SHOWN_FILES if (path / f).exists()],
-            # Что можно пришедшему: править трассы и выбирать вариант (студия, «Мой ремонт»)
+            # What the caller may do: edit routes and choose a variant (studio, "Мой ремонт")
             "can": {
                 "edit_wiring": allowed(request, "edit_wiring"),
                 "choose_variant": allowed(request, "choose_variant"),
@@ -226,13 +239,13 @@ def create_viewer(root: Path, auth: Auth | None = None) -> FastAPI:
             page = next((p for p in pages if p["index"] == index), None)
             if page is None:
                 raise HTTPException(404, f"листа {index} нет")
-            # Страница уже JSON — отдаём как есть, без разбора и повторной сборки
+            # The page is already JSON: return it as is, without parsing or rebuilding
             return Response(zf.read(page["file"]), media_type="application/json")
 
     @app.post("/api/projects/{name}/wiring")
     def save_wiring(name: str, changes: Annotated[dict[str, Any], Body()]) -> dict[str, Any]:
-        """Правки проводки: {"wires": {id: {from, to, path} | null}, "boxes": {id: {room,
-        group, at} | null}}, мм модели; null — вернуть автотрассу. Затем пересборка."""
+        """Wiring edits: {"wires": {id: {from, to, path} | null}, "boxes": {id: {room, group, at} |
+        null}}, model mm; null restores the auto route. Then a rebuild."""
         path = project_dir(name)
         issues = save_wiring_edits(path, changes)
         if issues:
@@ -246,8 +259,8 @@ def create_viewer(root: Path, auth: Auth | None = None) -> FastAPI:
 
     @app.post("/api/projects/{name}/variant")
     def choose_variant(name: str, data: Annotated[dict[str, Any], Body()]) -> dict[str, Any]:
-        """Вариант проводки: {mode, route, distribution} → variant.yaml, затем пересборка.
-        Правки трасс у каждого варианта свои (wiring.yaml, variants)."""
+        """Wiring variant: {mode, route, distribution} → variant.yaml, then a rebuild.
+        Each variant has its own route edits (wiring.yaml, variants)."""
         path = project_dir(name)
         issues = save_variant(path, data)
         if issues:
@@ -257,6 +270,29 @@ def create_viewer(root: Path, auth: Auth | None = None) -> FastAPI:
         except AuditError as exc:
             raise HTTPException(500, str(exc)) from exc
         return {"built": result.built, "notes": []}
+
+    def edit_prices(request: Request) -> bool:
+        """The studio price list is edited by the studio: login off — anyone; else auth.check."""
+        return auth is None or getattr(request.state, "edit_prices", False)
+
+    @app.get("/api/prices")
+    def prices(request: Request) -> dict[str, Any]:
+        """Studio price page: electrical works with the studio price (prices.yaml next to the
+        projects) and the market spread (market.yaml), the period and sources of market prices."""
+        return {**price_page(root), "editable": edit_prices(request)}
+
+    @app.post("/api/prices")
+    def save_price_list(
+        request: Request, changes: Annotated[dict[str, Any], Body()]
+    ) -> dict[str, Any]:
+        """Price edits: {"items": {key: price | null}, "date"?} → prices.yaml; projects are not
+        rebuilt (the estimate is rebuilt by build or estimate)."""
+        if not edit_prices(request):
+            raise HTTPException(403, "прайс правит только студия")
+        issues = save_prices(root, changes)
+        if issues:
+            raise HTTPException(422, "; ".join(f"{i.path}: {i.message}" for i in issues))
+        return {**price_page(root), "editable": True}
 
     @app.get("/api/projects/{name}/out/{rel:path}")
     def out_file(name: str, rel: str) -> FileResponse:

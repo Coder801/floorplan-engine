@@ -1,13 +1,13 @@
-"""Цикл проекта в сервисе: анализ → вопросы → ответы → … → сборка.
+"""Project cycle in the service: analysis → questions → answers → … → build.
 
-    created ─analyze─▶ analyzing ─▶ needs_model     (модели нет / ошибки / текстовые ответы)
-                                 ─▶ needs_answers   (есть вопросы и раунды не кончились)
-                                 ─▶ ready           (план собран, вопросов нет или раунды кончились)
-                                 ─▶ insufficient    (план не строится, спрашивать нечего)
-    needs_answers ─answers─▶ building ─▶ то же самое
+    created ─analyze─▶ analyzing ─▶ needs_model     (no model / errors / text answers)
+                                 ─▶ needs_answers   (questions open and rounds not used up)
+                                 ─▶ ready           (plan built, no questions or rounds used up)
+                                 ─▶ insufficient    (plan cannot be built, nothing to ask)
+    needs_answers ─answers─▶ building ─▶ the same
 
-Каждая оценка пересобирает отчёт, а если план строится — DXF, артефакт и PNG: черновик
-доступен и пока вопросы открыты.
+Every assessment rebuilds the report and, if the plan builds, the DXF, the artifact and the
+PNGs: a draft is available even while questions are open.
 """
 
 from __future__ import annotations
@@ -27,22 +27,22 @@ from floorplan_engine.service.storage import SOURCE_DIR, Storage
 from floorplan_engine.validation.assess import Status
 from floorplan_engine.validation.report import REPORT_JSON
 
-MAX_ROUNDS = 3  # раундов вопросов; дальше — сборка по допущениям или «мало данных»
+MAX_ROUNDS = 3  # question rounds; after that, a build on assumptions or "not enough data"
 log = logging.getLogger(__name__)
 
 
 class ConflictError(RuntimeError):
-    """Действие недопустимо в текущем состоянии проекта."""
+    """The action is not allowed in the current project state."""
 
 
 def _files(result: BuildResult, out: Path) -> list[str]:
-    """Готовые файлы относительно out/: report.md, project.dxf, project.epd …"""
+    """Ready files relative to out/: report.md, project.dxf, project.epd …"""
     paths = [*result.report_files, result.dxf, result.artifact, *result.sheets]
     return [p.relative_to(out).as_posix() for p in paths if p is not None]
 
 
 def _apply(info: ProjectInfo, result: BuildResult, out: Path) -> None:
-    """Итог оценки → состояние проекта."""
+    """Assessment result → project state."""
     a = result.assessment
     info.stages = [
         StageInfo(
@@ -96,12 +96,12 @@ class Workflow:
         return self._set_busy(project_id, ProjectState.ANALYZING)
 
     def run_analysis(self, project_id: str) -> None:
-        """Фоновая часть: анализ и оценка."""
+        """Background part: analysis and assessment."""
         with self.storage.lock(project_id):
             info = self.storage.load(project_id)
             try:
                 gate = self._gate(project_id)
-                if not gate.ok:  # модель не вызываем: токены на негодный источник не тратятся
+                if not gate.ok:  # do not call the model: no tokens spent on an unusable source
                     info.state, info.message = ProjectState.REJECTED, gate.message
                     self.storage.save(info)
                     return
@@ -119,8 +119,9 @@ class Workflow:
             self.storage.save(info)
 
     def _gate(self, project_id: str) -> Gate:
-        """Порог «не удалось» — только для анализатора, который читает источники, и только
-        пока модели нет (загруженную оператором модель он не проверяет)."""
+        """The "failed" gate applies only to an analyzer that reads the sources, and only while
+        there
+        is no model (it does not check a model uploaded by an operator)."""
         path = self.storage.path(project_id)
         has_model = any((path / f).exists() for f in MODEL_FILES)
         if not self.analyzer.reads_sources or has_model:
@@ -128,7 +129,7 @@ class Workflow:
         return check_sources(path / SOURCE_DIR)
 
     def submit_answers(self, project_id: str, answers: AnswersIn) -> ProjectInfo:
-        """Принять ответы раунда; дальше — run_answers в фоне."""
+        """Accept the round answers; then run_answers in the background."""
         info = self.storage.load(project_id)
         if info.state is not ProjectState.NEEDS_ANSWERS:
             raise ConflictError(
@@ -163,7 +164,9 @@ class Workflow:
         return self._set_busy(project_id, ProjectState.BUILDING)
 
     def run_answers(self, project_id: str, has_text: bool) -> None:
-        """Фоновая часть после ответов: текстовые сначала разбирает анализатор, потом оценка."""
+        """Background part after answers: the analyzer handles text answers first, then the
+        assessment.
+        """
         with self.storage.lock(project_id):
             info = self.storage.load(project_id)
             try:

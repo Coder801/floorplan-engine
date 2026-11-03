@@ -1,6 +1,6 @@
-// Глобальные стили: темы, сброс, теги и несколько утилит, которые нужны везде.
-// Всё остальное — модулем рядом с компонентом (<Компонент>.module.scss), общие части
-// интерфейса — styles/ui.module.scss.
+// Global styles: themes, reset, tags and a few utilities needed everywhere.
+// Everything else is a module next to its component (<Component>.module.scss); shared interface
+// parts are in styles/ui.module.scss.
 
 @use "./tokens";
 @use "./mixins" as *;
@@ -13,10 +13,10 @@ body {
   color: var(--text);
   font: 14px/1.45 "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
 }
-// Корень React: одна ячейка ровно в экран (просмотр, вход или «Загрузка…») — прокрутка
-// внутри панелей. Строка minmax(0, 1fr), а не auto: иначе длинная таблица боковой панели
-// растягивает страницу. На телефоне — тоже в экран (dvh — без панели адреса браузера):
-// чертёж на всё, таблицы — нижней шторкой
+// React root: one cell exactly the size of the screen (viewer, login or "Loading…"), scrolling
+// happens inside the panels. The row is minmax(0, 1fr), not auto: otherwise a long side panel
+// table stretches the page. On a phone it also fits the screen (dvh excludes the browser
+// address bar): the drawing takes everything, tables go in a bottom drawer
 #root {
   display: grid;
   grid-template: minmax(0, 1fr) / minmax(0, 1fr);
@@ -36,13 +36,13 @@ pre {
   font: 11px/1.45 $mono;
 }
 
-// Утилиты текста
+// Text utilities
 .mono { font-family: $mono; font-size: 12px; }
 .muted { color: var(--muted); }
 .small { font-size: 12px; }
 
-// Цвет по важности вопроса (sev-<severity>) и статусу этапа (st-<status>):
-// имена приходят из данных, поэтому классы глобальные
+// Colour by question severity (sev-<severity>) and stage status (st-<status>):
+// the names come from data, so the classes are global
 .sev-critical { color: var(--critical); }
 .sev-major { color: var(--major); }
 .sev-minor { color: var(--minor); }

@@ -1,8 +1,9 @@
-"""Надписи на чертеже на языке проекта (`language` в room.yaml): ru — русский, uk — украинский.
+"""Drawing labels in the project language (`language` in room.yaml): ru is Russian, uk is
+Ukrainian.
 
-Штамп оформляется по ДСТУ Б А.2.4-4:2009 (форма 3); uk — подписи граф из стандарта,
-ru — их перевод.
-Сообщения CLI и валидации сюда не входят — они всегда на русском.
+The title block follows DSTU B A.2.4-4:2009 (form 3); uk uses the box captions from the
+standard, ru their translation.
+CLI and validation messages are not here: they are always in Russian.
 """
 
 from __future__ import annotations
@@ -136,7 +137,7 @@ TEXTS: dict[str, dict[Language, str]] = {
         "uk": "Точок без групи не в розрахунку: {n}",
     },
     "format": {"ru": "Формат {name}", "uk": "Формат {name}"},
-    # Основная надпись
+    # Title block
     "stamp_change": {"ru": "Изм.", "uk": "Зм."},
     "stamp_count": {"ru": "Кол.уч", "uk": "Кільк."},
     "stamp_sheet_short": {"ru": "Лист", "uk": "Арк."},
@@ -154,5 +155,5 @@ TEXTS: dict[str, dict[Language, str]] = {
 
 
 def tr(key: str, language: Language, **values: object) -> str:
-    """Надпись по ключу на нужном языке; {поля} подставляются из values."""
+    """Label by key in the requested language; {fields} are filled from values."""
     return TEXTS[key][language].format(**values)

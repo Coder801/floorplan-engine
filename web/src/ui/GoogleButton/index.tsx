@@ -1,5 +1,6 @@
-// Кнопка «Продолжить с Google» по правилам Google (Sign in with Google branding): цветной знак
-// «G» слева, белая с серой рамкой в светлой теме, тёмная — в тёмной; подпись — от вызывающего
+// "Continue with Google" button following Google's rules (Sign in with Google branding): the
+// coloured "G" on the left, white with a grey border in the light theme, dark in the dark
+// theme; the label comes from the caller
 
 import css from "./GoogleButton.module.scss";
 

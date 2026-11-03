@@ -1,4 +1,4 @@
-"""Выжимка из векторного PDF: масштаб, размеры, цепочки, надписи."""
+"""Vector PDF digest: scale, dimensions, chains, labels."""
 
 from __future__ import annotations
 
@@ -8,12 +8,12 @@ import pytest
 
 from floorplan_engine.service.analysis.pdf_facts import describe, extract
 
-# Цифра Helvetica 10 pt — 5,56 pt шириной
+# A Helvetica 10 pt digit is 5.56 pt wide
 DIGIT = 5.56
 
 
 def _pdf(content: str) -> bytes:
-    """Одностраничный PDF 600×400 pt со шрифтом Helvetica."""
+    """A one-page 600×400 pt PDF with the Helvetica font."""
     objects = [
         "<< /Type /Catalog /Pages 2 0 R >>",
         "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
@@ -40,7 +40,7 @@ def _line(x0: float, y0: float, x1: float, y1: float) -> str:
 
 
 def _dim_h(x0: float, x1: float, y: float) -> list[str]:
-    """Горизонтальная размерная линия с засечками на концах."""
+    """Horizontal dimension line with ticks at the ends."""
     return [_line(x0, y, x1, y), *(_line(x - 1, y - 1.5, x + 1, y + 1.5) for x in (x0, x1))]
 
 
@@ -60,17 +60,17 @@ def _centered(text: str, mid: float, base: float, vertical: bool = False) -> str
 
 @pytest.fixture
 def sheet(tmp_path: Path) -> Path:
-    """Масштаб 1 pt = 10 мм: цепочка 1000 + 2000 + 150 и общий размер 3150 под ней."""
+    """Scale 1 pt = 10 mm: a chain 1000 + 2000 + 150 and an overall 3150 under it."""
     ops = [
         *_dim_h(100, 200, 100),
         *_dim_h(200, 400, 100),
         *_dim_h(400, 415, 100),
         _centered("1000", 150, 101),
         _centered("2000", 300, 101),
-        _text("150", 418, 101),  # не помещается в отрезок 15 pt — вынесена вправо
+        _text("150", 418, 101),  # does not fit the 15 pt segment, placed to the right
         *_dim_h(100, 415, 70),
         _centered("3150", 257.5, 71),
-        # Вертикальный размер: подпись 2200, нарисовано 230 pt = 2300 мм
+        # Vertical dimension: label 2200, drawn 230 pt = 2300 mm
         *_dim_v(500, 100, 330),
         _centered("2200", 215, 499, vertical=True),
         _text("H=1100", 200, 200),
@@ -86,7 +86,7 @@ def sheet(tmp_path: Path) -> Path:
 def test_scale_dimensions_and_chain(sheet: Path) -> None:
     (page,) = extract(sheet)
     assert page.scale == pytest.approx(10.0, rel=0.005)
-    assert page.scale_dims == 3  # 1000, 2000, 3150; 2200 расходится с чертежом
+    assert page.scale_dims == 3  # 1000, 2000, 3150; 2200 disagrees with the drawing
     values = sorted(d.value for d in page.dimensions)
     assert values == [150, 1000, 2000, 2200, 3150]
     chain = sorted((d for d in page.dimensions if d.chain), key=lambda d: d.start)
@@ -102,7 +102,7 @@ def test_render(sheet: Path) -> None:
     assert "1000 + 2000 + 150 = 3150" in text
     assert "общий размер 3150 (Y=700) — совпадает" in text
     assert "| 2200 | ≠ 2300 | X=5000 | Y=1000 | Y=3300 |" in text
-    assert "«socket for fridge»" in text  # строки заметки — одна надпись
+    assert "«socket for fridge»" in text  # note lines are one label
     assert "«H=1100» — высота 1100" in text
     assert "Числа без размерной линии" in text and "2 (" in text
 
@@ -122,8 +122,8 @@ def test_broken_pdf_is_reported(tmp_path: Path) -> None:
 
 
 def test_analysis_needs_only_primitives() -> None:
-    """Разбор не знает формата: страница из надписей и отрезков, собранная руками (как из
-    растрового адаптера), даёт те же размеры и масштаб."""
+    """The parser does not know the format: a page of labels and segments built by hand (as from the
+    raster adapter) gives the same dimensions and scale."""
     from floorplan_engine.service.facts.analysis import page_facts, render
     from floorplan_engine.service.facts.primitives import Label, Segment, Sheet
 
@@ -140,14 +140,14 @@ def test_analysis_needs_only_primitives() -> None:
         segments += segs
     sheet = Sheet("scan.png", 1, 600, 400, labels, segments, unit="px", source="raster")
     facts = page_facts(sheet)
-    assert facts.scale == pytest.approx(10.0)  # 1000 мм на 100 px
+    assert facts.scale == pytest.approx(10.0)  # 1000 mm per 100 px
     assert [d.value for d in facts.dimensions] == [1000, 2000, 1000]
-    assert len({d.chain for d in facts.dimensions}) == 1  # одна цепочка
+    assert len({d.chain for d in facts.dimensions}) == 1  # one chain
     assert "1 px = 10.000 мм" in render([facts])
 
 
 def test_facts_json_round_trip(sheet: Path) -> None:
-    """JSON выжимки (для базы) читается обратно в тот же объект — и тот же Markdown."""
+    """The digest JSON (for the database) reads back into the same object and the same Markdown."""
     import json
 
     from floorplan_engine.service.facts.analysis import ALGO_VERSION, from_dict, render, to_dict

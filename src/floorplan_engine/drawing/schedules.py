@@ -1,5 +1,5 @@
-"""Ведомости этапов на лист: «Точки», «Группы», смета. Строки
-считают расчёты (electrical/), здесь — колонки, ширины по метрикам шрифта и таблица листа.
+"""Stage schedules on the sheet: "Points", "Groups", estimate. Rows come from the calculations
+(electrical/); here are columns, widths from font metrics and the sheet table.
 """
 
 from __future__ import annotations
@@ -8,7 +8,7 @@ from collections.abc import Sequence
 
 from floorplan_engine.drawing.layers import TEXT_DIM_MM, text_width
 from floorplan_engine.drawing.tables import CELL_PAD, TEXT_GAP, Column, Mark, Table, name_width
-from floorplan_engine.electrical.estimate import Estimate, format_number
+from floorplan_engine.electrical.estimate import SECTIONS, Estimate, format_number
 from floorplan_engine.electrical.estimate import text as estimate_text
 from floorplan_engine.electrical.groups import ASSUMED, GroupRow, group_colors, group_rows
 from floorplan_engine.electrical.groups import text as groups_text
@@ -20,17 +20,17 @@ from floorplan_engine.electrical.wiring_model import Wiring
 from floorplan_engine.model.schema import Electrical, Plan
 from floorplan_engine.model.texts import Language
 
-POINTS_ROW_H = 5.5  # строки «Точек» плотнее обычных: точек много
+POINTS_ROW_H = 5.5  # "Points" rows are denser than usual: there are many points
 POINTS_HEADER_H = 8.0
 
 
 def _numbers_width(texts: Sequence[str]) -> float:
-    """Колонка номеров — по самому длинному списку, не уже 10 мм."""
+    """Number column sized by the longest list, at least 10 mm."""
     return max(10.0, max(text_width(t, TEXT_DIM_MM) for t in texts) + 2 * CELL_PAD + TEXT_GAP)
 
 
 def points_table(plan: Plan, elec: Electrical) -> Table | None:
-    """Таблица «Точки» на лист электрики; точек нет — None."""
+    """The "Points" table for the electrical sheet; None if there are no points."""
     lang = plan.language
     rows = point_rows(plan, elec)
     if not rows:
@@ -53,9 +53,9 @@ def groups_table(
     wiring: Wiring | None = None,
     panel: BoardPanel | None = None,
 ) -> tuple[Table, list[str]] | None:
-    """«Группы» — одна строка на группу: назначение, автомат и мощность (с листа «Щит»),
-    кабель и длина без запаса (из проводки), точек; итог — длина, точки, мощность. Без
-    проводки или щита — их колонок нет. Групп нет — None."""
+    """The "Groups": one row per group: purpose, breaker and power (from the "Panel" sheet), cable
+    and length without margin (from wiring), points; totals are length, points, power. Without
+    wiring or panel those columns are absent. None if there are no groups."""
     lang = plan.language
     rows = group_rows(plan, elec)
     if not rows:
@@ -128,22 +128,24 @@ def groups_table(
     return Table(groups_text("title", lang), tuple(columns), cells, total=total), notes
 
 
-ESTIMATE_ROW_H = 5.5  # мм листа: строка сметы на листе — плотнее обычной таблицы (8)
+ESTIMATE_ROW_H = 5.5  # sheet mm: estimate rows are denser than a normal table (8)
 ESTIMATE_HEADER_H = 8.0
 
 
 def estimate_table(
     est: Estimate, language: Language, priced: bool, title: str | None = None
 ) -> Table:
-    """Смета на лист: разделы, их итоги и «Всего»; без прайса — ведомость объёмов
-    (только количества). title — своё название (смета сантехники); нет — электрики."""
+    """Estimate on the sheet: sections (materials, rough and finishing work), their totals and
+    "Total"; without a price list, a bill of quantities (quantities only). title is a custom
+    title (plumbing estimate); none means electrical."""
 
     def t(key: str, **values: object) -> str:
         return estimate_text(key, language, **values)
 
     names = [ln.name for ln in est.lines]
-    names += [t("section_total", s=t(sec).lower()) for sec in ("material", "work")]
-    # Ширина наименований — по метрикам шрифта: колонка таблиц на листе шириной со штамп
+    names += [t("section_total", s=t(sec).lower()) for sec in SECTIONS]
+    # Name column width from font metrics: the table column on the sheet is as wide as the title
+    # block
     name_w = max(text_width(n, TEXT_DIM_MM) for n in names) + 2 * CELL_PAD + TEXT_GAP
     columns = [
         Column(t("col_no"), 8.0),
@@ -157,7 +159,7 @@ def estimate_table(
             Column(t("col_sum", c=est.currency), 21.0),
         ]
     rows: list[tuple[str, ...]] = []
-    for section in ("material", "work"):
+    for section in SECTIONS:
         lines = [ln for ln in est.lines if ln.section == section]
         if not lines:
             continue

@@ -1,4 +1,4 @@
-// Знак «St»: буквы в квадрате, обозначенном двумя уголками — сверху слева и снизу справа
+// The "St" mark: letters in a square marked by two corners, top left and bottom right
 
 import css from "./Logo.module.scss";
 

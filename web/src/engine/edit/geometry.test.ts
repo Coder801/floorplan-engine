@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { XY } from "@/shared/types";
 import { dragPath, moveEnd, segDistance, simplifyPath } from "./geometry";
 
-const U: XY[] = [[0, 0], [0, 1000], [2000, 1000], [2000, 0]];  // П: вверх, вправо, вниз
+const U: XY[] = [[0, 0], [0, 1000], [2000, 1000], [2000, 0]];  // U shape: up, right, down
 
 describe("dragPath", () => {
   it("верх П вверх — стойки удлиняются", () => {
@@ -51,7 +51,7 @@ describe("dragPath: косой участок (эконом)", () => {
     const path: XY[] = [[0, 0], [0, 100], [100, 200], [100, 300]];
     const out = dragPath(path, new Set([1]), 10, 0);
     const [a, b] = [out[1], out[2]];
-    // направление то же (45°), сдвиг — 10·cos45° по нормали
+    // same direction (45°), shift of 10·cos45° along the normal
     expect(b[0] - a[0]).toBeCloseTo(100);
     expect(b[1] - a[1]).toBeCloseTo(100);
     expect(a[0]).toBeCloseTo(5);

@@ -1,7 +1,7 @@
-// Масштаб холстов (лист, щит, развёртка, 3D) — пять фиксированных шагов от «вписано целиком»:
-// колесо, щипок и шкала справа (ZoomRail) переходят на шаг плавно (Glide), остановиться
-// между шагами и выйти за них нельзя. Внизу справа — линейка (ScaleBar) в мм объекта:
-// модели, щита, стены.
+// Canvas zoom (sheet, panel, elevation, 3D): five fixed steps from "fit whole": the wheel,
+// pinch and the scale on the right (ZoomRail) move to a step smoothly (Glide); you cannot stop
+// between steps or go past them. A scale bar (ScaleBar) at the bottom right in object mm:
+// model, panel, wall.
 
 import i18n from "@/shared/i18n";
 import { REDUCED_MOTION } from "./consts";
@@ -9,7 +9,7 @@ import { REDUCED_MOTION } from "./consts";
 export const ZOOM_STEPS = [1, 1.5, 2, 3, 4] as const;
 export const LAST_STEP = ZOOM_STEPS.length - 1;
 
-// Что показывать под чертежом: шаг, подпись и сколько px экрана в мм объекта (нет — без линейки)
+// What to show under the drawing: step, label and how many screen px per object mm (none means no scale bar)
 export interface Zoom {
   step: number;
   label: string;
@@ -19,22 +19,22 @@ export interface Zoom {
 export const zoomLabel = (step: number) => `${Math.round(ZOOM_STEPS[step] * 100)}%`;
 export const clampStep = (step: number) => Math.min(Math.max(Math.round(step), 0), LAST_STEP);
 
-// Крупнейший шаг, не больше ratio (наезд на объект: не крупнее нужного)
+// The largest step no larger than ratio (zooming to an object: no closer than needed)
 export function stepBelow(ratio: number): number {
   let k = 0;
   while (k < LAST_STEP && ZOOM_STEPS[k + 1] <= ratio + 1e-9) k++;
   return k;
 }
 
-export const RAIL_PX = 52;  // справа у чертежа — шкала масштаба: при «вписать» это место свободно
+export const RAIL_PX = 52;  // the zoom scale sits on the right of the drawing: when fitting, that space is kept free
 
 const GLIDE_MS = 220;
 
 export interface View2D { scale: number; ox: number; oy: number }
 
-// Плавный переход к масштабу to у точки (x, y) экрана: точка под ней стоит на месте
-// (экран = o ± мм·scale — у листа и щита y вниз, у развёртки вверх: формула та же),
-// масштаб меняется по логарифму. Без анимации (prefers-reduced-motion) — сразу
+// Smooth transition to zoom to at screen point (x, y): the point under it stays in place
+// (screen = o ± mm·scale; y points down for the sheet and panel and up for an elevation, same
+// formula), zoom changes on a log scale. Without animation (prefers-reduced-motion), instantly
 export class Glide {
   private frame = 0;
 
@@ -56,10 +56,10 @@ export class Glide {
   }
 }
 
-const WHEEL_PX = 40;       // накопленная прокрутка на один шаг
-const WHEEL_PAUSE = 180;   // мс после шага: инерция тачпада не перескакивает через шаги
+const WHEEL_PX = 40;       // scroll accumulated per step
+const WHEEL_PAUSE = 180;   // ms after a step: touchpad inertia does not skip steps
 
-// Колесо и тачпад: прокрутка копится до шага, после шага — пауза
+// Wheel and touchpad: scroll accumulates to a step, then a pause
 export class WheelSteps {
   private acc = 0;
   private until = 0;
@@ -68,16 +68,16 @@ export class WheelSteps {
     if (now < this.until) return 0;
     this.acc += deltaY;
     if (Math.abs(this.acc) < WHEEL_PX) return 0;
-    const dir = this.acc < 0 ? 1 : -1;  // от себя — крупнее
+    const dir = this.acc < 0 ? 1 : -1;  // away from you zooms in
     this.acc = 0;
     this.until = now + WHEEL_PAUSE;
     return dir;
   }
 }
 
-const PINCH_STEP = 1.3;  // во сколько раз развести пальцы на один шаг
+const PINCH_STEP = 1.3;  // how far apart to spread the fingers for one step
 
-// Щипок: множитель копится до шага
+// Pinch: the factor accumulates to a step
 export class PinchSteps {
   private acc = 1;
 
@@ -89,7 +89,7 @@ export class PinchSteps {
   }
 }
 
-// Линейка: круглая длина (1, 2, 5 × 10ⁿ мм), чтобы на экране было около target px
+// Scale bar: a round length (1, 2, 5 × 10ⁿ mm) that comes out at about target px on screen
 export function rulerLength(pxPerMm: number, target = 100): { mm: number; px: number; label: string } {
   const raw = target / pxPerMm;
   const pow = 10 ** Math.floor(Math.log10(raw));

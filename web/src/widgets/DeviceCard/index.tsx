@@ -1,7 +1,7 @@
-// Карточка аппарата щита поверх чертежа: открывается кликом по строке таблицы или по
-// аппарату (store.pinned = device:QF4). Назначение, строка таблицы аппаратов (аппарат,
-// кабель, мощность, ток — с заголовками колонок), модель каталога, шина, потребители группы
-// (из таблицы росписи) и слабые места. Закрыть — крестик, Esc или клик мимо аппаратов.
+// Panel device card over the drawing: opens on a click on a table row or a device
+// (store.pinned = device:QF4). Purpose, the device table row (device, cable, power, current,
+// with column headings), catalogue model, bus, group loads (from the load list) and weak spots.
+// Close with the cross, Esc or a click off the devices.
 
 import { useEffect } from "react";
 import { useTranslation } from "react-i18next";

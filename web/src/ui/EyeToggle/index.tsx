@@ -1,14 +1,14 @@
-// Видимость слоя — глаз, как в слоях Photoshop: открытый — слой виден, перечёркнутый — скрыт.
-// Кнопка с aria-pressed (нажата — виден); подпись — что показать или скрыть.
+// Layer visibility as an eye, like Photoshop layers: open means visible, crossed out means hidden.
+// A button with aria-pressed (pressed means visible); the label says what to show or hide.
 
 import { useTranslation } from "react-i18next";
 import { cx } from "@/shared/cx";
 import css from "./EyeToggle.module.scss";
 
 interface Props {
-  on: boolean;            // слой виден
+  on: boolean;            // the layer is visible
   onToggle: () => void;
-  what: string;           // что скрывает и показывает — для подсказки и экранного диктора
+  what: string;           // what it hides and shows, for the tooltip and screen readers
   className?: string;
 }
 

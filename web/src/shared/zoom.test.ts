@@ -19,7 +19,7 @@ describe("шаги масштаба", () => {
     const w = new WheelSteps();
     expect(w.push(-20, 0)).toBe(0);
     expect(w.push(-25, 10)).toBe(1);
-    expect(w.push(-100, 50)).toBe(0);   // инерция тачпада
+    expect(w.push(-100, 50)).toBe(0);   // touchpad inertia
     expect(w.push(100, 300)).toBe(-1);
   });
 

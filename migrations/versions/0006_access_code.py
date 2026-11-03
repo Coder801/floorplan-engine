@@ -1,11 +1,11 @@
-"""код доступа к проекту: вход в просмотр одного проекта без учётки
+"""project access code: view one project without an account
 
 Revision ID: 0006
 Revises: 0005
 Create Date: 2026-11-02
 
-Решение — docs/database.md, «Вход»: студия выдаёт код, человек вводит его на экране входа
-и смотрит этот проект (только чтение). В базе — только sha256 кода.
+Decision: docs/database.md, "Login": the studio issues a code, the person enters it on the login
+screen and views that project (read only). Only the sha256 of the code is stored.
 """
 
 from __future__ import annotations

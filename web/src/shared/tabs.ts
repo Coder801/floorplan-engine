@@ -1,27 +1,27 @@
-// Вкладки листов. Листы-продолжения одной темы (развёртки «07 Розгортки», «08 … (продовження)»)
-// — одна вкладка, страницы переключаются внутри чертежа (Viewer, «‹ 1 / 3 ›»). Электрика,
-// освещение и проводка — одна вкладка «Электрика» с видами: это один чертёж (sheet/drawing.ts),
-// вид выбирается справа (SidePanel), а печатные листы остаются отдельными
+// Sheet tabs. Continuation sheets of one topic (elevations "07 Розгортки", "08 … (продовження)")
+// are one tab, with pages switched inside the drawing (Viewer, "‹ 1 / 3 ›"). Electrical,
+// lighting and wiring are one "Electrical" tab with views: it is one drawing (sheet/drawing.ts),
+// the view is picked on the right (SidePanel), while the printed sheets stay separate
 
 import type { ManifestPage } from "./types";
 
-// Виды вкладки «Электрика» — темы листов (подписи — i18n views.*)
+// Views of the "Electrical" tab are sheet topics (labels in i18n views.*)
 export const VIEWS = new Set(["electrical", "lighting", "wiring"]);
 
-// Имя листа без номера: «01 План» → «План» (номера — для печати, вкладок меньше, чем листов:
-// виды электрики и продолжения развёрток — одна вкладка). Вкладка с темой подписывается на
-// языке интерфейса (stage.*), это имя — запасное
+// Sheet name without the number: "01 План" → "План" (numbers are for print; there are fewer
+// tabs than sheets: electrical views and elevation continuations are one tab). A tab with a
+// topic is labelled in the interface language (stage.*); this name is the fallback
 export const tabName = (sheet: string) => sheet.replace(/^\d+\s+/, "");
 
 export interface SheetTab {
-  name: string;       // имя первого листа без номера (на языке проекта)
-  stage?: string;     // тема: электрика с видами — «electrical»
-  pages: number[];    // index листов вкладки по порядку
-  views: boolean;     // листы — виды одного чертежа (переключатель справа), а не страницы
+  name: string;       // name of the first sheet without the number (in the project language)
+  stage?: string;     // topic: electrical with views is "electrical"
+  pages: number[];    // index of the tab's sheets in order
+  views: boolean;     // the sheets are views of one drawing (switch on the right), not pages
 }
 
-// Подряд идущие листы с одной темой (stage) — одна вкладка; виды электрики — одна вкладка;
-// без темы — каждый сам по себе
+// Consecutive sheets with the same topic (stage) are one tab; electrical views are one tab;
+// sheets without a topic stand alone
 export function sheetTabs(pages: readonly ManifestPage[]): SheetTab[] {
   const out: SheetTab[] = [];
   let prev: string | undefined;

@@ -1,6 +1,6 @@
-"""Доступ и вход (service/db/access.py) на SQLite в памяти: кто какой проект видит, клиент —
-один проект, монтажники независимы, разработчик без доступа к чужим проектам, сессии,
-приглашения, поддержка."""
+"""Access and login (service/db/access.py) on in-memory SQLite: who sees which project, a client
+has one project, installers are independent, a developer has no access to other people's
+projects, sessions, invites, support."""
 
 from __future__ import annotations
 
@@ -29,7 +29,7 @@ def test_pro_sees_own_projects_and_installers_are_independent(db: Session) -> No
     a, b = user(db, "studio-a", "pro"), user(db, "installer-b", "pro")
     pa = acc.create_project_for(db, a, "Кв 1", "kv1")
     pb = acc.create_project_for(db, b, "Кв 2", "kv2")
-    acc.create_project_for(db, b, "Кв 3", "kv3")  # у pro проектов сколько угодно
+    acc.create_project_for(db, b, "Кв 3", "kv3")  # pro can have any number of projects
     assert role(db, a, pa) == "owner" and role(db, a, pb) is None
     assert acc.visible_slugs(db, acc.Principal(b), {"kv1", "kv2", "kv3"}) == {"kv2", "kv3"}
 
@@ -37,7 +37,7 @@ def test_pro_sees_own_projects_and_installers_are_independent(db: Session) -> No
 def test_client_has_one_project_and_sees_everything_in_it(db: Session) -> None:
     c = user(db, "owner-flat", "client")
     p = acc.create_project_for(db, c, "Моя квартира", "flat")
-    assert role(db, c, p) == "owner"  # своё пространство — владелец
+    assert role(db, c, p) == "owner"  # own workspace: owner
     assert acc.can(role(db, c, p), "view")
     with pytest.raises(acc.AccessError, match="один проект"):
         acc.create_project_for(db, c, "Вторая", "flat2")
@@ -47,13 +47,13 @@ def test_invited_client_and_one_client_project_in_db(db: Session) -> None:
     studio = user(db, "studio", "pro")
     p1 = acc.create_project_for(db, studio, "Кв 1", "kv1")
     p2 = acc.create_project_for(db, studio, "Кв 2", "kv2")
-    c = user(db, "client")  # тип выберет приглашение
+    c = user(db, "client")  # the invite will choose the type
     acc.accept_invite(db, c, acc.create_invite(db, studio, "client", project=p1))
     assert c.account_type == "client" and role(db, c, p1) == "client"
     assert acc.can("client", "answer") and not acc.can("client", "edit_wiring")
     with pytest.raises(acc.AccessError, match="уже есть проект"):
         acc.accept_invite(db, c, acc.create_invite(db, studio, "client", project=p2))
-    # И база не даст: частичный уникальный индекс
+    # The database will not allow it either: partial unique index
     db.add(ProjectMember(project_id=p2.id, user_id=c.id, role="client"))
     with pytest.raises(IntegrityError):
         db.flush()
@@ -80,12 +80,12 @@ def test_client_invites_only_installer(db: Session) -> None:
 def test_developer_needs_support_grant(db: Session) -> None:
     studio = user(db, "studio", "pro")
     p = acc.create_project_for(db, studio, "Кв 1", "kv1")
-    dev = user(db, "developer", "pro")  # обычный pro со своей тестовой студией
+    dev = user(db, "developer", "pro")  # a regular pro with their own test studio
     assert role(db, dev, p) is None
     grant = acc.grant_support(db, p, dev, studio, "не рисуется щит")
     assert role(db, dev, p) == "support" and acc.can("support", "edit_wiring")
     grant.expires_at = acc.now() - timedelta(minutes=1)
-    assert role(db, dev, p) is None  # срок вышел
+    assert role(db, dev, p) is None  # expired
     acc.grant_support(db, p, dev, studio, "ещё раз")
     acc.revoke_support(db, p, dev)
     assert role(db, dev, p) is None
@@ -112,9 +112,9 @@ def test_oauth_links_only_verified_email(db: Session) -> None:
     again = acc.oauth_login(db, "google", "g1", "same@example.com", True)
     assert again.id == a.id
     linked = acc.oauth_login(db, "other", "x1", "SAME@example.com", True)
-    assert linked.id == a.id  # подтверждённый email — тот же пользователь
+    assert linked.id == a.id  # a confirmed e-mail is the same user
     stranger = acc.oauth_login(db, "other", "x2", "same@example.com", False)
-    assert stranger.id != a.id and stranger.email is None  # неподтверждённый — новый
+    assert stranger.id != a.id and stranger.email is None  # an unconfirmed one is new
 
 
 def test_sessions_expire_and_end(db: Session) -> None:
@@ -123,7 +123,7 @@ def test_sessions_expire_and_end(db: Session) -> None:
     assert acc.session_user(db, token) is u
     assert acc.session_user(db, "чужой") is None
     row = db.query(UserSession).one()
-    assert row.token_hash != token  # в базе только хеш
+    assert row.token_hash != token  # only the hash is stored
     row.expires_at = acc.now() - timedelta(seconds=1)
     assert acc.session_user(db, token) is None
     t2 = acc.create_session(db, u)
@@ -158,7 +158,7 @@ def test_studio_invite_makes_member(db: Session) -> None:
 
 
 def test_register_firm(db: Session) -> None:
-    """Фирма — с названием и видом; одна на человека; сотрудник фирмы свою не заводит."""
+    """A firm has a name and a kind; one per person; a firm employee does not create their own."""
     owner = user(db, "owner")
     with pytest.raises(acc.AccessError, match="чем занимается"):
         acc.register_firm(db, owner, "Искра", "bakery")
@@ -185,12 +185,12 @@ def test_register_firm(db: Session) -> None:
 
 
 def test_adopt_folders_links_new_slugs_once(db: Session) -> None:
-    """Вход владельца: папки без строки — ему; повторно — ничего; чужие строки не трогаются."""
+    """Owner login: folders without a row go to them; again, nothing; other rows are not touched."""
     linked, reason = acc.adopt_folders(db, "owner@example.com", ["kv1", "kv2"])
-    assert linked == [] and reason is not None and "owner@example.com" in reason  # не входил
+    assert linked == [] and reason is not None and "owner@example.com" in reason  # never logged in
     u = user(db, "owner")
     linked, reason = acc.adopt_folders(db, "owner@example.com", ["kv1"])
-    assert linked == [] and "тип" in (reason or "")  # тип учётки не выбран
+    assert linked == [] and "тип" in (reason or "")  # account type not chosen
     acc.set_account_type(db, u, "pro")
     other = user(db, "other", "pro")
     acc.create_project_for(db, other, "Чужой", "kv2")
@@ -199,13 +199,14 @@ def test_adopt_folders_links_new_slugs_once(db: Session) -> None:
     kv1, kv2 = acc.project_by_slug(db, "kv1"), acc.project_by_slug(db, "kv2")
     assert kv1 is not None and kv2 is not None
     assert role(db, u, kv1) == "owner"
-    assert role(db, u, kv2) is None  # осталась у other
+    assert role(db, u, kv2) is None  # stayed with other
     assert acc.adopt_folders(db, "owner@example.com", ["kv1", "kv2", "kv3"]) == ([], None)
 
 
 def test_adopt_folders_takes_unowned_projects(db: Session) -> None:
-    """Проект, записанный командной строкой без владельца (код доступа до входа), при входе
-    владельца переходит в его студию; чужие и уже свои — не трогаются."""
+    """A project written from the command line without an owner (an access code before login) moves
+    into the owner's studio when they log in; other people's and already owned ones are not
+    touched."""
     kv1 = acc.create_project_unowned(db, "kv1", "kv1")
     assert acc.unowned_studio(db).id == kv1.studio_id
     with pytest.raises(acc.AccessError, match="уже в базе"):
@@ -221,12 +222,12 @@ def test_adopt_folders_takes_unowned_projects(db: Session) -> None:
 def test_adopt_folders_client_gets_one_project(db: Session) -> None:
     user(db, "home", "client")
     linked, reason = acc.adopt_folders(db, "home@example.com", ["b", "a"])
-    assert linked == ["a"] and reason is not None  # второй проект хозяину квартиры нельзя
+    assert linked == ["a"] and reason is not None  # a flat owner cannot have a second project
 
 
 def test_personal_owner_chooses_variant_studio_client_does_not(db: Session) -> None:
-    """«Мой ремонт» — хозяин своего пространства: выбирает вариант и правит трассы; клиент
-    студии — только смотрит (docs/wiring-variants.md)."""
+    """In "Мой ремонт" the owner of their own workspace chooses the variant and edits routes; a
+    studio client only views (docs/wiring-variants.md)."""
     home = user(db, "home", "client")
     own = acc.create_project_for(db, home, "Моя квартира", "home")
     assert acc.can(role(db, home, own), "choose_variant")

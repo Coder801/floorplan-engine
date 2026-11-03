@@ -1,8 +1,8 @@
-"""Факты из PDF без LLM: вход команды `pdf-facts` и анализатора.
+"""PDF facts without an LLM: the input of the `pdf-facts` command and of the analyzer.
 
-Разбор живёт в facts/: адаптер формата (facts/vector.py) даёт примитивы страницы
-(facts/primitives.py), общий разбор (facts/analysis.py) находит по ним размеры, масштаб,
-цепочки и надписи и пишет выжимку для модели.
+Parsing lives in facts/: a format adapter (facts/vector.py) produces page primitives
+(facts/primitives.py), the shared analysis (facts/analysis.py) finds dimensions, scale, chains
+and labels in them and writes the digest for the model.
 """
 
 from __future__ import annotations
@@ -21,14 +21,14 @@ def extract(path: Path, name: str | None = None) -> list[PageFacts]:
 
 
 def describe(path: Path, name: str | None = None) -> str:
-    """Факты одного PDF текстом; ошибка разбора — тоже текстом, анализ не падает."""
+    """Facts of one PDF as text; a parse error is text too, the analysis does not fail."""
     try:
         return render(extract(path, name))
-    except Exception as exc:  # pdfminer бросает разное на битых файлах
+    except Exception as exc:  # pdfminer raises all sorts of things on broken files
         return f"### {name or path.name}\nPDF не разобран: {exc}\n"
 
 
 def describe_json(path: Path, name: str | None = None) -> str:
-    """Те же факты в JSON: список страниц (to_dict)."""
+    """The same facts as JSON: a list of pages (to_dict)."""
     pages = [to_dict(f) for f in extract(path, name)]
     return json.dumps(pages, ensure_ascii=False, indent=1)

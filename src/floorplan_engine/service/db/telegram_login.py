@@ -1,12 +1,13 @@
-"""Вход по номеру телефона через бота Telegram (решение 2026-11-01, docs/database.md,
-«Вход»): страница просит билет и открывает ссылку t.me/<бот>?start=<токен>; человек жмёт
-Start и кнопку «Поделиться номером»; бот получает его контакт (номер подтверждён самим
-Telegram), ставит номер в билет; страница опрашивает билет — и вошла. Паролей и кодов нет.
+"""Login by phone number through a Telegram bot (decision 2026-11-01, docs/database.md,
+"Login"): the page asks for a ticket and opens the link t.me/<bot>?start=<token>; the person
+taps Start and the "Share number" button; the bot receives their contact (the number is
+confirmed by Telegram itself) and puts the number into the ticket; the page polls the ticket
+and is logged in. No passwords and no codes.
 
-Учётка — провайдер «telegram» (access.oauth_login) с номером: тот же номер в другой учётке —
-тот же пользователь. Билет живёт TICKET_MINUTES, одноразовый; в базе — только sha256 токена.
-Здесь — правила на базе, без сети; разговор с Bot API — service/api/telegram.py.
-Функции не делают commit, как access.py.
+The account is provider "telegram" (access.oauth_login) with the number: the same number in
+another account is the same user. A ticket lives TICKET_MINUTES and is one-time; only the
+sha256 of the token is stored. This module holds the database rules, no network; talking to
+the Bot API is in service/api/telegram.py. Functions do not commit, like access.py.
 """
 
 from __future__ import annotations
@@ -25,8 +26,9 @@ TICKET_MINUTES = 10
 
 
 def normalize_phone(raw: str) -> str:
-    """Номер в виде «+380501234567»: только цифры, от 8 до 15 (E.164); иначе AccessError.
-    Так же записаны телефоны в SHTROBA_SUPERUSERS и SHTROBA_OWNER."""
+    """Number in the form "+380501234567": digits only, 8 to 15 of them (E.164); otherwise
+    AccessError.
+    Phones in SHTROBA_SUPERUSERS and SHTROBA_OWNER are written the same way."""
     digits = re.sub(r"\D", "", raw)
     if not 8 <= len(digits) <= 15:
         raise AccessError("Это не похоже на номер телефона")
@@ -34,12 +36,12 @@ def normalize_phone(raw: str) -> str:
 
 
 def is_phone(value: str) -> bool:
-    """Строка из окружения — телефон (иначе email)."""
+    """An environment string is a phone (otherwise an e-mail)."""
     return "@" not in value and bool(re.fullmatch(r"\+?[\d\s()-]{8,20}", value.strip()))
 
 
 def issue_ticket(session: Session, lang: str = "ru", t: datetime | None = None) -> str:
-    """Новый билет входа; вернёт токен для ссылки на бота."""
+    """New login ticket; returns the token for the bot link."""
     t = t or now()
     token = new_token()
     session.add(
@@ -68,8 +70,9 @@ def bind_chat(
     name: str = "",
     t: datetime | None = None,
 ) -> LoginTicket | None:
-    """«/start токен» в боте: билет запоминает чат. Билета нет, он устарел, использован или
-    уже занят другим чатом — None (бот отвечает «откройте ссылку заново»)."""
+    """Handle "/start token" in the bot: the ticket remembers the chat. A missing, expired, used
+    ticket or one already taken by another chat gives None (the bot replies "open the link
+    again")."""
     t = t or now()
     ticket = _alive(
         session.scalar(select(LoginTicket).where(LoginTicket.token_hash == token_hash(token))), t
@@ -86,8 +89,8 @@ def bind_chat(
 def confirm_phone(
     session: Session, chat_id: int, telegram_user_id: str, phone: str, t: datetime | None = None
 ) -> LoginTicket | None:
-    """Контакт в боте: номер — в последний живой билет этого чата. Контакт не свой, билета
-    нет или устарел — None."""
+    """Contact in the bot: the number goes into the latest live ticket of this chat. Someone else's
+    contact or a missing or expired ticket gives None."""
     t = t or now()
     ticket = _alive(
         session.scalar(
@@ -106,8 +109,8 @@ def confirm_phone(
 
 
 def claim_ticket(session: Session, token: str, t: datetime | None = None) -> LoginTicket | None:
-    """Опрос страницы: номер уже есть — билет гасится и возвращается (дальше вход);
-    ещё нет — None; билета нет или устарел — AccessError."""
+    """Page poll: if the number is there, the ticket is used up and returned (login follows);
+    not yet gives None; a missing or expired ticket gives AccessError."""
     t = t or now()
     ticket = session.scalar(select(LoginTicket).where(LoginTicket.token_hash == token_hash(token)))
     if _alive(ticket, t) is None:

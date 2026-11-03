@@ -48,12 +48,13 @@ def test_l_shape_builds(tmp_path: Path) -> None:
     assert not doc.audit().has_errors
     msp = doc.modelspace()
     assert "10,50 м²" in {m.text for m in msp.query("MTEXT") if isinstance(m, MText)}
-    # Контур площади — отдельная замкнутая полилиния на непечатаемом слое
+    # The area outline is a separate closed polyline on a non-printing layer
     (area,) = msp.query('LWPOLYLINE[layer=="A-AREA"]')
     assert isinstance(area, LWPolyline)
     assert area.closed and len(area) == 6
     assert doc.layers.get("A-AREA").dxf.plot == 0
-    # Площадь в подписи и в экспликации — поля от этого контура; итог — поле-сумма
+    # The area in the label and in the room schedule are fields from this outline; the total is a
+    # sum field
     fields = [o for o in doc.objects if isinstance(o, DXFTagStorage) and o.dxftype() == "FIELD"]
     targets = [t.value for f in fields for t in f.xtags.subclasses[1] if t.code == 331]
     assert targets.count(area.dxf.handle) == 3
@@ -68,7 +69,7 @@ def test_readable_angle(angle: float, expected: float) -> None:
 
 
 def _two_rooms() -> Plan:
-    """Две комнаты 3000 × 3000 через перегородку 100; наружные стены несущие, 200."""
+    """Two 3000 × 3000 rooms with a 100 partition; exterior walls are load-bearing, 200."""
 
     def room(rid: str, x: float, inner: str) -> dict[str, object]:
         walls = []
@@ -107,11 +108,11 @@ def _wall_lines(tmp_path: Path) -> tuple[list[tuple[Vec, Vec]], Drawing]:
 
 def test_shared_partition_is_drawn_once(tmp_path: Path) -> None:
     lines, _ = _wall_lines(tmp_path)
-    # Общая перегородка описана в обеих комнатах, но каждая её грань — одна линия
+    # The shared partition is described in both rooms, but each of its faces is a single line
     faces = [(a, b) for a, b in lines if abs(a.x - b.x) < 1e-6 and a.x in (3000.0, 3100.0)]
     assert sorted(a.x for a, _ in faces) == [3000.0, 3100.0]
-    assert all(abs(abs(b.y - a.y) - 3000) < 1e-6 for a, b in faces)  # торец до несущей
-    # Внутренней грани наружной стены на стыке нет: верх и низ — по две линии, а не три
+    assert all(abs(abs(b.y - a.y) - 3000) < 1e-6 for a, b in faces)  # end up to the bearing wall
+    # No inner face of the exterior wall at the joint: top and bottom have two lines each, not three
     inner_top = [(a, b) for a, b in lines if abs(a.y - 3000) < 1e-6 and abs(b.y - 3000) < 1e-6]
     assert len(inner_top) == 2
 
@@ -123,17 +124,18 @@ def test_hatch_density_by_material(tmp_path: Path) -> None:
         oid = object_id(h)
         assert oid is not None
         scales.setdefault(oid[1], set()).add(round(h.dxf.pattern_scale, 3))
-    # Перегородка штрихуется один раз — у первой комнаты; у второй она уже закрыта
-    # Шаг штриховки пропорционален масштабу листа, соотношение материалов — постоянное
+    # The partition is hatched once, in the first room; in the second it is already covered
+    # The hatch step is proportional to the sheet scale, the material ratio is constant
     (partition,) = scales["a.w3"]
     (bearing,) = scales["a.w2"]
     assert "b.w1" not in scales
     assert partition / bearing == pytest.approx(HATCH_SCALE_PARTITION / HATCH_SCALE_BEARING)
-    assert bearing < partition  # несущие — чаще
+    assert bearing < partition  # load-bearing is denser
 
 
 def test_window_to_corner_keeps_square_corner() -> None:
-    # Окно верхней стены доходит до правого угла: угол целиком за правой стеной, без среза
+    # The top wall's window reaches the right corner: the corner belongs wholly to the right wall,
+    # no mitre
     plan = make_plan(
         [
             {"length": 3000},
@@ -147,14 +149,14 @@ def test_window_to_corner_keeps_square_corner() -> None:
     assert not issues
     (g,) = room_geometries(plan, contours)
     total = shapely.unary_union([p.polygon for p in wall_pieces(g)])
-    corner = shapely.box(4000, 3000, 4400, 3300)  # квадрат угла: толщина правой × верхней
+    corner = shapely.box(4000, 3000, 4400, 3300)  # corner square: right × top thickness
     assert total.intersection(corner).area == pytest.approx(corner.area)
 
 
 def _wall() -> WallSegment:
     plan = make_plan([{"length": 3000}, {"length": 4000}, {"length": 3000}, {"length": 4000}])
     _, contours = validate_plan(plan)
-    return contours["r"].segment("w2")  # верхняя стена, 4000
+    return contours["r"].segment("w2")  # top wall, 4000
 
 
 def test_row_moves_to_next_level_when_taken() -> None:
@@ -163,13 +165,13 @@ def test_row_moves_to_next_level_when_taken() -> None:
         taken: list[BaseGeometry] = []
         first, _ = _place_rows(seg, [[(0.0, seg.length)]], 1.0, 400.0, taken)
         second, _ = _place_rows(seg, [[(0.0, seg.length)]], 1.0, 400.0, taken)
-        assert first == 400.0 and second > first  # то же место занято — следующий уровень
+        assert first == 400.0 and second > first  # the same spot is taken: next level
 
 
 def test_narrow_part_text_is_moved_off_its_part() -> None:
     with drawing_scale(50):
         seg = _wall()
-        parts = [(0.0, 1900.0), (1900.0, 2000.0), (2000.0, seg.length)]  # 100 мм — 2 мм листа
+        parts = [(0.0, 1900.0), (1900.0, 2000.0), (2000.0, seg.length)]  # 100 mm is 2 sheet mm
         assert not _fits(1900.0, 2000.0) and _fits(0.0, 1900.0)
         taken: list[BaseGeometry] = []
         level, moves = _place_rows(seg, [parts], 1.0, 400.0, taken)

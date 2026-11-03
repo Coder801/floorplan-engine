@@ -1,6 +1,6 @@
-"""Проверка плана (room.yaml): уникальность id, замкнутость контура — при невязке ошибка с
-её величиной и стенами, которые вероятно заданы неверно; проёмы — на своей стене и в её
-длине. Ничего не подгоняется молча."""
+"""Plan check (room.yaml): unique ids, outline closure (a closure error reports its size and the
+walls that are probably wrong), openings on their wall and within its length. Nothing is
+silently adjusted."""
 
 from __future__ import annotations
 
@@ -40,9 +40,9 @@ def no_wall(room: Room, wall: str, path: str, file: str) -> Issue:
 def duplicates(
     ids: Iterable[tuple[str, str]], file: str, what: str, taken: dict[str, str] | None = None
 ) -> list[Issue]:
-    """Повторы id: пары (путь к полю id, значение) в порядке появления.
+    """Duplicate ids: pairs (path to the id field, value) in order of appearance.
 
-    `taken` — уже занятые id (значение → где занят), сами они не проверяются.
+    `taken` holds ids already in use (value → where); they are not checked themselves.
     """
     seen: dict[str, str] = dict(taken or {})
     issues: list[Issue] = []

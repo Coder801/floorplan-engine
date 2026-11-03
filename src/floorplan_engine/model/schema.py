@@ -1,14 +1,15 @@
-"""Pydantic-модели входных YAML: room.yaml (план) и electrical.yaml (электрика).
+"""Pydantic models of the input YAML: room.yaml (plan) and electrical.yaml (electrical).
 
-Соглашения:
-- все размеры в миллиметрах;
-- стены комнаты перечисляются по часовой стрелке по внутреннему контуру,
-  начиная от `origin` (левый нижний внутренний угол); первая стена по умолчанию идёт вверх;
-- `turn` — внутренний угол комнаты между стеной и следующей за ней:
-  90 — обычный угол, 270 — «входящий» угол Г-образной комнаты, 180 — стена продолжается прямо;
-- у каждого объекта стабильный `id`: стена — уникальна в своей комнате, комната, проём, точка,
-  кабель, LED-лента — в проекте. Ссылки на стены — по `id`, не по номеру: номер меняется,
-  когда стену добавляют или убирают, а `id` нет.
+Conventions:
+- all sizes in millimetres;
+- room walls are listed clockwise along the inner outline, starting at `origin` (the
+  bottom-left inner corner); the first wall goes up by default;
+- `turn` is the room's inner angle between a wall and the next one:
+  90 is a normal corner, 270 the reflex corner of an L-shaped room, 180 means the wall goes on
+  straight;
+- every object has a stable `id`: a wall is unique within its room; a room, opening, point,
+  cable, LED strip within the project. Walls are referenced by `id`, not by number: the
+  number changes when a wall is added or removed, the `id` does not.
 """
 
 from __future__ import annotations
@@ -28,7 +29,7 @@ class StrictModel(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, populate_by_name=True)
 
 
-# --- План -------------------------------------------------------------------
+# --- Plan -------------------------------------------------------------------
 
 
 class Wall(StrictModel):
@@ -57,7 +58,7 @@ class Wall(StrictModel):
 class OpeningType(StrEnum):
     DOOR = "door"
     WINDOW = "window"
-    OPENING = "opening"  # проём без заполнения
+    OPENING = "opening"  # opening without a door or window
 
 
 class Opening(StrictModel):
@@ -94,7 +95,7 @@ class Room(StrictModel):
     )
 
     def wall_index(self, wall_id: str) -> int | None:
-        """Номер стены в обходе по её id; None — такой стены нет."""
+        """Wall index in the walk by its id; None if there is no such wall."""
         return next((k for k, w in enumerate(self.walls) if w.id == wall_id), None)
 
 
@@ -108,7 +109,7 @@ class Signature(StrictModel):
 
 
 class SheetInfo(StrictModel):
-    """Основная надпись по форме 3 ДСТУ Б А.2.4-4:2009: номера граф — в описаниях полей."""
+    """Title block per form 3 of DSTU B A.2.4-4:2009: box numbers are in the field descriptions."""
 
     code: str = Field(default="", description="Графа 1: обозначение документа")
     object: str | None = Field(default=None, description="Графа 2: объект; по умолчанию name")
@@ -120,10 +121,10 @@ class SheetInfo(StrictModel):
 
 
 class Studio(StrictModel):
-    """Профиль студии (studio.yaml рядом с папками проектов): общие графы штампа.
+    """Studio profile (studio.yaml next to the project folders): shared title block boxes.
 
-    Подставляется в `sheet` каждого проекта, где эта графа не заполнена. Графы, свои для
-    проекта (обозначение, объект, будинок), здесь не задаются.
+    Applied to the `sheet` of every project where that box is empty. Boxes specific to a
+    project (designation, object, building) are not set here.
     """
 
     organization: str = Field(default="", description="Графа 9: организация")
@@ -131,7 +132,7 @@ class Studio(StrictModel):
     signatures: list[Signature] = Field(default_factory=list, max_length=8)
 
 
-CEILING_MIN = 2000  # высота потолка, мм: правка в просмотре — от 2 до 4 м
+CEILING_MIN = 2000  # ceiling height, mm: editable in the viewer from 2 to 4 m
 CEILING_MAX = 4000
 
 
@@ -148,24 +149,24 @@ class Plan(StrictModel):
     sheet: SheetInfo = Field(default_factory=SheetInfo)
 
 
-# --- Электрика --------------------------------------------------------------
+# --- Electrical -------------------------------------------------------------
 
 
 class PointType(StrEnum):
     SOCKET = "socket"
-    SWITCH = "switch"  # keys: 1 или 2 клавиши
-    PASS_SWITCH = "pass_switch"  # проходной
-    LIGHT = "light"  # потолочный светильник (общий)
-    DOWNLIGHT = "downlight"  # точечный
-    PENDANT = "pendant"  # подвесной
-    SCONCE = "sconce"  # бра
-    DATA = "data"  # интернет
-    TV = "tv"  # телевизионная розетка
-    LED_OUTPUT = "led_output"  # вывод под подсветку (только LED)
-    OUTLET = "outlet"  # силовой вывод кабеля к технике: вытяжка, кондиционер, рушникосушка
+    SWITCH = "switch"  # keys: 1 or 2 keys
+    PASS_SWITCH = "pass_switch"  # two-way switch
+    LIGHT = "light"  # ceiling light (general)
+    DOWNLIGHT = "downlight"  # spot light
+    PENDANT = "pendant"  # pendant
+    SCONCE = "sconce"  # wall lamp
+    DATA = "data"  # internet
+    TV = "tv"  # TV socket
+    LED_OUTPUT = "led_output"  # lighting output (LED only)
+    OUTLET = "outlet"  # power cable output to an appliance: hood, air conditioner, towel rail
 
 
-# Свет: что включают выключатели (лист «Освещение»)
+# Lights: what switches turn on ("Lighting" sheet)
 LIGHT_TYPES = frozenset(
     {
         PointType.LIGHT,
@@ -177,7 +178,7 @@ LIGHT_TYPES = frozenset(
 )
 SWITCH_TYPES = frozenset({PointType.SWITCH, PointType.PASS_SWITCH})
 
-# Что может висеть на потолке и что — только там
+# What may hang on the ceiling and what may only hang there
 CEILING_TYPES = frozenset({PointType.LIGHT, PointType.DOWNLIGHT, PointType.PENDANT})
 CEILING_ONLY_TYPES = frozenset({PointType.DOWNLIGHT, PointType.PENDANT})
 
@@ -256,7 +257,7 @@ class Cable(StrictModel):
 
 
 class LedStrip(StrictModel):
-    """LED-подсветка вдоль стены: участок от start до end (мм от начала стены)."""
+    """LED strip along a wall: the part from start to end (mm from the wall start)."""
 
     id: str = Field(pattern=ID_PATTERN)
     room: str
@@ -273,23 +274,24 @@ class LedStrip(StrictModel):
 
 
 class Group(StrictModel):
-    """Группа щита: назначение и аппарат — только из источника (не выдумываются)."""
+    """Panel group: purpose and device only from the source (never invented)."""
 
     name: str | None = Field(default=None, description="Назначение: «Розетки кухні»")
     breaker: str | None = Field(default=None, description="Автомат: «C16», «B10»")
     rcd: str | None = Field(default=None, description="УЗО / диф: «30 мА»")
 
 
-# Схема щита (решение 2026-10-27): economy — минимум аппаратов, мокрые зоны под одним УЗО,
-# ручной ввод резерва; standard — реле напряжения, мокрые зоны дифавтоматами, АВР; premium —
-# плюс УЗИП, все группы дифавтоматами, характеристика B
+# Panel scheme (decision 2026-10-27): economy has the fewest devices, wet zones under one RCD,
+# manual backup input; standard has a voltage relay, wet zones on RCBOs, ATS; premium adds
+# a surge protector, all groups on RCBOs, curve B
 PanelScheme = Literal["economy", "standard", "premium"]
 Earthing = Literal["TN-C-S", "TN-S", "TT"]
 
 
 class PanelSetup(StrictModel):
-    """Щит в лицо (лист «Щит»): ввод, схема и резерв. Номиналы ввода и мощность — только
-    из источника (техусловия, договор); нет — допущение и вопрос на листе."""
+    """Panel front view ("Panel" sheet): supply, scheme and backup. Supply ratings and power only
+    from the source (grid connection terms, contract); otherwise an assumption and a question on
+    the sheet."""
 
     phases: Literal[1, 3] = Field(default=1, description="Фаз на вводе: пока только 1")
     earthing: Earthing = Field(
@@ -379,8 +381,8 @@ class PanelSetup(StrictModel):
         return self
 
 
-# Раскладка электрики (решение 2026-10-25): economy — меньше автоматов, бюджетно;
-# standard — свет и розетки каждого помещения своей группой; proper — «по правильному»
+# Electrical layout (decision 2026-10-25): economy has fewer breakers, low budget;
+# standard gives lights and sockets of each room their own group; proper is "done right"
 ElectricalMode = Literal["economy", "standard", "proper"]
 
 
@@ -424,13 +426,13 @@ class Electrical(StrictModel):
         return self
 
 
-# --- Ручные правки проводки (wiring.yaml) ------------------------------------
+# --- Manual wiring edits (wiring.yaml) ---------------------------------------
 
 
 class WireEdit(StrictModel):
-    """Трасса линии, перетянутая в просмотре: точки в мм модели, от источника к цели.
-    from / to — сверка: если линия с этим id теперь идёт не так, правка не применяется.
-    Участки под углом — только в экономе: проверяет сборка (wiring._manual_runs)."""
+    """Line route dragged in the viewer: points in model mm, from source to target.
+    from / to are a check: if the line with this id now goes differently, the edit is not applied.
+    Slanted pieces only in economy: checked by the build (wiring._manual_runs)."""
 
     from_: str = Field(alias="from", description="board или id коробки")
     to: str = Field(description="id коробки или точки")
@@ -438,9 +440,9 @@ class WireEdit(StrictModel):
 
 
 class BoxEdit(StrictModel):
-    """Место распаечной коробки, перенесённой в просмотре, мм модели. У коробки на стене —
-    точка на её стене. room и group — сверка: коробка с этим id теперь другая — правка
-    не применяется."""
+    """Spot of a junction box moved in the viewer, model mm. A wall box gets a point on its wall.
+    room and group are a check: if the box with this id is now a different one, the edit is
+    not applied."""
 
     room: str
     group: str
@@ -448,21 +450,22 @@ class BoxEdit(StrictModel):
 
 
 class WiringEdits(StrictModel):
-    """wiring.yaml — правки проводки из просмотра: линии и коробки по id листа проводки.
-    Остальное строится автоматически; потребители и щит не двигаются."""
+    """wiring.yaml: wiring edits from the viewer: lines and boxes by wiring sheet id.
+    Everything else is built automatically; loads and the panel do not move."""
 
     wires: dict[str, WireEdit] = Field(default_factory=dict)
     boxes: dict[str, BoxEdit] = Field(default_factory=dict)
 
 
 WireRoute = Literal["ceiling", "floor"]
-Distribution = Literal["boxes"]  # loop — шлейф через подрозетники, позже (docs/wiring-variants.md)
+Distribution = Literal["boxes"]  # loop: daisy chain, later (docs/wiring-variants.md)
 
 
 class Variant(StrictModel):
-    """variant.yaml — вариант проводки, выбранный в просмотре (docs/wiring-variants.md):
-    режим, трасса и разводка. Точки — из проекта и в вариантах не меняются. Высота потолка
-    (мм) — правка со страницы «Общие сведения»: накладывается на room.yaml, исходный не меняется."""
+    """variant.yaml: the wiring variant chosen in the viewer (docs/wiring-variants.md): mode, route
+    and distribution. Points come from the project and do not change between variants. Ceiling
+    height (mm) is an edit from the "Overview" page: it is applied on top of room.yaml, the
+    original is not changed."""
 
     mode: ElectricalMode = "standard"
     route: WireRoute = "ceiling"
@@ -471,21 +474,22 @@ class Variant(StrictModel):
 
     @property
     def key(self) -> str:
-        """«economy-floor-boxes» — ключ правок трасс этого варианта в wiring.yaml."""
+        """Key such as "economy-floor-boxes": the key for this variant's route edits in
+        wiring.yaml."""
         return f"{self.mode}-{self.route}-{self.distribution}"
 
 
 class WiringFile(StrictModel):
-    """wiring.yaml: правки трасс по вариантам (variants: {ключ варианта: правки}). wires и
-    boxes верхнего уровня — правки, записанные до вариантов: они относятся к варианту
-    «как в проекте» (variants.default_variant)."""
+    """wiring.yaml: route edits by variant (variants: {variant key: edits}). Top-level wires and
+    boxes are edits written before variants existed: they belong to the "as in project"
+    variant (variants.default_variant)."""
 
     wires: dict[str, WireEdit] = Field(default_factory=dict)
     boxes: dict[str, BoxEdit] = Field(default_factory=dict)
     variants: dict[str, WiringEdits] = Field(default_factory=dict)
 
     def edits_for(self, key: str, default_key: str) -> WiringEdits | None:
-        """Правки варианта; у варианта по умолчанию — и правки до вариантов."""
+        """Variant edits; the default variant also gets the pre-variant edits."""
         edits = self.variants.get(key)
         if key == default_key and (self.wires or self.boxes):
             base = edits or WiringEdits()

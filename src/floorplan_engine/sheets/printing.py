@@ -1,13 +1,14 @@
-"""Печать комплекта: PDF-альбом листов в натуральную величину и проверка листа перед
-печатью (решение 2026-10-28).
+"""Printing the set: a full-size PDF album of the sheets and a pre-print sheet check (decision
+2026-10-28).
 
-Страница PDF — ровно формат листа (A2 — 594 × 420 мм), линии — в своей толщине (мм),
-текст — кривыми: печать «в размер» даёт чертёж в масштабе листа. Формат комплекта можно
-задать (`print --paper A3`) — листы раскладываются заново под этот формат, масштаб
-подбирается тот же функцией, что при сборке (`sheets.choose_paper_and_scale`).
+A PDF page is exactly the sheet size (A2 is 594 × 420 mm), lines keep their width (mm), text
+is converted to curves: printing "actual size" gives the drawing at sheet scale. The paper
+size of the set can be given (`print --paper A3`): the sheets are laid out again for that
+size, and the scale is picked by the same function as in the build
+(`sheets.choose_paper_and_scale`).
 
-Проверка: самый мелкий текст на каждом листе (на бумаге, мм) — не мельче MIN_TEXT_MM;
-ничего не выходит за рамку листа (план не влез в формат даже в самом мелком масштабе).
+Check: the smallest text on each sheet (on paper, mm) is not below MIN_TEXT_MM; nothing
+sticks out of the sheet frame (the plan did not fit the paper even at the smallest scale).
 """
 
 from __future__ import annotations
@@ -45,21 +46,21 @@ from floorplan_engine.sheets.preview import (
 )
 
 MM_PER_INCH = 25.4
-PT_PER_MM = 72.0 / MM_PER_INCH  # толщина линии в matplotlib — в пунктах
-MIN_LINE_MM = 0.1  # тоньше на печати не бывает
+PT_PER_MM = 72.0 / MM_PER_INCH  # matplotlib line width is in points
+MIN_LINE_MM = 0.1  # nothing prints thinner than this
 
-FRAME_TOL_MM = 0.5  # допуск выхода за рамку (толщина линий)
+FRAME_TOL_MM = 0.5  # tolerance for sticking out of the frame (line width)
 
 
 @dataclass(frozen=True)
 class SheetCheck:
-    """Лист перед печатью: имя вкладки, самый мелкий текст на бумаге (мм; текста нет — None)
-    и насколько что-то вылезает за рамку (мм, 0 — всё внутри)."""
+    """Sheet before printing: tab name, the smallest text on paper (mm; None if there is no text)
+    and how far anything sticks out of the frame (mm, 0 if everything is inside)."""
 
     tab: str
     min_text: float | None
     overflow: float
-    empty: bool = False  # на листе только рамка и штамп: схема или таблицы не поместились
+    empty: bool = False  # only frame and title block: content did not fit
 
     def warnings(self) -> list[str]:
         out: list[str] = []
@@ -79,7 +80,7 @@ class SheetCheck:
 
 
 def write_album(doc: Drawing, path: Path, title: str) -> Path:
-    """Все листы документа — страницами одного PDF, каждая в размер своего листа."""
+    """All document sheets as pages of one PDF, each at its own sheet size."""
     path.parent.mkdir(parents=True, exist_ok=True)
     config = Configuration(
         lineweight_policy=LineweightPolicy.ABSOLUTE,
@@ -106,7 +107,7 @@ def write_album(doc: Drawing, path: Path, title: str) -> Path:
 
 
 def check_sheets(doc: Drawing) -> list[SheetCheck]:
-    """Самый мелкий текст и выход за рамку на каждом листе."""
+    """Smallest text and frame overflow on each sheet."""
     return [_check(doc, layout) for layout in sheet_layouts(doc)]
 
 
@@ -119,13 +120,13 @@ def _check(doc: Drawing, layout: Paperspace) -> SheetCheck:
         c, w, h = vp.dxf.center, vp.dxf.width, vp.dxf.height
         rect = (c.x - w / 2, c.y - h / 2, c.x + w / 2, c.y + h / 2)
         overflow = max(overflow, _beyond(rect, frame))
-    # Рамка и штамп (A-SHEET) — сами по себе на краю рамки и за ней (линия обреза)
+    # Frame and title block (A-SHEET) are on the frame edge and beyond it by nature (trim line)
     others = [e for e in layout if e.dxftype() != "VIEWPORT" and e.dxf.layer != A_SHEET.name]
     box = bbox.extents(others)
     if box.has_data:
         rect = (box.extmin.x, box.extmin.y, box.extmax.x, box.extmax.y)
         overflow = max(overflow, _beyond(rect, frame))
-    # Текст модели — через видовой экран: высота на бумаге = высота в модели / масштаб
+    # Model text goes through a viewport: height on paper = model height / scale
     frozen = {n.upper() for n in frozen_in_viewports(layout)}
     for vp in viewports:
         if vp.dxf.height <= 0:
@@ -139,7 +140,7 @@ def _check(doc: Drawing, layout: Paperspace) -> SheetCheck:
 def _beyond(
     rect: tuple[float, float, float, float], frame: tuple[float, float, float, float]
 ) -> float:
-    """На сколько мм прямоугольник выходит за рамку (0 — внутри)."""
+    """How many mm the rectangle sticks out of the frame (0 if inside)."""
     x0, y0, x1, y1 = rect
     f0, g0, f1, g1 = frame
     return max(0.0, f0 - x0, g0 - y0, x1 - f1, y1 - g1)
@@ -148,7 +149,7 @@ def _beyond(
 def _text_heights(
     entities: Iterable[DXFGraphic], frozen: set[str] | None = None
 ) -> Iterator[float]:
-    """Высоты непустых текстов, с текстами внутри блоков (в масштабе вставки)."""
+    """Heights of non-empty texts, including texts inside blocks (at the insert scale)."""
     for e in _flat(entities):
         if frozen and e.dxf.layer.upper() in frozen:
             continue
@@ -156,14 +157,14 @@ def _text_heights(
             if str(e.plain_text()).strip():
                 yield float(e.dxf.char_height)
         elif isinstance(e, Text) and e.dxf.text.strip():
-            # Невидимый атрибут (ID, группа у символа) не печатается
+            # An invisible attribute (ID, group on a symbol) is not printed
             if isinstance(e, Attrib) and e.is_invisible:
                 continue
             yield float(e.dxf.height)
 
 
 def _flat(entities: Iterable[DXFGraphic], depth: int = 0) -> Iterator[DXFGraphic]:
-    """Примитивы с содержимым блоков (до 4 уровней вложенности) и атрибутами вставок."""
+    """Primitives with block contents (up to 4 nesting levels) and insert attributes."""
     for e in entities:
         if isinstance(e, Insert) and depth < 4:
             yield from e.attribs

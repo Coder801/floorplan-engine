@@ -1,6 +1,6 @@
-"""Проверка электрики (electrical.yaml): ссылки на помещения и стены, привязка точек
-к стене и высоты (точка выше потолка — предупреждение), щит, `controls` выключателей,
-группы, охватывающие несколько помещений в режимах standard и proper."""
+"""Electrical check (electrical.yaml): references to rooms and walls, anchoring points to walls
+and heights (a point above the ceiling is a warning), the panel, switch `controls`, groups
+spanning several rooms in standard and proper modes."""
 
 from __future__ import annotations
 
@@ -49,7 +49,7 @@ def _check_height(value: float | None, path: str, file: str) -> list[Issue]:
 
 
 def _check_controls(elec: Electrical, file: str) -> list[Issue]:
-    """controls выключателя ссылается на светильник, вывод LED или ленту проекта."""
+    """A switch's controls refers to a light, an LED output or a strip of the project."""
     lights = {p.id for p in elec.points if p.type in LIGHT_TYPES}
     lights |= {s.id for s in elec.led_strips}
     return [
@@ -65,8 +65,8 @@ def _check_controls(elec: Electrical, file: str) -> list[Issue]:
 
 
 def _above_ceiling(elec: Electrical, plan: Plan, file: str) -> list[Issue]:
-    """Точка на стене выше потолка: неверна высота точки или высота потолка (предупреждение —
-    на развёртке стены такая точка видна над линией потолка)."""
+    """Wall point above the ceiling: either the point height or the ceiling height is wrong (a
+    warning: on the wall elevation such a point shows above the ceiling line)."""
     ceiling = plan.ceiling_height
     default = "ceiling_height" not in plan.model_fields_set
     note = " (не задана в room.yaml — по умолчанию)" if default else ""
@@ -146,7 +146,7 @@ def _check_point(
 
 
 def _check_board_width(plan: Plan, board: Board, file: str) -> list[Issue]:
-    """Щит (offset — его середина) целиком помещается на стене."""
+    """The panel (offset is its centre) fits entirely on the wall."""
     room = next((r for r in plan.rooms if r.id == board.room), None)
     index = room.wall_index(board.wall) if room is not None else None
     if room is None or index is None:
@@ -167,7 +167,7 @@ def _check_board_width(plan: Plan, board: Board, file: str) -> list[Issue]:
 
 
 def resolve_ref(ref: str, points: Sequence[ElectricalPoint]) -> int | None:
-    """Индекс точки по её id; None — не найдено."""
+    """Point index by its id; None if not found."""
     return next((k for k, pt in enumerate(points) if pt.id == ref), None)
 
 
@@ -175,7 +175,7 @@ def validate_electrical(
     elec: Electrical, plan: Plan, contours: dict[str, Contour], file: str = ELECTRICAL_FILE
 ) -> list[Issue]:
     issues: list[Issue] = []
-    # id объектов уникальны во всём проекте: проёмы плана — тоже
+    # Object ids are unique across the whole project, plan openings included
     taken = {
         op.id: f"{ROOM_FILE}: rooms[{r}].openings[{k}]"
         for r, room in enumerate(plan.rooms)
@@ -202,7 +202,7 @@ def validate_electrical(
         issues += check_wall_anchor(plan, b.room, b.wall, b.offset, "board", file)
         issues += _check_board_width(plan, b, file)
     for s, strip in enumerate(elec.led_strips):
-        # Конец ленты должен лежать на стене; попадание в проём здесь не ошибка
+        # The strip end must lie on the wall; landing in an opening is not an error here
         issues += [
             replace(i, path=i.path.replace(".offset", ".end"))
             for i in check_wall_anchor(
@@ -241,8 +241,8 @@ def validate_electrical(
     return issues
 
 
-# Группы света и розеток — по помещениям (кроме режима economy); отдельные линии к технике
-# и регуляторы (switch с note) — не в счёт
+# Lighting and socket groups are per room (except in economy mode); dedicated appliance lines
+# and controllers (a switch with a note) do not count
 _ROOM_GROUP_TYPES = frozenset(
     {
         PointType.LIGHT,
@@ -256,7 +256,7 @@ _ROOM_GROUP_TYPES = frozenset(
 
 
 def _check_room_groups(elec: Electrical, plan: Plan, file: str) -> list[Issue]:
-    """В режиме standard и proper группа света или розеток — в одном помещении."""
+    """In standard and proper modes a lighting or socket group stays within one room."""
     if elec.mode == "economy":
         return []
     names = {r.id: r.name for r in plan.rooms}

@@ -1,4 +1,4 @@
-"""Примитивы страницы: отрезок (длина, направление, близость точки) и надпись (число, точка)."""
+"""Page primitives: a segment (length, direction, point proximity) and a label (number, point)."""
 
 from __future__ import annotations
 
@@ -16,13 +16,13 @@ def test_segment_length() -> None:
     ("seg", "direction"),
     [
         (Segment(0, 0, 10, 0), "h"),
-        (Segment(10, 5, 0, 5.19), "h"),  # перекос меньше 0.2
+        (Segment(10, 5, 0, 5.19), "h"),  # skew below 0.2
         (Segment(0, 0, 0, 10), "v"),
         (Segment(3, 10, 3.1, 0), "v"),
         (Segment(0, 0, 10, 10), None),
-        (Segment(0, 0, 10, 0.2), None),  # перекос ровно 0.2 — уже не горизонталь
-        (Segment(0, 0, 0.1, 0.1), None),  # короче 0.2 в обе стороны
-        (Segment(0, 0, 0.2, 0), "h"),  # длина ровно 0.2 — ещё отрезок
+        (Segment(0, 0, 10, 0.2), None),  # skew exactly 0.2 is no longer horizontal
+        (Segment(0, 0, 0.1, 0.1), None),  # shorter than 0.2 both ways
+        (Segment(0, 0, 0.2, 0), "h"),  # length exactly 0.2 is still a segment
         (Segment(1, 1, 1, 1), None),
     ],
 )
@@ -34,12 +34,12 @@ def test_segment_direction(seg: Segment, direction: Direction | None) -> None:
     ("x", "y", "near"),
     [
         (5, 0, True),
-        (5, 1, True),  # ровно на допуске
+        (5, 1, True),  # exactly at the tolerance
         (5, 1.01, False),
         (0, 0, True),
-        (11, 0, True),  # за концом, но в пределах допуска
+        (11, 0, True),  # past the end, but within tolerance
         (11.5, 0, False),
-        (-0.6, 0.6, True),  # у начала по диагонали: √0.72 < 1
+        (-0.6, 0.6, True),  # diagonal near the start: √0.72 < 1
         (-0.8, 0.8, False),
     ],
 )

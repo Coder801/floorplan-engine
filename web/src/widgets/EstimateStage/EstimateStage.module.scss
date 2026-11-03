@@ -1,5 +1,5 @@
-// Смета — документом по центру области чертежа: таблица с разделами, итоги жирным, позиции
-// без цены — приглушённо; прокрутка — внутри области
+// The estimate as a document centred in the drawing area: a table with sections, totals in
+// bold, items without a price muted; scrolling inside the area
 
 @use "@/shared/styles/mixins" as *;
 
@@ -7,7 +7,7 @@
 .sheet {
   @include raised(10px);
   max-width: 960px; margin: 0 auto; padding: 24px 28px;
-  & + & { margin-top: 24px; }  // сметы этапов — одна под другой
+  & + & { margin-top: 24px; }  // stage estimates one under another
 }
 .head {
   display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px;
@@ -29,7 +29,7 @@
 .missing td { color: var(--muted); }
 .total td { border-top: 2px solid var(--text); font-weight: 600; font-size: 14px; }
 .line td:first-child { color: var(--muted); }
-// Наименование со значком «i» — в строку
+// A name with an "i" icon on one line
 .named { display: inline-flex; align-items: center; gap: 6px; }
 .notes { margin: 16px 0 0; padding-left: 18px; color: var(--muted); font-size: 12px; line-height: 1.6; }
 

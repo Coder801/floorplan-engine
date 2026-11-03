@@ -1,23 +1,24 @@
-"""3D-сцена проводки для просмотра: квартира в объёме и трассы по высоте — из модели.
+"""3D wiring scene for the viewer: the flat in 3D and routes by height, from the model.
 
-Новых расчётов нет: план трасс, коробки и подъёмы — те же, что у листа проводки и сметы
-(wiring.py), здесь они только развёрнуты по высоте. Мм модели, ось Z вверх, пол — 0.
+No new calculations: route plan, boxes and rises are the same as for the wiring sheet and the
+estimate (wiring.py), here they are only unfolded by height. Model mm, Z axis up, floor is 0.
 
-- Стены — призмы по участкам контура (внутренняя грань → внешние углы, как на плане), от
-  пола до потолка; над дверью и проёмом — перемычка, под окном — подоконная часть. Общая
-  перегородка — один кусок с нормалями в обе комнаты (normals): по ним просмотр срезает
-  стены, что стоят между камерой и помещением. Нормали — у всех кусков физической стены
-  (тело, перемычка, подоконник, куски стены соседа за ней) одни и те же. Угол на стыке
-  перегородки с наружной стеной — у наружной: перегородка в срезе бортиком не оставляет в
-  ней выреза, периметр сплошной.
-- Трасса: подъём от источника (щит, коробка) до плоскости трассы — потолок или пол (route
-  floor), путь по плану в этой плоскости, спуск к точке. Совпадающие трассы — пучком, кабели
-  в PITCH_MM друг от друга (на листе полосы шире — это приём чертежа, не место в квартире).
-  Концы — у грани стены, а не у макушки символа листа.
-- Высоты проёмов, которых нет в room.yaml, — допущения: дверь — DOOR_TOP_MM, подоконник —
-  WINDOW_SILL_MM, верх окна — потолок (в 3D окно без высоты идёт до потолка: проще рисовать,
-  над окном нет простенка; на развёртках у такого окна типовые WINDOW_HEIGHT_MM). Перечислены
-  в assumed; высота окна из room.yaml берётся как есть.
+- Walls are prisms along the outline pieces (inner face → outer corners, as on the plan),
+  from floor to ceiling; a lintel above a door or opening, a sill part under a window. A
+  shared partition is one piece with normals into both rooms (normals): the viewer uses them
+  to cut away walls between the camera and the room. All pieces of one physical wall (body,
+  lintel, sill, the neighbour's pieces behind it) share the same normals. The corner where a
+  partition meets an exterior wall belongs to the exterior wall: a cut-down partition leaves
+  no notch in it, the perimeter stays solid.
+- Route: a rise from the source (panel, box) to the route plane, ceiling or floor (route
+  floor), the plan path in that plane, a drop to the point. Matching routes form a bundle,
+  cables PITCH_MM apart (lanes on the sheet are wider, that is a drawing device, not real
+  space in the flat). Ends are at the wall face, not at the sheet symbol tip.
+- Opening heights missing in room.yaml are assumptions: a door is DOOR_TOP_MM, a sill
+  WINDOW_SILL_MM, the window top is the ceiling (in 3D a window without a height goes up to
+  the ceiling: simpler to draw, no wall above the window; elevations use the typical
+  WINDOW_HEIGHT_MM for such a window). They are listed in assumed; a window height from
+  room.yaml is used as is.
 """
 
 from __future__ import annotations
@@ -49,13 +50,13 @@ from floorplan_engine.model.geometry import (
 )
 from floorplan_engine.model.schema import Electrical, Opening, OpeningType, Plan
 
-PITCH_MM = 15.0  # кабели пучка — друг от друга
-WALL_GAP_MM = 20.0  # спуск и символ точки — от грани стены, чтобы не тонуть в ней
-FLOOR_Z_MM = 20.0  # трасса по полу (в стяжке) — чуть выше пола сцены, чтобы её было видно
-MIN_AREA_MM2 = 100.0  # осколки стен меньше — не рисуются
-SHARED_SHARE = 0.25  # перекрытие больше этой доли куска — общая стена двух комнат
-OPPOSITE = 0.9  # нормали общей стены — навстречу друг другу (скалярное произведение < −0,9)
-NO_COLOR = "#888888"  # точка без группы
+PITCH_MM = 15.0  # cables of a bundle, apart from each other
+WALL_GAP_MM = 20.0  # drop and point symbol off the wall face so they do not sink into it
+FLOOR_Z_MM = 20.0  # floor route (in the screed) slightly above the scene floor so it is visible
+MIN_AREA_MM2 = 100.0  # wall fragments smaller than this are not drawn
+SHARED_SHARE = 0.25  # overlap above this fraction of a piece: a wall shared by two rooms
+OPPOSITE = 0.9  # normals of a shared wall face each other (dot product < −0.9)
+NO_COLOR = "#888888"  # point without a group
 
 
 def _xy(v: Vec) -> list[float]:
@@ -67,7 +68,7 @@ def _xyz(v: Vec, z: float) -> list[float]:
 
 
 def _rings(geom: BaseGeometry) -> list[list[list[list[float]]]]:
-    """Многоугольники: внешний контур и отверстия, без повтора первой точки."""
+    """Polygons: outer contour and holes, without repeating the first point."""
     polys = getattr(geom, "geoms", [geom])
     out = []
     for p in polys:
@@ -79,8 +80,8 @@ def _rings(geom: BaseGeometry) -> list[list[list[list[float]]]]:
 
 
 def _opening_span(op: Opening, ceiling: float) -> list[tuple[float, float]]:
-    """Где в проёме есть стена, по высоте: над дверью — перемычка, у окна — ещё и низ; окно
-    без высоты в room.yaml — до потолка (перемычки над ним нет)."""
+    """Where an opening has wall, by height: a lintel above a door, plus the bottom for a window;
+    a window without a height in room.yaml goes up to the ceiling (no lintel above it)."""
     if op.type is OpeningType.WINDOW:
         sill = op.sill if op.sill is not None else WINDOW_SILL_MM
         top = sill + op.height if op.height is not None else ceiling
@@ -97,27 +98,28 @@ def _assumed_opening(op: Opening) -> bool:
 
 
 class _Walls:
-    """Куски стен без наложений: общий кусок перегородки — один, с нормалями обеих комнат.
-    Наложение — по плану и по высоте сразу: под- и надоконная части одного окна не дубли.
-    Нормали — у физической стены целиком (unified): подоконник, тело и перемычка одной стены
-    и стены соседа за ней срезаются в просмотре одинаково, а не каждый кусок по-своему."""
+    """Wall pieces without overlaps: a shared partition piece appears once, with normals of both
+    rooms. Overlap is checked on plan and by height at once: the under- and over-window parts of
+    one window are not duplicates. Normals belong to the whole physical wall (unified): sill,
+    body and lintel of one wall and of the neighbour's wall behind it are cut the same way in
+    the viewer, not each piece on its own."""
 
     def __init__(self, links: Sequence[tuple[str, str]]) -> None:
         self.pieces: list[dict[str, Any]] = []
         self.shapes: list[tuple[BaseGeometry, tuple[float, float]]] = []
-        self.links = links  # ключи стен, общих для двух комнат (_shared)
-        self.normals: dict[str, list[list[float]]] = {}  # нормали по ключу стены
+        self.links = links  # keys of walls shared by two rooms (_shared)
+        self.normals: dict[str, list[list[float]]] = {}  # normals by wall key
 
     def add(self, key: str, geom: BaseGeometry, z: tuple[float, float], normal: Vec) -> None:
-        n = [round(normal.x, 6) + 0.0, round(normal.y, 6) + 0.0]  # без -0.0
+        n = [round(normal.x, 6) + 0.0, round(normal.y, 6) + 0.0]  # no -0.0
         if n not in self.normals.setdefault(key, []):
-            self.normals[key].append(n)  # и у стены, целиком накрытой куском соседа
+            self.normals[key].append(n)  # also for a wall fully covered by a neighbour's piece
         geom = shapely.make_valid(geom)
         overlap = [
             shape
             for shape, zz in self.shapes
             if zz[0] < z[1] - 1.0
-            and z[0] < zz[1] - 1.0  # не одно над другим
+            and z[0] < zz[1] - 1.0  # not one above the other
             and shape.intersection(geom).area > MIN_AREA_MM2
         ]
         rest = geom.difference(unary_union(overlap)) if overlap else geom
@@ -128,10 +130,11 @@ class _Walls:
         self.pieces.append({"key": key, "polys": rings, "z": [z[0], z[1]], "normals": [n]})
 
     def unified(self) -> list[dict[str, Any]]:
-        """Куски с нормалями всей физической стены: стена помещения (все её куски) и стены
-        соседей, общие с ней, — одна стена; у каждого куска — все их нормали. Иначе
-        подоконник или перемычка, не перекрывшиеся с куском соседа, остаются с одной
-        нормалью и в срезе стоят в полный рост над срезанным телом."""
+        """Pieces with the normals of the whole physical wall: the room's wall (all its pieces) and
+        the
+        neighbours' walls shared with it are one wall; every piece gets all their normals. Otherwise
+        a sill or lintel that does not overlap the neighbour's piece keeps a single normal and, in a
+        cut view, stands at full height above the cut body."""
         parent: dict[str, str] = {}
 
         def root(k: str) -> str:
@@ -153,16 +156,16 @@ class _Walls:
 
 
 def _wall_quad(g: RoomGeometry, seg: WallSegment) -> BaseGeometry:
-    """Силуэт куска стены: внутренняя грань и внешние углы (на стыке под 180°
-    четырёхугольник бывает самопересекающимся — приводится к валидному)."""
+    """Wall piece silhouette: inner face and outer corners (at a 180° joint the quadrilateral can
+    self-intersect, so it is made valid)."""
     corners = (seg.start, seg.end, g.outer_end(seg), g.outer_start(seg))
     return shapely.make_valid(Polygon([p.as_tuple() for p in corners]))
 
 
 def _wall_body(g: RoomGeometry, seg: WallSegment, outline: BaseGeometry) -> BaseGeometry:
-    """Тело стены, как на плане (drawing.plan.WallPiece.body): прямоугольник, в выпуклых углах
-    продлённый на толщину соседней стены, в пределах силуэта стен. Угол достаётся стене,
-    добавленной первой, — стыки под 90°, а не швом «на ус» по верхней грани."""
+    """Wall body as on the plan (drawing.plan.WallPiece.body): a rectangle extended at convex
+    corners by the thickness of the neighbouring wall, within the wall silhouette. The corner
+    goes to the wall added first, so joints are square, not a mitre seam on the top face."""
     segs = g.contour.segments
     prev, nxt = segs[seg.index - 1], segs[(seg.index + 1) % len(segs)]
     lo = -prev.thickness if convex(prev, seg) else 0.0
@@ -174,10 +177,10 @@ def _wall_body(g: RoomGeometry, seg: WallSegment, outline: BaseGeometry) -> Base
 
 
 def _shared(bodies: Sequence[tuple[str, BaseGeometry, Vec]]) -> list[tuple[str, str]]:
-    """Общие стены двух комнат: тела накладываются заметной долей куска и нормали смотрят
-    навстречу (перегородка двух комнат — в обе стороны). Угол соседней стены — стык, не в
-    счёт, даже если у короткого куска он большой: иначе стена получает чужую нормаль и
-    «срез» прячет её, когда она дальняя."""
+    """Walls shared by two rooms: the bodies overlap by a noticeable fraction of a piece and the
+    normals face each other (a partition between two rooms faces both ways). A neighbouring wall's
+    corner is a joint and does not count, even if it is large for a short piece: otherwise the wall
+    gets a foreign normal and the cut hides it when it is the far one."""
     links = []
     for (ka, ga, na), (kb, gb, nb) in itertools.combinations(bodies, 2):
         if na.dot(nb) >= -OPPOSITE:
@@ -188,7 +191,9 @@ def _shared(bodies: Sequence[tuple[str, BaseGeometry, Vec]]) -> list[tuple[str, 
 
 
 def _strip(seg: WallSegment, op: Opening) -> Polygon:
-    """Проём во всю толщину стены (с запасом — потом пересекается с куском стены)."""
+    """Opening through the whole wall thickness (with a margin, it is intersected with the wall
+    piece later).
+    """
     a, b = seg.point_at(op.offset), seg.point_at(op.offset + op.width)
     out = seg.outward * (seg.thickness * 2 + 10)
     return Polygon([p.as_tuple() for p in (a, b, b + out, a + out)])
@@ -204,8 +209,8 @@ def _walls(geoms: Sequence[RoomGeometry], ceiling: float) -> list[dict[str, Any]
     links = _shared([(key, quad, seg.inward) for key, _, seg, quad in bodies])
     partitions = {key for pair in links for key in pair}
     walls = _Walls(links)
-    # Наружные стены — первыми: угол на стыке с перегородкой достаётся им (_wall_body), и
-    # когда перегородка в срезе бортиком, стена по периметру остаётся сплошной
+    # Exterior walls first: the corner at a partition joint goes to them (_wall_body), and
+    # when a partition is cut down, the perimeter wall stays solid
     for key, g, seg, quad in sorted(bodies, key=lambda b: b[0] in partitions):
         ops = [o for o in g.room.openings if o.wall == seg.id]
         strips = [_strip(seg, o).intersection(quad) for o in ops]
@@ -217,7 +222,7 @@ def _walls(geoms: Sequence[RoomGeometry], ceiling: float) -> list[dict[str, Any]
 
 
 def _face(a: Anchor) -> Vec:
-    """Место у грани стены (потолочная точка — сама точка)."""
+    """Spot at the wall face (a ceiling point is the point itself)."""
     return a.pos if a.inward is None else a.pos + a.inward * WALL_GAP_MM
 
 
@@ -232,8 +237,8 @@ def _wires(
     ceiling: float,
     rooms: dict[str, str],
 ) -> dict[str, Any]:
-    """Трассы в 3D: подъём от источника, путь по плану в плоскости потолка или пола, спуск.
-    Помещение линии — помещение её цели (точки или коробки): по нему фильтр в просмотре."""
+    """Routes in 3D: rise from the source, plan path in the ceiling or floor plane, drop.
+    A line's room is the room of its target (point or box): the viewer filters by it."""
     paths = [list(r.path) for r in wiring.runs]
     for route in ("ceiling", "floor"):
         idx = [k for k, r in enumerate(wiring.runs) if r.route == route]
@@ -270,8 +275,8 @@ def _wires(
 def build_scene(
     plan: Plan, contours: dict[str, Contour], elec: Electrical, wiring: Wiring
 ) -> dict[str, Any]:
-    """Сцена для ключа `scene` страницы проводки .epd. Вызывать в масштабе листа
-    (scale.drawing_scale): концы трасс — те же узлы, что на чертеже."""
+    """Scene for the `scene` key of the .epd wiring page. Call at the sheet scale
+    (scale.drawing_scale): route ends are the same nodes as on the drawing."""
     ceiling = plan.ceiling_height
     geoms = room_geometries(plan, contours)
     by_room = {g.room.id: g for g in geoms}

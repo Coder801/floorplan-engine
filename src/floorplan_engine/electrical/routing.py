@@ -1,15 +1,15 @@
-"""Трассировка кабеля по плану: только внутри помещений и через дверные проёмы.
+"""Cable routing on the plan: only inside rooms and through door openings.
 
-План разбивается на сетку с шагом STEP. Свободны ячейки внутри помещений и в проёмах
-дверей (не ближе CLEARANCE к стенам), стены и окна закрыты. Путь — кратчайший по сетке
-со штрафом TURN_COST за каждый поворот: так трасса идёт прямыми участками под 90°.
-Путь считается один раз от источника (щит, коробка) сразу до всех его целей.
+The plan is split into a grid with step STEP. Cells inside rooms and in door openings are
+free (at least CLEARANCE from walls), walls and windows are blocked. The path is the
+shortest on the grid with a TURN_COST penalty per turn, so a route goes in straight runs at
+90°. The path is computed once from a source (panel, box) to all its targets at once.
 
-Под любым углом (any_angle — эконом, docs/wiring-variants.md): поиск — в восемь сторон без
-штрафа за поворот, затем путь натягивается (pull): углы срезаются, где прямой отрезок
-целиком в свободной области не ближе CLEARANCE к стенам. Подход к точке на стене — как
-обычно, перпендикулярно стене. Это только для потолка и пола: по стенам трасса всегда
-вертикальна (штробы — chases.py).
+Any angle (any_angle: economy, docs/wiring-variants.md): the search goes in eight directions
+without a turn penalty, then the path is pulled tight (pull): corners are cut where a straight
+segment lies fully in the free area at least CLEARANCE from walls. The approach to a wall
+point is as usual, perpendicular to the wall. This is only for ceiling and floor: on walls a
+route is always vertical (chases in chases.py).
 """
 
 from __future__ import annotations
@@ -28,19 +28,19 @@ from shapely.geometry.base import BaseGeometry
 from floorplan_engine.model.geometry import RoomGeometry, Vec
 from floorplan_engine.model.schema import Opening, OpeningType
 
-STEP = 100.0  # мм — шаг сетки
-CLEARANCE = 150.0  # мм — трасса не ближе к стенам (правило 2026-10-24); кроме подхода к точке
-# на стене и прохода в проёме
-TURN_COST = 400.0  # мм — штраф за поворот
+STEP = 100.0  # mm: grid step
+CLEARANCE = 150.0  # mm: clearance from walls (rule 2026-10-24), except the approach to a point
+# on a wall and the pass through an opening
+TURN_COST = 400.0  # mm: turn penalty
 DIRS = ((1, 0), (0, 1), (-1, 0), (0, -1))
 DIAGONALS = ((1, 1), (-1, 1), (-1, -1), (1, -1))
-# Восемь направлений по кругу: соседние отличаются на 45° (канализация — search45)
+# Eight directions around the circle: neighbours differ by 45° (sewer uses search45)
 DIRS8 = ((1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0), (-1, -1), (0, -1), (1, -1))
-BEND_COST = TURN_COST / 2  # мм — штраф за отвод 45°
+BEND_COST = TURN_COST / 2  # mm: penalty for a 45° bend
 
 
 def free_area(geoms: Sequence[RoomGeometry]) -> BaseGeometry:
-    """Помещения и проёмы дверей и открытых проёмов (окна — нет)."""
+    """Rooms and openings of doors and open passages (not windows)."""
     parts: list[BaseGeometry] = [Polygon([v.as_tuple() for v in g.contour.vertices]) for g in geoms]
     for g in geoms:
         for op in g.room.openings:
@@ -50,7 +50,9 @@ def free_area(geoms: Sequence[RoomGeometry]) -> BaseGeometry:
 
 
 def opening_strip(g: RoomGeometry, op: Opening) -> Polygon:
-    """Проём на плане: по ширине проёма, на всю толщину стены наружу от помещения."""
+    """Opening on the plan: opening width, through the whole wall thickness outward from the
+    room.
+    """
     seg = g.contour.segment(op.wall)
     a, b = seg.point_at(op.offset), seg.point_at(op.offset + op.width)
     out = seg.outward * seg.thickness
@@ -63,17 +65,17 @@ def room_area(g: RoomGeometry) -> BaseGeometry:
 
 @dataclass
 class Grid:
-    """Сетка свободных ячеек внутри области."""
+    """Grid of free cells inside the area."""
 
     x0: float
     y0: float
     nx: int
     ny: int
     free: list[bool]
-    inner: BaseGeometry | None = None  # область не ближе CLEARANCE к стенам — для pull
-    penalty: dict[int, float] | None = None  # доплата за вход в ячейку, мм (сантехника)
-    mult: list[float] | None = None  # цена мм шага в ячейку (канализация: у стены дешевле)
-    tag: list[int] | None = None  # вид ячейки для отсечения в поиске (канализация, network)
+    inner: BaseGeometry | None = None  # area at least CLEARANCE from walls, for pull
+    penalty: dict[int, float] | None = None  # extra cost to enter a cell, mm (plumbing)
+    mult: list[float] | None = None  # cost per mm of a step into the cell (sewer: cheaper by walls)
+    tag: list[int] | None = None  # cell kind for pruning in the search (sewer, network)
 
     @classmethod
     def of(cls, area: BaseGeometry) -> Grid:
@@ -85,12 +87,13 @@ class Grid:
         ys = miny + STEP / 2 + np.arange(ny) * STEP
         gx, gy = np.meshgrid(xs, ys)  # [iy, ix]
         mask = shapely.contains_xy(inner, gx.ravel(), gy.ravel())
-        # Чуть шире самой полосы: отрезок по краю ячеек — не «сквозь стену» из-за округления
+        # Slightly wider than the band itself: a segment along cell edges must not go "through the
+        # wall" by rounding
         shapely.prepare(near := inner.buffer(1.0))
         return cls(minx + STEP / 2, miny + STEP / 2, nx, ny, [bool(v) for v in mask], near)
 
     def free_points(self) -> list[Vec]:
-        """Центры свободных ячеек: места внутри области не ближе CLEARANCE к стенам."""
+        """Centres of free cells: spots inside the area at least CLEARANCE from walls."""
         return [self.center(k) for k, ok in enumerate(self.free) if ok]
 
     def center(self, idx: int) -> Vec:
@@ -98,7 +101,7 @@ class Grid:
         return Vec(self.x0 + ix * STEP, self.y0 + iy * STEP)
 
     def nearest_free(self, p: Vec) -> int:
-        """Ближайшая к точке свободная ячейка."""
+        """Free cell nearest to the point."""
         best, best_d = -1, float("inf")
         cx = round((p.x - self.x0) / STEP)
         cy = round((p.y - self.y0) / STEP)
@@ -117,9 +120,9 @@ class Grid:
         raise ValueError("на плане нет свободного места для трассы")
 
     def search_any(self, start: int) -> tuple[dict[int, int], dict[int, float]]:
-        """Дейкстра в восемь сторон без штрафа за поворот (any_angle): состояние — ячейка
-        (направление 0), как у search, чтобы path и cost были общими. По диагонали — только
-        если обе соседние ячейки свободны: угол стены не срезается."""
+        """Dijkstra in eight directions with no turn penalty (any_angle): the state is a cell
+        (direction 0), as in search, so path and cost are shared. Diagonal steps only if both
+        neighbouring cells are free: wall corners are not cut."""
         dist: dict[int, float] = {start * 4: 0.0}
         prev: dict[int, int] = {start * 4: -1}
         heap: list[tuple[float, int]] = [(0.0, start * 4)]
@@ -147,8 +150,8 @@ class Grid:
         return prev, dist
 
     def pull(self, cells: Sequence[Vec]) -> list[Vec]:
-        """Натянуть путь по ячейкам: от каждой вершины — к самой дальней, до которой прямой
-        отрезок не выходит из полосы не ближе CLEARANCE к стенам."""
+        """Pull the cell path tight: from each vertex go to the farthest one that a straight segment
+        can reach without leaving the band at least CLEARANCE from walls."""
         if self.inner is None or len(cells) <= 2:
             return list(cells)
         out = [cells[0]]
@@ -165,7 +168,7 @@ class Grid:
         return out
 
     def search(self, start: int) -> tuple[dict[int, int], dict[int, float]]:
-        """Дейкстра по состояниям (ячейка, направление): предки и стоимость состояний."""
+        """Dijkstra over states (cell, direction): state parents and costs."""
         dist: dict[int, float] = {}
         prev: dict[int, int] = {}
         heap: list[tuple[float, int]] = []
@@ -204,13 +207,14 @@ class Grid:
         prune: Callable[[int, float], bool] | None = None,
         start_len: float = 0.0,
     ) -> tuple[dict[int, int], dict[int, float]]:
-        """Дейкстра по состояниям (ячейка, одно из восьми направлений DIRS8): за шаг
-        направление меняется не больше чем на 45° (отвод 45°, штраф bend), поворот на
-        90° — два отвода через шаг по диагонали. По диагонали — только если обе соседние
-        ячейки свободны. Состояние — ячейка · 8 + направление (path(..., ndirs=8)).
-        Шаг стоит длину × mult ячейки (нет mult — 1) плюс penalty. prune(ячейка, длина) —
-        ячейка недоступна при такой геометрической длине пути от старта (start_len — уже
-        пройдено до стартовой ячейки): канализация, что там уже не помещается в стяжку."""
+        """Dijkstra over states (cell, one of the eight directions DIRS8): per step the direction
+        changes by at most 45° (a 45° bend, penalty bend); a 90° turn is two bends with a diagonal
+        step between. Diagonal steps only if both neighbouring cells are free. The state is
+        cell · 8 + direction (path(..., ndirs=8)).
+        A step costs length × the cell's mult (1 without mult) plus penalty. prune(cell, length)
+        makes a cell unavailable at that geometric path length from the start (start_len is what
+        was already travelled to the start cell): sewer pipe that no longer fits in the screed
+        there."""
         dist: dict[int, float] = {}
         prev: dict[int, int] = {}
         glen: dict[int, float] = {}
@@ -273,7 +277,9 @@ class Grid:
 
 
 def _join(node: Vec, cell: Vec, vertical_wall: bool) -> list[Vec]:
-    """От точки подключения до центра ячейки — двумя участками под 90°: сначала от стены."""
+    """From the connection point to the cell centre in two pieces at 90°: away from the wall
+    first.
+    """
     if abs(node.x - cell.x) < 1e-6 or abs(node.y - cell.y) < 1e-6:
         return [node]
     corner = Vec(cell.x, node.y) if vertical_wall else Vec(node.x, cell.y)
@@ -281,7 +287,7 @@ def _join(node: Vec, cell: Vec, vertical_wall: bool) -> list[Vec]:
 
 
 def simplify(path: Sequence[Vec]) -> list[Vec]:
-    """Без повторов и без точек на прямой."""
+    """No duplicates and no collinear points."""
     out: list[Vec] = []
     for p in path:
         if out and abs(p.x - out[-1].x) < 1e-6 and abs(p.y - out[-1].y) < 1e-6:
@@ -298,8 +304,8 @@ def simplify(path: Sequence[Vec]) -> list[Vec]:
 
 
 def move_end(path: Sequence[Vec], at_start: bool, p: Vec) -> list[Vec]:
-    """Конец ортогональной трассы — в точку p, углы остаются прямыми: соседняя вершина
-    сдвигается поперёк первого участка; трасса из одного участка получает излом."""
+    """Move the end of an orthogonal route to point p keeping right angles: the neighbouring vertex
+    shifts across the first piece; a single-piece route gets a bend."""
     pts = list(path) if at_start else list(reversed(path))
     a, b = pts[0], pts[1]
     horizontal = abs(a.y - b.y) <= abs(a.x - b.x)
@@ -313,7 +319,7 @@ def move_end(path: Sequence[Vec], at_start: bool, p: Vec) -> list[Vec]:
 
 
 def fit_path(path: Sequence[Vec], start: Vec, end: Vec, tol: float = 0.5) -> list[Vec]:
-    """Ручная трасса с концами в узлах источника и цели (если они сдвинулись)."""
+    """Manual route with its ends at the source and target nodes (if they moved)."""
     out = list(path)
     if abs(out[0].x - start.x) > tol or abs(out[0].y - start.y) > tol:
         out = move_end(out, True, start)
@@ -328,15 +334,15 @@ def fit_path(path: Sequence[Vec], start: Vec, end: Vec, tol: float = 0.5) -> lis
 
 @dataclass(frozen=True)
 class End:
-    """Конец трассы: точка подключения и ориентация стены (None — потолок)."""
+    """Route end: connection point and wall orientation (None for ceiling)."""
 
     node: Vec
     vertical_wall: bool
 
 
 class Router:
-    """Трассы от одного источника до многих целей в заданной области. any_angle — под любым
-    углом (эконом): кратчайший путь натягивается, а не идёт под 90°."""
+    """Routes from one source to many targets in a given area. any_angle allows any angle
+    (economy): the shortest path is pulled tight instead of running at 90°."""
 
     def __init__(self, area: BaseGeometry, source: End, any_angle: bool = False) -> None:
         self.grid = Grid.of(area)
@@ -347,7 +353,7 @@ class Router:
         self.prev, self.dist = search(self.start)
 
     def cost(self, node: Vec) -> float:
-        """Стоимость трассы до точки (с поворотами); недостижимо — бесконечность."""
+        """Route cost to the point (with turns); infinity if unreachable."""
         cell = self.grid.nearest_free(node)
         costs = [self.dist[s] for s in range(cell * 4, cell * 4 + 4) if s in self.dist]
         return min(costs, default=float("inf"))
@@ -363,10 +369,10 @@ class Router:
 
 
 def length(path: Sequence[Vec]) -> float:
-    """Длина трассы по плану; участки — под любым углом (у прямых углов — то же самое)."""
+    """Route length on the plan; pieces at any angle (the same for right angles)."""
     return sum(math.hypot(b.x - a.x, b.y - a.y) for a, b in itertools.pairwise(path))
 
 
 def is_ortho(path: Sequence[Vec], tol: float = 0.5) -> bool:
-    """Все участки — по осям (стандарт и премиум)."""
+    """All pieces run along the axes (standard and premium)."""
     return all(abs(a.x - b.x) <= tol or abs(a.y - b.y) <= tol for a, b in itertools.pairwise(path))

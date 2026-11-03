@@ -1,4 +1,4 @@
-"""Сантехника для просмотра: карточки, таблицы боковой панели, 3D, развёртки."""
+"""Plumbing for the viewer: cards, side panel tables, 3D, elevations."""
 
 from __future__ import annotations
 
@@ -59,10 +59,10 @@ def test_scene_water_rises_to_outlet_sewer_slopes_down() -> None:
     cold = next(
         p for p in scene["pipes"].values() if p["kind"] == "cold" and p["key"].endswith("_2")
     )
-    assert cold["pts"][-1][2] == 600  # водорозетка умывальника — из источника
+    assert cold["pts"][-1][2] == 600  # basin water outlet from the source
     sewer = next(p for p in scene["pipes"].values() if p["kind"] == "sewer")
     zs = [pt[2] for pt in sewer["pts"]]
-    assert zs == sorted(zs)  # от стояка к прибору — вверх по уклону
+    assert zs == sorted(zs)  # from the riser to the fixture: up along the slope
     assert scene["risers"][0]["z"] == [0.0, 2700.0]
 
 
@@ -83,4 +83,4 @@ def test_elevation_data_water_has_fixture_name() -> None:
     data = elevation_data(plan, contours, Electrical(), None, {}, water=water_views(PLUMBING, net))
     water = [v for e in data for v in e["water"]]
     assert water and all(v["name"] and v["key"] == f"fixture:{v['fixture']}" for v in water)
-    assert "Умывальник" in {v["name"] for v in water}  # язык проекта — ru
+    assert "Умывальник" in {v["name"] for v in water}  # project language is ru

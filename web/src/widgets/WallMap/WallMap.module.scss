@@ -1,4 +1,4 @@
-// Мини-схема развёртки — карточкой внизу слева чертежа, над кнопками масштаба
+// Elevation mini map as a card at the bottom left of the drawing, above the zoom buttons
 
 @use "@/shared/styles/mixins" as *;
 
@@ -13,7 +13,7 @@
   figcaption { font-size: 12px; color: var(--muted); text-align: center; }
 }
 
-// Грани: пол, пол помещения развёртки, срез стены сверху, бока — светлее и темнее
+// Faces: floor, the elevation room floor, the wall cut on top, sides lighter and darker
 .floor { fill: var(--soft); stroke: var(--line); }
 .room { fill: var(--hl-row); stroke: var(--line); }
 .top { fill: var(--raise); stroke: var(--muted); }
@@ -21,14 +21,14 @@
 .right { fill: color-mix(in srgb, var(--muted) 55%, var(--raise)); stroke: var(--muted); }
 .lit { fill: var(--hl); stroke: var(--hl); }
 .litTop { fill: color-mix(in srgb, var(--hl) 70%, white); stroke: var(--hl); }
-// Человечек перед стеной и его взгляд на полу
+// The figure in front of the wall and its line of sight on the floor
 .view { fill: color-mix(in srgb, var(--hl) 40%, transparent); stroke: var(--hl); stroke-dasharray: 2 2; }
 .pegman {
   path, circle { fill: #f5b400; stroke: #7a5600; stroke-width: 1px; vector-effect: non-scaling-stroke; stroke-linejoin: round; }
   .shadow { fill: rgba(0, 0, 0, .28); stroke: none; }
 }
 
-// Узкий экран — маленькая и без подписи: имя стены — в пейджере сверху
+// Narrow screen: small and without a label, the wall name is in the pager at the top
 @media (max-width: $narrow) {
   .map { left: 8px; bottom: 60px; width: 132px; padding: 6px; svg { height: 78px; } figcaption { display: none; } }
 }

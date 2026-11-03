@@ -72,7 +72,7 @@ def test_point_insert_carries_invisible_attributes(tmp_path: Path) -> None:
     assert {a.dxf.tag: a.dxf.text for a in s1.attribs} == {"ID": "s1", "H": "300", "GROUP": "QF1"}
     assert all(a.is_invisible for a in s1.attribs)
     assert inserts["board"].get_attrib_text("H") == "1700"
-    # В легенде на листе — те же блоки, но без атрибутов и меток
+    # The sheet legend uses the same blocks, but without attributes and tags
     legend = [e for e in doc.paperspace("02 Электрика").query("INSERT") if e.dxf.name == "E_SOCKET"]
     assert legend and all(isinstance(e, Insert) and not e.attribs for e in legend)
 
@@ -83,9 +83,9 @@ def test_artifact_items_reference_objects(tmp_path: Path) -> None:
     _, pages = read_artifact(export_artifact(doc, plan, tmp_path / "p.epd"))
     objects = {item.get("o") for item in pages[1]["items"]}
     assert {"point:s1", "point:s2", "board:board", "wall:r.w2"} <= objects
-    # Кабели — только на листе проводки
+    # Cables only on the wiring sheet
     assert not any(str(o).startswith("wire:") for o in objects)
     assert {"wire:wire_1", "box:box_1"} <= {item.get("o") for item in pages[2]["items"]}
-    # Рамка, штамп и легенда — не объекты проекта
+    # Frame, title block and legend are not project objects
     sheet_items = [i for i in pages[1]["items"] if i["l"] == "A-SHEET"]
     assert sheet_items and all("o" not in i for i in sheet_items)

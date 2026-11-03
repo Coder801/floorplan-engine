@@ -1,12 +1,12 @@
-// 3D чертежа (ключ scene страницы проводки, scene3d.py): мм модели, ось Z вверх. Один на все
-// вкладки чертежа: видно то, что видно в слоях вкладки (план — стены, электрика — точки,
-// освещение — свет и выключатели, проводка — всё). Стены «срез» — перегородки бортиком,
-// наружные стены — бортиком, когда стоят между камерой и помещением;
-// закрытая стеной часть линии — бледно поверх всего; подсказки, выделение и связь с
-// таблицами — через общее состояние.
-// Стены полупрозрачные, но монолитом: сначала в глубину пишется передняя поверхность всех
-// стен, затем цвет ложится только на неё — внутренние торцы кусков не складывают
-// прозрачность в тёмные швы; контур — только там, где стена кончается (wallEdges.ts).
+// Drawing 3D (key scene of the wiring page, scene3d.py): model mm, Z axis up. One for all tabs
+// of the drawing: it shows what the tab's layers show (plan: walls, electrical: points,
+// lighting: lights and switches, wiring: everything). The "cut" wall mode makes partitions a
+// low rim, and exterior walls a rim when they stand between the camera and the room; the part
+// of a line hidden by a wall is faint and drawn over everything; hints, selection and the
+// link to tables go through the shared state.
+// Walls are translucent but solid: first the front surface of all walls is written to depth,
+// then colour lands only on it, so the inner ends of pieces do not stack transparency into
+// dark seams; the outline is drawn only where a wall ends (wallEdges.ts).
 
 import { Line, OrbitControls } from "@react-three/drei";
 import { Canvas, useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
@@ -31,23 +31,23 @@ import {
 export interface Scene3DApi {
   iso(): void;
   fit(): void;
-  zoomTo(step: number): void;  // шаг масштаба (shared/zoom.ts) от «вся квартира»
+  zoomTo(step: number): void;  // zoom step (shared/zoom.ts) from "whole flat"
 }
 
 interface Props {
   scene: Scene;
   index: PageIndex;
-  own: Set<string> | null;          // слои вкладки (sheet/drawing.ts); null — все
-  layerOf: Map<string, string>;     // объект → его слой на чертеже
+  own: Set<string> | null;          // tab layers (sheet/drawing.ts); null means all
+  layerOf: Map<string, string>;     // object → its layer on the drawing
   apiRef: MutableRefObject<Scene3DApi | null>;
   onZoom: (zoom: Zoom) => void;
 }
 
-// Порядок прозрачного: точки и линии — до стен (стена ложится поверх того, что за ней),
-// глубина стен, их цвет; бледное «за стеной» и бегущий пунктир — поверх всего
+// Transparent draw order: points and lines before walls (a wall lies over what is behind it),
+// wall depth, wall colour; the faint "behind the wall" and running dashes on top of everything
 const WALL_DEPTH = 8, WALL_COLOR = 9, ON_TOP = 10;
 
-// Слой объекта, если на чертеже его нет: линия — по трассе, коробка, щит
+// Object layer when it is not on the drawing: a line by its route, a box, the panel
 const fallbackLayer = (key: string, w?: SceneWire) =>
   (w ? (w.route === "floor" ? "W-CABLE-FLOOR" : "W-CABLE") : key.startsWith("box:") ? "W-BOX"
     : key.startsWith("board:") ? "E-BOARD" : key.startsWith("riser:") ? "P-RISER"
@@ -72,7 +72,7 @@ export function Scene3D(props: Props) {
         camera={{ up: [0, 0, 1], near: -1e6, far: 1e6, position: [0, -1, 1], zoom: 0.05 }}
         raycaster={{ params: { Line2: { threshold: 6 } } as unknown as THREE.RaycasterParameters }}
         onPointerMissed={(e) => {
-          // Клик мимо объектов — снять выделение; конец вращения камеры — не клик
+          // A click off objects clears the selection; the end of a camera rotation is not a click
           const d = down.current;
           if (e.type === "click" && d && Math.abs(e.clientX - d.x) + Math.abs(e.clientY - d.y) <= 4) {
             view.set({ selected: null, neighbors: null, pinned: null });
@@ -91,7 +91,7 @@ function World({ scene, index, own, layerOf, apiRef, onZoom }: Props) {
   const s = useView((st) => st);
   refreshPalette();
 
-  // Габариты квартиры и масштаб «весь чертёж»
+  // Flat bounds and the "whole drawing" zoom
   const bounds = useMemo(() => {
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
     for (const f of scene.floors) for (const [x, y] of f.rings[0]) {
@@ -102,9 +102,9 @@ function World({ scene, index, own, layerOf, apiRef, onZoom }: Props) {
   }, [scene]);
   const fitZoom = Math.min(size.width, size.height * 1.4) / (bounds.ext * 1.15);
 
-  // Масштаб — те же пять шагов, что у листа: шаг k — ZOOM_STEPS[k] от «вся квартира»,
-  // переход плавный (Glide), к центру экрана
-  const step = useRef(-1);  // -1 — ещё не показан: первый шаг сообщается странице
+  // Zoom has the same five steps as the sheet: step k is ZOOM_STEPS[k] from "whole flat",
+  // moving smoothly (Glide) towards the screen centre
+  const step = useRef(-1);  // -1 means not shown yet: the first step is reported to the page
   const glide = useMemo(() => new Glide(), []);
   const zoomTo = (k: number, animate = true) => {
     k = clampStep(k);
@@ -117,7 +117,7 @@ function World({ scene, index, own, layerOf, apiRef, onZoom }: Props) {
   };
   useEffect(() => () => glide.stop(), [glide]);
 
-  // Камера смотрит на target из direction (от target к камере), масштаб — шаг k
+  // The camera looks at target from direction (from target to the camera), zoom is step k
   const look = (target: THREE.Vector3, direction: THREE.Vector3, k: number) => {
     const c = controls.current;
     camera.position.copy(target).addScaledVector(direction.clone().normalize(), bounds.ext * 2);
@@ -127,14 +127,14 @@ function World({ scene, index, own, layerOf, apiRef, onZoom }: Props) {
   const direction = () => camera.position.clone().sub(controls.current?.target ?? bounds.center);
 
   apiRef.current = {
-    // Изометрия: с юго-запада сверху
+    // Isometry: from the south-west, above
     iso: () => look(bounds.center, new THREE.Vector3(-1, -1, 1.15), 0),
-    // Весь чертёж: тот же угол, вся квартира
+    // Whole drawing: the same angle, the whole flat
     fit: () => look(bounds.center, direction(), 0),
     zoomTo,
   };
 
-  // Колесо и щипок — на соседний шаг, как у листа (масштаб OrbitControls выключен)
+  // Wheel and pinch go to the neighbouring step, as on the sheet (OrbitControls zoom is off)
   const gl = useThree((st) => st.gl);
   const latest = useRef(zoomTo);
   latest.current = zoomTo;
@@ -166,15 +166,15 @@ function World({ scene, index, own, layerOf, apiRef, onZoom }: Props) {
       el.removeEventListener("touchmove", onTouch);
     };
   }, [gl]);
-  // Состояние показа сменилось (режим стен, тема, слои) — новый кадр: материал стен и «срез»
-  // меняются мутацией и в кадре, а кадр рисуется только по запросу (frameloop="demand")
+  // The display state changed (wall mode, theme, layers): a new frame. The wall material and the
+  // cut change by mutation inside the frame, and frames are drawn only on demand (frameloop="demand")
   useEffect(() => { invalidate(); });
-  // Размер окна сменился — «вся квартира» другая, шаг тот же
+  // The window size changed: "whole flat" is different, the step stays
   useEffect(() => { zoomTo(step.current, false); }, [fitZoom]);  // eslint-disable-line react-hooks/exhaustive-deps
-  // Первый показ — изометрия
+  // First show: isometry
   useEffect(() => { apiRef.current?.iso(); }, [scene]);  // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Навести на объекты (двойной клик): тот же угол, крупнее
+  // Focus on objects (double click): the same angle, closer
   const groupRef = useRef<THREE.Group>(null);
   const focus = (keys: Set<string>) => {
     const box = new THREE.Box3();
@@ -196,7 +196,7 @@ function World({ scene, index, own, layerOf, apiRef, onZoom }: Props) {
     });
   }, [scene]);
   const floors = useMemo(() => scene.floors.map((f) => new THREE.ShapeGeometry(shape(f.rings))), [scene]);
-  // Точки, коробки, щит: на стене — плоские по стене, на потолке — диск
+  // Points, boxes, panel: flat against a wall, a disc on the ceiling
   const solids = useMemo(() => {
     const out: { key: string; pos: [number, number, number]; color: string; geo: THREE.BufferGeometry;
                  edges: THREE.EdgesGeometry; group?: string | null; room?: string }[] = [];
@@ -211,7 +211,7 @@ function World({ scene, index, own, layerOf, apiRef, onZoom }: Props) {
           b.group, b.room);
     }
     if (scene.board) add("board:board", scene.board.pos, "#6b6357", flat(scene.board.inward ?? [0, 1], 300, 100, 400));
-    // Сантехника: водорозетка и выпуск — шайба на стене, стояк — цилиндр от пола до потолка
+    // Plumbing: a water outlet or drain is a puck on the wall, a riser a cylinder from floor to ceiling
     for (const f of Object.values(scene.fixtures ?? {})) {
       const [ix, iy] = f.inward;
       const geo = new THREE.CylinderGeometry(f.kind === "sewer" ? 40 : 22, f.kind === "sewer" ? 40 : 22, 30, 20)
@@ -230,10 +230,10 @@ function World({ scene, index, own, layerOf, apiRef, onZoom }: Props) {
   const flowLines = useRef(new Map<string, { material: { dashOffset: number; dashSize: number; gapSize: number } }>());
 
   const dark = isDark();
-  // Глубина передней поверхности стен (без цвета), затем цвет — только на неё. Оба прохода —
-  // одним материалом: у другого (MeshBasicMaterial) вершину считает другой шейдер, и на GPU
-  // (Metal) грань целиком ложится на единицу глубины дальше своей же записи — тест «≤»
-  // не проходит, и при части углов камеры грань пропадает из цветного прохода
+  // Depth of the front wall surface (no colour), then colour only on it. Both passes use one
+  // material: with another one (MeshBasicMaterial) a different shader computes the vertex, and
+  // on the GPU (Metal) the whole face lands one depth unit behind its own write, so the "≤" test
+  // fails and at some camera angles the face disappears from the colour pass
   const depthMat = useMemo(() => new THREE.MeshLambertMaterial({ colorWrite: false, transparent: true }), []);
   const wallMat = useMemo(() => new THREE.MeshLambertMaterial({ transparent: true, depthWrite: false }), []);
   const edgeMat = useMemo(() => new THREE.LineBasicMaterial({ transparent: true, opacity: 0.45 }), []);
@@ -241,11 +241,12 @@ function World({ scene, index, own, layerOf, apiRef, onZoom }: Props) {
   wallMat.opacity = s.wallMode === "ghost" ? WALL_GHOST_ALPHA : WALL_ALPHA;
   edgeMat.color.set(dark ? "#bbbebf" : "#29251f");
 
-  // Срез: перегородка между комнатами — всегда бортиком; наружная стена — бортиком, когда
-  // стоит между камерой и помещением (нормаль в помещение смотрит от камеры сильнее CUT_DOT),
-  // иначе в полный рост. Стена целиком: все куски (тело, подоконник, перемычка) — одним
-  // масштабом от пола, перемычка над проёмом срезанной стены не рисуется — проём виден
-  // разрывом бортика. Пунктир выделенной линии бежит от источника к цели (штрих — в px экрана)
+  // Cut: a partition between rooms is always a low rim; an exterior wall is a rim when it stands
+  // between the camera and the room (its normal into the room faces away from the camera more
+  // than CUT_DOT), otherwise full height. The wall as a whole: all pieces (body, sill, lintel) use
+  // one scale from the floor, and the lintel above an opening of a cut wall is not drawn: the
+  // opening shows as a gap in the rim. The selected line's dashes run from source to target
+  // (dash length in screen px)
   useFrame((state) => {
     const t = controls.current?.target ?? bounds.center, p = camera.position;
     const dx = t.x - p.x, dy = t.y - p.y, len = Math.hypot(dx, dy) || 1;
@@ -263,7 +264,7 @@ function World({ scene, index, own, layerOf, apiRef, onZoom }: Props) {
       }
       m.scale.z = s; m.position.z = w.z0 * s;
     });
-    const mm = 1 / camera.zoom;  // мм на px
+    const mm = 1 / camera.zoom;  // mm per px
     const time = REDUCED_MOTION ? 0 : state.clock.elapsedTime;
     for (const l of flowLines.current.values()) {
       Object.assign(l.material, { dashSize: FLOW_DASH_PX * mm, gapSize: FLOW_GAP_PX * mm,
@@ -276,7 +277,7 @@ function World({ scene, index, own, layerOf, apiRef, onZoom }: Props) {
   const alpha = (key: string) => (!s.selected || s.selected.has(key) ? 1
     : s.neighbors && s.neighbors.has(key) ? NEIGHBOR_ALPHA : DIM_ALPHA);
   const handlers = (key: string) => objectEvents(key, index, focus);
-  // Объект виден, если виден его слой на этой вкладке; слой неизвестен — виден всегда
+  // An object is visible if its layer is visible on this tab; an unknown layer is always visible
   const visible = (key: string, w?: SceneWire, fallback?: string) => {
     const l = layerOf.get(key) ?? fallback ?? fallbackLayer(key, w);
     return !l || (own ? layerShown(own, s.hidden, s.extra, l) : !s.hidden.has(l));
@@ -301,7 +302,7 @@ function World({ scene, index, own, layerOf, apiRef, onZoom }: Props) {
             <lineSegments geometry={w.edges} material={edgeMat} renderOrder={WALL_COLOR} />
           </group>
         ))}
-        {/* Отфильтрованное не рисуется вовсе — и под курсор не попадает */}
+        {/* Filtered items are not drawn at all, so they are never under the cursor */}
         {Object.entries(scene.wires)
           .filter(([id, w]) => shown3d(s.filter3d, w.group, w.room) && visible(`wire:${id}`, w)).map(([id, w]) => (
           <WireLines key={id} id={id} w={w} s={s} lit={lit(`wire:${id}`)} alpha={alpha(`wire:${id}`)}
@@ -320,12 +321,12 @@ function World({ scene, index, own, layerOf, apiRef, onZoom }: Props) {
   );
 }
 
-// На стене — плоский по стене, на потолке — диск
+// Flat against a wall, a disc on the ceiling
 const flat = (inward: XY, w: number, d: number, h: number) =>
   (Math.abs(inward[0]) > Math.abs(inward[1]) ? new THREE.BoxGeometry(d, w, h) : new THREE.BoxGeometry(w, d, h));
 const disc = () => new THREE.CylinderGeometry(60, 60, 20, 24).rotateX(Math.PI / 2);
 
-// Наведение — подсказка и подсветка; клик — выделить линию; двойной клик — навести на неё
+// Hover shows a hint and highlight; click selects the line; double click focuses on it
 function objectEvents(key: string, index: PageIndex, focus: (keys: Set<string>) => void) {
   const tipAt = (e: ThreeEvent<PointerEvent>) => {
     const r = (e.nativeEvent.target as HTMLElement).getBoundingClientRect();
@@ -348,7 +349,7 @@ function objectEvents(key: string, index: PageIndex, focus: (keys: Set<string>) 
     },
     onClick: (e: ThreeEvent<MouseEvent>) => {
       e.stopPropagation();
-      if (e.delta > 4) return;  // конец вращения камеры — не клик
+      if (e.delta > 4) return;  // the end of a camera rotation is not a click
       select();
     },
     onDoubleClick: (e: ThreeEvent<MouseEvent>) => {
@@ -371,7 +372,7 @@ function WireLines({ id, w, s, lit, alpha, handlers, flowLines }: {
     <>
       <Line points={w.pts} color={color} lineWidth={lit ? WIRE_LIT_PX : on ? WIRE_SEL_PX : WIRE_PX}
             transparent opacity={alpha} userData={{ key }} {...handlers} />
-      {/* Закрытое стеной — бледно поверх всего */}
+      {/* Hidden by a wall: faint, on top of everything */}
       <Line points={w.pts} color={color} lineWidth={2} transparent opacity={GHOST_ALPHA * alpha}
             depthTest={false} renderOrder={ON_TOP} raycast={() => null} />
       {on && (
@@ -383,7 +384,7 @@ function WireLines({ id, w, s, lit, alpha, handlers, flowLines }: {
   );
 }
 
-// Труба: канализация толще воды; закрытое стеной — бледно поверх всего, как у кабеля
+// Pipe: sewer is thicker than water; the part hidden by a wall is faint, on top of everything, as for cables
 function PipeLine({ p, lit, alpha, handlers }: { p: ScenePipe; lit: boolean; alpha: number; handlers: Handlers }) {
   const color = lit ? palette.hl : screenColor(p.color);
   const width = (p.kind === "sewer" ? 2 : 1) * (lit ? WIRE_LIT_PX : WIRE_PX);

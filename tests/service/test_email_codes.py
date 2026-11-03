@@ -1,5 +1,5 @@
-"""Вход по коду на почту (service/db/email_codes.py) на SQLite в памяти: код одноразовый,
-действует последний, срок, попытки, частота запросов."""
+"""E-mail code login (service/db/email_codes.py) on in-memory SQLite: a code is one-time, the last
+one is valid, expiry, attempts, request rate."""
 
 from __future__ import annotations
 
@@ -25,12 +25,12 @@ def test_code_once_last_one_counts(db: Session) -> None:
     assert len(first) == 6 and first.isdigit()
     second = codes.issue_code(db, "ann@example.com", t + timedelta(seconds=61))
     if first != second:
-        with pytest.raises(acc.AccessError, match="Неверный"):  # прежний больше не действует
+        with pytest.raises(acc.AccessError, match="Неверный"):  # the previous one no longer works
             codes.check_code(db, "ann@example.com", first, t + timedelta(seconds=62))
     assert (
         codes.check_code(db, "ANN@example.com", f"{second[:3]} {second[3:]}") == "ann@example.com"
     )
-    with pytest.raises(acc.AccessError, match="устарел"):  # погашен
+    with pytest.raises(acc.AccessError, match="устарел"):  # used up
         codes.check_code(db, "ann@example.com", second)
 
 
@@ -46,7 +46,7 @@ def test_code_expires_and_attempts_end(db: Session) -> None:
             codes.check_code(db, "x@b.cd", wrong, t)
     with pytest.raises(acc.AccessError, match="кончились"):
         codes.check_code(db, "x@b.cd", wrong, t)
-    with pytest.raises(acc.AccessError, match="устарел"):  # и верный уже не примет
+    with pytest.raises(acc.AccessError, match="устарел"):  # even the right one fails
         codes.check_code(db, "x@b.cd", code, t)
 
 
@@ -60,5 +60,5 @@ def test_resend_limits(db: Session) -> None:
         codes.issue_code(db, "a@b.cd", t + timedelta(minutes=2 * k))
     with pytest.raises(codes.TooSoonError, match="Слишком много"):
         codes.issue_code(db, "a@b.cd", t + timedelta(minutes=20))
-    codes.issue_code(db, "a@b.cd", t + timedelta(minutes=61))  # час прошёл
-    codes.issue_code(db, "other@b.cd", t + timedelta(minutes=20))  # другой адрес — свой счёт
+    codes.issue_code(db, "a@b.cd", t + timedelta(minutes=61))  # an hour has passed
+    codes.issue_code(db, "other@b.cd", t + timedelta(minutes=20))  # own count per address

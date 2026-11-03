@@ -1,26 +1,26 @@
-// Общее для модулей: ширины перелома, шрифты, повторяющиеся куски оформления.
-// Подключение: @use "<путь>/styles/mixins" as *;
+// Shared by modules: breakpoints, fonts, repeated styling pieces.
+// Use: @use "<path>/styles/mixins" as *;
 
-$narrow: 900px;   // боковая панель уходит под чертёж
+$narrow: 900px;   // the side panel moves under the drawing
 $phone: 560px;
 
 $mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
 $brand: "Chakra Petch", sans-serif;
 
-// Плашка поверх чертежа или фона: карточка, группа кнопок, всплывашка
+// A badge over the drawing or background: card, button group, popup
 @mixin raised($radius: 8px) {
   background: var(--raise);
   border: 1px solid var(--line);
   border-radius: $radius;
 }
 
-// Кнопка без рамки и фона: крестик, стрелка, вкладка
+// A button without border or background: close cross, arrow, tab
 @mixin bare-button {
   border: 0;
   background: none;
 }
 
-// Список «название — значение» в две колонки (dl)
+// A "name: value" list in two columns (dl)
 @mixin pairs($gap) {
   display: grid;
   grid-template-columns: auto 1fr;
@@ -30,7 +30,7 @@ $brand: "Chakra Petch", sans-serif;
   dd { margin: 0; }
 }
 
-// Без анимации, если пользователь просил меньше движения
+// No animation if the user asked for reduced motion
 @mixin no-motion {
   @media (prefers-reduced-motion: reduce) { animation: none; }
 }

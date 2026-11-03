@@ -1,42 +1,44 @@
-"""Сеть водоснабжения и канализации из plumbing.yaml: подводы приборов, трассы, проверки.
+"""Water supply and sewer network from plumbing.yaml: fixture supplies, routes, checks.
 
-Правила (docs/plumbing.md):
-- трассы идут по полу (вода — в стяжке, канализация — по полу в коробе), под прямыми
-  углами, в обход стен и препятствий (инсталляция, ванна, поддон, короб), через дверные
-  проёмы, не ближе routing.CLEARANCE к стенам — та же сетка, что у проводки;
-- к прибору труба подходит по полу к ближайшему свободному месту у его стены, дальше — в
-  стене: вдоль стены (wall_run) и вверх до водорозетки или выпуска (rise). Так трасса
-  обходит инсталляцию и ванну: к смесителю над ванной — сбоку, в стене;
-- вода — лучевая (collector, по умолчанию): у каждой водорозетки своя труба Ø16 от
-  коллектора холодной или горячей воды в узле ввода; тройниковая (tee, эконом): магистраль
-  от узла ввода, к прибору — отвод от ближайшего места магистрали; труба, от которой есть
-  отводы, — Ø20, концевые — Ø16. Коллектор горячей от бойлера — у бойлера. В лучевой
-  соседи на одной стене (двойная тумба, посудомойка у мойки — supply_groups) — одной трубой
-  Ø16 от коллектора на каждую воду, второй — тройником у первого; луч, что долго идёт рядом
-  с другим или отводом от него заметно короче, — тройником от него, если общая труба
-  пропустит расход (_merge_parallel). Горячая — из стояка или от
-  бойлера (бойлер берёт холодную с коллектора, горячую отдаёт в коллектор горячей воды или в
-  магистраль);
-- водорозетки пары: горячая слева, холодная справа (вид изнутри) — в HOT_COLD_GAP / 2 от
-  середины подводки;
-- канализация (ТЗ трассировки 2026-11-02) — дерево к стояку: сначала унитазы (Ø110 —
-  только в стояк или в трубу Ø110, отвод не длиннее WC_REACH), затем остальные — в стояк
-  или в трубу Ø50 (унитаз — ближе всех к стояку). Своя сетка: через дверные проёмы и пороги
-  жилых комнат — нельзя, скрытые зоны (короб, инсталляция, под ванной и поддоном —
-  HIDDEN_HEIGHT) — в приоритете; поиск в восемь сторон, изломы — только отводами 45°
-  (plumbing/bends.py), врезка — косым тройником. Высоты — обратным счётом от врезки в
-  стояк, от плиты: уклон на всей трассе прибора один (SLOPE, у Ø110 — до SLOPE_MIN), выпуск
-  выше — спуск в стене. В стяжке (SCREED_MM) низ трубы + Ø + SCREED_COVER не выше стяжки,
-  Ø110 в стяжке нельзя. Что в стяжку не помещается, идёт по стене над полом (зона surface:
-  у стены, в коробе; правка 2026-11-02) — не ошибка, а примечание с высотой короба; в
-  стяжке остаются ошибкой только участки посреди помещения и через проёмы. Проходы: обычный,
-  через скрытые зоны и только вдоль стен — берётся проход с меньшим числом ошибок
-  (SewerError, трассы — SewerRoute, JSON — routes_json);
-- слабые места (Weak) — на лист и в отчёт: стяжка, перепад, отвод унитаза, канализация
-  через жилую комнату, много отводов, прибор недостижим, нет горячей воды.
+Rules (docs/plumbing.md):
+- routes run on the floor (water in the screed, sewer on the floor in a box), at right
+  angles, around walls and obstacles (installation frame, bath, tray, box), through door
+  openings, at least routing.CLEARANCE from walls, on the same grid as wiring;
+- a pipe reaches a fixture on the floor at the nearest free spot by its wall, then continues
+  in the wall: along it (wall_run) and up to the water outlet or drain (rise). This way the
+  route goes around an installation frame and a bath: the mixer above a bath is reached from
+  the side, in the wall;
+- water is radial (collector, the default): each water outlet has its own Ø16 pipe from the
+  cold or hot manifold in the supply unit; tee layout (tee, economy): a main from the supply
+  unit, a branch to each fixture from the nearest point of the main; a pipe with branches is
+  Ø20, end ones are Ø16. The hot manifold for a boiler sits at the boiler. In the radial
+  layout, neighbours on one wall (a double vanity, a dishwasher by the sink: supply_groups)
+  share one Ø16 pipe from the manifold per water, the second one via a tee at the first; a
+  branch that runs alongside another for long, or is much shorter as a branch from it, is
+  teed off it if the shared pipe can carry the flow (_merge_parallel). Hot water comes from
+  a riser or from a boiler (the boiler takes cold from the manifold and feeds hot into the
+  hot manifold or the main);
+- the outlets of a pair: hot on the left, cold on the right (view from inside), HOT_COLD_GAP / 2
+  from the middle of the supply;
+- sewer (routing spec 2026-11-02) is a tree to the riser: WCs first (Ø110, only into the
+  riser or a Ø110 pipe, branch no longer than WC_REACH), then the rest into the riser or a
+  Ø50 pipe (the WC is closest to the riser). Its own grid: never through door openings or
+  thresholds of living rooms, hidden zones (box, installation frame, under bath and tray,
+  HIDDEN_HEIGHT) are preferred; the search goes in eight directions, corners only with 45°
+  bends (plumbing/bends.py), branches join with an angled tee. Heights are computed backwards
+  from the riser inlet, from the slab: one slope over the whole fixture route (SLOPE, down to
+  SLOPE_MIN for Ø110), a higher drain means a drop in the wall. In the screed (SCREED_MM) the
+  pipe bottom + Ø + SCREED_COVER must not exceed the screed, Ø110 is not allowed in the
+  screed. What does not fit in the screed runs along the wall above the floor (zone surface:
+  by the wall, in a box; change 2026-11-02): not an error but a note with the box height; in
+  the screed only pieces in the middle of a room and through openings remain errors. Passes:
+  normal, through hidden zones and only along walls; the pass with fewer errors wins
+  (SewerError, routes in SewerRoute, JSON in routes_json);
+- weak spots (Weak) go to the sheet and the report: screed, height drop, WC branch, sewer
+  through a living room, many bends, unreachable fixture, no hot water.
 
-Высоты подводов без данных — FIXTURE_SPECS (допущение, «*» в таблице приборов); ось
-врезки в стояк без данных — SEWER_INLET_MM.
+Supply heights without data come from FIXTURE_SPECS (an assumption, "*" in the fixture table);
+the riser inlet axis without data is SEWER_INLET_MM.
 """
 
 from __future__ import annotations
@@ -86,71 +88,71 @@ from floorplan_engine.plumbing import bends as b45
 Kind = Literal["cold", "hot", "sewer"]
 KINDS: tuple[Kind, ...] = ("cold", "hot", "sewer")
 
-HOT_COLD_GAP = 150.0  # мм между водорозетками холодной и горячей
-COLLECTOR_GAP = 200.0  # мм между коллекторами холодной и горячей воды в узле
-SUPPLY_D = 16  # Ø луча коллектора и концевого отвода, мм (металлопластик / PEX 16)
-MAIN_D = 20  # Ø магистрали, ввода и подачи от бойлера, мм
-# Уклон канализации (ТЗ трассировки 2026-11-02): 2–3 см на метр, один на всей трассе
-# прибора, из списка (_sewer_heights): 0,025 — по умолчанию; 0,02 — если с 0,025 трасса не
-# годится, только Ø110 (Ø50 — не меньше 0,025 по ДБН В.2.5-64, как СНиП 2.04.01-85); 0,03 —
-# если запас высоты позволяет (трасса без отводов от неё: магистраль не круче, чем ветки)
+HOT_COLD_GAP = 150.0  # mm between the cold and hot water outlets
+COLLECTOR_GAP = 200.0  # mm between the cold and hot manifolds in the unit
+SUPPLY_D = 16  # Ø of a manifold branch and an end branch, mm (multilayer / PEX 16)
+MAIN_D = 20  # Ø of the main, inlet and boiler feed, mm
+# Sewer slope (routing spec 2026-11-02): 2–3 cm per metre, one over the whole fixture route,
+# from a list (_sewer_heights): 0.025 by default; 0.02 if the route fails at 0.025, Ø110
+# only (Ø50 not below 0.025 per DBN V.2.5-64, like SNiP 2.04.01-85); 0.03 if the height
+# allows it (a route with no branches off it: the main is no steeper than its branches)
 SLOPE = {50: 0.025, 110: 0.025}
 SLOPE_MIN = {50: 0.025, 110: 0.02}
 SLOPE_MAX = 0.03
-SCREED_MM = 90.0  # стяжка: чистый пол на 90 мм выше плиты; высоты канализации — от плиты
-SCREED_COVER = 15.0  # мм над трубой в стяжке — не меньше
-RISER_TEE_D = 110  # тройник стояка: низ входа — ось врезки минус радиус Ø110
-# Скрытые зоны канализации — препятствия, где трубу прячут: наибольшая высота верха трубы от
-# чистого пола (у препятствия нет height — эта, допущение)
+SCREED_MM = 90.0  # finished floor 90 mm above slab; sewer heights from slab
+SCREED_COVER = 15.0  # mm above a pipe in the screed, at least
+RISER_TEE_D = 110  # riser tee: inlet bottom is the inlet axis minus the Ø110 radius
+# Hidden sewer zones are obstacles where the pipe is hidden: the highest pipe top from the
+# finished floor (if the obstacle has no height, this one, as an assumption)
 HIDDEN_HEIGHT = {
     ObstacleType.INSTALLATION: 1000.0,
     ObstacleType.BOX: 600.0,
-    ObstacleType.BATH: 450.0,  # под ванной, за экраном
-    ObstacleType.SHOWER_TRAY: 100.0,  # под поддоном
+    ObstacleType.BATH: 450.0,  # under the bath, behind the panel
+    ObstacleType.SHOWER_TRAY: 100.0,  # under the tray
 }
-# Цена клетки сетки канализации — множитель длины шага (ТЗ трассировки, правка 2026-11-02):
-# скрытая зона дешевле всего, у стены — 1, дальше — дороже. Свободные ячейки сетки — не ближе
-# CLEARANCE (150 мм) к стене, поэтому «у стены» — первая полоса оси трубы, до WALL_BAND_MM
+# Sewer grid cell cost is a step length multiplier (routing spec, change 2026-11-02): a hidden
+# zone is cheapest, by a wall 1, farther out more expensive. Free grid cells are at least
+# CLEARANCE (150 mm) from a wall, so "by the wall" is the first pipe axis band, up to WALL_BAND_MM
 HIDDEN_COST = 0.7
 WALL_COST = 1.0
 NEAR_WALL_COST = 2.0
-OPEN_ROOM_COST = 4.0  # ≥ 3: диагональ короче пути вдоль стен не больше чем в √2 раза
-WALL_BAND_MM = CLEARANCE + STEP  # полоса у стены: над полом здесь можно в коробе
-NEAR_WALL_MM = 400.0  # дальше — середина комнаты
-# Варианты трассы канализации (проходы _sewer): цены скрытой, у стены, рядом, середины
+OPEN_ROOM_COST = 4.0  # ≥ 3: a diagonal is at most √2 times shorter than the path along walls
+WALL_BAND_MM = CLEARANCE + STEP  # band by the wall: a box above the floor is allowed here
+NEAR_WALL_MM = 400.0  # farther out: the middle of the room
+# Sewer route variants (passes of _sewer): costs of hidden, by the wall, near, middle
 SEWER_VARIANTS: tuple[tuple[float, float, float, float], ...] = (
-    (HIDDEN_COST, WALL_COST, NEAR_WALL_COST, OPEN_ROOM_COST),  # обычный
-    (0.2, WALL_COST * 3, NEAR_WALL_COST * 3, OPEN_ROOM_COST * 3),  # через скрытые зоны
-    (HIDDEN_COST, WALL_COST, NEAR_WALL_COST * 5, OPEN_ROOM_COST * 10),  # только вдоль стен
+    (HIDDEN_COST, WALL_COST, NEAR_WALL_COST, OPEN_ROOM_COST),  # normal
+    (0.2, WALL_COST * 3, NEAR_WALL_COST * 3, OPEN_ROOM_COST * 3),  # through hidden zones
+    (HIDDEN_COST, WALL_COST, NEAR_WALL_COST * 5, OPEN_ROOM_COST * 10),  # only along walls
 )
-# Вид ячейки сетки канализации (Grid.tag): скрытая зона, у стены, рядом, середина
+# Sewer grid cell kind (Grid.tag): hidden zone, by the wall, near, middle
 TAG_HIDDEN, TAG_WALL, TAG_NEAR, TAG_OPEN = 0, 1, 2, 3
-FALLBACK_COST = 1e6  # путь без отсечения по высоте — только если иначе к прибору не пройти
-# Полые препятствия: трубы своего прибора идут внутри (короб, инсталляция), чужие — в обход
+FALLBACK_COST = 1e6  # path without height pruning, only if the fixture is otherwise unreachable
+# Hollow obstacles: pipes of their own fixture go inside (box, installation frame), others go around
 HOLLOW = frozenset({ObstacleType.INSTALLATION, ObstacleType.BOX})
-PARTITION_MAX = 150.0  # мм: ненесущая тоньше — перегородка; толще — только с partition: true
-PARTITION_COST = 1000.0  # мм за ячейку у перегородки: проход ≈ как 4 м обхода
-UNDER_COST = 50.0  # мм за ячейку под гипсокартонной стенкой внутри помещения: почти свободно
-DOOR_COST = 20000.0  # мм за ячейку в дверном проёме: трубы через дверь — в крайнем случае
-HOLE_SHARE = 300.0  # мм: трубы ближе — в одном отверстии
-RISER_WALL = 400.0  # мм: от стояка в стене до помещения — не больше (толщина стены с запасом)
-RISER_REACH = 800.0  # мм: насколько от стояка искать подход с каждой стороны
-WC_REACH = 1000.0  # мм по трубе до стояка: отвод унитаза длиннее — ошибка
-SEWER_BENDS = 6  # отводов 45° по плану у трубы канализации — больше: ревизия
-DROP_TURN = 150.0  # мм: спуск от выпуска не ниже — два поворота на 90° (вниз и на пол),
-# меньше — сдвиг вниз двумя отводами 45° («утка»)
-# Расход трубы (ТЗ «тройники» 2026-11-02): вес метра по диаметру и отвод 45° — в мм
-# эквивалентной длины; тройники Ø50 — объединением пар приборов по экономии (_merge_drains)
+PARTITION_MAX = 150.0  # mm: thinner non-bearing walls are partitions
+PARTITION_COST = 1000.0  # mm per cell at a partition: a pass ≈ a 4 m detour
+UNDER_COST = 50.0  # mm per cell under a plasterboard wall inside a room: almost free
+DOOR_COST = 20000.0  # mm per cell in a door opening: pipes through a door only as a last resort
+HOLE_SHARE = 300.0  # mm: closer pipes share one hole
+RISER_WALL = 400.0  # mm: riser in the wall to the room, at most
+RISER_REACH = 800.0  # mm: how far from the riser to look for an approach on each side
+WC_REACH = 1000.0  # mm along the pipe to the riser: a longer WC branch is an error
+SEWER_BENDS = 6  # 45° plan bends on a sewer pipe; more than this needs a cleanout
+DROP_TURN = 150.0  # mm: a drop at least this high takes two 90° turns (down, onto the floor);
+# less takes an offset down with two 45° bends (a "duck")
+# Pipe consumption ("tees" spec 2026-11-02): weight per metre by diameter and a 45° bend in mm
+# of equivalent length; Ø50 tees come from merging fixture pairs by savings (_merge_drains)
 PIPE_WEIGHT = {50: 1.0, 110: 2.2}
-TURN_COST_MM = 175.0  # отвод 45° — в мм эквивалентной длины: в поиске, в экономии тройников
+TURN_COST_MM = 175.0  # 45° bend in mm of equivalent length: in the search and in tee savings
 SEWER_BEND_COST = TURN_COST_MM
-TEE_CANDIDATES = 20  # мест тройника на пару: лучшее недопустимо — следующее по стоимости
-REACH = CLEARANCE + 1.6 * STEP  # насколько от стены ищется место подхода к прибору
-ALONG_COST = 3.0  # метр в стене вдоль — как три метра по полу: штроба дороже
-PAIR_GAP = 80.0  # мм между осями горячей и холодной, идущих парой к одному прибору
-# Общая линия от коллектора (правка 2026-11-02): приборы-соседи одного помещения на одной стене
-# не дальше SHARE_GAP — одна труба на воду, у прибора тройник Ø16: два умывальника (двойная
-# тумба), посудомойка — от холодной мойки
+TEE_CANDIDATES = 20  # tee spots per pair: if the best is not allowed, the next by cost
+REACH = CLEARANCE + 1.6 * STEP  # how far from the wall to look for the approach to a fixture
+ALONG_COST = 3.0  # a metre along the wall counts as three on the floor: chasing costs more
+PAIR_GAP = 80.0  # mm between hot and cold axes running as a pair to one fixture
+# Shared line from the manifold (change 2026-11-02): neighbouring fixtures of one room on one
+# wall no farther than SHARE_GAP share one pipe per water, with a Ø16 tee at the fixture: two
+# basins (double vanity), a dishwasher off the sink's cold
 SHARED_PAIRS = frozenset(
     {
         (FixtureType.SINK, FixtureType.SINK),
@@ -159,14 +161,14 @@ SHARED_PAIRS = frozenset(
     }
 )
 SHARED_TYPES = frozenset(t for pair in SHARED_PAIRS for t in pair)
-# Попутные линии (правка 2026-11-02): луч, что идёт рядом с другим (ближе PARALLEL_GAP) не
-# меньше PARALLEL_MIN, отходит от него тройником, если так короче и труба пропустит расход
-PARALLEL_GAP = 300.0  # мм между осями: идут рядом, одним пучком
-PARALLEL_MIN = 2000.0  # мм рядом — уже «долго»
-BRANCH_SAVING = 1000.0  # мм: идут рядом недолго — отвод, только если экономит столько трубы
-# Расчётный расход водорозетки, л/с — ориентир: ДБН В.2.5-64 / СНиП 2.04.01-85 (прил. 3) для
-# умывальника, мойки, душа, ванны, унитаза; стиральная и посудомоечная машины — по паспортам
-# типовых моделей (≈ 9 и 6 л/мин)
+# Parallel lines (change 2026-11-02): a branch running alongside another (closer than PARALLEL_GAP)
+# for at least PARALLEL_MIN is teed off it if that is shorter and the pipe can carry the flow
+PARALLEL_GAP = 300.0  # mm between axes: running together, as one bundle
+PARALLEL_MIN = 2000.0  # mm side by side already counts as "long"
+BRANCH_SAVING = 1000.0  # mm: running together briefly; tee off only if it saves this much pipe
+# Design flow of a water outlet, l/s, a guide: DBN V.2.5-64 / SNiP 2.04.01-85 (annex 3) for
+# basin, sink, shower, bath, WC; washing machine and dishwasher from typical model datasheets
+# (≈ 9 and 6 l/min)
 FLOW: dict[FixtureType, float] = {
     FixtureType.SINK: 0.09,
     FixtureType.KITCHEN_SINK: 0.09,
@@ -179,15 +181,15 @@ FLOW: dict[FixtureType, float] = {
     FixtureType.DISHWASHER: 0.10,
     FixtureType.BOILER: 0.18,
 }
-# Пропуск трубы, л/с, без коэффициента одновременности (с запасом): Ø16 (внутр. 12 мм) и
-# Ø20 (внутр. 16 мм) — при скорости около 1,75 м/с
+# Pipe capacity, l/s, without a simultaneity factor (with a margin): Ø16 (12 mm inside) and
+# Ø20 (16 mm inside) at about 1.75 m/s
 CAPACITY: dict[int, float] = {16: 0.20, 20: 0.35}
-SHARE_GAP = 1200.0  # мм между серединами подводок
-COLLECTOR_HEIGHT = 400.0  # мм: ось выходов коллектора от пола (шкаф у пола) — допущение
-COLLECTOR_HALF = 150.0  # мм: половина коллектора с кранами вдоль стены (место на стене)
-BOILER_NEAR = 1500.0  # мм: бойлер ближе к узлу ввода — коллектор горячей в узле, дальше — у бойлера
-# Жилые комнаты: канализация по полу через них — слабое место; совмещённые с кухней или
-# коридором — нет (мойка там своя)
+SHARE_GAP = 1200.0  # mm between supply centres
+COLLECTOR_HEIGHT = 400.0  # mm: manifold outlet axis from the floor (assumption)
+COLLECTOR_HALF = 150.0  # mm: half a manifold with valves along the wall (wall space)
+BOILER_NEAR = 1500.0  # mm: hot manifold in the unit if the boiler is closer
+# Living rooms: sewer on the floor through them is a weak spot; rooms combined with a kitchen
+# or hallway are not (they have their own sink)
 LIVING_NAME = re.compile(
     r"спальн|кабінет|кабинет|вітальн|гостин|дитяч|детск|зал\b|кімнат|комнат", re.IGNORECASE
 )
@@ -212,23 +214,23 @@ def fixture_name(fx: Fixture, language: Language) -> str:
 
 @dataclass(frozen=True)
 class Outlet:
-    """Подключение прибора на стене: водорозетка или выпуск. node — на грани стены."""
+    """Fixture connection on a wall: a water outlet or a drain. node is on the wall face."""
 
     fixture: str
     kind: Kind
     room: str
     wall: str
-    offset: float  # от начала стены, мм
-    height: float  # ось от чистого пола, мм
+    offset: float  # from the wall start, mm
+    height: float  # axis from the finished floor, mm
     node: Vec
     inward: Vec
     d: int
-    assumed: bool  # высота типовая (FIXTURE_SPECS)
+    assumed: bool  # typical height (FIXTURE_SPECS)
 
 
 @dataclass(frozen=True)
 class Collector:
-    """Коллектор (лучевая) или начало магистрали (тройниковая) в узле ввода."""
+    """Manifold (radial) or main start (tee layout) in the supply unit."""
 
     id: str  # collector_cold, collector_hot
     kind: Kind
@@ -238,7 +240,7 @@ class Collector:
     node: Vec
     inward: Vec
     outputs: int
-    height: float = 0.0  # ось выходов от чистого пола, мм (input.height или COLLECTOR_HEIGHT)
+    height: float = 0.0  # outlet axis from floor, mm (input.height or COLLECTOR_HEIGHT)
 
 
 @dataclass(frozen=True)
@@ -248,78 +250,79 @@ class RiserNode:
     center: Vec
     sewer: bool
     water: bool
-    inlet: float  # ось врезки канализации от пола, мм
+    inlet: float  # sewer inlet axis from the floor, mm
     inlet_assumed: bool
 
 
 @dataclass(frozen=True)
 class Pipe:
-    """Труба: путь по плану от источника к цели (мм модели) и участки в стене у цели."""
+    """Pipe: plan path from source to target (model mm) and the parts in the wall at the target."""
 
     id: str
     kind: Kind
-    source: str  # коллектор, стояк, бойлер или труба-родитель (отвод)
-    target: str  # прибор, коллектор горячей воды (подача от бойлера), узел ввода
+    source: str  # manifold, riser, boiler or parent pipe (branch)
+    target: str  # fixture, hot manifold (boiler feed), supply unit
     path: tuple[Vec, ...]
     d: int
-    rise: float  # вверх в стене у цели, мм (до водорозетки или выпуска)
-    wall_run: float  # вдоль стены у цели, мм (в стене)
+    rise: float  # up in the wall at the target, mm (to the water outlet or drain)
+    wall_run: float  # along the wall at the target, mm (in the wall)
     parent: str | None = None
-    attach: float = 0.0  # мм от начала родителя до врезки
-    room: str = ""  # помещение цели
-    slope: float = 0.0  # канализация: уклон по плану
-    z0: float = 0.0  # канализация: низ трубы у начала (стояк или врезка), мм от плиты
-    # канализация по стене над полом (в стяжку не помещается): участки своей трубы, мм от
-    # начала пути (от стояка или врезки), и верх трубы над чистым полом там — высота короба
+    attach: float = 0.0  # mm from the parent start to the tee
+    room: str = ""  # target room
+    slope: float = 0.0  # sewer: plan slope
+    z0: float = 0.0  # sewer: pipe bottom at the start (riser or tee), mm from the slab
+    # sewer along the wall above the floor (does not fit in the screed): parts of its own pipe, mm
+    # from the path start (from the riser or tee), and the pipe top above the finished floor there:
+    # the box height
     surface: tuple[tuple[float, float], ...] = ()
     surface_top: float = 0.0
-    open_length: float = 0.0  # канализация: мм своей трубы посреди комнаты (оценка варианта)
+    open_length: float = 0.0  # sewer: mm of its own pipe in the middle of a room (variant score)
 
     @property
     def length(self) -> float:
-        """По плану, без участков в стене."""
+        """On the plan, without the parts in the wall."""
         return sum((b - a).length() for a, b in itertools.pairwise(self.path)) - self.wall_run
 
     @property
     def total(self) -> float:
-        """Вся труба: по полу, в стене вдоль и вверх."""
+        """The whole pipe: on the floor, along the wall and up."""
         return self.length + self.wall_run + self.rise
 
     @property
     def bends(self) -> int:
-        """Отводов 45° по плану (поворот на 90° — два)."""
+        """45° bends on the plan (a 90° turn counts as two)."""
         return b45.bends(self.path)
 
     @property
     def surface_length(self) -> float:
-        """По стене над полом, мм (в коробе, не в стяжке)."""
+        """Along the wall above the floor, mm (in a box, not in the screed)."""
         return sum(b - a for a, b in self.surface)
 
 
 @dataclass(frozen=True)
 class SewerCheck:
-    """Перепад канализации прибора до врезки в стояк. z — низ трубы от плиты."""
+    """Sewer height drop of a fixture to the riser inlet. z is the pipe bottom from the slab."""
 
     fixture: str
     riser: str
-    length: float  # по трубам до стояка, мм
-    start: float  # ось выпуска у прибора, мм от чистого пола
-    slope: float  # уклон трассы прибора
+    length: float  # along pipes to the riser, mm
+    start: float  # drain axis at the fixture, mm from the finished floor
+    slope: float  # slope of the fixture route
     d: int
-    inlet: float  # ось врезки в стояк от чистого пола
+    inlet: float  # riser inlet axis from the finished floor
     inlet_assumed: bool
-    z_inlet: float  # низ трубы у стояка
-    z_end: float  # низ трубы по полу у прибора: врезка плюс перепад
-    z_outlet: float  # низ выпуска
+    z_inlet: float  # pipe bottom at the riser
+    z_end: float  # floor pipe bottom at the fixture: inlet plus drop
+    z_outlet: float  # drain bottom
 
     @property
     def drop(self) -> float:
-        """Перепад по полу от прибора до стояка, мм."""
+        """Drop along the floor from the fixture to the riser, mm."""
         return self.z_end - self.z_inlet
 
     @property
     def end_floor(self) -> float:
-        """Ось трубы по полу у прибора, мм от чистого пола."""
+        """Floor pipe axis at the fixture, mm from the finished floor."""
         return self.z_end + self.d / 2 - SCREED_MM
 
     @property
@@ -328,16 +331,16 @@ class SewerCheck:
 
     @property
     def podium(self) -> float:
-        """Насколько поднять выпуск (подиум, трап), чтобы хватило уклона, мм."""
+        """How much to raise the drain (podium, floor drain) to get enough slope, mm."""
         return max(0.0, self.z_end - self.z_outlet)
 
 
-Zone = Literal["screed", "hidden", "wall", "surface"]  # surface — по стене над полом
+Zone = Literal["screed", "hidden", "wall", "surface"]  # surface: along the wall above the floor
 
 
 @dataclass(frozen=True)
 class RouteSegment:
-    """Участок трассы канализации по течению: точки [x, y, z] (z — низ трубы от плиты)."""
+    """Sewer route piece along the flow: points [x, y, z] (z is the pipe bottom from the slab)."""
 
     start: tuple[float, float, float]
     end: tuple[float, float, float]
@@ -347,22 +350,22 @@ class RouteSegment:
 
 @dataclass(frozen=True)
 class SewerRoute:
-    """Трасса прибора до стояка (формат ТЗ, routes_json): участки по течению, спуск в стене,
-    фасонные части своей трубы (до её врезки)."""
+    """Fixture route to the riser (spec format, routes_json): pieces along the flow, the drop in the
+    wall, the fittings of its own pipe (up to its tee)."""
 
     fixture: str
     d: int
     slope: float
-    drop: tuple[float, float] | None  # спуск в стене: от низа выпуска до низа трубы по полу
+    drop: tuple[float, float] | None  # drop in the wall, drain to floor pipe
     segments: tuple[RouteSegment, ...]
     fittings: tuple[str, ...]
-    into: str  # стояк или труба, в которую врезка
+    into: str  # riser or the pipe it tees into
     ok: bool
 
 
 @dataclass(frozen=True)
 class SewerError:
-    """Почему трасса прибора не годится: код причины и место на плане (мм модели)."""
+    """Why a fixture route is not acceptable: reason code and place on the plan (model mm)."""
 
     fixture: str
     reason: str  # screed_depth | screed_110 | hidden_height | drop | wc_far | unreachable
@@ -371,11 +374,11 @@ class SewerError:
 
 @dataclass(frozen=True)
 class Weak:
-    """Слабое место сети: на лист «Сантехника» и в отчёт."""
+    """Network weak spot: for the "Plumbing" sheet and the report."""
 
     severity: Literal["error", "warning"]
     text: dict[str, str]  # ru, uk
-    target: str  # id прибора, трубы или стояка; «» — сеть целиком
+    target: str  # fixture, pipe or riser id; "" means the whole network
 
 
 @dataclass
@@ -388,25 +391,26 @@ class Network:
     sewer: list[SewerCheck] = field(default_factory=list)
     routes: list[SewerRoute] = field(default_factory=list)
     sewer_errors: list[SewerError] = field(default_factory=list)
-    sewer_direct: float = 0.0  # расход Ø50, если каждый прибор отдельно в стояк, мм экв.
-    hidden: dict[str, tuple[Polygon, float]] = field(default_factory=dict)  # скрытые зоны:
-    # препятствие → место и наибольшая высота верха трубы от чистого пола
+    sewer_direct: float = 0.0  # Ø50 consumption if every fixture goes to the riser alone, mm eq.
+    hidden: dict[str, tuple[Polygon, float]] = field(default_factory=dict)  # hidden zones:
+    # obstacle → place and highest pipe top from the finished floor
     weak: list[Weak] = field(default_factory=list)
-    hot_source: str | None = None  # riser | id бойлера | None — горячей нет
-    input_assumed: bool = False  # узел ввода поставлен у стояка допущением
+    hot_source: str | None = None  # riser | boiler id | None means no hot water
+    input_assumed: bool = False  # supply unit placed at the riser as an assumption
     free: BaseGeometry | None = None
     distribution: str = "collector"
-    partitions: list[Polygon] = field(default_factory=list)  # перегородки: проход с отверстием
-    under: list[Polygon] = field(default_factory=list)  # гипсокартонные стенки внутри помещения:
-    # трубы — по полу под ними (кладутся до стенки), без отверстия
-    doors: list[Polygon] = field(default_factory=list)  # дверные проёмы: трубы — в крайнем случае
-    hollow: set[str] = field(default_factory=set)  # препятствия-короба (инсталляция)
-    rooms: BaseGeometry | None = None  # помещения и проёмы без перегородок и препятствий:
-    # грани — стены (за ванной — тоже стена)
+    partitions: list[Polygon] = field(default_factory=list)  # partitions: a pass with a hole
+    under: list[Polygon] = field(default_factory=list)  # plasterboard walls inside a room:
+    # pipes go on the floor under them (laid before the wall), no hole
+    doors: list[Polygon] = field(default_factory=list)  # door openings: pipes only as a last resort
+    hollow: set[str] = field(default_factory=set)  # box obstacles (installation frame)
+    rooms: BaseGeometry | None = None  # rooms and openings without partitions and obstacles:
+    # the edges are walls (behind a bath, too)
 
     def holes(self, kinds: tuple[Kind, ...]) -> int:
-        """Отверстий в перегородках: трубы этих сетей, что проходят перегородку рядом (ближе
-        HOLE_SHARE), — в одном отверстии."""
+        """Holes in partitions: pipes of these networks passing a partition close together (closer
+        than
+        HOLE_SHARE) share one hole."""
         spots: list[tuple[int, Vec]] = []
         for p in self.pipes:
             if p.kind not in kinds:
@@ -504,8 +508,9 @@ TEXT: dict[str, dict[str, str]] = {
 
 
 def drop_bends(rise: float) -> int:
-    """Отводов 45° на спуске в стене от выпуска до трубы по полу: поворот на 90° — всегда
-    два отвода 45°. Спуск от DROP_TURN — вниз из выпуска и на пол (4), меньше — сдвиг (2)."""
+    """45° bends on the drop in the wall from the drain to the floor pipe: a 90° turn is always
+    two 45° bends. A drop of DROP_TURN or more goes down from the drain and onto the floor (4),
+    less is an offset (2)."""
     if rise <= 0.5:
         return 0
     return 4 if rise >= DROP_TURN else 2
@@ -516,7 +521,7 @@ def text(key: str, language: Language, **values: object) -> str:
 
 
 def _weak(severity: Literal["error", "warning"], key: str, target: str, **values: object) -> Weak:
-    """Слабое место на обоих языках; значение-словарь {ru, uk} — своё на каждом."""
+    """Weak spot in both languages; a dict value {ru, uk} has its own per language."""
 
     def on(lang: Language) -> dict[str, object]:
         return {k: v[lang] if isinstance(v, dict) else v for k, v in values.items()}
@@ -529,11 +534,11 @@ def _m(mm: float) -> str:
     return f"{mm / 1000:.1f}".replace(".", ",")
 
 
-# --- Геометрия -------------------------------------------------------------------
+# --- Geometry --------------------------------------------------------------------
 
 
 def obstacle_polygon(ob: Obstacle, g: RoomGeometry) -> Polygon:
-    """Препятствие на плане, мм модели."""
+    """Obstacle on the plan, model mm."""
     if ob.rect is not None:
         ox, oy = g.room.origin
         x0, y0, x1, y1 = ob.rect
@@ -549,8 +554,9 @@ def obstacle_polygon(ob: Obstacle, g: RoomGeometry) -> Polygon:
 
 
 def door_strips(geoms: Sequence[RoomGeometry]) -> list[Polygon]:
-    """Дверные проёмы на всю толщину стены (у соседа на том же месте — проём type: opening,
-    он ложится на ту же полосу). Арка без двери — не дверь: через неё трубы идут свободно."""
+    """Door openings through the whole wall thickness (the neighbour has an opening of type: opening
+    at the same spot, it lands on the same band). An arch without a door is not a door: pipes pass
+    through it freely."""
     return [
         opening_strip(g, op) for g in geoms for op in g.room.openings if op.type is OpeningType.DOOR
     ]
@@ -559,12 +565,12 @@ def door_strips(geoms: Sequence[RoomGeometry]) -> list[Polygon]:
 def partition_strips(
     geoms: Sequence[RoomGeometry], doors: Sequence[Polygon] = (), inner: bool = False
 ) -> list[Polygon]:
-    """Перегородки между помещениями квартиры (не несущие, не толще PARTITION_MAX или
-    явно `partition: true` в room.yaml); inner=True — стены внутри помещения с
-    `partition: true` (гипсокартонная стенка в санузле: с обеих сторон — то же помещение,
-    трубы — под ней по полу, network.Network.under): полоса
-    стены на всю толщину, без окон (стеклянная перегородка — не проход) и без дверей (их
-    проход дороже, door_strips)."""
+    """Partitions between rooms of the flat (non-load-bearing, no thicker than PARTITION_MAX, or
+    explicitly `partition: true` in room.yaml); inner=True means walls inside a room with
+    `partition: true` (a plasterboard wall in a bathroom: the same room on both sides, pipes go on
+    the floor under it, network.Network.under): a band through the whole wall thickness, without
+    windows (a glass partition is not a pass) and without doors (passing them costs more,
+    door_strips)."""
     blocked = shapely.unary_union(list(doors)).buffer(1.0) if doors else None
     out: list[Polygon] = []
     for g in geoms:
@@ -594,8 +600,8 @@ def partition_strips(
                 strip = strip.difference(blocked)
             parts = list(strip.geoms) if hasattr(strip, "geoms") else [strip]
             out += [p for p in parts if isinstance(p, Polygon) and p.area > 1.0]
-    # Общая стена описана в обоих помещениях — полосы совпадают: одна перегородка, иначе
-    # каждое отверстие в ней считалось бы дважды (Network.holes)
+    # A shared wall is described in both rooms, so the bands match: one partition, otherwise
+    # each hole in it would be counted twice (Network.holes)
     merged = shapely.unary_union(out) if out else None
     if merged is None:
         return []
@@ -609,7 +615,7 @@ def riser_center(r: Riser, geoms: dict[str, RoomGeometry]) -> Vec:
 
 
 def nearest_wall(g: RoomGeometry, p: Vec) -> tuple[WallSegment, float]:
-    """Ближайшая к точке стена помещения и отступ проекции на неё (в её пределах)."""
+    """The room wall nearest to the point and the offset of the projection onto it (within it)."""
     best: tuple[float, WallSegment, float] | None = None
     for seg in g.contour.segments:
         t = min(max((p - seg.start).dot(seg.direction), 0.0), seg.length)
@@ -622,14 +628,14 @@ def nearest_wall(g: RoomGeometry, p: Vec) -> tuple[WallSegment, float]:
 
 @dataclass(frozen=True)
 class _Field:
-    """Поиск по сетке от одной ячейки: стоимость до каждой и путь."""
+    """Grid search from one cell: cost to each cell and the path."""
 
     grid: Grid
     prev: dict[int, int]
     dist: dict[int, float]
-    ndirs: int = 4  # 4 — под 90° (вода), 8 — отводами 45° (канализация)
+    ndirs: int = 4  # 4 for 90° turns (water), 8 for 45° bends (sewer)
 
-    offset: float = 0.0  # доплата ко всей стоимости: запасной поиск без отсечения
+    offset: float = 0.0  # extra cost on the whole cost: fallback search without pruning
 
     @classmethod
     def from_cell(
@@ -660,17 +666,17 @@ class _Field:
 
 @dataclass(frozen=True)
 class _Approach:
-    """Место подхода к узлу на стене: ячейка сетки и хвост до узла (по полу к стене, в стене
-    вдоль неё). along — сколько в стене вдоль."""
+    """Approach to a node on a wall: the grid cell and the tail to the node (on the floor to the
+    wall, then in the wall along it). along is how much runs in the wall."""
 
     cell: int
-    tail: tuple[Vec, ...]  # от центра ячейки до узла
+    tail: tuple[Vec, ...]  # from the cell centre to the node
     along: float
 
 
 def _approaches(grid: Grid, seg: WallSegment, offset: float) -> list[_Approach]:
-    """Свободные ячейки у стены seg (не дальше REACH от её грани, против неё), от ближних
-    к месту на стене — к дальним."""
+    """Free cells by wall seg (no farther than REACH from its face, facing it), from the ones
+    nearest to the wall spot to the farthest."""
     out: list[tuple[float, _Approach]] = []
     node = seg.point_at(offset)
     for k, free in enumerate(grid.free):
@@ -691,8 +697,8 @@ def _approaches(grid: Grid, seg: WallSegment, offset: float) -> list[_Approach]:
 
 
 def _box_approaches(grid: Grid, poly: Polygon, node: Vec) -> list[_Approach]:
-    """Подходы к узлу внутри короба (инсталляция): свободные ячейки у короба с любой
-    стороны; от ячейки — к грани короба и внутри него к узлу (в коробе, как в стене)."""
+    """Approaches to a node inside a box (installation frame): free cells by the box on any side;
+    from the cell to the box face and inside it to the node (in the box, as in a wall)."""
     out: list[tuple[float, _Approach]] = []
     edge = poly.exterior
     near = poly.buffer(REACH)
@@ -712,8 +718,8 @@ def _box_approaches(grid: Grid, poly: Polygon, node: Vec) -> list[_Approach]:
 
 
 def _point_approach(grid: Grid, p: Vec, cell: int | None = None) -> _Approach:
-    """Подход к точке вне стены (стояк): свободная ячейка (по умолчанию — ближайшая) и
-    излом под 90°."""
+    """Approach to a point off the wall (riser): a free cell (the nearest by default) and a 90°
+    bend."""
     cell = grid.nearest_free(p) if cell is None else cell
     c = grid.center(cell)
     if abs(c.x - p.x) < 1e-6 or abs(c.y - p.y) < 1e-6:
@@ -722,7 +728,7 @@ def _point_approach(grid: Grid, p: Vec, cell: int | None = None) -> _Approach:
 
 
 def _best(field_: _Field, options: Sequence[_Approach]) -> _Approach | None:
-    """Подход с наименьшей стоимостью: путь по сетке плюс штраф за метры в стене."""
+    """Approach with the lowest cost: grid path plus a penalty for metres in the wall."""
     best: tuple[float, _Approach] | None = None
     for a in options:
         c = field_.cost(a.cell)
@@ -734,7 +740,7 @@ def _best(field_: _Field, options: Sequence[_Approach]) -> _Approach | None:
     return best[1] if best is not None else None
 
 
-# --- Сеть ------------------------------------------------------------------------
+# --- Network ---------------------------------------------------------------------
 
 
 @dataclass
@@ -744,18 +750,18 @@ class _Ctx:
     geoms: dict[str, RoomGeometry]
     grid: Grid
     net: Network
-    boxes: dict[str, bool] = field(default_factory=dict)  # препятствие — короб: трубы внутри
+    boxes: dict[str, bool] = field(default_factory=dict)  # box obstacle: pipes inside
     counter: dict[str, int] = field(default_factory=dict)
-    sewer_grids: tuple[Grid, ...] = ()  # сетки канализации: обычная, через скрытые, у стен
-    ndirs: int = 4  # поиск: 8 — канализация отводами 45°
-    boxes_open: bool = False  # короба и инсталляции — проходимы (канализация)
-    prune: Prune | None = None  # отсечение по высоте, не зависящее от длины (Ø110)
+    sewer_grids: tuple[Grid, ...] = ()  # sewer grids: normal, through hidden zones, by walls
+    ndirs: int = 4  # search: 8 means sewer with 45° bends
+    boxes_open: bool = False  # boxes and installation frames are passable (sewer)
+    prune: Prune | None = None  # height pruning independent of length (Ø110)
 
     def field(self, cell: int, prune: bool = True) -> _Field:
         return _Field.from_cell(self.grid, cell, self.ndirs, self.prune if prune else None)
 
     def name(self, fixture: str) -> dict[str, str]:
-        """Прибор словами на обоих языках: «Мийка (Кухня)»."""
+        """Fixture in words in both languages: "Мийка (Кухня)"."""
         fx = next((f for f in self.plumbing.fixtures if f.id == fixture), None)
         if fx is None:
             return {"ru": fixture, "uk": fixture}
@@ -776,7 +782,9 @@ class _Ctx:
         return f"{kind}_{self.counter[kind]}"
 
     def wall_approaches(self, room: str, wall: str, offset: float) -> list[_Approach]:
-        """Подходы к месту на стене; прибор на коробе или инсталляции — через короб."""
+        """Approaches to a wall spot; a fixture on a box or installation frame goes through the
+        box.
+        """
         seg = self.geoms[room].contour.segment(wall)
         node = seg.point_at(offset)
         for oid, poly in self.net.obstacles.items():
@@ -788,7 +796,7 @@ class _Ctx:
 
 
 def fixture_outlets(fx: Fixture, geoms: dict[str, RoomGeometry]) -> list[Outlet]:
-    """Подводы прибора на его стене: горячая слева, холодная справа, выпуск по середине."""
+    """Fixture supplies on its wall: hot on the left, cold on the right, drain in the middle."""
     spec = fx.spec
     seg = geoms[fx.room].contour.segment(fx.wall)
     supply_h = fx.supply_height if fx.supply_height is not None else spec.supply_height
@@ -826,13 +834,13 @@ def fixture_outlets(fx: Fixture, geoms: dict[str, RoomGeometry]) -> list[Outlet]
 
 
 def build_network(plan: Plan, contours: dict[str, Contour], plumbing: Plumbing) -> Network:
-    """Сеть по plumbing.yaml: подводы, коллекторы, трассы воды и канализации, проверки."""
+    """Network from plumbing.yaml: supplies, manifolds, water and sewer routes, checks."""
     geoms = {g.room.id: g for g in room_geometries(plan, contours)}
     net = Network(distribution=plumbing.distribution)
     for ob in plumbing.obstacles:
         net.obstacles[ob.id] = obstacle_polygon(ob, geoms[ob.room])
     free = free_area(list(geoms.values()))
-    rooms_only = free  # без перегородок: их грани — тоже стены, у них идёт канализация
+    rooms_only = free  # no partitions: their faces are walls too, sewer runs along them
     net.doors = door_strips(list(geoms.values()))
     net.partitions = partition_strips(list(geoms.values()), net.doors)
     net.under = partition_strips(list(geoms.values()), net.doors, inner=True)
@@ -869,9 +877,9 @@ def build_network(plan: Plan, contours: dict[str, Contour], plumbing: Plumbing) 
 
 
 def _grid(free: BaseGeometry, net: Network) -> Grid:
-    """Сетка трасс: сквозь перегородку — можно, но дорого (отверстие у пола); под
-    гипсокартонной стенкой внутри помещения — почти свободно; через дверной проём — почти
-    никогда (порог, полотно): только если иначе к прибору не пройти."""
+    """Route grid: through a partition is allowed but costly (a hole at the floor); under a
+    plasterboard wall inside a room almost free; through a door opening almost never (threshold,
+    leaf): only if the fixture is otherwise unreachable."""
     grid = Grid.of(free)
     grid.penalty = {}
     for strips, cost, reach in (
@@ -890,7 +898,7 @@ def _grid(free: BaseGeometry, net: Network) -> Grid:
 
 
 def is_living(room: Room) -> bool:
-    """Жилая комната: канализация через неё — слабое место, через её порог — нельзя."""
+    """Living room: sewer through it is a weak spot, through its threshold is not allowed."""
     return (
         bool(LIVING_NAME.search(room.name)) and not SERVICE_NAME.search(room.name) and not room.wet
     )
@@ -899,10 +907,11 @@ def is_living(room: Room) -> bool:
 def _sewer_grid(
     geoms: Sequence[RoomGeometry], net: Network, costs: tuple[float, float, float, float]
 ) -> Grid:
-    """Сетка канализации: без дверных проёмов и проёмов жилых комнат (пороги — запрет без
-    исключений); цена шага — множитель по ячейке (Grid.mult, costs: скрытая зона — короб,
-    инсталляция, под ванной и поддоном; у стены до WALL_BAND_MM; до NEAR_WALL_MM; дальше)
-    и вид ячейки (Grid.tag) — для отсечения по высоте в поиске (_height_prune)."""
+    """Sewer grid: without door openings and openings of living rooms (thresholds are forbidden, no
+    exceptions); the step cost is a per-cell multiplier (Grid.mult, costs: hidden zone (box,
+    installation frame, under bath and tray); by the wall up to WALL_BAND_MM; up to
+    NEAR_WALL_MM; farther) and the cell kind (Grid.tag) for height pruning in the search
+    (_height_prune)."""
     assert net.rooms is not None
     blocked: list[BaseGeometry] = list(net.doors)
     blocked += [
@@ -926,7 +935,7 @@ def _sewer_grid(
     walls = net.rooms
     if net.obstacles:
         walls = walls.difference(shapely.unary_union(list(net.obstacles.values())))
-    edge = walls.boundary  # вдоль стен, ванны, короба
+    edge = walls.boundary  # along walls, bath, box
     shapely.prepare(edge)
     grid.mult = [costs[TAG_OPEN]] * len(grid.free)
     grid.tag = [TAG_OPEN] * len(grid.free)
@@ -937,7 +946,7 @@ def _sewer_grid(
         if hidden is not None and hidden.contains(p):
             tag = TAG_HIDDEN
         else:
-            far = edge.distance(p)  # ровно на границе полосы (+1 мм) — ещё у стены
+            far = edge.distance(p)  # exactly on the band edge (+1 mm): by the wall
             tag = TAG_WALL if far <= WALL_BAND_MM + 1.0 else TAG_NEAR
             if far > NEAR_WALL_MM + 1.0:
                 tag = TAG_OPEN
@@ -951,11 +960,12 @@ Prune = Callable[[int, float], bool]
 def _height_prune(
     grid: Grid, z0: float, slope: float, d: int, lower: Vec | None = None
 ) -> Prune | None:
-    """Отсечение в поиске канализации (ТЗ трассировки, п. 2): ячейка вне скрытой зоны и
-    пристенной полосы недоступна, если низ трубы там — z0 + длина · уклон — с Ø и слоем
-    SCREED_COVER уже выше стяжки. Длина — по пути от врезки (поиск от стояка); lower —
-    поиск от прибора: длина неизвестна, берётся нижняя оценка — расстояние от этой точки
-    (стояка) по прямой; Ø110 в стяжку не помещается вовсе."""
+    """Sewer search pruning (routing spec, item 2): a cell outside a hidden zone and the wall band
+    is
+    unavailable if the pipe bottom there (z0 + length · slope) plus Ø and the SCREED_COVER layer is
+    already above the screed. Length is the path from the tee (search from the riser); lower means
+    a search from the fixture: the length is unknown, so a lower bound is used, the straight
+    distance from this point (the riser); Ø110 never fits in the screed."""
     tags = grid.tag
     if tags is None:
         return None
@@ -972,9 +982,10 @@ def _height_prune(
 
 
 def supply_groups(fixtures: Sequence[Fixture]) -> dict[str, str]:
-    """Прибор → прибор, с которым у него общая линия от коллектора (первый в группе; у
-    одиночного — он сам): пары SHARED_PAIRS одного помещения на одной стене, соседние
-    подводки не дальше SHARE_GAP (двойная тумба; посудомойка у мойки)."""
+    """Fixture → the fixture it shares a manifold line with (the first in the group; a single one
+    maps
+    to itself): SHARED_PAIRS pairs of one room on one wall with neighbouring supplies no farther
+    than SHARE_GAP (double vanity; dishwasher by the sink)."""
     out = {f.id: f.id for f in fixtures}
     shared = sorted(
         (f for f in fixtures if f.type in SHARED_TYPES), key=lambda f: (f.room, f.wall, f.offset)
@@ -987,7 +998,9 @@ def supply_groups(fixtures: Sequence[Fixture]) -> dict[str, str]:
 
 
 def _input_place(ctx: _Ctx) -> tuple[str, str, float] | None:
-    """Узел ввода: из plumbing.yaml или у водяного стояка (иначе у первого) допущением."""
+    """Supply unit: from plumbing.yaml, or at the water riser (else the first riser) as an
+    assumption.
+    """
     inp = ctx.plumbing.input
     if inp is not None:
         return inp.room, inp.wall, inp.offset
@@ -1001,7 +1014,9 @@ def _input_place(ctx: _Ctx) -> tuple[str, str, float] | None:
 
 
 def _hot_source(ctx: _Ctx) -> str | None:
-    """Откуда горячая: стояк (riser) или бойлер (id прибора); None — неоткуда."""
+    """Where hot water comes from: a riser (riser) or a boiler (fixture id); None if from
+    nowhere.
+    """
     inp = ctx.plumbing.input
     boiler = next((f.id for f in ctx.plumbing.fixtures if f.spec.hot_source), None)
     if inp is not None and inp.hot is not None:
@@ -1034,13 +1049,15 @@ def _supply(ctx: _Ctx) -> None:
     )
     for kind, shift, outlets in water:
         if not outlets or (kind == "hot" and tee and boiler_out):
-            continue  # магистраль горячей в тройниковой — от бойлера
+            continue  # hot main in the tee layout starts at the boiler
         c_room, c_wall, c_seg, c_at = room, wall, seg, offset + shift
         c_h = inp.height if inp is not None and inp.height is not None else COLLECTOR_HEIGHT
         far = boiler_out and (boiler_out[0].node - seg.point_at(offset)).length() > BOILER_NEAR
         if kind == "hot" and far:
-            # Горячая от бойлера вдали от узла — её коллектор у бойлера (правка 2026-11-02):
-            # иначе горячая шла бы от бойлера к узлу ввода и обратно к приборам у бойлера
+            # Hot water from a boiler far from the unit: its manifold is at the boiler (change
+            # 2026-11-02);
+            # otherwise hot water would run from the boiler to the unit and back to fixtures by the
+            # boiler
             b = boiler_out[0]
             c_room, c_wall = b.room, b.wall
             c_seg = ctx.geoms[b.room].contour.segment(b.wall)
@@ -1060,7 +1077,7 @@ def _supply(ctx: _Ctx) -> None:
         )
         net.collectors.append(col)
     collectors = {c.kind: c for c in net.collectors}
-    # Бойлер отдаёт горячую в коллектор горячей воды (лучевая) или начинает магистраль
+    # The boiler feeds hot water into the hot manifold (radial) or starts the main
     if boiler_out and "hot" in collectors and ctx.plumbing.distribution == "collector":
         _route_one(
             ctx,
@@ -1080,9 +1097,10 @@ def _supply(ctx: _Ctx) -> None:
             by_group: dict[str, list[Outlet]] = {}
             for o in outlets:
                 by_group.setdefault(groups.get(o.fixture, o.fixture), []).append(o)
-            for members in by_group.values():  # группы — до попутных линий (_merge_parallel)
-                # Линия — к прибору группы с горячей (холодная к нему — парой с горячей), из
-                # них — к ближнему к коллектору; остальные — тройником от неё
+            for members in by_group.values():  # groups come before parallel lines (_merge_parallel)
+                # The line goes to the group fixture with hot water (cold goes to it paired with
+                # hot), and of
+                # those to the one nearest the manifold; the others are teed off it
                 lead, *rest = sorted(
                     members,
                     key=lambda o: (o.fixture not in with_hot, (o.node - found.node).length()),
@@ -1109,7 +1127,7 @@ def _supply(ctx: _Ctx) -> None:
 
 
 def _subtree(pipes: Sequence[Pipe], root: Pipe) -> list[Pipe]:
-    """Труба и все отводы от неё (и от отводов)."""
+    """A pipe and all branches off it (and off its branches)."""
     out, todo = [root], [root.id]
     while todo:
         pid = todo.pop()
@@ -1121,18 +1139,18 @@ def _subtree(pipes: Sequence[Pipe], root: Pipe) -> list[Pipe]:
 
 
 def _demand(ctx: _Ctx, pipes: Sequence[Pipe]) -> float:
-    """Расчётный расход приборов этих труб, л/с (FLOW)."""
+    """Design flow of the fixtures on these pipes, l/s (FLOW)."""
     types = {f.id: f.type for f in ctx.plumbing.fixtures}
     return sum(FLOW.get(types[p.target], 0.1) for p in pipes if p.target in types)
 
 
 def _pipe_d(flow: float) -> int | None:
-    """Ø трубы под расход; не пропустит и Ø20 — None."""
+    """Pipe Ø for the flow; None if even Ø20 cannot carry it."""
     return next((d for d in sorted(CAPACITY) if flow <= CAPACITY[d] + 1e-9), None)
 
 
 def _alongside(a: Pipe, b: Pipe) -> float:
-    """Сколько мм пути b по полу идёт рядом с a (ближе PARALLEL_GAP)."""
+    """How many mm of path b on the floor run next to a (closer than PARALLEL_GAP)."""
     if len(a.path) < 2 or len(b.path) < 2:
         return 0.0
     near = LineString([v.as_tuple() for v in a.path]).buffer(PARALLEL_GAP)
@@ -1140,11 +1158,12 @@ def _alongside(a: Pipe, b: Pipe) -> float:
 
 
 def _merge_parallel(ctx: _Ctx, kind: Kind, col: Collector) -> None:
-    """Попутные линии (правка 2026-11-02): луч от коллектора переносится тройником на другой
-    луч, если идёт рядом с ним дольше PARALLEL_MIN и вода сети от этого короче, или отвод
-    экономит не меньше BRANCH_SAVING; общая труба должна пропустить расход (FLOW, CAPACITY:
-    Ø16, иначе Ø20; больше — нет). Линия бойлера — своя: он греет воду всей квартиры.
-    Начинают пары с самым длинным общим участком; повторяется, пока есть что объединить."""
+    """Parallel lines (change 2026-11-02): a branch from the manifold is moved onto another branch
+    with a tee if it runs alongside it for more than PARALLEL_MIN and the network water gets
+    shorter, or if the tee saves at least BRANCH_SAVING; the shared pipe must carry the flow
+    (FLOW, CAPACITY: Ø16, else Ø20; no larger). The boiler line stays separate: it heats water
+    for the whole flat. Pairs with the longest shared piece go first; repeat while something can
+    be merged."""
     net = ctx.net
     rejected: set[tuple[str, str]] = set()
     boilers = {f.id for f in ctx.plumbing.fixtures if f.spec.hot_source}
@@ -1175,8 +1194,9 @@ def _merge_parallel(ctx: _Ctx, kind: Kind, col: Collector) -> None:
 def _rehang(
     ctx: _Ctx, kind: Kind, col: Collector, a: Pipe, moved: list[Pipe], d: int, saving: float
 ) -> bool:
-    """Перевесить трубы moved (луч и его отводы) тройником на трубу a; a — Ø d. Вода сети
-    короче меньше чем на saving мм или отвод не нашёл места на a — вернуть как было (False)."""
+    """Re-hang the moved pipes (a branch and its sub-branches) onto pipe a with a tee; a is Ø d.
+    If the network water gets shorter by less than saving mm, or the branch finds no spot on a,
+    put things back (False)."""
     net = ctx.net
     before = list(net.pipes)
     old = sum(p.total for p in net.pipes if p.kind == kind)
@@ -1195,7 +1215,9 @@ def _rehang(
 
 
 def _radial(ctx: _Ctx, kind: Kind, col: Collector, o: Outlet) -> Pipe | None:
-    """Луч от коллектора к водорозетке; горячая — парой с холодной, если та уже есть."""
+    """Branch from the manifold to a water outlet; hot goes paired with cold if cold is already
+    there.
+    """
     net = ctx.net
     cold = next((p for p in net.pipes if p.kind == "cold" and p.target == o.fixture), None)
     if kind == "hot" and cold is not None and cold.parent is None and _pair(ctx, cold, col, o):
@@ -1204,8 +1226,8 @@ def _radial(ctx: _Ctx, kind: Kind, col: Collector, o: Outlet) -> Pipe | None:
 
 
 def _clear_offset(ctx: _Ctx, seg: WallSegment, offset: float) -> float:
-    """Ближайшее к offset место на стене, где коллектор (COLLECTOR_HALF в обе стороны) не за
-    препятствием: под бойлером над инсталляцией коллектор не встанет — рядом с ней."""
+    """Wall spot closest to offset where the manifold (COLLECTOR_HALF each way) is not behind an
+    obstacle: under a boiler above an installation frame the manifold cannot go, so next to it."""
     obstacles = list(ctx.net.obstacles.values())
     if not obstacles:
         return offset
@@ -1224,7 +1246,7 @@ def _clear_offset(ctx: _Ctx, seg: WallSegment, offset: float) -> float:
 
 
 def parallel(path: Sequence[Vec], gap: float) -> list[Vec]:
-    """Ортогональная ломаная, сдвинутая влево по ходу на gap (вправо — gap < 0)."""
+    """Orthogonal polyline shifted left along its direction by gap (right if gap < 0)."""
     pts = simplify(path)
     if len(pts) < 2:
         return list(pts)
@@ -1244,9 +1266,9 @@ def parallel(path: Sequence[Vec], gap: float) -> list[Vec]:
 
 
 def _pair(ctx: _Ctx, cold: Pipe, col: Collector, o: Outlet) -> bool:
-    """Горячая к прибору — парой с холодной: та же трасса, сдвинутая на PAIR_GAP в ту
-    сторону, где она свободна; концы — к коллектору горячей и водорозетке. Нет места ни с
-    одной стороны — False (горячая прокладывается сама)."""
+    """Hot water to a fixture goes paired with cold: the same route, shifted by PAIR_GAP to the side
+    where it is free; the ends go to the hot manifold and the water outlet. No room on either
+    side gives False (hot water is routed on its own)."""
     free = ctx.net.free
     if free is None or len(cold.path) < 3:
         return False
@@ -1286,7 +1308,7 @@ def _plan_length(path: Sequence[Vec]) -> float:
 
 @dataclass(frozen=True)
 class _Node:
-    """Узел на стене — источник или цель трассы."""
+    """Node on a wall: route source or target."""
 
     room: str
     wall: str
@@ -1321,7 +1343,7 @@ def _route_one(
     d: int,
     target_id: str | None = None,
 ) -> Pipe | None:
-    """Труба от узла src к подводу dst: по полу от стены к стене, хвосты — в стене."""
+    """Pipe from node src to supply dst: on the floor from wall to wall, the tails in the wall."""
     started = _start(ctx, src)
     approach = None
     if started is not None:
@@ -1350,9 +1372,10 @@ def _route_one(
 
 
 def _open_holes(ctx: _Ctx, pipe: Pipe) -> None:
-    """Отверстие в перегородке, через которое прошла труба воды, — следующим трубам воды без
-    доплаты PARTITION_COST: они идут пучком через то же отверстие, а не пробивают своё
-    (правка 2026-11-02: стиральная машина шла через гостиную, а не со всеми через санузел)."""
+    """A hole in a partition already used by a water pipe is free (no PARTITION_COST) for the next
+    water pipes: they go as a bundle through the same hole instead of making their own (change
+    2026-11-02: the washing machine pipe went through the living room instead of through the
+    bathroom with the rest)."""
     net, grid = ctx.net, ctx.grid
     if pipe.kind == "sewer" or not net.partitions or grid.penalty is None:
         return
@@ -1369,7 +1392,9 @@ def _open_holes(ctx: _Ctx, pipe: Pipe) -> None:
 
 
 def _tree_points(pipe: Pipe) -> list[tuple[Vec, float]]:
-    """Места врезки отвода вдоль трубы по полу (без хвостов в стене): точка и мм от начала."""
+    """Spots along a floor pipe where a branch can tee in (without the wall tails): point and mm
+    from the start.
+    """
     out: list[tuple[Vec, float]] = []
     acc = 0.0
     floor = pipe.path[1:-1] if len(pipe.path) > 2 else pipe.path
@@ -1385,9 +1410,9 @@ def _tree_points(pipe: Pipe) -> list[tuple[Vec, float]]:
 
 
 def _riser_heads(grid: Grid, center: Vec, rooms: BaseGeometry | None = None) -> list[_Approach]:
-    """Подходы к стояку с четырёх сторон: стояк в выступе стены или в коробе — к нему
-    подходят с той стороны, где прибор (ближайшая свободная ячейка по каждой оси). В стене
-    (вне помещений) — не больше RISER_WALL: вдоль стены внутри неё труба не идёт."""
+    """Approaches to a riser from four sides: a riser in a wall projection or in a box is reached
+    from the fixture's side (the nearest free cell on each axis). Inside a wall (outside rooms) at
+    most RISER_WALL: a pipe does not run along the inside of a wall."""
     out: list[_Approach] = []
     inside = rooms.buffer(1.0) if rooms is not None else None
     seen: set[int] = set()
@@ -1436,18 +1461,19 @@ def _route_tree(
     attach_to: Sequence[str] | None = None,
     main_d: int = MAIN_D,
 ) -> None:
-    """Дерево от источника: приборы по стоимости от источника; каждый — отводом от
-    ближайшего места уже проложенных труб (или от источника). only_into — отвод только в
-    трубы этого диаметра (унитаз Ø110 — только в Ø110 или в стояк); attach_to — отводы только
-    от этих труб (общая линия группы от коллектора); main_d — Ø трубы, от которой есть отвод
-    (воды: магистраль тройниковой — Ø20, общая линия умывальников — Ø16)."""
+    """Tree from a source: fixtures by cost from the source; each is a branch off the nearest spot
+    of
+    the pipes already laid (or off the source). only_into restricts branches to pipes of this
+    diameter (a Ø110 WC only into Ø110 or the riser); attach_to restricts branches to these pipes
+    (a group's shared line from the manifold); main_d is the Ø of a pipe with branches (water:
+    the tee layout main is Ø20, the shared basin line Ø16)."""
     heads = _heads(ctx, src)
     if not heads:
         for o in outlets:
             ctx.unreachable(o.fixture, kind)
         return
     fields = [ctx.field(h.cell) for h in heads]
-    if ctx.prune is not None:  # запасной поиск без отсечения: прибор иначе недостижим
+    if ctx.prune is not None:  # fallback: no pruning, else unreachable
         fields += [replace(ctx.field(h.cell, prune=False), offset=FALLBACK_COST) for h in heads]
     lift = src.height if not isinstance(src, RiserNode) else 0.0
 
@@ -1475,7 +1501,7 @@ def _route_tree(
             (a for fld in fields if (a := _best(fld, options)) is not None),
             key=lambda a: min(f.cost(a.cell) for f in fields) + a.along * ALONG_COST,
         )
-        # Поиск от прибора: до источника и до каждого места врезки в уже проложенные трубы
+        # Search from the fixture: to the source and to each tee spot on pipes already laid
         back = ctx.field(here.cell)
         if all(math.isinf(back.cost(h.cell)) for h in heads):
             back = ctx.field(here.cell, prune=False)
@@ -1526,7 +1552,7 @@ def _route_tree(
                 attach=along,
                 room=o.room,
             )
-            if kind != "sewer" and parent.d < main_d:  # с отводом — магистраль Ø20
+            if kind != "sewer" and parent.d < main_d:  # with a branch: a Ø20 main
                 k = ctx.net.pipes.index(parent)
                 ctx.net.pipes[k] = replace(parent, d=main_d)
                 tree[tree.index(parent)] = ctx.net.pipes[k]
@@ -1538,8 +1564,8 @@ def _route_tree(
 def _shape45(
     path: Sequence[Vec], parent: Pipe | None = None, along: float = 0.0
 ) -> tuple[list[Vec], float]:
-    """Канализация по плану — только отводами 45°: участки — в восемь сторон, врезка в трубу
-    parent — косым тройником (место врезки along сдвигается к стояку), изломы — отводами."""
+    """Sewer on the plan with 45° bends only: pieces in eight directions, the tee into pipe parent
+    is an angled tee (the tee spot along moves towards the riser), corners use bends."""
     pts = b45.octilinear(path)
     if parent is not None:
         pts, along = b45.tee45(pts, parent.path, along)
@@ -1550,8 +1576,8 @@ DEPTH_ERRORS = frozenset({"screed_depth", "screed_110", "hidden_height"})
 
 
 def _sewer(ctx: _Ctx) -> None:
-    """Канализация вариантами (SEWER_VARIANTS): обычный, через скрытые зоны, только вдоль
-    стен; берётся вариант с наименьшей оценкой _score (ТЗ трассировки, п. 6)."""
+    """Sewer in variants (SEWER_VARIANTS): normal, through hidden zones, only along walls; the
+    variant with the lowest _score wins (routing spec, item 6)."""
     net = ctx.net
     if not any(o.kind == "sewer" for o in net.outlets):
         return
@@ -1568,7 +1594,7 @@ def _sewer(ctx: _Ctx) -> None:
             if best is None or score < best[0]:
                 best = (score, k)
             if score[:4] == (0, 0, 0.0, 0.0):
-                break  # ни ошибок, ни подиума, ни короба, ни середины комнаты
+                break  # no errors, no podium, no box, no room middle
         if best is not None and best[1] != k:
             _rollback(ctx, mark)
             ctx.grid = ctx.sewer_grids[best[1]]
@@ -1581,9 +1607,9 @@ SewerScore = tuple[int, int, float, float, float]
 
 
 def _score(net: Network) -> SewerScore:
-    """Оценка варианта канализации, сравнение — по порядку: ошибок стяжки и скрытых зон,
-    подиумов (не хватает перепада), мм короба над полом, мм посреди комнаты (дальше
-    WALL_BAND_MM от стен вне скрытых зон), мм трубы плюс отводы по TURN_COST_MM."""
+    """Sewer variant score, compared in order: screed and hidden zone errors, podiums (not enough
+    drop), mm of box above the floor, mm in the middle of a room (farther than WALL_BAND_MM from
+    walls outside hidden zones), mm of pipe plus bends at TURN_COST_MM."""
     sewer = net.pipes_of("sewer")
     fittings = sum(f == "bend45" for r in net.routes for f in r.fittings)
     return (
@@ -1614,7 +1640,7 @@ def _sewer_trees(ctx: _Ctx) -> None:
     if not risers:
         net.weak.append(_weak("error", "no_riser", ""))
         return
-    # Прибор — к стояку, до которого путь короче; у каждого стояка своё дерево
+    # A fixture goes to the riser with the shorter path; each riser has its own tree
     fields = {r.id: [f for _, f in _riser_fields(ctx, r, 50)] for r in risers}
 
     def cost(r: RiserNode, o: Outlet) -> float:
@@ -1636,7 +1662,7 @@ def _sewer_trees(ctx: _Ctx) -> None:
             continue
         wc = [o for o in mine if o.d >= 110]
         rest = [o for o in mine if o.d < 110]
-        # Ø110 в стяжку не помещается вовсе: середина комнаты закрыта на любой длине
+        # Ø110 never fits in the screed: the room middle is closed at any length
         ctx.prune = _height_prune(ctx.grid, _riser_invert(r), SLOPE_MIN[110], 110)
         _route_tree(ctx, "sewer", r.id, r, wc, only_into=110)
         ctx.prune = None
@@ -1645,21 +1671,24 @@ def _sewer_trees(ctx: _Ctx) -> None:
 
 
 def _riser_invert(r: RiserNode) -> float:
-    """Низ трубы у врезки в стояк, мм от плиты: ось врезки от чистого пола плюс стяжка минус
-    радиус тройника Ø110 (труба Ø50 — через переход, низ вровень с тройником). Высоты
-    канализации везде — низ трубы; ось ↔ низ — здесь и в _outlet_invert."""
+    """Pipe bottom at the riser inlet, mm from the slab: inlet axis from the finished floor plus the
+    screed minus the radius of the Ø110 tee (a Ø50 pipe goes through a reducer, bottom flush with
+    the tee). Sewer heights are always the pipe bottom; axis ↔ bottom conversion happens here and
+    in _outlet_invert."""
     return SCREED_MM + r.inlet - RISER_TEE_D / 2
 
 
 def _outlet_invert(o: Outlet) -> float:
-    """Низ выпуска прибора, мм от плиты: ось от чистого пола плюс стяжка минус радиус."""
+    """Fixture drain bottom, mm from the slab: axis from the finished floor plus the screed minus
+    the radius.
+    """
     return SCREED_MM + o.height - o.d / 2
 
 
 def _riser_fields(ctx: _Ctx, r: RiserNode, d: int) -> list[tuple[_Approach, _Field]]:
-    """Поиск от стояка с каждой стороны: с отсечением по высоте для Ø d (самый пологий
-    уклон, что ему можно) и запасной — без отсечения, дороже на FALLBACK_COST: к прибору,
-    к которому иначе не пройти (ошибку стяжки найдёт _evaluate)."""
+    """Search from the riser on each side: with height pruning for Ø d (the flattest slope allowed
+    for it) and a fallback without pruning, FALLBACK_COST dearer, for a fixture that is otherwise
+    unreachable (_evaluate will find the screed error)."""
     out: list[tuple[_Approach, _Field]] = []
     heads = _riser_heads(ctx.grid, r.center, ctx.net.rooms)
     prune = _height_prune(ctx.grid, _riser_invert(r), SLOPE_MIN[_norm(d)], d)
@@ -1673,12 +1702,12 @@ def _riser_fields(ctx: _Ctx, r: RiserNode, d: int) -> list[tuple[_Approach, _Fie
 
 @dataclass
 class _Merge:
-    """Узел дерева канализации Ø50: прибор (leaf) или тройник J над двумя узлами. У каждого
-    прибора узла — длина по трубе от его места подхода до ячейки узла (для высот)."""
+    """Node of the Ø50 sewer tree: a fixture (leaf) or a tee J over two nodes. Each fixture of the
+    node has the pipe length from its approach spot to the node cell (for heights)."""
 
     cell: int
     fld: _Field
-    cost: np.ndarray  # стоимость пути от узла до каждой ячейки сетки
+    cost: np.ndarray  # path cost from the node to every grid cell
     members: list[Outlet]
     length: dict[str, float]
     leaf: Outlet | None = None
@@ -1701,24 +1730,24 @@ def _node(ctx: _Ctx, cell: int, members: list[Outlet], length: dict[str, float])
 
 
 def _between(a: _Merge, cell: int) -> list[Vec]:
-    """Путь по сетке от ячейки cell к узлу a (по течению — обратно)."""
+    """Grid path from cell to node a (backwards along the flow)."""
     if cell == a.cell:
         return [a.fld.grid.center(cell)]
     return list(reversed(a.fld.path(cell)))
 
 
 def _merge_drains(ctx: _Ctx, r: RiserNode, outlets: Sequence[Outlet]) -> None:
-    """Приборы Ø50 к стояку r деревом с наименьшим расходом трубы (ТЗ «тройники»): для
-    каждой пары узлов (A, B) — место тройника J с наименьшей стоимостью
-    d(A, J) + d(B, J) + k·d(J, R) (d — путь по сетке отводами 45°, отвод — SEWER_BEND_COST,
-    k — PIPE_WEIGHT магистрали); экономия пары — d(A, R) + d(B, R) − стоимость. Пары
-    объединяются по убыванию экономии, J — новый узел; тройник недопустим, если с ним прибор,
-    который напрямую укладывался в стяжку или в перепад, перестаёт укладываться, — тогда
-    следующее по стоимости место, — или если ветка до тройника идёт посреди комнаты выше
-    стяжки (длина — по полному пути прибор → тройник → стояк). Поиск от стояка — с
-    отсечением по высоте (_height_prune), от приборов — с нижней оценкой длины. Узел, что
-    ближе к трубе Ø110 (унитаза), чем к стояку, врезается в неё тройником 110×50.
-    Соосность и вход под 45° — при сборке трубы (_shape45)."""
+    """Ø50 fixtures joined to riser r as a tree with the least pipe consumption ("tees" spec): for
+    each pair of nodes (A, B), the tee spot J with the lowest cost d(A, J) + d(B, J) + k·d(J, R)
+    (d is a grid path with 45° bends, a bend costs SEWER_BEND_COST, k is the main's PIPE_WEIGHT);
+    the pair saving is d(A, R) + d(B, R) − cost. Pairs are merged in order of decreasing saving,
+    J becomes a new node; a tee is not allowed if a fixture that fitted the screed or the drop on
+    its own stops fitting with it (then the next spot by cost is tried), or if the branch to the
+    tee runs through the middle of a room above the screed (length is the full path fixture →
+    tee → riser). The search from the riser uses height pruning (_height_prune), the search from
+    fixtures a lower length bound. A node closer to the Ø110 (WC) pipe than to the riser tees into
+    it with a 110×50 tee. Alignment and the 45° entry are handled when the pipe is assembled
+    (_shape45)."""
     if not outlets:
         return
     grid = ctx.grid
@@ -1730,17 +1759,17 @@ def _merge_drains(ctx: _Ctx, r: RiserNode, outlets: Sequence[Outlet]) -> None:
     slope = SLOPE_MIN[50]
     limit = SCREED_MM - 50 - SCREED_COVER
     tags = grid.tag
-    # Ветки от приборов: длина до стояка неизвестна — нижняя оценка по прямой
+    # Branches from fixtures: the length to the riser is unknown, use a straight-line lower bound
     ctx.prune = _height_prune(grid, z0, slope, 50, lower=r.center)
 
     def to_riser(cell: int) -> tuple[list[Vec], float]:
-        """От стояка до ячейки: хвост к стояку и путь по сетке."""
+        """From the riser to the cell: the tail to the riser and the grid path."""
         k = min(range(len(heads)), key=lambda i: hfields[i].cost(cell))
         path = [*reversed(heads[k].tail), *hfields[k].path(cell)[1:]]
         return path, _plan_length(path) - heads[k].along
 
     nodes: list[_Merge] = []
-    direct: dict[str, float] = {}  # мм по трубе от места подхода прибора до стояка
+    direct: dict[str, float] = {}  # mm along the pipe from the fixture approach spot to the riser
     for o in outlets:
         options = ctx.wall_approaches(o.room, o.wall, o.offset)
         found = [x for f in hfields if (x := _best(f, options)) is not None]
@@ -1757,8 +1786,9 @@ def _merge_drains(ctx: _Ctx, r: RiserNode, outlets: Sequence[Outlet]) -> None:
         ctx.net.sewer_direct += _equivalent(shaped, 50)
 
     def leg_ok(leg: Sequence[Vec], s0: float) -> bool:
-        """Ветка от тройника (leg[0]) к узлу: посреди комнаты низ трубы с Ø и слоем — не выше
-        стяжки; s0 — мм по трубе от стояка до тройника."""
+        """Branch from the tee (leg[0]) to the node: in the room middle the pipe bottom plus Ø and
+        the
+        cover must not exceed the screed; s0 is mm along the pipe from the riser to the tee."""
         if tags is None:
             return True
         s = s0
@@ -1773,7 +1803,7 @@ def _merge_drains(ctx: _Ctx, r: RiserNode, outlets: Sequence[Outlet]) -> None:
         tail = to_riser(cell)[1]
         legs = {id(n): _between(n, cell) for n in (na, nb)}
         for n in (na, nb):
-            leg = legs[id(n)]  # от тройника к узлу
+            leg = legs[id(n)]  # from the tee to the node
             if not leg_ok(leg, tail):
                 return False
             for o in n.members:
@@ -1786,7 +1816,7 @@ def _merge_drains(ctx: _Ctx, r: RiserNode, outlets: Sequence[Outlet]) -> None:
 
     k = PIPE_WEIGHT[50]
     while len(nodes) > 1:
-        best: tuple[float, int, int, int] | None = None  # экономия, A, B, J
+        best: tuple[float, int, int, int] | None = None  # saving, A, B, J
         for i, j in itertools.combinations(range(len(nodes)), 2):
             na, nb = nodes[i], nodes[j]
             total = na.cost + nb.cost + k * rcost
@@ -1835,15 +1865,16 @@ def _into_110(
     to_riser: float,
     leg_ok: Callable[[Sequence[Vec], float], bool],
 ) -> tuple[Pipe, Vec, float] | None:
-    """Место врезки узла Ø50 в трубу Ø110 тройником 110×50 (ТЗ трассировки, п. 4), если
-    дешевле, чем свой путь к стояку, и ветка не выходит посреди комнаты выше стяжки."""
+    """Tee spot of a Ø50 node into a Ø110 pipe with a 110×50 tee (routing spec, item 4), if that is
+    cheaper than its own path to the riser and the branch does not run in the room middle above
+    the screed."""
     best: tuple[float, Pipe, Vec, float] | None = None
     for p in big:
         for at, along in _tree_points(p):
             c = n.fld.cost(ctx.grid.nearest_free(at))
             if c >= to_riser - 1e-6 or (best is not None and c >= best[0]):
                 continue
-            leg = _between(n, ctx.grid.nearest_free(at))  # от тройника к узлу
+            leg = _between(n, ctx.grid.nearest_free(at))  # from the tee to the node
             if leg_ok([at, *leg], along):
                 best = (c, p, at, along)
     return (best[1], best[2], best[3]) if best is not None else None
@@ -1852,8 +1883,8 @@ def _into_110(
 def _emit(
     ctx: _Ctx, r: RiserNode, node: _Merge, prefix: list[Vec], parent: Pipe | None, along: float
 ) -> None:
-    """Трубы из дерева: от начала (стояк или место на трубе-родителе) по «соосной» ветке
-    каждого тройника до прибора — одна труба; вторые ветки — отводами от неё."""
+    """Pipes from the tree: from the start (riser or a spot on the parent pipe) along the "aligned"
+    branch of each tee to a fixture is one pipe; the other branches are branches off it."""
     pts = list(prefix)
     branches: list[tuple[_Merge, int]] = []
     cur = node
@@ -1907,8 +1938,8 @@ def _emit(
 
 
 def _straightness(child: _Merge, cell: int, incoming: Vec | None) -> float:
-    """Насколько ветка к child из тройника в cell продолжает магистраль: косинус угла
-    (1 — соосно); ветка нулевой длины (прибор у тройника) — отвод."""
+    """How much the branch to child from the tee at cell continues the main: the cosine of the angle
+    (1 means aligned); a zero-length branch (fixture at the tee) is a side branch."""
     path = _between(child, cell)
     if len(path) < 2 or incoming is None or incoming.length() < 1e-6:
         return -2.0
@@ -1917,13 +1948,13 @@ def _straightness(child: _Merge, cell: int, incoming: Vec | None) -> float:
 
 
 def _equivalent(path: Sequence[Vec], d: int) -> float:
-    """Расход трубы в мм эквивалентной длины: вес метра по диаметру плюс отводы 45°."""
+    """Pipe consumption in mm of equivalent length: weight per metre by diameter plus 45° bends."""
     return PIPE_WEIGHT[_norm(d)] * _plan_length(path) + SEWER_BEND_COST * b45.bends(path)
 
 
 def _check_doors(ctx: _Ctx) -> None:
-    """Вода через дверной проём — слабое место (канализации через дверь нельзя: её сетка
-    без дверных проёмов)."""
+    """Water through a door opening is a weak spot (sewer through a door is impossible: its grid has
+    no door openings)."""
     net = ctx.net
     names = {g.room.id: g.room.name for g in ctx.geoms.values()}
     seen: set[tuple[str, str, str]] = set()
@@ -1959,19 +1990,19 @@ HIDDEN_NAMES: dict[ObstacleType, dict[str, str]] = {
     ObstacleType.BATH: {"ru": "под ванной", "uk": "під ванною"},
     ObstacleType.SHOWER_TRAY: {"ru": "под поддоном", "uk": "під піддоном"},
 }
-SAMPLE = 25.0  # мм: шаг, с которым участок трассы делится по зонам
+SAMPLE = 25.0  # mm: step for splitting a route piece into zones
 
 
 @dataclass(frozen=True)
 class _Zones:
-    """Где лежит точка трассы канализации: скрытая зона, стяжка (пол) или стена; у пола —
-    ещё и у стены ли она (полоса WALL_BAND_MM вдоль стен и препятствий, без проёмов):
-    там труба, что не помещается в стяжку, идёт по стене над полом."""
+    """Where a sewer route point lies: a hidden zone, the screed (floor) or a wall; on the floor
+    also whether it is by a wall (the WALL_BAND_MM band along walls and obstacles, without
+    openings): there a pipe that does not fit the screed runs along the wall above the floor."""
 
-    hidden: tuple[tuple[str, BaseGeometry, float], ...]  # препятствие, место, высота верха
+    hidden: tuple[tuple[str, BaseGeometry, float], ...]  # obstacle, place, top height
     floor: BaseGeometry
     edge: BaseGeometry
-    walls: BaseGeometry  # грани стен и препятствий: середина комнаты — дальше WALL_BAND_MM
+    walls: BaseGeometry  # wall and obstacle faces: the room middle is farther than WALL_BAND_MM
 
     @classmethod
     def of(cls, ctx: _Ctx) -> _Zones:
@@ -1984,9 +2015,9 @@ class _Zones:
         walls = net.rooms
         if net.obstacles:
             walls = walls.difference(shapely.unary_union(list(net.obstacles.values())))
-        # Полоса трассы у стен (сетка) плюс шаг: срез угла отводами 45° — тоже у стены
+        # The route band by walls (grid) plus a step: a corner cut by 45° bends is also by the wall
         edge = walls.boundary.buffer(WALL_BAND_MM + STEP)
-        # Через проём (дверь, арку) над полом трубу не ведут — там ходят
+        # A pipe is not run through an opening (door, arch) above the floor: people walk there
         openings = [
             opening_strip(g, op)
             for g in ctx.geoms.values()
@@ -2001,11 +2032,13 @@ class _Zones:
         return cls(hidden, floor, edge, line)
 
     def open_room(self, v: Vec) -> bool:
-        """Посреди комнаты: дальше WALL_BAND_MM от стен (скрытые зоны — не в счёт)."""
+        """In the middle of a room: farther than WALL_BAND_MM from walls (hidden zones do not
+        count).
+        """
         return self.walls.distance(shapely.Point(v.as_tuple())) > WALL_BAND_MM + 1.0
 
     def at(self, v: Vec, z: float, d: int) -> tuple[Zone, str, float]:
-        """Зона точки трассы; z — низ трубы от плиты, d — её Ø."""
+        """Zone of a route point; z is the pipe bottom from the slab, d its Ø."""
         p = shapely.Point(v.as_tuple())
         for oid, g, h in self.hidden:
             if g.contains(p):
@@ -2020,7 +2053,9 @@ class _Zones:
 
 @dataclass(frozen=True)
 class _Piece:
-    """Кусок трассы в одной зоне, по течению; s — мм по трассе от прибора до начала."""
+    """Route part in one zone, along the flow; s is mm along the route from the fixture to its
+    start.
+    """
 
     a: Vec
     za: float
@@ -2033,7 +2068,9 @@ class _Piece:
 
 
 def _upto(path: Sequence[Vec], s: float) -> list[tuple[Vec, float]]:
-    """Точки ломаной от начала до s мм по ней и расстояние каждой от начала."""
+    """Polyline points from the start up to s mm along it, and the distance of each from the
+    start.
+    """
     out = [(path[0], 0.0)]
     acc = 0.0
     for a, b in itertools.pairwise(path):
@@ -2048,7 +2085,9 @@ def _upto(path: Sequence[Vec], s: float) -> list[tuple[Vec, float]]:
 
 
 def _flow(pipes: dict[str, Pipe], p: Pipe) -> list[tuple[Vec, float]]:
-    """Трасса прибора по течению — от выпуска по полу до стояка: точки и низ трубы."""
+    """Fixture route along the flow, from the drain on the floor to the riser: points and pipe
+    bottom.
+    """
     out: list[tuple[Vec, float]] = []
     cur, end = p, _plan_length(p.path)
     while True:
@@ -2104,8 +2143,8 @@ class _Eval:
 
 
 def _evaluate(ctx: _Ctx, zones: _Zones, pipes: dict[str, Pipe], p: Pipe) -> _Eval:
-    """Трасса прибора с уже заданными уклоном и началом: участки по зонам, спуск в стене,
-    проверки стяжки, скрытых зон, перепада и отвода унитаза."""
+    """Fixture route with a given slope and start: parts by zone, the drop in the wall, checks of
+    screed, hidden zones, drop and WC branch."""
     net = ctx.net
     outlet = next(o for o in net.outlets if o.fixture == p.target and o.kind == "sewer")
     flow = _flow(pipes, p)
@@ -2219,8 +2258,10 @@ def _evaluate(ctx: _Ctx, zones: _Zones, pipes: dict[str, Pipe], p: Pipe) -> _Eva
 def _surface(
     pieces: Sequence[_Piece], own: float, d: int
 ) -> tuple[tuple[tuple[float, float], ...], float]:
-    """Участки своей трубы по стене над полом — мм от начала её пути (own — длина пути;
-    куски трассы считаются от прибора) — и верх трубы над чистым полом там."""
+    """Parts of its own pipe along the wall above the floor, in mm from the start of its path (own
+    is
+    the path length; route parts are counted from the fixture), and the pipe top above the
+    finished floor there."""
     spans: list[tuple[float, float]] = []
     top = 0.0
     for x in pieces:
@@ -2237,13 +2278,13 @@ def _surface(
 
 
 def _sewer_heights(ctx: _Ctx) -> None:
-    """Высоты канализации обратным счётом от врезки в стояк (от плиты), все — низ трубы:
-    у каждой трубы — уклон и низ у начала; у отвода начало — на трубе-родителе, низ вровень
-    с её низом (тройник 110×50 — низ ветки не ниже низа магистрали). Уклон — один на трубу,
-    из списка (ТЗ трассировки, п. 5): SLOPE; если с ним трасса не годится — SLOPE_MIN
-    (Ø110, без отводов); если годится — SLOPE_MAX, когда трасса без отводов от неё, уклон
-    родителя не меньше и короба над полом и середины комнаты не больше (магистраль не
-    положе веток)."""
+    """Sewer heights computed backwards from the riser inlet (from the slab), all as pipe bottom:
+    each pipe has a slope and a bottom at its start; a branch starts on the parent pipe with its
+    bottom flush with the parent's (a 110×50 tee: the branch bottom is not below the main's).
+    One slope per pipe, from a list (routing spec, item 5): SLOPE; if the route fails with it,
+    SLOPE_MIN (Ø110, no branches); if it passes, SLOPE_MAX when the route has no branches off it,
+    the parent slope is not smaller and the box above the floor and the room middle do not grow
+    (the main is not flatter than its branches)."""
     net = ctx.net
     pipes = {p.id: p for p in net.pipes if p.kind == "sewer"}
     if not pipes:
@@ -2251,7 +2292,7 @@ def _sewer_heights(ctx: _Ctx) -> None:
     zones = _Zones.of(ctx)
     risers = {r.id: r for r in net.risers}
     parents = {p.parent for p in pipes.values() if p.parent is not None}
-    order = [p.id for p in net.pipes if p.kind == "sewer"]  # родитель проложен раньше отвода
+    order = [p.id for p in net.pipes if p.kind == "sewer"]  # the parent is laid before the branch
     results: dict[str, _Eval] = {}
     for pid in order:
         p = pipes[pid]
@@ -2298,7 +2339,7 @@ def _sewer_heights(ctx: _Ctx) -> None:
 
 
 def _sewer_warnings(ctx: _Ctx, p: Pipe) -> None:
-    """Предупреждения трубы: много отводов (ревизия), через жилую комнату."""
+    """Pipe warnings: many bends (cleanout), through a living room."""
     net = ctx.net
     name = ctx.name(p.target)
     fx = next(f for f in ctx.plumbing.fixtures if f.id == p.target)
@@ -2329,12 +2370,12 @@ def _norm(d: int) -> int:
 
 
 def routes_json(net: Network) -> dict[str, Any]:
-    """Трассы канализации в формате ТЗ трассировки (out/sewer-routes.json): по прибору —
-    диаметр, уклон, спуск в стене, участки по течению с зоной (z — низ трубы, мм от плиты),
-    фасонные части своей трубы; ошибки — с местом на плане (мм модели). Итоги:
-    totalLength — мм всех труб канализации (по полу, в стене, спуски), totalFittings —
-    фасонных частей, savingVsDirect — мм эквивалентной длины (PIPE_WEIGHT, SEWER_BEND_COST),
-    сэкономленные тройниками против подключения каждого прибора Ø50 отдельно."""
+    """Sewer routes in the routing spec format (out/sewer-routes.json): per fixture the diameter,
+    slope, drop in the wall, parts along the flow with their zone (z is the pipe bottom, mm from
+    the slab), fittings of its own pipe; errors with their place on the plan (model mm). Totals:
+    totalLength is mm of all sewer pipes (on the floor, in walls, drops), totalFittings the number
+    of fittings, savingVsDirect the mm of equivalent length (PIPE_WEIGHT, SEWER_BEND_COST) saved
+    by tees compared with connecting each Ø50 fixture separately."""
     sewer = net.pipes_of("sewer")
     small = [p for p in sewer if p.d < 100]
     saving = net.sewer_direct - sum(_equivalent(p.path, p.d) for p in small) if small else 0.0

@@ -1,28 +1,34 @@
-"""Смета электрики: объёмы — из модели (код), цены — из прайса проекта (prices.yaml).
+"""Electrical estimate: quantities come from the model (code), prices from the project price
+list (prices.yaml).
 
-Чертежа нет — только таблица: out/estimate.md, out/estimate.csv и out/estimate.xlsx
-(Excel с формулами: поменяли цену или количество — суммы пересчитываются).
-Объёмы берутся из того же расчёта, что лист проводки (wiring.py); отдельной спецификации
-изделий нет — смета без прайса и есть ведомость объёмов:
+There is no drawing, only a table: out/estimate.md, out/estimate.csv and out/estimate.xlsx
+(Excel with formulas: change a price or a quantity and the sums recalculate).
+Quantities come from the same calculation as the wiring sheet (wiring.py); there is no
+separate product specification: the estimate without prices is the bill of quantities:
 
-- кабель по маркам — с запасом RESERVE; работа по прокладке — по фактической длине;
-- подрозетники и механизмы — по постам настенных механизмов, рамки — по блокам;
-- распаечные коробки (во влажных помещениях — IP44, отдельная позиция); соединения под
-  опрессовку — в каждой коробке L, N, PE и по одному на каждую клавишу выключателей,
-  которые она питает;
-- крепления кабеля — шаг FIXING_STEP по длине трасс;
-- штробы — wall_chases (общие для спусков рядом): узкие (до CHASE_NARROW кабелей) и
-  широкие — разные позиции; проходы через стены — wall_holes;
-- щит: корпус и аппараты — по составу листа «Щит» (panel.build_panel: вид и номинал, как
-  в таблице аппаратов на закупку), сборка — по модулям этого состава; щита нет — автомат
-  на каждую группу; цены аппаратов — по виду (breaker, diff, rcd, input…), номинал —
-  уточнением ключа (breaker.C16);
-- светильники, выводы под подсветку и к технике — по точкам, LED-лента — в метрах;
-- маркировка — бирка на каждом конце каждой линии; замер сопротивления изоляции с
-  протоколом — на каждую силовую группу.
+- cable by type, with a RESERVE margin; laying work by actual length;
+- flush boxes and devices by wall device posts, frames by blocks;
+- junction boxes (IP44 in wet rooms, a separate item); crimp connections: L, N, PE in every
+  box plus one per key of each switch it feeds;
+- cable fixings at FIXING_STEP along the routes;
+- chases from wall_chases (shared by nearby drops): narrow (up to CHASE_NARROW cables) and
+  wide ones are separate items; passes through walls from wall_holes;
+- panel: enclosure and devices from the "Panel" sheet (panel.build_panel: kind and rating, as
+  in the purchase device table), assembly by the modules of that set; no panel means one
+  breaker per group; device prices by kind (breaker, diff, rcd, input…), with the rating as a
+  key refinement (breaker.C16);
+- lights, lighting outputs and appliance outputs by point, LED strip in metres;
+- labelling: a tag at each end of each line; insulation resistance test with a report for each
+  power group.
 
-Цены не выдумываются: позиции без цены в прайсе остаются в смете с пометкой «нет цены»
-и в итог не входят. Профиль и блоки питания LED в модели не описаны и в смету не входят.
+Work comes in two sections with their own totals (decision 2026-11-03): rough (`rough`),
+before plaster and screed: chases, passes, laying cable and conduit, flush boxes, boxes with
+crimping, panel recess and enclosure, labelling, insulation test; finishing (`finish`), after
+the finish: filling the panel with devices, fitting the devices. An item's section is in LINES.
+
+Prices are never invented: items with no price in the list stay in the estimate marked
+"no price" and are left out of the total. LED profiles and power supplies are not described
+in the model and are not in the estimate.
 """
 
 from __future__ import annotations
@@ -48,26 +54,27 @@ from floorplan_engine.model.panel_catalog import DeviceKind
 from floorplan_engine.model.schema import Electrical, PointType, StrictModel
 from floorplan_engine.model.texts import Language, tr
 
-PRICES_FILE = "prices.yaml"  # прайс проекта — в папке проекта, рядом с room.yaml
+PRICES_FILE = "prices.yaml"  # the project price list lives in the project folder, next to room.yaml
 ESTIMATE_MD = "estimate.md"
 ESTIMATE_CSV = "estimate.csv"
 ESTIMATE_XLSX = "estimate.xlsx"
 XLSX_MONEY = "#,##0.00"
 XLSX_QTY = "#,##0.0##"
-XLSX_EDIT_FILL = "FFF4D6"  # ячейки, которые правят руками: цена и количество
-FIXING_STEP = 400.0  # мм: шаг креплений кабеля по трассе
-CONDUIT_SIZES = ((1.5, 16), (2.5, 20), (6.0, 25), (1e9, 32))  # сечение, мм² → гофра Ø, мм
+XLSX_EDIT_FILL = "FFF4D6"  # cells edited by hand: price and quantity
+FIXING_STEP = 400.0  # mm: cable fixing step along the route
+CONDUIT_SIZES = ((1.5, 16), (2.5, 20), (6.0, 25), (1e9, 32))  # cross-section, mm² → conduit Ø, mm
 SWITCHES = frozenset({PointType.SWITCH, PointType.PASS_SWITCH})
-# Механизмы в подрозетнике: на каждый пост — подрозетник, на блок — рамка
+# Devices in flush boxes: one flush box per post, one frame per block
 MOUNTED = frozenset(
     {PointType.SOCKET, PointType.SWITCH, PointType.PASS_SWITCH, PointType.DATA, PointType.TV}
 )
 
-Section = Literal["material", "work"]
+Section = Literal["material", "rough", "finish"]
+SECTIONS: tuple[Section, ...] = ("material", "rough", "finish")  # order in the estimate
 
-# Позиции сметы: ключ → раздел, единица, наименование (ru, uk). Ключи с параметром:
-# cable.<марка>, frame.<постов>, junction_box.<размер>, junction_box_ip.<размер>, аппараты
-# щита — <вид>.<номинал> (breaker.C16); нет цены с параметром — берётся цена без него
+# Estimate items: key → section, unit, name (ru, uk). Keys with a parameter:
+# cable.<type>, frame.<posts>, junction_box.<size>, junction_box_ip.<size>, panel devices
+# <kind>.<rating> (breaker.C16); if there is no price with the parameter, the plain key is used
 LINES: dict[str, tuple[Section, str, str, str]] = {
     "cable": ("material", "м", "Кабель {mark}", "Кабель {mark}"),
     "conduit": ("material", "м", "Гофротруба ПВХ Ø{n}", "Гофротруба ПВХ Ø{n}"),
@@ -87,7 +94,7 @@ LINES: dict[str, tuple[Section, str, str, str]] = {
     ),
     "cable_fixing": ("material", "шт", "Крепление кабеля", "Кріплення кабелю"),
     "board_enclosure": ("material", "шт", "Корпус щита", "Корпус щита"),
-    # Аппараты щита — по видам (DeviceKind); в строке — название и номинал из состава щита
+    # Panel devices by kind (DeviceKind); the row has the name and rating from the panel set
     "breaker": ("material", "шт", "Автомат 1P (на группу)", "Автомат 1P (на групу)"),
     "diff": ("material", "шт", "Дифавтомат 1P+N", "Дифавтомат 1P+N"),
     "rcd": ("material", "шт", "УЗО", "ПЗВ"),
@@ -109,7 +116,7 @@ LINES: dict[str, tuple[Section, str, str, str]] = {
     "data": ("material", "шт", "Розетка интернет", "Розетка інтернет"),
     "tv": ("material", "шт", "Розетка TV", "Розетка TV"),
     "frame": ("material", "шт", "Рамка {n}-постовая", "Рамка {n}-постова"),
-    # Светильники и выводы — названия как в условных обозначениях (texts.symbol_*)
+    # Lights and outputs: names as in the legend (texts.symbol_*)
     "light": ("material", "шт", "", ""),
     "downlight": ("material", "шт", "", ""),
     "pendant": ("material", "шт", "", ""),
@@ -117,56 +124,56 @@ LINES: dict[str, tuple[Section, str, str, str]] = {
     "led_output": ("material", "шт", "", ""),
     "outlet": ("material", "шт", "", ""),
     "led_strip": ("material", "м", "", ""),
-    "work.cable": ("work", "м", "Прокладка кабеля", "Прокладання кабелю"),
-    "work.conduit": ("work", "м", "Укладка кабеля в гофротрубу", "Укладання кабелю в гофротрубу"),
+    "work.cable": ("rough", "м", "Прокладка кабеля", "Прокладання кабелю"),
+    "work.conduit": ("rough", "м", "Укладка кабеля в гофротрубу", "Укладання кабелю в гофротрубу"),
     "work.chase": (
-        "work",
+        "rough",
         "м",
         "Штроба узкая, 1–2 кабеля",
         "Штроба вузька, 1–2 кабелі",
     ),
     "work.chase_wide": (
-        "work",
+        "rough",
         "м",
         "Штроба широкая, 3–4 кабеля",
         "Штроба широка, 3–4 кабелі",
     ),
     "work.wall_hole": (
-        "work",
+        "rough",
         "шт",
         "Сверление прохода через стену",
         "Свердління проходу крізь стіну",
     ),
     "work.socket_box": (
-        "work",
+        "rough",
         "шт",
         "Сверление и установка подрозетника",
         "Свердління і встановлення підрозетника",
     ),
     "work.junction_box": (
-        "work",
+        "rough",
         "шт",
         "Монтаж коробки с опрессовкой",
         "Монтаж коробки з опресуванням",
     ),
-    "work.board_install": ("work", "шт", "Установка щита", "Встановлення щита"),
-    "work.board_module": ("work", "мод.", "Сборка щита", "Збирання щита"),
-    "work.mechanism": ("work", "шт", "Установка механизмов", "Встановлення механізмів"),
+    "work.board_install": ("rough", "шт", "Установка щита", "Встановлення щита"),
+    "work.board_module": ("finish", "мод.", "Сборка щита", "Збирання щита"),
+    "work.mechanism": ("finish", "шт", "Установка механизмов", "Встановлення механізмів"),
     "work.marking": (
-        "work",
+        "rough",
         "шт",
         "Маркировка концов кабеля",
         "Маркування кінців кабелю",
     ),
     "work.insulation_test": (
-        "work",
+        "rough",
         "гр.",
         "Замер сопротивления изоляции с протоколом",
         "Вимірювання опору ізоляції з протоколом",
     ),
 }
-# Пояснения к позициям — значок «i» у наименования в просмотре, комментарий в Excel; без цены
-# — ещё «цена уточняется»
+# Item notes: an "i" icon next to the name in the viewer, a comment in Excel; without a price
+# also "price to be confirmed"
 HINTS: dict[str, dict[str, str]] = {
     "work.mechanism": {
         "ru": "Установка розеток, выключателей, интернет- и ТВ-выводов",
@@ -186,7 +193,7 @@ PARAM_KEYS = (
     "junction_box_ip",
     *(k.value for k in DeviceKind),
 )
-# Светильники и выводы: ключ → название в texts (как в условных обозначениях)
+# Lights and outputs: key → name in texts (as in the legend)
 FIXTURES = {
     "light": "symbol_light",
     "downlight": "symbol_downlight",
@@ -198,6 +205,8 @@ FIXTURES = {
 }
 TEXT: dict[str, dict[str, str]] = {
     "material": {"ru": "Материалы", "uk": "Матеріали"},
+    "rough": {"ru": "Черновые работы", "uk": "Чорнові роботи"},
+    "finish": {"ru": "Чистовые работы", "uk": "Чистові роботи"},
     "work": {"ru": "Работы", "uk": "Роботи"},
     "head": {
         "ru": "| № | Наименование | Ед. | Кол. | Цена, {c} | Сумма, {c} |",
@@ -311,8 +320,8 @@ class Price(StrictModel):
 
 
 class BoardItem(StrictModel):
-    """Устарело: состав щита считает лист «Щит», цены аппаратов — ключами по видам
-    (breaker, diff, rcd, input…). Поле читается, чтобы старые прайсы открывались."""
+    """Deprecated: the panel set is computed by the "Panel" sheet, device prices use keys by kind
+    (breaker, diff, rcd, input…). The field is still read so old price lists open."""
 
     name: str = Field(min_length=1)
     price: float = Field(ge=0)
@@ -321,7 +330,7 @@ class BoardItem(StrictModel):
 
 
 class PriceList(StrictModel):
-    """prices.yaml: цены по ключам позиций (LINES), за единицу, в валюте currency."""
+    """prices.yaml: prices by item key (LINES), per unit, in the currency currency."""
 
     currency: str = "грн"
     date: str = Field(default="", description="Когда собраны цены")
@@ -336,7 +345,7 @@ class PriceList(StrictModel):
         return Price(price=item) if isinstance(item, int | float) else item
 
     def lookup(self, key: str) -> Quote:
-        """Цена по ключу, а с параметром — и без него («cable.3x4» → «cable»)."""
+        """Price by key; with a parameter, also tries the key without it ("cable.3x4" → "cable")."""
         base, param = split_key(key)
         exact = self.price(key)
         return Quote(exact or (self.price(base) if param else None), exact, service=False)
@@ -344,8 +353,8 @@ class PriceList(StrictModel):
 
 @dataclass(frozen=True)
 class Quote:
-    """Ответ источника цен: цена, цена ровно по ключу (своё наименование — из неё) и признак,
-    что цена от сервиса цен (pricing.py), а не из прайса."""
+    """Price source answer: the price, the price for the exact key (its own name comes from it) and
+    a flag that the price comes from the price service (pricing.py), not the price list."""
 
     price: Price | None
     exact: Price | None
@@ -353,7 +362,9 @@ class Quote:
 
 
 class PriceSource(Protocol):
-    """Откуда смета берёт цены: прайс (PriceList), сервис цен или их склейка (pricing.Prices)."""
+    """Where the estimate gets prices: a price list (PriceList), the price service or both merged
+    (pricing.Prices).
+    """
 
     @property
     def currency(self) -> str: ...
@@ -362,14 +373,64 @@ class PriceSource(Protocol):
 
 
 def split_key(key: str) -> tuple[str, str]:
-    """«cable.3x1.5» → («cable», «3x1.5»); ключ без параметра → (ключ, «»)."""
+    """Split "cable.3x1.5" → ("cable", "3x1.5"); a key without a parameter → (key, "")."""
     base, _, param = key.partition(".")
     return (base, param) if base in PARAM_KEYS and param else (key, "")
 
 
 def unknown_keys(prices: PriceList) -> list[str]:
-    """Ключи прайса, которых нет среди позиций сметы (опечатка или чужой ключ)."""
+    """Price list keys that match no estimate item (a typo or a foreign key)."""
     return [k for k in prices.items if split_key(k)[0] not in LINES]
+
+
+ITEMS_LINE = re.compile(r"^items:\s*(#.*)?$")
+
+
+def _money(value: float) -> str:
+    return str(int(value)) if float(value).is_integer() else f"{value:g}"
+
+
+def edit_price_items(text: str, items: dict[str, float | None]) -> str:
+    """Prices in the prices.yaml text, line by line, keeping comments: `key: 30  # …` → the new
+    number, `key: { price: 30, name: … }` — only price; None removes the key's line; a missing
+    key — a new line at the end of the items section. No items section — it is appended."""
+    lines = text.splitlines()
+    head = next((i for i, line in enumerate(lines) if ITEMS_LINE.match(line)), None)
+    if head is None:
+        lines += ["items:"]
+        head = len(lines) - 1
+    end = head + 1  # the section runs to the first unindented line that is not blank or a comment
+    while end < len(lines) and (not lines[end].strip() or lines[end][:1] in (" ", "#")):
+        end += 1
+    last = head  # the section's last value line: new keys go after it
+    for i in range(head + 1, end):
+        if lines[i].strip() and not lines[i].lstrip().startswith("#"):
+            last = i
+    drop: set[int] = set()
+    added: list[str] = []
+    for key, value in items.items():
+        pat = re.compile(rf"^(\s+){re.escape(key)}:\s*(.*)$")
+        at = next((i for i in range(head + 1, end) if pat.match(lines[i])), None)
+        if at is None:
+            if value is not None:
+                added.append(f"  {key}: {_money(value)}")
+            continue
+        if value is None:
+            drop.add(at)
+            continue
+        m = pat.match(lines[at])
+        assert m is not None
+        indent, rest = m.groups()
+        if rest.startswith("{"):
+            rest = re.sub(r"price:\s*[\d.]+", f"price: {_money(value)}", rest, count=1)
+        else:
+            comment = re.search(r"\s+#.*$", rest)
+            rest = _money(value) + (comment.group() if comment else "")
+        lines[at] = f"{indent}{key}: {rest}"
+    out = [line for i, line in enumerate(lines[: last + 1]) if i not in drop]
+    out += added
+    out += [line for i, line in enumerate(lines[last + 1 :], start=last + 1) if i not in drop]
+    return "\n".join(out) + "\n"
 
 
 @dataclass(frozen=True)
@@ -379,9 +440,9 @@ class Line:
     name: str
     unit: str
     qty: float
-    price: float | None  # None — в прайсе нет
-    hint: str | None = None  # пояснение к позиции (HINTS)
-    service: bool = False  # цена — от сервиса цен (имитация), не из прайса
+    price: float | None  # None: not in the price list
+    hint: str | None = None  # item note (HINTS)
+    service: bool = False  # price from the price service (mock), not from the list
 
     @property
     def total(self) -> float | None:
@@ -397,8 +458,13 @@ class Estimate:
         return sum(ln.total or 0.0 for ln in self.lines if ln.section == section)
 
     @property
+    def work(self) -> float:
+        """All work: rough and finishing."""
+        return self.subtotal("rough") + self.subtotal("finish")
+
+    @property
     def total(self) -> float:
-        return self.subtotal("material") + self.subtotal("work")
+        return sum(self.subtotal(s) for s in SECTIONS)
 
     @property
     def unpriced(self) -> int:
@@ -410,24 +476,24 @@ class Estimate:
 
 
 def conduit_diameter(mark: str) -> int:
-    """Гофротруба по марке кабеля, мм: до 1,5 мм² — Ø16, до 2,5 — Ø20, до 6 — Ø25, больше —
-    Ø32; марку не разобрать (слаботочка) — Ø20."""
+    """Conduit by cable type, mm: up to 1.5 mm² Ø16, up to 2.5 Ø20, up to 6 Ø25, larger Ø32;
+    an unreadable type (low-voltage) gets Ø20."""
     m = re.search(r"[x×]\s*([\d.,]+)", mark)
     section = float(m.group(1).replace(",", ".")) if m else 2.5
     return next((d for limit, d in CONDUIT_SIZES if section <= limit), CONDUIT_SIZES[-1][1])
 
 
 def conduit_mm(run: Run, mode: str) -> float:
-    """Сколько линии — в гофре (решение 2026-11-01, docs/wiring-variants.md): по полу — всегда,
-    вся линия со подъёмом до точки; по потолку — только в премиуме (proper), участок по
-    потолку, спуски в штробах — без гофры."""
+    """How much of a line goes in conduit (decision 2026-11-01, docs/wiring-variants.md): on the
+    floor always, the whole line including the rise to the point; on the ceiling only in premium
+    (proper), the ceiling part; drops in chases go without conduit."""
     if run.route == "floor":
         return run.length_mm
     return run.plan_mm if mode == "proper" else 0.0
 
 
 def quantities(wiring: Wiring, elec: Electrical) -> dict[str, float]:
-    """Объёмы по ключам позиций (без цен)."""
+    """Quantities by item key (no prices)."""
     q: dict[str, float] = {}
     for mark, m in wiring.by_mark().items():
         q[f"cable.{mark}"] = round(m * (1 + RESERVE), 1)
@@ -500,13 +566,13 @@ def build_estimate(
     language: Language = "ru",
     panel: BoardPanel | None = None,
 ) -> Estimate:
-    """Смета: позиция на каждый объём. Щит — по составу листа «Щит» (panel): строка на вид и
-    номинал аппарата, сборка — по модулям состава; щита нет — автомат на группу. prices —
-    прайс или склейка прайса с сервисом цен (pricing.Prices)."""
+    """Estimate: one item per quantity. The panel follows the "Panel" sheet set (panel): a row per
+    device kind and rating, assembly by the modules of the set; no panel means one breaker per
+    group. prices is a price list or the list merged with the price service (pricing.Prices)."""
     q = quantities(wiring, elec)
     if panel is not None:
         q.pop("breaker", None)
-    if "work.board_install" in q:  # сборка — сразу за установкой щита
+    if "work.board_install" in q:  # assembly right after the panel installation
         modules = panel.modules if panel is not None else q.get("breaker", 0.0)
         items = list(q.items())
         at = next(k for k, (key, _) in enumerate(items) if key == "work.board_install") + 1
@@ -536,26 +602,26 @@ def build_estimate(
         return Line(section, key, name, unit, qty, p.price if p else None, hint, quote.service)
 
     names: dict[str, str] = {}
-    if panel is not None and panel.enclosure is not None:  # корпус — щит с листа «Щит»
+    if panel is not None and panel.enclosure is not None:  # enclosure from the Panel sheet
         enc = panel.enclosure
         base = LINES["board_enclosure"][2 if language == "ru" else 3]
         names["board_enclosure"] = f"{base} {enc.title}, {enc.modules} мод."
     lines = [line(k, v, names.get(k)) for k, v in q.items()]
     if panel is not None:
-        # Аппараты щита — по видам и номиналам, в порядке щита; рядом с корпусом
+        # Panel devices by kind and rating, in panel order; next to the enclosure
         counts: dict[tuple[str, str], tuple[str, int]] = {}
         for d in panel.all_devices:
             key = f"{d.kind.value}.{d.label}"
             name, n = counts.get((key, d.label), (device_name(d, language), 0))
             counts[(key, d.label)] = (name, n + 1)
         devices = [line(key, n, name) for (key, _), (name, n) in counts.items()]
-        if panel.dc is not None:  # корпус щита АКБ — за аппаратами
+        if panel.dc is not None:  # battery box enclosure after the devices
             enc = panel.dc.enclosure
             base = LINES["dc_enclosure"][2 if language == "ru" else 3]
             devices.append(line("dc_enclosure", 1, f"{base} {enc.title}, {enc.modules} мод."))
         at = next((k + 1 for k, ln in enumerate(lines) if ln.key == "board_enclosure"), len(lines))
         lines[at:at] = devices
-    lines.sort(key=lambda ln: 0 if ln.section == "material" else 1)
+    lines.sort(key=lambda ln: SECTIONS.index(ln.section))
     return Estimate(tuple(lines), prices.currency)
 
 
@@ -571,7 +637,7 @@ def write_markdown(
         return text(key, language, **values)
 
     out = [f"# {title}", ""]
-    for section in ("material", "work"):
+    for section in SECTIONS:
         rows = [ln for ln in est.lines if ln.section == section]
         if not rows:
             continue
@@ -592,7 +658,8 @@ def write_markdown(
 
 
 def write_csv(est: Estimate, path: Path) -> Path:
-    """CSV для Excel: UTF-8 с BOM, разделитель «;», десятичная запятая."""
+    """CSV for Excel: UTF-8 with BOM, ";" separator, decimal comma; section is the section
+    (material, rough, finish)."""
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8-sig", newline="") as fh:
         w = csv.writer(fh, delimiter=";")
@@ -613,9 +680,9 @@ def write_csv(est: Estimate, path: Path) -> Path:
 
 
 def write_xlsx(est: Estimate, path: Path, title: str, notes: list[str], language: Language) -> Path:
-    """Смета в Excel: разделы, сумма строки — формулой «кол. × цена», итоги разделов и
-    «Всего» — формулами, цены и количества подсвечены (их правят). Позиция без цены —
-    пустая цена с примечанием; впишут цену — войдёт в итоги."""
+    """Estimate in Excel: sections, row sum as a formula "qty × price", section totals and "Total"
+    as formulas, prices and quantities highlighted (they get edited). An item without a price has
+    an empty price with a note; once a price is entered it counts in the totals."""
 
     def t(key: str, **values: object) -> str:
         return text(key, language, **values)
@@ -644,7 +711,7 @@ def write_xlsx(est: Estimate, path: Path, title: str, notes: list[str], language
     edit = PatternFill("solid", start_color=XLSX_EDIT_FILL, end_color=XLSX_EDIT_FILL)
     grey = Font(color="999999", size=8)
     subtotals: list[str] = []
-    for section in ("material", "work"):
+    for section in SECTIONS:
         rows = [ln for ln in est.lines if ln.section == section]
         if not rows:
             continue

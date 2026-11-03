@@ -1,10 +1,10 @@
-"""вход по коду на почту: одноразовые коды
+"""login by e-mail code: one-time codes
 
 Revision ID: 0003
 Revises: 0002
 Create Date: 2026-10-31
 
-Решение — docs/database.md, «Вход»: без паролей; кроме Google — код на почту.
+Decision: docs/database.md, "Login": no passwords; besides Google, a code sent by e-mail.
 """
 
 from __future__ import annotations

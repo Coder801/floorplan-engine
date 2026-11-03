@@ -1,5 +1,5 @@
-// Выдвижная панель из шапки: вопросы проекта, исходники (source/) и проект — этапы,
-// замечания проверки, результаты, модель. Не про лист, поэтому не во вкладках боковой панели.
+// Slide-out panel from the header: project questions, sources (source/) and the project:
+// stages, check remarks, results, model. Not about the sheet, so not in the side panel tabs.
 
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -17,9 +17,9 @@ interface Props {
   project: Project;
   shownSource: string | null;
   onSource: (file: string) => void;
-  closing: boolean;             // попросили закрыть — панель уезжает вправо
-  onClose: () => void;          // закрыть: запустить уезжание
-  onClosed: () => void;         // уехала — убрать
+  closing: boolean;             // asked to close: the panel slides out to the right
+  onClose: () => void;          // close: start sliding out
+  onClosed: () => void;         // slid out: remove
 }
 
 export function Drawer({ tab, project, shownSource, onSource, closing, onClose, onClosed }: Props) {
@@ -29,7 +29,7 @@ export function Drawer({ tab, project, shownSource, onSource, closing, onClose, 
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
-  // Без анимации (уменьшение движения) конца анимации не будет — убрать сразу
+  // Without animation (reduced motion) there is no animation end, so remove right away
   useEffect(() => { if (closing && REDUCED_MOTION) onClosed(); }, [closing, onClosed]);
   let body: React.ReactNode;
   if (tab === "questions") body = <Questions project={project} />;
@@ -85,14 +85,14 @@ function Questions({ project: p }: { project: Project }) {
   );
 }
 
-// Исходные ресурсы: файлы source/ и что из них разобрано (intake.yaml, sources)
+// Source files: the source/ files and what was parsed from them (intake.yaml, sources)
 
 function Sources({ project: p, shown, onSource }: { project: Project; shown: string | null; onSource: (f: string) => void }) {
   const { t } = useTranslation();
   const parsed = new Map((p.parsed || []).map((s) => [s.file, s.note]));
   const files = [...new Set([...p.sources, ...parsed.keys()])];
   if (!files.length) return <div className="muted">{t("drawer.noSources")}</div>;
-  // Старый сервер без parsed — о разборе неизвестно, а не «не использован»
+  // An old server without parsed: parsing status is unknown, not "unused"
   const list = files.map((f) => ({ file: f, used: p.parsed ? parsed.has(f) : null, note: parsed.get(f) || "",
                                    exists: p.sources.includes(f) }));
   const used = list.filter((s) => s.used).length;

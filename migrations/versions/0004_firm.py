@@ -1,11 +1,12 @@
-"""регистрация фирмы: вид, город, телефон у studio
+"""firm registration: kind, city, phone on studio
 
 Revision ID: 0004
 Revises: 0003
 Create Date: 2026-10-31
 
-Решение — docs/database.md, «Доступ»: фирма регистрируется отдельным шагом с названием и
-видом; тип пространства — studio.kind (studio | personal), у человека — подсказка экрана.
+Decision: docs/database.md, "Access": a firm is registered in a separate step with a name and
+a kind; the workspace type is studio.kind (studio | personal), for a person it drives the screen
+hint.
 """
 
 from __future__ import annotations

@@ -1,16 +1,16 @@
-// Контур стен в 3D без швов: стены — отдельные куски (у каждого свой ключ, «срез» опускает
-// их по одному), но линии рисуются только там, где стена кончается. Ребро верхней или нижней
-// грани — если по одну его сторону стена, а по другую нет; вертикаль — только в настоящем
-// углу (стена в 1 или 3 четвертях вокруг вершины), а не на стыке двух кусков в одну линию.
+// Seamless wall outline in 3D: walls are separate pieces (each has its own key, the cut lowers
+// them one by one), but lines are drawn only where the wall ends. An edge of the top or bottom
+// face is drawn if there is wall on one side and none on the other; a vertical only at a real
+// corner (wall in 1 or 3 quarters around the vertex), not where two pieces meet in a line.
 
 import type { XY } from "@/shared/types";
 
 export interface WallPiece {
-  polys: XY[][][];        // многоугольники: первое кольцо — контур, остальные — отверстия
-  z: [number, number];    // от и до по высоте, мм
+  polys: XY[][][];        // polygons: the first ring is the outline, the rest are holes
+  z: [number, number];    // from and to by height, mm
 }
 
-const PROBE = 1.5;  // мм от ребра или вершины до пробной точки
+const PROBE = 1.5;  // mm from the edge or vertex to the probe point
 
 function inRing(x: number, y: number, ring: XY[]): boolean {
   let inside = false;
@@ -24,9 +24,9 @@ function inRing(x: number, y: number, ring: XY[]): boolean {
 const inPoly = (x: number, y: number, rings: XY[][]) =>
   inRing(x, y, rings[0]) && !rings.slice(1).some((h) => inRing(x, y, h));
 
-// Отрезки контура каждого куска: [x1, y1, z1, x2, y2, z2, …], z — от низа куска (0 … высота)
+// Outline segments of each piece: [x1, y1, z1, x2, y2, z2, …], z from the piece bottom (0 … height)
 export function wallEdges(pieces: readonly WallPiece[]): number[][] {
-  // Соседи по высоте: куски, что перекрываются с этим по z (перемычка над дверью и стена рядом)
+  // Neighbours by height: pieces that overlap this one in z (a lintel above a door and the wall next to it)
   const near = pieces.map((p) => pieces.filter((q) => q.z[0] < p.z[1] && p.z[0] < q.z[1]));
   return pieces.map((p, k) => {
     const wall = (x: number, y: number) => near[k].some((q) => q.polys.some((r) => inPoly(x, y, r)));
@@ -38,13 +38,13 @@ export function wallEdges(pieces: readonly WallPiece[]): number[][] {
           const [ax, ay] = ring[i], [bx, by] = ring[(i + 1) % ring.length];
           const len = Math.hypot(bx - ax, by - ay);
           if (len < 1e-6) continue;
-          // Ребро граней: стена с обеих сторон — шов между кусками, не рисуется
+          // Face edge: wall on both sides is a seam between pieces and is not drawn
           const nx = (-(by - ay) / len) * PROBE, ny = ((bx - ax) / len) * PROBE;
           const mx = (ax + bx) / 2, my = (ay + by) / 2;
           if (wall(mx + nx, my + ny) !== wall(mx - nx, my - ny)) {
             out.push(ax, ay, 0, bx, by, 0, ax, ay, h, bx, by, h);
           }
-          // Вертикаль в вершине: угол — стена в одной или трёх четвертях вокруг
+          // Vertical at a vertex: a corner means wall in one or three quarters around it
           const around = [[1, 1], [-1, 1], [-1, -1], [1, -1]]
             .filter(([sx, sy]) => wall(ax + sx * PROBE, ay + sy * PROBE)).length;
           if (around === 1 || around === 3) out.push(ax, ay, 0, ax, ay, h);

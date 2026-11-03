@@ -1,10 +1,10 @@
-"""Документ проекта: модель 1:1 и листы с видовыми экранами 1:50.
+"""Project document: the 1:1 model and sheets with 1:50 viewports.
 
-Модель — вся геометрия всех этапов, каждый этап на своих слоях (sheets.stages). Лист
-(layout) — рамка и основная надпись в мм листа, видовой экран 1:50 на модель, в котором
-заморожены слои чужих этапов, таблицы и легенда; раскладка — sheets.layout.
+The model holds all geometry of all stages, each stage on its own layers (sheets.stages). A
+sheet (layout) has the frame and title block in sheet mm, a 1:50 viewport onto the model with
+the layers of other stages frozen, tables and the legend; the layout logic is sheets.layout.
 
-Формат, ориентация и масштаб — общие для комплекта (choose_paper_and_scale).
+Paper size, orientation and scale are shared by the whole set (choose_paper_and_scale).
 """
 
 from __future__ import annotations
@@ -51,14 +51,14 @@ from floorplan_engine.sheets.layout import (
 )
 from floorplan_engine.sheets.stages import draw_stages
 
-VIEW_FILL = 0.94  # какую долю секции плана занимает чертёж — цель (решение 2026-10-21)
-VIEW_FILL_MAX = 1.0  # больше — чертёж вылезает из секции
-VIEWPORT_LOCKED = 16384  # флаг VIEWPORT «Display locked»: колесо мыши не сбивает масштаб
-# Слой 0 несёт содержимое блоков, слои листа модели не касаются
+VIEW_FILL = 0.94  # target share of the plan section taken by the drawing (decision 2026-10-21)
+VIEW_FILL_MAX = 1.0  # more than this and the drawing sticks out of the section
+VIEWPORT_LOCKED = 16384  # VIEWPORT flag "Display locked": the mouse wheel does not change the scale
+# Layer 0 carries block contents; sheet layers do not touch the model
 NEVER_FROZEN = frozenset({"0", "DEFPOINTS", A_SHEET.name, A_VPORT.name})
 
 
-# Имя PNG листа по его вкладке: «02 Електрика» → 02-electrical.png (латиница — для путей и API)
+# Sheet PNG name by its tab: "02 Електрика" → 02-electrical.png (Latin, for paths and the API)
 SHEET_SLUGS = {
     "tab_plan": "plan",
     "tab_electrical": "electrical",
@@ -72,7 +72,7 @@ SHEET_SLUGS = {
 
 
 def sheet_slug(tab: str) -> str | None:
-    """Тема листа (plan / electrical / wiring) по имени вкладки «NN Название» на любом языке."""
+    """Sheet topic (plan / electrical / wiring) by the tab name "NN Name" in any language."""
     title = tab.partition(" ")[2]
     for suffix in TEXTS["sheet_continued"].values():
         title = title.removesuffix(f" {suffix}")
@@ -80,14 +80,14 @@ def sheet_slug(tab: str) -> str | None:
 
 
 def sheet_png_name(tab: str) -> str:
-    """Имя файла превью листа по имени вкладки «NN Название» на любом языке проекта."""
+    """Sheet preview file name by the tab name "NN Name" in any project language."""
     return f"{tab.partition(' ')[0]}-{sheet_slug(tab) or 'sheet'}.png"
 
 
 def add_sheet(
     doc: Drawing, spec: SheetSpec, tab: str, stamp: StampText, paper: Paper
 ) -> Paperspace:
-    """Лист на бумаге paper: рамка, штамп, видовой экран (или схема), таблицы и легенда."""
+    """Sheet on paper: frame, title block, viewport (or diagram), tables and legend."""
     if spec.body is not None:
         return _add_body_sheet(doc, spec, tab, stamp, paper)
     box = visible_extents(doc, spec.layers)
@@ -127,7 +127,7 @@ def _new_layout(doc: Drawing, tab: str, layout: SheetLayout) -> Paperspace:
 def _add_body_sheet(
     doc: Drawing, spec: SheetSpec, tab: str, stamp: StampText, paper: Paper
 ) -> Paperspace:
-    """Лист со схемой вместо видового экрана: схема — по центру секции плана."""
+    """Sheet with a diagram instead of a viewport: the diagram is centred in the plan section."""
     p = place((0.0, 0.0), spec, paper)
     body = fit_body(spec, paper)
     layout = p.layout if isinstance(body, Panel) else replace(p.layout, fits=False)
@@ -142,8 +142,8 @@ def _add_body_sheet(
 
 
 def document_scale(doc: Drawing) -> float:
-    """Масштаб, в котором нарисована модель документа (50 — это 1:50): по видовому экрану
-    листа; листов нет — DEFAULT_SCALE."""
+    """Scale the document model is drawn at (50 means 1:50), from the sheet viewport;
+    DEFAULT_SCALE if there are no sheets."""
     for layout in doc.layouts:
         for vp in layout.query("VIEWPORT"):
             if vp.dxf.layer == A_VPORT.name and vp.dxf.height > 0:
@@ -152,8 +152,8 @@ def document_scale(doc: Drawing) -> float:
 
 
 def _at(view: tuple[float, float], scale: float) -> tuple[float, float]:
-    """Размер вида в масштабе 1:scale по черновику 1:50 — с запасом: подписи и размерные
-    линии в крупном масштабе занимают в модели меньше, чем в черновике."""
+    """View size at 1:scale from the 1:50 draft, with a margin: labels and dimension lines at a
+    large scale take less model space than in the draft."""
     k = DEFAULT_SCALE / scale
     return (
         (view[0] - 2 * VIEW_MARGIN) * k + 2 * VIEW_MARGIN,
@@ -169,10 +169,10 @@ def choose_paper_and_scale(
     edits: WiringEdits | None = None,
     plumbing: tuple[Plumbing, Network] | None = None,
 ) -> tuple[Paper, float]:
-    """Бумага комплекта — наименьшая, на которой у всех листов помещаются таблицы и легенда,
-    а план в 1:50 или крупнее занимает не больше VIEW_FILL_MAX своей секции (формат из
-    room.yaml — только он). Масштаб — тот, при котором самый тесный план ближе всего
-    к VIEW_FILL, не больше VIEW_FILL_MAX."""
+    """Paper for the set: the smallest on which every sheet fits its tables and legend and the plan
+    at 1:50 or larger takes at most VIEW_FILL_MAX of its section (a size from room.yaml is used
+    alone). The scale is the one that brings the tightest plan closest to VIEW_FILL, no more than
+    VIEW_FILL_MAX."""
     with drawing_scale(DEFAULT_SCALE):
         draft, all_specs = draw_stages(plan, contours, elec, prices, edits, plumbing)
         views = {s.tab_key: view_parts(draft, s) for s in all_specs if s.body is None}
@@ -180,7 +180,7 @@ def choose_paper_and_scale(
     specs = all_specs
 
     def worst(paper: Paper, scale: float) -> float:
-        # Схема (щит) масштаба не имеет: её место проверяет panels_fit
+        # A diagram (panel) has no scale: panels_fit checks its space
         def at(core: tuple[float, float], extra: tuple[float, float]) -> tuple[float, float]:
             w, h = _at(core, scale)
             return w + extra[0], h + extra[1]
@@ -196,13 +196,13 @@ def choose_paper_and_scale(
     base = [s for s in SCALES if s <= DEFAULT_SCALE]
     found = next((p for p in papers if any(ok(p, s) for s in base)), None)
     if found is None:
-        # Ни на один формат таблицы не входят — самый крупный, таблицы на продолжение
-        # Масштаб — по виду: схемам (щит, таблицы) он не поможет, их проверит печать
+        # Tables fit no paper size: take the largest, tables go to a continuation sheet
+        # Scale follows the view: it will not help diagrams (panel, tables), printing checks those
         paper = max(papers, key=lambda p: (p[1] * p[2], p[1]))
         specs = fit_specs(all_specs, paper)
         fitting = [s for s in SCALES if worst(paper, s) <= VIEW_FILL_MAX]
-        # Оценка по черновику 1:50 занижает полосу размеров в мелком масштабе — выбранный
-        # масштаб проверяется отрисовкой, не влез — следующий мельче
+        # The 1:50 draft estimate understates the dimension band at a small scale, so the chosen
+        # scale is checked by drawing; if it does not fit, the next smaller one
         best = min(fitting, key=lambda s: abs(worst(paper, s) - VIEW_FILL), default=SCALES[-1])
         for scale in [s for s in SCALES if s >= best]:
             with drawing_scale(scale):
@@ -228,29 +228,29 @@ def build_project_document(
     edits: WiringEdits | None = None,
     plumbing: Plumbing | None = None,
 ) -> Drawing:
-    """Один DXF: модель со всеми этапами и лист на каждый этап; формат и масштаб — общие.
-    prices — цены сметы на листе проводки (прайс поверх сервиса цен); None — ведомость
-    объёмов без цен.
-    edits — ручные правки проводки (wiring.yaml); plumbing — сантехника (лист «Сантехника»)."""
+    """One DXF: the model with all stages and one sheet per stage; paper and scale are shared.
+    prices are the estimate prices on the wiring sheet (price list on top of the price service);
+    None gives a bill of quantities without prices.
+    edits are manual wiring edits (wiring.yaml); plumbing is plumbing (the "Plumbing" sheet)."""
     water = (plumbing, build_network(plan, contours, plumbing)) if plumbing is not None else None
     paper, scale = choose_paper_and_scale(plan, contours, elec, prices, edits, water)
     with drawing_scale(scale):
         doc, specs = draw_stages(plan, contours, elec, prices, edits, water)
         specs = fit_specs(specs, paper)
-        main_no = 1  # лист, чьи таблицы продолжаются
+        main_no = 1  # sheet whose tables continue
         for no, spec in enumerate(specs, 1):
             main_no = main_no if spec.continued else no
             tab = f"{no:02d} {tr(spec.tab_key, plan.language)}"
             stamp = plan_stamp(plan, spec.image_key, no, len(specs), today)
             if spec.continued:
                 tab += f" {tr('sheet_continued', plan.language)}"
-                if spec.paged:  # продолжение развёрток — то же название
+                if spec.paged:  # elevation continuation keeps the same name
                     image = f"{stamp.image} {tr('sheet_continued', plan.language)}"
                 else:
                     image = tr("sheet_tables", plan.language, no=main_no)
                 stamp = replace(stamp, image=image)
             add_sheet(doc, spec, tab, stamp, paper)
-    # Пустой лист по умолчанию из ezdxf не нужен
+    # The default empty sheet from ezdxf is not needed
     doc.layouts.delete("Layout1")
     finalize_fields(doc)
     return doc

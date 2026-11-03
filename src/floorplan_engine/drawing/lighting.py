@@ -1,15 +1,15 @@
-"""План освещения (решение 2026-10-28, P2): светильники, выключатели и что чем включается.
+"""Lighting plan (decision 2026-10-28, P2): lights, switches and which switch turns on what.
 
-Связь «выключатель → свет» — из `controls` выключателя (только из источника); нет её —
-по группе и помещению: выключатель стоит в группе света, которым управляет (правило
-CLAUDE.md), и включает свет своей группы в своём помещении. Такая связь — допущение «*»:
-у двухклавишного выключателя код не знает, какая клавиша что включает.
+The "switch → light" link comes from the switch's `controls` (only from the source). Without
+it, the link is guessed by group and room: a switch belongs to the group of the lights it
+controls (CLAUDE.md rule) and turns on the lights of its group in its room. Such a link is an
+assumption marked "*": for a two-key switch the code does not know which key does what.
 
-На листе — стены и проёмы, символы света и выключателей (слои E-SWITCH, E-LIGHT, E-LED),
-связи (E-LINK, пунктир прямыми: выключатель → ближайший светильник → следующий…; от
-кабеля связь отличает пунктир и слой — кабель идёт под 90°, связь — напрямую; решение
-2026-11-03: дуг нет), номера точек —
-как на листе электрики, только у света и выключателей (L-TEXT), таблица «Выключатели».
+The sheet shows walls and openings, light and switch symbols (layers E-SWITCH, E-LIGHT, E-LED),
+links (E-LINK, dashed straight lines: switch → nearest light → next one…; a link differs from
+a cable by its dashes and layer: a cable runs at 90°, a link goes straight; decision
+2026-11-03: no arcs), point numbers as on the electrical sheet, only for lights and switches
+(L-TEXT), and the "Switches" table.
 """
 
 from __future__ import annotations
@@ -66,8 +66,8 @@ def text(key: str, language: Language, **kw: object) -> str:
 @dataclass(frozen=True)
 class SwitchLink:
     switch: str
-    targets: tuple[str, ...]  # id светильников, выводов LED и лент
-    assumed: bool  # из группы и помещения, не из controls
+    targets: tuple[str, ...]  # ids of lights, LED outputs and strips
+    assumed: bool  # from group and room, not from controls
 
 
 def is_lighting(p: ElectricalPoint) -> bool:
@@ -75,14 +75,14 @@ def is_lighting(p: ElectricalPoint) -> bool:
 
 
 def lighting_model(elec: Electrical) -> Electrical:
-    """Электрика только света — светильники, выключатели и ленты, без щита: легенда листа
-    «Освещение» и его плашки в просмотре."""
+    """Lighting-only electrical model: lights, switches and strips, no panel. Used for the legend of
+    the "Lighting" sheet and its badge in the viewer."""
     return elec.model_copy(
         update={"points": [p for p in elec.points if is_lighting(p)], "board": None}
     )
 
 
-# Слова подписи выключателя → какой свет он включает (основы слов, ru и uk)
+# Words in a switch label → which light it turns on (word stems, ru and uk)
 KEYWORDS: tuple[tuple[tuple[str, ...], frozenset[PointType]], ...] = (
     (("бра",), frozenset({PointType.SCONCE})),
     (("підвіс", "подвес"), frozenset({PointType.PENDANT})),
@@ -99,8 +99,8 @@ def _words(note: str | None) -> set[str]:
 
 
 def _by_note(s: ElectricalPoint, candidates: Sequence[ElectricalPoint]) -> list[str]:
-    """Свет, который выключатель включает по своей подписи: по виду («бра» → бра) или по
-    общему слову с подписью светильника («підсвітка кухні»). Подсказки нет — []."""
+    """Lights a switch turns on according to its label: by kind ("бра" → wall lamp) or by a word
+    shared with the light's label ("підсвітка кухні"). No hint gives []."""
     note = (s.note or "").lower()
     kinds: set[PointType] = set()
     for stems, types in KEYWORDS:
@@ -111,11 +111,11 @@ def _by_note(s: ElectricalPoint, candidates: Sequence[ElectricalPoint]) -> list[
 
 
 def switch_links(elec: Electrical) -> list[SwitchLink]:
-    """Что включает каждый выключатель. Из controls — как есть. Иначе — допущение: свет
-    его группы в его помещении; если подпись выключателя подсказывает вид или общее слово
-    («бра», «стеля», «підсвітка кухні») — только такой свет; выключатели без подсказки
-    берут то, что не разобрали подсказанные (а если всё разобрано — весь свет группы).
-    Без controls и без группы — ничего: связь не выдумывается."""
+    """What each switch turns on. From controls, as is. Otherwise an assumption: the lights of its
+    group in its room; if the switch label hints at a kind or a shared word ("бра", "стеля",
+    "підсвітка кухні"), only those lights; switches without a hint take whatever the hinted ones
+    did not take (and if everything is taken, all lights of the group).
+    No controls and no group: nothing. A link is never invented."""
     out: list[SwitchLink] = []
     pending: list[tuple[ElectricalPoint, list[ElectricalPoint]]] = []
     claimed: dict[tuple[str, str], set[str]] = {}
@@ -147,12 +147,12 @@ def switch_links(elec: Electrical) -> list[SwitchLink]:
 
 
 def line_link(msp: Modelspace, points: Sequence[Vec], attribs: dict[str, object]) -> None:
-    """Связь через точки — прямыми отрезками между соседними, одной полилинией."""
+    """Link through points: straight segments between neighbours, as one polyline."""
     msp.add_lwpolyline([(v.x, v.y) for v in points], format="xy", dxfattribs=attribs)
 
 
 def chain(start: Vec, targets: Sequence[tuple[str, Vec]]) -> list[tuple[str, Vec]]:
-    """Обход целей от start: каждый раз — к ближайшей ещё не пройденной."""
+    """Visit targets from start: always go to the nearest one not yet visited."""
     left = list(targets)
     out: list[tuple[str, Vec]] = []
     at = start
@@ -167,7 +167,9 @@ def chain(start: Vec, targets: Sequence[tuple[str, Vec]]) -> list[tuple[str, Vec
 def draw_lighting(
     msp: Modelspace, plan: Plan, contours: dict[str, Contour], elec: Electrical
 ) -> None:
-    """Связи выключателей и номера света на своих слоях (символы — с листа электрики)."""
+    """Switch links and light numbers on their own layers (symbols come from the electrical
+    sheet).
+    """
     geoms_list = room_geometries(plan, contours)
     geoms = {g.room.id: g for g in geoms_list}
     shifts = stack_shifts(elec.points)
@@ -179,8 +181,8 @@ def draw_lighting(
         c = strip_area(strip, geoms).centroid
         spots[strip.id] = Vec(c.x, c.y)
 
-    # Как на плане освещения: свет одного набора — одной цепочкой прямых, от выключателя —
-    # один отрезок к ближайшему светильнику набора
+    # As on the lighting plan: lights of one set form one chain of straight lines, and the
+    # switch gets one segment to the nearest light of the set
     links = switch_links(elec)
     attribs = {"layer": E_LINK.name, "lineweight": LW_LINK}
     drawn: set[frozenset[str]] = set()
@@ -224,7 +226,7 @@ def draw_lighting(
 
 
 def _spot(a: Anchor) -> Vec:
-    """Куда ведёт связь: середина символа (у точки на стене — отступ от стены)."""
+    """Where a link points: the symbol centre (for a wall point, offset from the wall)."""
     if a.inward is None:
         return a.pos
     return a.pos + a.inward * (a.depth / 2)
@@ -240,7 +242,7 @@ class SwitchRow:
 
 
 def switch_rows(plan: Plan, elec: Electrical) -> list[SwitchRow]:
-    """Строки таблицы «Выключатели» по номерам выключателей."""
+    """Rows of the "Switches" table by switch number."""
     lang = plan.language
     numbers = number_points(plan, elec)
     by_id = {p.id: p for p in elec.points}
@@ -264,7 +266,7 @@ def switch_rows(plan: Plan, elec: Electrical) -> list[SwitchRow]:
 
 
 def switch_table(plan: Plan, elec: Electrical) -> tuple[Table, list[str]] | None:
-    """Таблица «Выключатели» и примечание о допущениях; выключателей со связями нет — None."""
+    """The "Switches" table and a note about assumptions; None if no switch has links."""
     rows = switch_rows(plan, elec)
     if not rows:
         return None

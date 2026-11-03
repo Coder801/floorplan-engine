@@ -1,15 +1,16 @@
-"""Оценка проекта: вес вопросов и статус каждого этапа — строить, строить с вопросами или нет.
+"""Project assessment: question weights and the status of each stage: build, build with
+questions, or not.
 
-Вес вопроса считает код по полю, на которое он указывает, а не анализатор: один и тот
-же проект всегда даёт один и тот же статус.
+The code weighs a question by the field it points to, not the analyzer: the same project
+always gets the same status.
 
-    геометрия (length, turn, origin, start_angle)   critical, если значения нет, иначе major
-    привязка (offset, width, wall, ceiling, …)      major
-    остальное (height, thickness, sill, group, …)   minor
-    вопрос без target                               вес указывает анализатор
+    geometry (length, turn, origin, start_angle)    critical if there is no value, else major
+    anchoring (offset, width, wall, ceiling, …)     major
+    the rest (height, thickness, sill, group, …)    minor
+    question without target                         weight set by the analyzer
 
-Этап не строится, если есть открытый critical или сумма весов (major 3, minor 1) больше
-WEIGHT_LIMIT — «мало данных». Электрика без готового плана заблокирована.
+A stage is not built if there is an open critical question or the weight sum (major 3,
+minor 1) exceeds WEIGHT_LIMIT: "not enough data". Electrical without a finished plan is blocked.
 """
 
 from __future__ import annotations
@@ -24,11 +25,11 @@ from floorplan_engine.validation.validate import Report
 
 GEOMETRY_FIELDS = frozenset({"length", "turn", "origin", "start_angle"})
 PLACEMENT_FIELDS = frozenset({"offset", "width", "wall", "ceiling", "start", "end", "room"})
-SAFETY_FIELDS = frozenset({"npe_relay"})  # защита людей — вопрос важный
+SAFETY_FIELDS = frozenset({"npe_relay"})  # protecting people: an important question
 WEIGHTS = {QSeverity.CRITICAL: 0, QSeverity.MAJOR: 3, QSeverity.MINOR: 1}
 WEIGHT_LIMIT = 12
 
-# Этапы, которые уже умеем строить, и их файлы
+# Stages we can already build, and their files
 STAGE_FILES = {
     Stage.PLAN: ROOM_FILE,
     Stage.ELECTRICAL: ELECTRICAL_FILE,
@@ -46,13 +47,13 @@ DEPENDS_ON = {
 
 
 class Status(StrEnum):
-    READY = "ready"  # строится, вопросов нет
-    QUESTIONS = "questions"  # строится по допущениям, вопросы в отчёте
-    INSUFFICIENT = "insufficient"  # мало данных — не строится
-    INVALID = "invalid"  # ошибки в YAML — не строится
-    BLOCKED = "blocked"  # не готов этап, от которого зависит
-    ABSENT = "absent"  # данных нет, делать не буду
-    UNSUPPORTED = "unsupported"  # данные есть, этап ещё не умеем строить
+    READY = "ready"  # builds, no questions
+    QUESTIONS = "questions"  # builds on assumptions, questions in the report
+    INSUFFICIENT = "insufficient"  # not enough data, not built
+    INVALID = "invalid"  # YAML errors, not built
+    BLOCKED = "blocked"  # a stage it depends on is not ready
+    ABSENT = "absent"  # no data, will not be done
+    UNSUPPORTED = "unsupported"  # there is data, but the stage cannot be built yet
 
     @property
     def builds(self) -> bool:
@@ -72,7 +73,7 @@ STATUS_TEXT = {
 
 def severity(q: Question) -> QSeverity:
     if q.target is None:
-        assert q.severity is not None  # гарантирует схема
+        assert q.severity is not None  # guaranteed by the schema
         return q.severity
     name = q.target.rsplit(".", 1)[-1]
     if name in GEOMETRY_FIELDS:
@@ -97,7 +98,7 @@ class StageResult:
         return sum(1 for q in self.open_questions if severity(q) is level)
 
 
-# Этапы, которые в отчёте всегда (их нет — «нет файла»); остальные — если о них что-то известно
+# Stages always in the report (missing ones show "no file"); the rest only if something is known
 ALWAYS = frozenset({Stage.PLAN, Stage.ELECTRICAL})
 
 
@@ -112,7 +113,7 @@ def _stages_in_play(report: Report) -> list[Stage]:
 
 
 def assess(report: Report) -> list[StageResult]:
-    """Статус каждого этапа, о котором что-то известно, в порядке Stage."""
+    """Status of each stage something is known about, in Stage order."""
     intake = report.intake
     results: dict[Stage, StageResult] = {}
     for stage in _stages_in_play(report):
@@ -133,7 +134,7 @@ def assess(report: Report) -> list[StageResult]:
         errors = [i for i in report.errors if file is not None and i.file in (file,)]
         parent = DEPENDS_ON.get(stage)
         if stage is Stage.PANEL:
-            # Щит строится вместе с электрикой; его вопросы её не останавливают
+            # The panel builds together with electrical; its questions do not stop it
             built = parent in results and results[parent].status.builds
             result.status = (
                 Status.BLOCKED if not built else Status.QUESTIONS if open_q else Status.READY

@@ -1,2 +1,2 @@
-"""Данные проекта: схема YAML (pydantic), intake и ответы, надписи на языке проекта,
-контур помещения, каталог аппаратов щита."""
+"""Project data: YAML schema (pydantic), intake and answers, labels in the project language,
+room outline, panel device catalogue."""

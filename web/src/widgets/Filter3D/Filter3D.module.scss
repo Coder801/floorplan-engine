@@ -1,5 +1,5 @@
-// Фильтр 3D в группе кнопок под чертежом: помещение и кнопка групп; всплывашка — порталом
-// в области чертежа над кнопками (index.tsx)
+// 3D filter in the button group under the drawing: room and groups button; the popup is a
+// portal in the drawing area above the buttons (index.tsx)
 
 @use "@/shared/styles/mixins" as *;
 
@@ -20,7 +20,7 @@
 }
 .head { display: flex; gap: 4px; margin-bottom: 4px; }
 
-// Строка группы: глаз | цвет | QF | «только» (видно при наведении); скрытая — бледнее
+// Group row: eye | colour | QF | "only" (visible on hover); a hidden one is fainter
 .row {
   display: grid; grid-template-columns: auto 10px minmax(0, 1fr) auto;
   align-items: center; gap: 8px; padding: 3px 4px; border-radius: 4px; cursor: pointer;
@@ -30,6 +30,6 @@
 .swatch { height: 10px; border-radius: 50%; }
 .hidden > :not(:first-child):not(.only) { opacity: .45; }
 .pop .only { @include bare-button; color: var(--muted); font-size: 11px; visibility: hidden; }
-// Без наведения (палец) — «только» видно всегда
+// Without hover (touch), "only" is always visible
 @media (hover: none) { .pop .only { visibility: visible; } }
 @media (max-width: $narrow) { .pop { left: 8px; right: 8px; bottom: 60px; } }

@@ -1,4 +1,4 @@
-"""Карточки объектов для подсказок просмотра: названия линий по смыслу и данные из модели."""
+"""Object cards for viewer hints: meaningful line names and data from the model."""
 
 from __future__ import annotations
 
@@ -32,7 +32,7 @@ def _model() -> tuple[Plan, Any, Electrical, Wiring]:
             "points": [
                 _pt("s1", "socket", 500, "QF2", count=2, note="у дивана"),
                 _pt("s2", "socket", 1500, "QF2"),
-                _pt("s3", "socket", 2500, "QF3"),  # одна точка группы — от щита
+                _pt("s3", "socket", 2500, "QF3"),  # a group's single point comes from the panel
             ],
             "board": {"room": "r", "wall": "w1", "offset": 500, "height": 1700},
         }
@@ -45,9 +45,9 @@ def _model() -> tuple[Plan, Any, Electrical, Wiring]:
 def test_wire_titles_say_where_from_and_to() -> None:
     plan, _, elec, wiring = _model()
     titles = set(wire_titles(plan, elec, wiring).values())
-    assert "QF2: ЩР → К1" in titles  # щит → коробка
-    assert "QF2: К1 → Розетка с заземлением, Комната" in titles  # коробка → точка
-    assert "QF3: ЩР → Розетка с заземлением, Комната" in titles  # напрямую от щита
+    assert "QF2: ЩР → К1" in titles  # panel → box
+    assert "QF2: К1 → Розетка с заземлением, Комната" in titles  # box → point
+    assert "QF3: ЩР → Розетка с заземлением, Комната" in titles  # straight from the panel
     assert not any("wire_" in t for t in titles)
 
 
@@ -57,7 +57,7 @@ def test_wire_card_has_group_cable_and_lengths() -> None:
     card = describe_objects(plan, contours, elec, wiring)[f"wire:{run.id}"]
     rows = dict(card.rows)
     assert rows["Автомат (группа)"] == "QF3"
-    assert rows["Кабель"] == "3x2.5 — допущение"  # марки в модели нет
+    assert rows["Кабель"] == "3x2.5 — допущение"  # no cable type in the model
     assert rows["Откуда"] == "ЩР" and rows["Трасса"] == "по потолку"
     assert rows["Длина"].startswith(f"{run.length_mm / 1000:.1f}".replace(".", ","))
 
@@ -95,8 +95,8 @@ def test_epd_pages_carry_only_their_objects(tmp_path: Path) -> None:
         pages = [json.loads(zf.read(f"pages/0{k}.json")) for k in (1, 2, 3)]
     for page in pages:
         drawn = {i["o"] for i in page["items"] if "o" in i}
-        assert set(page["objects"]) <= drawn  # карточки — только нарисованного
-    assert not any(k.startswith("wire:") for k in pages[0]["objects"])  # на плане проводки нет
+        assert set(page["objects"]) <= drawn  # cards only for what is drawn
+    assert not any(k.startswith("wire:") for k in pages[0]["objects"])  # not on the wiring plan
     assert any(k.startswith("wire:") for k in pages[2]["objects"])
 
 
@@ -108,7 +108,7 @@ def test_line_chains_select_whole_line() -> None:
     via_box = next(r for r in wiring.runs if r.source.startswith("box_"))
     feed = next(r for r in wiring.runs if r.target == via_box.source)
     chain = chains[f"point:{via_box.target}"]
-    assert chain == chains[f"wire:{via_box.id}"]  # клик по точке и по её линии — одно
+    assert chain == chains[f"wire:{via_box.id}"]  # a click on a point and on its line is the same
     assert f"wire:{feed.id}" in chain and f"box:{via_box.source}" in chain
     direct = next(r for r in wiring.runs if r.source == "board" and not r.target.startswith("box_"))
     assert chains[f"point:{direct.target}"] == [f"wire:{direct.id}", f"point:{direct.target}"]

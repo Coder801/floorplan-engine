@@ -1,4 +1,6 @@
-"""Линия от щита — свой автомат (lines.py): premium и proper делят группу по линиям."""
+"""Each line from the panel gets its own breaker (lines.py): premium and proper split a group by
+lines.
+"""
 
 from __future__ import annotations
 
@@ -26,7 +28,7 @@ def _socket(pid: str, room: str, offset: float, group: str = "QF1") -> dict[str,
 
 
 def _elec(**extra: Any) -> Electrical:
-    """По две розетки QF1 в комнатах a и b: коробка в каждой — две линии от щита."""
+    """Two QF1 sockets in rooms a and b each: a box in each, two lines from the panel."""
     return Electrical.model_validate(
         {
             "points": [
@@ -80,8 +82,9 @@ def test_proper_gives_each_board_line_own_group() -> None:
     groups = {p.id: p.group for p in out.points}
     assert groups["a1"] == groups["a2"] == "QF1"
     assert groups["b1"] == groups["b2"] == "QF1.2"
-    assert groups["d1"] == groups["d2"] == "QF9"  # слаботочка не в щите — не делится
-    # Кабель, автомат и резерв группы — у каждой линии; назначение второй — по точкам
+    assert groups["d1"] == groups["d2"] == "QF9"  # low-voltage is not in the panel and is not split
+    # Cable, breaker and group backup go to every line; the second one's purpose is built from
+    # points
     assert [(c.group, c.cable) for c in out.cables] == [("QF1", "3x2.5"), ("QF1.2", "3x2.5")]
     assert out.cables[1].to == ["b1", "b2"]
     assert out.groups["QF1"].name == "Розетки"

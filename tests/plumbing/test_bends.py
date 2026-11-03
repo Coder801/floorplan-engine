@@ -28,7 +28,7 @@ def test_octilinear_splits_odd_segment() -> None:
 
 def test_chamfer_right_angle_into_two_bends() -> None:
     out = chamfer([Vec(0, 0), Vec(1000, 0), Vec(1000, 1000)])
-    assert out[0] == Vec(0, 0) and out[-1] == Vec(1000, 1000)  # концы на месте
+    assert out[0] == Vec(0, 0) and out[-1] == Vec(1000, 1000)  # ends in place
     assert turns(out) == pytest.approx([45.0, 45.0])
     assert bends(out) == 2
 
@@ -41,7 +41,7 @@ def test_chamfer_135_into_three_bends() -> None:
 
 def test_chamfer_shrinks_on_short_segments() -> None:
     out = chamfer([Vec(0, 0), Vec(1000, 0), Vec(1000, 40), Vec(2000, 40)])
-    assert turns(out) == pytest.approx([45.0, 45.0])  # уступ 40 мм — одна диагональ
+    assert turns(out) == pytest.approx([45.0, 45.0])  # a 40 mm step: one diagonal
     assert bends(out) == 2
     assert all((b - a).length() > 0 for a, b in itertools.pairwise(out))
 
@@ -57,12 +57,12 @@ def test_simplify_drops_collinear_diagonal() -> None:
 
 
 def test_tee45_branch_enters_along_flow() -> None:
-    parent = [Vec(0, 0), Vec(2000, 0)]  # от стояка (0, 0): течёт к началу, влево
-    branch = [Vec(1000, 0), Vec(1000, 800)]  # врезка под 90°
+    parent = [Vec(0, 0), Vec(2000, 0)]  # from riser (0, 0): flows left
+    branch = [Vec(1000, 0), Vec(1000, 800)]  # tee at 90°
     out, along = tee45(branch, parent, 1000.0)
-    assert along == pytest.approx(900.0)  # место врезки сдвинулось к стояку
+    assert along == pytest.approx(900.0)  # the tee spot moved towards the riser
     assert out[0] == Vec(900, 0)
-    flow_in = out[0] - out[1]  # течение отвода у врезки
+    flow_in = out[0] - out[1]  # branch flow at the tee
     assert turn(flow_in, Vec(-1, 0)) == pytest.approx(45.0)
     assert out[-1] == Vec(1000, 800)
 

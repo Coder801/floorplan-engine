@@ -1,14 +1,14 @@
-// Связи объектов страницы: линия целиком (chains), группа (groups), карточки (objects)
+// Links between page objects: the whole line (chains), group (groups), cards (objects)
 
 import { label } from "@/shared/i18n";
 import type { ObjectCard, Page } from "./types";
 
-// Ключи объекта для сверки с таблицами: общая подпись точек — это её точки
+// Object keys for matching with tables: a shared label of points means its points
 export const expand = (o: string): string[] =>
   (o.startsWith("label:") ? o.slice(6).split(",").map((id) => `point:${id}`) : [o]);
 
-// other — карточки других листов общего чертежа: для объектов слоя, включённого с чужого
-// листа (размеры на проводке); свои карточки и линии листа главнее
+// other holds cards of other sheets of the shared drawing, for objects on a layer switched on
+// from another sheet (dimensions on wiring); the sheet's own cards and lines win
 export class PageIndex {
   readonly objects: Record<string, ObjectCard> | null;
   readonly chains: Record<string, string[]>;
@@ -23,13 +23,13 @@ export class PageIndex {
     }
   }
 
-  // Линия объекта для выделения; подпись нескольких точек — линии всех её точек
+  // An object's line for selection; a label of several points means the lines of all its points
   chainOf(o: string): Set<string> {
     const keys = expand(o).flatMap((k) => this.chains[k] || [k]);
     return new Set([o, ...keys]);
   }
 
-  // Соседи — остальное той же группы QF (её другие коробки, ветки и точки)
+  // Neighbours: the rest of the same QF group (its other boxes, branches and points)
   neighborsOf(chain: Set<string>): Set<string> | null {
     for (const k of chain) {
       const g = this.groupOf.get(k);
@@ -42,7 +42,7 @@ export class PageIndex {
     return !!o && (!this.objects || o in this.objects || expand(o).some((k) => k in this.chains) || o in this.other);
   }
 
-  // Карточка объекта; точка на листе проводки — карточка линии до неё; нет — тип и id
+  // Object card; a point on the wiring sheet gets the card of the line to it; otherwise type and id
   card(o: string): ObjectCard {
     const objs = this.objects || {};
     const info = objs[o] || objs[(this.chains[o] || [])[0]] || this.other[o];

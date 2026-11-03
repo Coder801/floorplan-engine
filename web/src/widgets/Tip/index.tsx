@@ -1,6 +1,6 @@
-// Подсказка объекта: у курсора (справа и ниже, не помещается — по другую сторону) или
-// закреплённая кликом — в правом верхнем углу, не поверх чертежа; закрывается ×, Esc
-// (и на листе, и в 3D) и сменой листа (store.resetSelection)
+// Object hint: at the cursor (right and below; if it does not fit, on the other side) or, pinned
+// by a click, in the top-right corner, not over the drawing; closed by ×, Esc (on the sheet and
+// in 3D) and by switching sheets (store.resetSelection)
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";

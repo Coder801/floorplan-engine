@@ -1,6 +1,6 @@
-// Мини-схема к развёртке (внизу слева чертежа): какая это стена — в квартире «в разрезе»,
-// стена цветом, пол её помещения — подсветкой, перед стеной — человечек лицом к ней (с какой
-// стороны смотрим). Статичная, из 3D-сцены (sheet/wallMap.ts)
+// Elevation mini map (bottom left of the drawing): which wall this is, in a cut-away view of the
+// flat, the wall in colour, its room floor highlighted, and a figure facing the wall (which
+// side we look from). Static, from the 3D scene (sheet/wallMap.ts)
 
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
@@ -8,7 +8,7 @@ import { frame, viewer, wallMap } from "@/engine/sheet/wallMap";
 import type { Scene, XY } from "@/shared/types";
 import css from "./WallMap.module.scss";
 
-// key — объект развёртки: elevation:bath.w3
+// key is the elevation object: elevation:bath.w3
 export function WallMap({ scene, elevation, title, face }: { scene: Scene; elevation: string; title: string; face?: [XY, XY] }) {
   const { t } = useTranslation();
   const id = elevation.slice(elevation.indexOf(":") + 1);
@@ -30,8 +30,8 @@ export function WallMap({ scene, elevation, title, face }: { scene: Scene; eleva
   );
 }
 
-// Человечек, как на картах: жёлтый, руки чуть в стороны; рисунок — в единицах роста 100,
-// ноги — в (0, 0), над ними — тень
+// A figure as on maps: yellow, arms slightly apart; drawn in units of a height of 100, feet at
+// (0, 0), a shadow above them
 function Pegman({ x, y, size }: { x: number; y: number; size: number }) {
   return (
     <g className={css.pegman} transform={`translate(${x} ${y}) scale(${size / 100})`}>

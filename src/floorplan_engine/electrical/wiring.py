@@ -1,56 +1,57 @@
-"""Проводка через распаечные коробки: топология, трассы и длины кабеля — из модели.
+"""Wiring through junction boxes: topology, routes and cable lengths, all from the model.
 
-Правила варианта:
-- кабель идёт только от щита к коробке, от щита к потребителю или от коробки к
-  потребителю; от потребителя к коробке и от коробки к коробке — никогда;
-- помещение — отдельная зона: коробка стоит в помещении и питает только его точки, её
-  кабели не выходят за стены; в другое помещение кабель приходит от щита через дверные
-  проёмы (routing.py). Исключение — выключатель: он врезается в коробку своего света, и
-  если в помещении у группы только выключатели (у двери снаружи), ветка к ним идёт от
-  ближайшей коробки группы через проём; своей коробки и линии от щита у них нет
-  (решение 2026-10-25);
-- коробка — на группу в помещении, если у группы там свет (любой) или две точки и
-  больше; одна розетка группы в помещении питается прямо от щита; линий в коробке
-  (питающая + ветки) не больше, чем вводов у 150×110 (BOX_SIZES, по нижней границе), —
-  больше точек: коробки по зонам (split_points), каждая своей линией от щита; типоразмер —
-  наименьший по числу линий (box_size), 190×140 — только в крайнем случае;
-- отдельные линии (direct) идут от щита к каждой точке без коробок: сечение от
-  HEAVY_SECTION мм² (варочная, духовка, бойлер), группа только из выводов к технике
-  (кондиционер, рушникосушка) и слаботочка; в модели — Cable.direct;
-- коробка у трассы по потолку — всегда на потолке, не ближе routing.CLEARANCE к стенам,
-  в центре своих точек: из мест, где ветки до точек по трассе в обход стен
-  (branch_reach) почти самые короткие, — ближайшее к их середине (решение 2026-11-01);
-  у группы по полу — на стене в BOX_ABOVE_FLOOR от пола, где путь от щита плюс ветки
-  наименьшие;
-- трассы — под прямыми углами, в обход стен (тот же путь, что на листе): по потолку,
-  у группы с route: floor — по полу в стяжке; не ближе routing.CLEARANCE (150 мм)
-  к стенам, кроме подхода к точке на стене и прохода в проёме; в экономе — под любым углом;
-- в объёме комнаты кабеля нет (решение 2026-11-01): к потолочной точке кабель идёт по
-  потолку и при трассе по полу — группа освещения (только потолочный свет и выключатели)
-  целиком по потолку, а в смешанной группе ветка к светильнику поднимается по стене от
-  коробки или щита до потолка и идёт по потолку (_to_ceiling).
+Variant rules:
+- cable runs only from the panel to a box, from the panel to a load or from a box to a load;
+  never from a load to a box or from box to box;
+- a room is its own zone: a box sits in the room and feeds only its points, its cables do not
+  leave the walls; cable reaches another room from the panel through door openings
+  (routing.py). The exception is a switch: it is tapped into the box of its light, and if a
+  group has only switches in a room (by a door outside), the branch to them comes from the
+  group's nearest box through the opening; they get no box or panel line of their own
+  (decision 2026-10-25);
+- a box per group per room if the group has any light there, or two points or more; a single
+  socket of a group in a room is fed directly from the panel; lines in a box (feed +
+  branches) are at most the entries of a 150×110 (BOX_SIZES, low end); with more points the
+  boxes are split by zone (split_points), each with its own panel line; box size is the
+  smallest for the number of lines (box_size), 190×140 only as a last resort;
+- direct lines run from the panel to each point without boxes: cross-section from
+  HEAVY_SECTION mm² (hob, oven, boiler), a group made only of appliance outputs (air
+  conditioner, towel rail) and low-voltage; in the model, Cable.direct;
+- a box for a ceiling route is always on the ceiling, at least routing.CLEARANCE from walls,
+  at the centre of its points: among spots where the route branches to the points around
+  walls (branch_reach) are nearly the shortest, the one closest to their middle (decision
+  2026-11-01); for a floor group, on a wall at BOX_ABOVE_FLOOR from the floor where the path
+  from the panel plus branches is smallest;
+- routes run at right angles around walls (the same path as on the sheet): on the ceiling,
+  or for a group with route: floor in the floor screed; at least routing.CLEARANCE (150 mm)
+  from walls, except the approach to a wall point and the pass through an opening; in
+  economy at any angle;
+- no cable crosses the room volume (decision 2026-11-01): cable to a ceiling point runs on
+  the ceiling; with a floor route a lighting group (only ceiling lights and switches) goes
+  entirely on the ceiling, and in a mixed group the branch to a light rises up the wall from
+  the box or panel to the ceiling and runs along the ceiling (_to_ceiling).
 
-Длина линии = путь по плану + вертикаль от точки подключения до потолка (или пола) на
-обоих концах + выпуски: у щита кабель выпускается до пола (BOARD_TAIL — высота щита),
-на остальных подключениях — END_ALLOWANCE. Итог по марке — с запасом RESERVE.
-Точки без группы (обычно слаботочка) в расчёт не входят.
+Line length = plan path + vertical from the connection point to the ceiling (or floor) at
+both ends + tails: at the panel the cable runs down to the floor (BOARD_TAIL is the panel
+height), at other connections END_ALLOWANCE. The total per cable type includes RESERVE.
+Points without a group (usually low-voltage) are not counted.
 
-Штробы (wall_chases) — вертикальные: от потолка вниз (или от пола вверх) к точке на
-стене, у щита и у коробки. Спуски одной стены, если они ближе CHASE_SHARE друг к другу,
-идут в общей штробе, не больше CHASE_CABLES кабелей в одной; длина общей штробы — до
-самой дальней точки. У щита и коробки — по штробе на каждые CHASE_CABLES кабелей.
-Силовые кабели и слаботочка (circuit) в одну штробу не кладутся, трассы потолка и пола —
-тоже. Штроба до CHASE_NARROW кабелей — узкая, больше — широкая (своя цена в смете).
+Chases (wall_chases) are vertical: from the ceiling down (or the floor up) to a wall point,
+at the panel and at a box. Drops on one wall closer than CHASE_SHARE share one chase, at most
+CHASE_CABLES cables per chase; a shared chase runs to the farthest point. At the panel and a
+box there is one chase per CHASE_CABLES cables. Power and low-voltage (circuit) cables never
+share a chase, nor do ceiling and floor routes. A chase with up to CHASE_NARROW cables is
+narrow, more is wide (its own price in the estimate).
 
-Ручные правки (wiring.yaml, из просмотра): коробка ставится в указанное место (на стене —
-вдоль своей стены, не ближе BOX_CLEARANCE к углам; на потолке — внутри помещения), её
-линии без ручной трассы прокладываются от нового места заново; линия с ручной трассой
-идёт по ней, концы пристёгиваются к узлам источника и цели под прямыми углами. Правка,
-у которой id теперь означает другую линию или коробку, не применяется (edit_notes).
+Manual edits (wiring.yaml, from the viewer): a box is put at the given spot (on a wall, along
+its wall, at least BOX_CLEARANCE from corners; on the ceiling, inside the room), its lines
+without a manual route are routed again from the new spot; a line with a manual route
+follows it, its ends snapped to the source and target nodes at right angles. An edit whose
+id now means another line or box is not applied (edit_notes).
 
-Проходы через стены (wall_holes): трасса по потолку проходит в соседнее помещение над
-дверью или проёмом — стену над ним сверлят; в одно отверстие — до HOLE_CABLES кабелей,
-силовые и слаботочка — в разные. Трасса по полу проходит под проёмом — без сверления.
+Wall passes (wall_holes): a ceiling route passes into a neighbouring room above a door or
+opening, so the wall above it is drilled; up to HOLE_CABLES cables per hole, power and
+low-voltage in separate holes. A floor route passes under the opening with no drilling.
 """
 
 from __future__ import annotations
@@ -108,13 +109,13 @@ from floorplan_engine.model.schema import (
     WiringEdits,
 )
 
-END_ALLOWANCE = 200.0  # мм: выпуск кабеля на каждое подключение, кроме щита
-RESERVE = 0.15  # запас на итог по марке
-HEAVY_SECTION = 4.0  # мм²: от этого сечения линия идёт от щита без коробок
+END_ALLOWANCE = 200.0  # mm: cable tail at every connection except the panel
+RESERVE = 0.15  # margin on the total per cable type
+HEAVY_SECTION = 4.0  # mm²: from this cross-section a line goes from the panel without boxes
 POWER_TYPES = frozenset({PointType.SOCKET, PointType.OUTLET})
-LOW_TYPES = frozenset({PointType.DATA, PointType.TV})  # слаботочка
+LOW_TYPES = frozenset({PointType.DATA, PointType.TV})  # low-voltage
 SWITCH_TYPES = frozenset({PointType.SWITCH, PointType.PASS_SWITCH})
-# Свет в помещении всегда идёт через коробку (решение 2026-10-21)
+# Lighting in a room always goes through a box (decision 2026-10-21)
 LIGHT_TYPES = frozenset(
     {
         PointType.LIGHT,
@@ -144,7 +145,7 @@ def _mark(cable: Cable | None, points: Sequence[ElectricalPoint]) -> tuple[str, 
 
 
 def section(mark: str) -> float:
-    """Сечение жилы из марки: «3x6» → 6, «5х2,5» → 2.5; не разобрать — 0."""
+    """Conductor cross-section from a type: "3x6" → 6, "5х2,5" → 2.5; 0 if unreadable."""
     m = re.search(r"[xх×]\s*(\d+(?:[.,]\d+)?)", mark)
     return float(m.group(1).replace(",", ".")) if m else 0.0
 
@@ -152,7 +153,7 @@ def section(mark: str) -> float:
 def _direct(
     cable: Cable | None, mark: str, points: Sequence[ElectricalPoint], circuit: Circuit
 ) -> bool:
-    """Отдельные линии от щита без коробок."""
+    """Direct lines from the panel without boxes."""
     if cable is not None and cable.direct is not None:
         return cable.direct
     return (
@@ -163,11 +164,11 @@ def _direct(
 
 
 def _rise(pt: ElectricalPoint, ceiling: float, route: Route) -> float:
-    """От точки подключения до плоскости трассы, мм: до потолка (потолочная точка — 0)
-    или до пола (потолочная точка — вся высота стены)."""
+    """From the connection point to the route plane, mm: up to the ceiling (a ceiling point
+    gives 0) or down to the floor (a ceiling point gives the whole wall height)."""
     if pt.ceiling is not None:
         return ceiling if route == "floor" else 0.0
-    assert pt.height is not None  # у точки на стене высота обязательна (валидация)
+    assert pt.height is not None  # a wall point always has a height (validated)
     return pt.height if route == "floor" else max(ceiling - pt.height, 0.0)
 
 
@@ -183,20 +184,20 @@ class _Link:
     target_rise: float
     route: Route
     circuit: Circuit
-    cross: bool = False  # ветка коробки в соседнее помещение: выключатель у двери снаружи
+    cross: bool = False  # box branch into a neighbouring room: a switch by the door outside
 
 
 @dataclass(frozen=True)
 class _Context:
-    """Общее для всех групп: план, точки подключения, щит и трассы от него."""
+    """Shared by all groups: plan, connection points, panel and routes from it."""
 
     plan: Plan
     geoms: dict[str, RoomGeometry]
     anchors: dict[str, Anchor]
     board: Board
     from_board: Router
-    free: BaseGeometry  # вся квартира с проёмами — для веток к выключателям за дверью
-    any_angle: bool = False  # эконом: трассы по потолку и полу под любым углом (routing.py)
+    free: BaseGeometry  # the whole flat with openings, for branches to switches behind a door
+    any_angle: bool = False  # economy: ceiling and floor routes at any angle (routing.py)
 
     @property
     def ceiling(self) -> float:
@@ -209,9 +210,9 @@ def estimate_wiring(
     elec: Electrical,
     edits: WiringEdits | None = None,
 ) -> Wiring | None:
-    """Проводка для объёмов сметы — всегда в масштабе 1:50. Полосы пучков задаются в мм листа,
-    и длины трасс чуть зависят от масштаба листа; смета от формата не зависит: одна и та же
-    на листе A2, A3 и в out/estimate.*."""
+    """Wiring for estimate quantities, always at 1:50. Bundle lanes are set in sheet mm, so route
+    lengths depend slightly on the sheet scale; the estimate does not depend on paper size: it is
+    the same on A2, A3 and in out/estimate.*."""
     with drawing_scale(DEFAULT_SCALE):
         return box_wiring(plan, contours, elec, edits)
 
@@ -222,8 +223,8 @@ def box_wiring(
     elec: Electrical,
     edits: WiringEdits | None = None,
 ) -> Wiring | None:
-    """Проводка через коробки; None — нет щита или точек с группами. edits — ручные правки
-    из wiring.yaml: места коробок и трассы линий."""
+    """Wiring through boxes; None without a panel or grouped points. edits are manual edits from
+    wiring.yaml: box spots and line routes."""
     if elec.board is None:
         return None
     grouped = [p for p in elec.points if p.group]
@@ -232,7 +233,7 @@ def box_wiring(
     geoms = {g.room.id: g for g in room_geometries(plan, contours)}
     shifts = stack_shifts(elec.points)
     free = free_area(list(geoms.values()))
-    # Эконом экономит кабель: по потолку и полу — кратчайшим путём (docs/wiring-variants.md)
+    # Economy saves cable: on ceiling and floor along the shortest path (docs/wiring-variants.md)
     any_angle = elec.mode == "economy"
     ctx = _Context(
         plan,
@@ -282,7 +283,7 @@ def _moved_boxes(
     edited: set[str],
     notes: list[tuple[str, str]],
 ) -> tuple[list[JunctionBox], list[_Link]]:
-    """Коробки — в места из wiring.yaml; линия щит → коробка ведёт к новому месту."""
+    """Boxes go to the spots from wiring.yaml; the panel → box line leads to the new spot."""
     by_id = {b.id: b for b in boxes}
     out = list(boxes)
     moved: dict[str, Anchor] = {}
@@ -316,8 +317,8 @@ def _manual_runs(
     notes: list[tuple[str, str]],
     any_angle: bool = False,
 ) -> list[Run]:
-    """Линии с ручной трассой из wiring.yaml; концы — в узлах источника и цели. Участки под
-    углом — только в экономе (any_angle); в стандарте и премиуме такая правка не применяется."""
+    """Lines with a manual route from wiring.yaml; ends at the source and target nodes. Slanted
+    pieces only in economy (any_angle); in standard and premium such an edit is not applied."""
     by_id = {r.id: r for r in runs}
     manual: dict[str, Run] = {}
     inside = free.buffer(1.0)
@@ -347,14 +348,15 @@ def _group_links(
     pts: Sequence[ElectricalPoint],
     boxes: list[JunctionBox],
 ) -> list[_Link]:
-    """Линии одной группы по помещениям: через коробку или каждая точка от щита.
-    Новые коробки дописываются в boxes."""
+    """Lines of one group by room: through a box, or each point from the panel.
+    New boxes are appended to boxes."""
     cable = _cable(elec, group)
     mark, assumed = _mark(cable, pts)
-    # Трасса: у кабеля группы — его; без кабеля — общая трасса электрики (вариант проводки)
+    # Route: the group's cable route if it has one; without a cable, the shared electrical route
+    # (wiring variant)
     floor = cable.route == "floor" if cable is not None else elec.route == "floor"
-    # Освещение (только потолочный свет и выключатели) — по потолку и при трассе по полу:
-    # иначе от пола к светильнику кабель шёл бы через объём комнаты
+    # Lighting (only ceiling lights and switches) runs on the ceiling even with a floor route:
+    # otherwise cable from the floor to a light would cross the room volume
     lighting = any(p.ceiling is not None for p in pts) and all(
         p.ceiling is not None or p.type in SWITCH_TYPES for p in pts
     )
@@ -380,8 +382,9 @@ def _group_links(
     def to_point(
         src: str, from_height: float, up: float, p: ElectricalPoint, cross: bool = False
     ) -> None:
-        """Ветка к точке; к потолочной при трассе по полу — по стене вверх и по потолку
-        (from_height — высота подключения у источника, от пола)."""
+        """Branch to a point; to a ceiling point with a floor route, up the wall and along the
+        ceiling
+        (from_height is the connection height at the source, from the floor)."""
         if route == "floor" and p.ceiling is not None:
             up = max(ctx.ceiling - from_height, 0.0)
             link(src, p.id, ctx.anchors[p.id], up, 0.0, cross, way="ceiling")
@@ -391,8 +394,8 @@ def _group_links(
     def direct(p: ElectricalPoint) -> None:
         to_point("board", height, board_rise, p)
 
-    # Выключатель врезается в коробку своего света: в помещении, где у группы только
-    # выключатели (у двери снаружи), отдельной коробки и линии от щита у них нет
+    # A switch is tapped into the box of its light: in a room where the group has only
+    # switches (by the door outside) they get no box or panel line of their own
     lit = {p.room for p in pts if p.type not in SWITCH_TYPES}
     outside = [] if no_boxes else [p for p in pts if p.type in SWITCH_TYPES and p.room not in lit]
     for room in ctx.plan.rooms:
@@ -404,12 +407,12 @@ def _group_links(
             for p in here:
                 direct(p)
             continue
-        # Не больше BOX_BRANCHES веток на коробку: больше точек — коробки по зонам
+        # At most BOX_BRANCHES branches per box: more points means boxes by zone
         zones = split_points([ctx.anchors[p.id].node for p in here], BOX_BRANCHES)
         for zone in zones:
             part = [here[i] for i in zone]
             spot = _box_spot(ctx, room.id, part, boxes, route)
-            if spot is None:  # на стенах нет места под коробку — каждая точка от щита
+            if spot is None:  # no wall space for a box: each point from the panel
                 for p in part:
                     direct(p)
                 continue
@@ -423,7 +426,7 @@ def _group_links(
     own = [b for b in boxes if b.group == group]
     for p in outside:
         near = _nearest_box(ctx, own, ctx.anchors[p.id])
-        if near is None:  # у группы нет коробки — выключатель от щита
+        if near is None:  # group has no box: switch from the panel
             direct(p)
             continue
         to_point(near.id, _box_height(near, ctx.ceiling), near.rise_mm, p, cross=True)
@@ -431,13 +434,13 @@ def _group_links(
 
 
 def _box_height(box: JunctionBox, ceiling: float) -> float:
-    """Высота коробки от пола: на стене у трассы по полу — rise_mm от пола, под потолком —
-    потолок минус rise_mm; на потолке — потолок."""
+    """Box height from the floor: on a wall for a floor route, rise_mm from the floor; under the
+    ceiling, ceiling minus rise_mm; on the ceiling, the ceiling."""
     return box.rise_mm if box.route == "floor" else ceiling - box.rise_mm
 
 
 def _nearest_box(ctx: _Context, boxes: Sequence[JunctionBox], target: Anchor) -> JunctionBox | None:
-    """Коробка группы, от которой путь до точки по квартире (через проёмы) короче."""
+    """Group box with the shorter path to the point through the flat (via openings)."""
     best: tuple[float, JunctionBox] | None = None
     for b in boxes:
         cost = Router(ctx.free, anchor_end(b.anchor), ctx.any_angle).cost(target.node)
@@ -447,7 +450,7 @@ def _nearest_box(ctx: _Context, boxes: Sequence[JunctionBox], target: Anchor) ->
 
 
 def _sized(boxes: Sequence[JunctionBox], links: Sequence[_Link]) -> list[JunctionBox]:
-    """Типоразмер коробки — по итоговому числу линий, с выключателями из-за двери."""
+    """Box size by the final number of lines, including switches behind the door."""
     lines = {b.id: 1 + sum(1 for ln in links if ln.source == b.id) for b in boxes}
     return [replace(b, size=box_size(lines[b.id])) for b in boxes]
 
@@ -459,8 +462,8 @@ def _box_spot(
     boxes: Sequence[JunctionBox],
     route: Route,
 ) -> Anchor | None:
-    """Место коробки для точек зоны: у трассы по потолку — на потолке в центре точек, у
-    трассы по полу — на стене."""
+    """Box spot for the points of a zone: on the ceiling at the centre of the points for a ceiling
+    route, on a wall for a floor route."""
     g = ctx.geoms[room]
     taken = [b.anchor.node for b in boxes if b.room == room]
     targets = [ctx.anchors[p.id] for p in part]
@@ -471,18 +474,18 @@ def _box_spot(
 
 
 def _route_runs(ctx: _Context, links: Sequence[_Link], boxes: Sequence[JunctionBox]) -> list[Run]:
-    """Трассы линий: от щита — по всей квартире, от коробки — только внутри её помещения."""
+    """Line routes: from the panel through the whole flat, from a box only inside its room."""
     routers = {
         b.id: Router(room_area(ctx.geoms[b.room]), anchor_end(b.anchor), ctx.any_angle)
         for b in boxes
     }
-    # Ветка к выключателю за дверью — по всей квартире через проём
+    # Branch to a switch behind a door: through the whole flat via the opening
     wide = {
         b.id: Router(ctx.free, anchor_end(b.anchor), ctx.any_angle)
         for b in boxes
         if any(ln.cross and ln.source == b.id for ln in links)
     }
-    board_tail = ctx.board.height  # выпуск в щите — до пола
+    board_tail = ctx.board.height  # tail inside the panel down to the floor
     runs: list[Run] = []
     for k, ln in enumerate(links):
         if ln.source == "board":

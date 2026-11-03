@@ -1,1 +1,1 @@
-"""Тесты проверки модели: план, электрика, ответы, отчёт."""
+"""Model validation tests: plan, electrical, answers, report."""

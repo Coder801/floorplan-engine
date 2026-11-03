@@ -1,12 +1,12 @@
-"""Надписи щита в лицо на языке проекта (ru / uk): названия аппаратов и схем, назначения
-групп, слабые места, вопросы этапа; мощность и ток — по-русски с запятой."""
+"""Panel front view labels in the project language (ru / uk): device and scheme names, group
+purposes, weak spots, stage questions; power and current in Russian style with a comma."""
 
 from __future__ import annotations
 
 from floorplan_engine.model.panel_catalog import DeviceKind
 from floorplan_engine.model.texts import Language
 
-# Аппараты групп — вид и номинал («Автомат 1P C16»); остальные — название и номинал
+# Group devices: kind and rating ("Автомат 1P C16"); others: name and rating
 KIND_NAME: dict[DeviceKind, dict[str, str]] = {
     DeviceKind.BREAKER: {"ru": "Автомат 1P", "uk": "Автомат 1P"},
     DeviceKind.DIFF: {"ru": "Дифавтомат 1P+N", "uk": "Дифавтомат 1P+N"},
@@ -52,7 +52,7 @@ TEXT: dict[str, dict[str, str]] = {
     "grid": {"ru": "Ввод от сети 230 В", "uk": "Введення від мережі 230 В"},
     "reserve_bus": {"ru": "Резервная шина", "uk": "Резервна шина"},
     "main_bus": {"ru": "Сеть", "uk": "Мережа"},
-    # Слабые места
+    # Weak spots
     "w_overload": {
         "ru": "{g}: расчётный ток {i} А больше автомата {r} А — разделите группу",
         "uk": "{g}: розрахунковий струм {i} А більший за автомат {r} А — розділіть групу",
@@ -159,7 +159,7 @@ def text(key: str, language: Language, **kw: object) -> str:
 
 
 def kw(watts: float) -> str:
-    """Вт → «1,25» кВт."""
+    """W → "1,25" kW."""
     return f"{watts / 1000:.2f}".replace(".", ",")
 
 

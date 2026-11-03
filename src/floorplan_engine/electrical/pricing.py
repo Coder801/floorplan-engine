@@ -1,12 +1,14 @@
-"""Откуда смета берёт цены: прайс студии или проекта (prices.yaml) поверх сервиса цен.
+"""Where the estimate gets prices: the studio or project price list (prices.yaml) on top of the
+price service.
 
-Сервис цен — внешний (решение 2026-11-01): API анализа цен, микросервис или база, куда цены
-попадают с сайтов поставщиков. Его ещё нет, и его место занимает имитация `MockPriceService`
-с типовыми ценами по Киеву: смета всегда с ценами, а `prices.yaml` — поправки студии поверх
-(свой ключ прайса важнее любой цены сервиса). Строки с ценой сервиса помечены в смете
-(`Line.service`, подсказка «из сервиса цен (пока имитация)»), чтобы их не приняли за рыночные.
-Настоящий клиент сервиса появится в `service/` (сеть — только там) и передастся в
-`pipeline.build_project` / `estimate_project` тем же протоколом `PriceSource`.
+The price service is external (decision 2026-11-01): a price analysis API, a microservice or a
+database fed from supplier sites. It does not exist yet; its place is taken by the mock
+`MockPriceService` with typical Kyiv prices, so the estimate always has prices and
+`prices.yaml` holds studio overrides on top (an own price list key beats any service price).
+Rows priced by the service are marked in the estimate (`Line.service`, hint "from the price
+service (mock for now)") so nobody takes them for market prices.
+The real service client will live in `service/` (network only there) and will be passed to
+`pipeline.build_project` / `estimate_project` through the same `PriceSource` protocol.
 """
 
 from __future__ import annotations
@@ -31,9 +33,9 @@ from floorplan_engine.model.texts import Language
 
 CURRENCY = "грн"
 
-# Имитация: грн за единицу позиции (ключи LINES), ориентир по Киеву осенью 2026 — не рыночные
-# цены. Ключи с параметром считает mock_price: кабель — по сечению, рамки — по постам,
-# коробки — по размеру, аппараты щита — по номиналу.
+# Mock: UAH per item unit (LINES keys), a rough Kyiv guide for autumn 2026, not market
+# prices. Keys with a parameter are priced by mock_price: cable by cross-section, frames by
+# posts, boxes by size, panel devices by rating.
 MOCK_PRICES: dict[str, float] = {
     "socket_box": 20,
     "crimp": 8,
@@ -79,12 +81,12 @@ MOCK_PRICES: dict[str, float] = {
     "work.marking": 10,
     "work.insulation_test": 150,
 }
-CABLE_PER_MM2 = 10.0  # грн за метр на мм² суммарного сечения жил: 3×1,5 → 45, 3×2,5 → 75
+CABLE_PER_MM2 = 10.0  # UAH per metre per mm² of total conductor section: 3×1.5 → 45, 3×2.5 → 75
 BOX_PRICES = {"80": 40.0, "100x100": 60.0, "150x110": 110.0, "190x140": 180.0}
-CONDUIT_PRICES = {16: 10.0, 20: 14.0, 25: 20.0, 32: 30.0}  # гофротруба ПВХ, грн за метр
-IP_FACTOR = 2.0  # IP44 — вдвое дороже обычной
-FRAME_FIRST, FRAME_NEXT = 60.0, 40.0  # рамка: первый пост и каждый следующий
-HEAVY_A = 40  # номинал, с которого ввод, реле и автомат дороже
+CONDUIT_PRICES = {16: 10.0, 20: 14.0, 25: 20.0, 32: 30.0}  # PVC conduit, UAH per metre
+IP_FACTOR = 2.0  # IP44 costs twice a normal one
+FRAME_FIRST, FRAME_NEXT = 60.0, 40.0  # frame: first post and each next one
+HEAVY_A = 40  # rating from which supply, relay and breaker cost more
 HEAVY = {"input": (650.0, 850.0), "relay": (1500.0, 1900.0), "breaker": (140.0, 220.0)}
 
 
@@ -94,7 +96,7 @@ def _rating(param: str) -> int | None:
 
 
 def mock_price(key: str) -> float | None:
-    """Цена имитации по ключу позиции; неизвестный ключ — None."""
+    """Mock price by item key; None for an unknown key."""
     base, param = split_key(key)
     if base == "cable":
         m = re.fullmatch(r"(\d+)x([\d.,]+)", param.replace("×", "x"))
@@ -119,8 +121,8 @@ def mock_price(key: str) -> float | None:
 
 @dataclass(frozen=True)
 class MockPriceService:
-    """Имитация сервиса цен: знает все позиции сметы, цены типовые и постоянные. extra —
-    цены позиций других смет (сантехника, plumbing/estimate.MOCK_PRICES) по ключу."""
+    """Price service mock: knows every estimate item, prices are typical and fixed. extra holds
+    prices of items from other estimates (plumbing, plumbing/estimate.MOCK_PRICES) by key."""
 
     currency: str = CURRENCY
     extra: Mapping[str, float] = field(default_factory=dict)
@@ -134,8 +136,9 @@ class MockPriceService:
 
 @dataclass(frozen=True)
 class Prices:
-    """Цены сметы: прайс студии или проекта (own, может не быть) поверх сервиса цен (service).
-    Свой ключ, даже без номинала (`diff`), важнее точной цены сервиса (`diff.C16 30 мА`)."""
+    """Estimate prices: the studio or project price list (own, may be missing) on top of the price
+    service (service). An own key, even without a rating (`diff`), beats an exact service price
+    (`diff.C16 30 мА`)."""
 
     own: PriceList | None = None
     service: PriceSource | None = None
@@ -148,7 +151,7 @@ class Prices:
 
     @property
     def priced(self) -> bool:
-        """Есть откуда брать цены: иначе смета — ведомость объёмов."""
+        """There is a price source; otherwise the estimate is a bill of quantities."""
         return self.own is not None or self.service is not None
 
     def lookup(self, key: str) -> Quote:
@@ -164,8 +167,9 @@ class Prices:
 def price_notes(
     est: Estimate, prices: Prices, language: Language, f: str = PRICES_FILE, note: bool = False
 ) -> list[str]:
-    """Откуда цены — первые примечания сметы на листе, в просмотре и в файлах: прайс (с датой
-    и, если note, пометкой прайса), доля сервиса цен (имитация), позиции без цены."""
+    """Price sources: the first estimate notes on the sheet, in the viewer and in files: the price
+    list (with date and, if note is set, the list's remark), the share of the price service
+    (mock), items without a price."""
     out = []
     if prices.own is not None:
         date = f" ({prices.own.date})" if prices.own.date else ""
@@ -183,6 +187,6 @@ def price_notes(
 
 
 def mock_covers_all_lines() -> list[str]:
-    """Ключи позиций, для которых у имитации нет цены (тест: должен быть пуст)."""
+    """Item keys the mock has no price for (test: must be empty)."""
     sample = {"cable": "cable.3x1.5", "frame": "frame.2", "conduit": "conduit.20"}
     return [k for k in LINES if mock_price(sample.get(k, k)) is None]

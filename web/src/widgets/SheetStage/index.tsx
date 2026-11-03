@@ -1,5 +1,5 @@
-// Область чертежа: лист в canvas (SheetView) или 3D проводки, кнопки под чертежом, подсказка.
-// Чертёж один на листы с планом (drawing): вкладка меняет слои, холст и масштаб остаются.
+// Drawing area: the sheet in canvas (SheetView) or the wiring 3D, buttons under the drawing, the hint.
+// Sheets with a plan share one drawing (drawing): a tab changes layers, the canvas and zoom stay.
 
 import {
   forwardRef, lazy, Suspense, useEffect, useImperativeHandle, useMemo, useReducer, useRef, useState,
@@ -22,20 +22,20 @@ import { Legend } from "@/widgets/Legend";
 import type { Scene3DApi } from "@/widgets/Scene3D";
 import { Tip } from "@/widgets/Tip";
 
-// 3D (three.js) — отдельным файлом, грузится при первом включении
+// 3D (three.js) is a separate file, loaded the first time it is turned on
 const Scene3D = lazy(() => import("@/widgets/Scene3D").then((m) => ({ default: m.Scene3D })));
 
 export interface StageHandle {
-  pending(): number;              // несохранённые правки трасс
+  pending(): number;              // unsaved route edits
 }
 
 interface Props {
   page: Page;
   drawing: Drawing;
   project: string;
-  editable?: boolean;            // можно править трассы (нет — клиент студии: кнопки нет)
+  editable?: boolean;            // routes may be edited (no for a studio client: no button)
   onSaved: (notes: string[]) => void;
-  onBusy?: (busy: boolean) => void;  // идёт сохранение и пересборка — интерфейс блокирует страница
+  onBusy?: (busy: boolean) => void;  // saving and rebuilding in progress: the page blocks the interface
   onBanner: (text: string) => void;
 }
 
@@ -50,15 +50,15 @@ export const SheetStage = forwardRef<StageHandle, Props>(function SheetStage({ p
   const [zoom, setZoom] = useState<Zoom>({ step: 0, label: "100%", pxPerMm: null });
   const [zoom3d, setZoom3d] = useState<Zoom>({ step: 0, label: "100%", pxPerMm: null });
   const [saving, setSaving] = useState(false);
-  const [, tick] = useReducer((n: number) => n + 1, 0);  // правка изменилась — перерисовать кнопки
+  const [, tick] = useReducer((n: number) => n + 1, 0);  // the edit changed: redraw the buttons
   const { editMode, show3d, wallMode } = useView((s) => s);
-  // 3D — у всего чертежа (сцена листа проводки); на вкладке видно то же, что в её слоях
+  // 3D belongs to the whole drawing (the wiring sheet scene); a tab shows what its layers show
   const scene3d = useMemo(() => sceneOf(drawing), [drawing]);
   const layerOf = useMemo(() => objectLayers(drawing), [drawing]);
   const own = drawing.own.get(page) ?? null;
   const in3d = show3d && !!scene3d;
 
-  // Холст — на чертёж; вкладка того же чертежа — только setPage (ниже)
+  // The canvas is per drawing; a tab of the same drawing only calls setPage (below)
   const first = useRef({ page, index });
   first.current = { page, index };
   useEffect(() => {
@@ -67,7 +67,7 @@ export const SheetStage = forwardRef<StageHandle, Props>(function SheetStage({ p
     sv.onEditChange = tick;
     sv.onZoom = (z) => setZoom((p) => (p.step === z.step && p.pxPerMm === z.pxPerMm ? p : z));
     sheet.current = sv;
-    tick();  // лист создан после первого рендера — показать его кнопки правки
+    tick();  // the sheet was created after the first render: show its edit buttons
     return () => { sv.destroy(); sheet.current = null; };
   }, [drawing]);
 
@@ -79,8 +79,8 @@ export const SheetStage = forwardRef<StageHandle, Props>(function SheetStage({ p
     tick();
   }, [page, index]);
 
-  // Переход с развёртки: лист проводки открывается сразу на линии точки (store.goto).
-  // Пока грузится, здесь ещё прежний лист — ждём проводку
+  // Coming from an elevation: the wiring sheet opens right at the point's line (store.goto).
+  // While it loads, the previous sheet is still here, so wait for wiring
   useEffect(() => {
     const goto = view.get().goto;
     if (!goto || page.stage !== "wiring" || !sheet.current) return;
@@ -104,7 +104,7 @@ export const SheetStage = forwardRef<StageHandle, Props>(function SheetStage({ p
     tick();
   };
 
-  // POST правок → wiring.yaml и пересборка; затем лист перечитывается
+  // POST the edits → wiring.yaml and a rebuild; then the sheet is reloaded
   const save = async () => {
     if (!sv || !ed) return;
     const body = ed.payload();

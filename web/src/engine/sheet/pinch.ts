@@ -1,20 +1,20 @@
-// Щипок двумя пальцами на холсте (лист, щит): масштаб у точки между пальцами и сдвиг вслед
-// за ней. Пальцы — pointer-события касания; пока пальцев два, перетаскивание одним и клик
-// не работают, а после щипка клик не засчитывается, пока не отпущены все пальцы.
+// Two-finger pinch on a canvas (sheet, panel): zoom at the point between the fingers and pan
+// following it. Fingers are touch pointer events; while there are two, single-finger drag and
+// click do not work, and after a pinch no click counts until all fingers are lifted.
 
 type Touch = Pick<PointerEvent, "pointerId" | "pointerType" | "clientX" | "clientY">;
 
-// Шаг щипка: f — во сколько крупнее, (x, y) — центр в px холста, (dx, dy) — сдвиг центра
+// Pinch step: f is how much larger, (x, y) is the centre in canvas px, (dx, dy) is the centre shift
 export interface PinchStep { f: number; x: number; y: number; dx: number; dy: number }
 
 export class Pinch {
   private readonly pts = new Map<number, { x: number; y: number }>();
   private last: { d: number; x: number; y: number } | null = null;
-  used = false;   // с первого касания был щипок — клик и перетаскивание не засчитывать
+  used = false;   // there was a pinch since the first touch: do not count click or drag
 
   get busy() { return this.pts.size >= 2; }
 
-  // Палец коснулся; true — начался щипок (перетаскивание одним пальцем отменить)
+  // A finger touched; true means a pinch started (cancel single-finger drag)
   down(ev: Touch): boolean {
     if (ev.pointerType !== "touch") return false;
     if (!this.pts.size) this.used = false;
@@ -25,7 +25,7 @@ export class Pinch {
     return true;
   }
 
-  // Палец сдвинулся; шаг щипка или null, если пальцев меньше двух
+  // A finger moved; the pinch step, or null with fewer than two fingers
   move(ev: Touch, origin: { left: number; top: number }): PinchStep | null {
     if (!this.pts.has(ev.pointerId)) return null;
     this.pts.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
@@ -40,7 +40,7 @@ export class Pinch {
     this.last = this.busy ? this.measure() : null;
   }
 
-  // Расстояние между первыми двумя пальцами и середина между ними
+  // Distance between the first two fingers and the midpoint between them
   private measure() {
     const [a, b] = [...this.pts.values()];
     return { d: Math.max(Math.hypot(b.x - a.x, b.y - a.y), 1), x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };

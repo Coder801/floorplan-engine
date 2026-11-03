@@ -1,30 +1,30 @@
-// Общие части интерфейса, которые встречаются в нескольких компонентах
+// Shared interface parts used in several components
 
 @use "./mixins" as *;
 
-// Вместо чертежа или содержимого панели: пусто, загрузка, ошибка
+// In place of a drawing or panel content: empty, loading, error
 .empty { color: var(--muted); padding: 60px 24px; text-align: center; }
 .error { color: var(--critical); white-space: pre-wrap; padding: 24px; }
 
-// Ссылка, оформленная кнопкой (скачать DXF, войти)
+// A link styled as a button (download DXF, log in)
 .btnLink {
   display: inline-flex; align-items: center; min-height: 36px; padding: 0 12px;
   border-radius: 6px; text-decoration: none;
   background: var(--accent); color: var(--accent-text);
 }
 
-// Кружок цвета группы щита — как линии на чертеже
+// Panel group colour dot, like the lines on the drawing
 .dot {
   display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px;
   vertical-align: 0;
 }
-// Аппарат щита не на линии группы — квадрат цвета приглушённого текста
+// A panel device not on a group line: a square in the muted text colour
 .square {
   display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 6px;
   vertical-align: 0; background: var(--muted);
 }
 
-// Сегменты: листы в шапке, файлы модели
+// Segments: sheets in the header, model files
 .segmented {
   display: flex; flex-wrap: wrap; gap: 2px; padding: 3px; border-radius: 8px;
   background: var(--soft);
@@ -35,7 +35,7 @@
   }
 }
 
-// Заголовок выдвижной панели и меню проектов
+// Heading of the slide-out panel and the project menu
 .panelHead {
   display: flex; align-items: center; gap: 4px; padding: 8px 16px 8px 8px;
   border-bottom: 1px solid var(--line);
@@ -43,7 +43,7 @@
   button { @include bare-button; min-width: 36px; min-height: 36px; font-size: 18px; line-height: 1; }
 }
 
-// Тело панели: своя прокрутка, заголовки разделов
+// Panel body: its own scrolling, section headings
 .panelBody {
   min-height: 0; overflow: auto; padding: 12px 16px 24px;
   h3 {
@@ -53,7 +53,7 @@
   }
 }
 
-// Кнопки и подсказка под чертежом (лист, 3D, щит)
+// Buttons and the hint under the drawing (sheet, 3D, panel)
 .toolbar {
   position: absolute; left: 12px; bottom: 12px; right: 12px; z-index: 3;
   display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
@@ -64,14 +64,14 @@
 .group {
   @include raised;
   display: flex; overflow: hidden;
-  // Только свои кнопки: всплывашка фильтра 3D внутри группы оформлена сама
+  // Only our own buttons: the 3D filter popup inside the group styles itself
   > button { @include bare-button; border-radius: 0; min-width: 40px; }
   > button + button, > span + button { border-left: 1px solid var(--line); }
 }
 .zoomValue { display: flex; align-items: center; padding: 0 8px; }
-.hint { flex: 1 1 0; min-width: 0; font-size: 12px; color: var(--muted); }  // ужимается: справа — линейка
+.hint { flex: 1 1 0; min-width: 0; font-size: 12px; color: var(--muted); }  // shrinks: the scale bar is on the right
 
-// Узкий экран: кнопки — одной полосой с прокруткой, подсказка про мышь не нужна
+// Narrow screen: buttons in one scrolling strip, the mouse hint is not needed
 @media (max-width: $narrow) {
   .toolbar {
     left: 8px; right: 8px; bottom: 8px;
@@ -82,5 +82,5 @@
   .hint { display: none; }
 }
 
-// 3D проводки — поверх холста листа
+// Wiring 3D on top of the sheet canvas
 .three { position: absolute; inset: 0; z-index: 1; background: var(--paper); }

@@ -1,8 +1,8 @@
-// Карточка проекта — на экране приветствия и в меню проектов (ProjectsMenu)
+// Project card on the welcome screen and in the project menu (ProjectsMenu)
 
 @use "@/shared/styles/mixins" as *;
 
-// Карточка: превью плана | текст
+// Card: plan preview | text
 .card {
   display: grid; grid-template-rows: auto 1fr; align-content: start;
   padding: 0; text-align: left; overflow: hidden;
@@ -15,22 +15,22 @@
   &.current { border-color: var(--hl); box-shadow: 0 0 0 1px var(--hl); }
 }
 
-// Превью: условный план (svg) или план из модели (out/preview.svg внутри div)
+// Preview: a placeholder plan (svg) or the plan from the model (out/preview.svg inside a div)
 .plan {
   display: block; width: 100%; aspect-ratio: 5 / 3; padding: 14px;
   background: var(--paper); border-bottom: 1px solid var(--line);
 }
-// Условный план — рисует ProjectCard.Plan
+// Placeholder plan, drawn by ProjectCard.Plan
 .room { fill: var(--soft); stroke: var(--muted); stroke-width: 1.2; }
 .outline { fill: none; stroke: var(--text); stroke-width: 3; }
 .gap { stroke: var(--paper); stroke-width: 3.4; }
 .pt { fill: var(--hl); }
 .card:hover .outline { stroke: var(--hl); }
 
-// План из модели: SVG пишет ядро (thumbnail.py) с классами room, вида помещения (wet,
-// kitchen, outdoor, service, living), wall, window — они глобальные. Цвет вида — оттенок,
-// смешанный с фоном карточки: одни правила для светлой и тёмной темы. Координаты в мм, линии — без масштабирования толщины; рамка одна на
-// все карточки, план вписан по центру
+// Plan from the model: the core writes the SVG (thumbnail.py) with classes room, room kind (wet,
+// kitchen, outdoor, service, living), wall, window; they are global. The kind colour is a tint
+// mixed with the card background: one set of rules for light and dark themes. Coordinates are
+// in mm, lines do not scale their width; one frame for all cards, the plan is centred inside
 .real {
   position: relative;
   svg { position: absolute; inset: 14px; width: calc(100% - 28px); height: calc(100% - 28px); }

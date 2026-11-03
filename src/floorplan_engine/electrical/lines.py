@@ -1,14 +1,15 @@
-"""Линия от щита — свой автомат (решение 2026-10-28).
+"""Each line from the panel gets its own breaker (decision 2026-10-28).
 
-В схеме щита premium и в раскладке proper группа модели делится по линиям проводки от щита
-(wiring.py: коробка помещения или зоны, прямая линия к точке): QF1 → QF1, QF1.2, QF1.3.
-Деление — до щита, проводки, таблиц и сметы: все видят одни и те же группы, у каждой
-линии от щита — свой автомат. В economy и standard группа остаётся одной: несколько линий
-от щита на одном автомате.
+With the premium panel scheme and the proper layout, a model group is split by the wiring
+lines leaving the panel (wiring.py: a room or zone box, a direct line to a point):
+QF1 → QF1, QF1.2, QF1.3. The split happens before the panel, wiring, tables and estimate,
+so they all see the same groups and every line from the panel has its own breaker. In
+economy and standard the group stays one: several lines from the panel on one breaker.
 
-Первая линия сохраняет имя группы и её запись в `groups`; у остальных — автомат и УЗО
-группы, назначение составляет код по точкам. Кабели группы и место в резерве щита
-(`panel.reserve`) переходят на все её линии. Слаботочка в щит не идёт и не делится.
+The first line keeps the group name and its `groups` entry; the others get the group's
+breaker and RCD, and the code builds their purpose from the points. The group's cables and
+its place on the panel backup bus (`panel.reserve`) carry over to all its lines.
+Low-voltage does not go into the panel and is not split.
 """
 
 from __future__ import annotations
@@ -21,13 +22,13 @@ from floorplan_engine.model.schema import Electrical, Group, Plan
 
 
 def per_line(elec: Electrical) -> bool:
-    """Каждой линии от щита — свой автомат: щит premium или раскладка proper."""
+    """Each line from the panel has its own breaker: premium panel or proper layout."""
     return elec.mode == "proper" or scheme_of(elec) == "premium"
 
 
 def line_names(group: str, count: int, taken: set[str]) -> list[str]:
-    """Имена линий группы: первая — сама группа, дальше QF1.2, QF1.3…; занятое имя
-    пропускается."""
+    """Line names of a group: the first is the group itself, then QF1.2, QF1.3…; taken names are
+    skipped."""
     out = [group]
     k = 2
     while len(out) < count:
@@ -38,14 +39,14 @@ def line_names(group: str, count: int, taken: set[str]) -> list[str]:
     return out
 
 
-# Последний результат: проверка и вопросы щита делят одну и ту же модель — проводка
-# считается один раз
+# Last result: validation and panel questions share the same model, so wiring is
+# computed once
 _last: tuple[str, Electrical] | None = None
 
 
 def split_by_lines(plan: Plan, contours: dict[str, Contour], elec: Electrical) -> Electrical:
-    """Модель, где у каждой линии от щита своя группа; не premium и не proper, нет щита
-    или линий — модель как есть."""
+    """Model where each line from the panel has its own group; if not premium or proper, or there is
+    no panel or no lines, the model is returned as is."""
     global _last
     if not per_line(elec):
         return elec
@@ -60,7 +61,7 @@ def _split(plan: Plan, contours: dict[str, Contour], elec: Electrical) -> Electr
     if wiring is None:
         return elec
     points = {p.id for p in elec.points}
-    # Линия точки — то, что питается от щита: коробка или сама точка
+    # A point's line is what is fed from the panel: a box or the point itself
     line_of = {
         r.target: r.source if r.source != "board" else r.target
         for r in wiring.runs
@@ -71,7 +72,7 @@ def _split(plan: Plan, contours: dict[str, Contour], elec: Electrical) -> Electr
         if r.source == "board":
             lines.setdefault(r.group, []).append(r.target)
     taken = {p.group for p in elec.points if p.group} | {c.group for c in elec.cables if c.group}
-    rename: dict[str, dict[str, str]] = {}  # группа → линия → новое имя
+    rename: dict[str, dict[str, str]] = {}  # group → line → new name
     for group, keys in lines.items():
         pts = [p for p in elec.points if p.group == group]
         if len(keys) < 2 or all(p.type in LOW for p in pts):

@@ -1,8 +1,8 @@
-"""Анализатор: источники проекта → intake.yaml и YAML этапов.
+"""Analyzer: project sources → intake.yaml and stage YAML.
 
-Интерфейс один для всех реализаций; сервис не знает, кто пишет модель.
-Сейчас — ручной анализатор: модель загружает оператор (PUT /projects/{id}/model/...).
-В фазе 4 здесь появится LLM-анализатор (подписка Claude или API-ключ).
+One interface for all implementations; the service does not know who writes the model.
+Currently the manual analyzer: an operator uploads the model (PUT /projects/{id}/model/...).
+Phase 4 adds an LLM analyzer here (Claude subscription or API key).
 """
 
 from __future__ import annotations
@@ -16,30 +16,33 @@ from floorplan_engine.model.plumbing import PLUMBING_FILE
 from floorplan_engine.validation.issues import ROOM_FILE
 
 MODEL_FILES = (INTAKE_FILE, ROOM_FILE, "electrical.yaml", PLUMBING_FILE)
-# Что оператор может загрузить готовым: модель и накопленные ответы (эталонные проекты)
+# What an operator may upload ready-made: the model and accumulated answers (reference projects)
 OPERATOR_FILES = (*MODEL_FILES, ANSWERS_FILE)
 
 
 @dataclass(frozen=True)
 class AnalysisResult:
-    done: bool  # модель на месте, можно оценивать
-    message: str = ""  # если не done — что нужно; если done — итог анализа
-    cost_usd: float = 0.0  # стоимость вызовов LLM в этом анализе (оценка)
-    calls: int = 0  # вызовов LLM
+    done: bool  # the model is in place and can be assessed
+    message: str = ""  # if not done: what is needed; if done: the analysis summary
+    cost_usd: float = 0.0  # cost of LLM calls in this analysis (estimate)
+    calls: int = 0  # LLM calls
 
 
 class Analyzer(Protocol):
-    # Анализатор сам читает source/ (LLM): перед ним проверяется порог «не удалось»
+    # The analyzer reads source/ itself (LLM): the "failed" gate is checked before it
     reads_sources: bool
 
     def analyze(self, project: Path, round_no: int) -> AnalysisResult:
-        """Прочитать source/ (и answers.yaml с текстовыми ответами), записать intake.yaml и
-        YAML этапов в папку проекта."""
+        """Read source/ (and answers.yaml with text answers), write intake.yaml and the stage YAML
+        into
+        the project folder."""
         ...
 
 
 class ManualAnalyzer:
-    """Модель пишет человек (или Claude Code в репозитории) и загружает через API."""
+    """A human (or Claude Code in the repository) writes the model and uploads it through the
+    API.
+    """
 
     reads_sources = False
 

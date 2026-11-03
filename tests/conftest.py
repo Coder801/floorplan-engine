@@ -6,7 +6,7 @@ from floorplan_engine.model.schema import Plan
 
 
 def make_plan(walls: list[dict[str, Any]], openings: list[dict[str, Any]] | None = None) -> Plan:
-    """Одна комната «r»; стенам без id даются w1, w2…, проёмам — o1, o2…"""
+    """One room "r"; walls without an id get w1, w2…, openings o1, o2…"""
     walls = [{"id": f"w{k + 1}", **w} for k, w in enumerate(walls)]
     openings = [{"id": f"o{k + 1}", **o} for k, o in enumerate(openings or [])]
     return Plan.model_validate(
@@ -20,8 +20,9 @@ def make_plan(walls: list[dict[str, Any]], openings: list[dict[str, Any]] | None
 
 
 def make_flat() -> Plan:
-    """Санузел 2000×2500 (bath, wet) и кухня 3000×2500 (kitchen) справа за перегородкой 100 мм,
-    дверь из санузла в кухню — на w3 санузла (offset 1500, ширина 700)."""
+    """Bathroom 2000×2500 (bath, wet) and a kitchen 3000×2500 (kitchen) to its right behind a
+    100 mm partition; the door from the bathroom into the kitchen is on the bathroom's w3
+    (offset 1500, width 700)."""
     return Plan.model_validate(
         {
             "name": "тест",

@@ -1,12 +1,13 @@
-"""Номера точек на листе электрики и таблица «Точки» (решение 2026-10-28).
+"""Point numbers on the electrical sheet and the "Points" table (decision 2026-10-28).
 
-На плане у символа — только номер («7», у соседних точек одной стены — «7–9»); вид, высота
-и примечание — в таблице на полях. Одинаковые точки (вид, высота, примечание) — одной
-строкой со списком номеров: так таблица короче, а на плане текст не повторяется.
+On the plan a symbol carries only a number ("7", or "7–9" for neighbouring points on one
+wall); kind, height and note are in the table in the margin. Identical points (kind,
+height, note) share one row with a list of numbers: the table is shorter and the plan
+does not repeat text.
 
-Нумерация — по помещениям в порядке room.yaml; в помещении — точки на стенах по обходу
-стен и отступу, затем потолочные сверху вниз, слева направо. Номер не хранится в модели:
-добавили точку — номера после неё сдвинутся.
+Numbering goes by room in room.yaml order; inside a room, wall points by wall walk and
+offset, then ceiling points top to bottom, left to right. The number is not stored in the
+model: add a point and the numbers after it shift.
 """
 
 from __future__ import annotations
@@ -48,7 +49,8 @@ def text(key: str, language: Language, **kw: object) -> str:
 
 
 def point_name(p: ElectricalPoint, language: Language) -> str:
-    """«Розетка», «Вимикач 2-клавішний: коридор»; у блока — число постов."""
+    """Point kind label such as "Розетка", "Вимикач 2-клавішний: коридор"; a block gets its number
+    of posts."""
     key = "switch2" if p.type is PointType.SWITCH and p.keys == 2 else p.type.value
     name = NAMES[key][language]
     if p.count > 1 and p.type in (PointType.SOCKET, PointType.DATA, PointType.TV):
@@ -57,7 +59,7 @@ def point_name(p: ElectricalPoint, language: Language) -> str:
 
 
 def number_points(plan: Plan, elec: Electrical) -> dict[str, int]:
-    """Номер каждой точки, с 1."""
+    """Number of each point, from 1."""
     room_order = {r.id: k for k, r in enumerate(plan.rooms)}
     wall_order = {(r.id, w.id): k for r in plan.rooms for k, w in enumerate(r.walls)}
 
@@ -73,7 +75,7 @@ def number_points(plan: Plan, elec: Electrical) -> dict[str, int]:
 
 
 def ranges(numbers: Sequence[int]) -> str:
-    """1, 2, 3, 7 → «1–3, 7»; два подряд — через запятую: «4, 5»."""
+    """1, 2, 3, 7 → "1–3, 7"; two in a row are comma-separated: "4, 5"."""
     nums = sorted(set(numbers))
     out: list[str] = []
     k = 0
@@ -94,12 +96,12 @@ class PointRow:
     numbers: str
     name: str
     height: str
-    count: int  # постов (механизмов) по всем точкам строки
+    count: int  # posts (devices) over all points of the row
     point_ids: tuple[str, ...]
 
 
 def point_rows(plan: Plan, elec: Electrical) -> list[PointRow]:
-    """Строки таблицы: одинаковые точки (вид, высота, примечание) вместе, по первому номеру."""
+    """Table rows: identical points (kind, height, note) together, ordered by first number."""
     lang = plan.language
     numbers = number_points(plan, elec)
     groups: dict[tuple[str, str], list[ElectricalPoint]] = {}

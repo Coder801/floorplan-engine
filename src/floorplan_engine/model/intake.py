@@ -1,32 +1,32 @@
-"""intake.yaml — что известно об источниках проекта, и answers.yaml — ответы на вопросы.
+"""intake.yaml says what is known about the project sources, and answers.yaml holds the answers.
 
-intake.yaml пишет анализатор (сейчас — Claude по правилам CLAUDE.md):
+intake.yaml is written by the analyzer (currently Claude, following the CLAUDE.md rules):
 
-    sources:                       # что разобрано
+    sources:                       # what was parsed
       - { file: source/plan.pdf, note: "лист 08, масштаб по привязкам" }
-    stages:                        # этапы, о которых есть что сказать
+    stages:                        # stages with something to say
       plumbing: { status: absent, note: "на листах нет сантехники" }
     questions:
       - id: q1
         stage: plan
-        target: rooms.storage.walls.w2.length   # поле модели, путь по id
-        also: [rooms.storage.walls.w4.length]   # те же значения в других полях
+        target: rooms.storage.walls.w2.length   # model field, path by id
+        also: [rooms.storage.walls.w4.length]   # the same value in other fields
         text: "Ширина кладовки не подписана, 1783 — расчёт 7245 − 5462"
         answer: value                           # value | choice | text
         unit: mm
-        assumption: 1783                        # что сейчас стоит в модели
+        assumption: 1783                        # what the model holds now
       - id: q2
         stage: plan
         text: "Есть ли обмерный план?"
         answer: text
-        severity: major                         # только у вопросов без target
+        severity: major                         # only for questions without target
 
-answers.yaml — ответы, накладываются на YAML этапа при загрузке (исходники не переписываются):
+answers.yaml holds answers, applied to the stage YAML on load (the sources are not rewritten):
 
     answers:
-      q1: 1800                       # value / choice — подставляется в target
-      q2: { text: "обмера нет" }      # текст — ждёт анализатора; разобрал — resolved: true
-      q3: { accept: true }           # оставить допущение
+      q1: 1800                       # value / choice: put into target
+      q2: { text: "обмера нет" }      # text: waits for the analyzer; once handled, resolved: true
+      q3: { accept: true }           # keep the assumption
 """
 
 from __future__ import annotations
@@ -43,7 +43,7 @@ ANSWERS_FILE = "answers.yaml"
 
 
 class Stage(StrEnum):
-    """Этапы проекта; построение есть у plan, electrical (с panel) и plumbing."""
+    """Project stages; plan, electrical (with panel) and plumbing can be built."""
 
     PLAN = "plan"
     ELECTRICAL = "electrical"
@@ -52,13 +52,13 @@ class Stage(StrEnum):
     POWER = "power"
     WIRING = "wiring"
     PLUMBING = "plumbing"
-    PANEL = "panel"  # щит: вопросы составляет код по расчёту (panel_questions.panel_questions)
+    PANEL = "panel"  # questions built by code (panel_questions.panel_questions)
 
 
 class QSeverity(StrEnum):
-    CRITICAL = "critical"  # без ответа этап не строится
-    MAJOR = "major"  # строится по допущению, влияет на геометрию
-    MINOR = "minor"  # уточнение
+    CRITICAL = "critical"  # the stage is not built without an answer
+    MAJOR = "major"  # built on an assumption, affects geometry
+    MINOR = "minor"  # clarification
 
 
 class Source(StrictModel):
@@ -120,7 +120,7 @@ class Accept(StrictModel):
 
 class TextAnswer(StrictModel):
     text: str = Field(min_length=1)
-    # Анализатор перенёс смысл ответа в YAML этапа — вопрос закрыт
+    # The analyzer moved the answer's meaning into the stage YAML: the question is closed
     resolved: bool = False
 
 
@@ -131,7 +131,7 @@ class Answers(StrictModel):
     answers: dict[str, Answer] = Field(default_factory=dict)
 
 
-# --- Пути к полям -------------------------------------------------------------
+# --- Field paths --------------------------------------------------------------
 
 
 class TargetError(ValueError):
@@ -152,7 +152,7 @@ def _step(node: Any, key: str, path: str) -> Any:
 
 
 def get_target(data: Any, target: str) -> Any:
-    """Значение поля по пути из id; отсутствующее последнее поле — None."""
+    """Field value by an id path; a missing last field gives None."""
     parts = target.split(".")
     node = data
     for k, key in enumerate(parts[:-1]):
@@ -163,7 +163,7 @@ def get_target(data: Any, target: str) -> Any:
 
 
 def set_target(data: Any, target: str, value: Any) -> None:
-    """Записать значение в поле по пути из id (поле создаётся, объекты — нет)."""
+    """Write a value into the field at an id path (the field is created, objects are not)."""
     parts = target.split(".")
     node = data
     for k, key in enumerate(parts[:-1]):
@@ -174,7 +174,7 @@ def set_target(data: Any, target: str, value: Any) -> None:
 
 
 def index_path(data: Any, target: str) -> str:
-    """Путь по id → путь по индексам, как в сообщениях валидации:
+    """Id path → index path, as in validation messages:
     rooms.balcony.openings.balcony_window_1.sill → rooms[2].openings[2].sill."""
     out = ""
     node = data

@@ -1,6 +1,6 @@
-// Код доступа к проекту (service/db/access_codes.py): 8 букв и цифр, показывается как XXXX-XXXX.
-// В поле ввода — заглавными, без лишних знаков, с дефисом посередине; вставка «код: abcd 2345» —
-// тоже.
+// Project access code (service/db/access_codes.py): 8 letters and digits, shown as XXXX-XXXX.
+// The input shows it in upper case, without stray characters, with a dash in the middle; pasting
+// "код: abcd 2345" works too.
 
 export const ACCESS_CODE_LENGTH = 8;
 

@@ -1,7 +1,7 @@
 [project]
 name = "floorplan-engine"
 version = "0.1.0"
-description = "Чертежи DXF (план помещения, электрика) из YAML-описания"
+description = "DXF drawings (room plan, electrical) from a YAML description"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
@@ -55,7 +55,7 @@ service = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-# NumPy 2.5 предупреждает о коде внутри ezdxf, не нашем
+# NumPy 2.5 warns about code inside ezdxf, not ours
 filterwarnings = ["ignore::DeprecationWarning:ezdxf.*"]
 
 [tool.mypy]
@@ -78,21 +78,21 @@ target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF", "N", "PTH"]
-# Кириллица в строках и комментариях — норма для проекта
+# Cyrillic in strings and comments is normal for this project
 ignore = ["RUF001", "RUF002", "RUF003"]
 
 [tool.uv]
-# Сервис (FastAPI) — отдельная группа: ядро и CLI от неё не зависят
+# The service (FastAPI) is a separate group: the core and CLI do not depend on it
 default-groups = ["dev", "service"]
 
-# Слои пакета и направление импортов (uv run lint-imports; входит в verify). Выше по списку —
-# может импортировать ниже, не наоборот; исключений нет — общее для слоёв выносится вниз
+# Package layers and import direction (uv run lint-imports; part of verify). Higher in the list
+# may import lower, never the other way; there are no exceptions: shared code moves down
 [tool.importlinter]
 root_package = "floorplan_engine"
 include_external_packages = true
 
 [[tool.importlinter.contracts]]
-name = "Слои: CLI → сервис → конвейер → .epd → листы → проверка → рисование → сантехника → электрика → модель"
+name = "Layers: CLI → service → pipeline → .epd → sheets → validation → drawing → plumbing → electrical → model"
 type = "layers"
 layers = [
     "floorplan_engine.cli",
@@ -108,7 +108,7 @@ layers = [
 ]
 
 [[tool.importlinter.contracts]]
-name = "Ядро не импортирует сервис"
+name = "The core does not import the service"
 type = "forbidden"
 source_modules = [
     "floorplan_engine.model",
@@ -123,7 +123,7 @@ source_modules = [
 forbidden_modules = ["floorplan_engine.service"]
 
 [[tool.importlinter.contracts]]
-name = "Ядро без LLM, сети, базы и веб-сервера"
+name = "The core has no LLM, network, database or web server"
 type = "forbidden"
 source_modules = [
     "floorplan_engine.model",
@@ -138,7 +138,7 @@ source_modules = [
 forbidden_modules = ["anthropic", "fastapi", "httpx", "sqlalchemy", "alembic", "authlib", "uvicorn"]
 
 [[tool.importlinter.contracts]]
-name = "Модель, проверка и расчёты не рисуют DXF сами"
+name = "Model, validation and calculations do not draw DXF themselves"
 type = "forbidden"
 source_modules = [
     "floorplan_engine.model",
@@ -149,14 +149,15 @@ source_modules = [
 forbidden_modules = ["ezdxf"]
 allow_indirect_imports = true
 
-# Версия и релиз (docs/development.md, «Коммиты и версии»): заголовки коммитов — Conventional
-# Commits (проверяет хук web/.husky/commit-msg), `uv run cz bump` поднимает версию по типам
-# коммитов с прошлого тега, правит файлы версии, пишет CHANGELOG.md, коммитит и ставит тег
+# Version and release (docs/development.md, "Commits and versions"): commit titles follow
+# Conventional Commits (checked by the web/.husky/commit-msg hook); `uv run cz bump` bumps the
+# version by the commit types since the last tag, edits the version files, writes CHANGELOG.md,
+# commits and tags
 [tool.commitizen]
 name = "cz_conventional_commits"
 version_provider = "pep621"
 tag_format = "v$version"
-major_version_zero = true          # пока альфа: feat — minor, fix — patch, breaking — тоже minor
+major_version_zero = true          # alpha for now: feat is minor, fix is patch, breaking is minor too
 update_changelog_on_bump = true
 version_files = [
     "src/floorplan_engine/__init__.py:__version__",

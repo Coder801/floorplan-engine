@@ -1,38 +1,39 @@
-"""Вход в просмотр: Google (OAuth, Authlib) и код на почту, сессии в cookie, приглашения,
-гость отладки.
+"""Viewer login: Google (OAuth, Authlib) and an e-mail code, cookie sessions, invites, a debug
+guest.
 
-Включается окружением (SHTROBA_AUTH=on); без него просмотр открыт, как раньше (локально).
-Правила доступа — db/access.py; здесь — веб: маршруты /api/auth/*, /api/invites/* и
-промежуточный слой, который проверяет доступ к /api/projects/{имя}/… (решения 2026-10-28,
-docs/database.md, «Вход»).
+Turned on by the environment (SHTROBA_AUTH=on); without it the viewer is open, as before
+(locally). Access rules live in db/access.py; this is the web part: routes /api/auth/*,
+/api/invites/* and the middleware that checks access to /api/projects/{name}/… (decisions
+2026-10-28, docs/database.md, "Login").
 
-Окружение:
-  SHTROBA_AUTH=on              включить вход
-  SHTROBA_SECRET               ключ подписи cookie состояния OAuth (длинная случайная строка)
-  SHTROBA_PUBLIC_URL           адрес страницы: https://… (там же /api) или http://127.0.0.1:5173
-  GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET   OAuth-клиент Google; нет — кнопки Google нет
-  SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, MAIL_FROM   письма с кодом входа (mail.py);
-                               без SMTP на http (локально) код — в лог сервера, на https —
-                               входа по коду нет
-  TELEGRAM_BOT_TOKEN           бот для входа по номеру телефона (api/telegram.py); нет — кнопки
-                               «Войти через Telegram» нет. На https бот ходит вебхуком
-                               <SHTROBA_PUBLIC_URL>/api/auth/telegram/webhook, на http (локально)
-                               сервер сам опрашивает Bot API
-  Код доступа к проекту (db/access_codes.py) настройки не требует: его выдаёт команда
-  `floorplan-engine access code projects/<имя>`, вход — /api/auth/code.
-  SHTROBA_ACCESS_CODES         постоянные коды доступа «папка=КОД» через запятую
-                               (kv42=ABCD-2345): при старте сервис записывает их в базу
-                               (проект без строки — «без владельца»), отозванный — снова
-                               действует; для тестов, пока коды не выдаются из просмотра
-  SHTROBA_SUPERUSERS           email или телефоны («+380…») владельцев платформы через запятую
-  SHTROBA_OWNER                email или телефон владельца проектов из папок: при его входе и
-                               выборе «Фирма» папки без строки в базе уходят в его студию
-                               (access.adopt_folders)
-  SHTROBA_DEV_LOGIN=1          «Зайти для разработки»: вход без Google и письма под первым
-                               адресом SHTROBA_SUPERUSERS; только http (локально), не production
-  SHTROBA_VISITOR=1            «Войти как гость» без входа — только для отладки: видит все
-                               проекты, только чтение; в окружении Railway «production» запрещён
-  DATABASE_URL                 база (db/session.py)
+Environment:
+  SHTROBA_AUTH=on              turn login on
+  SHTROBA_SECRET               signing key for the OAuth state cookie (a long random string)
+  SHTROBA_PUBLIC_URL           page address: https://… (with /api there) or http://127.0.0.1:5173
+  GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET   Google OAuth client; without it there is no Google button
+  SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, MAIL_FROM   login code e-mails (mail.py);
+                               without SMTP over http (locally) the code goes to the server log,
+                               over https there is no code login
+  TELEGRAM_BOT_TOKEN           bot for login by phone number (api/telegram.py); without it there
+                               is no "Log in with Telegram" button. Over https the bot uses the
+                               webhook <SHTROBA_PUBLIC_URL>/api/auth/telegram/webhook, over http
+                               (locally) the server polls the Bot API itself
+  A project access code (db/access_codes.py) needs no setup: it is issued by the command
+  `floorplan-engine access code projects/<name>`, login is /api/auth/code.
+  SHTROBA_ACCESS_CODES         permanent access codes "folder=CODE", comma-separated
+                               (kv42=ABCD-2345): on start the service writes them to the database
+                               (a project without a row gets "no owner"), a revoked one works
+                               again; for tests, until codes are issued from the viewer
+  SHTROBA_SUPERUSERS           e-mails or phones ("+380…") of platform owners, comma-separated
+  SHTROBA_OWNER                e-mail or phone of the owner of folder projects: when they log in
+                               and choose "Firm", folders without a database row move into their
+                               studio (access.adopt_folders)
+  SHTROBA_DEV_LOGIN=1          "Log in for development": login without Google or e-mail as the
+                               first SHTROBA_SUPERUSERS address; http only (locally), not production
+  SHTROBA_VISITOR=1            "Log in as guest" without an account, for debugging only: sees all
+                               projects, read only; forbidden in the Railway "production"
+                               environment
+  DATABASE_URL                 database (db/session.py)
 """
 
 from __future__ import annotations
@@ -67,15 +68,16 @@ log = logging.getLogger(__name__)
 COOKIE = "shtroba_session"
 WEBHOOK_PATH = "/api/auth/telegram/webhook"
 GOOGLE_METADATA = "https://accounts.google.com/.well-known/openid-configuration"
-# Без входа: сам вход, приглашения (посмотреть, куда зовут), описание API
+# No login needed: the login itself, invites (to see what you are invited to), API docs
 OPEN_PREFIXES = ("/api/auth/", "/api/invites/")
-# Подбор кода доступа: не больше CODE_TRIES неверных кодов с одного адреса за CODE_WINDOW секунд
+PRICES_PATH = "/api/prices"  # studio price page (viewer.py): studio accounts only
+# Access code guessing: at most CODE_TRIES wrong codes per address in CODE_WINDOW seconds
 CODE_TRIES = 20
 CODE_WINDOW = 600
 
 
 class ConfigError(RuntimeError):
-    """Окружение входа задано неверно — сервис не стартует."""
+    """The login environment is misconfigured: the service does not start."""
 
 
 @dataclass(frozen=True)
@@ -86,9 +88,9 @@ class AuthConfig:
     google_secret: str | None = None
     superusers: tuple[str, ...] = ()
     visitor: bool = False
-    dev_login: bool = False  # «Зайти для разработки» — под первым суперпользователем
-    owner: str | None = None  # SHTROBA_OWNER: чьи папки проектов без строки в базе
-    fixed_codes: tuple[tuple[str, str], ...] = ()  # SHTROBA_ACCESS_CODES: (папка, код)
+    dev_login: bool = False  # "Log in for development" as the first superuser
+    owner: str | None = None  # SHTROBA_OWNER: whose project folders have no database row
+    fixed_codes: tuple[tuple[str, str], ...] = ()  # SHTROBA_ACCESS_CODES: (folder, code)
 
     @property
     def google(self) -> bool:
@@ -100,7 +102,7 @@ class AuthConfig:
 
     @classmethod
     def from_env(cls, env: dict[str, str] | None = None) -> AuthConfig | None:
-        """Настройки из окружения; вход выключен — None."""
+        """Settings from the environment; None if login is off."""
         env = dict(os.environ) if env is None else env
         if env.get("SHTROBA_AUTH", "").lower() not in {"on", "1", "true"}:
             return None
@@ -157,9 +159,9 @@ class AuthConfig:
 
 
 class CodeLimiter:
-    """Неверные коды доступа по адресам клиента, в памяти процесса: CODE_TRIES за CODE_WINDOW
-    секунд, дальше — 429. Код — 40 бит, перебор без этого и так не по силам, но лишние
-    попытки нам ни к чему."""
+    """Wrong access codes per client address, in process memory: CODE_TRIES per CODE_WINDOW
+    seconds, then 429. A code is 40 bits, so brute force is out of reach anyway, but extra
+    attempts are not welcome."""
 
     def __init__(self, tries: int = CODE_TRIES, window: float = CODE_WINDOW) -> None:
         self.tries, self.window = tries, window
@@ -180,7 +182,7 @@ class CodeLimiter:
 
 
 def client_ip(request: Request) -> str:
-    """Адрес клиента: за прокси (Railway, Caddy) — первый из X-Forwarded-For."""
+    """Client address: behind a proxy (Railway, Caddy) the first one from X-Forwarded-For."""
     forwarded = request.headers.get("x-forwarded-for", "")
     if forwarded:
         return forwarded.split(",")[0].strip()
@@ -188,14 +190,14 @@ def client_ip(request: Request) -> str:
 
 
 def identity(value: str) -> str:
-    """Кто это из окружения: телефон — как «+380…», email — в нижнем регистре (так они
-    записаны у пользователя)."""
+    """Who this is from the environment: a phone as "+380…", an e-mail in lower case (as stored
+    for the user)."""
     value = value.strip()
     return tg.normalize_phone(value) if tg.is_phone(value) else value.lower()
 
 
 def _user_json(db: Session, user: AppUser) -> dict[str, Any]:
-    """Пользователь и его пространство: фирма (kind studio, вид и город) или личное."""
+    """The user and their workspace: a firm (kind studio, type and city) or personal."""
     space = acc.user_space(db, user)
     return {
         "id": str(user.id),
@@ -217,15 +219,15 @@ def _user_json(db: Session, user: AppUser) -> dict[str, Any]:
 
 @dataclass
 class Auth:
-    """Вход и доступ для одного приложения FastAPI."""
+    """Login and access for one FastAPI app."""
 
     config: AuthConfig
     sessions: sessionmaker[Session]
     oauth: OAuth = field(default_factory=OAuth)
-    mailer: Mailer | None = None  # письма с кодом входа; None — входа по коду нет
-    telegram: telegram.TelegramApi | None = None  # бот для входа по телефону; None — нет кнопки
-    folders: Callable[[], Collection[str]] | None = None  # папки проектов (ставит create_viewer)
-    limiter: CodeLimiter = field(default_factory=CodeLimiter)  # подбор кода доступа
+    mailer: Mailer | None = None  # login code e-mails; None means no code login
+    telegram: telegram.TelegramApi | None = None  # bot for phone login; None means no button
+    folders: Callable[[], Collection[str]] | None = None  # project folders (set by create_viewer)
+    limiter: CodeLimiter = field(default_factory=CodeLimiter)  # access code guessing
     _bot_name: str | None = field(default=None, init=False, repr=False)
 
     def __post_init__(self) -> None:
@@ -245,18 +247,20 @@ class Auth:
             s.commit()
 
     def _adopt(self, db: Session, user: AppUser) -> None:
-        """Владелец папок (SHTROBA_OWNER) вошёл или выбрал тип учётки — папки без строки в
-        базе в его студию. Не владелец, нет папок или тип ещё не выбран — ничего."""
+        """The folder owner (SHTROBA_OWNER) logged in or chose an account type: folders without a
+        database row go to their studio. Not the owner, no folders or no type chosen yet:
+        nothing."""
         owner = self.config.owner
         if owner and self.folders is not None and owner in (user.email, user.phone):
             acc.adopt_folders(db, owner, self.folders())
 
     def seed_codes(self) -> None:
-        """При старте сервера: постоянные коды из SHTROBA_ACCESS_CODES — в базу
-        (access_codes.ensure_code); проекта нет в базе — строка «без владельца». Папки с
-        таким именем нет или код занят другим проектом — предупреждение, в базе ничего
-        (ошибка внутри `db()` откатывает и созданный проект). Два процесса стартовали
-        разом — второй увидит нарушение уникальности, код уже записал первый."""
+        """On server start: permanent codes from SHTROBA_ACCESS_CODES go to the database
+        (access_codes.ensure_code); a project missing from the database gets a "no owner" row. If
+        there is no folder with that name or the code belongs to another project: a warning and
+        nothing in the database (an error inside `db()` also rolls back the created project). If two
+        processes start at once, the second hits a uniqueness violation: the first has already
+        written the code."""
         folders = None if self.folders is None else set(self.folders())
         for slug, code in self.config.fixed_codes:
             if folders is not None and slug not in folders:
@@ -279,7 +283,7 @@ class Auth:
     # --- Telegram ------------------------------------------------------------------------
 
     def bot_name(self) -> str:
-        """Имя бота для ссылки t.me/<имя> — один раз у Bot API."""
+        """Bot name for the t.me/<name> link, fetched once from the Bot API."""
         assert self.telegram is not None
         if self._bot_name is None:
             self._bot_name = self.telegram.get_me()
@@ -289,13 +293,13 @@ class Auth:
         return acc.token_hash(f"telegram:{self.config.secret}")
 
     def handle_update(self, update: dict[str, Any]) -> None:
-        """Обновление от бота (вебхук или опрос) — в правила входа, в своей транзакции."""
+        """Bot update (webhook or polling) goes to the login rules, in its own transaction."""
         assert self.telegram is not None
         with self.db() as db:
             telegram.handle_update(db, self.telegram, update)
 
     def start_telegram(self) -> None:
-        """При старте сервера: на https — вебхук, на http — опрос Bot API в фоне."""
+        """On server start: a webhook over https, background Bot API polling over http."""
         if self.telegram is None:
             return
         if self.config.secure:
@@ -303,12 +307,12 @@ class Auth:
                 self.telegram.set_webhook(
                     self.config.public_url + WEBHOOK_PATH, self.webhook_secret()
                 )
-            except Exception as exc:  # сеть: вход без Telegram, остальное работает
+            except Exception as exc:  # network: login without Telegram, everything else works
                 log.warning("Telegram setWebhook: %s", exc)
         else:
             telegram.start_polling(self.telegram, self.handle_update)
 
-    # --- кто пришёл ------------------------------------------------------------------
+    # --- who is calling ----------------------------------------------------------------
 
     def principal(self, db: Session, request: Request) -> acc.Principal | None:
         token = request.cookies.get(COOKIE)
@@ -326,7 +330,9 @@ class Auth:
         return None
 
     def _code_json(self, db: Session, who: acc.Principal | None) -> dict[str, Any] | None:
-        """Вошедший по коду: проект кода (папка и название) для шапки и открытия проекта."""
+        """Logged in by code: the code's project (folder and name) for the header and opening the
+        project.
+        """
         if who is None or not who.by_code:
             return None
         project = db.get(Project, who.code_project)
@@ -335,14 +341,14 @@ class Auth:
         return {"project": project.slug, "name": project.name}
 
     def visible(self, request: Request, slugs: Collection[str]) -> set[str]:
-        """Папки проектов, которые видит пришедший (для списка проектов)."""
+        """Project folders the caller can see (for the project list)."""
         with self.db() as db:
             who = self.principal(db, request)
             return set() if who is None else acc.visible_slugs(db, who, slugs)
 
     def check(self, request: Request) -> Response | None:
-        """Проверка запроса к API; None — пропустить. Нет входа — 401, нет доступа к
-        проекту — 404 (чужие проекты не раскрываются), нет права — 403."""
+        """API request check; None means let it through. Not logged in gives 401, no access to the
+        project gives 404 (other people's projects are not revealed), no permission gives 403."""
         path = request.url.path
         if not path.startswith("/api/") or path.startswith(OPEN_PREFIXES):
             return None
@@ -350,7 +356,14 @@ class Auth:
             who = self.principal(db, request)
             if who is None:
                 return JSONResponse({"detail": "нужен вход"}, status_code=401)
-            parts = path.split("/")  # ["", "api", "projects", имя, …]
+            parts = path.split("/")  # ["", "api", "projects", name, …]
+            if path == PRICES_PATH:  # studio price list: a studio account; the debug guest reads
+                user = who.user
+                pro = user is not None and (user.is_superuser or user.account_type == "pro")
+                if not pro and not (who.visitor and request.method == "GET"):
+                    return JSONResponse({"detail": "прайс — только для студии"}, status_code=403)
+                request.state.edit_prices = pro
+                return None
             if len(parts) < 4 or parts[2] != "projects" or not parts[3]:
                 return None
             project = acc.project_by_slug(db, parts[3])
@@ -370,7 +383,7 @@ class Auth:
             request.state.role = role
         return None
 
-    # --- подключение к приложению ----------------------------------------------------
+    # --- wiring into the app -----------------------------------------------------------
 
     def install(self, app: FastAPI) -> None:
         auth = self
@@ -382,7 +395,7 @@ class Auth:
             denied = await run_in_threadpool(auth.check, request)
             return denied if denied is not None else await call_next(request)
 
-        # Снаружи guard: guard читает request.session (гость отладки, приглашение)
+        # Outside the guard: the guard reads request.session (debug guest, invite)
         app.add_middleware(
             SessionMiddleware,
             secret_key=self.config.secret,
@@ -460,7 +473,9 @@ class Auth:
         def email_start(
             email: str = Body(..., embed=True), lang: str = Body("ru", embed=True)
         ) -> dict[str, Any]:
-            """Код на почту. Есть ли такой пользователь, не говорит: учётка появится при входе."""
+            """Code by e-mail. Does not reveal whether the user exists: the account appears on
+            login.
+            """
             if self.mailer is None:
                 raise HTTPException(503, "вход по коду не настроен (SMTP_HOST)")
             with self.db() as db:
@@ -486,8 +501,8 @@ class Auth:
             code: str = Body(..., embed=True),
             invite: str | None = Body(None, embed=True),
         ) -> Response:
-            """Вход по коду: пользователь (тот же, что с Google, если email совпал), приглашение,
-            сессия в cookie."""
+            """Login by code: the user (the same as with Google if the e-mail matches), invite,
+            cookie session."""
             if self.mailer is None:
                 raise HTTPException(503, "вход по коду не настроен (SMTP_HOST)")
             with self.db() as db:
@@ -505,12 +520,12 @@ class Auth:
 
         @r.post("/api/auth/telegram/start")
         def telegram_start(lang: str = Body("ru", embed=True)) -> dict[str, Any]:
-            """Билет входа и ссылка на бота; страница открывает её и опрашивает status."""
+            """Login ticket and the bot link; the page opens it and polls status."""
             if self.telegram is None:
                 raise HTTPException(503, "вход через Telegram не настроен (TELEGRAM_BOT_TOKEN)")
             try:
                 bot = self.bot_name()
-            except Exception as exc:  # Bot API недоступен
+            except Exception as exc:  # Bot API unavailable
                 raise HTTPException(503, "бот Telegram сейчас недоступен") from exc
             with self.db() as db:
                 token = tg.issue_ticket(db, lang)
@@ -522,8 +537,9 @@ class Auth:
 
         @r.get("/api/auth/telegram/status")
         def telegram_status(request: Request, token: str, invite: str | None = None) -> Response:
-            """Опрос билета: номер ещё не пришёл — pending; пришёл — вход, cookie сессии;
-            билет устарел — 410."""
+            """Ticket poll: no number yet gives pending; once it arrives, login and a session
+            cookie;
+            an expired ticket gives 410."""
             if self.telegram is None:
                 raise HTTPException(503, "вход через Telegram не настроен (TELEGRAM_BOT_TOKEN)")
             with self.db() as db:
@@ -543,7 +559,7 @@ class Auth:
 
         @r.post(WEBHOOK_PATH)
         async def telegram_webhook(request: Request) -> dict[str, bool]:
-            """Обновления от Bot API (https); секрет — в заголовке, его ставит setWebhook."""
+            """Updates from the Bot API (https); the secret is in a header set by setWebhook."""
             given = request.headers.get("x-telegram-bot-api-secret-token", "")
             if self.telegram is None or given != self.webhook_secret():
                 raise HTTPException(403, "не бот")
@@ -553,8 +569,9 @@ class Auth:
 
         @r.post("/api/auth/code")
         def code_login(request: Request, code: str = Body(..., embed=True)) -> dict[str, Any]:
-            """Вход по коду доступа к проекту: код действует — в подписанной cookie id кода,
-            дальше каждый запрос проверяет, что код не отозван. Учётки не появляется."""
+            """Login by project access code: if the code is valid, its id goes into a signed cookie,
+            and every
+            later request checks that the code was not revoked. No account is created."""
             ip = client_ip(request)
             if self.limiter.blocked(ip):
                 raise HTTPException(429, "Слишком много неверных кодов — попробуйте позже")
@@ -570,7 +587,7 @@ class Auth:
 
         @r.post("/api/auth/dev")
         def dev_login(request: Request) -> Response:
-            """Вход для разработки: под первым суперпользователем, без Google и письма."""
+            """Development login: as the first superuser, without Google or e-mail."""
             if not cfg.dev_login:
                 raise HTTPException(403, "вход для разработки выключен")
             email = cfg.superusers[0]
@@ -602,7 +619,7 @@ class Auth:
         def account_type(
             request: Request, kind: Literal["client"] = Body(..., embed=True, alias="type")
         ) -> dict[str, Any]:
-            """«Мой ремонт» — личное пространство; фирма — /api/auth/firm (с названием)."""
+            """Choose "Мой ремонт", the personal workspace; a firm uses /api/auth/firm."""
             with self.db() as db:
                 who = self.principal(db, request)
                 if who is None or who.user is None:
@@ -622,7 +639,7 @@ class Auth:
             city: str = Body("", embed=True),
             phone: str = Body("", embed=True),
         ) -> dict[str, Any]:
-            """Регистрация фирмы при первом входе: название, вид, город, телефон."""
+            """Firm registration on first login: name, kind, city, phone."""
             with self.db() as db:
                 who = self.principal(db, request)
                 if who is None or who.user is None:
@@ -662,8 +679,8 @@ class Auth:
     def _finish_login(
         self, info: dict[str, Any], invite: str | None, user_agent: str, provider: str = "google"
     ) -> tuple[str, str | None]:
-        """Пользователь по ответу провайдера (Google или код на почту), принятие приглашения,
-        новая сессия; вернёт токен сессии и ошибку приглашения (если была)."""
+        """User from the provider answer (Google or e-mail code), invite acceptance, a new session;
+        returns the session token and the invite error (if any)."""
         error: str | None = None
         with self.db() as db:
             user = acc.oauth_login(

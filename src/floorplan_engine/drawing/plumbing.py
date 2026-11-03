@@ -1,12 +1,13 @@
-"""Сантехника на листе: трубы воды и канализации, приборы с номерами, водорозетки, стояки,
-узел ввода и коллекторы, препятствия; таблицы «Сантехприборы» и «Трубы», легенда.
+"""Plumbing on the sheet: water and sewer pipes, numbered fixtures, water outlets, risers,
+the supply unit and manifolds, obstacles; "Fixtures" and "Pipes" tables, legend.
 
-Расчёт — plumbing/network.py; здесь — только DXF. Трубы, что идут по одной линии, — в
-своих полосах (lanes, как кабели проводки), повороты скруглены; холодная — синяя, горячая —
-красная, канализация — коричневая и толще; её участки по стене над полом (в стяжку не
-помещаются, в коробе) — оранжевым пунктиром. У конца трубы — диаметр, у канализации ещё
-уклон: «Ø50 i=0,035»; нет места — подписи нет (диаметр есть в таблице «Трубы»).
-Номер прибора — в кружке у стены, как номера точек электрики; что за прибор — в таблице.
+Calculation lives in plumbing/network.py; this module only draws DXF. Pipes running along one
+line go in their own lanes (like wiring cables), corners are rounded; cold is blue, hot is
+red, sewer is brown and thicker; sewer parts along the wall above the floor (too big for the
+screed, in a box) are dashed orange. At the pipe end: diameter, plus slope for sewer:
+"Ø50 i=0,035"; no room means no label (the diameter is in the "Pipes" table).
+The fixture number is in a circle by the wall, like electrical point numbers; what the
+fixture is, is in the table.
 """
 
 from __future__ import annotations
@@ -67,28 +68,29 @@ from floorplan_engine.plumbing.rows import (
 from floorplan_engine.plumbing.rows import text as rows_text
 
 COLORS: dict[Kind, int] = {"cold": 0x1F77B4, "hot": 0xD62728, "sewer": 0x8C564B}
-# Канализация по стене над полом: свой цвет (просмотр и PNG типов линий не рисуют) и пунктир
+# Sewer along the wall above the floor: own colour (viewer and PNG do not draw line types) and
+# dashes
 SURFACE_COLOR = 0xE6862A
 LAYERS = {"cold": P_COLD, "hot": P_HOT, "sewer": P_SEWER}
 LW_WATER = 25
 LW_SEWER = 50
-LANE_MM = 0.9  # шаг полос труб на листе
-SNAP_LANES = 2.0  # трубы на соседних линиях ближе стольких шагов полосы — одним пучком
+LANE_MM = 0.9  # pipe lane step on the sheet
+SNAP_LANES = 2.0  # pipes on neighbouring lines closer than this many lane steps form one bundle
 BAND_MM = 12.0
 FILLET_MM = 1.2
-FIXTURE_R_MM = 2.2  # кружок номера прибора
-FIXTURE_OUT_MM = 4.0  # кружок — на столько от стены в помещение
-OUTLET_R_MM = 0.55  # водорозетка, выпуск
+FIXTURE_R_MM = 2.2  # fixture number circle
+FIXTURE_OUT_MM = 4.0  # circle placed this far from the wall into the room
+OUTLET_R_MM = 0.55  # water outlet, drain
 RISER_MIN_R_MM = 1.2
-COLLECTOR_LEN = 160.0  # мм модели вдоль стены
-COLLECTOR_PLACE = 500.0  # мм: коллекторы ближе — в одном месте, подпись общая
+COLLECTOR_LEN = 160.0  # model mm along the wall
+COLLECTOR_PLACE = 500.0  # mm: manifolds closer than this share one spot and one label
 COLLECTOR_DEPTH_MM = 1.6
 LABEL_MM = 1.8
-OBSTACLE_HATCH = "NET"  # короб, инсталляция — сеткой: стены — косой штриховкой ANSI31
-OBSTACLE_HATCH_MM = 1.6  # шаг сетки на листе — редкая, светлее стен
+OBSTACLE_HATCH = "NET"  # box, installation frame: grid hatch; walls use ANSI31
+OBSTACLE_HATCH_MM = 1.6  # grid step on the sheet: sparse, lighter than walls
 WHITE = 0xFFFFFF
-FIXTURE_NEAR = 150.0  # мм: прибор у препятствия «ванна» или «поддон» — нарисован им
-# Ванна и поддон, заданные препятствием, рисуются прибором в его контуре, без штриховки
+FIXTURE_NEAR = 150.0  # mm: a fixture at a "bath" or "tray" obstacle is drawn by it
+# A bath or tray given as an obstacle is drawn as the fixture inside its outline, no hatch
 DRAWN_AS_FIXTURE = {
     ObstacleType.BATH: FixtureType.BATH,
     ObstacleType.SHOWER_TRAY: FixtureType.SHOWER,
@@ -138,7 +140,7 @@ def text(key: str, language: Language, **values: object) -> str:
 
 
 def draw_plumbing(msp: Modelspace, plan: Plan, plumbing: Plumbing, net: Network) -> None:
-    """Сантехника в модели: препятствия, трубы, водорозетки, приборы, стояки, коллекторы."""
+    """Plumbing in the model: obstacles, pipes, water outlets, fixtures, risers, manifolds."""
     lang = plan.language
     _draw_obstacles(msp, plumbing, net, lang)
     _draw_symbols(msp, plumbing, net)
@@ -152,15 +154,16 @@ def draw_plumbing(msp: Modelspace, plan: Plan, plumbing: Plumbing, net: Network)
 
 
 def _lay_out(net: Network) -> list[list[Vec]]:
-    """Пути труб со сдвигом в свои полосы (общие для воды и канализации: все по полу).
-    Только рисунок: трассы, длины и смета — из сети как есть. Вода — под прямыми углами
-    (косой вход отвода в трубу, что идёт парой не по сетке, — уголком); трубы на соседних
-    линиях ближе SNAP_LANES шагов полосы — одним пучком в разных полосах, а не одна на другой
-    (горячая парой с холодной лежит не на сетке, рядом с чужой трубой)."""
+    """Pipe paths shifted into their lanes (shared by water and sewer: all run on the floor).
+    Drawing only: routes, lengths and the estimate come from the network as is. Water runs at
+    right angles (a slanted branch entering a pipe that runs as an off-grid pair becomes an
+    elbow); pipes on neighbouring lines closer than SNAP_LANES lane steps go as one bundle in
+    different lanes, not on top of each other (hot paired with cold lies off the grid, next to
+    another pipe)."""
     paths = [list(p.path) if p.kind == "sewer" else _square(p.path) for p in net.pipes]
     all_segs = segments(paths)
-    # Участок по грани стены (к водорозетке в стене) — от стены в помещение, первая полоса
-    # на грани; вывод к стояку — на месте
+    # A piece along the wall face (to a water outlet in the wall) goes from the wall into the
+    # room, the first lane on the face; the outlet to the riser stays in place
     walls = net.rooms.boundary if net.rooms is not None else None
     risers = [r.center for r in net.risers]
 
@@ -197,8 +200,8 @@ def _lay_out(net: Network) -> list[list[Vec]]:
 
 
 def _wall_lanes(segs: Sequence[Segment], net: Network) -> dict[tuple[int, int], float]:
-    """Участки по грани стены, что идут по одной линии, — в полосы от стены в помещение:
-    первая — на грани, следующие — через шаг полосы внутрь (в стену сдвигать нельзя)."""
+    """Pieces along a wall face that run on one line go into lanes from the wall into the room:
+    the first on the face, the next ones one lane step further in (never into the wall)."""
     out: dict[tuple[int, int], float] = {}
     sym = lanes(segs, sheet(LANE_MM), sheet(BAND_MM), None)
     low: dict[tuple[str, float], float] = {}
@@ -218,9 +221,9 @@ def _wall_lanes(segs: Sequence[Segment], net: Network) -> dict[tuple[int, int], 
 
 
 def _square(path: Sequence[Vec]) -> list[Vec]:
-    """Путь воды под прямыми углами: косой участок — уголком (поворот там, где путь и так
-    поворачивает, — вдоль предыдущего участка); возврат по той же линии (вперёд и назад у
-    врезки отвода) — без «шпильки»."""
+    """Water path at right angles: a slanted piece becomes an elbow (the turn goes where the path
+    already turns, along the previous piece); going back along the same line (forth and back at
+    a branch tee) is done without a hairpin."""
     out = [path[0]]
     for a, b in itertools.pairwise(path):
         if abs(a.x - b.x) > 1.0 and abs(a.y - b.y) > 1.0:
@@ -236,7 +239,7 @@ def _square(path: Sequence[Vec]) -> list[Vec]:
             cross = d1.x * d2.y - d1.y * d2.x
             if abs(cross) > 1e-6 * max(d1.length() * d2.length(), 1.0):
                 break
-            clean.pop()  # на одной прямой: средняя точка лишняя (и при возврате назад)
+            clean.pop()  # collinear: the middle point is redundant (also when going back)
         clean.append(v)
     return clean
 
@@ -244,9 +247,9 @@ def _square(path: Sequence[Vec]) -> list[Vec]:
 def _snap(
     segs: Sequence[Segment], tol: float
 ) -> tuple[list[Segment], dict[tuple[int, int], float]]:
-    """Участки соседних линий одной оси (ближе tol), что перекрываются вдоль, — на одну
-    линию (среднюю), чтобы lanes развёл их по полосам; второе — поправка сдвига участка:
-    от его линии к общей."""
+    """Pieces of neighbouring lines on one axis (closer than tol) that overlap lengthwise are put on
+    one line (the middle one) so that lanes can spread them; the second value is the piece shift
+    correction from its line to the shared one."""
     parent = list(range(len(segs)))
 
     def root(i: int) -> int:
@@ -304,8 +307,8 @@ def _length(path: Sequence[Vec]) -> float:
 
 
 def _scaled(pipe: Pipe, path: Sequence[Vec]) -> list[tuple[float, float]]:
-    """Участки трубы по стене над полом (мм от начала пути модели) — на путь листа: он
-    сдвинут в свою полосу и чуть длиннее или короче."""
+    """Pipe pieces along the wall above the floor (mm from the start of the model path) mapped to
+    the sheet path: it is shifted into its lane and slightly longer or shorter."""
     model = _length(pipe.path)
     k = _length(path) / model if model > 1e-9 else 1.0
     return [(a * k, b * k) for a, b in pipe.surface]
@@ -314,7 +317,9 @@ def _scaled(pipe: Pipe, path: Sequence[Vec]) -> list[tuple[float, float]]:
 def _split(
     path: Sequence[Vec], spans: Sequence[tuple[float, float]]
 ) -> list[tuple[list[Vec], bool]]:
-    """Путь кусками: (точки, по стене над полом ли); spans — мм от начала пути."""
+    """Path in pieces: (points, whether along the wall above the floor); spans are mm from the
+    start.
+    """
     if not spans:
         return [(list(path), False)]
     cuts = sorted({0.0, _length(path), *(x for span in spans for x in span)})
@@ -333,7 +338,7 @@ def _split(
 
 
 def _cut(path: Sequence[Vec], s0: float, s1: float) -> list[Vec]:
-    """Кусок ломаной от s0 до s1 мм по ней."""
+    """Piece of a polyline from s0 to s1 mm along it."""
     out: list[Vec] = []
     acc = 0.0
     for a, b in itertools.pairwise(path):
@@ -377,7 +382,7 @@ def _draw_fixtures(msp: Modelspace, plumbing: Plumbing, net: Network, labels: _L
                 (center - o.inward * r).as_tuple(),
                 dxfattribs={"layer": P_FIXT.name, "lineweight": LW_THIN},
             )
-            _dot(msp, center, r, P_FIXT.name, WHITE)  # подложка: контур и трубы не под номером
+            _dot(msp, center, r, P_FIXT.name, WHITE)  # underlay
             msp.add_circle(
                 center.as_tuple(), r, dxfattribs={"layer": P_FIXT.name, "lineweight": LW_THIN}
             )
@@ -386,8 +391,9 @@ def _draw_fixtures(msp: Modelspace, plumbing: Plumbing, net: Network, labels: _L
 
 
 def _clear_of(center: Vec, inward: Vec, r: float, net: Network, placed: Sequence[Vec]) -> Vec:
-    """Кружок прибора — не на коробе (прибор на инсталляции — перед ним) и не на кружке
-    другого прибора в том же месте стены (бойлер над стиралкой — стопкой от стены)."""
+    """Fixture circle: not on a box (a fixture on an installation frame goes in front of it) and not
+    on another fixture's circle at the same wall spot (boiler above washer: stacked from the
+    wall)."""
     boxes = [p for k, p in net.obstacles.items() if k in net.hollow]
     for _ in range(40):
         here = Point(center.as_tuple())
@@ -432,8 +438,9 @@ def _draw_risers(msp: Modelspace, net: Network, labels: _Labels, lang: Language)
 
 
 def _draw_collectors(msp: Modelspace, net: Network, lang: Language) -> None:
-    """Коллекторы на стене: в узле ввода оба, горячей от бойлера — у бойлера; подпись — одна
-    на место: «КЛ.Х/Г», «КЛ.Х» или «КЛ.Г»."""
+    """Manifolds on the wall: both at the supply unit, hot from a boiler at the boiler; one label
+    per
+    spot: "КЛ.Х/Г", "КЛ.Х" or "КЛ.Г"."""
     places: list[list[Collector]] = []
     for c in net.collectors:
         place = next((g for g in places if (g[0].node - c.node).length() <= COLLECTOR_PLACE), None)
@@ -476,7 +483,7 @@ def _draw_obstacles(msp: Modelspace, plumbing: Plumbing, net: Network, lang: Lan
         pts = list(poly.exterior.coords)[:-1]
         with tagged(msp, "obstacle", ob.id):
             kind = DRAWN_AS_FIXTURE.get(ob.type)
-            if kind is not None:  # ванна, поддон — прибором в своём контуре
+            if kind is not None:  # bath, tray: drawn as the fixture inside its outline
                 frame, size = _obstacle_frame(poly)
                 _draw_shapes(msp, symbol(kind, frame, size))
                 continue
@@ -490,7 +497,7 @@ def _draw_obstacles(msp: Modelspace, plumbing: Plumbing, net: Network, lang: Lan
 
 
 def _obstacle_frame(poly: Polygon) -> tuple[Frame, tuple[float, float]]:
-    """Прибор в контуре препятствия (прямоугольник): вдоль длинной стороны."""
+    """Fixture inside an obstacle outline (rectangle): along the long side."""
     x0, y0, x1, y1 = poly.bounds
     if x1 - x0 >= y1 - y0:
         return Frame(Vec((x0 + x1) / 2, y0), Vec(1.0, 0.0), Vec(0.0, 1.0)), (x1 - x0, y1 - y0)
@@ -507,8 +514,8 @@ def _draw_shapes(msp: BaseLayout, shapes: Sequence[Shape]) -> None:
 
 
 def fixture_shapes(fx: Fixture, net: Network) -> list[Shape]:
-    """Контур прибора у его стены (типовой размер); висит на коробе или инсталляции — от
-    её лица; ванна и душ, заданные препятствием, — пусто (их рисует препятствие)."""
+    """Fixture outline at its wall (typical size); hanging on a box or installation frame, from its
+    face; a bath or shower given as an obstacle gives nothing (the obstacle draws it)."""
     outlets = net.by_fixture(fx.id)
     if not outlets:
         return []
@@ -516,7 +523,7 @@ def fixture_shapes(fx: Fixture, net: Network) -> list[Shape]:
     mid = sum((x.node for x in outlets), Vec(0.0, 0.0)) * (1 / len(outlets))
     here = Point(mid.as_tuple())
     v0 = 0.0
-    if fx.type is not FixtureType.BOILER:  # бойлер висит над коробом — на стене
+    if fx.type is not FixtureType.BOILER:  # boiler hangs above the box, on the wall
         ray = LineString([mid.as_tuple(), (mid + o.inward * 5000.0).as_tuple()])
         for oid in net.hollow:
             poly = net.obstacles[oid]
@@ -527,7 +534,9 @@ def fixture_shapes(fx: Fixture, net: Network) -> list[Shape]:
 
 
 def _draw_symbols(msp: Modelspace, plumbing: Plumbing, net: Network) -> None:
-    """Приборы контуром — под трубами и номерами; ванна и душ у препятствия — его рисунком."""
+    """Fixtures as outlines under pipes and numbers; bath and shower at an obstacle use its
+    drawing.
+    """
     beside = {
         ob.id: DRAWN_AS_FIXTURE[ob.type]
         for ob in plumbing.obstacles
@@ -543,7 +552,7 @@ def _draw_symbols(msp: Modelspace, plumbing: Plumbing, net: Network) -> None:
 
 
 def _in_obstacle(fx: Fixture, net: Network, beside: dict[str, FixtureType]) -> bool:
-    """Ванна или душ у препятствия «ванна» или «поддон» — прибор уже нарисован им."""
+    """Bath or shower at a "bath" or "tray" obstacle: the fixture is already drawn by it."""
     outlets = net.by_fixture(fx.id)
     if not outlets:
         return False
@@ -565,7 +574,7 @@ def _obstacle_label(msp: Modelspace, kind: ObstacleType, poly: Polygon, lang: La
         add_text(msp, label, Vec(c.x, c.y), LABEL_MM, P_OBST.name, 90.0)
 
 
-# --- Таблицы и легенда на листе ---------------------------------------------------
+# --- Tables and legend on the sheet --------------------------------------------
 
 
 def fixtures_table(plan: Plan, plumbing: Plumbing, net: Network) -> Table | None:
@@ -624,11 +633,11 @@ def _m(mm: float) -> str:
     return f"{mm / 1000:.1f}".replace(".", ",")
 
 
-LegendDraw = Callable[[Paperspace, Vec], None]  # образец строки; точка — середина слева
+LegendDraw = Callable[[Paperspace, Vec], None]  # row sample; the point is the middle on the left
 
 
 def _legend_rows(lang: Language) -> list[tuple[str, LegendDraw]]:
-    """Строки легенды: подпись и как нарисовать образец (мм листа)."""
+    """Legend rows: caption and how to draw the sample (sheet mm)."""
     kinds: tuple[Kind, ...] = ("cold", "hot", "sewer")
 
     def line(kind: Kind, surface: bool = False) -> LegendDraw:
@@ -683,7 +692,7 @@ def _legend_rows(lang: Language) -> list[tuple[str, LegendDraw]]:
             )
 
     def symbols(psp: Paperspace, mid: Vec) -> None:
-        # Умывальник и ванна в масштабе образца: контуры модели (мм) — в мм листа
+        # Basin and bath at sample scale: model outlines (mm) in sheet mm
         w, d = SIZES[FixtureType.BATH]
         k = LEGEND_SAMPLE_MM / w
         frame = Frame(Vec(0.0, 0.0), Vec(1.0, 0.0), Vec(0.0, -1.0))
@@ -719,8 +728,8 @@ def _legend_rows(lang: Language) -> list[tuple[str, LegendDraw]]:
 
 
 def legend_variants(lang: Language) -> list[tuple[float, float, LegendDraw]]:
-    """Варианты легенды у штампа — (ширина, высота, рисунок от левого верхнего угла): по k
-    строк в колонке; раскладка берёт самый низкий, что помещается (layout.fit_legend)."""
+    """Legend variants next to the title block: (width, height, drawing from the top-left corner),
+    k rows per column; the layout takes the lowest one that fits (layout.fit_legend)."""
     rows = _legend_rows(lang)
     title = text("legend", lang)
     out: list[tuple[float, float, LegendDraw]] = []

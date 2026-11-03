@@ -1,11 +1,11 @@
-"""Версия в web/package-lock.json при релизе (pre_bump_hooks в pyproject.toml,
-[tool.commitizen]): commitizen правит только файлы версии, а в lock-файле строка «version»
-есть у каждого пакета — менять по образцу нельзя. Здесь меняются только две записи корня
-(верхняя и packages[""]), файл пишется, как его пишет npm (отступ 2, перевод строки в конце),
-и ставится в индекс: cz bump коммитит индекс вместе с файлами версии.
+"""Version in web/package-lock.json at release time (pre_bump_hooks in pyproject.toml,
+[tool.commitizen]): commitizen edits only the version files, while the lock file has a
+"version" line for every package, so a pattern replace is not safe. Only the two root entries
+are changed here (the top one and packages[""]); the file is written the way npm writes it
+(indent 2, trailing newline) and staged: cz bump commits the index together with the version files.
 
-Новая версия — из переменной CZ_PRE_NEW_VERSION (её даёт commitizen); для проверки руками —
-аргументом: `uv run python scripts/release_lock.py 0.2.0 --no-add`.
+The new version comes from the CZ_PRE_NEW_VERSION variable (set by commitizen); for a manual
+check pass it as an argument: `uv run python scripts/release_lock.py 0.2.0 --no-add`.
 """
 
 from __future__ import annotations

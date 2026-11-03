@@ -1,9 +1,9 @@
-"""Раскладка листов собранных проектов — кодом, без картинок: формат, масштаб, переполнение
-и таблицы поверх плана.
+"""Sheet layout of built projects, checked by code without images: paper size, scale, overflow
+and tables placed over the plan.
 
     uv run python scripts/check_layout.py nahirna-16 vavilovykh-11
 
-Код выхода 1 — есть переполненный лист или таблица на плане.
+Exit code 1 means an overflowing sheet or a table on top of the plan.
 """
 
 from __future__ import annotations
@@ -38,7 +38,7 @@ def check(project: Path) -> bool:
     )
     prices_path = find_prices(project)
     own = load_prices(prices_path)[0] if prices_path is not None else None
-    prices = Prices(own, price_service(None))  # как при сборке: прайс поверх сервиса цен
+    prices = Prices(own, price_service(None))  # as in build: price list over the price service
     paper, scale = choose_paper_and_scale(
         report.plan, report.contours, report.electrical, prices, plumbing=water
     )

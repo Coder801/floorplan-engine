@@ -1,6 +1,6 @@
-"""Варианты проводки (electrical/variants.py, docs/wiring-variants.md): применение варианта,
-вариант «как в проекте», сводка без чертежей; в проекте — variant.yaml, правки трасс
-отдельно по вариантам (pipeline.save_wiring_edits), сводка в манифесте .epd."""
+"""Wiring variants (electrical/variants.py, docs/wiring-variants.md): applying a variant, the "as
+in project" variant, a summary without drawings; in the project, variant.yaml, route edits per
+variant (pipeline.save_wiring_edits), the summary in the .epd manifest."""
 
 from __future__ import annotations
 
@@ -42,7 +42,7 @@ def _elec(**extra: Any) -> Electrical:
 
 def test_all_variants_and_keys() -> None:
     keys = [v.key for v in all_variants()]
-    assert len(keys) == len(set(keys)) == 6  # 3 режима × 2 трассы × 1 разводка
+    assert len(keys) == len(set(keys)) == 6  # 3 modes × 2 routes × 1 distribution
     assert "economy-floor-boxes" in keys and "proper-ceiling-boxes" in keys
 
 
@@ -69,9 +69,9 @@ def test_default_variant_keeps_project_as_is() -> None:
     elec = _elec(mode="economy")
     default = default_variant(elec)
     assert default == Variant(mode="economy", route="ceiling")
-    assert apply_variant(elec, default) is elec  # «как в проекте» — без изменений
+    assert apply_variant(elec, default) is elec  # "as in project": no changes
     floor = apply_variant(elec, Variant(mode="proper", route="floor"))
-    assert floor.mode == "proper" and floor.points == elec.points  # точки — из проекта
+    assert floor.mode == "proper" and floor.points == elec.points  # points come from the project
 
 
 def test_apply_variant_sets_one_route_for_all_cables() -> None:
@@ -80,7 +80,7 @@ def test_apply_variant_sets_one_route_for_all_cables() -> None:
         {"id": "c2", "from": "board", "to": ["l1"], "cable": "3x1.5"},
     ]
     elec = _elec(cables=cables)
-    assert default_variant(elec).route == "ceiling"  # не все по полу
+    assert default_variant(elec).route == "ceiling"  # not all on the floor
     assert {c.route for c in apply_variant(elec, Variant(route="floor")).cables} == {"floor"}
     assert {c.route for c in apply_variant(elec, Variant(mode="economy")).cables} == {"ceiling"}
     all_floor = _elec(cables=[{**c, "route": "floor"} for c in cables])
@@ -94,7 +94,7 @@ def test_wiring_file_edits_for_variant_and_legacy() -> None:
         variants={"economy-floor-boxes": WiringEdits(wires={"wire_2": edit})},
     )
     default = "standard-ceiling-boxes"
-    legacy = data.edits_for(default, default)  # правки до вариантов — у варианта по умолчанию
+    legacy = data.edits_for(default, default)  # pre-variant edits belong to the default variant
     assert legacy is not None and set(legacy.wires) == {"wire_1"}
     own = data.edits_for("economy-floor-boxes", default)
     assert own is not None and set(own.wires) == {"wire_2"}
@@ -113,8 +113,8 @@ def test_variant_summary_differs_by_mode_and_route() -> None:
     std, prem = summaries["standard-ceiling-boxes"], summaries["proper-ceiling-boxes"]
     floor = summaries["standard-floor-boxes"]
     assert std is not None and prem is not None and floor is not None
-    assert prem.total > std.total  # премиум: дифавтоматы, УЗИП
-    assert floor.cable_m != std.cable_m  # по полу — другие трассы
+    assert prem.total > std.total  # premium: RCBOs, surge protector
+    assert floor.cable_m != std.cable_m  # on the floor: different routes
     d = std.as_dict()
     assert d["key"] == "standard-ceiling-boxes" and d["currency"] == "грн" and not d["edited"]
 
@@ -142,20 +142,20 @@ def _project(tmp_path: Path) -> Path:
 
 def test_variant_choice_and_edits_kept_per_variant(tmp_path: Path) -> None:
     project = _project(tmp_path)
-    assert assess_project(project).report.variant == Variant()  # «как в проекте»
+    assert assess_project(project).report.variant == Variant()  # "as in project"
     assert not save_wiring_edits(project, {"wires": {"wire_1": EDIT}})
-    assert save_variant(project, {"mode": "cheap"})[0].path == "mode"  # ошибка — с путём
+    assert save_variant(project, {"mode": "cheap"})[0].path == "mode"  # error with a path
     assert not save_variant(project, {"mode": "economy", "route": "floor"})
     report = assess_project(project).report
     assert report.variant is not None and report.variant.key == "economy-floor-boxes"
     assert report.electrical is not None and report.electrical.mode == "economy"
-    assert report.wiring_edits is None  # у этого варианта правок нет
+    assert report.wiring_edits is None  # this variant has no edits
     assert not save_wiring_edits(project, {"wires": {"wire_5": EDIT}})
     data = yaml.safe_load((project / "wiring.yaml").read_text("utf-8"))
     assert set(data["variants"]) == {"standard-ceiling-boxes", "economy-floor-boxes"}
-    assert "wires" not in data  # правки до вариантов переехали в раздел варианта
+    assert "wires" not in data  # pre-variant edits moved into the variant section
     assert set(data["variants"]["economy-floor-boxes"]["wires"]) == {"wire_5"}
-    # Вернулись к варианту «как в проекте» — и его правки на месте
+    # Back to the "as in project" variant: its edits are still there
     assert not save_variant(project, {"mode": "standard", "route": "ceiling"})
     back = assess_project(project).report.wiring_edits
     assert back is not None and set(back.wires) == {"wire_1"}
@@ -166,13 +166,13 @@ def test_ceiling_height_from_viewer_overrides_plan_and_survives_variant_change(
 ) -> None:
     project = _project(tmp_path)
     assert assess_project(project).report.plan is not None
-    for bad in (1999, 4001):  # от 2 до 4 м
+    for bad in (1999, 4001):  # from 2 to 4 m
         assert save_variant(project, {"ceiling_height": bad})[0].path == "ceiling_height"
     assert not save_variant(project, {"mode": "standard", "ceiling_height": 3100})
     plan = assess_project(project).report.plan
     assert plan is not None and plan.ceiling_height == 3100
-    assert "ceiling_height" in plan.model_fields_set  # не допущение
-    assert not save_variant(project, {"mode": "economy"})  # смена варианта высоту не сбрасывает
+    assert "ceiling_height" in plan.model_fields_set  # not an assumption
+    assert not save_variant(project, {"mode": "economy"})  # variant change keeps the height
     plan = assess_project(project).report.plan
     assert plan is not None and plan.ceiling_height == 3100
 
@@ -192,8 +192,8 @@ def test_build_writes_variant_summaries_to_manifest(tmp_path: Path) -> None:
 
 
 def test_project_without_floor_builds_only_ceiling_variants(tmp_path: Path) -> None:
-    """routes: [ceiling] — вариант по полу из variant.yaml не применяется (предупреждение),
-    в манифесте только варианты по потолку."""
+    """routes: [ceiling]: a floor variant from variant.yaml is not applied (a warning), and the
+    manifest has only ceiling variants."""
     project = _project(tmp_path)
     elec_path = project / "electrical.yaml"
     data = yaml.safe_load(elec_path.read_text(encoding="utf-8"))

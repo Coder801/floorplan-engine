@@ -1,9 +1,9 @@
-"""Источник → примитивы страниц: адаптер выбирается сам, по файлу и по каждой странице.
+"""Source → page primitives: the adapter is picked automatically, per file and per page.
 
-- картинка (JPEG, PNG, TIFF…) — растр;
-- PDF — постранично: есть векторный текст (MIN_VECTOR_CHARS символов и больше) — вектор,
-  нет (скан, лист, вставленный картинкой, текст в кривых) — страница рендерится и идёт
-  в растр.
+- an image (JPEG, PNG, TIFF…) goes to raster;
+- a PDF goes page by page: with vector text (MIN_VECTOR_CHARS characters or more) it is
+  vector; without it (a scan, a sheet pasted as an image, text as curves) the page is
+  rendered and goes to raster.
 """
 
 from __future__ import annotations
@@ -24,7 +24,7 @@ def is_image(path: Path) -> bool:
 
 
 def read_source(path: Path, name: str | None = None) -> list[Sheet]:
-    """Страницы источника как примитивы; у каждой source — vector или raster."""
+    """Source pages as primitives; each has source set to vector or raster."""
     name = name or path.name
     if is_image(path):
         return read_image(path, name)

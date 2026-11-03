@@ -1,14 +1,15 @@
-"""Стенд точности растра: векторный PDF → картинка → растровый разбор, сверка с вектором.
+"""Raster accuracy bench: vector PDF → image → raster parsing, compared with the vector.
 
-Вектор — эталон: в нём подписи и координаты точные. Тот же лист рендерится и разбирается
-растром (raster.py), размеры сопоставляются по месту на листе:
+The vector is the reference: its labels and coordinates are exact. The same sheet is
+rendered and parsed as raster (raster.py), dimensions are matched by position on the sheet:
 
-- found — на месте векторного размера растр нашёл размер с той же подписью;
-- misread — нашёл размер, но подпись другая (ошибка OCR: опасная, она даёт неверную стену);
-- missed — на месте векторного размера растр ничего не нашёл;
-- extra — растровый размер там, где у вектора размера нет.
+- found: at the place of a vector dimension the raster found one with the same label;
+- misread: it found a dimension but the label differs (an OCR error, a dangerous one: it
+  gives a wrong wall);
+- missed: the raster found nothing at the place of a vector dimension;
+- extra: a raster dimension where the vector has none.
 
-Масштаб сравнивается отдельно: растр должен найти тот же мм/pt.
+Scale is compared separately: the raster must find the same mm/pt.
 """
 
 from __future__ import annotations
@@ -20,7 +21,7 @@ from floorplan_engine.service.facts.analysis import Dimension, PageFacts, page_f
 from floorplan_engine.service.facts.raster import RENDER_DPI, read_raster_pdf
 from floorplan_engine.service.facts.vector import read_pdf
 
-POSITION_TOL = 4.0  # pt: размеры на одном месте — линия и концы не дальше этого
+POSITION_TOL = 4.0  # pt: dimensions at one place have line and ends no farther apart than this
 
 
 @dataclass
@@ -28,7 +29,7 @@ class PageBench:
     page: int
     vector_dims: int
     found: int = 0
-    misread: list[tuple[int, int]] = field(default_factory=list)  # (вектор, растр)
+    misread: list[tuple[int, int]] = field(default_factory=list)  # (vector, raster)
     missed: int = 0
     extra: int = 0
     vector_scale: float | None = None
@@ -36,12 +37,12 @@ class PageBench:
 
     @property
     def recall(self) -> float:
-        """Доля векторных размеров, которые растр прочитал верно."""
+        """Share of vector dimensions the raster read correctly."""
         return self.found / self.vector_dims if self.vector_dims else 1.0
 
     @property
     def scale_error(self) -> float | None:
-        """Расхождение масштаба растра с вектором, %; None — у кого-то масштаба нет."""
+        """Raster scale deviation from the vector, %; None if either has no scale."""
         if not self.vector_scale or not self.raster_scale:
             return None
         return abs(self.raster_scale / self.vector_scale - 1) * 100
@@ -57,7 +58,7 @@ def same_place(a: Dimension, b: Dimension, tol: float = POSITION_TOL) -> bool:
 
 
 def compare(vector: PageFacts, raster: PageFacts) -> PageBench:
-    """Сверка размеров одной страницы: каждому векторному — растровый на том же месте."""
+    """Dimension check for one page: for each vector dimension, a raster one at the same place."""
     bench = PageBench(vector.page, len(vector.dimensions))
     bench.vector_scale, bench.raster_scale = vector.scale, raster.scale
     used: set[int] = set()

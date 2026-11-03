@@ -1,7 +1,7 @@
-"""Щит в лицо данными для просмотра (ключ `panel` страницы «Щит», docs/epd-format.md):
-корпус щита из каталога, аппараты с моделью каталога и рейкой
-корпуса, группы с нагрузкой и цветом, ввод, итоги, слабые места,
-инвертор или вилка генератора. Рисует его своим компонентом фронт (web/src/engine/panel)."""
+"""Panel front view as data for the viewer (key `panel` of the "Panel" page, docs/epd-format.md):
+enclosure from the catalogue, devices with their catalogue model and enclosure rail, groups
+with load and colour, supply, totals, weak spots, inverter or generator plug. The frontend
+draws it with its own component (web/src/engine/panel)."""
 
 from __future__ import annotations
 
@@ -18,15 +18,15 @@ from floorplan_engine.electrical.panel import (
 from floorplan_engine.electrical.panel_text import text
 from floorplan_engine.model.texts import Language
 
-EXTERNAL = {"inverter": "U1", "plug": "XP1"}  # аппарат резерва вне щита
+EXTERNAL = {"inverter": "U1", "plug": "XP1"}  # backup device outside the panel
 
 
 def panel_data(
     panel: BoardPanel, colors: dict[str, int], name: str, language: Language
 ) -> dict[str, object]:
-    """Щит для просмотра (ключ `panel` страницы .epd): аппараты по порядку с моделью
-    из каталога, группы с нагрузкой, итоги и слабые места — на языке проекта. Раскладку
-    по рейкам и рисунок делает просмотр."""
+    """Panel for the viewer (key `panel` of an .epd page): devices in order with their catalogue
+    model, groups with load, totals and weak spots, in the project language. The viewer does the
+    rail layout and the drawing."""
     groups = {}
     for g in panel.groups:
         groups[g.group] = {
@@ -79,7 +79,8 @@ def panel_data(
             "id": EXTERNAL[panel.backup],
             "kind": panel.backup,
             "title": text(panel.backup, language),
-            # LOAD — в автомат выхода инвертора, с него — во вход II АВР или переключателя
+            # LOAD goes into the inverter output breaker, from there into input II of the ATS or
+            # switch
             "to": "QS3" if any(d.id == "QS3" for d in panel.devices) else switch,
             "switch": switch,
             "feed": "QS2" if panel.backup == "inverter" else None,
@@ -90,7 +91,7 @@ def panel_data(
 def _devices(
     devices: tuple[Device, ...], rows: tuple[tuple[Device, ...], ...]
 ) -> list[dict[str, object]]:
-    """Аппараты по порядку с моделью каталога и рейкой корпуса."""
+    """Devices in order with their catalogue model and enclosure rail."""
     row_of = {d.id: r for r, row in enumerate(rows) for d in row}
     out = []
     for d in devices:
@@ -117,7 +118,7 @@ def _devices(
 
 
 def dc_data(dc: DcBox, language: Language) -> dict[str, object]:
-    """Щит АКБ у инвертора (ключ `panel.dc`): корпус, аппараты, АКБ, строки панелей."""
+    """Battery box for the inverter (key `panel.dc`): enclosure, devices, battery, solar strings."""
     return {
         "enclosure": dc.enclosure.as_dict(),
         "devices": _devices(dc.devices, dc.rows),

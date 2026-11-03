@@ -1,6 +1,6 @@
-// Карточка проекта: превью плана, этапы, когда собран — на входном экране (Welcome) и в меню
-// проектов (ProjectsMenu). Картинка — превью плана из модели (out/preview.svg, пишет build);
-// нет его — условный план, разбитый по имени проекта.
+// Project card: plan preview, stages, build time, on the start screen (Welcome) and in the
+// project menu (ProjectsMenu). The image is the plan preview from the model (out/preview.svg,
+// written by build); without it, a placeholder plan derived from the project name.
 
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -10,7 +10,7 @@ import { label, locale } from "@/shared/i18n";
 import type { ProjectSummary } from "@/shared/types";
 import css from "./ProjectCard.module.scss";
 
-// Детерминированный генератор по имени: у проекта всегда одна и та же картинка
+// Deterministic generator seeded by the name: a project always gets the same picture
 function seeded(name: string) {
   let h = 2166136261;
   for (const ch of name) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
@@ -23,7 +23,7 @@ function seeded(name: string) {
 
 type Rect = [number, number, number, number];
 
-// Прямоугольник квартиры, разрезанный на комнаты по очереди вдоль длинной стороны
+// The flat rectangle, cut into rooms one by one along the long side
 function rooms(name: string): Rect[] {
   const rnd = seeded(name);
   const out: Rect[] = [];
@@ -50,7 +50,7 @@ function Plan({ name }: { name: string }) {
     <svg className={css.plan} viewBox="0 0 200 120" aria-hidden="true">
       {rs.map(([x, y, w, h], i) => <rect key={i} x={x} y={y} width={w} height={h} className={css.room} />)}
       <rect x={10} y={10} width={180} height={100} className={css.outline} />
-      {/* Проём в каждой комнате — разрыв в нижней или правой стене */}
+      {/* An opening in each room: a gap in the bottom or right wall */}
       {rs.map(([x, y, w, h], i) => {
         const horiz = rnd() < 0.5 && w > 30;
         return horiz
@@ -62,7 +62,7 @@ function Plan({ name }: { name: string }) {
   );
 }
 
-// SVG пишет ядро (thumbnail.py): только пути и линии с классами, цвета — из ProjectCard.module.scss
+// The core writes the SVG (thumbnail.py): only paths and lines with classes, colours come from ProjectCard.module.scss
 function Preview({ p }: { p: ProjectSummary }) {
   const [svg, setSvg] = useState<string | null>(null);
   useEffect(() => {

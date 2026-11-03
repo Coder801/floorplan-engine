@@ -1,7 +1,7 @@
-// Цвета — CSS-переменные, а не переменные SCSS: тема переключается без пересборки
-// (palette.ts читает их же для холста и 3D). Светлая — тёплый белый; тёмная — палитра темы
-// «Dark 2026» из VS Code (extensions/theme-defaults/themes/2026-dark.json): фон редактора
-// #121314, боковые панели #191A1B, виджеты #202122, рамки #2A2B2C, акцент кнопок #297AA0.
+// Colours are CSS variables, not SCSS variables: the theme switches without a rebuild
+// (palette.ts reads the same ones for the canvas and 3D). Light is a warm white; dark is the
+// "Dark 2026" palette from VS Code (extensions/theme-defaults/themes/2026-dark.json): editor
+// background #121314, side panels #191A1B, widgets #202122, borders #2A2B2C, button accent #297AA0.
 
 @mixin dark {
   --bg: #121314; --panel: #191a1b; --raise: #202122; --text: #bfbfbf; --muted: #8c8c8c;

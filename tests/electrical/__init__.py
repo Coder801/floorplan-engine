@@ -1,1 +1,1 @@
-"""Тесты расчётов электрики и щита."""
+"""Electrical and panel calculation tests."""

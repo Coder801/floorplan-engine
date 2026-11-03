@@ -1,8 +1,9 @@
-"""Примитивы страницы источника — общий вход разбора, какой бы ни был формат файла.
+"""Source page primitives: the shared parser input, whatever the file format.
 
-Адаптер формата (vector.py — векторный PDF; растр — позже) превращает страницу в надписи
-и отрезки; дальше всё считает analysis.py, не зная, откуда они пришли. Координаты — в
-единицах источника (pt у PDF, px у картинки) от левого нижнего угла листа, Y вверх.
+A format adapter (vector.py for vector PDF; raster later) turns a page into labels and
+segments; analysis.py computes everything else without knowing where they came from.
+Coordinates are in source units (pt for PDF, px for an image) from the bottom-left corner of
+the sheet, Y up.
 """
 
 from __future__ import annotations
@@ -35,7 +36,7 @@ class Segment:
         return None
 
     def passes_near(self, x: float, y: float, tol: float) -> bool:
-        """Точка лежит на отрезке (с допуском)."""
+        """The point lies on the segment (within tolerance)."""
         dx, dy = self.x1 - self.x0, self.y1 - self.y0
         n2 = dx * dx + dy * dy
         if n2 == 0:
@@ -47,16 +48,16 @@ class Segment:
 
 @dataclass
 class Label:
-    """Надпись: одна строка символов одного направления. Координаты — pt, Y вверх."""
+    """Label: one line of characters in one direction. Coordinates in pt, Y up."""
 
     text: str
     direction: Direction
-    a0: float  # начало и конец вдоль направления текста
+    a0: float  # start and end along the text direction
     a1: float
-    base: float  # базовая линия: Y для горизонтальной, X для вертикальной
-    perp: float  # середина поперёк направления
+    base: float  # baseline: Y for horizontal, X for vertical
+    perp: float  # middle across the direction
     height: float
-    confidence: float = 1.0  # 1 — вектор (точно); у OCR — его оценка
+    confidence: float = 1.0  # 1 for vector (exact); the OCR estimate for OCR
 
     @property
     def mid(self) -> float:
@@ -72,7 +73,7 @@ class Label:
 
 @dataclass
 class Sheet:
-    """Страница источника как примитивы."""
+    """A source page as primitives."""
 
     file: str
     page: int
@@ -80,6 +81,6 @@ class Sheet:
     height: float
     labels: list[Label] = field(default_factory=list)
     segments: list[Segment] = field(default_factory=list)
-    unit: str = "pt"  # единица координат: pt у векторного PDF, px у картинки
+    unit: str = "pt"  # coordinate unit: pt for a vector PDF, px for an image
     source: Literal["vector", "raster"] = "vector"
-    tolerance: float = 1.0  # во сколько раз шире допуски разбора (растр — неточные концы)
+    tolerance: float = 1.0  # how much wider the parser tolerances are (raster has imprecise ends)

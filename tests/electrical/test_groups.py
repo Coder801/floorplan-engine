@@ -1,5 +1,5 @@
-"""«Группы»: назначение из модели или составленное по точкам; автомат и мощность — с листа
-«Щит», кабель и длина — из проводки."""
+"""The "Groups": purpose from the model or built from points; breaker and power from the "Panel"
+sheet, cable and length from wiring."""
 
 from __future__ import annotations
 
@@ -43,7 +43,7 @@ def _elec(**extra: Any) -> Electrical:
 def test_composed_purpose_by_points_and_rooms() -> None:
     plan = make_plan(RECT, [])
     rows = {r.group: r for r in group_rows(plan, _elec())}
-    assert list(rows) == ["QF1", "QF2", "QF10"]  # по номерам, не по строке
+    assert list(rows) == ["QF1", "QF2", "QF10"]  # by number, not by string
     assert rows["QF1"].purpose.startswith("Освещение — ") and rows["QF1"].assumed
     assert rows["QF2"].purpose.startswith("Розетки — ") and rows["QF2"].points == 2
     assert rows["QF2"].cable == "3x2.5" and rows["QF2"].cable_ids == ("cable_1",)
@@ -57,9 +57,9 @@ def test_purpose_and_device_from_model() -> None:
     assert built is not None
     table, notes = built
     row = next(r for r in table.rows if isinstance(r[0], Mark) and r[0].text == "QF2")
-    assert isinstance(row[0], Mark) and row[0].color  # кружок цвета группы
-    assert row[1] == "Розетки кухни" and row[2] == "C16, 30 мА"  # без «*»: из модели
-    assert any(str(r[1]).endswith(ASSUMED) for r in table.rows) and notes  # остальные составлены
+    assert isinstance(row[0], Mark) and row[0].color  # group colour dot
+    assert row[1] == "Розетки кухни" and row[2] == "C16, 30 мА"  # no "*": from the model
+    assert any(str(r[1]).endswith(ASSUMED) for r in table.rows) and notes  # the others are built
 
 
 def test_device_column_only_when_known() -> None:
@@ -92,8 +92,8 @@ def test_standard_mode_warns_group_over_rooms() -> None:
 
 
 def test_groups_with_wiring_and_panel() -> None:
-    """С проводкой и щитом: автомат и мощность — со щита (подобранное — «*» и примечание),
-    кабель и длина — из проводки; итог — длина, точки, мощность."""
+    """With wiring and a panel: breaker and power from the panel (a chosen one gets "*" and a note),
+    cable and length from wiring; totals are length, points, power."""
     plan = make_plan(RECT, [])
     _, contours = validate_plan(plan)
     elec = _elec(board={"room": "r", "wall": "w1", "offset": 500, "height": 1700})
@@ -112,4 +112,4 @@ def test_groups_with_wiring_and_panel() -> None:
     assert row[4] == f"{qf2:.1f}".replace(".", ",")
     points = sum(int(str(r[5])) for r in table.rows)
     assert table.total is not None and table.total[5] == str(points)
-    assert any("лист «Щит»" in n for n in notes)  # автомат подобран кодом
+    assert any("лист «Щит»" in n for n in notes)  # breaker chosen by code

@@ -42,8 +42,8 @@ def test_quantities_follow_network() -> None:
     assert q["water.outlet16"] == 3 == q["work.water_outlet"]
     assert q["sewer.riser_tee"] == len([p for p in net.pipes_of("sewer") if p.parent is None])
     assert q["water.collector"] == sum(c.outputs for c in net.collectors)
-    assert q["water.valve"] == 2  # холодная и горячая — из стояка
-    assert "water.meter" not in q  # счётчики — только из источника
+    assert q["water.valve"] == 2  # cold and hot from the riser
+    assert "water.meter" not in q  # meters only from the source
     assert set(q) <= set(LINES)
 
 
@@ -57,6 +57,16 @@ def test_mock_covers_all_lines_and_totals() -> None:
 def test_no_prices_is_volumes() -> None:
     est = build_estimate(_net(), PLUMBING, Prices())
     assert est.unpriced == len(est.lines)
+
+
+def test_all_plumbing_works_are_rough() -> None:
+    """Water and sewer go in before screed and tiles: all work is rough; the estimate has no
+    finishing work (fixtures, mixers)."""
+    assert {v[0] for k, v in LINES.items() if k.startswith("work.")} == {"rough"}
+    assert {v[0] for k, v in LINES.items() if not k.startswith("work.")} == {"material"}
+    est = build_estimate(_net(), PLUMBING, Prices(None, MockPriceService(extra=MOCK_PRICES)))
+    assert est.subtotal("finish") == 0 and est.subtotal("rough") > 0
+    assert est.total == est.subtotal("material") + est.work
 
 
 def test_units_follow_language() -> None:
@@ -74,18 +84,18 @@ def _pipe(path: Sequence[tuple[float, float]], parent: str | None = None) -> Pip
 
 def test_elbow_on_each_plan_turn_and_at_foot_of_each_riser() -> None:
     zigzag = [(0, 0), (1000, 0), (1000, 1000), (2000, 1000)]
-    assert elbows(_pipe(zigzag)) == 2 + 2  # два поворота по плану, вертикали у обоих концов
-    assert elbows(_pipe(zigzag, parent="cold_0")) == 2 + 1  # отвод начинается тройником
+    assert elbows(_pipe(zigzag)) == 2 + 2  # two plan turns, verticals at both ends
+    assert elbows(_pipe(zigzag, parent="cold_0")) == 2 + 1  # the branch starts with a tee
 
 
 def test_collector_fittings_rehau() -> None:
-    net = _net()  # лучевая: три трубы Ø16 от коллекторов
+    net = _net()  # radial: three Ø16 pipes from the manifolds
     f = water_fittings(net)
     water = [p for p in net.pipes if p.kind != "sewer"]
     n = sum(elbows(p) for p in water)
     assert f["water.outlet16"] == 3 and f["water.eurocone16"] == 3
     assert f["water.elbow16"] == n
-    assert f["water.sleeve16"] == 2 * len(water) + 2 * n  # гильза на каждый конец в фитинге
+    assert f["water.sleeve16"] == 2 * len(water) + 2 * n  # a sleeve for each pipe end in a fitting
     assert not any(k.startswith(("water.tee", "water.adapter")) for k in f)
 
 
@@ -102,17 +112,17 @@ def test_tee_fittings_rehau() -> None:
     branches = [p for p in water if p.parent is not None]
     roots = [p for p in water if p.parent is None]
     assert branches
-    assert f["water.tee20_16"] == len(branches)  # магистраль Ø20, отвод Ø16
-    assert f.get("water.adapter20", 0) + f.get("water.adapter16", 0) == len(roots)  # узел ввода
-    assert "water.eurocone16" not in f  # коллектора нет — евроконусов нет
+    assert f["water.tee20_16"] == len(branches)  # Ø20 main, Ø16 branch
+    assert f.get("water.adapter20", 0) + f.get("water.adapter16", 0) == len(roots)  # supply unit
+    assert "water.eurocone16" not in f  # no manifold, no eurocones
     sleeves = f.get("water.sleeve16", 0) + f.get("water.sleeve20", 0)
     assert sleeves == sum(2 + 2 * elbows(p) for p in water) + 2 * len(branches)
 
 
 def test_sewer_turn_90_is_two_bends_45() -> None:
     assert drop_bends(0) == 0
-    assert drop_bends(DROP_TURN - 1) == 2  # короткий сдвиг вниз — двумя отводами 45°
-    assert drop_bends(DROP_TURN) == 4  # вниз из выпуска и на пол — по два отвода 45°
+    assert drop_bends(DROP_TURN - 1) == 2  # short offset down: two 45° bends
+    assert drop_bends(DROP_TURN) == 4  # down from the drain and onto the floor: two 45° bends each
     net = _net()
     q = quantities(net, PLUMBING)
     sewer = net.pipes_of("sewer")
@@ -128,7 +138,7 @@ def test_sewer_above_floor_is_box_not_floor_chase() -> None:
     )
     plan = make_flat()
     _, contours = validate_plan(plan)
-    net = build_network(plan, contours, plumbing)  # врезка 100 мм — в стяжку не помещается
+    net = build_network(plan, contours, plumbing)  # a 100 mm inlet does not fit in the screed
     pipe = net.pipes_of("sewer")[0]
     q = quantities(net, plumbing)
     assert q["work.sewer_box"] == round(pipe.surface_length / 1000, 2) > 0

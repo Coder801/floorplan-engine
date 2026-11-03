@@ -1,8 +1,9 @@
-"""Карточки объектов проекта для подсказок в просмотре: заголовок и строки «что — значение».
+"""Project object cards for hints in the viewer: a title and "what: value" rows.
 
-Ключ — тот же «тип:id», что в XDATA примитивов (ids.py) и в ключе `o` артефакта .epd.
-Всё — из модели и расчёта проводки (wiring.py), на языке проекта; в DXF не пишется.
-Линия проводки называется по смыслу — «QF4: К3 → Розетка, Кухня», а не по wire_n.
+The key is the same "type:id" as in the primitive XDATA (ids.py) and the `o` key of the .epd
+artifact. Everything comes from the model and the wiring calculation (wiring.py), in the
+project language; nothing is written to the DXF.
+A wiring line is named by meaning, "QF4: К3 → Розетка, Кухня", not by wire_n.
 """
 
 from __future__ import annotations
@@ -100,7 +101,7 @@ TEXT: dict[str, dict[str, str]] = {
     "points_on_wall": {"ru": "Точек", "uk": "Точок"},
     "water_on_wall": {"ru": "Подводов воды и выпусков", "uk": "Підводів води і випусків"},
 }
-CARD_LOADS = 8  # потребителей в карточке аппарата, остальные — «ещё N»
+CARD_LOADS = 8  # loads shown on a device card; the rest as "N more"
 
 
 def text(key: str, language: Language, **values: object) -> str:
@@ -135,8 +136,8 @@ def describe_objects(
     wiring: Wiring | None = None,
     water: WaterMap | None = None,
 ) -> dict[str, ObjectInfo]:
-    """Карточки всех объектов модели по ключу «тип:id»; water — подводы сантехники по стенам
-    (у развёрток — и стены, где есть только сантехника)."""
+    """Cards of all model objects by "type:id"; water is plumbing supplies by wall (for elevations,
+    also walls that only have plumbing)."""
     lang = plan.language
     out: dict[str, ObjectInfo] = {}
     height_assumed = "ceiling_height" not in plan.model_fields_set
@@ -181,7 +182,7 @@ def describe_objects(
             out[f"opening:{op.id}"] = ObjectInfo(f"{text(name, lang)} {op.id}", tuple(rows))
     if elec is not None:
         out.update(_electrical(plan, elec, wiring))
-        # Развёртки: имя (пейджер и подсказка просмотра) и что за стеной
+        # Elevations: name (viewer pager and hint) and what is behind the wall
         for e in wall_elevations(plan, contours, elec, wiring, water=water):
             rows = [
                 (text("length", lang), _mm(e.length)),
@@ -200,8 +201,8 @@ def describe_objects(
 
 
 def device_cards(panel: BoardPanel, lang: Language) -> dict[str, ObjectInfo]:
-    """Карточки аппаратов листа «Щит»: у автомата группы — нагрузка, потребители и слабые
-    места группы."""
+    """Device cards of the "Panel" sheet: a group breaker gets the group's load, loads and weak
+    spots."""
     groups = {g.group: g for g in panel.groups}
     out: dict[str, ObjectInfo] = {}
     for d in panel.devices:
@@ -362,15 +363,15 @@ def _run_info(
 
 
 def wire_titles(plan: Plan, elec: Electrical, wiring: Wiring) -> dict[str, str]:
-    """Названия линий по смыслу для журнала: id линии → «QF4: К3 → Розетка…, Кухня»."""
+    """Meaningful line names for the log: line id → "QF4: К3 → Розетка…, Кухня"."""
     infos = _electrical(plan, elec, wiring)
     return {r.id: infos[f"wire:{r.id}"].title for r in wiring.runs}
 
 
 def line_chains(wiring: Wiring) -> dict[str, list[str]]:
-    """Что выделять по клику на листе проводки: объект → его линия целиком.
-    Линия щит → коробка и сама коробка — с коробкой и всеми её линиями до точек;
-    линия коробка → точка и точка — эта ветка, коробка и линия щит → коробка."""
+    """What to highlight on click on the wiring sheet: object → its whole line.
+    A panel → box line and the box itself: the box and all its lines to the points;
+    a box → point line and the point: this branch, the box and the panel → box line."""
     feed = {r.target: r for r in wiring.runs if r.source == "board"}
     children: dict[str, list[str]] = {}
     for r in wiring.runs:
@@ -400,8 +401,8 @@ def line_chains(wiring: Wiring) -> dict[str, list[str]]:
 
 
 def line_groups(wiring: Wiring) -> dict[str, list[str]]:
-    """Состав каждой группы на листе проводки — для подсветки соседей выделенной линии:
-    её линии, коробки и точки."""
+    """Members of each group on the wiring sheet, for highlighting neighbours of the selected line:
+    its lines, boxes and points."""
     out: dict[str, list[str]] = {}
     for b in wiring.boxes:
         out.setdefault(b.group, []).append(f"box:{b.id}")
@@ -416,8 +417,8 @@ def line_groups(wiring: Wiring) -> dict[str, list[str]]:
 def page_objects(
     keys: set[str], infos: dict[str, ObjectInfo], language: Language
 ) -> dict[str, dict[str, object]]:
-    """Карточки объектов, нарисованных на странице. Общая подпись нескольких точек
-    («label:a,b») — список их названий."""
+    """Cards of objects drawn on the page. A shared label of several points ("label:a,b") lists
+    their names."""
     out: dict[str, dict[str, object]] = {}
     for key in sorted(keys):
         info = infos.get(key)
@@ -437,12 +438,12 @@ def _xy(v: Vec) -> list[float]:
 
 
 def wiring_handles(plan: Plan, contours: dict[str, Contour], wiring: Wiring) -> dict[str, Any]:
-    """Что можно править на листе проводки (ключ `edit` страницы .epd), мм модели:
-    трассы линий (от источника к цели) и как они нарисованы — со сдвигом в полосу пучка
-    (lane, те же вершины; правится то, что видно на листе), и коробки — место, направление
-    в помещение, сторона квадрата и отрезок стены, по которому коробку можно двигать (на
-    потолке — нет). manual — правка из wiring.yaml применена. Потребители и щит не двигаются.
-    Вызывать в масштабе листа (scale.drawing_scale): полосы — как на чертеже."""
+    """What can be edited on the wiring sheet (the `edit` key of an .epd page), model mm: line
+    routes (source to target) and how they are drawn, shifted into the bundle lane (lane, same
+    vertices; what is edited is what the sheet shows), and boxes: spot, direction into the room,
+    square side and the wall segment the box can move along (none on the ceiling). manual means
+    the wiring.yaml edit was applied. Loads and the panel do not move.
+    Call at the sheet scale (scale.drawing_scale) so lanes match the drawing."""
     geoms = {g.room.id: g for g in room_geometries(plan, contours)}
     lanes, _ = lay_out(wiring)
     wires = {

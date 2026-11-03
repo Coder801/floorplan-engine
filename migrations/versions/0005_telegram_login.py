@@ -1,11 +1,12 @@
-"""вход через Telegram: телефон пользователя и билеты входа
+"""Telegram login: user phone number and login tickets
 
 Revision ID: 0005
 Revises: 0004
 Create Date: 2026-11-01
 
-Решение — docs/database.md, «Вход»: учётка по номеру телефона, номер подтверждает бот
-Telegram (контакт пользователя); билет входа связывает страницу, чат бота и номер.
+Decision: docs/database.md, "Login": the account is keyed by phone number, the number is
+confirmed by the Telegram bot (user contact); a login ticket links the page, the bot chat and the
+number.
 """
 
 from __future__ import annotations

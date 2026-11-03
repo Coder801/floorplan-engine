@@ -1,4 +1,4 @@
-"""Растровый адаптер: чистые функции без OCR (плитки, выпрямление, склейка, надписи)."""
+"""Raster adapter: pure functions without OCR (tiles, straightening, merging, labels)."""
 
 from __future__ import annotations
 
@@ -13,40 +13,40 @@ from floorplan_engine.service.facts.raster import Word, _label, dedupe, merge, s
 
 
 def test_tiles_cover_image_with_overlap() -> None:
-    assert tiles(800, 600, size=1000, overlap=100) == [(0, 0)]  # меньше плитки — одна
+    assert tiles(800, 600, size=1000, overlap=100) == [(0, 0)]  # smaller than a tile: one tile
     starts = tiles(2500, 1000, size=1000, overlap=200)
     xs = sorted({x for x, _ in starts})
-    assert xs[0] == 0 and xs[-1] == 1500  # последняя плитка — вплотную к краю
-    assert all(b - a <= 800 for a, b in itertools.pairwise(xs))  # шаг с перекрытием
+    assert xs[0] == 0 and xs[-1] == 1500  # the last tile is flush with the edge
+    assert all(b - a <= 800 for a, b in itertools.pairwise(xs))  # step with overlap
 
 
 def test_snap_straightens_near_axis_lines() -> None:
     assert snap(0, 10, 100, 11) == (0, 10.5, 100, 10.5)
     assert snap(5, 0, 6, 200) == (5.5, 0, 5.5, 200)
-    assert snap(0, 0, 10, 10) == (0, 0, 10, 10)  # засечка 45° — как есть
+    assert snap(0, 0, 10, 10) == (0, 0, 10, 10)  # 45° tick stays as is
 
 
 def test_merge_joins_collinear_pieces_only() -> None:
     pieces = [(0, 10, 40, 10), (42, 10.5, 90, 10.5), (0, 30, 40, 30), (5, 5, 9, 9)]
     out = merge(pieces)
     flat = sorted((a, b) for a, y, b, y2 in out if y == y2 and abs(y - 10) < 1)
-    assert flat == [(0, 90)]  # зазор 2 px — один отрезок
+    assert flat == [(0, 90)]  # 2 px gap: one segment
     assert (0, 30, 40, 30) in out and (5, 5, 9, 9) in out
 
 
 def test_dedupe_keeps_confident_word() -> None:
     a = Word("3842", 0.99, 0, 0, 40, 10, False)
-    b = Word("3842", 0.7, 2, 0, 41, 10, False)  # та же строка из соседней плитки
+    b = Word("3842", 0.7, 2, 0, 41, 10, False)  # the same line from the neighbouring tile
     c = Word("120", 0.9, 100, 0, 130, 10, False)
     assert dedupe([b, a, c]) == [a, c]
 
 
 def test_word_to_label_in_points_y_up() -> None:
-    # Картинка 1000 px высотой, 144 dpi: 1 px = 0,5 pt
+    # Image 1000 px high, 144 dpi: 1 px = 0.5 pt
     h = Word("3842", 0.9, 100, 200, 180, 220, False)
     lab = _label(h, 1000, 0.5)
     assert (lab.direction, lab.a0, lab.a1) == ("h", 50, 90)
-    assert lab.base == pytest.approx((1000 - 220) * 0.5)  # низ строки, Y вверх
+    assert lab.base == pytest.approx((1000 - 220) * 0.5)  # line bottom, Y up
     assert lab.confidence == 0.9
     v = Word("1300", 0.8, 300, 400, 320, 480, True)
     lv = _label(v, 1000, 0.5)
@@ -54,7 +54,9 @@ def test_word_to_label_in_points_y_up() -> None:
 
 
 def test_merged_chain_line_split_by_ticks_on_raster() -> None:
-    """Растр: звенья цепочки слиты в одну линию; размер ищется между засечками у подписи."""
+    """Raster: chain links merged into one line; the dimension is found between ticks at the
+    label.
+    """
     line = Segment(0, 100, 300, 100)
     ticks = [Segment(x - 1, 98.5, x + 1, 101.5) for x in (0, 100, 300)]
 
@@ -69,7 +71,7 @@ def test_merged_chain_line_split_by_ticks_on_raster() -> None:
         (2000, 100, 300),
     ]
     assert all(d.confidence == 0.9 for d in facts.dimensions)
-    vector = Sheet("plan.pdf", 1, 400, 200, labels, [line, *ticks])  # вектор так не делает
+    vector = Sheet("plan.pdf", 1, 400, 200, labels, [line, *ticks])  # a vector never does this
     assert page_facts(vector).dimensions == []
 
 

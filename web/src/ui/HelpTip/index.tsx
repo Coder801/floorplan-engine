@@ -1,7 +1,8 @@
-// Значок «?» с подсказкой: открывается наведением, фокусом и кликом (на телефоне — касанием),
-// закрывается кликом мимо и Esc. label — название кнопки для чтения с экрана, text — подсказка;
-// mark — знак на кнопке («?» или «i»), size — диаметр, px; align — подсказка от значка вправо
-// (left: значок у левого края подсказки) или влево (right, по умолчанию)
+// A "?" icon with a tooltip: opens on hover, focus and click (tap on a phone), closes on a
+// click outside and Esc. label is the button name for screen readers, text is the tooltip;
+// mark is the sign on the button ("?" or "i"), size the diameter in px; align places the
+// tooltip to the right of the icon (left: the icon at the tooltip's left edge) or to the left
+// (right, the default)
 
 import { useId, useState } from "react";
 import { cx } from "@/shared/cx";

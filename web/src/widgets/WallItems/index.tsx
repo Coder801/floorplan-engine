@@ -1,9 +1,10 @@
-// Боковая панель развёртки — «На стене», двумя разделами со своим глазом видимости:
-// «Электрика» — точки по номерам листа электрики (вид, отступ, высота, группа и откуда линия
-// проводки), коробки и щит; «Вода» — водорозетки и выпуски по номерам листа «Сантехника».
-// Глаз скрывает слой на развёртке (store.wallLayers), строки остаются бледными.
-// Строка ↔ объект развёртки (store.hover / lit / pinned); «На проводке» — открыть лист
-// проводки с этой линией.
+// Elevation side panel, "On the wall", with two sections, each with its own visibility eye:
+// "Electrical": points by electrical sheet number (kind, offset, height, group and where the
+// wiring line comes from), boxes and the panel; "Water": water outlets and drains by the
+// "Plumbing" sheet number. The eye hides the layer on the elevation (store.wallLayers), the
+// rows stay, faint.
+// Row ↔ elevation object (store.hover / lit / pinned); "On wiring" opens the wiring sheet at
+// this line.
 
 import { useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
@@ -24,7 +25,7 @@ export function WallItems({ wall, onWiring }: { wall: Elevation; onWiring?: (key
   }, WATER), [wall, t]);
   const on = (k: string) => k === hover || k === pinned || !!lit?.has(k);
 
-  // Объект под курсором или закреплённый — прокрутить к его строке
+  // Object under the cursor or pinned: scroll to its row
   useEffect(() => {
     document.querySelector(`.${css.list} .${css.lit}`)?.scrollIntoView({ block: "nearest" });
   }, [hover, pinned]);

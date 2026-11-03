@@ -1,13 +1,13 @@
-"""Канализация под 45° (docs/plumbing.md): трасса по плану — только из отводов 45°.
+"""Sewer at 45° (docs/plumbing.md): the plan route is made of 45° bends only.
 
-- `octilinear` — участок не под 45° (хвост к стене, к стояку, к месту врезки) делится на
-  прямой и диагональный;
-- `chamfer` — излом на 90° или 135° собирается из отводов 45°: в угол вставляются короткие
-  участки, у каждого излома — ровно 45°;
-- `tee45` — врезка отвода в трубу косым тройником: отвод входит под 45° по течению;
-- `bends` — сколько отводов 45° на трассе по плану.
+- `octilinear`: a piece not at a multiple of 45° (a tail to a wall, a riser, a tee spot) is
+  split into a straight and a diagonal one;
+- `chamfer`: a 90° or 135° corner is built from 45° bends: short pieces are inserted into the
+  corner so every bend is exactly 45°;
+- `tee45`: a branch enters a pipe through an angled tee: the branch comes in at 45° with the flow;
+- `bends`: how many 45° bends are on the plan route.
 
-Чистая геометрия на Vec, мм модели; сетка и стены — в plumbing/network.py.
+Pure geometry on Vec, model mm; grid and walls are in plumbing/network.py.
 """
 
 from __future__ import annotations
@@ -18,9 +18,9 @@ from collections.abc import Sequence
 
 from floorplan_engine.model.geometry import Vec
 
-TOL = 0.5  # мм: короче — точка та же; отклонение меньше — направление то же
-CHAMFER = 100.0  # мм: длина вставки между двумя отводами 45°
-TEE = (100.0, 50.0, 25.0)  # мм: насколько отвод отходит от трубы косым участком, по убыванию
+TOL = 0.5  # mm: shorter means the same point; a smaller deviation means the same direction
+CHAMFER = 100.0  # mm: length of the insert between two 45° bends
+TEE = (100.0, 50.0, 25.0)  # mm: how far the branch leaves the pipe with an angled piece, descending
 COS45 = math.cos(math.pi / 4)
 
 
@@ -35,19 +35,19 @@ def _rotate(v: Vec, angle: float) -> Vec:
 
 
 def is_octilinear(v: Vec) -> bool:
-    """Направление — одно из восьми: вдоль осей или по диагонали."""
+    """The direction is one of eight: along the axes or diagonal."""
     ax, ay = abs(v.x), abs(v.y)
     return ax < TOL or ay < TOL or abs(ax - ay) < TOL
 
 
 def turn(u: Vec, v: Vec) -> float:
-    """Излом между направлениями u и v, градусы (0 — прямо)."""
+    """Bend between directions u and v, degrees (0 is straight)."""
     c = u.dot(v) / (u.length() * v.length())
     return math.degrees(math.acos(max(-1.0, min(1.0, c))))
 
 
 def simplify(path: Sequence[Vec]) -> list[Vec]:
-    """Без повторов и без точек на прямой (под любым углом)."""
+    """No duplicates and no collinear points (at any angle)."""
     out: list[Vec] = []
     for p in path:
         if out and (p - out[-1]).length() < TOL:
@@ -62,7 +62,9 @@ def simplify(path: Sequence[Vec]) -> list[Vec]:
 
 
 def octilinear(path: Sequence[Vec]) -> list[Vec]:
-    """Каждый участок не под 45° — прямым и диагональным (сначала прямой)."""
+    """Each piece not at a multiple of 45° becomes a straight and a diagonal one (straight
+    first).
+    """
     pts = simplify(path)
     out = pts[:1]
     for a, b in itertools.pairwise(pts):
@@ -76,8 +78,8 @@ def octilinear(path: Sequence[Vec]) -> list[Vec]:
 
 
 def chamfer(path: Sequence[Vec], size: float = CHAMFER) -> list[Vec]:
-    """Изломы больше 45° — отводами 45°: в угол вставляются участки длиной size (короче,
-    если соседние участки коротки). Концы трассы не двигаются."""
+    """Corners over 45° become 45° bends: pieces of length size are inserted into the corner
+    (shorter if the neighbouring pieces are short). The route ends do not move."""
     pts = simplify(path)
     if len(pts) < 3:
         return pts
@@ -93,7 +95,7 @@ def chamfer(path: Sequence[Vec], size: float = CHAMFER) -> list[Vec]:
         sign = 1.0 if u.cross(v) > 0 else -1.0
         dirs = [_rotate(u, sign * math.pi / 4 * (j + 1)) for j in range(k - 1)]
         total = Vec(sum(d.x for d in dirs), sum(d.y for d in dirs))
-        reach = total.length() / (u + v).length()  # от угла до отвода при вставке 1 мм
+        reach = total.length() / (u + v).length()  # from the corner to the bend for a 1 mm insert
         room_in = u_raw.length() * (0.5 if i > 1 else 0.9)
         room_out = v_raw.length() * (0.5 if i + 1 < last else 0.9)
         seg = min(size, room_in / reach, room_out / reach)
@@ -107,7 +109,7 @@ def chamfer(path: Sequence[Vec], size: float = CHAMFER) -> list[Vec]:
 
 
 def bends(path: Sequence[Vec]) -> int:
-    """Отводов 45° по плану: излом на 90° — два."""
+    """45° bends on the plan: a 90° corner counts as two."""
     pts = simplify(path)
     return sum(
         round(turn(b - a, c - b) / 45) for a, b, c in zip(pts, pts[1:], pts[2:], strict=False)
@@ -115,7 +117,9 @@ def bends(path: Sequence[Vec]) -> int:
 
 
 def point_at(path: Sequence[Vec], along: float) -> tuple[Vec, Vec, float]:
-    """Точка в along мм от начала ломаной, направление её участка и где участок начинается."""
+    """Point at along mm from the polyline start, the direction of its piece and where the piece
+    starts.
+    """
     acc = 0.0
     for a, b in itertools.pairwise(path):
         n = (b - a).length()
@@ -128,18 +132,19 @@ def point_at(path: Sequence[Vec], along: float) -> tuple[Vec, Vec, float]:
 
 
 def tee45(path: Sequence[Vec], parent: Sequence[Vec], along: float) -> tuple[list[Vec], float]:
-    """Врезка отвода path (от места врезки path[0] к прибору) в трубу parent (от стояка) на
-    along мм от её начала — косым тройником: последний участок отвода по течению идёт под 45°
-    к течению в трубе. Место врезки сдвигается по трубе к стояку. Нельзя — без изменений."""
+    """Tee the branch path (from the tee spot path[0] to the fixture) into the pipe parent (from the
+    riser) at along mm from its start with an angled tee: the last branch piece along the flow
+    enters at 45° to the flow in the pipe. The tee spot moves along the pipe towards the riser.
+    If impossible, nothing changes."""
     pts = simplify(path)
     if len(pts) < 2 or len(parent) < 2:
         return pts, along
     _, d_parent, seg_start = point_at(parent, along)
-    flow = d_parent * -1.0  # в трубе течёт к стояку — к её началу
+    flow = d_parent * -1.0  # the pipe flows towards the riser, i.e. towards its start
     n = _unit(pts[1] - pts[0])
     cos_phi, sin_phi = n.dot(flow), abs(n.cross(flow))
     if -cos_phi >= COS45 - 1e-6 or sin_phi < 1e-3:
-        return pts, along  # уже под 45° по течению или вдоль трубы
+        return pts, along  # already at 45° with the flow or along the pipe
     first = (pts[1] - pts[0]).length()
     for e in TEE:
         t = e * (cos_phi + sin_phi)

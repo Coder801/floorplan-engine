@@ -1,5 +1,6 @@
-"""floorplan-engine: детерминированная сборка DXF-чертежей из YAML-описания помещений."""
+"""floorplan-engine: deterministic DXF drawings built from a YAML description of rooms."""
 
 __version__ = "0.1.0"
-# Имя продукта — бренд: всегда латиницей, на всех языках одинаково (решение 2026-11-03)
+# The product name is a brand: always in Latin letters, the same in every language (decision
+# 2026-11-03)
 BRAND = "Shtroba"

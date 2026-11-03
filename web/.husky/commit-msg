@@ -1,4 +1,4 @@
-# Сообщение коммита — Conventional Commits (docs/development.md, «Коммиты и версии»):
-# проверяет commitizen (pyproject.toml, [tool.commitizen]). Хук ставит `npm install` в web/
-# (prepare → husky); git запускает его из корня репозитория
+# The commit message must follow Conventional Commits (docs/development.md, "Commits and
+# versions"), checked by commitizen (pyproject.toml, [tool.commitizen]). `npm install` in web/
+# installs the hook (prepare → husky); git runs it from the repository root
 uv run --no-sync cz check --allow-abort --commit-msg-file "$1"

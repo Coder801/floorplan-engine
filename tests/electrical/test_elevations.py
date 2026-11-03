@@ -1,4 +1,4 @@
-"""Развёртки стен (elevations.py, drawing/elevations.py) на синтетической комнате."""
+"""Wall elevations (elevations.py, drawing/elevations.py) on a synthetic room."""
 
 from __future__ import annotations
 
@@ -41,14 +41,14 @@ def test_walls_with_electrics_only_and_their_content() -> None:
     )
     wiring = box_wiring(plan, contours, elec)
     walls = {e.wall: e for e in wall_elevations(plan, contours, elec, wiring)}
-    assert set(walls) >= {"w1", "w2"} and "w3" not in walls  # на w3 ничего нет
+    assert set(walls) >= {"w1", "w2"} and "w3" not in walls  # nothing on w3
     w2 = walls["w2"]
     assert [(p.id, p.x, p.y, p.posts) for p in w2.points] == [
         ("s1", 1000, 300, 2),
         ("s2", 2500, 300, 1),
     ]
-    assert w2.points[0].number < w2.points[1].number  # номера — как на листе электрики
-    # Спуски к розеткам — штробы от потолка вниз до точек
+    assert w2.points[0].number < w2.points[1].number  # numbers as on the electrical sheet
+    # Drops to sockets: chases from the ceiling down to the points
     assert w2.chases and all(c.y1 == w2.height for c in w2.chases)
     assert min(c.y0 for c in w2.chases) <= 300
     w1 = walls["w1"]
@@ -56,15 +56,15 @@ def test_walls_with_electrics_only_and_their_content() -> None:
     (door,) = w1.openings
     assert (door.x0, door.x1, door.y1, door.assumed) == (300, 1100, DOOR_TOP_MM, True)
     assert {1000, 2500} <= set(w2.offsets()) and 300 in w2.heights()
-    # Коробка на стене — с отметкой под потолком
+    # A wall box with a mark below the ceiling
     assert all(b.y == w2.height - 200 for b in w2.boxes)
 
 
 def test_spread_keeps_order_gap_and_bounds() -> None:
     assert spread([0, 1, 2], 2.0, 0, 100) == [0, 2, 4]
-    assert spread([10, 30], 2.0, 0, 100) == [10, 30]  # далеко — на своих местах
+    assert spread([10, 30], 2.0, 0, 100) == [10, 30]  # far apart: in their own places
     out = spread([98, 99, 100], 2.0, 0, 100)
-    assert out == [96, 98, 100]  # у края — сдвиг назад, не за границу
+    assert out == [96, 98, 100]  # at the edge: shifted back, not past the boundary
 
 
 def test_point_above_ceiling_extends_view_and_warns() -> None:
@@ -85,11 +85,13 @@ def test_panel_size_follows_scale() -> None:
     (e,) = [x for x in wall_elevations(plan, contours, elec, None) if x.wall == "w2"]
     small, big = elevation_panel(e, 100, "ru"), elevation_panel(e, 50, "ru")
     assert big.width > small.width and big.height > small.height
-    assert big.width >= 4000 / 50  # стена в масштабе
+    assert big.width >= 4000 / 50  # wall at scale
 
 
 def test_behind_names_neighbour_and_its_wall() -> None:
-    """Общая перегородка — две развёртки, и каждая называет другую сторону; наружная — пусто."""
+    """A shared partition has two elevations, each naming the other side; an exterior wall has
+    none.
+    """
     from typing import Any
 
     from floorplan_engine.electrical.elevations import behind
@@ -111,7 +113,7 @@ def test_behind_names_neighbour_and_its_wall() -> None:
     _, contours = validate_plan(plan)
     geoms = room_geometries(plan, contours)
     a, b = geoms
-    # Правая стена a (w3) — левая стена b (w1)
+    # The right wall of a (w3) is the left wall of b (w1)
     assert behind(a, a.contour.segments[2], geoms) == (("B", 1),)
     assert behind(b, b.contour.segments[0], geoms) == (("A", 3),)
     assert behind(a, a.contour.segments[0], geoms) == ()
@@ -132,9 +134,9 @@ def test_elevation_side_line() -> None:
 
 
 def test_back_side_points_mirrored_onto_this_wall() -> None:
-    """Розетка соседа на общей перегородке — на развёртке этой стороны, на своём месте:
-    стена w3 комнаты a идёт сверху вниз, w1 комнаты b — снизу вверх, поэтому отступ 1000
-    от низа у b — это 4000 − 1000 = 3000 от верхнего угла у a."""
+    """The neighbour's socket on a shared partition appears on this side's elevation in its place:
+    wall w3 of room a runs top to bottom, w1 of room b bottom to top, so an offset of 1000 from
+    the bottom in b is 4000 − 1000 = 3000 from the top corner in a."""
     from typing import Any
 
     from floorplan_engine.model.schema import Plan
@@ -172,8 +174,8 @@ def test_back_side_points_mirrored_onto_this_wall() -> None:
 
 
 def test_elevation_data_links_points_to_wiring() -> None:
-    """Развёртка данными для просмотра: точки — с номером, группой и тем, откуда к ним
-    линия проводки; ключи объектов — как на листах (point:, box:, board:)."""
+    """Elevation as data for the viewer: points carry their number, group and where the wiring line
+    comes from; object keys match the sheets (point:, box:, board:)."""
     plan = make_plan(WALLS, [DOOR])
     _, contours = validate_plan(plan)
     elec = _elec(
@@ -196,8 +198,9 @@ def test_elevation_data_links_points_to_wiring() -> None:
 
 
 def test_elevation_data_face_and_neighbours() -> None:
-    """У развёртки — грань на плане и соседние стены в углах: угол и что на них (у стены без
-    электрики — только проёмы)."""
+    """An elevation has its face on the plan and the neighbouring walls at the corners: the angle
+    and
+    what is on them (a wall without electrical items has openings only)."""
     plan = make_plan(WALLS, [DOOR])
     _, contours = validate_plan(plan)
     elec = _elec([{"id": "s1", "offset": 1000, "height": 300, **SOCKETS}])
@@ -209,7 +212,7 @@ def test_elevation_data_face_and_neighbours() -> None:
     assert [o["kind"] for o in left["openings"]] == ["door"]
     assert left["points"] == []
     assert (right["key"], right["turn"]) == ("elevation:r.w3", 90)
-    # Сосед с электрикой — с её точками и щитом
+    # A neighbour with electrical items lists its points and panel
     w1 = walls["elevation:r.w1"]
     assert [p["key"] for p in w1["right"]["points"]] == ["point:s1"]
     assert w1["left"]["key"] == "elevation:r.w4"

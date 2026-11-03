@@ -1,5 +1,5 @@
-// Линейка внизу справа у чертежа: круглая длина (zoom.rulerLength) в мм объекта — модели,
-// щита или стены — на текущем масштабе
+// Scale bar at the bottom right of the drawing: a round length (zoom.rulerLength) in object mm
+// (model, panel or wall) at the current zoom
 
 import { useTranslation } from "react-i18next";
 import { rulerLength, type Zoom } from "@/shared/zoom";

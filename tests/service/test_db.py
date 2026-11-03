@@ -1,5 +1,5 @@
-"""База сервиса на Postgres (tests/service/conftest.py): схема из миграций совпадает с
-моделями, репозитории."""
+"""Service database on Postgres (tests/service/conftest.py): the migration schema matches the
+models; repositories."""
 
 from __future__ import annotations
 
@@ -30,7 +30,9 @@ def test_schema_has_all_tables() -> None:
 
 
 def test_migrations_match_models(pg: Engine) -> None:
-    """Схема после миграций — ровно то, что в моделях: забытая миграция или поле — здесь."""
+    """The schema after migrations is exactly what the models say: a forgotten migration or field
+    shows up here.
+    """
     with pg.connect() as conn:
         diff = compare_metadata(MigrationContext.configure(conn), Base.metadata)
     assert diff == []
@@ -46,7 +48,7 @@ def test_source_is_not_added_twice(session: Session) -> None:
 def test_facts_cache_round_trip(session: Session) -> None:
     project = repo.create_project(session, repo.create_studio(session, "С").id, "Кв")
     source = repo.add_source(session, project.id, "plan.pdf", b"x", "vector", "k")
-    assert repo.cached_facts(session, source.id) is None  # ещё не считали
+    assert repo.cached_facts(session, source.id) is None  # not computed yet
     page = PageFacts(
         "plan.pdf", 1, 600, 400, scale=10.0, scale_dims=3,
         dimensions=[Dimension(1000, "h", 300, 50, 150, chain=1, drawn=1000.0, confidence=0.9)],
@@ -83,5 +85,5 @@ def test_database_url_uses_psycopg(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setenv("DATABASE_URL", "postgresql://u:p@host:5432/db")
     assert database_url() == "postgresql+psycopg://u:p@host:5432/db"
-    monkeypatch.setenv("DATABASE_URL", "postgres://u:p@host:5432/db")  # так даёт Railway
+    monkeypatch.setenv("DATABASE_URL", "postgres://u:p@host:5432/db")  # as Railway gives it
     assert database_url() == "postgresql+psycopg://u:p@host:5432/db"

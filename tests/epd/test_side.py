@@ -1,5 +1,5 @@
-"""Боковая панель просмотра: таблицы листа со ссылками строк на объекты, тема листа,
-область чертежа на странице .epd."""
+"""Viewer side panel: sheet tables with rows linked to objects, sheet topic, drawing area on the
+.epd page."""
 
 from __future__ import annotations
 
@@ -69,23 +69,23 @@ def test_side_tables_link_rows_to_objects() -> None:
         "points",
         "estimate",
     }
-    # Проводка — только «Группы»; смета — отдельно (вкладка «Смета»), спецификации нет
+    # Wiring has only "Groups"; the estimate is separate ("Estimate" tab), there is no specification
     assert [t.title for t in tables["wiring"]] == ["Группы"]
-    assert tables["estimate"][0].title.startswith("Ведомость объёмов")  # прайса нет
+    assert tables["estimate"][0].title.startswith("Ведомость объёмов")  # no price list
     assert not any("Спецификация" in t.title for t in tables["electrical"])
     assert [t.title for t in tables["panel"]][-1] != "Аппараты для закупки"
     rooms = tables["plan"][0]
     assert "room:r" in rooms.rows[0].keys and "wall:r.w1" in rooms.rows[0].keys
-    assert rooms.rows[0].cells[2] == "12,00"  # 3 × 4 м — как поле площади
+    assert rooms.rows[0].cells[2] == "12,00"  # 3 × 4 m, like the area field
     groups = {r.cells[0]: r.keys for r in tables["wiring"][0].rows}
     qf2 = {f"wire:{r.id}" for r in wiring.runs if r.group == "QF2"}
     assert qf2 <= set(groups["QF2"])
     assert not qf2 & set(groups["QF3"])
-    # «Электрика»: только «Точки» (номер на плане → вид, высота, количество; строка ведёт
-    # к своим точкам); легенда — не таблица, а плашка на чертеже (side_legends)
+    # "Electrical": only "Points" (plan number → kind, height, count; a row leads to its points);
+    # the legend is not a table but a badge on the drawing (side_legends)
     (points_t,) = tables["electrical"]
     assert any("point:s1" in r.keys for r in points_t.rows)
-    # «Группы» — на проводке: строка ведёт и к точкам, и к линиям группы
+    # "Groups" are on the wiring sheet: a row leads to both the points and the lines of the group
     assert "point:s1" in groups["QF2"]
     assert not any(t.title.startswith("Групп") for t in tables["electrical"])
 
@@ -94,13 +94,13 @@ def test_panel_devices_in_sections_square_marker_off_line() -> None:
     plan, contours, elec, wiring = _model()
     devices = side_tables(plan, contours, elec, wiring)["panel"][0]
     sections = [r.cells[1] for r in devices.rows if r.section]
-    assert sections == ["Ввод и резерв", "Линии групп", "Щит АКБ"]  # резерв — инвертор*
+    assert sections == ["Ввод и резерв", "Линии групп", "Щит АКБ"]  # backup: inverter*
     by_id = {r.cells[0]: r for r in devices.rows if not r.section}
     assert by_id["QS1"].marker == "square" and by_id["QB1"].marker == "square"
-    assert by_id["QF2"].marker is None and by_id["QF2"].color is not None  # кружок группы
+    assert by_id["QF2"].marker is None and by_id["QF2"].color is not None  # group dot
     assert by_id["QF2"].as_dict().get("marker") is None
     assert by_id["QS3"].as_dict()["marker"] == "square"
-    # Раздел «Линии групп» — только аппараты групп
+    # The "Group lines" section has group devices only
     rows = list(devices.rows)
     start = next(k for k, r in enumerate(rows) if r.cells[1] == "Линии групп")
     end = next(k for k, r in enumerate(rows) if r.cells[1] == "Щит АКБ")
@@ -112,10 +112,10 @@ def test_legend_entries_only_symbol_and_meaning() -> None:
     entries = legend_entries(elec, plan.language)
     assert [e.key for e in entries] == ["socket", "board"]
     assert entries[0].text == "Розетка с заземлением"
-    assert not any("QF" in e.text or e.text.isdigit() for e in entries)  # без групп и количества
+    assert not any("QF" in e.text or e.text.isdigit() for e in entries)  # no groups and no counts
     legends = side_legends(elec, plan.language)
     assert set(legends) == {"electrical", "lighting"}
-    assert legends["lighting"] == []  # света в модели нет
+    assert legends["lighting"] == []  # no lights in the model
 
 
 def test_epd_page_has_view_stage_tables_and_theme_objects(tmp_path: Path) -> None:
@@ -131,8 +131,8 @@ def test_epd_page_has_view_stage_tables_and_theme_objects(tmp_path: Path) -> Non
     )
     with zipfile.ZipFile(path) as zf:
         pages = [json.loads(zf.read(f"pages/0{k}.json")) for k in (1, 2, 3, 4)]
-    # Легенда страницы электрики: подпись и примитивы значка с листа; на листе эти
-    # примитивы больше не объекты
+    # Electrical page legend: caption and icon primitives from the sheet; on the sheet these
+    # primitives are no longer objects
     legend = {e["key"]: e for e in pages[1]["legend"]}
     assert set(legend) == {"socket", "board"} and "legend" not in pages[0]
     assert legend["socket"]["text"] == "Розетка с заземлением"
@@ -148,9 +148,9 @@ def test_epd_page_has_view_stage_tables_and_theme_objects(tmp_path: Path) -> Non
         types = {k.partition(":")[0] for k in page["objects"]}
         assert types <= STAGE_OBJECTS[page["stage"]]
         assert page["tables"]
-    assert not any(k.startswith("point:") for k in pages[2]["objects"])  # проводка: без точек
+    assert not any(k.startswith("point:") for k in pages[2]["objects"])  # wiring: no points
     assert any(k.startswith("box:") for k in pages[2]["objects"])
     assert "device:QS1" in pages[3]["objects"] and "model" not in pages[3]
-    assert "panel" not in pages[3]  # без данных щита — только примитивы листа
-    assert pages[2]["estimate"]["rows"]  # смета — на странице проводки, для вкладки «Смета»
+    assert "panel" not in pages[3]  # no panel data: sheet primitives only
+    assert pages[2]["estimate"]["rows"]  # estimate on the wiring page
     assert "estimate" not in pages[1]

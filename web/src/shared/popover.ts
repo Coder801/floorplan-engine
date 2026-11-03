@@ -1,5 +1,5 @@
-// Всплывающее меню у кнопки («Скачать», настройки, язык): открыто — закрывается кликом мимо
-// и Esc. ref — на обёртку кнопки и меню: клик внутри неё не закрывает
+// Popup menu at a button ("Download", settings, language): when open, a click outside or Esc
+// closes it. ref goes on the wrapper of the button and menu: a click inside it does not close
 
 import { useEffect, useRef, useState } from "react";
 

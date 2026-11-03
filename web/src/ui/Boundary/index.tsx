@@ -1,5 +1,5 @@
-// Ошибка отрисовки листа — видимое сообщение вместо пустого холста. Сбрасывается сменой
-// key (другой лист, пересборка).
+// A sheet render error: a visible message instead of an empty canvas. Reset by changing the
+// key (another sheet, a rebuild).
 
 import { Component, type ReactNode } from "react";
 import i18n from "@/shared/i18n";

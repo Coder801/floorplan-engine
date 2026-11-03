@@ -1,18 +1,19 @@
-"""Раскладка листа: секции (план | таблицы / легенда | штамп), панели таблиц и легенды,
-колонки справа налево, подбор под формат, листы-продолжения для таблиц, что не влезли.
+"""Sheet layout: sections (plan | tables / legend | title block), table and legend panels,
+columns from right to left, fitting to paper, continuation sheets for tables that did not fit.
 
-Раскладка одна для всех листов — четыре секции, крест которых проходит через левый верхний
-угол штампа:
+One layout for all sheets: four sections whose cross goes through the top-left corner of the
+title block:
 
-    план    | таблицы
-    легенда | штамп
+    plan   | tables
+    legend | title block
 
-План — по центру своей секции и занимает около VIEW_FILL её; таблицы — прижаты к правому
-краю своей секции, одна под другой; не влезли — колонками справа налево, и колонки за линией
-штампа забирают место у секции плана (arrange); легенда — в секции слева от штампа.
-Таблицы, что не входят ни на один формат (печать на заданном формате, `print --paper A3`),
-уходят на лист-продолжение во всю ширину над штампом; таблица выше листа делится по строкам
-на колонки (`fit_specs`).
+The plan is centred in its section and takes about VIEW_FILL of it; tables are pressed to
+the right edge of their section, one under another; if they do not fit, they go in columns
+from right to left, and columns past the title block line take space from the plan section
+(arrange); the legend sits in the section left of the title block.
+Tables that fit no paper size (printing at a given size, `print --paper A3`) go to a
+continuation sheet across the full width above the title block; a table taller than the
+sheet is split by rows into columns (`fit_specs`).
 """
 
 from __future__ import annotations
@@ -42,30 +43,30 @@ from floorplan_engine.drawing.titleblock import (
 from floorplan_engine.model.geometry import Vec
 from floorplan_engine.model.scale import sheet_scale
 
-VIEW_MARGIN = 3.0  # поле вокруг чертежа внутри видового экрана, мм листа
-PANEL_GAP = 10.0  # между таблицами и колонками легенды, мм листа
-MIN_LEAD_ROWS = 5  # меньше строк в остатке колонки — таблица начинается в следующей
-LEGEND_PAD = 5.0  # отступ легенды сверху и снизу: секция низкая, по высоте штампа
+VIEW_MARGIN = 3.0  # margin around the drawing inside the viewport, sheet mm
+PANEL_GAP = 10.0  # between tables and legend columns, sheet mm
+MIN_LEAD_ROWS = 5  # fewer rows left in a column than this: the table starts in the next one
+LEGEND_PAD = 5.0  # legend top and bottom margin: the section is low, as tall as the title block
 
 
-# Бумага: (формат, ширина, высота) в мм — с ориентацией
+# Paper: (size, width, height) in mm, orientation applied
 Paper = tuple[str, float, float]
 
 
 @dataclass(frozen=True)
 class Panel:
-    """Блок на листе (таблица, легенда); draw рисует его от левого верхнего угла, мм листа."""
+    """Block on the sheet (table, legend); draw draws it from the top-left corner, sheet mm."""
 
     width: float
     height: float
     draw: Callable[[Paperspace, Vec], None]
-    # Части: первая не выше first (остаток колонки), остальные не выше rest (таблица — по
-    # строкам); None — блок не делится
+    # Parts: the first no taller than first (rest of a column), the others no taller than rest
+    # (a table splits by rows); None means the block does not split
     split: Callable[[float, float], list[Panel] | None] | None = None
 
 
 def table_panel(table: Table) -> Panel:
-    """Таблица блоком на листе; выше места — делится по строкам (split_table)."""
+    """Table as a sheet block; taller than the space, it splits by rows (split_table)."""
 
     def split(first: float, rest: float) -> list[Panel] | None:
         parts = split_table(table, first, rest)
@@ -75,9 +76,10 @@ def table_panel(table: Table) -> Panel:
 
 
 def split_table(table: Table, first: float, rest: float) -> list[Table] | None:
-    """Таблица частями: первая не выше first, остальные — не выше rest; заголовок колонок —
-    в каждой, название — в первой, итог — в последней. В first не входят MIN_LEAD_ROWS
-    строк — обрывок не ставится, таблица начинается с rest; None — в rest не входят две."""
+    """Table in parts: the first no taller than first, the others no taller than rest; the column
+    header is in each, the title in the first, the total in the last. If first cannot hold
+    MIN_LEAD_ROWS rows, no stub is placed and the table starts in rest; None if rest cannot
+    hold two."""
     head = replace(table, rows=(), total=None).height
     per = int((rest - head) // table.row_h)
     if per < 2:
@@ -106,27 +108,27 @@ def split_table(table: Table, first: float, rest: float) -> list[Table] | None:
 
 @dataclass(frozen=True)
 class SheetSpec:
-    tab_key: str  # имя вкладки листа — ключ texts.TEXTS
-    image_key: str  # графа 4 основной надписи
-    layers: tuple[LayerSpec, ...]  # видимые в видовом экране слои модели
-    tables: tuple[Panel, ...] = ()  # справа от вида, по порядку
-    legends: tuple[Panel, ...] = ()  # варианты ряда легенды у штампа (разное число колонок)
-    # Схема вместо видового экрана (щит): по месту (ширина, высота) — панель или None,
-    # если не помещается
+    tab_key: str  # sheet tab name: a texts.TEXTS key
+    image_key: str  # title block box 4
+    layers: tuple[LayerSpec, ...]  # model layers visible in the viewport
+    tables: tuple[Panel, ...] = ()  # right of the view, in order
+    legends: tuple[Panel, ...] = ()  # legend row variants by the title block
+    # Diagram instead of a viewport (panel): for the space (width, height) a panel, or None
+    # if it does not fit
     body: Callable[[float, float], Panel | None] | None = None
-    wide: bool = False  # схема во всю ширину над штампом (секции плана и таблиц вместе)
-    # Схема не влезла (печать на малом формате) — эти таблицы по страницам вместо неё
+    wide: bool = False  # diagram full width above the title block
+    # The diagram did not fit (printing on small paper): these tables go page by page instead
     spill: tuple[Panel, ...] = ()
-    # Блоки spill всегда по страницам (развёртки стен): сколько листов — столько и будет
+    # spill blocks always go page by page (wall elevations): as many sheets as it takes
     paged: bool = False
-    continued: bool = False  # лист-продолжение таблиц предыдущего листа
+    continued: bool = False  # continuation sheet for the previous sheet's tables
 
 
 @dataclass(frozen=True)
 class Placement:
     layout: SheetLayout
-    view_at: Vec  # левый верхний угол видового экрана
-    panels: tuple[tuple[Panel, Vec], ...]  # панель и её левый верхний угол
+    view_at: Vec  # top-left corner of the viewport
+    panels: tuple[tuple[Panel, Vec], ...]  # panel and its top-left corner
 
 
 def visible_extents(doc: Drawing, layers: tuple[LayerSpec, ...]) -> BoundingBox:
@@ -137,7 +139,9 @@ def visible_extents(doc: Drawing, layers: tuple[LayerSpec, ...]) -> BoundingBox:
 def view_size(
     doc: Drawing, spec: SheetSpec, layers: tuple[LayerSpec, ...] | None = None
 ) -> tuple[float, float]:
-    """Ширина и высота видового экрана 1:50 под слои листа (или layers), мм листа; у схемы — 0."""
+    """Width and height of the 1:50 viewport for the sheet layers (or layers), sheet mm; 0 for a
+    diagram.
+    """
     if spec.body is not None:
         return 0.0, 0.0
     box = visible_extents(doc, layers or spec.layers)
@@ -146,8 +150,9 @@ def view_size(
 
 
 def view_parts(doc: Drawing, spec: SheetSpec) -> tuple[tuple[float, float], tuple[float, float]]:
-    """Вид без подписей электрики и их вынос за него, мм листа. Подписи стоят в мм листа и
-    с масштабом не растут — при выборе масштаба вынос не пересчитывается (labels.py)."""
+    """View without electrical labels and how far they stick out, sheet mm. Labels are set in sheet
+    mm and do not grow with the scale, so the overhang is not recomputed when the scale is chosen
+    (labels.py)."""
     full = view_size(doc, spec)
     core_layers = tuple(spec_ for spec_ in spec.layers if spec_.name != E_TEXT.name)
     if spec.body is not None or len(core_layers) == len(spec.layers):
@@ -158,7 +163,7 @@ def view_parts(doc: Drawing, spec: SheetSpec) -> tuple[tuple[float, float], tupl
 
 @dataclass(frozen=True)
 class Grid:
-    """Секции листа, (x0, y0, x1, y1) в мм листа."""
+    """Sheet sections, (x0, y0, x1, y1) in sheet mm."""
 
     plan: Region
     tables: Region
@@ -166,7 +171,7 @@ class Grid:
 
 
 def grid(w: float, h: float) -> Grid:
-    """Секции по кресту в левом верхнем углу штампа."""
+    """Sections by the cross at the top-left corner of the title block."""
     x0, y0, x1, y1 = frame_region(w, h)
     xs, ys = x1 - STAMP_W, y0 + STAMP_H
     return Grid((x0, ys, xs, y1), (xs, ys, x1, y1), (x0, y0, xs, ys))
@@ -177,7 +182,9 @@ def _size(r: Region) -> tuple[float, float]:
 
 
 def stack_right(tables: Sequence[Panel], sec: Region) -> list[tuple[Panel, Vec]] | None:
-    """Таблицы одна под другой, прижаты к правому краю секции; None — не помещаются."""
+    """Tables one under another, pressed to the right edge of the section; None if they do not
+    fit.
+    """
     x0, y0, x1, y1 = sec
     out: list[tuple[Panel, Vec]] = []
     y = y1 - PADDING
@@ -193,17 +200,19 @@ def stack_right(tables: Sequence[Panel], sec: Region) -> list[tuple[Panel, Vec]]
 
 @dataclass(frozen=True)
 class Arrangement:
-    """Таблицы на листе и что осталось плану."""
+    """Tables on the sheet and what is left for the plan."""
 
     tables: tuple[tuple[Panel, Vec], ...]
     plan: Region
 
 
 def columns(tables: Sequence[Panel], sec: Region) -> list[list[Panel]] | None:
-    """Таблицы по колонкам высотой с секцию, по порядку; None — таблица выше секции."""
+    """Tables in columns as tall as the section, in order; None if a table is taller than the
+    section.
+    """
     height = sec[3] - sec[1] - 2 * PADDING
     out: list[list[Panel]] = []
-    used = height + 1.0  # первая таблица открывает колонку
+    used = height + 1.0  # the first table opens a column
     for t in tables:
         if t.height > height:
             return None
@@ -216,9 +225,9 @@ def columns(tables: Sequence[Panel], sec: Region) -> list[list[Panel]] | None:
 
 
 def arrange(tables: Sequence[Panel], g: Grid) -> Arrangement | None:
-    """Таблицы над штампом одной колонкой; не влезли — колонками справа налево, и лишние
-    колонки забирают место у секции плана. None — таблица выше секции или плану не осталось
-    места."""
+    """Tables above the title block in one column; if they do not fit, in columns from right to
+    left, and the extra columns take space from the plan section. None if a table is taller than
+    the section or there is no room left for the plan."""
     one = stack_right(tables, g.tables)
     if one is not None:
         return Arrangement(tuple(one), g.plan)
@@ -234,7 +243,7 @@ def arrange(tables: Sequence[Panel], g: Grid) -> Arrangement | None:
             out.append((t, Vec(right - t.width, y)))
             y -= t.height + PANEL_GAP
         right -= width + PANEL_GAP
-    # Секция плана — до левого края таблиц, если они зашли за линию штампа
+    # The plan section ends at the left edge of the tables if they went past the title block line
     left = right + PANEL_GAP - PADDING
     px0, py0, px1, py1 = g.plan
     if left < px1:
@@ -245,17 +254,17 @@ def arrange(tables: Sequence[Panel], g: Grid) -> Arrangement | None:
 
 
 def fit_legend(legends: Sequence[Panel], sec: Region) -> tuple[Panel, Vec] | None:
-    """Самый низкий вариант легенды, что помещается в секцию; по высоте — по центру."""
+    """The lowest legend variant that fits the section; vertically centred."""
     w, h = _size(sec)
     for leg in sorted(legends, key=lambda p: p.height):
-        # По горизонтали — обычный отступ, по вертикали меньше: секция высотой со штамп
+        # Normal margin horizontally, less vertically: the section is as tall as the title block
         if leg.width <= w - 2 * PADDING and leg.height <= h - 2 * LEGEND_PAD:
             return leg, Vec(sec[0] + PADDING, sec[3] - (h - leg.height) / 2)
     return None
 
 
 def panels_fit(spec: SheetSpec, paper: Paper) -> bool:
-    if spec.paged:  # по страницам: лишь бы каждый блок влез на свою
+    if spec.paged:  # page by page: each block only needs to fit its own page
         x0, y0, x1, y1 = plan_region(replace(spec, wide=True), paper)
         return paginate(spec.spill, x1 - x0 - 2 * PADDING, y1 - y0 - 2 * PADDING) is not None
     g = grid(paper[1], paper[2])
@@ -264,7 +273,9 @@ def panels_fit(spec: SheetSpec, paper: Paper) -> bool:
 
 
 def fit_body(spec: SheetSpec, paper: Paper) -> Panel | bool:
-    """Схема листа под секцию плана без отступов; схемы нет — True, не влезла — False."""
+    """Sheet diagram for the plan section without margins; True if there is no diagram, False if
+    it does not fit.
+    """
     if spec.body is None:
         return True
     x0, y0, x1, y1 = plan_region(spec, paper)
@@ -273,8 +284,8 @@ def fit_body(spec: SheetSpec, paper: Paper) -> Panel | bool:
 
 
 def plan_region(spec: SheetSpec, paper: Paper) -> Region:
-    """Секция плана на этом листе: без колонок таблиц, зашедших в неё; у листа-продолжения —
-    секции плана и таблиц вместе."""
+    """Plan section on this sheet: without the table columns that went into it; a continuation
+    sheet gets the plan and table sections together."""
     g = grid(paper[1], paper[2])
     if spec.wide:
         return g.plan[0], g.plan[1], g.tables[2], g.tables[3]
@@ -283,8 +294,8 @@ def plan_region(spec: SheetSpec, paper: Paper) -> Region:
 
 
 def place(view: tuple[float, float], spec: SheetSpec, paper: Paper) -> Placement:
-    """Раскладка на бумаге paper = (формат, ширина, высота). Что не поместилось, всё равно
-    ставится на своё место; fits=False отмечает, что лист переполнен."""
+    """Layout on paper = (size, width, height). What does not fit is still placed in its spot;
+    fits=False marks the sheet as overflowing."""
     name, w, h = paper
     g = grid(w, h)
     arranged = arrange(spec.tables, g)
@@ -297,7 +308,7 @@ def place(view: tuple[float, float], spec: SheetSpec, paper: Paper) -> Placement
         and (not spec.legends or legend is not None)
         and fill(view, plan) <= 1.0
     )
-    if arranged is None:  # переполнение: одна под другой от правого верхнего угла секции
+    if arranged is None:  # overflow: one under another from the top-right corner of the section
         tables, y = [], g.tables[3] - PADDING
         for t in spec.tables:
             tables.append((t, Vec(g.tables[2] - PADDING - t.width, y)))
@@ -323,7 +334,7 @@ def in_row(panels: Sequence[Panel]) -> Panel:
 
 
 def beside(left: Panel, right: Panel) -> Panel:
-    """Две панели рядом, по верхнему краю."""
+    """Two panels side by side, aligned at the top."""
 
     def draw(psp: Paperspace, top_left: Vec) -> None:
         left.draw(psp, top_left)
@@ -333,14 +344,14 @@ def beside(left: Panel, right: Panel) -> Panel:
 
 
 def stacked(top: Panel, bottom: Panel) -> Panel:
-    """Две панели одна под другой."""
+    """Two panels one under another."""
 
     def draw(psp: Paperspace, top_left: Vec) -> None:
         top.draw(psp, top_left)
         bottom.draw(psp, Vec(top_left.x, top_left.y - top.height - PANEL_GAP))
 
     def split(first: float, rest: float) -> list[Panel] | None:
-        # Делится верхний блок; нижний (примечания) — под последней частью или отдельно
+        # The top block splits; the bottom one (notes) goes under the last part or on its own
         parts = top.split(first, rest) if top.split is not None else None
         if parts is None or bottom.height > rest:
             return None
@@ -354,12 +365,11 @@ def stacked(top: Panel, bottom: Panel) -> Panel:
 
 
 def paginate(tables: Sequence[Panel], width: float, height: float) -> list[Panel] | None:
-    """Таблицы по страницам width × height: колонками слева направо, колонка не шире
-    страницы; таблица, что не входит в остаток колонки, делится по строкам (Panel.split) и
-    продолжается в следующей колонке или на следующей странице. None — таблица не входит
-    даже частями."""
+    """Tables on width × height pages: in columns from left to right, a column no wider than the
+    page; a table that does not fit the rest of a column is split by rows (Panel.split) and
+    continues in the next column or on the next page. None if a table does not fit even in parts."""
     pages: list[list[list[Panel]]] = [[[]]]
-    used = -PANEL_GAP  # высота занятой части колонки
+    used = -PANEL_GAP  # height of the used part of the column
 
     def page_width(cols: list[list[Panel]]) -> float:
         return sum(max(p.width for p in c) for c in cols if c) + PANEL_GAP * (len(cols) - 1)
@@ -373,7 +383,7 @@ def paginate(tables: Sequence[Panel], width: float, height: float) -> list[Panel
             cols.append([])
             used = -PANEL_GAP
         cols[-1].append(part)
-        if page_width(cols) > width:  # колонка не входит — на новую страницу
+        if page_width(cols) > width:  # the column does not fit: new page
             cols[-1].pop()
             if not cols[-1]:
                 cols.pop()
@@ -403,12 +413,12 @@ def _column(panels: Sequence[Panel]) -> Panel:
 
 
 def fit_specs(specs: Sequence[SheetSpec], paper: Paper) -> list[SheetSpec]:
-    """Листы на бумаге paper: у листа, таблицы которого не помещаются, остаются первые, что
-    влезли, остальные — на лист-продолжение сразу за ним; не влезла легенда — она тоже
-    (самым узким вариантом, первой)."""
+    """Sheets on paper: a sheet whose tables do not fit keeps the first ones that fit, the rest go
+    to a continuation sheet right after it; a legend that does not fit goes there too (in its
+    narrowest variant, first)."""
     out: list[SheetSpec] = []
     for spec in specs:
-        if spec.paged:  # развёртки: первая страница — сам лист, дальше — продолжения
+        if spec.paged:  # elevations: the first page is the sheet itself, the rest are continuations
             first, *rest = _continued(spec, spec.spill, paper)
             out += [replace(first, continued=False), *rest]
             continue
@@ -416,22 +426,23 @@ def fit_specs(specs: Sequence[SheetSpec], paper: Paper) -> list[SheetSpec]:
             out.append(spec)
             continue
         if spec.body is not None:
-            # Схема (щит) — во всю ширину, её таблицы — на продолжение
+            # Diagram (panel) across the full width, its tables go to a continuation
             wide = replace(spec, tables=(), wide=True)
             if spec.tables and panels_fit(wide, paper):
                 out += [wide, *_continued(spec, spec.tables, paper)]
-            elif spec.spill:  # схема-таблица (точки) — по страницам
+            elif spec.spill:  # a table diagram (points) goes page by page
                 first, *rest = _continued(spec, spec.spill, paper)
                 out += [replace(first, continued=False), *rest]
             else:
-                out.append(spec)  # не влезает и так — проверка печати скажет
+                out.append(spec)  # does not fit even so: the print check will report it
             continue
         moved: list[Panel] = []
         main = spec
         if spec.legends and fit_legend(spec.legends, grid(paper[1], paper[2]).legend) is None:
             moved.append(min(spec.legends, key=lambda p: p.width))
             main = replace(spec, legends=())
-        # Остаются таблицы, что встают одной колонкой над штампом: план не уступает им место
+        # Tables that fit in one column above the title block stay: the plan does not give way to
+        # them
         sec = grid(paper[1], paper[2]).tables
         k = next(
             k
@@ -439,15 +450,16 @@ def fit_specs(specs: Sequence[SheetSpec], paper: Paper) -> list[SheetSpec]:
             if stack_right(main.tables[:k], sec) is not None
         )
         moved += main.tables[k:]
-        # Таблиц на листе не осталось — плану вся ширина над штампом
+        # No tables left on the sheet: the plan gets the full width above the title block
         main = replace(main, tables=main.tables[:k], wide=k == 0)
         out += [main, *_continued(spec, moved, paper)]
     return out
 
 
 def _continued(spec: SheetSpec, tables: Sequence[Panel], paper: Paper) -> list[SheetSpec]:
-    """Листы-продолжения таблиц листа spec во всю ширину над штампом, по страницам. Не
-    входят даже частями — один лист с исходной схемой: его проверит печать (пустой лист)."""
+    """Continuation sheets for the tables of sheet spec, full width above the title block, page by
+    page. If they do not fit even in parts, one sheet with the original diagram: the print check
+    will catch it (an empty sheet)."""
     x0, y0, x1, y1 = plan_region(replace(spec, wide=True), paper)
     pages = paginate(tables, x1 - x0 - 2 * PADDING, y1 - y0 - 2 * PADDING)
 
@@ -467,8 +479,8 @@ def _continued(spec: SheetSpec, tables: Sequence[Panel], paper: Paper) -> list[S
 
 
 def fill(view: tuple[float, float], sec: Region) -> float:
-    """Какую долю секции занимает вид — по более тесной стороне. На A4 штамп во всю
-    ширину и секции плана нет — бесконечность."""
+    """Share of the section the view takes, by the tighter side. On A4 the title block spans the
+    full width and there is no plan section: infinity."""
     w, h = _size(sec)
     if w <= 0 or h <= 0:
         return math.inf

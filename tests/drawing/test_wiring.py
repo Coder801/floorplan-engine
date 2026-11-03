@@ -1,4 +1,4 @@
-"""Лист проводки: участки трасс по осям и мелкие форматтеры — без DXF."""
+"""Wiring sheet: route pieces along axes and small formatters, without DXF."""
 
 from __future__ import annotations
 
@@ -32,7 +32,7 @@ def test_segments_number_runs_and_skip_diagonals() -> None:
         [],
         [Vec(0, 0)],
         [Vec(0, 0), Vec(0, 0)],
-        [Vec(0, 0), Vec(1, 0)],  # не длиннее допуска 1 мм
+        [Vec(0, 0), Vec(1, 0)],  # no longer than the 1 mm tolerance
         [Vec(0, 0), Vec(0, 0.5)],
     ],
 )
@@ -62,9 +62,9 @@ def test_unit_vector() -> None:
         (Vec(-1, 0), Vec(1, 0)),
         (Vec(0, 1), Vec(0, 1)),
         (Vec(0, -1), Vec(0, 1)),
-        (Vec(-1, 1), Vec(1, -1)),  # влево-вверх → вправо-вниз
+        (Vec(-1, 1), Vec(1, -1)),  # left-up → right-down
         (Vec(1, -1), Vec(1, -1)),
-        (Vec(1e-12, -1), Vec(-1e-12, 1)),  # почти вертикаль вниз — по допуску вертикаль
+        (Vec(1e-12, -1), Vec(-1e-12, 1)),  # almost vertical down: vertical within tolerance
     ],
 )
 def test_readable_reads_left_to_right_or_bottom_up(direction: Vec, expected: Vec) -> None:

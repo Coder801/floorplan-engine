@@ -63,17 +63,17 @@ def test_place_plan_centered_tables_right_legend_left_of_stamp() -> None:
     p = place(view, _spec([(100, 60), (80, 40)], legend=(250, 30)), paper)
     g = grid(paper[1], paper[2])
     assert p.layout.fits and p.layout.paper_prefix == "ISO_full_bleed_A2"
-    # План — по центру своей секции
+    # The plan is centred in its section
     cx = p.view_at.x + view[0] / 2
     cy = p.view_at.y - view[1] / 2
     assert cx == pytest.approx((g.plan[0] + g.plan[2]) / 2)
     assert cy == pytest.approx((g.plan[1] + g.plan[3]) / 2)
     (t1, a1), (t2, a2), (_, legend) = p.panels
-    # Таблицы — прижаты к правому краю секции, одна под другой
+    # Tables are pressed to the right edge of the section, one under another
     for t, at in ((t1, a1), (t2, a2)):
         assert at.x + t.width == pytest.approx(g.tables[2] - PADDING)
     assert a1.y == pytest.approx(g.tables[3] - PADDING) and a2.y < a1.y - t1.height
-    # Легенда — в секции слева от штампа
+    # The legend is in the section left of the title block
     assert g.legend[0] <= legend.x and legend.x + 250 <= g.legend[2]
     assert g.legend[1] <= legend.y - 30 and legend.y <= g.legend[3]
 
@@ -94,7 +94,7 @@ def _fits(text: str, width: float, height: float, factor: float) -> bool:
 
 def test_fit_line_shrinks_then_compresses() -> None:
     assert fit_line("Кухня", 68, 3.5) == (3.5, 1.0)
-    medium = "План електропостачання М 1:30"  # 75,7 мм при 3,5 — не влезает в 68
+    medium = "План електропостачання М 1:30"  # 75.7 mm at 3.5 does not fit into 68
     height, factor = fit_line(medium, 68, 3.5)
     assert TEXT_MIN_MM <= height < 3.5 and factor == 1.0 and _fits(medium, 68, height, factor)
     long = "Будівництво сховища цивільного захисту на 1200 місць " * 2
@@ -109,7 +109,7 @@ def test_fit_cell_wraps_long_value_to_two_lines() -> None:
     assert lines[0].dy > 0 > lines[1].dy
     for line in lines:
         assert _fits(line.text, 68, line.height, line.factor)
-    # Короткое — одной строкой без уменьшения; одна строка, если графа не позволяет
+    # Short text: one line without shrinking; one line if the box does not allow two
     assert fit_cell("Кухня", 68, 3.5, lines=2) == [Line("Кухня", 3.5, 1.0)]
     assert len(fit_cell(text, 68, 3.5, lines=1)) == 1
 
@@ -137,15 +137,15 @@ def test_stamp_values_stay_inside_cells(tmp_path: Path) -> None:
         w = text_width(a.dxf.text, a.dxf.height) * a.dxf.width
         assert w <= f.width + 1e-6, a.dxf.tag
         assert a.dxf.height >= TEXT_MIN_MM or a.dxf.height == f.height
-        # Центр строки — внутри графы по Y
+        # The line centre is inside the box along Y
         y = a.dxf.align_point.y - stamp.dxf.insert.y
         assert f.y - f.cell_h / 2 < y < f.y + f.cell_h / 2, a.dxf.tag
         assert x0 + f.x0 <= a.dxf.align_point.x <= x0 + f.x1
-    assert stamp.get_attrib_text("OBJECT_2")  # длинный объект — на две строки
+    assert stamp.get_attrib_text("OBJECT_2")  # a long object name takes two lines
 
 
 def _texts(doc: Drawing) -> set[str]:
-    """Тексты листа плана, модели, блока штампа и значения атрибутов штампа."""
+    """Texts of the plan sheet, the model, the title block and the title block attribute values."""
     sheet = sheet_layouts(doc)[0]
     out: set[str] = set()
     for layout in (sheet, doc.modelspace(), doc.blocks.get(STAMP_BLOCK)):
@@ -188,7 +188,7 @@ def test_stamp_fields_from_sheet_block(tmp_path: Path) -> None:
     assert {"KV-01-АР", "Р", "Разраб.", "Иванов", "10.26"} <= texts
     assert any(t.startswith("Формат A") for t in texts)
     assert {"Изм.", "Кол.уч", "Стадия", "Листов"} <= texts
-    assert "тест" in texts  # графа 2 по умолчанию — name
+    assert "тест" in texts  # box 2 defaults to name
     assert any(re.fullmatch(r"План помещений М 1:\d+", t) for t in texts)
 
 
@@ -197,7 +197,7 @@ def test_ukrainian_labels(tmp_path: Path) -> None:
     plan = plan.model_copy(update={"language": "uk"})
     texts = _texts(_build(plan, tmp_path))
     assert {"Зм.", "Кільк.", "Арк.", "Підп.", "Стадія", "Аркуш", "Аркушів"} <= texts
-    # Дополнительные графы ДСТУ Б А.2.4-4: 20–22 на поле для підшивки, 26–27 под рамкой
+    # Extra DSTU B A.2.4-4 boxes: 20–22 on the binding margin, 26–27 under the frame
     assert {"Інв. № ор.", "Підпис і дата", "Зам. інв. №", "Копіював"} <= texts
     assert any(t.startswith("Формат A") for t in texts)
     assert {"Експлікація приміщень", "Площа, м²", "Загальна площа", "12,00"} <= texts
@@ -214,18 +214,18 @@ def test_every_text_has_both_languages() -> None:
 def test_tables_go_in_columns_and_take_plan_space() -> None:
     from floorplan_engine.sheets.layout import arrange, columns
 
-    g = grid(594.0, 420.0)  # A2: секция таблиц над штампом 185 мм
+    g = grid(594.0, 420.0)  # A2: the table section above the title block is 185 mm
     tall = Panel(140, 250, lambda psp, at: None)
-    a = arrange([tall, tall], g)  # одной колонкой не влезут
+    a = arrange([tall, tall], g)  # they will not fit in one column
     assert a is not None and len(a.tables) == 2
     (_, first), (_, second) = a.tables
-    assert second.x < first.x  # вторая колонка — левее
-    assert a.plan[2] < g.plan[2]  # плану осталось меньше места
-    assert a.plan[2] <= second.x  # и он не заходит под таблицы
+    assert second.x < first.x  # the second column is further left
+    assert a.plan[2] < g.plan[2]  # the plan has less room left
+    assert a.plan[2] <= second.x  # and it does not go under the tables
     too_tall = Panel(100, 1000, lambda psp, at: None)
     assert columns([too_tall], g.tables) is None and arrange([too_tall], g) is None
     one = arrange([Panel(100, 50, lambda psp, at: None)], g)
-    assert one is not None and one.plan == g.plan  # влезло над штампом — план не трогаем
+    assert one is not None and one.plan == g.plan  # fits above the title block: plan untouched
 
 
 def test_wrap_by_font_metrics() -> None:

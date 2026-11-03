@@ -1,7 +1,7 @@
-"""Масштаб листа: знаменатель, под который рисуется модель (50 — это 1:50). Размеры «на листе»
-(высота текста, глубина символа, отступ трассы от стены) умножаются на него — поэтому от
-масштаба зависят и расчёты в мм модели: якоря точек, трассы, коробки. Масштаб — параметр
-сборки (drawing_scale); весь комплект рисуется в одном масштабе.
+"""Sheet scale: the denominator the model is drawn for (50 means 1:50). "On sheet" sizes (text
+height, symbol depth, route clearance from a wall) are multiplied by it, so calculations in
+model mm depend on the scale too: point anchors, routes, boxes. The scale is a build
+parameter (drawing_scale); the whole set is drawn at one scale.
 """
 
 from __future__ import annotations
@@ -11,20 +11,20 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 
 DEFAULT_SCALE = 50.0
-# Масштабы от крупного к мелкому — из них подбирается масштаб листов: ряд ГОСТ 2.302
-# и 1:30, принятый в интерьерных проектах
+# Scales from large to small, used to pick the sheet scale: the GOST 2.302 series plus
+# 1:30, common in interior projects
 SCALES = (20.0, 25.0, 30.0, 40.0, 50.0, 75.0, 100.0)
 _SCALE: ContextVar[float] = ContextVar("sheet_scale", default=DEFAULT_SCALE)
 
 
 def sheet_scale() -> float:
-    """Знаменатель масштаба листа, по которому сейчас рисуется модель (50 — это 1:50)."""
+    """Denominator of the sheet scale the model is drawn for now (50 means 1:50)."""
     return _SCALE.get()
 
 
 @contextmanager
 def drawing_scale(scale: float) -> Iterator[None]:
-    """Рисовать модель под масштаб листа 1:scale."""
+    """Draw the model for sheet scale 1:scale."""
     token = _SCALE.set(scale)
     try:
         yield
@@ -33,5 +33,5 @@ def drawing_scale(scale: float) -> Iterator[None]:
 
 
 def sheet(mm: float) -> float:
-    """Размер «на листе» → размер в модели при текущем масштабе."""
+    """Convert an "on sheet" size → model size at the current scale."""
     return mm * _SCALE.get()

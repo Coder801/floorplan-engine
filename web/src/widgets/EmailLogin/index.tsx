@@ -1,5 +1,5 @@
-// Вход по коду на почту (service/api/auth.py, /api/auth/email/*): почта → код из письма →
-// вход. Без паролей; приглашение из адреса принимает Gate после входа, как у Google.
+// E-mail code login (service/api/auth.py, /api/auth/email/*): e-mail → code from the e-mail →
+// logged in. No passwords; an invite in the address is accepted by Gate after login, as with Google.
 
 import { type FormEvent, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -17,7 +17,7 @@ export function EmailLogin({ onDone }: { onDone: () => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Обратный отсчёт до «Отправить ещё раз»
+  // Countdown to "Send again"
   useEffect(() => {
     if (!sent || now >= resendAt) return;
     const timer = setTimeout(() => setNow(Date.now()), 1000);
@@ -76,7 +76,7 @@ export function EmailLogin({ onDone }: { onDone: () => void }) {
                    onChange={(e) => {
                      const v = codeDigits(e.target.value);
                      setCode(v);
-                     if (v.length === CODE_LENGTH && !busy) void verify(v);  // вставили код — сразу вход
+                     if (v.length === CODE_LENGTH && !busy) void verify(v);  // a pasted code logs in right away
                    }} />
             <button className={css.primary} type="submit" disabled={busy || code.length !== CODE_LENGTH}>{t("gate.signIn")}</button>
           </div>

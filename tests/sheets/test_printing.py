@@ -1,5 +1,5 @@
-"""Печать: деление таблиц по строкам, листы-продолжения на малом формате, PDF-альбом и
-проверка листа перед печатью."""
+"""Printing: splitting tables by rows, continuation sheets on small paper, the PDF album and the
+pre-print sheet check."""
 
 from __future__ import annotations
 
@@ -34,17 +34,17 @@ def test_split_table_keeps_rows_header_and_total() -> None:
     parts = split_table(TABLE, rest, rest)
     assert parts is not None and len(parts) > 1
     assert all(p.height <= rest + 1e-9 for p in parts)
-    assert sum(len(p.rows) for p in parts) == len(TABLE.rows)  # строки не теряются
+    assert sum(len(p.rows) for p in parts) == len(TABLE.rows)  # no rows are lost
     assert parts[0].title == "Смета" and all(p.title == "" for p in parts[1:])
     assert [p.total is not None for p in parts] == [False] * (len(parts) - 1) + [True]
 
 
 def test_split_table_skips_short_lead() -> None:
-    """В остатке колонки меньше MIN_LEAD_ROWS строк — таблица начинается с полной высоты."""
+    """Fewer than MIN_LEAD_ROWS rows left in a column: the table starts at full height."""
     head = Table(TABLE.title, TABLE.columns, ()).height
     parts = split_table(TABLE, head + 2 * TABLE.row_h, head + 20 * TABLE.row_h)
     assert parts is not None and len(parts[0].rows) > 2
-    assert split_table(TABLE, head, head + TABLE.row_h) is None  # две строки не входят
+    assert split_table(TABLE, head, head + TABLE.row_h) is None  # two rows do not fit
 
 
 def test_paginate_columns_then_pages() -> None:
@@ -52,11 +52,11 @@ def test_paginate_columns_then_pages() -> None:
         return Panel(w, h, lambda psp, tl: None)
 
     pages = paginate([box(50, 80), box(50, 80), box(50, 80)], 120, 100)
-    assert pages is not None and len(pages) == 2  # две колонки на странице, третья — дальше
+    assert pages is not None and len(pages) == 2  # two columns on a page, the third goes on
     assert pages[0].width <= 120
     long = paginate([table_panel(TABLE)], 200, 80)
     assert long is not None and all(p.height <= 80 for p in long)
-    assert paginate([box(300, 10)], 120, 100) is None  # шире страницы
+    assert paginate([box(300, 10)], 120, 100) is None  # wider than the page
 
 
 def _project(points: int) -> tuple[Plan, dict[str, Contour], Electrical]:
@@ -87,7 +87,7 @@ def test_small_format_moves_tables_to_continuation() -> None:
     checks = {c.tab: c for c in check_sheets(doc)}
     assert not checks["03 Электрика (продолжение)"].empty
     assert all(c.min_text is None or c.min_text >= MIN_TEXT_MM - 1e-6 for c in checks.values())
-    # Что не влезло даже на продолжение (аппараты щита шире A4), не пропадает молча
+    # What did not fit even on a continuation (panel devices wider than A4) does not vanish silently
     assert all(c.warnings() for c in checks.values() if c.empty or c.overflow > 0.5)
 
 

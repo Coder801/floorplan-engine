@@ -1,7 +1,7 @@
-// Условные обозначения — сворачиваемая плашка в левом верхнем углу чертежа (листы электрики
-// и освещения, ключ legend страницы): значок — те же примитивы, что на листе (SVG из путей
-// в мм листа), и что он значит. Количество точек — в «Точках», цвета групп — в «Группах».
-// Свёрнута или развёрнута — помнится в браузере; на узком экране по умолчанию свёрнута.
+// Legend: a collapsible badge in the top-left corner of the drawing (electrical and lighting
+// sheets, page key legend): the icon is the same primitives as on the sheet (SVG from paths in
+// sheet mm), and what it means. Point counts are in "Points", group colours in "Groups".
+// Collapsed or expanded is remembered in the browser; on a narrow screen it is collapsed by default.
 
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -19,7 +19,7 @@ const STROKE_PX = 1.3;
 export function Legend({ entries }: { entries: LegendEntry[] }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(() => (remembered(KEY) ?? (window.innerWidth > NARROW_PX ? "open" : "closed")) === "open");
-  useView((s) => s.themeTick);  // сменилась тема — перекрасить значки
+  useView((s) => s.themeTick);  // the theme changed: recolour the icons
   if (!entries.length) return null;
   refreshPalette();
   const toggle = () => { setOpen(!open); remember(KEY, open ? "closed" : "open"); };
@@ -43,7 +43,7 @@ export function Legend({ entries }: { entries: LegendEntry[] }) {
   );
 }
 
-// Значок с листа: линии — одной толщины на экране, заливки (текст на щите) — как есть
+// Icon from the sheet: lines get one width on screen, fills (text on the panel) stay as they are
 function Symbol({ items }: { items: Item[] }) {
   return (
     <svg className={css.icon} viewBox={viewBoxOf(symbolBox(items))} preserveAspectRatio="xMidYMid meet" aria-hidden="true">

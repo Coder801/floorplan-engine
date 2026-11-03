@@ -1,9 +1,11 @@
-// Боковая панель листа: таблицы (связь строка ↔ объекты) и слои — у листов, нарисованных
-// из примитивов (у щита слоёв нет: он рисуется своим компонентом). Слои — свои слои листа
-// и слои с других листов общего чертежа (sheet/drawing.ts). Вопросы, исходники и проект —
-// в шапке (widgets/Drawer). У вкладки «Электрика» сверху — вид: точки, освещение, проводка (листы
-// одного чертежа); вид меняет слои, таблицы, подсказки и правку, масштаб остаётся.
-// Узкий экран: панель — нижняя шторка: полоса с видом и «▴» внизу, таблицы и слои — по ней.
+// Sheet side panel: tables (row ↔ objects link) and layers, for sheets drawn from primitives
+// (the panel has no layers: it is drawn by its own component). Layers are the sheet's own layers
+// and layers from other sheets of the shared drawing (sheet/drawing.ts). Questions, sources and
+// the project are in the header (widgets/Drawer). The "Electrical" tab has a view on top:
+// points, lighting, wiring (sheets of one drawing); the view changes layers, tables, hints and
+// editing, the zoom stays.
+// Narrow screen: the panel is a bottom drawer: a strip with the view and "▴" at the bottom,
+// tables and layers inside it.
 
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -25,24 +27,24 @@ interface Props {
   tab: SideTab;
   onTab: (tab: SideTab) => void;
   page: Page | null;
-  drawing: Drawing | null;     // чертёж, на котором стоит лист
-  views?: { index: number; label: string }[] | null;  // виды вкладки (tabs.ts)
+  drawing: Drawing | null;     // the drawing the sheet belongs to
+  views?: { index: number; label: string }[] | null;  // tab views (tabs.ts)
   view?: number | null;
   onView?: (index: number) => void;
-  wall?: Elevation | null;      // развёртка: вместо таблиц и слоёв — что на стене
-  estimate?: SideTable | null;  // вкладка «Смета»: вместо таблиц и слоёв — итоги и примечания
-  onWiring?: (key: string) => void;  // с развёртки — на лист проводки к линии объекта
-  // Вариант проводки — строкой над таблицами видов «Электрики» и «Сметы»; выбор — на вкладке
-  // «Общие сведения» (onOpen)
+  wall?: Elevation | null;      // elevation: what is on the wall, instead of tables and layers
+  estimate?: SideTable | null;  // "Estimate" tab: totals and notes instead of tables and layers
+  onWiring?: (key: string) => void;  // from an elevation to the wiring sheet, to the object's line
+  // Wiring variant as a line above the tables of the "Electrical" views and "Estimate"; the
+  // choice is on the "Overview" tab (onOpen)
   variant?: { label: string; onOpen: () => void } | null;
-  summary?: React.ReactNode;    // вкладка «Общие сведения»: итоги вместо таблиц и слоёв
-  children?: React.ReactNode;  // выдвижная панель шапки — поверх боковой
+  summary?: React.ReactNode;    // "Overview" tab: totals instead of tables and layers
+  children?: React.ReactNode;  // the header slide-out panel, on top of the side panel
 }
 
-// Вариант проводки меняет группы, щит и трассы — строка на всех видах «Электрики» и в «Смете»
+// The wiring variant changes groups, panel and routes: the line shows on every "Electrical" view and in "Estimate"
 const VARIANT_STAGES = new Set(["electrical", "lighting", "wiring"]);
 
-// Слои есть у листа, нарисованного из примитивов: у щита (page.panel) — нет
+// Layers exist for a sheet drawn from primitives; the panel (page.panel) has none
 export const hasLayers = (page: Page | null) =>
   !!page && !page.panel && page.items.some((it) => !SHEET_ONLY.has(it.l));
 
@@ -50,7 +52,7 @@ export function SidePanel({ tab, onTab, page, drawing, views, view: current, onV
   const { t } = useTranslation();
   const tabs: SideTab[] = wall || estimate || summary ? [] : SIDE_TABS.filter((k) => k !== "layers" || hasLayers(page));
   const shown = tabs.includes(tab) ? tab : "tables";
-  const [open, setOpen] = useState(false);  // узкий экран: шторка развёрнута
+  const [open, setOpen] = useState(false);  // narrow screen: the drawer is expanded
   const hasViews = !estimate && !summary && !!views && views.length > 1;
   return (
     <aside className={css.side} data-open={open || undefined}>
@@ -91,15 +93,15 @@ export function SidePanel({ tab, onTab, page, drawing, views, view: current, onV
   );
 }
 
-// Таблицы листа: строка со ссылками на объекты подсвечивается при наведении на объект
-// и сама подсвечивает их на чертеже
+// Sheet tables: a row linked to objects lights up when an object is hovered and highlights
+// them on the drawing itself
 function Tables({ page }: { page: Page | null }) {
   const { t } = useTranslation();
   const hover = useView((s) => s.hover);
   const [rowHover, setRowHover] = useState<string | null>(null);
   const hoverKeys = useMemo(() => new Set(hover ? expand(hover) : []), [hover]);
 
-  // Объект под курсором на чертеже — прокрутить панель к его первой строке
+  // Object under the cursor on the drawing: scroll the panel to its first row
   useEffect(() => {
     if (hover) document.querySelector(`.${css.side} tr.${css.lit}`)?.scrollIntoView({ block: "nearest" });
   }, [hover]);
@@ -118,7 +120,7 @@ function Tables({ page }: { page: Page | null }) {
   );
 }
 
-// onPick — клик по строке (лист «Щит»: карточка аппарата)
+// onPick is a row click ("Panel" sheet: the device card)
 function TableView({ t, id, rowHover, hoverKeys, onRow, onPick }: {
   t: SideTable; id: string; rowHover: string | null; hoverKeys: Set<string>;
   onRow: (rid: string | null, keys: Set<string> | null) => void;
@@ -141,8 +143,8 @@ function TableView({ t, id, rowHover, hoverKeys, onRow, onPick }: {
                   onClick={onPick && r.keys?.length ? () => onPick(r.keys!) : undefined}>
                 {r.cells.map((c, i) => (
                   <td key={i} className={i === 0 && (r.color || r.marker) ? css.mark : al(i)}>
-                    {/* Группа щита — кружок её цвета, как линии на чертеже; аппарат не на
-                        линии (ввод, реле, резерв, щит АКБ) — квадрат */}
+                    {/* A panel group gets a dot in its colour, like the lines on the drawing; a device not on a
+                        line (main switch, relay, backup, battery box) gets a square */}
                     {i === 0 && r.color && <span className={ui.dot} style={{ background: r.color }} aria-hidden="true" />}
                     {i === 0 && !r.color && r.marker === "square" && <span className={ui.square} aria-hidden="true" />}
                     {c}
@@ -159,7 +161,7 @@ function TableView({ t, id, rowHover, hoverKeys, onRow, onPick }: {
   );
 }
 
-// Вкладка «Смета»: итоги разделов и «Всего», без цен — сколько позиций; примечания расчёта
+// "Estimate" tab: section totals and "Total"; without prices, the item count; calculation notes
 function EstimateTotals({ table }: { table: SideTable }) {
   const { t } = useTranslation();
   const sums = totals(table.rows, table.total);
@@ -184,13 +186,13 @@ function Layers({ page, drawing }: { page: Page | null; drawing: Drawing | null 
   refreshPalette();
   const colors = drawingLayers(drawing);
   const own = drawing.own.get(page) ?? new Set(colors.keys());
-  // Свой слой — выключить на всех листах; с другого листа — добавить на чертёж
+  // Own layer: switch it off on all sheets; from another sheet: add it to the drawing
   const toggle = (l: string, on: boolean) => {
     const set = new Set(own.has(l) ? hidden : extra);
     if (own.has(l) === on) set.delete(l); else set.add(l);
     view.set(own.has(l) ? { hidden: set } : { extra: set });
   };
-  // Строка слоя: глаз (как в Photoshop) | цвет | название | код; клик по строке — тоже
+  // Layer row: eye (as in Photoshop) | colour | name | code; a click on the row works too
   const row = (l: string) => {
     const shown = layerShown(own, hidden, extra, l);
     return (

@@ -1,4 +1,4 @@
-// Настройки: шестерёнка в шапке и панель под ней — разделы друг под другом
+// Settings: a gear in the header and a panel under it, sections one under another
 
 @use "@/shared/styles/mixins" as *;
 
@@ -22,10 +22,10 @@
 .row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px; }
 .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
 .themes > button { flex: 1; }
-.about { font-size: 13px; }  // версия и сборка — последним разделом
-.brand { font-family: $brand; font-weight: 600; letter-spacing: .02em; }  // имя продукта — брендовым шрифтом
+.about { font-size: 13px; }  // version and build as the last section
+.brand { font-family: $brand; font-weight: 600; letter-spacing: .02em; }  // product name in the brand font
 
-// Язык: название | ▾ (в меню: название | ✓)
+// Language: name | ▾ (in the menu: name | ✓)
 .lang {
   display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px;
   width: 100%; text-align: left;

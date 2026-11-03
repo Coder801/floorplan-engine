@@ -1,11 +1,12 @@
-// Просмотр собранных проектов: проект из адреса (#имя), листы .epd, боковая панель.
-// Данные — API просмотра (service/viewer.py); единственная запись — правки проводки.
+// Viewer of built projects: the project from the address (#name), .epd sheets, side panel.
+// Data comes from the viewer API (service/viewer.py); the only write is wiring edits.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { buildDrawing, DRAWING_STAGES } from "@/engine/sheet/drawing";
 import { downloadSheetPng } from "@/engine/sheet/paint";
 import { wallPages, wallSheet } from "@/engine/sheet/walls";
+import { Prices } from "@/pages/Prices";
 import { Welcome } from "@/pages/Welcome";
 import { base, enc, getManifest, getPage, getProject, listProjects, saveVariant } from "@/shared/api";
 import { DRAWER_TABS, SIDE_TABS, type DrawerTab, type SideTab, type Theme } from "@/shared/consts";
@@ -37,57 +38,62 @@ import { WallMap } from "@/widgets/WallMap";
 import { WallPager } from "@/widgets/WallPager";
 import css from "./Viewer.module.scss";
 
-const fromHash = () => decodeURIComponent(location.hash.slice(1)) || null;
+// #<project> — a project; #@prices — the studio price page (project names never start with @)
+const PRICES_HASH = "@prices";
+const hashValue = () => decodeURIComponent(location.hash.slice(1));
+const fromHash = () => (hashValue() === PRICES_HASH ? null : hashValue() || null);
+const onPricesHash = () => hashValue() === PRICES_HASH;
 
-// Не разрешённые вопросы: без ответа и с текстовым ответом, который ещё не разобран
+// Unresolved questions: without an answer, or with a text answer not handled yet
 const UNRESOLVED = new Set(["open", "text"]);
 export const unresolved = (p: Project | null) =>
   (p?.report ? p.report.questions.filter((q) => UNRESOLVED.has(q.state)).length : 0);
 
-// account — кто вошёл (Gate, для настроек); вход выключен — null
+// account is who is logged in (Gate, for settings); null if login is off
 export function Viewer({ account = null }: { account?: Account | null }) {
   const { t } = useTranslation();
   const [list, setList] = useState<ProjectSummary[]>([]);
   const [current, setCurrent] = useState<string | null>(fromHash);
+  const [prices, setPrices] = useState(onPricesHash);  // the studio price page is open
   const [project, setProject] = useState<Project | null>(null);
   const [pages, setPages] = useState<ManifestPage[]>([]);
   const [sheet, setSheet] = useState<number | null>(null);
   const [page, setPage] = useState<Page | null>(null);
-  const [loaded, setLoaded] = useState<number | null>(null);  // лист, чья страница сейчас в page
-  const [drawn, setDrawn] = useState<Page[]>([]);  // листы чертежа, на котором стоит page
-  const [elevs, setElevs] = useState<{ index: number; page: Page }[]>([]);  // листы развёрток
-  const [scene, setScene] = useState<Scene | null>(null);  // 3D-сцена — для мини-схемы развёртки
-  const [wallKey, setWallKey] = useState<string | null>(null);  // открытая развёртка
-  const cache = useRef(new Map<number, Promise<Page>>());  // страницы проекта — один раз
+  const [loaded, setLoaded] = useState<number | null>(null);  // the sheet whose page is currently in page
+  const [drawn, setDrawn] = useState<Page[]>([]);  // sheets of the drawing page belongs to
+  const [elevs, setElevs] = useState<{ index: number; page: Page }[]>([]);  // elevation sheets
+  const [scene, setScene] = useState<Scene | null>(null);  // 3D scene, for the elevation mini map
+  const [wallKey, setWallKey] = useState<string | null>(null);  // the open elevation
+  const cache = useRef(new Map<number, Promise<Page>>());  // project pages, once
   const [error, setError] = useState<string | null>(null);
   const [banners, setBanners] = useState<string[]>([]);
   const [side, setSide] = useState<SideTab>(() => {
     const saved = remembered("side");
     return (SIDE_TABS as readonly string[]).includes(saved ?? "") ? (saved as SideTab) : "tables";
   });
-  const [drawer, setDrawer] = useState<DrawerTab | null>(null);  // вопросы, исходники, проект
-  const [closing, setClosing] = useState(false);                // панель уезжает
-  const [menu, setMenu] = useState<"open" | "closing" | null>(null);  // меню проектов слева
-  const [more, setMore] = useState(false);  // телефон: действия шапки — меню «⋯»
-  const [source, setSource] = useState<string | null>(null);  // файл source/, открытый вместо листа
-  const [estimate, setEstimate] = useState(false);  // вкладка «Смета» (страница проводки, ключ estimate)
-  const [info, setInfo] = useState(false);  // вкладка «Общие сведения» (манифест: overview, variants)
+  const [drawer, setDrawer] = useState<DrawerTab | null>(null);  // questions, sources, project
+  const [closing, setClosing] = useState(false);                // the panel slides away
+  const [menu, setMenu] = useState<"open" | "closing" | null>(null);  // project menu on the left
+  const [more, setMore] = useState(false);  // phone: header actions in the "⋯" menu
+  const [source, setSource] = useState<string | null>(null);  // a source/ file opened instead of a sheet
+  const [estimate, setEstimate] = useState(false);  // "Estimate" tab (wiring page, key estimate)
+  const [info, setInfo] = useState(false);  // "Overview" tab (manifest: overview, variants)
   const [overview, setOverview] = useState<Overview | null>(null);
   const [theme, setTheme] = useState<Theme>(savedTheme);
   const [reloads, setReloads] = useState(0);
-  // Пересборка того же проекта: прежние данные остаются на экране под заглушками, пока не придут новые
+  // Rebuilding the same project: the previous data stays on screen under placeholders until the new data arrives
   const [refreshing, setRefreshing] = useState(false);
-  const [shown, setShown] = useState(0);  // reloads, с которыми нарисован чертёж: ключ Boundary меняется вместе с данными
+  const [shown, setShown] = useState(0);  // the reloads the drawing was drawn with: the Boundary key changes with the data
   const reloadsRef = useRef(0);
   reloadsRef.current = reloads;
   const prevProject = useRef<string | null>(null);
-  const [variants, setVariants] = useState<Variants | null>(null);  // варианты проводки (манифест)
-  const [choosing, setChoosing] = useState(false);  // вариант сохраняется и проект пересобирается
-  const [saving, setSaving] = useState(false);  // правки трасс сохраняются и проект пересобирается
-  const [outdated, setOutdated] = useState(false);  // после открытия вкладки выложили новую версию
+  const [variants, setVariants] = useState<Variants | null>(null);  // wiring variants (manifest)
+  const [choosing, setChoosing] = useState(false);  // the variant is being saved and the project rebuilt
+  const [saving, setSaving] = useState(false);  // route edits are being saved and the project rebuilt
+  const [outdated, setOutdated] = useState(false);  // a new version was deployed after the tab was opened
   const stage = useRef<StageHandle>(null);
 
-  // Уйти с листа, где есть несохранённые правки трасс, — только с подтверждения
+  // Leaving a sheet with unsaved route edits only after confirmation
   const confirmLeave = useCallback(() => {
     const n = stage.current?.pending() ?? 0;
     return !n || confirm(t("app.leave"));
@@ -95,11 +101,12 @@ export function Viewer({ account = null }: { account?: Account | null }) {
 
   useEffect(() => {
     const onHash = () => {
-      if (!confirmLeave()) {  // остаться на листе с несохранёнными правками
+      if (!confirmLeave()) {  // stay on the sheet with unsaved edits
         history.replaceState(null, "", `#${encodeURIComponent(current || "")}`);
         return;
       }
       setCurrent(fromHash());
+      setPrices(onPricesHash());
     };
     const onUnload = (ev: BeforeUnloadEvent) => { if (stage.current?.pending()) ev.preventDefault(); };
     window.addEventListener("hashchange", onHash);
@@ -109,7 +116,7 @@ export function Viewer({ account = null }: { account?: Account | null }) {
 
   useEffect(() => watchBuild(() => setOutdated(true)), []);
 
-  // Тема: системная → светлая → тёмная; холст и 3D перекрашиваются
+  // Theme: system → light → dark; canvas and 3D are recoloured
   useEffect(() => {
     applyTheme(theme);
     view.set({ themeTick: view.get().themeTick + 1 });
@@ -121,31 +128,31 @@ export function Viewer({ account = null }: { account?: Account | null }) {
     return () => mq.removeEventListener("change", bump);
   }, []);
 
-  // Другой проект — с первой стены; перечитанный тот же — на той же
+  // Another project starts at the first wall; the same project reloaded stays on the same wall
   useEffect(() => setWallKey(null), [current]);
 
-  // Проект пересобрали, пока вкладка открыта, — перечитать листы (reloads)
+  // The project was rebuilt while the tab is open: reload the sheets (reloads)
   const built = project?.built;
   useEffect(() => {
     if (!current || built === undefined) return;
     return watchRebuild(() => getProject(current).then((p) => p.built), built, () => setReloads((n) => n + 1));
   }, [current, built]);
 
-  // Открытая вкладка проекта (лист или «Смета») — в браузере: после перезагрузки страницы и
-  // пересборки — та же. Пишется, только когда проект уже открыт на своём месте (placed)
+  // The open project tab (a sheet or "Estimate") is kept in the browser, so after a page reload
+  // or a rebuild it is the same. It is written only once the project is open in its place (placed)
   const placed = useRef<string | null>(null);
   useEffect(() => {
     if (!current || sheet === null || placed.current !== current) return;
     remember(`place:${current}`, JSON.stringify({ sheet, estimate, info }));
   }, [current, sheet, estimate, info]);
 
-  // Проект: список, отчёт, листы; reloads — перечитать после сохранения правок или пересборки
+  // Project: list, report, sheets; reloads re-reads after saving edits or a rebuild
   useEffect(() => {
     let alive = true;
     const again = !!current && prevProject.current === current && placed.current === current;
     prevProject.current = current;
     if (again) {
-      setRefreshing(true);  // тот же проект: ничего не сбрасываем, чтобы блоки не пропадали
+      setRefreshing(true);  // the same project: reset nothing so blocks do not disappear
     } else {
       placed.current = null;
       setProject(null); setPages([]); setPage(null); setLoaded(null); setDrawn([]); setElevs([]); setScene(null);
@@ -163,7 +170,7 @@ export function Viewer({ account = null }: { account?: Account | null }) {
         if (!p.artifact) { setRefreshing(false); return; }
         const m = await getManifest(current);
         if (!alive) return;
-        // Ведомость точек — для печати; в просмотре она в боковой панели листа электрики
+        // The point schedule is for print; in the viewer it is in the side panel of the electrical sheet
         const shown = m.pages.filter((pg) => pg.stage !== "points");
         setPages(shown);
         setVariants(m.variants ?? null);
@@ -172,7 +179,7 @@ export function Viewer({ account = null }: { account?: Account | null }) {
         const has = (i: unknown) => shown.some((pg) => pg.index === i);
         setSheet((s) => (has(saved?.sheet) ? saved!.sheet : has(s) ? s : shown[0]?.index ?? null));
         setEstimate(!!saved?.estimate && shown.some((pg) => (pg.stage === "wiring" || pg.stage === "plumbing") && pg.index === saved.sheet));
-        // Первый заход в проект — «Общие сведения»; дальше — где был
+        // The first visit to a project opens "Overview"; after that, where you were
         setInfo(saved === null || saved.info);
         placed.current = current;
       } catch (e) {
@@ -182,14 +189,14 @@ export function Viewer({ account = null }: { account?: Account | null }) {
     return () => { alive = false; };
   }, [current, reloads]);
 
-  // Листы с планом (план, электрика, освещение, проводка) — один чертёж: грузятся вместе,
-  // вкладка между ними — другие слои того же чертежа (sheet/drawing.ts)
+  // Sheets with a plan (plan, electrical, lighting, wiring) are one drawing: they load together,
+  // and a tab between them is a different set of layers of the same drawing (sheet/drawing.ts)
   const drawingSheets = useMemo(
     () => pages.filter((pg) => pg.stage && DRAWING_STAGES.has(pg.stage)).map((pg) => pg.index), [pages]);
-  // Развёртки — постранично по стенам: листы вкладки грузятся вместе, и с ними лист со сценой
+  // Elevations go wall by wall: the tab's sheets load together, and with them the sheet with the scene
   const elevSheets = useMemo(() => pages.filter((pg) => pg.stage === "elevations").map((pg) => pg.index), [pages]);
   const sceneSheet = pages.find((pg) => pg.stage === "wiring")?.index;
-  // Смета сантехники — на странице «Сантехника»; без проводки вкладка «Смета» открывает её
+  // The plumbing estimate is on the "Plumbing" page; without wiring the "Estimate" tab opens it
   const estimateSheet = sceneSheet ?? pages.find((pg) => pg.stage === "plumbing")?.index;
 
   useEffect(() => {
@@ -206,20 +213,20 @@ export function Viewer({ account = null }: { account?: Account | null }) {
     };
     const walls = elevSheets.includes(sheet);
     const want = drawingSheets.includes(sheet) ? drawingSheets : walls ? elevSheets : [sheet];
-    // Сцена мини-схемы — не обязательна: не загрузилась — развёртки без схемы
+    // The mini map scene is optional: if it fails to load, elevations go without the map
     if (walls && sceneSheet !== undefined) {
       load(sceneSheet).then((pg) => alive && setScene(pg.scene ?? null), () => {});
     }
     Promise.all(want.map(load)).then((pgs) => {
       if (!alive) return;
       if (walls) setElevs(want.map((index, i) => ({ index, page: pgs[i] })));
-      // Вкладка того же чертежа — 3D остаётся (меняются слои), другой лист — сначала план
+      // A tab of the same drawing keeps 3D (only layers change); another sheet starts with the plan
       const was = drawnRef.current;
       resetSelection(pgs.length > 1 && was.length === pgs.length && was.every((p, i) => p === pgs[i]));
       setPage(pgs[want.indexOf(sheet)]);
       setLoaded(sheet);
       setShown(reloadsRef.current); setRefreshing(false);
-      // Те же страницы — тот же чертёж: холст, масштаб и сдвиг остаются
+      // The same pages mean the same drawing: canvas, zoom and pan stay
       const own = walls ? [pgs[want.indexOf(sheet)]] : pgs;
       setDrawn((prev) => (prev.length === own.length && prev.every((p, i) => p === own[i]) ? prev : own));
     }, (e) => alive && (setError((e as Error).message), setRefreshing(false)));
@@ -227,7 +234,7 @@ export function Viewer({ account = null }: { account?: Account | null }) {
   }, [current, sheet, pages, drawingSheets, elevSheets, sceneSheet]);
 
   const sheetDrawing = useMemo(() => (drawn.length ? buildDrawing(drawn) : null), [drawn]);
-  // Развёртка стены: тот же лист, видовой экран — её габарит
+  // Wall elevation: the same sheet, the viewport is its bounding box
   const walls = useMemo(() => wallPages(elevs), [elevs]);
   const wall = walls.find((w) => w.key === wallKey && w.sheet === sheet) ?? walls.find((w) => w.sheet === sheet) ?? null;
   const wallPage = useMemo(() => (wall && page && elevSheets.includes(loaded ?? -1) ? wallSheet(page, wall) : null),
@@ -237,35 +244,36 @@ export function Viewer({ account = null }: { account?: Account | null }) {
   const drawnRef = useRef(drawn);
   drawnRef.current = drawn;
 
-  // Другой лист — сразу без подсказки, 3D и правки, не дожидаясь загрузки страницы
+  // Another sheet: drop the hint, 3D and edits right away, without waiting for the page to load
   const openSheet = (index: number) => {
     setEstimate(false); setInfo(false);
     if (source) { setSource(null); resetSelection(); setSheet(index); return; }
-    if (page && index === sheet) {  // лист уже открыт: правки не терять, из 3D — на лист
+    if (page && index === sheet) {  // the sheet is already open: keep the edits, leave 3D for the sheet
       if (view.get().show3d) view.set({ show3d: false, pinned: null, selected: null, neighbors: null, tip: null });
       return;
     }
     const sameDrawing = sheet !== null && drawingSheets.includes(sheet) && drawingSheets.includes(index);
     if (confirmLeave()) { resetSelection(sameDrawing); setSheet(index); }
   };
-  // С развёртки — на лист проводки, сразу к линии точки или коробки (store.goto)
+  // From an elevation to the wiring sheet, straight to the line of a point or box (store.goto)
   const toWiring = sceneSheet === undefined ? undefined : (key: string) => {
     view.set({ goto: key });
     openSheet(sceneSheet);
   };
-  // «Смета» — не лист: страница проводки (там ключ estimate) без чертежа; смета сантехники —
-  // со страницы «Сантехника», она того же чертежа и уже загружена (drawn)
+  // "Estimate" is not a sheet: it is the wiring page (which has the estimate key) without the
+  // drawing; the plumbing estimate comes from the "Plumbing" page, which is part of the same
+  // drawing and already loaded (drawn)
   const openEstimate = estimateSheet === undefined ? undefined : () => {
     openSheet(estimateSheet);
     setEstimate(true);
   };
-  // «Общие сведения» — не лист: страница из манифеста; лист под ней остаётся загруженным
+  // "Overview" is not a sheet: a page from the manifest; the sheet under it stays loaded
   const openInfo = () => {
     if (!confirmLeave()) return;
     setSource(null); setEstimate(false); setInfo(true);
   };
   const showSide = (tab: SideTab) => { setSide(tab); remember("side", tab); };
-  // Та же кнопка — закрыть (панель уезжает), другая — открыть её
+  // The same button closes (the panel slides away), another one opens its panel
   const toggleDrawer = (tab: DrawerTab) => {
     if (drawer === tab && !closing) setClosing(true);
     else { setDrawer(tab); setClosing(false); }
@@ -282,7 +290,7 @@ export function Viewer({ account = null }: { account?: Account | null }) {
     setSaving(false);
   };
 
-  // Другой вариант проводки: несохранённые правки трасс — только с подтверждения
+  // Another wiring variant: only after confirmation if there are unsaved route edits
   const chooseVariant = (v: { mode: string; route: string; distribution: string }, ceiling?: number) => {
     if (!current || !confirmLeave()) return;
     setChoosing(true);
@@ -292,13 +300,13 @@ export function Viewer({ account = null }: { account?: Account | null }) {
       .finally(() => setChoosing(false));
   };
 
-  // Продолжения (развёртки) — одна вкладка, страницы — внутри чертежа; электрика, освещение
-  // и проводка — одна вкладка, вид — переключателем справа (SidePanel)
+  // Continuations (elevations) are one tab with pages inside the drawing; electrical, lighting
+  // and wiring are one tab, the view is picked with the switch on the right (SidePanel)
   const tabs = sheetTabs(pages);
   const tab = source || estimate || info ? null : tabOf(tabs, sheet);
   const stageOf = (i: number) => pages.find((pg) => pg.index === i)?.stage ?? "";
   const views = tab?.views ? tab.pages.map((i) => ({ index: i, label: label("views", stageOf(i)) })) : null;
-  // Вкладка с видами открывается на последнем выбранном виде
+  // A tab with views opens on the last chosen view
   const [lastView, setLastView] = useState(() => remembered("view") || "electrical");
   useEffect(() => {
     const st = pages.find((pg) => pg.index === sheet)?.stage;
@@ -307,7 +315,7 @@ export function Viewer({ account = null }: { account?: Account | null }) {
   const tabTarget = (tb: (typeof tabs)[number]) =>
     (tb === tab && sheet !== null ? sheet : tb.views ? tb.pages.find((i) => stageOf(i) === lastView) ?? tb.pages[0] : tb.pages[0]);
   const at = tab && sheet !== null ? tab.pages.indexOf(sheet) : -1;
-  // Страницы вкладки развёрток — стены, а не листы
+  // Pages of the elevations tab are walls, not sheets
   const wallAt = wall ? walls.indexOf(wall) : -1;
   const openWall = (index: number) => {
     const next = walls[index];
@@ -324,7 +332,7 @@ export function Viewer({ account = null }: { account?: Account | null }) {
     }
   };
 
-  // PageUp / PageDown — соседняя страница, если у листа их несколько
+  // PageUp / PageDown go to the neighbouring page if the sheet has several
   const turnRef = useRef(turn);
   turnRef.current = turn;
   useEffect(() => {
@@ -338,7 +346,7 @@ export function Viewer({ account = null }: { account?: Account | null }) {
   }, []);
 
   const openQs = unresolved(project);
-  // Вариант проводки строкой в боковой панели листов: «Стандарт · По потолку · Через коробки»
+  // Wiring variant as a line in the sheet side panel: "Стандарт · По потолку · Через коробки"
   const activeVariant = variants ? parseKey(variants.active) : null;
   const variantLabel = activeVariant
     ? [t(`variant.modes.${activeVariant.mode}`), t(`variant.routes.${activeVariant.route}`), t("variant.distributions.boxes")].join(" · ")
@@ -347,7 +355,7 @@ export function Viewer({ account = null }: { account?: Account | null }) {
     ? t("app.stale", { name: project.name })
     : project && !project.report ? t("app.notBuilt", { name: project.name }) : null;
 
-  // Пока грузится проект или лист — прелоадер поверх чертежа (прежний лист виден под ним)
+  // While a project or sheet is loading: a preloader over the drawing (the previous sheet shows under it)
   const loading = !!current && !error && !source && (!project || (!!project.artifact && loaded !== sheet));
 
   let main: React.ReactNode;
@@ -382,12 +390,20 @@ export function Viewer({ account = null }: { account?: Account | null }) {
   }
   if (page && project && main) main = <Boundary key={`${current}/${drawn.length > 1 ? "drawing" : loaded}/${shown}`}>{main}</Boundary>;
 
+  // The studio price page is the studio's: login off, a firm account or the debug guest (reads)
+  const openPrices = account === null || account.plan === "pro" || account.visitor
+    ? () => { location.hash = PRICES_HASH; }
+    : undefined;
+
   return (
     <div className={css.app}>
       {(choosing || saving) && <RebuildModal />}
-      {!current && <Welcome list={list} onOpen={(name) => { location.hash = encodeURIComponent(name); }} />}
+      {prices && <Prices onBack={() => { location.hash = ""; }} />}
+      {!current && !prices && (
+        <Welcome list={list} onOpen={(name) => { location.hash = encodeURIComponent(name); }} onPrices={openPrices} />
+      )}
       {menu && (
-        <ProjectsMenu list={list} current={current} closing={menu === "closing"}
+        <ProjectsMenu list={list} current={current} closing={menu === "closing"} onPrices={openPrices && (() => { openPrices(); setMenu("closing"); })}
                       onOpen={(name) => { location.hash = encodeURIComponent(name); setMenu("closing"); }}
                       onClose={closeMenu} onClosed={menuClosed} />
       )}
@@ -401,7 +417,7 @@ export function Viewer({ account = null }: { account?: Account | null }) {
           </span>
         </button>
         <nav className={cx(ui.segmented, css.sheets)} aria-label={t("app.sheets")}>
-          {/* Вкладка есть у любого собранного проекта: сборка без сведений (старый код) — с подсказкой пересобрать */}
+          {/* Every built project has this tab: a build without the overview (old code) shows a hint to rebuild */}
           {project?.artifact && pages.length > 0 && (
             <button className={cx(info && ui.on)} onClick={openInfo}>{t("overview.tab")}</button>
           )}
@@ -415,7 +431,7 @@ export function Viewer({ account = null }: { account?: Account | null }) {
           )}
         </nav>
         <button className={css.more} aria-label={t("app.more")} aria-expanded={more} onClick={() => setMore(!more)}>⋯</button>
-        {/* На телефоне — меню «⋯»: выбрал действие — меню закрылось */}
+        {/* On a phone: the "⋯" menu; choosing an action closes it */}
         <div className={cx(css.actions, more && css.open)} onClick={() => setMore(false)}>
           {project && (
             <div className={ui.segmented} aria-label={t("app.project")}>
@@ -445,7 +461,7 @@ export function Viewer({ account = null }: { account?: Account | null }) {
       </div>
       <main id="stage" className={css.stage}>
         {main}
-        {/* Скачать: PNG листа (весь лист, не больше A3 150 dpi) и DXF проекта */}
+        {/* Download: sheet PNG (the whole sheet, at most A3 150 dpi) and the project DXF */}
         {project && current && !estimate && !info && (
           <DownloadMenu
             onPng={page && !source && !estimate && !loading ? () => downloadSheetPng(page, `${current}-${page.name}.png`) : null}
@@ -459,7 +475,7 @@ export function Viewer({ account = null }: { account?: Account | null }) {
         )}
         {wall && page && !loading && !info && !estimate && !source ? (
           <>
-            {/* Развёртки: одна страница — одна стена, имя — список всех стен; внизу слева — где она в квартире */}
+            {/* Elevations: one page is one wall, the name opens a list of all walls; bottom left shows where it is in the flat */}
             <WallPager walls={walls} at={wallAt} onTurn={turn} onPick={openWall} />
             {scene && <WallMap scene={scene} elevation={wall.key} title={wall.title} face={wall.data?.face} />}
           </>
@@ -487,7 +503,7 @@ export function Viewer({ account = null }: { account?: Account | null }) {
   );
 }
 
-// Где был открыт проект в этом браузере: лист, вкладка «Смета» или «Общие сведения» (place:<проект>)
+// Where the project was open in this browser: a sheet, the "Estimate" tab or "Overview" (place:<project>)
 function savedPlace(name: string): { sheet: number; estimate: boolean; info: boolean } | null {
   try {
     const v = JSON.parse(remembered(`place:${name}`) || "null") as { sheet?: unknown; estimate?: unknown; info?: unknown } | null;

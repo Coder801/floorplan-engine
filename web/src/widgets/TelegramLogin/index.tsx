@@ -1,7 +1,6 @@
-// Вход через Telegram (service/api/auth.py, /api/auth/telegram/*): страница берёт билет и
-// открывает бота по ссылке t.me/<бот>?start=<токен>; человек жмёт Start и «Поделиться
-// номером», страница опрашивает билет и входит. Без паролей и кодов; приглашение из адреса
-// уходит вместе с опросом.
+// Telegram login (service/api/auth.py, /api/auth/telegram/*): the page gets a ticket and opens
+// the bot via t.me/<bot>?start=<token>; the person taps Start and "Share number", the page polls
+// the ticket and logs in. No passwords or codes; an invite from the address goes along with the poll.
 
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -21,7 +20,7 @@ export function TelegramLogin({ onDone, invite }: { onDone: () => void; invite?:
     try {
       const r = await startTelegramLogin(i18n.language);
       setTicket(r);
-      window.open(r.url, "_blank", "noopener");  // приложение Telegram или веб-версия
+      window.open(r.url, "_blank", "noopener");  // Telegram app or the web version
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -29,7 +28,7 @@ export function TelegramLogin({ onDone, invite }: { onDone: () => void; invite?:
     }
   };
 
-  // Опрос билета, пока человек в боте; устарел — назад к кнопке с пояснением
+  // Poll the ticket while the person is in the bot; if it expires, back to the button with an explanation
   useEffect(() => {
     if (!ticket) return;
     let stopped = false;

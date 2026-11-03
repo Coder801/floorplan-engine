@@ -1,5 +1,5 @@
-"""План освещения (lighting.py): что чем включается — из controls или допущением по группе,
-помещению и подписи выключателя; таблица «Выключатели»; проверка controls."""
+"""Lighting plan (lighting.py): what turns on what, from controls or assumed by group, room and
+switch label; the "Switches" table; controls checks."""
 
 from __future__ import annotations
 
@@ -50,7 +50,7 @@ def test_note_hints_and_rest() -> None:
             {"id": "l1", "ceiling": [1000, 1000], **CEIL},
             {"id": "led", "type": "led_output", "room": "r", "wall": "w3", "offset": 500,
              "height": 2200, "group": "QF1", "note": "підсвітка кухні"},
-            # Свет другой группы — не связан
+            # A light of another group is not linked
             {"id": "other", "ceiling": [2000, 2000], "room": "r", "type": "downlight",
              "group": "QF2"},
         ]
@@ -58,7 +58,7 @@ def test_note_hints_and_rest() -> None:
     links = _links(elec)
     assert links["s_bra"] == (("sc",), True)
     assert links["s_led"] == (("led",), True)
-    assert links["s_main"] == (("l1",), True)  # то, что не разобрали подсказанные
+    assert links["s_main"] == (("l1",), True)  # whatever the hinted ones did not take
 
 
 def test_no_group_no_link() -> None:
@@ -69,7 +69,7 @@ def test_no_group_no_link() -> None:
             {"id": "l1", "ceiling": [1000, 1000], **CEIL},
         ]
     )
-    assert switch_links(elec) == []  # связь не выдумывается
+    assert switch_links(elec) == []  # no link is invented
 
 
 def test_switch_rows_mark_assumed() -> None:
@@ -87,7 +87,7 @@ def test_switch_rows_mark_assumed() -> None:
 
 
 def test_controls_validation() -> None:
-    with pytest.raises(AssertionError):  # controls — только у выключателя
+    with pytest.raises(AssertionError):  # controls only on a switch
         _elec([{"id": "x", "type": "socket", "offset": 1, "controls": ["l1"], **SW}])
     plan = make_plan(WALLS)
     _, contours = validate_plan(plan)
@@ -107,7 +107,9 @@ def test_chain_goes_to_nearest() -> None:
 
 
 def test_line_link_draws_straight_segments() -> None:
-    """Связь — прямые отрезки между соседними точками одной полилинией, без дуг (2026-11-03)."""
+    """The link is straight segments between neighbouring points as one polyline, no arcs
+    (2026-11-03).
+    """
     from ezdxf.entities.lwpolyline import LWPolyline
     from ezdxf.filemanagement import new
 

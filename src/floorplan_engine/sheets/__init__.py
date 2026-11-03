@@ -1,1 +1,1 @@
-"""Документ проекта: модель 1:1 и листы (layouts), печать PDF-альбома, PNG листов из DXF."""
+"""Project document: the 1:1 model and sheets (layouts), the PDF album, sheet PNGs from DXF."""

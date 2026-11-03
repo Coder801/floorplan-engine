@@ -32,7 +32,7 @@ describe("sheetTabs", () => {
       ["План", [1], false], ["Електрика", [2, 3, 4], true], ["Щит", [5], false],
     ]);
     expect(tabOf(tabs, 4)?.name).toBe("Електрика");
-    // Подпись вкладки — по теме, на языке интерфейса
+    // The tab label follows the topic, in the interface language
     expect(tabs.map((t) => t.stage)).toEqual(["plan", "electrical", "panel"]);
   });
 

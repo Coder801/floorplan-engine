@@ -1,4 +1,4 @@
-// Исходник — на месте чертежа; вкладка листа или «← К листу» возвращает чертёж
+// The source replaces the drawing; the sheet tab or "← Back to sheet" brings the drawing back
 
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";

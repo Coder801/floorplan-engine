@@ -1,5 +1,5 @@
-"""Цены сметы (electrical/pricing.py): имитация сервиса цен знает все позиции, прайс студии
-важнее сервиса, строки от сервиса помечены."""
+"""Estimate prices (electrical/pricing.py): the price service mock knows every item, the studio
+price list beats the service, service rows are marked."""
 
 from __future__ import annotations
 
@@ -26,7 +26,7 @@ def test_mock_knows_every_line_and_is_deterministic() -> None:
 @pytest.mark.parametrize(
     ("key", "price"),
     [
-        ("cable.3x1.5", 45),  # 10 грн за мм² суммарного сечения
+        ("cable.3x1.5", 45),  # 10 UAH per mm² of total cross-section
         ("cable.3x2.5", 75),
         ("cable.5x6", 300),
         ("cable.abc", None),
@@ -35,13 +35,13 @@ def test_mock_knows_every_line_and_is_deterministic() -> None:
         ("junction_box.80", 40),
         ("junction_box.100×100", 60),
         ("junction_box_ip.150x110", 220),
-        ("input.C63 2P", 850),  # больше 40 А — дороже
+        ("input.C63 2P", 850),  # above 40 A costs more
         ("input.C40 2P", 650),
         ("relay.63 А", 1900),
         ("breaker.C16", 140),
         ("breaker.C50", 220),
         ("diff.C16 30 мА", 950),
-        ("ats.АВР", 4500),  # без номинала — цена вида
+        ("ats.АВР", 4500),  # no rating: price for the kind
         ("work.chase", 200),
     ],
 )
@@ -56,7 +56,7 @@ def test_own_prices_override_service_even_without_rating() -> None:
     prices = Prices(own, MockPriceService())
     diff = prices.lookup("diff.C16 30 мА")
     assert diff.price is not None and not diff.service
-    assert diff.price.price == 700  # свой ключ вида важнее точной цены сервиса
+    assert diff.price.price == 700  # own key for the kind beats the exact service price
     assert prices.lookup("socket").service and prices.lookup("socket").price is not None
     exact = prices.lookup("cable.3x2.5")
     assert exact.exact is not None and exact.exact.name == "ВВГнг"
@@ -75,6 +75,6 @@ def test_estimate_marks_service_lines_and_notes() -> None:
     notes = price_notes(est, Prices(own, MockPriceService()), "uk")
     assert notes[0] == "Ціни: prices.yaml (2026-10)" and "із сервісу цін" in notes[1]
     assert price_notes(est, Prices(None, MockPriceService()), "uk")[0].startswith("Усі ціни")
-    # Установка механизмов: своё пояснение и пометка сервиса вместе
+    # Device fitting: its own note and the service mark together
     assert "Встановлення розеток" in (by_key["work.mechanism"].hint or "")
     assert "імітація" in (by_key["work.mechanism"].hint or "")

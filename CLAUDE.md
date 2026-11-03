@@ -36,10 +36,10 @@ uv run floorplan-engine facts-bench projects/<имя>/source/x.pdf # точно�
 uv run floorplan-engine preview projects/<имя>               # PNG листов из DXF (отладка ezdxf)
 docker compose up -d db && uv run alembic upgrade head  # база сервиса (docs/database.md), только Postgres
 TEST_REQUIRE_DB=1 uv run pytest && uv run mypy && uv run ruff check . && uv run ruff format --check . && uv run lint-imports
-uv run cz bump --dry-run                                # релиз: версия по коммитам, CHANGELOG, тег (docs/development.md)
+uv run python scripts/flow.py feature <имя> | integrate | release [--dry-run]  # ветки и релиз: develop → feature → develop → main (docs/development.md)
 ```
 
-Slash-команды: `/plan`, `/electrical`, `/check`, `/review`, `/commit` (в `.claude/commands/`).
+Slash-команды: `/plan`, `/electrical`, `/check`, `/review`, `/commit`, `/release` (в `.claude/commands/`).
 
 ## Агенты и скиллы
 
@@ -406,7 +406,8 @@ group, at }`), по вариантам проводки (`variants.<режим-�
     `drawing/panel.py` — лист «Щит» для печати (DXF): щит в лицо прямо на листе (без видового
     экрана, по месту секции плана — `SheetSpec.body`), таблица аппаратов. В просмотре щит
     рисует свой компонент из ключа `panel` страницы (`epd/panel_data.py`), не из примитивов;
-  - `electrical/estimate.py` — смета электрики: объёмы из модели (кабель, подрозетники, коробки,
+  - `electrical/estimate.py` — смета электрики (работы — разделами «черновые» и «чистовые» со
+    своими итогами, раздел позиции — в `LINES`): объёмы из модели (кабель, подрозетники, коробки,
     опрессовка, крепления, штробы, механизмы, светильники, LED; щит — по составу листа «Щит»,
     `panel.build_panel`, названия аппаратов — `panel.device_name`, как в закупке), цены — из `prices.yaml` проекта, а если его нет — из
     общего прайса студии `projects/prices.yaml` (`pipeline.find_prices`), поверх сервиса цен
@@ -415,6 +416,14 @@ group, at }`), по вариантам проводки (`variants.<режим-�
     помечены «пока имитация»); цены в прайсы не выдумывай. Excel — `out/estimate.xlsx`: сумма строки и итоги формулами. Таблица сметы стоит на листе проводки (`estimate_table`; совсем без цен —
     ведомость объёмов), в просмотре — вкладка «Смета» (ключ `estimate` страницы проводки),
     файлами — `out/estimate.md`, `.csv`, `.xlsx` (пишут `build` и команда `estimate`, `pipeline.write_estimate`);
+  - `electrical/market.py` — рынок цен работ (решение 2026-11-03): выборка открытых прайсов
+    `projects/market.yaml` (источник со ссылкой и датой прайса, у каждой цены — строка прайса,
+    составная — суммой строк; стена — бетон), вилка позиции (`item_spread`: мин, квартили,
+    медиана) и период цен (`period`). Сети нет: выборку собирают руками или агентом раз в
+    квартал, цены — только со страницы источника. Страница «Прайс студии» в просмотре
+    (`#@prices`, `pipeline.price_page`) — работы `work.*`: своя цена рядом с вилкой рынка,
+    сноска о периоде и источниках; правка — в `projects/prices.yaml` с комментариями
+    (`pipeline.save_prices`, `estimate.edit_price_items`), только студия;
   - `electrical/variants.py` — варианты проводки (`docs/wiring-variants.md`): все сочетания
     режима, трассы и разводки, вариант «как в проекте», электрика варианта (`apply_variant`) и
     сводка без чертежей (`variant_summary`: смета, кабель, аппараты, штробы) — в манифест `.epd`
@@ -477,7 +486,7 @@ group, at }`), по вариантам проводки (`variants.<режим-�
   - `pipeline.py` — конвейер без вывода: оценка, отчёт, сборка DXF и артефакта `.epd`
     (его вызывают и CLI, и сервис; логику сборки держи здесь, а не в cli.py);
   - `cli.py` — команды: печать и коды выхода поверх `pipeline.py`;
-  - `service/` — API (FastAPI): `app.py` маршруты, `viewer.py` — API просмотра собранных `projects/` (страница — фронт `web/`, см. ниже) (команда `view`; листы рисуются в canvas из `.epd`, PNG листа для альбома — из canvas, не больше A3 150 dpi; печать — DXF; единственная запись — правка трасс на листе проводки → `wiring.yaml` и пересборка), `workflow.py` цикл и состояния,
+  - `service/` — API (FastAPI): `app.py` маршруты, `viewer.py` — API просмотра собранных `projects/` (страница — фронт `web/`, см. ниже) (команда `view`; листы рисуются в canvas из `.epd`, PNG листа для альбома — из canvas, не больше A3 150 dpi; печать — DXF; запись — правка трасс на листе проводки → `wiring.yaml` и пересборка, вариант проводки → `variant.yaml`, цены работ со страницы «Прайс студии» → `projects/prices.yaml`), `workflow.py` цикл и состояния,
     `storage.py` хранение на диске, `analyzer.py` интерфейс анализатора и ручной анализатор,
     `llm_analyzer.py` LLM-анализатор (бэкенды claude-code и api, расход в usage.jsonl),
     `analyzer_prompt.md` его системный промпт, `pdf_facts.py` выжимка из PDF без LLM

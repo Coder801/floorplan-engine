@@ -1,5 +1,5 @@
-"""База сервиса: таблицы (models), подключение (session), доступ (repositories).
+"""Service database: tables (models), connection (session), access (repositories).
 
-Сейчас сервис хранит проекты в папках (storage.py); база заведена рядом и пока не подключена
-к Workflow. Что нужно для полного переезда — docs/database.md.
+The service currently keeps projects in folders (storage.py); the database sits next to it and
+is not wired to Workflow yet. What a full move needs is in docs/database.md.
 """

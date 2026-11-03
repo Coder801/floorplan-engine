@@ -1,10 +1,11 @@
-"""Лист «Щит»: щит в лицо — DIN-рейки, аппараты, провода групп снизу к своим автоматам,
-таблица аппаратов с нагрузкой и слабые места. Рисуется прямо на листе (мм листа), без
-видового экрана: щит — схема, а не план в масштабе.
+"""The "Panel" sheet: the panel front view with DIN rails, devices, group wires going down to their
+breakers, a device table with loads, and weak spots. Drawn directly on the sheet (sheet mm),
+with no viewport: the panel is a diagram, not a scaled plan.
 
-Ряд рейки сверху вниз: полоса обозначений (QF4) и шина, аппарат, полоса проводов — провод
-группы цветом её линий идёт вниз от автомата, рядом вертикальные подписи: назначение, кабель
-и мощность. Все размеры — в долях модуля DIN (`m`, мм листа): щит подгоняется под место.
+A rail row from top to bottom: a strip of designations (QF4) and the busbar, the device, a
+strip of wires: each group's wire goes down from its breaker in the colour of its lines, with
+vertical labels next to it: purpose, cable and power. All sizes are fractions of a DIN module
+(`m`, sheet mm), so the panel fits its space.
 """
 
 from __future__ import annotations
@@ -28,22 +29,22 @@ from floorplan_engine.model.geometry import Vec
 from floorplan_engine.model.panel_catalog import DeviceKind
 from floorplan_engine.model.texts import Language
 
-# Высоты в модулях
-HEAD = 1.2  # полоса обозначений и шина
-BODY = 5.0  # аппарат
-GUTTER = 6.5  # провода и подписи под рейкой
-PAD = 1.2  # от стенки щита до рейки
-LEAD = 2.0  # ввод над щитом
+# Heights in modules
+HEAD = 1.2  # designation strip and busbar
+BODY = 5.0  # device
+GUTTER = 6.5  # wires and labels under the rail
+PAD = 1.2  # from the enclosure wall to the rail
+LEAD = 2.0  # supply above the panel
 ROW = HEAD + BODY + GUTTER
-SIDE = 7.0  # внешний аппарат (инвертор, вилка) справа от щита, с зазором
-M_MAX = 9.0  # модуль на листе, мм: больше — щит слишком крупный
+SIDE = 7.0  # external device (inverter, plug) right of the panel, with a gap
+M_MAX = 9.0  # module on the sheet, mm: larger makes the panel too big
 TEXT_MAX = 2.0
-GUTTER_TEXT = 0.28  # подписи под рейкой — доля модуля, самые мелкие на листе
-M_MIN = MIN_TEXT_MM / GUTTER_TEXT  # меньше — подписи мельче MIN_TEXT_MM
+GUTTER_TEXT = 0.28  # labels under the rail, fraction of a module; the smallest on the sheet
+M_MIN = MIN_TEXT_MM / GUTTER_TEXT  # smaller makes labels smaller than MIN_TEXT_MM
 DARK = 0x3A3A3A
 GREY = 0x8C8C8C
 BUS = 0x5A5A5A
-INPUT_WIRE = 0x8B4513  # коричневый — фаза ввода
+INPUT_WIRE = 0x8B4513  # brown: supply phase
 RESERVE = 0x2E8B57
 LW_BOX = 50
 LW_DEV = 25
@@ -86,12 +87,12 @@ def text(key: str, language: Language, **kw_: object) -> str:
 
 @dataclass(frozen=True)
 class PanelDrawing:
-    """Щит, подогнанный под место: модуль m и рейки."""
+    """Panel fitted to its space: module m and rails."""
 
     m: float
     rows: tuple[tuple[Device, ...], ...]
     per_row: int
-    external: bool  # инвертор или вилка справа от щита
+    external: bool  # inverter or plug right of the panel
 
     @property
     def box_w(self) -> float:
@@ -107,8 +108,8 @@ class PanelDrawing:
 
 
 def fit_panel(panel: BoardPanel, width: float, height: float) -> PanelDrawing | None:
-    """Ширина рейки (12, 18 или 24 модуля), при которой модуль крупнее всего; не влезает
-    даже с M_MIN — None."""
+    """Rail width (12, 18 or 24 modules) that gives the largest module; None if it does not fit
+    even with M_MIN."""
     external = panel.backup is not None
     best: PanelDrawing | None = None
     for per_row in (12, 18, 24):
@@ -156,7 +157,7 @@ def _text(
 
 
 def clip(s: str, width: float, h: float) -> str:
-    """Строка, обрезанная с «…» под ширину width, мм листа."""
+    """String cut with "…" to fit width, sheet mm."""
     if text_width(s, h) <= width:
         return s
     while s and text_width(s + "…", h) > width:
@@ -165,12 +166,12 @@ def clip(s: str, width: float, h: float) -> str:
 
 
 def draw_device(layout: BaseLayout, d: Device, x: float, top: float, m: float, color: int) -> None:
-    """Аппарат от левого верхнего угла корпуса: корпус, рычаги, надпись номинала."""
+    """Device from the top-left corner of its body: body, levers, rating text."""
     w, h = d.modules * m, BODY * m
     x1, bottom = x + w, top - h
     _fill(layout, x, bottom, x1, top, 0xFFFFFF)
     _rect(layout, x, bottom, x1, top, lineweight=LW_DEV, true_color=DARK)
-    # Полоска цвета группы — как у её линий на листах электрики и проводки
+    # Group colour stripe, same as its lines on the electrical and wiring sheets
     if d.group is not None:
         _fill(layout, x + 0.1 * m, top - 0.45 * m, x1 - 0.1 * m, top - 0.15 * m, color)
     th = min(TEXT_MAX, 0.32 * m)
@@ -187,7 +188,7 @@ def draw_device(layout: BaseLayout, d: Device, x: float, top: float, m: float, c
         for k in range(poles):
             cx = x + (k + 0.5) * m
             _fill(layout, cx - 0.22 * m, mid - 0.6 * m, cx + 0.22 * m, mid + 0.6 * m, DARK)
-        if d.kind in (DeviceKind.DIFF, DeviceKind.RCD):  # кнопка «Тест»
+        if d.kind in (DeviceKind.DIFF, DeviceKind.RCD):  # "Test" button
             cx = x1 - 0.5 * m
             layout.add_circle((cx, mid), 0.22 * m, dxfattribs={"layer": E_PANEL.name})
             _text(layout, "T", Vec(cx, mid - 0.55 * m), th)
@@ -204,7 +205,7 @@ def draw_device(layout: BaseLayout, d: Device, x: float, top: float, m: float, c
         )
         _line(layout, [Vec(cx, mid), Vec(cx, mid + 0.8 * m)], DARK, LW_WIRE)
         _text(layout, "I    0    II", Vec(cx, mid + 1.35 * m), th)
-    else:  # АВР
+    else:  # ATS
         _rect(layout, x + 0.3 * m, mid - 0.6 * m, x1 - 0.3 * m, mid + 0.6 * m, true_color=GREY)
         _text(layout, "ATS", Vec((x + x1) / 2, mid), th)
     lines = d.label.split(" ", 1) if d.modules > 1 or len(d.label) > 4 else [d.label]
@@ -218,7 +219,7 @@ def draw_device(layout: BaseLayout, d: Device, x: float, top: float, m: float, c
 def _gutter_labels(
     layout: BaseLayout, g: PanelGroup, x: float, top: float, m: float, color: int
 ) -> None:
-    """Провод группы вниз от автомата и вертикальные подписи по бокам."""
+    """Group wire down from the breaker with vertical labels on both sides."""
     bottom = top - (GUTTER - 0.4) * m
     _line(layout, [Vec(x, top), Vec(x, bottom)], color, LW_WIRE, E_PANEL_WIRE.name)
     layout.add_circle(
@@ -242,7 +243,7 @@ def draw_panel_front(
     name: str,
     language: Language,
 ) -> None:
-    """Щит в лицо от левого верхнего угла места на листе."""
+    """Panel front view from the top-left corner of its space on the sheet."""
     m = fit.m
     groups = {g.group: g for g in panel.groups}
     x0 = top_left.x
@@ -263,12 +264,12 @@ def draw_panel_front(
             lineweight=LW_THIN,
             true_color=GREY,
         )
-    places: dict[str, tuple[float, float]] = {}  # id аппарата → (x середины, верх)
+    places: dict[str, tuple[float, float]] = {}  # device id → (centre x, top)
     for r, row in enumerate(fit.rows):
         top = box_top - (PAD + r * ROW) * m
         dev_top = top - HEAD * m
         rail_y = dev_top - BODY * m / 2
-        # DIN-рейка за аппаратами
+        # DIN rail behind the devices
         _fill(
             layout,
             x0 + PAD * m * 0.6,
@@ -300,7 +301,7 @@ def draw_panel_front(
             places[d.id] = (x + w / 2, dev_top)
             segments.append((x, x + w, d.reserve))
             x += w
-        # Шина над аппаратами: основная и резервная — отдельными кусками
+        # Busbar above the devices: main and backup as separate pieces
         bus_y = dev_top + 0.25 * m
         for reserve in (False, True):
             xs = [(a, b) for a, b, rv in segments if rv is reserve]
@@ -328,7 +329,7 @@ def draw_panel_front(
                     color=RESERVE,
                     align=TextEntityAlignment.MIDDLE_RIGHT,
                 )
-    # Ввод сверху в вводной автомат
+    # Supply from above into the main breaker
     if "QS1" in places:
         cx, top = places["QS1"]
         with tagged(layout, "device", "QS1"):
@@ -356,7 +357,7 @@ def _draw_external(
     th: float,
     language: Language,
 ) -> None:
-    """Инвертор или силовая вилка справа от щита и провод к переключателю резерва."""
+    """Inverter or power plug right of the panel, and the wire to the backup switch."""
     key = "inverter" if panel.backup == "inverter" else "plug"
     ext_id = "U1" if key == "inverter" else "XP1"
     bx0, bx1 = box_right + 1.5 * m, box_right + (SIDE - 0.3) * m
@@ -408,11 +409,11 @@ def _draw_external(
             )
 
 
-# --- Таблица аппаратов и примечания ------------------------------------------
+# --- Device table and notes ---------------------------------------------------
 
 
 def device_rows(panel: BoardPanel, language: Language) -> list[tuple[Device, tuple[str, ...]]]:
-    """Строки таблицы: аппарат → (поз., назначение, аппарат, кабель, P, I)."""
+    """Table rows: device → (pos., purpose, device, cable, P, I)."""
     groups = {g.group: g for g in panel.groups}
     out: list[tuple[Device, tuple[str, ...]]] = []
     dc = panel.dc
@@ -424,7 +425,7 @@ def device_rows(panel: BoardPanel, language: Language) -> list[tuple[Device, tup
             purpose = g.purpose + (ASSUMED if g.purpose_assumed else "")
             p = kw(g.power) + (ASSUMED if g.assumed else "")
             out.append((d, (d.id, purpose, f"{kind} {d.label}{star}", g.cable, p, amps(g.current))))
-        elif dc is not None and d.kind is DeviceKind.DC_BATTERY:  # кабель и ток АКБ
+        elif dc is not None and d.kind is DeviceKind.DC_BATTERY:  # battery cable and current
             v = f"{dc.voltage} В" + (ASSUMED if dc.voltage_assumed else "")
             cable = f"2×{dc.cable:g} мм²"
             out.append((d, (d.id, f"{d.title}, {v}", d.label + star, cable, "", amps(dc.current))))
@@ -433,7 +434,7 @@ def device_rows(panel: BoardPanel, language: Language) -> list[tuple[Device, tup
     return out
 
 
-PURPOSE_MAX = 80.0  # мм листа: длинное назначение обрезается
+PURPOSE_MAX = 80.0  # sheet mm: a long purpose is cut
 
 
 def devices_table(panel: BoardPanel, language: Language, colors: dict[str, int]) -> Table:
@@ -465,7 +466,7 @@ def devices_table(panel: BoardPanel, language: Language, colors: dict[str, int])
 
 
 def panel_notes(panel: BoardPanel, language: Language) -> list[str]:
-    """Расчётная нагрузка, допущения и слабые места — строки под таблицей."""
+    """Design load, assumptions and weak spots: rows under the table."""
     inp = panel.input.label + (ASSUMED if panel.input.assumed else "")
     calc = panel.calculated
     lines = [

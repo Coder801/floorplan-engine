@@ -1,6 +1,6 @@
-"""Строки таблиц сантехники — на лист «Сантехника» и в боковую панель просмотра: приборы
-(номер на листе, подводы, высоты; типовая высота — «*»), трубы по видам и диаметрам,
-примечания (допущения и слабые места)."""
+"""Plumbing table rows for the "Plumbing" sheet and the viewer side panel: fixtures (number on
+the sheet, supplies, heights; a typical height gets "*"), pipes by kind and diameter, notes
+(assumptions and weak spots)."""
 
 from __future__ import annotations
 
@@ -109,7 +109,7 @@ class FixtureRow:
     id: str
     name: str
     room: str
-    supply: str  # «Х, Г»
+    supply: str  # "Х, Г"
     supply_h: str  # «550*»
     drain: str  # «Ø50»
     drain_h: str
@@ -120,7 +120,7 @@ class FixtureRow:
 
 
 def fixture_numbers(plumbing: Plumbing) -> dict[str, int]:
-    """Номер прибора на листе — по порядку в plumbing.yaml."""
+    """Fixture number on the sheet, in plumbing.yaml order."""
     return {f.id: k for k, f in enumerate(plumbing.fixtures, 1)}
 
 
@@ -157,7 +157,7 @@ class PipeRow:
     kind: Kind
     d: int
     count: int
-    length: float  # мм, вся длина без запаса
+    length: float  # mm, full length without margin
     keys: tuple[str, ...]
 
 
@@ -175,7 +175,7 @@ def pipe_rows(net: Network) -> list[PipeRow]:
 
 
 def plumbing_notes(plan: Plan, plumbing: Plumbing, net: Network) -> list[str]:
-    """Примечания листа: трассы и разводка, уклоны, допущения, слабые места."""
+    """Sheet notes: routes and distribution, slopes, assumptions, weak spots."""
     lang = plan.language
     dist = text(f"dist_{net.distribution}", lang)
     s, s110 = (f"{v:g}".replace(".", ",") for v in (SLOPE[50], SLOPE_MIN[110]))
@@ -204,7 +204,7 @@ def plumbing_notes(plan: Plan, plumbing: Plumbing, net: Network) -> list[str]:
 
 
 def water_views(plumbing: Plumbing, net: Network) -> dict[tuple[str, str], list[WaterView]]:
-    """Подводы приборов по стенам — на развёртки (electrical/elevations.wall_elevations)."""
+    """Fixture supplies by wall, for the elevations (electrical/elevations.wall_elevations)."""
     numbers = fixture_numbers(plumbing)
     langs: tuple[Language, ...] = ("ru", "uk")
     names: dict[str, dict[str, str]] = {

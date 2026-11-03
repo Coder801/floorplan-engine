@@ -1,1 +1,1 @@
-"""Водоснабжение и канализация: трассы по полу, проверки уклонов, смета (docs/plumbing.md)."""
+"""Water supply and sewer: floor routes, slope checks, estimate (docs/plumbing.md)."""

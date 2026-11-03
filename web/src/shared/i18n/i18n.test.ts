@@ -3,7 +3,7 @@ import { en } from "./en";
 import { ru } from "./ru";
 import { uk } from "./uk";
 
-// Строки словаря плоско: «drawer.questions» → текст
+// Dictionary strings flattened: "drawer.questions" → text
 function flat(o: object, prefix = ""): Map<string, string> {
   const out = new Map<string, string>();
   for (const [k, v] of Object.entries(o)) {

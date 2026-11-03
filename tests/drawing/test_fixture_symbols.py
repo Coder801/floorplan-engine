@@ -1,4 +1,4 @@
-"""Сантехприборы контуром на плане: у каждого вида свой рисунок, у стены и в помещение."""
+"""Fixture outlines on the plan: each kind has its own drawing, at the wall and into the room."""
 
 from __future__ import annotations
 
@@ -11,14 +11,14 @@ from floorplan_engine.model.plumbing import FixtureType
 
 @pytest.mark.parametrize("kind", list(FixtureType))
 def test_symbol_stays_in_its_place_at_wall(kind: FixtureType) -> None:
-    # Стена — ось x, помещение — вверх; прибор с серединой подводки в x = 1000
+    # The wall is the x axis, the room is up; the fixture's supply middle is at x = 1000
     frame = Frame(Vec(1000.0, 0.0), Vec(1.0, 0.0), Vec(0.0, 1.0))
     shapes = symbol(kind, frame)
     assert shapes and all(len(s.points) >= 2 for s in shapes)
     w, d = SIZES[kind]
     for s in shapes:
         for v in s.points:
-            assert -0.5 <= v.y <= d + 0.5  # от стены в помещение, не глубже типового
+            assert -0.5 <= v.y <= d + 0.5  # from the wall into the room, no deeper than typical
             assert abs(v.x - 1000.0) <= w / 2 + 0.5
 
 

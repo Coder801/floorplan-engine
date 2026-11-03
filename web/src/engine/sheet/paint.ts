@@ -1,4 +1,4 @@
-// Рисование примитивов .epd в canvas по правилам формата (docs/epd-format.md)
+// Drawing .epd primitives into a canvas by the format rules (docs/epd-format.md)
 
 import { MIN_LINE_PX, PNG_DPI, PNG_LONG, PNG_SHORT } from "@/shared/consts";
 import type { Box, Item, Page } from "@/shared/types";
@@ -8,10 +8,10 @@ export interface DrawItem extends Item {
   path: Path2D;
 }
 
-// [цвет, прозрачность, во сколько толще]
+// [colour, opacity, how much thicker]
 export type Look = (it: DrawItem) => [string, number, number];
 
-// На экране — только чертёж: видовой экран листа (view); старые артефакты — целым листом
+// The screen shows only the drawing: the sheet viewport (view); old artifacts show the whole sheet
 export const viewOf = (page: Page): Box => page.view || [0, 0, page.size[0], page.size[1]];
 
 export function inView(page: Page, box: Box): boolean {
@@ -20,8 +20,8 @@ export function inView(page: Page, box: Box): boolean {
   return box[2] >= x0 && box[0] <= x1 && box[3] >= y0 && box[1] <= y1;
 }
 
-// Примитивы по порядку; pxPerMm — для минимальной толщины линии; cableMinPx — на экране
-// линии проводки не тоньше этого (px устройства); в PNG — 0
+// Primitives in order; pxPerMm is for the minimum line width; cableMinPx keeps wiring lines on
+// screen at least this thick (device px); 0 in PNG
 export function paint(ctx: CanvasRenderingContext2D, items: DrawItem[], pxPerMm: number, look: Look,
                       shown: (layer: string) => boolean, cableMinPx = 0) {
   ctx.lineCap = "round"; ctx.lineJoin = "round";
@@ -40,7 +40,7 @@ export function paint(ctx: CanvasRenderingContext2D, items: DrawItem[], pxPerMm:
   ctx.globalAlpha = 1;
 }
 
-// Габариты пути: в d только абсолютные команды, числа идут парами x y
+// Path bounds: d holds only absolute commands, numbers come in x y pairs
 export function bbox(d: string): Box {
   const nums = d.match(/-?\d*\.?\d+(?:e-?\d+)?/gi) || [];
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
@@ -54,7 +54,7 @@ export function bbox(d: string): Box {
 export const inBox = (b: Box, x: number, y: number, t: number) =>
   x >= b[0] - t && x <= b[2] + t && y >= b[1] - t && y <= b[3] + t;
 
-// PNG листа для альбома: весь лист с таблицами и штампом, не больше A3 при 150 dpi
+// Sheet PNG for the album: the whole sheet with tables and title block, at most A3 at 150 dpi
 export function downloadSheetPng(page: Page, filename: string) {
   const [pw, ph] = page.size;
   const k = Math.min(PNG_DPI / 25.4, PNG_LONG / Math.max(pw, ph), PNG_SHORT / Math.min(pw, ph));

@@ -21,7 +21,9 @@ def test_symbols_export(tmp_path: Path) -> None:
 def test_load_env_reads_dotenv_without_overriding(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """.env — в окружение: комментарии и кавычки снимаются, заданное в окружении — главнее."""
+    """.env into the environment: comments and quotes are stripped, values already in the
+    environment win.
+    """
     from floorplan_engine.cli import load_env
 
     env = tmp_path / ".env"
@@ -40,13 +42,15 @@ def test_load_env_reads_dotenv_without_overriding(
     assert os.environ["SHTROBA_T_D"] == "from-env"
     for key in ("SHTROBA_T_A", "SHTROBA_T_B", "SHTROBA_T_C"):
         monkeypatch.delenv(key)
-    load_env(tmp_path / "нет.env")  # файла нет — ничего
+    load_env(tmp_path / "нет.env")  # no file: nothing
 
 
 def test_dev_viewer_factory_reads_projects_from_env(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """`dev` перезапускает API по правке кода: фабрика берёт папку проектов из окружения."""
+    """`dev` restarts the API on code changes: the factory takes the projects folder from the
+    environment.
+    """
     from fastapi.testclient import TestClient
 
     from floorplan_engine.cli import DEV_PROJECTS_ENV, dev_viewer

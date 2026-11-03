@@ -1,7 +1,7 @@
-"""Где символ точки стоит на плане и откуда к нему подходит трасса: якорь (точка вставки,
-направление в помещение, «макушка» символа), стопки точек в одном месте стены, размеры
-символов на листе. Общая основа рисования электрики (drawing/) и расчёта проводки — поэтому
-здесь, а не в рисовании: трасса начинается от макушки символа.
+"""Where a point symbol sits on the plan and where the route reaches it: the anchor (insert
+point, direction into the room, the symbol "tip"), stacks of points at one wall spot, symbol
+sizes on the sheet. Shared by the electrical drawing (drawing/) and the wiring calculation,
+which is why it lives here and not in drawing: a route starts at the symbol tip.
 """
 
 from __future__ import annotations
@@ -14,10 +14,10 @@ from floorplan_engine.model.geometry import RoomGeometry, Vec
 from floorplan_engine.model.scale import sheet
 from floorplan_engine.model.schema import Board, ElectricalPoint, PointType
 
-# Размеры символов, мм листа (блоки рисует drawing/symbols.py)
-WALL_GAP = 0.4  # зазор символа от грани стены
+# Symbol sizes, sheet mm (blocks are drawn by drawing/symbols.py)
+WALL_GAP = 0.4  # symbol gap from the wall face
 SOCKET_R = 2.0
-SOCKET_DEPTH = WALL_GAP + SOCKET_R  # до касательной (линия заземления)
+SOCKET_DEPTH = WALL_GAP + SOCKET_R  # to the tangent line (earth line)
 SWITCH_R = 1.0
 SWITCH_ARM = 3.0
 SWITCH_DEPTH = WALL_GAP + 2 * SWITCH_R + SWITCH_ARM * math.sin(math.radians(45))
@@ -33,8 +33,8 @@ OUTLET_R = 0.8
 OUTLET_DEPTH = WALL_GAP + 2.5
 BOARD_DEPTH = 3.0
 
-# Ключ символа: тип точки, а для двухклавишного выключателя — "switch2"; щит — "board"
-# мм листа: насколько символ выступает от стены (у потолочных — радиус)
+# Symbol key: the point type, "switch2" for a two-key switch, "board" for the panel
+# sheet mm: how far the symbol sticks out from the wall (radius for ceiling ones)
 SYMBOL_DEPTH: dict[str, float] = {
     PointType.SOCKET: SOCKET_DEPTH,
     PointType.SWITCH: SWITCH_DEPTH,
@@ -58,13 +58,13 @@ def symbol_key(pt: ElectricalPoint) -> str:
     return str(pt.type)
 
 
-STACK_GAP_MM = 1.0  # между символами, стоящими в одной точке стены
-STACK_TOLERANCE = 30.0  # мм: точки ближе этого по стене рисуются стопкой
+STACK_GAP_MM = 1.0  # between symbols standing at one wall spot
+STACK_TOLERANCE = 30.0  # mm: wall points closer than this are drawn as a stack
 
 
 @dataclass(frozen=True)
 class Anchor:
-    """Положение символа: точка вставки и направление в помещение (None — потолок)."""
+    """Symbol position: insert point and direction into the room (None for ceiling)."""
 
     pos: Vec
     inward: Vec | None
@@ -73,7 +73,7 @@ class Anchor:
 
     @property
     def node(self) -> Vec:
-        """Точка подключения трассы — «макушка» символа."""
+        """Route connection point: the symbol "tip"."""
         return self.pos if self.inward is None else self.pos + self.inward * self.depth
 
     @property
@@ -99,7 +99,7 @@ def wall_anchor(
 
 
 def point_anchor(pt: ElectricalPoint, geoms: dict[str, RoomGeometry], shift: float = 0.0) -> Anchor:
-    """Положение символа; shift — сдвиг от стены в помещение (для стопки в одной точке)."""
+    """Symbol position; shift moves it from the wall into the room (for a stack at one spot)."""
     depth = SYMBOL_DEPTH[symbol_key(pt)]
     if pt.ceiling is not None:
         origin = Vec(*room_geometry(geoms, pt.room).room.origin)
@@ -112,8 +112,8 @@ def point_anchor(pt: ElectricalPoint, geoms: dict[str, RoomGeometry], shift: flo
 
 
 def stacks(points: Sequence[ElectricalPoint]) -> list[list[int]]:
-    """Точки на одной стене в одном месте (в пределах STACK_TOLERANCE от первой) — розетка
-    под выключателем и т. п., по порядку из YAML; потолочные точки — каждая сама по себе."""
+    """Points on one wall at one spot (within STACK_TOLERANCE of the first): a socket under a
+    switch and so on, in YAML order; each ceiling point stands alone."""
     out: list[list[int]] = []
     for k, pt in enumerate(points):
         if pt.wall is None or pt.offset is None:
@@ -138,7 +138,7 @@ def stacks(points: Sequence[ElectricalPoint]) -> list[list[int]]:
 
 
 def stack_shifts(points: Sequence[ElectricalPoint]) -> list[float]:
-    """Сдвиг каждой точки от стены: следующая в стопке ставится за предыдущей."""
+    """Offset of each point from the wall: the next in a stack goes behind the previous one."""
     shifts = [0.0] * len(points)
     for group in stacks(points):
         acc = 0.0

@@ -1,16 +1,17 @@
-"""Каталог щита: корпуса (боксы) и модели аппаратов производителей — ширина в модулях DIN,
-габарит и вид.
+"""Panel catalogue: enclosures (boxes) and manufacturer device models: width in DIN modules,
+size and kind.
 
-Корпус (`Enclosure`) — реальный щит производителя: рядов, модулей в ряду и габарит; щит в
-лицо рисуется в нём (просмотр, лист «Щит»), аппараты подбираются так, чтобы не выйти за
-корпус (`electrical/panel.choose_enclosure`).
+An enclosure (`Enclosure`) is a real manufacturer panel: rows, modules per row and size; the
+panel front view is drawn inside it (viewer, "Panel" sheet), devices are chosen so they do
+not stick out of it (`electrical/panel.choose_enclosure`).
 
-Аппарат щита (panel.Device) получает модель по бренду щита (`panel.brand` в electrical.yaml)
-и виду аппарата; у бренда нет такой модели — берётся типовая (`generic`). Модель уходит
-в страницу .epd (ключ `panel`): просмотр рисует аппарат по её виду (`style`) и цветам.
+A panel device (panel.Device) gets a model by panel brand (`panel.brand` in electrical.yaml)
+and device kind; if the brand has no such model, the typical one (`generic`) is used. The
+model goes into the .epd page (key `panel`): the viewer draws the device by its kind
+(`style`) and colours.
 
-Сюда добавляются бренды и серии — только с данными из каталога производителя (ширина,
-высота, цвета корпуса); артикулы не выдумываются.
+Brands and series are added here only with data from the manufacturer catalogue (width,
+height, body colours); article numbers are never invented.
 """
 
 from __future__ import annotations
@@ -20,22 +21,22 @@ from enum import StrEnum
 
 
 class DeviceKind(StrEnum):
-    INPUT = "input"  # вводной 2P
-    RELAY = "relay"  # реле напряжения
-    SPD = "spd"  # УЗИП
-    RCD = "rcd"  # УЗО на несколько групп
-    CHANGEOVER = "changeover"  # перекидной I-0-II или обходной
-    ATS = "ats"  # АВР
-    FEED = "feed"  # питание инвертора 2P
-    OUTPUT = "output"  # выход инвертора 2P (AC OUT → АВР или переключатель)
-    BREAKER = "breaker"  # автомат группы 1P
-    DIFF = "diff"  # дифавтомат группы 1P+N
-    DC_BATTERY = "dc_battery"  # автомат АКБ, DC 2P (щит АКБ у инвертора)
-    DC_BREAKER = "dc_breaker"  # автомат строки солнечных панелей, DC 2P
-    DC_SPD = "dc_spd"  # УЗИП строки солнечных панелей, DC (+, −, PE)
+    INPUT = "input"  # main switch 2P
+    RELAY = "relay"  # voltage relay
+    SPD = "spd"  # surge protector
+    RCD = "rcd"  # RCD for several groups
+    CHANGEOVER = "changeover"  # changeover I-0-II or bypass
+    ATS = "ats"  # ATS
+    FEED = "feed"  # inverter supply 2P
+    OUTPUT = "output"  # inverter output 2P (AC OUT → ATS or switch)
+    BREAKER = "breaker"  # group breaker 1P
+    DIFF = "diff"  # group RCBO 1P+N
+    DC_BATTERY = "dc_battery"  # battery breaker, DC 2P (battery box at the inverter)
+    DC_BREAKER = "dc_breaker"  # solar string breaker, DC 2P
+    DC_SPD = "dc_spd"  # solar string surge protector, DC (+, −, PE)
 
 
-MODULE_MM = 17.5  # ширина модуля DIN, мм
+MODULE_MM = 17.5  # DIN module width, mm
 
 
 @dataclass(frozen=True)
@@ -45,11 +46,11 @@ class CatalogModel:
     series: str
     kind: DeviceKind
     modules: int
-    height: float  # мм, по лицевой стороне
-    style: str  # как рисовать: breaker, diff, rcd, relay, spd, changeover, ats, input, feed
-    body: str = "#f4f4f2"  # цвет корпуса
-    lever: str = "#2b2b2b"  # цвет рычага
-    accent: str | None = None  # цвет вставки (у дифавтомата — кнопка «Тест»)
+    height: float  # mm, on the front face
+    style: str  # how to draw: breaker, diff, rcd, relay, spd, changeover, ats, input, feed
+    body: str = "#f4f4f2"  # body colour
+    lever: str = "#2b2b2b"  # lever colour
+    accent: str | None = None  # insert colour (the "Test" button on an RCBO)
 
     def as_dict(self) -> dict[str, object]:
         out: dict[str, object] = {
@@ -87,7 +88,7 @@ GENERIC: dict[DeviceKind, CatalogModel] = {
         _generic(DeviceKind.OUTPUT, 2),
         _generic(DeviceKind.BREAKER, 1),
         _generic(DeviceKind.DIFF, 2, accent="#3a6ea5"),
-        # DC-автомат АКБ на 80–250 А — шире модульного: полтора модуля на полюс
+        # A 80–250 A DC battery breaker is wider than modular: one and a half modules per pole
         _generic(DeviceKind.DC_BATTERY, 3, 90.0, accent="#c62828"),
         _generic(DeviceKind.DC_BREAKER, 2, accent="#c62828"),
         _generic(DeviceKind.DC_SPD, 3, 90.0),
@@ -97,19 +98,19 @@ GENERIC: dict[DeviceKind, CatalogModel] = {
 
 @dataclass(frozen=True)
 class Enclosure:
-    """Корпус щита: ряды DIN-реек по `per_row` модулей, наружный габарит, мм."""
+    """Panel enclosure: rows of DIN rails with `per_row` modules each, outer size, mm."""
 
     id: str  # «hager.VS212PD»
     brand: str
     series: str
-    article: str  # артикул производителя; у подобранного по месту — пусто
+    article: str  # manufacturer article; empty for an on-site enclosure
     rows: int
     per_row: int
     width: float
     height: float
     depth: float
-    pitch: float = 125.0  # шаг реек, мм
-    body: str = "#f6f6f3"  # цвет корпуса
+    pitch: float = 125.0  # rail step, mm
+    body: str = "#f6f6f3"  # body colour
 
     @property
     def modules(self) -> int:
@@ -145,8 +146,8 @@ def _golf(rows: int, per_row: int, width: float, height: float) -> Enclosure:
     )
 
 
-# Hager Golf, наружной установки, белая дверца, IP40 (hager.com/ua, карточки VS…PD):
-# габарит В × Ш × Г; шаг реек 125 мм — разница высот одно- и двухрядного (252 → 377)
+# Hager Golf, surface mounted, white door, IP40 (hager.com/ua, VS…PD cards):
+# size H × W × D; rail step 125 mm is the height difference of one and two rows (252 → 377)
 ENCLOSURES: tuple[Enclosure, ...] = (
     _golf(1, 12, 282.0, 252.0),
     _golf(2, 12, 282.0, 377.0),
@@ -159,22 +160,22 @@ ENCLOSURES: tuple[Enclosure, ...] = (
 )
 ENCLOSURE_BY_ARTICLE = {e.article: e for e in ENCLOSURES}
 
-RAIL_MARGIN = 37.5  # от стенки до рейки у корпуса, подобранного по месту, мм
-TOP_BOTTOM = 126.0  # над первой и под последней осью рейки у такого корпуса, мм
+RAIL_MARGIN = 37.5  # from the wall to the rail for an on-site enclosure, mm
+TOP_BOTTOM = 126.0  # above the first and below the last rail axis for such an enclosure, mm
 
 
 def fitted_enclosure(rows: int, per_row: int) -> Enclosure:
-    """Корпус по месту — когда аппараты не влезают ни в один щит каталога: те же поля и
-    шаг реек, что у Golf."""
+    """On-site enclosure, used when the devices fit no catalogue panel: the same fields and rail
+    step as Golf."""
     width = per_row * MODULE_MM + 2 * RAIL_MARGIN
     height = 2 * TOP_BOTTOM + (rows - 1) * 125.0
     return Enclosure(f"fitted.{rows}x{per_row}", "", "", "", rows, per_row, width, height, 99.0)
 
 
-# Бренд → модели по виду аппарата. Новый бренд — словарь здесь же, по данным производителя
+# Brand → models by device kind. A new brand is a dict right here, from manufacturer data
 BRANDS: dict[str, dict[DeviceKind, CatalogModel]] = {"generic": GENERIC}
 
 
 def model_for(kind: DeviceKind, brand: str = "generic") -> CatalogModel:
-    """Модель аппарата бренда; нет у бренда — типовая."""
+    """Brand device model; the typical one if the brand has none."""
     return BRANDS.get(brand, {}).get(kind) or GENERIC[kind]

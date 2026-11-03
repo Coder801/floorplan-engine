@@ -1,9 +1,10 @@
-"""Превью плана для карточки проекта: SVG из модели, не из DXF.
+"""Plan preview for the project card: SVG from the model, not from the DXF.
 
-Помещения — заливкой по внутреннему контуру, стены — общий силуэт (те же куски стен, что
-на плане, с разрывами проёмов), окна — линией по середине стены. Цвета не задаются: у
-фигур классы `room` и вид помещения (`room_kind`: `wet`, `kitchen`, `outdoor`, `service`,
-`living`), `wall`, `window` — их красит страница (светлая и тёмная тема).
+Rooms are filled along the inner outline, walls are the shared silhouette (the same wall
+pieces as on the plan, with gaps for openings), windows are a line along the wall middle.
+No colours are set: shapes get classes `room` and the room kind (`room_kind`: `wet`,
+`kitchen`, `outdoor`, `service`, `living`), `wall`, `window`; the page colours them (light
+and dark theme).
 """
 
 from __future__ import annotations
@@ -19,10 +20,10 @@ from floorplan_engine.model.geometry import Contour, Vec, room_geometries
 from floorplan_engine.model.schema import OpeningType, Plan
 
 PREVIEW_FILE = "preview.svg"
-PAD_MM = 300  # поле вокруг плана
+PAD_MM = 300  # margin around the plan
 
-# Вид помещения по названию (ru / uk), только для цвета на превью: в расчётах не участвует.
-# Мокрые — по флагу wet, не по названию: санузел без wet виден как пропуск в данных
+# Room kind by name (ru / uk), only for the preview colour: not used in calculations.
+# Wet rooms by the wet flag, not by name: a bathroom without wet shows up as a data gap
 ROOM_WORDS: dict[str, tuple[str, ...]] = {
     "outdoor": ("балкон", "лоджи", "лоджі", "терас"),
     "kitchen": ("кухн", "кухон"),
@@ -38,9 +39,9 @@ ROOM_WORDS: dict[str, tuple[str, ...]] = {
 
 
 def room_kind(name: str, wet: bool) -> str:
-    """Вид помещения для превью: wet — по флагу; иначе — по слову, что стоит в названии
-    раньше всех («Кухня-вітальня, коридор» — кухня, «Зал + коридор» — жилое); не узнали —
-    жилое."""
+    """Room kind for the preview: wet by the flag; otherwise by the word that comes first in the
+    name ("Кухня-вітальня, коридор" is a kitchen, "Зал + коридор" is living); unknown means
+    living."""
     if wet:
         return "wet"
     low = name.lower()
@@ -54,12 +55,12 @@ def room_kind(name: str, wet: bool) -> str:
 
 
 def _y(y: float) -> str:
-    """y в SVG: ось вниз — план переворачивается (0.0 - y, а не -y: без «-0»)."""
+    """y in SVG: the axis points down, so the plan is flipped (0.0 - y, not -y: avoids "-0")."""
     return f"{0.0 - y:.0f}"
 
 
 def _ring(points: Iterable[Sequence[float]]) -> str:
-    """Замкнутый контур пути SVG."""
+    """Closed contour of an SVG path."""
     pts = [f"{p[0]:.0f} {_y(p[1])}" for p in points]
     return "M" + " L".join(pts) + " Z"
 
@@ -71,7 +72,7 @@ def _polygons(geom: BaseGeometry) -> list[Polygon]:
 
 
 def _path(geom: BaseGeometry) -> str:
-    """Многоугольники с дырами — один путь (правило заливки evenodd)."""
+    """Polygons with holes as one path (evenodd fill rule)."""
     rings: list[str] = []
     for poly in _polygons(geom):
         rings.append(_ring(poly.exterior.coords[:-1]))
@@ -85,7 +86,7 @@ def _box(points: Sequence[Vec]) -> tuple[float, float, float, float]:
 
 
 def plan_thumbnail(plan: Plan, contours: dict[str, Contour]) -> str:
-    """SVG-превью плана в мм модели; размер задаёт страница (viewBox по плану)."""
+    """SVG plan preview in model mm; the page sets the size (viewBox fits the plan)."""
     geoms = room_geometries(plan, contours)
     walls = unary_union([p.polygon for g in geoms for p in wall_pieces(g)])
     outline = [v for g in geoms for v in (*g.contour.vertices, *g.corners)]

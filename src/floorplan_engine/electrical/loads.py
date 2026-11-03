@@ -1,7 +1,7 @@
-"""Потребители и группы щита: мощность точки (`power` или типовая по виду и пометке —
-допущение «*»), нагрузка группы и ток, автомат группы (из модели или по виду: свет 10 А,
-розетки 16 А, тяжёлые — по току, не больше, чем держит кабель), перегруженная группа —
-линиями на щите (QF8 → QF8, QF8.2). Однофазный ввод 230 В."""
+"""Loads and panel groups: point power (`power`, or a typical value by kind and note, marked
+"*" as an assumption), group load and current, group breaker (from the model or by kind:
+lighting 10 A, sockets 16 A, heavy loads by current, no more than the cable can carry), an
+overloaded group is split into lines on the panel (QF8 → QF8, QF8.2). Single-phase 230 V supply."""
 
 from __future__ import annotations
 
@@ -16,14 +16,14 @@ from floorplan_engine.model.schema import Electrical, ElectricalPoint, PanelSche
 from floorplan_engine.model.texts import Language, tr
 
 VOLTAGE = 230.0
-COS_PHI = 1.0  # коэффициент мощности: в квартире преобладает активная нагрузка (допущение)
-RATINGS = (6, 10, 16, 20, 25, 32, 40, 50, 63)  # ряд номиналов автоматов, А
+COS_PHI = 1.0  # power factor: a flat is mostly resistive load (assumption)
+RATINGS = (6, 10, 16, 20, 25, 32, 40, 50, 63)  # breaker rating series, A
 LIGHT_A = 10
 SOCKETS_A = 16
-HEAVY_W = 2000.0  # от этой мощности потребитель — тяжёлый: своя линия
-SOCKET_POST_W = 100.0  # расчётная мощность поста розетки без пометки (допущение)
-OUTLET_W = 1000.0  # вывод к технике без пометки (допущение)
-# Сечение, мм² → (рекомендуемый, наибольший) автомат, А: медь, скрытая проводка
+HEAVY_W = 2000.0  # from this power a load is heavy and gets its own line
+SOCKET_POST_W = 100.0  # design power of a socket post without a note (assumption)
+OUTLET_W = 1000.0  # appliance output without a note (assumption)
+# Cross-section, mm² → (recommended, maximum) breaker, A: copper, concealed wiring
 CABLE_LIMITS: dict[float, tuple[int, int]] = {
     1.5: (10, 16),
     2.5: (16, 25),
@@ -32,7 +32,7 @@ CABLE_LIMITS: dict[float, tuple[int, int]] = {
     10.0: (40, 50),
     16.0: (63, 63),
 }
-# Типовая мощность точек по виду, Вт (допущение)
+# Typical point power by kind, W (assumption)
 TYPE_W: dict[PointType, float] = {
     PointType.LIGHT: 100.0,
     PointType.PENDANT: 100.0,
@@ -40,7 +40,7 @@ TYPE_W: dict[PointType, float] = {
     PointType.DOWNLIGHT: 10.0,
     PointType.LED_OUTPUT: 50.0,
 }
-# Типовая мощность по пометке точки, Вт (допущение); первое совпадение
+# Typical power by point note, W (assumption); first match wins
 NOTE_W: tuple[tuple[re.Pattern[str], float], ...] = tuple(
     (re.compile(p, re.IGNORECASE), w)
     for p, w in (
@@ -63,17 +63,17 @@ NOTE_W: tuple[tuple[re.Pattern[str], float], ...] = tuple(
         (r"домофон|роутер|відеоспост|видеонаб", 20.0),
     )
 )
-# Что по умолчанию держит резервная шина: свет, розетки кухни и эти потребители (по пометке)
+# What the backup bus carries by default: lighting, kitchen sockets and these loads (by note)
 RESERVE_NOTE = re.compile(r"холодил|котел|котёл|котл|роутер|насос|ворот|домофон", re.IGNORECASE)
 KITCHEN = re.compile(r"кух", re.IGNORECASE)
-# Мокрая зона по названию, если в room.yaml нет wet: true (допущение)
+# Wet zone by name when room.yaml has no wet: true (assumption)
 WET_NAME = re.compile(r"санв|сануз|ванн|душ|пральн|прачеч|постироч", re.IGNORECASE)
-# Пусковой ток: такой группе характеристика C и в premium
+# Inrush current: such a group gets curve C even in premium
 MOTOR = re.compile(r"кондиц|кондиціон|насос|ворот|компрес", re.IGNORECASE)
 
 
 def demand_factor(installed_kw: float) -> float:
-    """Коэффициент спроса квартиры по установленной мощности (допущение)."""
+    """Flat demand factor by installed power (assumption)."""
     if installed_kw <= 10:
         return 0.8
     if installed_kw <= 15:
@@ -88,7 +88,7 @@ def current(watts: float) -> float:
 
 
 def rating_for(amps: float, floor: int = SOCKETS_A) -> int:
-    """Ближайший номинал ряда не меньше тока и не меньше floor."""
+    """Nearest rating in the series not below the current and not below floor."""
     return next((r for r in RATINGS if r >= max(amps, floor)), RATINGS[-1])
 
 
@@ -96,7 +96,7 @@ _SECTION = re.compile(r"(\d+)\s*[xх×*]\s*(\d+(?:[.,]\d+)?)", re.IGNORECASE)
 
 
 def cable_section(mark: str) -> float | None:
-    """Сечение жилы из марки «3x2.5», «ВВГнг 3х2,5»; не разобрать — None."""
+    """Conductor cross-section from a type like "3x2.5", "ВВГнг 3х2,5"; None if unreadable."""
     m = _SECTION.search(mark)
     return float(m.group(2).replace(",", ".")) if m else None
 
@@ -105,7 +105,7 @@ _BREAKER = re.compile(r"^\s*([BCD])?\s*(\d+)", re.IGNORECASE)
 
 
 def parse_breaker(text: str) -> tuple[str, int] | None:
-    """«C16» → ("C", 16); «16 А» → ("C", 16); не разобрать — None."""
+    """Parse a rating: "C16" → ("C", 16); "16 А" → ("C", 16); None if unreadable."""
     m = _BREAKER.match(text)
     if m is None:
         return None
@@ -120,14 +120,14 @@ class Kind(StrEnum):
 
 @dataclass(frozen=True)
 class Load:
-    """Потребитель: точка модели с мощностью."""
+    """Load: a model point with its power."""
 
-    point: str  # id точки
-    room: str  # название помещения
+    point: str  # point id
+    room: str  # room name
     title: str
     count: int
-    power: float  # Вт, на точку целиком
-    assumed: bool  # мощность типовая, не из источника
+    power: float  # W, for the whole point
+    assumed: bool  # typical power, not from the source
 
     @property
     def heavy(self) -> bool:
@@ -138,7 +138,7 @@ class Load:
 class Breaker:
     curve: str
     rating: int
-    assumed: bool  # подобран кодом, а не из модели
+    assumed: bool  # chosen by code, not from the model
 
     @property
     def label(self) -> str:
@@ -152,13 +152,13 @@ class PanelGroup:
     purpose: str
     purpose_assumed: bool
     loads: tuple[Load, ...]
-    cable: str  # марки кабелей группы через запятую
-    section: float | None  # наименьшее сечение
+    cable: str  # group cable types, comma-separated
+    section: float | None  # smallest cross-section
     breaker: Breaker
-    rcd: str | None  # «30 мА» — дифавтомат или под УЗО
+    rcd: str | None  # "30 мА": RCBO or behind an RCD
     wet: bool
     reserved: bool
-    split_of: str | None = None  # линия перегруженной группы, разделённой на щите
+    split_of: str | None = None  # line of an overloaded group split on the panel
 
     @property
     def power(self) -> float:
@@ -174,7 +174,7 @@ class PanelGroup:
 
 
 def point_load(p: ElectricalPoint, rooms: dict[str, str], language: Language) -> Load | None:
-    """Потребитель по точке; выключатель без пометки и слаботочка — None."""
+    """Load for a point; None for a switch without a note and for low-voltage."""
     room = rooms.get(p.room, p.room)
     note_w = next((w for rx, w in NOTE_W if p.note and rx.search(p.note)), None)
     title = p.note[0].upper() + p.note[1:] if p.note else tr(f"symbol_{p.type.value}", language)
@@ -203,7 +203,7 @@ def _kind(points: Sequence[ElectricalPoint], loads: Sequence[Load], section: flo
 
 
 def _breaker(kind: Kind, amps_: float, section: float | None, curve: str) -> Breaker:
-    """Автомат по виду группы, но не больше рекомендуемого для кабеля."""
+    """Breaker by group kind, but no larger than recommended for the cable."""
     rating = {Kind.LIGHT: LIGHT_A, Kind.SOCKETS: SOCKETS_A}.get(kind) or rating_for(amps_)
     if section is not None and section in CABLE_LIMITS:
         rating = min(rating, CABLE_LIMITS[section][0])
@@ -211,8 +211,8 @@ def _breaker(kind: Kind, amps_: float, section: float | None, curve: str) -> Bre
 
 
 def split_loads(loads: Sequence[Load], capacity: float) -> list[list[Load]]:
-    """Нагрузки по линиям не больше capacity, Вт: крупные — первыми, каждая — в первую
-    линию, где хватает места (порядок внутри линии — как в модели)."""
+    """Loads split into lines of at most capacity W: largest first, each into the first line with
+    room left (order inside a line follows the model)."""
     lines: list[list[Load]] = []
     for ld in sorted(loads, key=lambda x: -x.power):
         line = next((ln for ln in lines if sum(x.power for x in ln) + ld.power <= capacity), None)
@@ -225,7 +225,7 @@ def split_loads(loads: Sequence[Load], capacity: float) -> list[list[Load]]:
 
 
 def _wet_group(points: Sequence[ElectricalPoint], wet_rooms: set[str]) -> bool:
-    """Розетки или выводы в мокром помещении — группе нужно УЗО."""
+    """Sockets or outputs in a wet room: the group needs an RCD."""
     return any(
         p.room in wet_rooms and p.type in (PointType.SOCKET, PointType.OUTLET) for p in points
     )
@@ -243,7 +243,7 @@ def panel_groups(
     for g in sorted(names, key=group_key):
         points = [p for p in elec.points if p.group == g]
         if points and all(p.type in LOW for p in points):
-            continue  # слаботочка — не в щите
+            continue  # low-voltage: not in the panel
         loads = [ld for p in points if (ld := point_load(p, rooms, lang)) is not None]
         marks = sorted({c.cable for c in elec.cables if c.group == g})
         sections = [s for m in marks if (s := cable_section(m)) is not None]
@@ -292,7 +292,7 @@ def panel_groups(
         if base.current <= breaker.rating or len(lines) < 2:
             out.append(base)
             continue
-        # Перегруз: линии на щите, у каждой — свой автомат того же номинала (вопрос)
+        # Overload: lines on the panel, each with its own breaker of the same rating (a question)
         by_id = {p.id: p for p in points}
         for k, line in enumerate(lines, 1):
             pts = [by_id[ld.point] for ld in line]

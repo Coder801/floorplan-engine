@@ -1,8 +1,9 @@
-"""Сантехника для просмотра: карточки объектов (подсказки), таблицы боковой панели листа
-«Сантехника», смета для вкладки «Смета» и трубы для 3D-сцены. Новых расчётов нет — сеть
-из plumbing/network.py, строки — plumbing/rows.py, смета — plumbing/estimate.py.
+"""Plumbing for the viewer: object cards (hints), side panel tables of the "Plumbing" sheet,
+the estimate for the "Estimate" tab and pipes for the 3D scene. No new calculations: the
+network comes from plumbing/network.py, rows from plumbing/rows.py, the estimate from
+plumbing/estimate.py.
 
-Ключи объектов — как в XDATA (drawing/plumbing.py): fixture:<id>, pipe:<id>,
+Object keys match the XDATA (drawing/plumbing.py): fixture:<id>, pipe:<id>,
 riser:<id>, collector:<id>, obstacle:<id>.
 """
 
@@ -25,8 +26,8 @@ from floorplan_engine.plumbing.network import SCREED_MM, Network, Pipe, fixture_
 from floorplan_engine.plumbing.rows import fixture_numbers, fixture_rows, pipe_rows, plumbing_notes
 from floorplan_engine.plumbing.rows import text as rows_text
 
-FLOOR_Z_MM = 30.0  # вода в стяжке — чуть выше пола сцены, чтобы её было видно
-SEWER_MIN_Z_MM = 30.0  # канализация в стяжке — на полу сцены: ось не ниже
+FLOOR_Z_MM = 30.0  # water in the screed: slightly above the scene floor so it is visible
+SEWER_MIN_Z_MM = 30.0  # sewer in the screed: on the scene floor, axis not lower
 
 TEXT: dict[str, dict[str, str]] = {
     "room": {"ru": "Помещение", "uk": "Приміщення"},
@@ -80,7 +81,7 @@ def _m(mm: float) -> str:
 
 
 def plumbing_objects(plan: Plan, plumbing: Plumbing, net: Network) -> dict[str, ObjectInfo]:
-    """Карточки объектов сантехники по ключу «тип:id»."""
+    """Plumbing object cards by "type:id"."""
     lang = plan.language
     rooms = {r.id: r.name for r in plan.rooms}
     numbers = fixture_numbers(plumbing)
@@ -198,7 +199,7 @@ def _pipe_title(p: Pipe, lang: Language) -> str:
 def plumbing_tables(
     plan: Plan, plumbing: Plumbing, net: Network, prices: Prices | None
 ) -> dict[str, list[SideTable]]:
-    """Таблицы боковой панели листа «Сантехника» и смета для вкладки «Смета»."""
+    """Side panel tables of the "Plumbing" sheet and the estimate for the "Estimate" tab."""
     lang = plan.language
     out: list[SideTable] = []
     fixtures = fixtures_table(plan, plumbing, net)
@@ -220,19 +221,21 @@ def plumbing_tables(
 
 
 def plumbing_scene(net: Network, ceiling: float) -> dict[str, Any]:
-    """Сантехника для 3D-сцены (ключ scene, рядом с проводкой): трубы по высоте — вода по
-    полу в стяжке и вверх к водорозетке у стены; канализация от выпуска с уклоном к стояку;
-    приборы — точками у стены; стояки — вертикалью от пола до потолка. Канализация: от
-    врезки в стояк вверх по уклону вдоль стен, у прибора — вверх в стене к выпуску."""
+    """Plumbing for the 3D scene (key scene, next to wiring): pipes by height: water on the floor in
+    the screed and up to the water outlet at the wall; sewer from the drain with a slope to the
+    riser; fixtures as points at the wall; risers vertical from floor to ceiling. Sewer: from the
+    riser inlet up along the slope along walls, at the fixture up inside the wall to the drain."""
     pipes: dict[str, dict[str, Any]] = {}
     by_fixture = {(o.fixture, o.kind): o for o in net.outlets}
     for p in net.pipes:
         pts = list(p.path)
         color = f"#{COLORS[p.kind]:06x}"
         if p.kind == "sewer":
-            # Ось от чистого пола: низ трубы от плиты (network: z0, slope) минус стяжка плюс
-            # радиус; в стяжке — на полу сцены, чтобы было видно. У прибора — вверх в стене
-            # к выпуску; выпуск ниже трубы — подиум, вертикали нет
+            # Axis from the finished floor: pipe bottom from the slab (network: z0, slope) minus the
+            # screed plus the radius; in the screed it sits on the scene floor so it is visible. At
+            # the
+            # fixture it goes up in the wall to the drain; a drain below the pipe means a podium, no
+            # vertical
             lift = p.d / 2 - SCREED_MM
             z = p.z0 + lift
             z_pts = [[round(pts[0].x, 1), round(pts[0].y, 1), round(max(z, SEWER_MIN_Z_MM), 1)]]

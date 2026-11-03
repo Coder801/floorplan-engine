@@ -1,6 +1,7 @@
-"""Вопросы этапа «Щит» (panel_*): резерв, ввод, состав резервной шины, разделённая на щите
-группа, кабель тяжёлого прибора; у инвертора — АКБ, солнечные панели, место щита АКБ.
-Составляет код; ответы — в answers.yaml, накладывает answers.apply_auto_answers."""
+"""The "Panel" stage questions (panel_*): backup, supply, backup bus contents, a group split on the
+panel, the cable of a heavy appliance; with an inverter also the battery, solar panels and
+the battery box location. Built by code; answers go to answers.yaml and are applied by
+answers.apply_auto_answers."""
 
 from __future__ import annotations
 
@@ -16,19 +17,19 @@ from floorplan_engine.electrical.panel_text import amps, kw
 from floorplan_engine.model.intake import QSeverity, Question, Stage
 from floorplan_engine.model.schema import Electrical
 
-AUTO_PREFIX = "panel_"  # id вопросов, которые составляет код; в intake.yaml такие не пишутся
+AUTO_PREFIX = "panel_"  # ids of questions built by code; they are never written in intake.yaml
 BACKUP_OPTIONS = ["none", "inverter", "plug"]
 
 
 def cable_for(amps_: float) -> str | None:
-    """Наименьшее сечение, для которого рекомендуемый автомат держит ток: «3x6»."""
+    """Smallest cross-section whose recommended breaker carries the current: "3x6"."""
     s = next((s for s, (rec, _) in sorted(CABLE_LIMITS.items()) if rec >= amps_), None)
     return f"3x{s:g}" if s is not None else None
 
 
 def panel_questions(elec: Electrical, panel: BoardPanel) -> list[Question]:
-    """Вопросы щита по расчёту: резерв и ввод, если не заданы; разделённые группы;
-    прибор больше автомата своей группы; состав резервной шины по умолчанию."""
+    """Panel questions from the calculation: backup and supply if unset; split groups; an appliance
+    larger than its group breaker; default backup bus contents."""
     out: list[Question] = []
     setup = elec.panel
     if setup.backup is None:
@@ -107,8 +108,8 @@ def panel_questions(elec: Electrical, panel: BoardPanel) -> list[Question]:
 
 
 def _dc_questions(elec: Electrical, panel: BoardPanel) -> list[Question]:
-    """Щит АКБ: напряжение АКБ, строки панелей — если не заданы; место инвертора и АКБ —
-    всегда, пока не отвечено (на плане его нет)."""
+    """Battery box: battery voltage and solar strings if unset; inverter and battery location
+    always, until answered (it is not on the plan)."""
     assert panel.dc is not None
     dc, setup, out = panel.dc, elec.panel, []
     if setup.npe_relay is None:

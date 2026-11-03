@@ -1,8 +1,8 @@
-"""Адаптер векторного PDF (pdfplumber): страница → надписи и отрезки, координаты в pt.
+"""Vector PDF adapter (pdfplumber): page → labels and segments, coordinates in pt.
 
-Надписи собираются из символов: направление — по матрице символа, слова и числа
-с разделителем тысяч («3 842») — по зазорам между символами. Уверенность — 1: в векторе
-текст и координаты точные.
+Labels are assembled from characters: the direction from the character matrix, words and
+numbers with a thousands separator ("3 842") from the gaps between characters. Confidence is
+1: text and coordinates in a vector are exact.
 """
 
 from __future__ import annotations
@@ -16,8 +16,8 @@ import pdfplumber
 
 from floorplan_engine.service.facts.primitives import Direction, Label, Segment, Sheet
 
-GAP_SPACE = 0.15  # зазор больше этой доли высоты шрифта — пробел
-GAP_SPLIT = 0.6  # больше этой — новая надпись
+GAP_SPACE = 0.15  # a gap larger than this fraction of the font height is a space
+GAP_SPLIT = 0.6  # larger than this starts a new label
 
 
 def read_pdf(path: Path, name: str | None = None) -> list[Sheet]:
@@ -35,7 +35,7 @@ def _char_direction(char: dict[str, Any]) -> Direction | None:
     a, b = char["matrix"][0], char["matrix"][1]
     if a > 0.9:
         return "h"
-    if b > 0.9:  # повёрнут на 90° против часовой: читается снизу вверх
+    if b > 0.9:  # rotated 90° counter-clockwise: reads bottom to top
         return "v"
     return None
 
@@ -51,7 +51,7 @@ def _labels(page: Any) -> list[Label]:
         if direction is None or not c["text"].strip():
             continue
         if direction == "h":
-            # (база, начало, конец, середина поперёк, высота, текст)
+            # (baseline, start, end, middle across, height, text)
             item = (
                 c["matrix"][5],
                 c["x0"],

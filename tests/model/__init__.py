@@ -1,1 +1,1 @@
-"""Тесты модели: контур и геометрия помещений, intake и ответы."""
+"""Model tests: room outline and geometry, intake and answers."""

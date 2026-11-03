@@ -1,4 +1,4 @@
-// «Скачать» в правом верхнем углу чертежа: PNG листа для альбома или DXF всего проекта
+// "Download" in the top-right corner of the drawing: sheet PNG for the album or the DXF of the whole project
 
 import { useTranslation } from "react-i18next";
 import { usePopover } from "@/shared/popover";
@@ -6,7 +6,7 @@ import menu from "@/shared/styles/menu.module.scss";
 import css from "./DownloadMenu.module.scss";
 
 interface Props {
-  onPng: (() => void) | null;   // нет — лист не открыт (исходник, загрузка)
+  onPng: (() => void) | null;   // missing means no sheet is open (a source, loading)
   dxf: { href: string; name: string } | null;
 }
 

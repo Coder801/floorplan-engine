@@ -1,8 +1,8 @@
-"""Таблицы на листе (мм листа): линии и тексты, без ACAD_TABLE — так их одинаково
-открывает любая CAD-программа.
+"""Tables on the sheet (sheet mm): lines and texts, no ACAD_TABLE, so any CAD program opens
+them the same way.
 
-Экспликация помещений: площади — поля AutoCAD от контуров помещений в модели,
-итог — поле-сумма; поменяли стену и контур в AutoCAD — таблица пересчитается.
+Room schedule: areas are AutoCAD fields from the room outlines in the model, the total is a
+sum field; change a wall and its outline in AutoCAD and the table recalculates.
 """
 
 from __future__ import annotations
@@ -35,21 +35,21 @@ ROW_H = 8.0
 HEADER_H = 12.0
 CELL_PAD = 2.0
 TITLE_GAP = 3.0
-TEXT_GAP = 1.0  # мм листа: запас к ширине текста по метрикам, чтобы он не касался линий
+TEXT_GAP = 1.0  # sheet mm: margin added to the metric text width so it does not touch the lines
 
 
 @dataclass(frozen=True)
 class Mark:
-    """Ячейка с цветным кружком перед текстом: группа щита цветом её линий."""
+    """Cell with a coloured dot before the text: a panel group in the colour of its lines."""
 
     text: str
     color: int  # true color, 0xRRGGBB
 
 
-# Ячейка: готовый текст, текст с цветным кружком или функция, которая заполнит
-# MTEXT-носитель (поле AutoCAD)
+# Cell: ready text, text with a coloured dot, or a function that fills the
+# MTEXT host (AutoCAD field)
 Cell = str | Mark | Callable[[MText], None]
-MARK_R = 1.1  # радиус кружка на листе, мм
+MARK_R = 1.1  # dot radius on the sheet, mm
 
 
 @dataclass(frozen=True)
@@ -64,8 +64,8 @@ class Table:
     title: str
     columns: tuple[Column, ...]
     rows: tuple[tuple[Cell, ...], ...]
-    total: tuple[Cell, ...] | None = None  # итоговая строка, отделена основной линией
-    row_h: float = ROW_H  # высота строки; длинные ведомости (смета) — плотнее
+    total: tuple[Cell, ...] | None = None  # total row, separated by a thick line
+    row_h: float = ROW_H  # row height; long schedules (estimate) are denser
     header_h: float = HEADER_H
 
     @property
@@ -119,7 +119,7 @@ def _rgb(color: int) -> RGB:
 
 
 def draw_table(layout: BaseLayout, table: Table, top_left: Vec) -> None:
-    """Название над таблицей, шапка, строки, итог; основные линии — контур и шапка."""
+    """Title above the table, header, rows, total; thick lines are the outline and the header."""
     x0, y = top_left.x, top_left.y
     title_at = Vec(x0 + table.width / 2, y - TEXT_ROOM_MM / 2)
     add_text(layout, table.title, title_at, TEXT_ROOM_MM, A_TEXT.name, scale=1.0)
@@ -135,7 +135,7 @@ def draw_table(layout: BaseLayout, table: Table, top_left: Vec) -> None:
     if table.total is not None:
         rows.append((table.total, table.row_h))
     for k, (cells, h) in enumerate(rows):
-        # Основная линия — над таблицей, под шапкой и над итогом
+        # Thick line above the table, under the header and above the total
         thick = k == 0 or k == 1 or (table.total is not None and k == len(rows) - 1)
         _line(layout, Vec(x0, y), Vec(xs[-1], y), thick)
         for cell, col, cx in zip(cells, table.columns, xs[:-1], strict=True):
@@ -147,13 +147,13 @@ def draw_table(layout: BaseLayout, table: Table, top_left: Vec) -> None:
 
 
 def name_width(names: list[str]) -> float:
-    """Ширина колонки наименований под самый длинный текст, мм листа (по метрикам шрифта)."""
+    """Width of the name column for the longest text, sheet mm (from font metrics)."""
     longest = max(text_width(n, TEXT_DIM_MM) for n in names)
     return max(40.0, longest + 2 * CELL_PAD + TEXT_GAP)
 
 
 def room_schedule(plan: Plan, areas: dict[str, RoomArea]) -> Table:
-    """Экспликация помещений: №, наименование, площадь (поле), итог (поле-сумма)."""
+    """Room schedule: No., name, area (field), total (sum field)."""
     lang = plan.language
     columns = (
         Column(tr("schedule_no", lang), 12.0),

@@ -1,7 +1,7 @@
-"""Общие сведения о проекте для первой вкладки просмотра (ключ overview манифеста .epd):
-объект из штампа, помещения с площадями, высота потолка, что заложено — точки по видам,
-щит, сантехника (приборы, вода, канализация, итог её сметы). Только то, что уже посчитано
-из исходных данных: новых расчётов здесь нет. Варианты проводки — отдельным ключом манифеста
+"""Project overview for the first viewer tab (manifest key overview of the .epd): the object from
+the title block, rooms with areas, ceiling height, what is planned: points by kind, panel,
+plumbing (fixtures, water, sewer, its estimate total). Only what is already computed from
+the source data: no new calculations here. Wiring variants are a separate manifest key
 (pipeline.variant_block).
 """
 
@@ -29,9 +29,9 @@ def overview_data(
     net: Network | None = None,
     plumbing_estimate: Estimate | None = None,
 ) -> dict[str, Any]:
-    """Объект, помещения, потолок, точки по видам (как в условных обозначениях), щит и
-    сантехника; plumbing_estimate — смета сантехники (та же, что out/plumbing-estimate.*):
-    её итог — в итоге проекта вместе со сметой электрики выбранного варианта."""
+    """Object, rooms, ceiling, points by kind (as in the legend), panel and plumbing;
+    plumbing_estimate is the plumbing estimate (the same as out/plumbing-estimate.*): its total
+    goes into the project total together with the electrical estimate of the chosen variant."""
     sheet = plan.sheet
     areas = {r.id: round(contours[r.id].area_m2, 2) for r in plan.rooms if r.id in contours}
     rooms = [
@@ -51,7 +51,7 @@ def overview_data(
         "language": plan.language,
         "rooms": rooms,
         "area": round(sum(areas.values()), 2),
-        # не задана в room.yaml — 2700 допущением (как на листе проводки)
+        # not set in room.yaml: 2700 as an assumption (as on the wiring sheet)
         "ceiling": {
             "height": plan.ceiling_height,
             "assumed": "ceiling_height" not in plan.model_fields_set,
@@ -98,9 +98,9 @@ def _m(mm: float) -> float:
 
 
 def plumbing_overview(plumbing: Plumbing, net: Network, language: Language) -> dict[str, Any]:
-    """Сантехника: приборы по видам, вода (разводка, источник горячей, длины, водорозетки) и
-    канализация (длины по диаметрам, стояки, отводы 45°, косые тройники). Длины — по трассам,
-    без запаса сметы."""
+    """Plumbing: fixtures by kind, water (distribution, hot water source, lengths, water outlets)
+    and sewer (lengths by diameter, risers, 45° bends, angled tees). Lengths along routes,
+    without the estimate margin."""
     fixtures: dict[FixtureType, int] = {}
     for fx in plumbing.fixtures:
         fixtures[fx.type] = fixtures.get(fx.type, 0) + 1

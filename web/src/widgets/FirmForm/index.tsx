@@ -1,5 +1,5 @@
-// Регистрация фирмы при первом входе (service/api/auth.py, /api/auth/firm): название, чем
-// занимается (вид — studio.business), город и телефон по желанию. Фирма — одна на человека.
+// Firm registration on first login (service/api/auth.py, /api/auth/firm): name, what it does
+// (the kind, studio.business), city and phone optionally. One firm per person.
 
 import { type FormEvent, useState } from "react";
 import { useTranslation } from "react-i18next";

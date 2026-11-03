@@ -1,2 +1,2 @@
-"""Расчёты электрики: проводка через коробки и трассы, линии и группы щита, номера
-точек, спецификация, смета, щит в лицо, развёртки стен."""
+"""Electrical calculations: wiring through boxes and routes, panel lines and groups, point
+numbers, specification, estimate, panel front view, wall elevations."""

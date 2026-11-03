@@ -1,11 +1,12 @@
-"""Варианты проводки (docs/wiring-variants.md): режим (эконом, стандарт, премиум), трасса
-(потолок, пол) и разводка (через коробки; шлейф через подрозетники — позже). Точки — из
-проекта, вариант меняет только то, как тянуть. Строятся все варианты проекта
-(project_variants: без трасс, которых в проекте не будет — electrical.yaml routes):
-выбранный — листами, остальные — сводкой для сравнения (variant_summary), без чертежей.
+"""Wiring variants (docs/wiring-variants.md): mode (economy, standard, premium), route (ceiling,
+floor) and distribution (through boxes; daisy chain through flush boxes later). Points come
+from the project; a variant only changes how cable is run. All project variants are built
+(project_variants: without routes the project will not have, see electrical.yaml routes):
+the chosen one as sheets, the others as a summary for comparison (variant_summary), with no
+drawings.
 
-Вариант «как в проекте» (default_variant) — режим и трассы из electrical.yaml как есть;
-у остальных трасса одна на все кабели.
+The "as in project" variant (default_variant) uses the mode and routes from electrical.yaml
+as is; the others use one route for all cables.
 """
 
 from __future__ import annotations
@@ -42,19 +43,19 @@ def all_variants() -> list[Variant]:
 
 
 def project_routes(elec: Electrical) -> tuple[WireRoute, ...]:
-    """Трассы, допустимые в проекте: electrical.yaml routes, нет — все."""
+    """Routes allowed in the project: electrical.yaml routes, or all if unset."""
     return ROUTES if elec.routes is None else tuple(r for r in ROUTES if r in elec.routes)
 
 
 def project_variants(elec: Electrical) -> list[Variant]:
-    """Варианты проекта: все, кроме трасс, которых в проекте не будет (routes)."""
+    """Project variants: all except routes the project will not have (routes)."""
     routes = project_routes(elec)
     return [v for v in all_variants() if v.route in routes]
 
 
 def default_variant(elec: Electrical) -> Variant:
-    """Вариант «как в проекте»: режим из electrical.yaml; трасса — общая (route), а без неё
-    по полу, если все кабели по полу."""
+    """The "as in project" variant: mode from electrical.yaml; route is the shared one (route), and
+    without it, floor if all cables run on the floor."""
     if elec.route is not None:
         return Variant(mode=elec.mode, route=elec.route)
     floor = bool(elec.cables) and all(c.route == "floor" for c in elec.cables)
@@ -62,8 +63,8 @@ def default_variant(elec: Electrical) -> Variant:
 
 
 def apply_variant(elec: Electrical, variant: Variant) -> Electrical:
-    """Электрика варианта: точки те же; режим — варианта; трасса — одна на все кабели (у
-    варианта «как в проекте» трассы кабелей не трогаются)."""
+    """Variant electrical model: same points; the variant's mode; one route for all cables (the
+    "as in project" variant leaves cable routes untouched)."""
     if variant == default_variant(elec):
         return elec
     cables = [c.model_copy(update={"route": variant.route}) for c in elec.cables]
@@ -74,24 +75,24 @@ def apply_variant(elec: Electrical, variant: Variant) -> Electrical:
 def variant_electrical(
     plan: Plan, contours: dict[str, Contour], source: Electrical, variant: Variant
 ) -> Electrical:
-    """Электрика варианта для расчётов: вариант применён, в premium и proper группы
-    поделены на линии от щита (lines.split_by_lines), как при загрузке проекта."""
+    """Variant electrical model for calculations: the variant is applied, and in premium and proper
+    groups are split into lines from the panel (lines.split_by_lines), as on project load."""
     return split_by_lines(plan, contours, apply_variant(source, variant))
 
 
 @dataclass(frozen=True)
 class VariantSummary:
-    """Сводка варианта для сравнения: смета, кабель, аппараты щита, штробы."""
+    """Variant summary for comparison: estimate, cable, panel devices, chases."""
 
     variant: Variant
-    total: float  # всего по смете, валюта прайса
+    total: float  # estimate total, in the price list currency
     currency: str
-    unpriced: int  # позиций без цены
-    cable_m: float  # кабель по трассам, без запаса
-    devices: int  # аппаратов в щите
+    unpriced: int  # items without a price
+    cable_m: float  # cable along routes, without margin
+    devices: int  # devices in the panel
     chases_m: float
-    conduit_m: float  # гофра по трассам, без запаса
-    edited: bool  # есть ручные правки трасс
+    conduit_m: float  # conduit along routes, without margin
+    edited: bool  # has manual route edits
 
     def as_dict(self) -> dict[str, object]:
         v = self.variant
@@ -112,7 +113,9 @@ def variant_summary(
     edits: WiringEdits | None,
     prices: PriceSource,
 ) -> VariantSummary | None:
-    """Сводка одного варианта без чертежей: проводка, щит, смета. Нет щита или групп — None."""
+    """Summary of one variant without drawings: wiring, panel, estimate. None without a panel or
+    groups.
+    """
     elec = variant_electrical(plan, contours, source, variant)
     wiring = estimate_wiring(plan, contours, elec, edits)
     if wiring is None:

@@ -1,5 +1,5 @@
-"""Этапы на листах: модель всех этапов в текущем масштабе (draw_stages) и что кладётся на
-лист каждого из них — ведомости, легенда, примечания, развёртки стен, щит в лицо.
+"""Stages on sheets: the model of all stages at the current scale (draw_stages) and what goes
+on each stage's sheet: schedules, legend, notes, wall elevations, panel front view.
 """
 
 from __future__ import annotations
@@ -83,13 +83,13 @@ from floorplan_engine.sheets.layout import (
     table_panel,
 )
 
-ELEV_NOTES_W = 160.0  # ширина пояснения к развёрткам, мм листа
-# Что видно в видовом экране каждого листа
+ELEV_NOTES_W = 160.0  # width of the elevations explanation, sheet mm
+# What each sheet's viewport shows
 PLAN_SHEET_LAYERS = (A_WALL, A_DOOR, A_WIND, A_DIMS, A_TEXT)
 ELECTRICAL_SHEET_LAYERS = (A_WALL, A_DOOR, A_WIND, *ELECTRICAL_LAYERS)
-# Освещение: стены, свет и выключатели, связи и свои номера; без розеток, щита и групп
+# Lighting: walls, lights and switches, links and their numbers; no sockets, panel or groups
 LIGHTING_SHEET_LAYERS = (A_WALL, A_DOOR, A_WIND, E_SWITCH, E_LIGHT, E_LED, *LIGHTING_LAYERS)
-# Проводка: стены, символы точек и щит, коробки и кабели; без трасс и подписей листа электрики
+# Wiring: walls, point symbols and panel, boxes and cables; no routes or electrical sheet labels
 WIRING_SHEET_LAYERS = (
     A_WALL,
     A_DOOR,
@@ -102,7 +102,7 @@ WIRING_SHEET_LAYERS = (
     E_BOARD,
     *WIRING_LAYERS,
 )
-# Сантехника: стены, проёмы, трубы, приборы, стояки, препятствия; без электрики
+# Plumbing: walls, openings, pipes, fixtures, risers, obstacles; no electrical
 PLUMBING_SHEET_LAYERS = (A_WALL, A_DOOR, A_WIND, *PLUMBING_LAYERS)
 NOTE_STEP = TEXT_SMALL_MM * 1.8
 MIDDLE_LEFT = TextEntityAlignment.MIDDLE_LEFT
@@ -113,15 +113,15 @@ def schedule_panel(plan: Plan, areas: dict[str, RoomArea]) -> Panel:
     return table_panel(table)
 
 
-LEGEND_MIN_ROWS = 3  # строк в колонке легенды — не меньше
+LEGEND_MIN_ROWS = 3  # rows per legend column, at least
 
 
 def legend_columns(elec: Electrical, language: Language) -> tuple[Panel, ...]:
-    """Варианты нижнего ряда: условные обозначения, разбитые на колонки по k строк. Чем
-    меньше k, тем ряд шире и ниже; берётся самый низкий, что поместится. Только значок
-    и что он значит: количество — в «Точках», цвета групп — в «Группах»."""
+    """Bottom row variants: the legend split into columns of k rows. The smaller k, the wider and
+    lower the row; the lowest one that fits is used. Only the icon and what it means: counts are
+    in "Points", group colours in "Groups"."""
     title, body = (rows := legend_rows(elec, language))[0], rows[1:]
-    blank = replace(title, text="", step=0.0)  # продолжение — без заголовка, строки вровень
+    blank = replace(title, text="", step=0.0)  # continuation: no heading, rows level
 
     def panel(rows: list[LegendRow]) -> Panel:
         width, height = legend_size(rows)
@@ -143,8 +143,8 @@ def groups_panel(
     board: BoardPanel | None,
     extra: Sequence[str] = (),
 ) -> Panel | None:
-    """«Группы» (автомат и мощность — с листа «Щит», кабель и длина — из проводки) с
-    примечаниями: о составленных назначениях и допущениях, затем extra (расчёт проводки)."""
+    """The "Groups" (breaker and power from the "Panel" sheet, cable and length from wiring) with
+    notes: about built purposes and assumptions, then extra (wiring calculation)."""
     built = groups_table(plan, elec, wiring, board)
     if built is None:
         return None
@@ -155,8 +155,8 @@ def groups_panel(
 
 
 def points_spec(plan: Plan, elec: Electrical) -> SheetSpec | None:
-    """Лист «Точки» (решение 2026-10-28): номера на плане электрики → вид, высота,
-    количество. Таблица — на месте плана, колонками, если не входит по высоте."""
+    """The "Points" sheet (decision 2026-10-28): numbers on the electrical plan → kind, height,
+    count. The table takes the plan's place, in columns if it is too tall."""
     table = points_table(plan, elec)
     if table is None:
         return None
@@ -186,7 +186,7 @@ def _table_draw(table: Table) -> Callable[[Paperspace, Vec], None]:
 
 
 def wrap(text: str, width: float, height: float) -> list[str]:
-    """Строка, разбитая по словам на строки не шире width (мм листа, по метрикам шрифта)."""
+    """A string split by words into lines no wider than width (sheet mm, by font metrics)."""
     out: list[str] = []
     for word in text.split():
         if out and text_width(f"{out[-1]} {word}", height) <= width:
@@ -197,7 +197,7 @@ def wrap(text: str, width: float, height: float) -> list[str]:
 
 
 def notes_panel(lines: Sequence[str], width: float | None = None) -> Panel:
-    """Строки примечаний мелким шрифтом; width — переносить по словам под эту ширину."""
+    """Note lines in small type; width wraps them by words to this width."""
     if width is not None:
         lines = [part for line in lines for part in wrap(line, width, TEXT_SMALL_MM)]
     notes_w = max(text_width(t, TEXT_SMALL_MM) for t in lines)
@@ -220,14 +220,14 @@ def wiring_panels(
     quantities: Wiring | None = None,
     board: BoardPanel | None = None,
 ) -> tuple[Panel, Panel]:
-    """«Группы» с примечаниями расчёта проводки, под ними — смета электрики (цены — прайс
-    поверх сервиса цен, pricing.Prices) или ведомость объёмов (prices None — без цен): смета
-    этапа стоит на его листе. Кабель по маркам
-    с запасом — первые строки сметы, отдельной таблицы марок здесь нет. quantities — проводка
-    для объёмов сметы (wiring.estimate_wiring); None — та же, что на листе; board — состав
-    щита (лист «Щит»): автоматы и мощность групп, щит в смете."""
+    """The "Groups" with wiring calculation notes, and under them the electrical estimate (prices
+    from the list on top of the price service, pricing.Prices) or a bill of quantities (prices None,
+    no prices): a stage's estimate sits on its sheet. Cable by type with margin comes first in
+    the estimate; there is no separate cable type table here. quantities is the wiring for
+    estimate quantities (wiring.estimate_wiring); None means the same as on the sheet; board is
+    the panel set ("Panel" sheet): breakers and group power, the panel in the estimate."""
     cables = groups_panel(plan, elec, wiring, board, wiring_notes(wiring, language))
-    assert cables is not None  # проводка есть — есть и группы
+    assert cables is not None  # there is wiring, so there are groups
     priced = prices is not None and prices.priced
     est = build_estimate(quantities or wiring, elec, prices or Prices(), language, board)
     sheet = estimate_table(est, language, priced=priced)
@@ -247,9 +247,10 @@ def draw_stages(
     edits: WiringEdits | None = None,
     plumbing: tuple[Plumbing, Network] | None = None,
 ) -> tuple[Drawing, list[SheetSpec]]:
-    """Модель всех этапов в текущем масштабе и описания листов (без самих листов).
-    plumbing — сантехника и её сеть (plumbing/network.build_network): лист «Сантехника»
-    сразу за листами электрики, до ведомости точек и развёрток."""
+    """Model of all stages at the current scale and sheet descriptions (without the sheets
+    themselves). plumbing is plumbing and its network (plumbing/network.build_network): the
+    "Plumbing" sheet comes right after the electrical sheets, before the point schedule and the
+    elevations."""
     doc = new_document((*ALL_LAYERS, A_VPORT))
     define_blocks(doc)
     msp = doc.modelspace()
@@ -293,11 +294,11 @@ def draw_stages(
     if plumbing is not None:
         specs.append(plumbing_spec(msp, plan, *plumbing, prices))
     if elec is not None:
-        # Ведомость точек — приложением в конце: номера листов этапов не меняются
+        # The point schedule is an appendix at the end: stage sheet numbers do not change
         points = points_spec(plan, elec)
         if points is not None:
             specs.append(points)
-        # Развёртки стен — тоже в конце, сколько листов понадобится
+        # Wall elevations also at the end, as many sheets as needed
         water = water_views(*plumbing) if plumbing is not None else None
         elevations = elevations_spec(plan, contours, elec, wiring, water)
         if elevations is not None:
@@ -308,8 +309,8 @@ def draw_stages(
 def plumbing_spec(
     msp: Modelspace, plan: Plan, plumbing: Plumbing, net: Network, prices: Prices | None
 ) -> SheetSpec:
-    """Лист «Сантехника»: трубы, приборы, стояки, препятствия; справа — «Сантехприборы» с
-    примечаниями (допущения, слабые места), «Трубы» и смета сантехники; у штампа — легенда."""
+    """The "Plumbing" sheet: pipes, fixtures, risers, obstacles; on the right "Fixtures" with notes
+    (assumptions, weak spots), "Pipes" and the plumbing estimate; the legend by the title block."""
     draw_plumbing(msp, plan, plumbing, net)
     lang = plan.language
     tables: list[Panel] = []
@@ -343,8 +344,8 @@ def plumbing_spec(
 def lighting_spec(
     msp: Modelspace, plan: Plan, contours: dict[str, Contour], elec: Electrical
 ) -> SheetSpec | None:
-    """Лист «Освещение» — сразу за электрикой: связи выключателей и таблица «Выключатели»,
-    легенда — только света. Света нет — листа нет."""
+    """The "Lighting" sheet, right after electrical: switch links and the "Switches" table, a
+    legend of lights only. No lights, no sheet."""
     if not any(p.type in LIGHT_TYPES for p in elec.points):
         return None
     draw_lighting(msp, plan, contours, elec)
@@ -371,8 +372,8 @@ def elevations_spec(
     wiring: Wiring | None,
     water: WaterMap | None = None,
 ) -> SheetSpec | None:
-    """Листы «Развёртки»: стена за стеной в масштабе комплекта, по страницам; первым —
-    как читать размеры. Стен с электрикой нет — листов нет."""
+    """The "Elevations" sheets: wall after wall at the set's scale, page by page; first an
+    explanation of how to read the dimensions. No walls with electrical items, no sheets."""
     walls = wall_elevations(plan, contours, elec, wiring, water=water)
     if not walls:
         return None
@@ -387,8 +388,8 @@ def elevations_spec(
 
 
 def panel_spec(plan: Plan, elec: Electrical) -> SheetSpec | None:
-    """Лист «Щит»: щит в лицо по центру секции плана, справа — аппараты с нагрузкой
-    и слабые места. Групп нет — листа нет."""
+    """The "Panel" sheet: the panel front view centred in the plan section, devices with load and
+    weak spots on the right. No groups, no sheet."""
     panel = build_panel(plan, elec)
     if panel is None:
         return None

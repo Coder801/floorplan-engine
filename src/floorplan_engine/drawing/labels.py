@@ -1,15 +1,15 @@
-"""Размещение подписей на листе без наложений (отзыв 2026-10-28: подписи электрики налезали
-на стены, двери, символы и друг на друга).
+"""Label placement on the sheet without overlaps (feedback 2026-10-28: electrical labels sat on
+walls, doors, symbols and each other).
 
-Подпись — блок строк. Кандидаты — места вокруг символа: у точки на стене — со стороны
-помещения, со сдвигом вдоль стены и от неё; у потолочной — по восьми сторонам; дальше —
-дальний поиск по 16 направлениям. У каждого места штраф: задевает уже поставленную подпись,
-символ, дверь или LED-ленту, ложится на стену (за наружными стенами — свободно: в тесном
-помещении подпись выносится за контур квартиры); выноска пересекает подпись или символ;
-плюс расстояние от символа. Берётся место с наименьшим штрафом; подпись дальше
-`Metrics.leader_min` от символа — с выноской.
+A label is a block of lines. Candidates are spots around the symbol: for a wall point, on the
+room side, shifted along the wall and away from it; for a ceiling point, eight sides; farther
+out, a far search in 16 directions. Each spot has a penalty: touching an already placed label,
+a symbol, a door or an LED strip, sitting on a wall (outside exterior walls is free: in a
+cramped room the label goes outside the flat outline); the leader crossing a label or a
+symbol; plus distance from the symbol. The spot with the lowest penalty wins; a label farther
+than `Metrics.leader_min` from the symbol gets a leader.
 
-Геометрия — мм модели; размеры «на листе» пересчитывает вызывающий (`scale.sheet`).
+Geometry is model mm; the caller converts "on sheet" sizes (`scale.sheet`).
 """
 
 from __future__ import annotations
@@ -26,25 +26,25 @@ from shapely.ops import nearest_points
 
 from floorplan_engine.model.geometry import Vec
 
-# Штрафы: подпись на подписи хуже всего, затем символ и дверь, затем выход на стену
+# Penalties: label on label is worst, then symbol and door, then running onto a wall
 HIT_LABEL = 10_000.0
 HIT_SYMBOL = 5_000.0
-HIT_ZONE = 3_000.0  # дверь, LED-лента
-HIT_FRAME = 6_000.0  # подпись выходит за рамку плана: раздует вид и сменит масштаб листа
-HIT_LEADER = 2_000.0  # выноска пересекает подпись или чужой символ
-HIT_ROOM = 1_500.0  # подпись заходит в чужое помещение: монтажник ищет её не там
-PAD = 0.3  # запас вокруг подписи, доля высоты строки: соседние не встают впритык
-ON_WALL = 2_500.0  # подпись задевает стену
-ON_WALL_AREA = 4_000.0  # и ещё × доля площади блока на стенах
-# Расстояние — в шагах перебора (мм листа), чтобы не зависеть от масштаба
-ALONG_COST = 1.0  # за шаг сдвига вдоль стены
-AWAY_COST = 1.5  # за шаг от стены (дальше от символа — хуже читается связь)
-FAR_COST = 2.0  # за шаг в дальнем поиске (с выноской)
-LEADER_COST = 20.0  # выноска сама по себе
+HIT_ZONE = 3_000.0  # door, LED strip
+HIT_FRAME = 6_000.0  # label leaves the plan frame: inflates the view and changes the sheet scale
+HIT_LEADER = 2_000.0  # leader crosses a label or someone else's symbol
+HIT_ROOM = 1_500.0  # label enters another room: the installer looks for it in the wrong place
+PAD = 0.3  # margin around a label, fraction of line height: neighbours do not touch
+ON_WALL = 2_500.0  # label touches a wall
+ON_WALL_AREA = 4_000.0  # plus × fraction of the block area on walls
+# Distance is counted in search steps (sheet mm), so it does not depend on scale
+ALONG_COST = 1.0  # per step along the wall
+AWAY_COST = 1.5  # per step away from the wall (farther from the symbol, the link reads worse)
+FAR_COST = 2.0  # per step in the far search (with a leader)
+LEADER_COST = 20.0  # the leader itself
 
 
 class Align(Enum):
-    """Выравнивание строк в блоке: по левому краю, по правому, по центру."""
+    """Line alignment inside the block: left, right, centre."""
 
     LEFT = "left"
     RIGHT = "right"
@@ -53,8 +53,8 @@ class Align(Enum):
 
 @dataclass(frozen=True)
 class Placed:
-    """Поставленная подпись: строки (центр каждой строки по высоте), выравнивание,
-    габарит блока и выноска (от символа к блоку) или None."""
+    """Placed label: lines (centre of each line by height), alignment, block extent and the
+    leader (from symbol to block) or None."""
 
     lines: list[tuple[str, Vec]]
     align: Align
@@ -64,9 +64,9 @@ class Placed:
 
 @dataclass(frozen=True)
 class Metrics:
-    """Размеры текста в мм модели: высота строки, шаг строк, зазор от символа,
-    шаг перебора мест и сколько шагов можно уйти рядом с символом (reach) и в дальнем поиске
-    с выноской (far); выноска — если подпись дальше leader_min."""
+    """Text sizes in model mm: line height, line step, gap from the symbol, search step and how
+    many steps may be taken near the symbol (reach) and in the far search with a leader (far);
+    a leader is added when the label is farther than leader_min."""
 
     line_h: float
     step: float
@@ -78,13 +78,13 @@ class Metrics:
 
 
 class LabelPlacer:
-    """Ставит подписи по очереди; каждая поставленная — препятствие для следующих.
+    """Places labels one by one; each placed label becomes an obstacle for the next.
 
-    walls — силуэт стен (подпись на них не ложится);
-    symbols — габариты символов (ни подпись, ни выноска их не задевают); zones — куда подпись
-    не ставится, а выноска пересекать может: открывание дверей, LED-ленты у стен; frame —
-    рамка, за которую подпись не выходит (габарит плана с полосой); rooms — помещения по id:
-    подпись не заходит в чужое (за контуром квартиры — можно)."""
+    walls is the wall silhouette (labels do not sit on it);
+    symbols are symbol extents (neither label nor leader touches them); zones are where a label
+    may not go but a leader may cross: door swings, LED strips at walls; frame is the frame a
+    label must stay inside (plan extent plus a band); rooms are rooms by id: a label does not
+    enter another room (outside the flat outline is allowed)."""
 
     def __init__(
         self,
@@ -117,15 +117,15 @@ class LabelPlacer:
         own: BaseGeometry | None = None,
         room: str | None = None,
     ) -> Placed:
-        """Подпись символа в pos: inward — в помещение (None — потолок), depth — насколько
-        символ выступает от стены (у потолочного — радиус); own — габарит своих символов,
-        он подписи не мешает; room — помещение символа."""
+        """Label for the symbol at pos: inward points into the room (None for ceiling), depth is how
+        far the symbol sticks out from the wall (radius for a ceiling one); own is the extent of its
+        own symbols, which do not block the label; room is the symbol's room."""
         w = max(widths)
         h = self.m.step * (len(lines) - 1) + self.m.line_h
         best: tuple[float, tuple[float, float, float, float], Align] | None = None
         for rect, align, dist in self._candidates(w, h, pos, inward, depth):
             if best is not None and dist >= best[0]:
-                continue  # штраф не отрицательный — дальнее место уже не лучше
+                continue  # penalty is never negative, so a farther spot is not better
             cost = dist + self._penalty(rect, own, room)
             leader = self._leader(rect, pos, inward, depth)
             if leader is not None:
@@ -145,12 +145,12 @@ class LabelPlacer:
             )
         return Placed(self._lines(lines, rect, align), align, rect, leader)
 
-    # --- кандидаты -----------------------------------------------------------
+    # --- candidates ----------------------------------------------------------
 
     def _candidates(
         self, w: float, h: float, pos: Vec, inward: Vec | None, depth: float
     ) -> Iterator[tuple[tuple[float, float, float, float], Align, float]]:
-        """Места по возрастанию расстояния: рядом с символом, затем дальний поиск."""
+        """Spots in order of increasing distance: near the symbol, then the far search."""
         m = self.m
         base = depth + m.gap
         if inward is None:
@@ -159,20 +159,20 @@ class LabelPlacer:
                     rect, align = _beside(pos + v * (base + away * m.probe), v, w, h)
                     yield rect, align, away * AWAY_COST + i * 0.01
         else:
-            n, u = inward, inward.left()  # в помещение и вдоль стены
+            n, u = inward, inward.left()  # into the room and along the wall
             shifts = [0] + [s for k in range(1, m.reach + 1) for s in (k, -k)]
             for away in range(m.reach + 1):
                 for s in shifts:
                     c = pos + n * (base + away * m.probe) + u * (s * m.probe)
                     rect, align = _beside(c, n, w, h)
                     yield rect, align, abs(s) * ALONG_COST + away * AWAY_COST
-        # Рядом места нет — дальше по 16 направлениям, с выноской
+        # No room nearby: go farther in 16 directions, with a leader
         for away in range(m.reach + 1, m.far + 1, 2):
-            for v in _DIRS:  # и за стену — наружу квартиры: стену штрафует _penalty
+            for v in _DIRS:  # also across the wall, outside the flat: _penalty charges for the wall
                 rect, align = _beside(pos + v * (base + away * m.probe), v, w, h)
                 yield rect, align, away * FAR_COST + LEADER_COST
 
-    # --- штраф ---------------------------------------------------------------
+    # --- penalty -------------------------------------------------------------
 
     def _penalty(
         self, rect: tuple[float, float, float, float], own: BaseGeometry | None, room: str | None
@@ -213,7 +213,7 @@ class LabelPlacer:
                 return HIT_LEADER
         return 0.0
 
-    # --- результат -----------------------------------------------------------
+    # --- result --------------------------------------------------------------
 
     def _lines(
         self, lines: Sequence[str], rect: tuple[float, float, float, float], align: Align
@@ -239,12 +239,12 @@ _DIRS = [
     for a in [0, math.pi, -math.pi / 2, math.pi / 2]
     + [-math.pi / 4, -3 * math.pi / 4, math.pi / 4, 3 * math.pi / 4]
     + [math.pi * (2 * k + 1) / 8 for k in range(8)]
-]  # стороны, диагонали, промежуточные
+]  # sides, diagonals, in-between
 
 
 def _beside(c: Vec, n: Vec, w: float, h: float) -> tuple[tuple[float, float, float, float], Align]:
-    """Блок w × h, прижатый к точке c со стороны n: справа — по левому краю, слева — по
-    правому, сверху и снизу — по центру."""
+    """Block w × h pressed against point c from side n: on the right, left-aligned; on the left,
+    right-aligned; above and below, centred."""
     if abs(n.x) > abs(n.y) + 1e-9:
         if n.x > 0:
             return (c.x, c.y - h / 2, c.x + w, c.y + h / 2), Align.LEFT
@@ -253,14 +253,14 @@ def _beside(c: Vec, n: Vec, w: float, h: float) -> tuple[tuple[float, float, flo
         if n.y > 0:
             return (c.x - w / 2, c.y, c.x + w / 2, c.y + h), Align.CENTER
         return (c.x - w / 2, c.y - h, c.x + w / 2, c.y), Align.CENTER
-    # Диагональ: угол блока — в точке c
+    # Diagonal: the block corner sits at point c
     x0 = c.x if n.x > 0 else c.x - w
     y0 = c.y if n.y > 0 else c.y - h
     return (x0, y0, x0 + w, y0 + h), Align.LEFT if n.x > 0 else Align.RIGHT
 
 
 def door_swing(hinge: Vec, closed: Vec, normal: Vec, width: float) -> BaseGeometry:
-    """Зона открывания двери: четверть круга радиуса width у петли, со стороны normal."""
+    """Door swing zone: a quarter circle of radius width at the hinge, on the normal side."""
     quad = Polygon(
         [
             (hinge.x, hinge.y),

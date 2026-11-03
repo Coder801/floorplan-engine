@@ -21,14 +21,14 @@ from floorplan_engine.model.geometry import (
 from tests.conftest import make_plan
 
 RECT = [{"length": 3200}, {"length": 4100}, {"length": 3200}, {"length": 4100}]
-# Г-образная: 4000 x 3000 без правого верхнего угла 1500 x 1000
+# L-shaped: 4000 x 3000 without the top-right 1500 x 1000 corner
 L_SHAPE = [
-    {"length": 3000},  # 0: вверх
-    {"length": 2500},  # 1: вправо
-    {"length": 1000, "turn": 270},  # 2: вниз, затем входящий угол
-    {"length": 1500},  # 3: вправо
-    {"length": 2000},  # 4: вниз
-    {"length": 4000},  # 5: влево
+    {"length": 3000},  # 0: up
+    {"length": 2500},  # 1: right
+    {"length": 1000, "turn": 270},  # 2: down, then a reflex corner
+    {"length": 1500},  # 3: right
+    {"length": 2000},  # 4: down
+    {"length": 4000},  # 5: left
 ]
 
 
@@ -46,7 +46,7 @@ def test_first_wall_goes_up_clockwise() -> None:
     c = trace_contour(plan.rooms[0], 120)
     assert c.segments[0].end == Vec(0, 3200)
     assert c.segments[1].end == Vec(4100, 3200)
-    # стена 0 идёт вверх, наружу — влево (−X)
+    # wall 0 goes up, outward is left (−X)
     assert c.segments[0].outward == Vec(-1, 0)
 
 
@@ -56,7 +56,7 @@ def test_l_shape_270_closed_and_area() -> None:
     assert c.is_closed()
     assert c.area_m2 == pytest.approx(4.0 * 3.0 - 1.5 * 1.0)
     assert point_in_polygon(Vec(1000, 1000), c.vertices)
-    assert not point_in_polygon(Vec(3500, 2800), c.vertices)  # вырезанный угол
+    assert not point_in_polygon(Vec(3500, 2800), c.vertices)  # the cut-out corner
 
 
 def test_unclosed_suspects_point_to_parallel_walls() -> None:
@@ -80,7 +80,7 @@ def test_outer_corners_respect_thickness() -> None:
     plan = make_plan(walls)
     c = trace_contour(plan.rooms[0], 120)
     corners = outer_corners(c)
-    assert corners[0] == Vec(-120, -200)  # стык нижней (200) и левой (120)
+    assert corners[0] == Vec(-120, -200)  # joint of the bottom (200) and left (120) walls
     assert corners[1] == Vec(-120, 3120)
     assert corners[2] == Vec(4120, 3120)
 
@@ -89,7 +89,7 @@ SQUARE_CCW = [Vec(0, 0), Vec(10, 0), Vec(10, 10), Vec(0, 10)]
 
 
 def _contour(points: list[Vec], close: bool = True) -> Contour:
-    """Контур из вершин: стена i идёт от points[i] к points[i + 1]."""
+    """Outline from vertices: wall i goes from points[i] to points[i + 1]."""
     ends = [*points[1:], points[0]] if close else points[1:]
     segs = []
     for i, (a, b) in enumerate(zip(points, ends, strict=False)):
@@ -144,9 +144,9 @@ def test_signed_area_degenerate_is_zero(points: list[Vec]) -> None:
     ("point", "inside"),
     [
         (Vec(5, 5), True),
-        (Vec(0, 0), True),  # вершина
-        (Vec(10, 5), True),  # на ребре
-        (Vec(5, 10), True),  # на верхнем ребре
+        (Vec(0, 0), True),  # vertex
+        (Vec(10, 5), True),  # on an edge
+        (Vec(5, 10), True),  # on the top edge
         (Vec(10.1, 5), False),
         (Vec(-0.1, 5), False),
         (Vec(5, 11), False),
@@ -163,10 +163,10 @@ def test_segments_intersect_proper_crossing() -> None:
 @pytest.mark.parametrize(
     ("q1", "q2"),
     [
-        (Vec(10, 10), Vec(20, 0)),  # касание концом
-        (Vec(0, 1), Vec(10, 11)),  # параллельны
-        (Vec(20, 20), Vec(30, 30)),  # на одной прямой, не перекрываются
-        (Vec(5, 5), Vec(5, 20)),  # конец на отрезке
+        (Vec(10, 10), Vec(20, 0)),  # touching at an end
+        (Vec(0, 1), Vec(10, 11)),  # parallel
+        (Vec(20, 20), Vec(30, 30)),  # collinear, not overlapping
+        (Vec(5, 5), Vec(5, 20)),  # end on the segment
     ],
 )
 def test_segments_intersect_ignores_touching_and_parallel(q1: Vec, q2: Vec) -> None:
@@ -207,7 +207,7 @@ def test_closure_suspects_empty_when_closed() -> None:
 
 
 def test_closure_suspects_fix_parallel_walls() -> None:
-    # нижняя стена короче на 100: конец (100, 0), невязка вдоль X
+    # the bottom wall is 100 shorter: the end is (100, 0), closure error along X
     c = _contour([Vec(0, 0), Vec(0, 3000), Vec(4000, 3000), Vec(4000, 0), Vec(100, 0)], close=False)
     suspects = {s.wall: s.fixed_length for s in closure_suspects(c)}
     assert suspects == {"w2": 3900.0, "w4": 4000.0}

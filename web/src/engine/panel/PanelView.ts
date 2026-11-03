@@ -1,18 +1,19 @@
-// Щит в лицо в своём canvas: рисуется из данных щита (ключ panel страницы), а не из
-// примитивов листа. Корпус — реальный щит каталога в натуральную величину (enclosure),
-// аппараты — отрисовщиками каталога по модели. Рейки по видам (layout.ts):
-// общие аппараты, автоматы на гребёнке, дифавтоматы на двойной гребёнке (L + N). Питание
-// сверху: ввод → реле перемычкой по нижним клеммам, с выхода реле — гребёнка общих
-// аппаратов и стволы вдоль левой стенки к гребёнкам рядов (основная; резервная — от АВР;
-// N — от ввода N к клеммнику N и ветками к нулевым гребёнкам). Провод группы — тонкой линией
-// цвета группы из нижней клеммы в пучок под рейкой, пучком в правую стенку, за корпусом — под
-// углом к подписи; ввод L, N, PE сверху, клеммники PE
-// вверху и N внизу корпуса. Масштаб и сдвиг; объекты под курсором не ищутся — подсветка
-// только от строки таблицы в боковой панели (store.lit) и у открытой карточки (store.pinned,
-// клик по аппарату или строке): аппарат и провод группы светятся. Наведённое — цветом --hl,
-// свечение появляется плавно и мягко пульсирует (без анимации — ровное); закреплённое
-// кликом — своим цветом --pin, ровно, без пульсации: ховер на других строках его не трогает. У гибридного инвертора — щит АКБ:
-// провода АКБ и строк панелей — вверх в вводы BAT и PV инвертора, АКБ под щитом.
+// Panel front view in its own canvas: drawn from the panel data (page key panel), not from
+// sheet primitives. The enclosure is a real catalogue panel at full size (enclosure), devices
+// are drawn by the catalogue renderers by model. Rails by kind (layout.ts): shared devices,
+// breakers on a busbar, RCBOs on a double busbar (L + N). Power from the top: main switch →
+// relay with a jumper on the bottom terminals; from the relay output, the shared device busbar
+// and trunks along the left wall to the row busbars (main; backup from the ATS; N from the N
+// input to the N terminal block and branches to the neutral busbars). A group wire is a thin
+// line in the group colour from the bottom terminal into a bundle under the rail, as a bundle
+// to the right wall, and past the enclosure at an angle to its label; L, N, PE input from the
+// top, PE terminal block at the top and N at the bottom of the enclosure. Scale and pan;
+// objects under the cursor are not looked up: highlighting comes only from a side panel table
+// row (store.lit) and an open card (store.pinned, a click on a device or row): the device and
+// the group wire glow. Hovered items use --hl, the glow fades in and pulses gently (steady
+// without animation); pinned by click uses its own --pin colour, steady, no pulse: hovering
+// other rows leaves it alone. A hybrid inverter gets a battery box: battery and solar string
+// wires go up into the inverter's BAT and PV inputs, the battery sits under the box.
 
 import { Pinch } from "@/engine/sheet/pinch";
 import { FIT_SHRINK, REDUCED_MOTION, VIEW_PAD } from "@/shared/consts";
@@ -24,40 +25,40 @@ import { clip, plate, rendererFor, SCREW, shade, text, type Pen } from "./catalo
 import { BACKUP, busSegments, CHAIN, groupPath, LABEL_STEP, LABELS, layout, MODULE, TERM, termX,
          type PanelLayout, type Placed, type Rect, type Row } from "./layout";
 
-const WIRE = 2.2;          // толщина провода, мм щита
+const WIRE = 2.2;          // wire width, panel mm
 const INPUT_WIRE = "#8b4513";
 const RESERVE = "#2e8b57";
 const PE = "#2e8b2e";
-const PE_STRIPE = "#e3c200";  // PE — жёлто-зелёный
-// Нутро корпуса — светлое в любой теме, как настоящий щит: заливка, гребёнки и подложка
-// проводов внутри — цветами светлой темы, а не screenColor
+const PE_STRIPE = "#e3c200";  // PE is yellow-green
+// The enclosure interior is light in any theme, like a real panel: fill, busbars and wire
+// underlay inside use light theme colours, not screenColor
 const INSIDE = "#ededeb", INSIDE_HALO = "#ffffff", COMB = "#5a5a5a";
 const N = "#1f5fbf";
-const PE_BODY = "#3f9b4a";    // корпус клеммника PE
-const N_BODY = "#2f6fc4";     // корпус клеммника N
-const LABEL = 7;           // подписи у проводов, мм щита
-const ID = 4.4;            // обозначение на табличке аппарата
-// Над аппаратами: фазная гребёнка, нулевая (у дифавтоматов), подход резервного питания
+const PE_BODY = "#3f9b4a";    // PE terminal block body
+const N_BODY = "#2f6fc4";     // N terminal block body
+const LABEL = 7;           // labels at wires, panel mm
+const ID = 4.4;            // designation on the device plate
+// Above the devices: phase busbar, neutral busbar (for RCBOs), backup feed entry
 const L_COMB = 5, N_COMB = 10;
 const approach = (row: Row) => row.devTop - (row.kind === "double" ? 15 : 11);
-// Под общими аппаратами — полосы перемычек: N ввода, ввод → реле и гребёнка общих,
-// ствол основной сети, ствол резерва, PE ПЗІП (ниже — питание инвертора, layout.FEED_LANE)
+// Under the shared devices, jumper lanes: input N, input → relay and the shared busbar,
+// main network trunk, backup trunk, surge protector PE (below: inverter feed, layout.FEED_LANE)
 const BELOW = { n: 2.5, chain: 5.5, main: 8.5, reserve: 11.5, spd: 14.5 } as const;
-// Стволы вдоль левой стенки (левее аппаратов дорожек групп нет)
+// Trunks along the left wall (no group lanes left of the devices)
 const TRUNK = { n: 10, main: 18, reserve: 26, spd: 4 } as const;
-// Питание инвертора: N — под L; PE инвертора — стволом вдоль правой стенки (от неё — PE_TRUNK)
+// Inverter feed: N under L; inverter PE as a trunk along the right wall (PE_TRUNK from it)
 const CORE = 2.5;
 const PE_TRUNK = 8;
-const GROUP_WIRE = 1.4;    // провод группы, мм щита: не толще шага пучка
+const GROUP_WIRE = 1.4;    // group wire, panel mm: no thicker than the bundle step
 const TITLE = 9;
-const DC_PLUS = "#c62828", DC_MINUS = "#1e1e1e";  // провода DC: «+» красный, «−» чёрный
-const GLOW_IN = 180;       // мс: появление свечения
-const GLOW_PERIOD = 1400;  // мс: период пульсации
+const DC_PLUS = "#c62828", DC_MINUS = "#1e1e1e";  // DC wires: "+" red, "−" black
+const GLOW_IN = 180;       // ms: glow fade-in
+const GLOW_PERIOD = 1400;  // ms: pulse period
 
 export class PanelView {
   onZoom: (zoom: Zoom) => void = () => {};
   private ctx: CanvasRenderingContext2D;
-  private step = 0;  // шаг масштаба (zoom.ts)
+  private step = 0;  // zoom step (zoom.ts)
   private readonly wheel = new WheelSteps();
   private readonly pinchSteps = new PinchSteps();
   private readonly glide = new Glide();
@@ -90,7 +91,7 @@ export class PanelView {
     this.bind();
   }
 
-  // Наведённое: строка таблицы под курсором, кроме закреплённого — оно светится своим цветом
+  // Hovered: the table row under the cursor, except the pinned one, which glows in its own colour
   private hoverKeys(): Set<string> {
     const { lit, pinned } = view.get();
     const out = new Set(lit || []);
@@ -98,7 +99,7 @@ export class PanelView {
     return out;
   }
 
-  // Аппараты щита и щита АКБ — для клика и подсветки
+  // Devices of the panel and the battery box, for clicks and highlighting
   private allPlaced(): Placed[] { return [...this.lay.placed, ...(this.lay.dc?.placed || [])]; }
 
   destroy() { cancelAnimationFrame(this.pulse); for (const f of this.cleanup) f(); }
@@ -113,7 +114,7 @@ export class PanelView {
 
   fit() {
     this.glide.stop();
-    const l = this.lay, top = -TITLE * 2;  // заголовок над вводом
+    const l = this.lay, top = -TITLE * 2;  // heading above the input
     this.scale = FIT_SHRINK * Math.min((this.w - RAIL_PX - 2 * VIEW_PAD) / l.width, (this.h - 2 * VIEW_PAD) / (l.height - top));
     this.fitScale = this.scale;
     this.step = 0;
@@ -122,10 +123,10 @@ export class PanelView {
     this.draw();
   }
 
-  // Соседний шаг масштаба у точки (x, y) экрана; за крайние — нет
+  // Neighbouring zoom step at screen point (x, y); none past the ends
   zoomStep(dir: number, x = (this.w - RAIL_PX) / 2, y = this.h / 2) { this.zoomTo(this.step + dir, x, y); }
 
-  // Шаг масштаба — плавно, точка (x, y) экрана стоит на месте
+  // Zoom step, smoothly, keeping screen point (x, y) in place
   zoomTo(step: number, x = (this.w - RAIL_PX) / 2, y = this.h / 2) {
     step = clampStep(step);
     if (step === this.step) return;
@@ -148,7 +149,7 @@ export class PanelView {
     }, { passive: false });
     this.on("pointerdown", (ev) => {
       this.canvas.setPointerCapture(ev.pointerId);
-      if (this.pinch.down(ev)) { this.drag = null; this.down = null; return; }  // щипок, не сдвиг
+      if (this.pinch.down(ev)) { this.drag = null; this.down = null; return; }  // a pinch, not a pan
       this.drag = { x: ev.clientX, y: ev.clientY, ox: this.ox, oy: this.oy };
       this.down = { x: ev.clientX, y: ev.clientY };
       this.canvas.setPointerCapture(ev.pointerId);
@@ -168,10 +169,10 @@ export class PanelView {
       this.draw();
     });
     const end = () => { this.drag = null; this.canvas.classList.remove("drag"); };
-    // Клик (без сдвига) — карточка аппарата под курсором; мимо аппаратов — закрыть
+    // Click (without a drag): the card of the device under the cursor; off the devices, close it
     this.on("pointerup", (ev) => {
       this.pinch.up(ev);
-      const d = this.pinch.used ? null : this.down;  // конец щипка — не клик
+      const d = this.pinch.used ? null : this.down;  // end of a pinch is not a click
       this.down = null;
       end();
       if (!d || Math.hypot(ev.clientX - d.x, ev.clientY - d.y) > 4) return;
@@ -181,7 +182,7 @@ export class PanelView {
       view.set({ pinned: hit ? hit.dev.key : null });
     });
     this.on("pointercancel", (ev) => { this.pinch.up(ev); end(); });
-    // Двойной клик — на шаг крупнее в точку клика; на последнем шаге — вписать целиком
+    // Double click zooms one step in at the click point; at the last step, fit the whole panel
     this.on("dblclick", (ev) => {
       const r = this.canvas.getBoundingClientRect();
       if (this.step >= LAST_STEP) this.fit(); else this.zoomStep(1, ev.clientX - r.left, ev.clientY - r.top);
@@ -196,7 +197,7 @@ export class PanelView {
     ctx.fillRect(0, 0, this.w, this.h);
     ctx.setTransform(this.dpr * this.scale, 0, 0, this.dpr * this.scale, this.dpr * this.ox, this.dpr * this.oy);
     this.paint({ ctx, font: this.font, ink: screenColor("#2b2b2b") });
-    // Свечение подсветки — следующий кадр, пока наведено (пульсация) или закреплённое появляется
+    // Highlight glow: the next frame while hovered (pulse) or while the pinned one fades in
     const fading = !!view.get().pinned && performance.now() - this.pinAt < GLOW_IN;
     if ((this.hoverKeys().size || fading) && !REDUCED_MOTION && !this.pulse) {
       this.pulse = requestAnimationFrame(() => { this.pulse = 0; this.draw(); });
@@ -204,7 +205,7 @@ export class PanelView {
     this.onZoom({ step: this.step, label: zoomLabel(this.step), pxPerMm: this.scale });
   }
 
-  // Весь щит в мм щита на текущем преобразовании
+  // The whole panel in panel mm on the current transform
   private paint(pen: Pen) {
     const l = this.lay, d = this.data;
     const enc = l.enclosure;
@@ -217,7 +218,7 @@ export class PanelView {
     this.terminalBlock(pen, l.n, "N", N_BODY);
 
     const byId = new Map(l.placed.map((p) => [p.dev.id, p]));
-    for (const y of l.rails) this.rail(pen, b.x + 12, b.x + b.w - 12, y);  // и пустые
+    for (const y of l.rails) this.rail(pen, b.x + 12, b.x + b.w - 12, y);  // including empty ones
     l.rows.forEach((row, r) => {
       const placed = l.placed.filter((p) => p.row === r);
       for (const [x0, x1, reserve] of busSegments(placed)) {
@@ -230,7 +231,7 @@ export class PanelView {
     this.feeds();
     for (const p of l.placed) this.outWire(pen, p);
 
-    // Ввод сверху: L и N — в вводной автомат, PE — в вводную клемму клеммника PE
+    // Input from the top: L and N into the main switch, PE into the input terminal of the PE block
     const qs = byId.get("QS1");
     const peX = termX(l.pe, 0);
     this.wire(PE, [[peX, 0], [peX, l.pe.y + 6]], PE_STRIPE);
@@ -244,7 +245,7 @@ export class PanelView {
     this.highlight(pen);
   }
 
-  // Корпус: пластик щита и монтажное поле внутри, габарит под ним
+  // Enclosure: the panel plastic and the mounting plate inside, the size below it
   private enclosure(pen: Pen, b: Rect, enc: PanelLayout["enclosure"]) {
     const { ctx } = pen;
     ctx.fillStyle = enc.body;
@@ -258,17 +259,17 @@ export class PanelView {
   private device(pen: Pen, p: Placed) {
     const { ctx } = pen, dev = p.dev;
     rendererFor(dev)(pen, dev, p);
-    // Маркировка на табличке крышки: обозначение на цвете группы — как её линии на листах
+    // Marking on the cover plate: the designation on the group colour, like its lines on the sheets
     const color = (dev.group && this.data.groups[dev.group]?.color) || null;
     const t = plate(p);
     if (color) { ctx.fillStyle = color; ctx.fillRect(t.x, t.y, t.w, t.h); }
-    // Узкая табличка: сначала без «*» (допущение видно в подписи группы), потом мельче
+    // Narrow plate: first drop the "*" (the assumption shows in the group label), then go smaller
     ctx.font = `${ID}px ${pen.font}`;
     const id = dev.assumed && ctx.measureText(dev.id + "*").width <= t.w ? dev.id + "*" : dev.id;
     const size = Math.min(ID, (ID * t.w) / ctx.measureText(id).width);
     text(pen, id, t.x + t.w / 2, t.y + t.h / 2 + 0.2, size, color && dark(color) ? "#ffffff" : "#1e1e1e");
-    if (dev.kind === "spd") {  // ПЗІП — на клеммник PE
-      // Вдоль левой стенки вверх и по просвету под клеммником — дорожки групп не пересекает
+    if (dev.kind === "spd") {  // surge protector to the PE block
+      // Up along the left wall and through the gap under the terminal block: never crosses the group lanes
       const pe = this.lay.pe, cx = p.x + p.w / 2, x = termX(pe, 1);
       const y = this.lay.rows[p.row].gutterTop + BELOW.spd, band = pe.y + pe.h + 6, side = TRUNK.spd;
       this.wire(PE, [[cx, p.y + p.h - SCREW], [cx, y], [side, y], [side, band], [x, band], [x, pe.y + pe.h - 6]],
@@ -276,13 +277,13 @@ export class PanelView {
     }
   }
 
-  // Провод группы — тонкой линией цвета группы по пучку (groupPath), подпись — в колонке
-  // справа. Питание инвертора — L и N той же дорожкой, дальше к инвертору (external)
+  // Group wire: a thin line in the group colour along the bundle (groupPath), the label in the
+  // column on the right. Inverter feed: L and N along the same lane, then on to the inverter (external)
   private outWire(pen: Pen, p: Placed) {
     if (p.lane === null) return;
     const g = p.dev.group ? this.data.groups[p.dev.group] : undefined;
     const cx = p.x + MODULE / 2, right = this.lay.box.x + this.lay.box.w, from = p.y + p.h - SCREW;
-    if (!g) {  // питание инвертора 2P
+    if (!g) {  // inverter feed 2P
       const nx = p.x + 1.5 * MODULE;
       this.wire(N, [[nx, from], [nx, p.lane + CORE], [right, p.lane + CORE]]);
       this.wire(INPUT_WIRE, [[cx, from], [cx, p.lane], [right, p.lane]]);
@@ -295,8 +296,8 @@ export class PanelView {
     const { ctx } = pen, [ex, ey] = pts[pts.length - 1];
     ctx.fillStyle = color;
     ctx.beginPath(); ctx.arc(ex, ey, 1.4, 0, 2 * Math.PI); ctx.fill();
-    // «QF6 Освітлення — Санвузол · 3x1.5 · 0,50 кВт*»: назначение — чернилами, кабель и
-    // мощность — цветом группы
+    // "QF6 Освітлення — Санвузол · 3x1.5 · 0,50 кВт*": the purpose in ink, cable and power in
+    // the group colour
     const tail = ` · ${g.cable || "—"} · ${(g.power / 1000).toFixed(2).replace(".", ",")} кВт${g.assumed ? "*" : ""}`;
     ctx.font = `${LABEL}px ${pen.font}`;
     const room = LABELS - 8 - ctx.measureText(tail).width;
@@ -307,9 +308,9 @@ export class PanelView {
     text(pen, tail, x + ctx.measureText(lead).width, p.label, LABEL, color, "left");
   }
 
-  // Подсветка: закреплённый аппарат — ровно, цветом --pin; наведённый строкой таблицы — цветом
-  // --hl, появление — GLOW_IN, дальше мягкая пульсация. Аппарат и провод его группы светятся,
-  // строка подписи — мягким фоном
+  // Highlight: a pinned device is steady in --pin; one hovered via a table row uses --hl, fading
+  // in over GLOW_IN, then pulsing gently. The device and its group wire glow, the label row gets
+  // a soft background
   private highlight(pen: Pen) {
     const now = performance.now(), { pinned } = view.get();
     const fade = (since: number) => REDUCED_MOTION ? 1 : Math.min(1, (now - since) / GLOW_IN);
@@ -321,8 +322,8 @@ export class PanelView {
     }
   }
 
-  // Свечение одного аппарата: провод группы поверх, заливка с ореолом, фон строки подписи;
-  // wave — 0…1, на сколько ореол и заливка «дышат» (закреплённый — константа)
+  // Glow of one device: group wire on top, fill with a halo, label row background; wave is
+  // 0…1, how much the halo and fill "breathe" (constant for a pinned one)
   private glow(pen: Pen, p: Placed, color: string, fade: number, wave: number) {
     const { ctx } = pen;
     ctx.save();
@@ -336,9 +337,9 @@ export class PanelView {
       groupPath(this.lay, p).forEach(([x, y], k) => (k ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
       ctx.stroke();
     }
-    // Аппарат — полупрозрачной заливкой с ореолом
+    // The device: translucent fill with a halo
     ctx.fillStyle = color;
-    ctx.globalAlpha = fade * (0.05 + 0.04 * wave);  // прозрачно — аппарат виден
+    ctx.globalAlpha = fade * (0.05 + 0.04 * wave);  // translucent: the device stays visible
     ctx.beginPath(); ctx.roundRect(p.x, p.y, p.w, p.h, 2); ctx.fill();
     ctx.shadowBlur = 0;
     if (p.label !== null) {
@@ -348,8 +349,8 @@ export class PanelView {
     ctx.restore();
   }
 
-  // DIN-рейка TS35: профиль 35 мм с отбортовкой и пазами крепления; видна у концов и в
-  // промежутках между аппаратами
+  // TS35 DIN rail: a 35 mm profile with flanges and mounting slots; visible at the ends and in
+  // the gaps between devices
   private rail(pen: Pen, x0: number, x1: number, y: number) {
     const { ctx } = pen;
     ctx.fillStyle = "#a9a9a6";
@@ -362,9 +363,9 @@ export class PanelView {
     }
   }
 
-  // Гребёнки ряда групп над аппаратами: фазная (основная и резервная — участками), зубцы — в
-  // верхнюю клемму первого модуля; у дифавтоматов ещё нулевая — одна на ряд, зубцы — во
-  // второй модуль (N)
+  // Busbars of a group row above the devices: phase (main and backup in sections), teeth into
+  // the top terminal of the first module; RCBOs also get a neutral one, one per row, teeth into
+  // the second module (N)
   private combs(placed: Placed[], row: Row) {
     const lY = row.devTop - L_COMB, nY = row.devTop - N_COMB;
     if (row.kind === "double" && placed.length) {
@@ -381,8 +382,8 @@ export class PanelView {
     }
   }
 
-  // Гребёнка общих аппаратов после ввода и реле (ПЗІП, АВР — вход I, питание инвертора);
-  // выход инвертора — не от сети
+  // Busbar of the shared devices after the main switch and relay (surge protector, ATS input I,
+  // inverter feed); the inverter output is not fed from the grid
   private commonComb(placed: Placed[], row: Row) {
     const xs = placed.filter((p) => !CHAIN.has(p.dev.kind) && p.dev.kind !== "output");
     if (!xs.length) return;
@@ -404,15 +405,15 @@ export class PanelView {
     ctx.beginPath(); ctx.moveTo(x, y0); ctx.lineTo(x, y1); ctx.stroke();
   }
 
-  // Провод с подложкой цвета фона — на пересечении видно, какой сверху; внутри корпуса
-  // подложка светлая (нутро светлое в любой теме), снаружи — цвета бумаги; stripe — полосы
-  // второго цвета (PE)
+  // Wire with an underlay in the background colour, so a crossing shows which is on top; inside
+  // the enclosure the underlay is light (the interior is light in any theme), outside it is the
+  // paper colour; stripe adds stripes of a second colour (PE)
   private wire(color: string, pts: [number, number][], stripe?: string, width = WIRE) {
     const { ctx } = this, boxes = [this.lay.box, ...(this.lay.dc ? [this.lay.dc.box] : [])];
     ctx.lineJoin = "round"; ctx.lineCap = "round";
     ctx.beginPath();
     pts.forEach(([x, y], k) => (k ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
-    // Подложка тонкого провода — уже: в пучке не закрывает соседей
+    // A thin wire's underlay is narrower, so in a bundle it does not cover its neighbours
     ctx.strokeStyle = palette.paper || "#ffffff"; ctx.lineWidth = width + Math.min(1.6, width * 0.4); ctx.stroke();
     ctx.save();
     const clip = new Path2D();
@@ -429,27 +430,27 @@ export class PanelView {
     }
   }
 
-  // Клеммник N / PE (как Hager QuickConnect): светлый корпус с лапками крепления и полосой
-  // цвета проводника; вводная клемма — под винт, остальные безвинтовые: рычажок цвета
-  // проводника сверху, круглое отверстие под провод снизу; бирка справа
+  // N / PE terminal block (like Hager QuickConnect): a light body with mounting feet and a strip
+  // in the conductor colour; the input terminal takes a screw, the others are screwless: a lever
+  // in the conductor colour on top, a round wire hole below; a tag on the right
   private terminalBlock(pen: Pen, r: Rect, label: string, color: string) {
     const { ctx } = pen, n = this.lay.terminals;
     const x0 = r.x + TERM.foot, x1 = r.x + r.w - TERM.foot;
-    // Лапки крепления
+    // Mounting feet
     for (const x of [r.x, x1]) {
       ctx.fillStyle = "#b5b5b1"; ctx.strokeStyle = "#7d7d79"; ctx.lineWidth = 0.6;
       ctx.beginPath(); ctx.roundRect(x, r.y + 5, TERM.foot, r.h - 10, 1); ctx.fill(); ctx.stroke();
       ctx.fillStyle = "#7d7d79";
       ctx.beginPath(); ctx.arc(x + TERM.foot / 2, r.y + r.h / 2, 1.2, 0, 2 * Math.PI); ctx.fill();
     }
-    // Корпус и полоса цвета проводника по низу
+    // Body and a conductor-colour strip along the bottom
     ctx.fillStyle = "#e4e4e0"; ctx.strokeStyle = "#8a8a86"; ctx.lineWidth = 0.8;
     ctx.beginPath(); ctx.roundRect(x0, r.y, x1 - x0, r.h, 2); ctx.fill(); ctx.stroke();
     ctx.fillStyle = "#f3f3f0";
     ctx.fillRect(x0 + 1, r.y + 1, x1 - x0 - 2, 2);
     ctx.fillStyle = color;
     ctx.fillRect(x0 + 1, r.y + r.h - 3.2, x1 - x0 - 2, 2.2);
-    // Вводная: винт и отверстие
+    // Input terminal: screw and hole
     const big = termX(r, 0);
     ctx.fillStyle = "#d2d2ce";
     ctx.fillRect(big - TERM.big / 2 + 0.6, r.y + 3.5, TERM.big - 1.2, r.h - 8);
@@ -459,7 +460,7 @@ export class PanelView {
     ctx.beginPath(); ctx.moveTo(big - 2.2, r.y + 7.5); ctx.lineTo(big + 2.2, r.y + 7.5); ctx.stroke();
     ctx.fillStyle = "#26282a";
     ctx.beginPath(); ctx.arc(big, r.y + r.h - 8.5, 2.6, 0, 2 * Math.PI); ctx.fill();
-    // Безвинтовые клеммы: перегородки, рычажок, отверстие
+    // Screwless terminals: dividers, lever, hole
     for (let k = 1; k <= n; k++) {
       const cx = termX(r, k);
       ctx.strokeStyle = "#c4c4c0"; ctx.lineWidth = 0.5;
@@ -471,18 +472,19 @@ export class PanelView {
       ctx.fillStyle = "#26282a";
       ctx.beginPath(); ctx.arc(cx, r.y + r.h - 8.5, 1.8, 0, 2 * Math.PI); ctx.fill();
     }
-    // Бирка с маркировкой
+    // Marking tag
     const tx = x1 - TERM.tag;
     ctx.fillStyle = color;
     ctx.beginPath(); ctx.roundRect(tx + 1.5, r.y + 4, TERM.tag - 3, r.h - 9, 1); ctx.fill();
     text(pen, label, tx + TERM.tag / 2, r.y + (r.h - 1) / 2, 6, "#ffffff");
   }
 
-  // Питание по щиту. Под общими аппаратами: ввод → реле по нижним клеммам; с выхода
-  // последнего из них (у ввода — фаза в первом модуле, у реле — последний модуль) — в
-  // гребёнку общих аппаратов и стволом вдоль левой стенки к фазным гребёнкам рядов групп;
-  // с выхода АВР — стволом резерва к резервным участкам (подход над гребёнкой); N ввода —
-  // вдоль стенки к клеммнику N, ветками — к нулевым гребёнкам дифавтоматов
+  // Power distribution in the panel. Under the shared devices: main switch → relay via the
+  // bottom terminals; from the output of the last of them (phase in the first module for the
+  // main switch, the last module for the relay) into the shared busbar and as a trunk along the
+  // left wall to the phase busbars of the group rows; from the ATS output, a backup trunk to the
+  // backup sections (entering above the busbar); input N along the wall to the N terminal block,
+  // with branches to the RCBO neutral busbars
   private feeds() {
     const l = this.lay, rows = l.rows;
     const common = l.placed.filter((p) => rows[p.row].kind === "common");
@@ -541,10 +543,10 @@ export class PanelView {
     text(pen, this.data.texts.reserve, x0 - 2, y0 - 2.8, 4.5, RESERVE, "left");
   }
 
-  // Инвертор или вилка генератора справа от подписей; пять проводов снизу, без пересечений:
-  // GRID L, N — от питания инвертора его дорожкой; LOAD L, N — по просвету левее инвертора
-  // и над рядом АВР во вход II (два последних модуля); PE — стволом вдоль правой стенки в
-  // последнюю клемму клеммника PE
+  // Inverter or generator plug right of the labels; five wires from the bottom, no crossings:
+  // GRID L, N from the inverter feed along its lane; LOAD L, N through the gap left of the
+  // inverter and above the ATS row into input II (the last two modules); PE as a trunk along the
+  // right wall into the last terminal of the PE block
   private external(pen: Pen, byId: Map<string, Placed>) {
     const e = this.lay.external!, x = this.data.external!;
     const t = this.inverterBody(pen, e, x);
@@ -565,7 +567,7 @@ export class PanelView {
       const sw = x.switch && x.switch !== x.to ? byId.get(x.switch) : undefined;
       if (sw) this.outputJumper(to, sw);
     }
-    // PE — вдоль правой стенки щита вверх к последней клемме клеммника PE
+    // PE goes up along the right wall of the panel to the last terminal of the PE block
     const pe = this.lay.pe, last = termX(pe, this.lay.terminals), peY = pe.y + pe.h + 4;
     const trunk = right - PE_TRUNK, y = bottom + 12;
     this.wire(PE, [[t.pe, bottom], [t.pe, y], [trunk, y], [trunk, peY], [last, peY], [last, pe.y + pe.h - 6]],
@@ -573,22 +575,23 @@ export class PanelView {
     if (this.lay.dc && this.data.dc && t.glands) this.dcBox(pen, bottom, t.glands);
   }
 
-  // Щит АКБ: корпус и аппараты; от верхних клемм — вверх своими дорожками и влево в вводы
-  // инвертора (АКБ — в BAT+ и BAT−, строка панелей — парой в свой ввод PV); от нижних
-  // клемм автомата АКБ — кабели к АКБ, строк панелей — вниз и вправо к подписи; УЗИП строки
-  // — перемычками к клеммам её автомата, PE — вниз к метке
+  // Battery box: enclosure and devices; from the top terminals up along their own lanes and left
+  // into the inverter inputs (battery into BAT+ and BAT−, a solar string as a pair into its PV
+  // input); from the bottom terminals of the battery breaker, cables to the battery, solar
+  // strings go down and right to their label; a string's surge protector is jumpered to its
+  // breaker terminals, PE goes down to its mark
   private dcBox(pen: Pen, invBottom: number, glands: { bat: [number, number]; pv: number[] }) {
     const dc = this.lay.dc!, data = this.data.dc!;
     const enc = dc.enclosure;
     const used = data.devices.reduce((s, d) => s + d.model.modules, 0);
-    // Подпись — под АКБ: над корпусом идут провода к инвертору, под ним — к АКБ и панелям
+    // Label under the battery: wires to the inverter run above the enclosure, to the battery and panels below it
     text(pen, `${data.texts.title} · ${enc.title} · ${used}/${enc.rows * enc.per_row} DIN`,
          dc.battery.x, dc.battery.y + dc.battery.h + 8, LABEL, pen.ink, "left");
     this.enclosure(pen, dc.box, enc);
     for (const y of dc.rails) this.rail(pen, dc.box.x + 12, dc.box.x + dc.box.w - 12, y);
     for (const p of dc.placed) this.device(pen, p);
-    const poles = (p: Placed) => [p.x + MODULE / 2, p.x + p.w - MODULE / 2];  // «+» и «−»
-    // Вверх к инвертору: по порядку слева направо — у правого провода дорожка выше
+    const poles = (p: Placed) => [p.x + MODULE / 2, p.x + p.w - MODULE / 2];  // "+" and "−"
+    // Up to the inverter: in order left to right, the right-hand wire gets the higher lane
     const ups: { x: number; y: number; to: number; color: string; width: number }[] = [];
     const battery = dc.placed.find((p) => p.dev.kind === "dc_battery");
     const strings = dc.placed.filter((p) => p.dev.kind === "dc_breaker");
@@ -607,7 +610,7 @@ export class PanelView {
       const lane = dc.lanes[k];
       this.wire(u.color, [[u.x, u.y], [u.x, lane], [u.to, lane], [u.to, invBottom]], undefined, u.width);
     });
-    // УЗИП строки — перемычки к клеммам автомата строки, PE — вниз к метке
+    // String surge protector: jumpers to the string breaker terminals, PE down to its mark
     for (const f of dc.placed.filter((p) => p.dev.kind === "dc_spd")) {
       const q = strings[dc.placed.filter((p) => p.dev.kind === "dc_spd").indexOf(f)];
       if (q) {
@@ -619,7 +622,7 @@ export class PanelView {
       this.wire(PE, [[cx, from], [cx, from + 16]], PE_STRIPE, 1.6);
       text(pen, "PE", cx, from + 21, 4.5, PE);
     }
-    // Строки панелей: из нижних клемм вниз под корпус и вправо к подписи
+    // Solar strings: from the bottom terminals down under the enclosure and right to the label
     const end = dc.box.x + dc.box.w + 10;
     strings.forEach((p, k) => {
       const from = p.y + p.h - SCREW;
@@ -631,30 +634,30 @@ export class PanelView {
     if (battery) this.battery(pen, battery, poles(battery), data);
   }
 
-  // АКБ — шкаф с лицевой панелью и индикатором заряда; клеммы «+» и «−» сверху под полюсами
-  // автомата АКБ, кабели — к его нижним клеммам
+  // Battery: a cabinet with a front panel and a charge indicator; "+" and "−" terminals on top
+  // under the battery breaker poles, cables to its bottom terminals
   private battery(pen: Pen, qb: Placed, [xp, xm]: number[], data: NonNullable<PanelData["dc"]>) {
     const { ctx } = pen, r = this.lay.dc!.battery, b = data.battery;
     ctx.fillStyle = "#3b4046"; ctx.strokeStyle = "#22262a"; ctx.lineWidth = 1;
     ctx.beginPath(); ctx.roundRect(r.x, r.y, r.w, r.h, 5); ctx.fill(); ctx.stroke();
     ctx.fillStyle = "#4a5057";
     ctx.beginPath(); ctx.roundRect(r.x + 8, r.y + 14, r.w - 16, r.h * 0.42, 3); ctx.fill();
-    // Индикатор заряда
+    // Charge indicator
     const dx = r.x + 18, dy = r.y + 24, dw = r.w - 36, dh = 16;
     ctx.fillStyle = "#9fd6c8";
     ctx.beginPath(); ctx.roundRect(dx, dy, dw, dh, 2); ctx.fill();
     text(pen, `${b.voltage} V  ▮▮▮▮▯`, dx + dw / 2, dy + dh / 2, 7, "#173b33");
     const v = `${b.voltage} В${b.voltage_assumed ? "*" : ""}`;
-    // Старый .epd — без единицы в texts: по языку проекта из манифеста
+    // Old .epd without the unit in texts: use the project language from the manifest
     const kwh = data.texts.kwh ?? (this.language === "uk" ? "кВт·год" : "кВт·ч");
     const cap = b.capacity ? ` · ${String(b.capacity).replace(".", ",")} ${kwh}` : "";
     text(pen, `${data.texts.battery} ${v}${cap}`, r.x + r.w / 2, r.y + r.h * 0.42 + 2, 6.5, "#e8e8e6");
-    // Рёбра на нижней части
+    // Ribs on the lower part
     ctx.strokeStyle = "#2d3136"; ctx.lineWidth = 1;
     for (let y = r.y + r.h * 0.62; y < r.y + r.h - 8; y += 9) {
       ctx.beginPath(); ctx.moveTo(r.x + 10, y); ctx.lineTo(r.x + r.w - 10, y); ctx.stroke();
     }
-    // Клеммы и кабели к автомату АКБ
+    // Terminals and cables to the battery breaker
     const from = qb.y + qb.h - SCREW, thick = WIRE * 1.6;
     for (const [x, color, sign] of [[xp, DC_PLUS, "+"], [xm, DC_MINUS, "−"]] as const) {
       ctx.fillStyle = color;
@@ -663,14 +666,14 @@ export class PanelView {
       this.wire(color, [[x, r.y - 6], [x, from]], undefined, thick);
     }
     const box = this.lay.dc!.box;
-    // Слева от кабелей АКБ: справа идут провода строк панелей
+    // Left of the battery cables: the solar string wires run on the right
     text(pen, `2×${String(b.cable).replace(".", ",")} мм² · ${b.rating} А`, xp - 7, (box.y + box.h + r.y) / 2,
          5.5, pen.ink, "right");
   }
 
-  // Автомат выхода инвертора → вход II АВР или переключателя: с нижних клемм под рейкой
-  // влево в два последних модуля переключателя снизу; L (левый полюс) — выше и в крайний
-  // модуль, N — ниже и в соседний: перемычки не пересекаются
+  // Inverter output breaker → input II of the ATS or switch: from the bottom terminals under
+  // the rail left into the last two switch modules from below; L (left pole) higher and into
+  // the outermost module, N lower and into the next one: the jumpers do not cross
   private outputJumper(out: Placed, sw: Placed) {
     const y = this.lay.rows[out.row].gutterTop, from = out.y + out.h - SCREW;
     const l = out.x + MODULE / 2, n = out.x + 1.5 * MODULE;
@@ -679,15 +682,15 @@ export class PanelView {
     this.wire(RESERVE, [[l, from], [l, y + 3], [tl, y + 3], [tl, into]]);
   }
 
-  // Гибридный инвертор (вид как у настенных на 5 кВт): светлый корпус с рёбрами радиатора по
-  // бокам, тёмная лицевая панель с дисплеем, индикаторами и кнопками, внизу — вводы АКБ и
-  // PV (сальники) и клеммы LOAD, GRID, PE. Вилка генератора — тот же корпус без GRID.
-  // Возвращает x клемм
+  // Hybrid inverter (looks like 5 kW wall-mounted units): a light body with heatsink ribs on the
+  // sides, a dark front panel with a display, indicators and buttons, at the bottom the battery
+  // and PV inputs (glands) and LOAD, GRID, PE terminals. A generator plug is the same body
+  // without GRID. Returns the terminal x positions
   private inverterBody(pen: Pen, e: Rect, x: NonNullable<PanelData["external"]>) {
     const { ctx } = pen, w = e.w, h = e.h;
     const inverter = x.kind === "inverter";
     text(pen, `${x.id} · ${x.title}`, e.x, e.y - 5, LABEL, pen.ink, "left");
-    // Корпус и рёбра радиатора
+    // Body and heatsink ribs
     ctx.fillStyle = "#f2f3f1"; ctx.strokeStyle = "#8a8a86"; ctx.lineWidth = 1;
     ctx.beginPath(); ctx.roundRect(e.x, e.y, w, h, 6); ctx.fill(); ctx.stroke();
     const fin = w * 0.07;
@@ -699,36 +702,36 @@ export class PanelView {
         ctx.beginPath(); ctx.moveTo(fx, fy); ctx.lineTo(fx + fin, fy); ctx.stroke();
       }
     }
-    // Лицевая панель
+    // Front panel
     const px = e.x + w * 0.14, pw = w * 0.72, py = e.y + h * 0.1, ph = h * 0.36;
     ctx.fillStyle = "#2a2d31";
     ctx.beginPath(); ctx.roundRect(px, py, pw, ph, 5); ctx.fill();
-    // Дисплей
+    // Display
     const dx = px + pw * 0.1, dw = pw * 0.8, dy = py + ph * 0.1, dh = ph * 0.36;
     ctx.fillStyle = "#9fd6c8";
     ctx.beginPath(); ctx.roundRect(dx, dy, dw, dh, 2); ctx.fill();
     const fs = dh * 0.28;
     text(pen, inverter ? "230V  50Hz" : "GEN 230V", dx + dw / 2, dy + dh * 0.32, fs, "#173b33");
     text(pen, inverter ? "5.0 kW  ▮▮▮▯ 76%" : "STANDBY", dx + dw / 2, dy + dh * 0.7, fs * 0.9, "#173b33");
-    // Индикаторы: DC, AC, норма, авария
+    // Indicators: DC, AC, normal, fault
     const leds = ["#3ecf5a", "#3ecf5a", "#3ecf5a", "#5a2a2a"];
     leds.forEach((c, k) => {
       const lx = dx + dw * (0.12 + k * 0.25), ly = dy + dh + ph * 0.12;
       ctx.fillStyle = c;
       ctx.beginPath(); ctx.arc(lx, ly, Math.max(1.6, ph * 0.035), 0, 2 * Math.PI); ctx.fill();
     });
-    // Кнопки
+    // Buttons
     for (let k = 0; k < 4; k++) {
       const bx = dx + dw * (0.12 + k * 0.25), by = dy + dh + ph * 0.32;
       ctx.fillStyle = "#4a4f55";
       ctx.beginPath(); ctx.roundRect(bx - pw * 0.06, by - ph * 0.05, pw * 0.12, ph * 0.1, 1.5); ctx.fill();
     }
     text(pen, inverter ? "HYBRID INVERTER" : "POWER INLET", e.x + w / 2, py + ph + h * 0.05, h * 0.022, "#7a7d80");
-    // Нижняя панель подключений
+    // Bottom connection panel
     const cy = e.y + h * 0.84, ch = h * 0.13;
     ctx.fillStyle = "#3a3d42";
     ctx.beginPath(); ctx.roundRect(e.x + w * 0.04, cy, w * 0.92, ch, 3); ctx.fill();
-    // Вводы АКБ и PV справа — к щиту АКБ (он правее), клеммы сети слева — к щиту
+    // Battery and PV inputs on the right go to the battery box (further right), grid terminals on the left go to the panel
     const glands = inverter ? ["BAT+", "BAT−", "PV1", "PV2"] : [];
     const gxs = glands.map((_, k) => e.x + w * (0.6 + k * 0.085 + (k >= 2 ? 0.04 : 0)));
     glands.forEach((g, k) => {
@@ -737,7 +740,7 @@ export class PanelView {
       ctx.beginPath(); ctx.arc(gx, gy, w * 0.026, 0, 2 * Math.PI); ctx.fill();
       text(pen, g, gx, cy + ch * 0.85, ch * 0.13, "#c9ccd0");
     });
-    // Клеммы: LOAD L N, GRID L N, PE
+    // Terminals: LOAD L N, GRID L N, PE
     const pitch = w * 0.085, x0 = e.x + w * 0.1;
     const names = inverter ? ["L", "N", "L", "N", "PE"] : ["L", "N", "PE"];
     const xs = names.map((_, k) => x0 + k * pitch + (inverter && k >= 2 ? pitch * 0.3 : 0) + (k === names.length - 1 ? pitch * 0.3 : 0));
@@ -760,7 +763,7 @@ export class PanelView {
   }
 }
 
-// Тёмный цвет — подпись на нём белая
+// A dark colour gets white text on it
 function dark(hex: string): boolean {
   const n = parseInt(hex.replace("#", "").slice(0, 6), 16);
   return 0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255) < 150;

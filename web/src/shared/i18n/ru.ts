@@ -1,6 +1,6 @@
-// Строки интерфейса — русский: источник ключей. uk.ts и en.ts — та же форма (тип Messages):
-// нет ключа или лишний — ошибка типов. Надписи на чертежах, в таблицах и карточках — на языке
-// проекта (room.yaml: language), их пишет сборка, здесь их нет.
+// Interface strings in Russian: the source of keys. uk.ts and en.ts have the same shape (type
+// Messages): a missing or extra key is a type error. Labels on drawings, in tables and cards
+// are in the project language (room.yaml: language); the build writes them, they are not here.
 
 export const ru = {
   common: {
@@ -67,7 +67,7 @@ export const ru = {
     model: "Модель",
   },
   app: {
-    stages: { alpha: "альфа" },  // стадия продукта у имени и в настройках (shared/version.ts STAGE)
+    stages: { alpha: "альфа" },  // product stage next to the name and in settings (shared/version.ts STAGE)
     leave: "Правки трасс не сохранены. Уйти без сохранения?",
     stale: "YAML правили после сборки — листы устарели: uv run floorplan-engine build projects/{{name}}",
     notBuilt: "Проект не собран: uv run floorplan-engine build projects/{{name}}",
@@ -155,6 +155,24 @@ export const ru = {
     lead: "Выберите проект — листы, проводка и вопросы откроются в просмотре.",
     empty: "Нет проектов в projects/ — соберите хотя бы один:",
     placeholder: "имя",
+  },
+  prices: {
+    title: "Прайс студии · электрика", open: "Прайс студии",
+    lead: "Работы: цена студии рядом с рынком {{region}}. Сметы проектов берут цены отсюда при следующей сборке.",
+    back: "К проектам", leave: "Есть несохранённые цены. Уйти без сохранения?",
+    work: "Работа", unit: "Ед.", studio: "Цена студии, {{currency}}", market: "Рынок, {{region}}: мин · медиана · макс",
+    noMarket: "Рынок", vsMedian: "К медиане", priceOf: "Цена: {{name}}",
+    service: "в смете — имитация", serviceNote: "Своей цены нет: смета берёт цену сервиса цен (пока имитация, не рыночная)",
+    lists: "прайсов: {{n}}", takeMedian: "взять", takeMedianNote: "Поставить медиану рынка ценой студии",
+    noData: "нет в прайсах", median: "Медиана", spreadLabel: "мин {{min}}, медиана {{median}}, макс {{max}}",
+    places: { below: "дешевле всех прайсов", low: "в нижней четверти рынка", mid: "в средней половине рынка", high: "в верхней четверти рынка", above: "дороже всех прайсов" },
+    invalid: "Цена — число не меньше 0", saved: "Сохранено в prices.yaml — сметы пересчитаются при сборке",
+    reset: "Сбросить", save: "Сохранить", saving: "Сохраняю…",
+    footnote: "Рынок {{region}}: {{n}} открытых прайсов студий, мастеров и площадок, цены за {{period}}; собрано — {{collected}}.",
+    undated: "Без даты на странице: {{n}}.", undatedOnly: "период неизвестен",
+    method: "Цены — работа без материалов, стена — бетон; медиана, а не среднее: прайсы расходятся в разы.",
+    noDate: "без даты",
+    kinds: { company: "компания", master: "мастер", platform: "площадка", review: "обзор рынка" },
   },
   projects: { title: "Проекты", empty: "Нет собранных проектов." },
   source: { noPreview: "Предпросмотра нет — откройте файл в новой вкладке", back: "← К листу" },

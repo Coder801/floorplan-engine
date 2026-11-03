@@ -1,5 +1,5 @@
-"""Замечания проверки и загрузка YAML: файлы модели, Issue с путём к полю и важностью,
-перевод ошибок pydantic на русский (`format_loc`, `parse_model`), чтение YAML без падений."""
+"""Check remarks and YAML loading: model files, Issue with a field path and severity, pydantic
+errors translated to Russian (`format_loc`, `parse_model`), crash-free YAML reading."""
 
 from __future__ import annotations
 
@@ -14,9 +14,9 @@ from pydantic import BaseModel, ValidationError
 
 ROOM_FILE = "room.yaml"
 ELECTRICAL_FILE = "electrical.yaml"
-WIRING_FILE = "wiring.yaml"  # ручные правки проводки из просмотра (линии, коробки)
-VARIANT_FILE = "variant.yaml"  # вариант проводки, выбранный в просмотре (режим, трасса)
-STUDIO_FILE = "studio.yaml"  # профиль студии — в папке над проектами
+WIRING_FILE = "wiring.yaml"  # manual wiring edits from the viewer (lines, boxes)
+VARIANT_FILE = "variant.yaml"  # wiring variant chosen in the viewer (mode, route)
+STUDIO_FILE = "studio.yaml"  # studio profile, in the folder above the projects
 M = TypeVar("M", bound=BaseModel)
 
 

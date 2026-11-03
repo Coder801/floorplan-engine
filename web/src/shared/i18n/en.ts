@@ -67,7 +67,7 @@ export const en: Messages = {
     model: "Model",
   },
   app: {
-    stages: { alpha: "alpha" },  // стадия продукта у имени и в настройках (shared/version.ts STAGE)
+    stages: { alpha: "alpha" },  // product stage next to the name and in settings (shared/version.ts STAGE)
     leave: "Route edits are not saved. Leave without saving?",
     stale: "YAML changed after the build — sheets are outdated: uv run floorplan-engine build projects/{{name}}",
     notBuilt: "Project not built: uv run floorplan-engine build projects/{{name}}",
@@ -155,6 +155,24 @@ export const en: Messages = {
     lead: "Choose a project — sheets, wiring and questions open in the viewer.",
     empty: "No projects in projects/ — build at least one:",
     placeholder: "name",
+  },
+  prices: {
+    title: "Studio prices · electrical", open: "Studio prices",
+    lead: "Works: the studio price next to the {{region}} market. Project estimates take prices from here at the next build.",
+    back: "To projects", leave: "Some prices are not saved. Leave without saving?",
+    work: "Work", unit: "Unit", studio: "Studio price, {{currency}}", market: "Market, {{region}}: min · median · max",
+    noMarket: "Market", vsMedian: "Vs median", priceOf: "Price: {{name}}",
+    service: "estimate uses a mock", serviceNote: "No studio price: the estimate takes the price service's (a mock for now, not the market)",
+    lists: "price lists: {{n}}", takeMedian: "use", takeMedianNote: "Set the market median as the studio price",
+    noData: "not in price lists", median: "Median", spreadLabel: "min {{min}}, median {{median}}, max {{max}}",
+    places: { below: "cheaper than all lists", low: "in the market's lower quarter", mid: "in the market's middle half", high: "in the market's upper quarter", above: "dearer than all lists" },
+    invalid: "A price is a number not below 0", saved: "Saved to prices.yaml — estimates are recalculated at the build",
+    reset: "Reset", save: "Save", saving: "Saving…",
+    footnote: "{{region}} market: {{n}} public price lists of studios, masters and platforms, prices for {{period}}; collected {{collected}}.",
+    undated: "Undated on the page: {{n}}.", undatedOnly: "unknown period",
+    method: "Prices are labour without materials, concrete walls; the median, not the mean: price lists differ several-fold.",
+    noDate: "undated",
+    kinds: { company: "company", master: "master", platform: "platform", review: "market review" },
   },
   projects: { title: "Projects", empty: "No built projects." },
   source: { noPreview: "No preview — open the file in a new tab", back: "← Back to sheet" },

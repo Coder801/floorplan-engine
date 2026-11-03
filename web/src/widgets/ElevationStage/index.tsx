@@ -1,8 +1,9 @@
-// Развёртка стены: свой canvas (ElevationView) из данных развёртки, кнопки масштаба;
-// «Изометрия» — стена под 45° с частью соседней в углу (выбор запоминается в браузере).
-// Не общий чертёж листов с планом: слоёв листа, подсветки стен и помещений и 3D нет; видны
-// электрика и вода — глазом в «На стене» (store.wallLayers).
-// PNG для альбома — «Скачать» (Viewer), весь печатный лист из примитивов страницы.
+// Wall elevation: its own canvas (ElevationView) from the elevation data, zoom buttons;
+// "Isometry" shows the wall at 45° with part of the neighbouring one at the corner (the choice
+// is remembered in the browser). Not the shared drawing of plan sheets: no sheet layers, no
+// wall and room highlighting, no 3D; electrical and water are toggled with the eye in "On the
+// wall" (store.wallLayers).
+// The album PNG comes from "Download" (Viewer): the whole printed sheet from page primitives.
 
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -17,7 +18,7 @@ import type { StageHandle } from "@/widgets/SheetStage";
 
 interface Props {
   elevation: Elevation;
-  withMap: boolean;  // внизу слева — мини-схема (WallMap): развёртка её обходит
+  withMap: boolean;  // mini map at the bottom left (WallMap): the elevation avoids it
 }
 
 
@@ -38,7 +39,7 @@ export const ElevationStage = forwardRef<StageHandle, Props>(function ElevationS
     return () => { v.destroy(); ev.current = null; };
   }, []);
 
-  // Другая стена или вид — тот же холст, вся стена
+  // Another wall or view: the same canvas, the whole wall
   useEffect(() => { ev.current?.setData(elevation, withMap, mode); }, [elevation, withMap, mode]);
 
   const toggleIso = () => {
@@ -61,7 +62,7 @@ export const ElevationStage = forwardRef<StageHandle, Props>(function ElevationS
           {elevation.height_assumed ? t("elevation.ceiling", { h: elevation.height }) : ""}
           {mode === "iso" ? t("elevation.isoHint") : t("elevation.hint")}
         </span>
-        {/* В изометрии мм на экране разные по осям — линейки нет */}
+        {/* In isometry screen mm differ by axis, so there is no scale bar */}
         {mode === "flat" && <ScaleBar zoom={zoom} />}
       </div>
     </>

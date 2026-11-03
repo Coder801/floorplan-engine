@@ -1,6 +1,6 @@
 @use "sass:math";
 
-// Вуаль на весь экран (поверх шапки и панелей) и карточка по центру
+// A full-screen veil (over the header and panels) and a card in the middle
 .veil {
   position: fixed; inset: 0; z-index: 100;
   display: grid; place-content: center;
@@ -16,7 +16,7 @@
   b { color: inherit; font-weight: 600; }
 }
 .icon { display: block; }
-// Кнопки калькулятора: волна по диагонали, как lds-grid (задержка = −0,4 с на шаг строки + столбца)
+// Calculator buttons: a diagonal wave, like lds-grid (delay = −0.4 s per row + column step)
 .key {
   fill: currentColor; stroke: none;
   animation: pulse 1.2s linear infinite;

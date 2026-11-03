@@ -1,46 +1,48 @@
 ---
-description: Электрика для проекта → electrical.yaml, затем build и проверка листа электрики
-argument-hint: <проект> <описание точек, групп, щита, трасс>
+description: Electrical for a project → electrical.yaml, then build and a check of the electrical sheet
+argument-hint: <project> <description of points, groups, panel, routes>
 allowed-tools: Read, Write, Edit, Glob, Bash(uv run floorplan-engine:*), Bash(ls:*)
 ---
 
-Добавь электрику в проект. Аргументы: $ARGUMENTS
-Первое слово — имя проекта (`projects/<имя>/`), остальное — описание электрики.
+Add electrical to a project. Arguments: $ARGUMENTS
+The first word is the project name (`projects/<name>/`); the rest describes the electrical work.
 
-Следуй правилам из CLAUDE.md.
+Follow the rules in CLAUDE.md.
 
-## 1. Контекст
-- Прочитай `projects/<имя>/room.yaml`. Если файла нет или `check` падает на плане, остановись и скажи об этом.
-- Прочитай существующий `electrical.yaml`, если он есть: новые точки **дописываются**,
-  а уже записанные не удаляй и не меняй без явной просьбы.
-- Для ориентира открой лист плана `out/artifact/01-plan.png`, если он есть (`render-artifact`). `id` стен — в `room.yaml` (`walls[].id`).
+## 1. Context
+- Read `projects/<name>/room.yaml`. If the file is missing or `check` fails on the plan, stop and
+  say so.
+- Read the existing `electrical.yaml` if there is one: new points are **appended**; do not delete
+  or change points already there unless asked to.
+- For orientation, open the plan sheet `out/artifact/01-plan.png` if it exists (`render-artifact`).
+  Wall `id`s are in `room.yaml` (`walls[].id`).
 
-## 2. Перевод описания в точки
-- У каждой точки `id` (`<комната>_<тип>_<n>`). Привяжи её к стене: `room`, `wall` (`id` стены
-  из room.yaml, например `w3`), `offset` до **середины**
-  символа по направлению обхода, `height`. Светильник: `ceiling: [x, y]` от `origin` комнаты.
-- Описание вида «справа от двери 200 мм» переведи в offset через `offset` и `width` двери из room.yaml.
-  Покажи арифметику.
-- Количество в блоке — `count`, группа — `group` (QF1…), пояснение — `note`.
-- Щит — `board`, трассы — `cables` с `id` (`cable_<n>`): `from: board`, `to` — `id` точек,
-  `cable` — сечение, `route`: wall / ceiling / floor.
-- Чего нет в описании (высота, группа, сечение), не выдумывай: спроси. Типовые высоты
-  (300 / 900 / 1700) подставляй, только если пользователь согласился, и пометь как допущение —
-  вопросом в `intake.yaml` (`stage: electrical`, `target: points.<id>.height`, `assumption`).
+## 2. Turning the description into points
+- Every point has an `id` (`<room>_<type>_<n>`). Attach it to a wall: `room`, `wall` (the wall `id`
+  from room.yaml, for example `w3`), `offset` to the **centre** of the symbol along the walk
+  direction, and `height`. A ceiling light uses `ceiling: [x, y]` from the room `origin`.
+- Turn a description like "200 mm to the right of the door" into an offset using the door's
+  `offset` and `width` from room.yaml. Show the arithmetic.
+- A count in a block is `count`, the group is `group` (QF1…), a note is `note`.
+- The panel is `board`; routes are `cables` with an `id` (`cable_<n>`): `from: board`, `to` is a
+  point `id`, `cable` is the cable size, `route` is wall / ceiling / floor.
+- Do not invent what the description does not say (height, group, cable size): ask. Use typical
+  heights (300 / 900 / 1700) only if the user agreed, and mark them as an assumption with a
+  question in `intake.yaml` (`stage: electrical`, `target: points.<id>.height`, `assumption`).
 
-## 3. Покажи и остановись
-Покажи таблицу **«id/№ → комната → стена → offset → тип → высота → кол-во → группа → источник»**,
-таблицу трасс и список допущений и вопросов. Дождись подтверждения.
+## 3. Show and stop
+Show a table **"id/No. → room → wall → offset → type → height → count → group → source"**, a table
+of routes, and a list of assumptions and questions. Wait for confirmation.
 
-## 4. После подтверждения
-1. Запиши `electrical.yaml`. Выполни `uv run floorplan-engine check projects/<имя>`.
-   При ошибке покажи её и спроси; числа не подгоняй.
-2. `uv run floorplan-engine build projects/<имя>`.
-3. Запусти `uv run floorplan-engine render-artifact projects/<имя>` и открой через Read лист электрики
-   `out/artifact/02-electrical.png` (и проводку — `03-wiring.png`). Проверь:
-   - каждая точка на нужной стене и не в дверном или оконном проёме;
-   - символы смотрят в помещение;
-   - трассы соединяют нужные точки;
-   - подписи групп и высот читаются;
-   - легенда соответствует составу.
-4. Итог: `out/project.dxf` (лист «02 Електрика»), число точек по группам, допущения.
+## 4. After confirmation
+1. Write `electrical.yaml`. Run `uv run floorplan-engine check projects/<name>`.
+   If there is an error, show it and ask; do not adjust numbers to fit.
+2. Run `uv run floorplan-engine build projects/<name>`.
+3. Run `uv run floorplan-engine render-artifact projects/<name>` and open with Read the electrical
+   sheet `out/artifact/02-electrical.png` (and the wiring sheet `03-wiring.png`). Check that:
+   - every point is on the right wall and not inside a door or window opening;
+   - symbols face into the room;
+   - routes connect the right points;
+   - group and height labels are readable;
+   - the legend matches what is on the sheet.
+4. Result: `out/project.dxf` (sheet "02 Електрика"), the number of points per group, assumptions.

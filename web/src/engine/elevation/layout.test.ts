@@ -18,7 +18,7 @@ describe("badgePlaces", () => {
     const taken: Rect[] = [sym];
     const [a] = badgePlaces([{ w: 20, anchor: sym }], 16, taken);
     expect(a).toEqual([13, -14, 33, 2]);
-    // Вторая плашка у того же символа: справа занято — слева
+    // A second badge on the same symbol: right is taken, so left
     const [b] = badgePlaces([{ w: 20, anchor: sym }], 16, taken);
     expect(b).toEqual([-23, -3, -3, 13]);
   });

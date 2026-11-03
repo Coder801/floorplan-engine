@@ -1,5 +1,5 @@
-"""Наложение на модель: профиль студии (projects/studio.yaml), ответы из answers.yaml в
-поля по `target`, автоответы на вопросы, которые составляет код (вопросы щита)."""
+"""Applied on top of the model: the studio profile (projects/studio.yaml), answers from
+answers.yaml into fields by `target`, auto answers to code-built questions (panel questions)."""
 
 from __future__ import annotations
 
@@ -62,15 +62,15 @@ def load_optional(path: Path, model: type[M]) -> tuple[M | None, list[Issue]]:
 
 
 def apply_studio(path: Path, raw: dict[Stage, Any]) -> list[Issue]:
-    """Графы штампа из профиля студии — в `sheet` плана, где они не заполнены (raw меняется
-    на месте). Заполненное в room.yaml важнее профиля."""
+    """Title block boxes from the studio profile go into the plan `sheet` where they are empty (raw
+    is changed in place). What room.yaml fills in beats the profile."""
     plan = raw.get(Stage.PLAN)
     studio, issues = load_optional(path, Studio)
     if studio is None or not isinstance(plan, dict):
         return issues
     sheet = plan.setdefault("sheet", {})
     if not isinstance(sheet, dict):
-        return issues  # ошибку типа покажет проверка room.yaml
+        return issues  # the room.yaml check will report a type error
     for key, value in studio.model_dump(exclude_defaults=True).items():
         if not sheet.get(key):
             sheet[key] = value
@@ -80,10 +80,10 @@ def apply_studio(path: Path, raw: dict[Stage, Any]) -> list[Issue]:
 def apply_answers(
     intake: Intake, answers: Answers, raw: dict[Stage, Any]
 ) -> tuple[dict[str, QuestionState], list[Issue]]:
-    """Наложить ответы на сырые данные этапов (raw меняется на месте).
+    """Apply answers to the raw stage data (raw is changed in place).
 
-    Значение и выбор подставляются в target вопроса; текст ждёт анализатора;
-    accept оставляет допущение. Исходные YAML не переписываются.
+    A value or a choice is put into the question target; text waits for the analyzer;
+    accept keeps the assumption. The source YAML files are not rewritten.
     """
     issues: list[Issue] = []
     states: dict[str, QuestionState] = {q.id: "open" for q in intake.questions}
@@ -100,7 +100,7 @@ def apply_answers(
                 issues.append(Issue(INTAKE_FILE, f"questions[{k}].{key}", str(exc)))
     for qid, answer in answers.answers.items():
         if qid.startswith(AUTO_PREFIX):
-            continue  # вопрос щита — его составит код (apply_auto_answers)
+            continue  # a panel question: the code builds it (apply_auto_answers)
         path = f"answers.{qid}"
         question = by_id.get(qid)
         if question is None:
@@ -124,7 +124,7 @@ def apply_answers(
             )
             continue
         data = raw.get(question.stage)
-        assert question.target is not None  # value и choice без target запрещает схема
+        assert question.target is not None  # the schema forbids value and choice without target
         if data is None:
             issues.append(
                 Issue(ANSWERS_FILE, path, f"нет {STAGE_FILE.get(question.stage, question.stage)}")
@@ -141,8 +141,8 @@ def apply_answers(
 
 
 def auto_questions(raw: dict[Stage, Any]) -> list[Question]:
-    """Вопросы щита по сырым данным этапов: план и электрика разбираются молча — их ошибки
-    покажет проверка."""
+    """Panel questions from the raw stage data: plan and electrical are parsed silently, their
+    errors are reported by the check."""
     plan_data, elec_data = raw.get(Stage.PLAN), raw.get(Stage.ELECTRICAL)
     if plan_data is None or elec_data is None:
         return []
@@ -161,9 +161,9 @@ def auto_questions(raw: dict[Stage, Any]) -> list[Question]:
 def apply_auto_answers(
     answers: Answers, raw: dict[Stage, Any]
 ) -> tuple[list[Question], dict[str, QuestionState], list[Issue]]:
-    """Вопросы щита и ответы на них. Значение и выбор подставляются в `panel` электрики
-    (raw меняется на месте), после чего вопросы составляются заново: отвеченные поля
-    вопросов уже не дают, а раздел щита может измениться (резерв, линии)."""
+    """Panel questions and their answers. A value or choice is put into the electrical `panel`
+    (raw is changed in place), then the questions are built again: answered fields no longer
+    produce questions, and the panel section may change (backup, lines)."""
     states: dict[str, QuestionState] = {}
     issues: list[Issue] = []
 
@@ -199,7 +199,7 @@ def apply_auto_answers(
     final = auto_questions(raw)
     apply(final)
     ids = {q.id for q in final}
-    # Отвеченный вопрос поля больше не составляется — показываем его отвеченным
+    # An answered field question is no longer built: show it as answered
     final += [q for q in first if q.id not in ids and states.get(q.id) == "answered"]
     known = {q.id for q in final}
     for qid in answers.answers:

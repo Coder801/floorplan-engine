@@ -1,4 +1,4 @@
-"""Размещение подписей (labels.py) на синтетической геометрии: мм модели = мм листа."""
+"""Label placement (labels.py) on synthetic geometry: model mm = sheet mm."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from floorplan_engine.drawing.labels import Align, LabelPlacer, Metrics, door_sw
 from floorplan_engine.model.geometry import Vec
 
 M = Metrics(line_h=2.0, step=3.0, gap=1.0, probe=1.0, reach=12, far=40, leader_min=3.0)
-# Помещение 100 × 60, стены по 10 мм снаружи
+# Room 100 × 60, walls 10 mm thick outside
 ROOM = Polygon([(0, 0), (100, 0), (100, 60), (0, 60)])
 WALLS = box(-10, -10, 110, 70).difference(ROOM)
 
@@ -24,7 +24,7 @@ def test_label_beside_wall_symbol_inside_room() -> None:
     out = p.place(["h300"], [8.0], Vec(0, 30), Vec(1, 0), 2.0)
     x0, y0, _, y1 = out.rect
     assert out.align is Align.LEFT
-    assert x0 == 3.0 and y0 < 30 < y1  # у символа, со стороны помещения, по центру
+    assert x0 == 3.0 and y0 < 30 < y1  # by the symbol, on the room side, centred
     assert out.leader is None
     assert out.lines == [("h300", Vec(3.0, 30.0))]
 
@@ -37,7 +37,7 @@ def test_second_label_does_not_overlap_first() -> None:
 
 
 def test_label_avoids_symbol_and_door() -> None:
-    sym = box(2, 26, 6, 34)  # чужой символ прямо там, где встала бы подпись
+    sym = box(2, 26, 6, 34)  # someone else's symbol exactly where the label would go
     door = door_swing(Vec(20, 0), Vec(40, 0), Vec(0, 1), 20.0)
     p = placer(symbols=[sym], zones=[door])
     out = p.place(["h300"], [8.0], Vec(0, 30), Vec(1, 0), 2.0)
@@ -47,7 +47,7 @@ def test_label_avoids_symbol_and_door() -> None:
 
 
 def test_crowded_spot_gets_leader_and_stays_in_frame() -> None:
-    # Всё вокруг символа занято символами — подпись уходит дальше, с выноской
+    # Everything around the symbol is taken by symbols: the label moves farther, with a leader
     syms = [box(0, 0, 30, 60)]
     frame = box(-20, -20, 120, 80)
     p = placer(symbols=syms, frame=frame)

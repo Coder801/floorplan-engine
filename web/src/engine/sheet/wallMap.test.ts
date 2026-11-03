@@ -11,7 +11,7 @@ const scene = (): Scene => ({
   walls: [
     { key: "wall:a.w1", polys: [[rect(-100, 0, 0, 4000)]], z: [0, 2700], normals: [[1, 0]] },
     { key: "wall:a.w3", polys: [[rect(3000, 0, 3100, 4000)]], z: [0, 2700], normals: [[-1, 0], [1, 0]] },
-    { key: "wall:a.w2", polys: [[rect(1000, 4000, 1800, 4100)]], z: [2100, 2700], normals: [[0, -1]] },  // перемычка
+    { key: "wall:a.w2", polys: [[rect(1000, 4000, 1800, 4100)]], z: [2100, 2700], normals: [[0, -1]] },  // lintel
   ],
   wires: {}, points: {}, boxes: {},
 });
@@ -28,7 +28,7 @@ describe("wallMap", () => {
   it("полы — первыми, перемычки выше среза — не рисуются", () => {
     const faces = wallMap(scene(), null, null);
     expect(faces.slice(0, 2).every((f) => f.kind === "floor")).toBe(true);
-    // Две стены по одному верху; перемычка (2100…2700) выше среза 2700 × CUT_SHARE
+    // Two walls with the same top; the lintel (2100…2700) is above the cut 2700 × CUT_SHARE
     expect(2100).toBeGreaterThan(2700 * CUT_SHARE);
     expect(faces.filter((f) => f.kind === "top")).toHaveLength(2);
   });
@@ -47,13 +47,13 @@ describe("wallMap", () => {
     expect(wallMap(scene(), "wall:a.w3", "a").some((f) => f.kind === "view")).toBe(false);
     const man = viewer(scene(), "a", face);
     expect(man.view.pts[0]).toEqual(man.feet);
-    expect(man.size).toBe(1300);  // квартира меньше 16 м по ширине и глубине — значок как есть
+    expect(man.size).toBe(1300);  // flat smaller than 16 m in width and depth: icon as is
   });
 });
 
 describe("standPoint", () => {
   it("перед серединой грани, внутри помещения (обход по часовой — помещение справа)", () => {
-    // Правая стена прямоугольника 3000 × 4000 идёт вниз: помещение — слева от неё на плане
+    // The right wall of a 3000 × 4000 rectangle runs down: the room is to its left on the plan
     const { at, normal } = standPoint([[3000, 4000], [3000, 0]], rect(0, 0, 3000, 4000));
     expect(normal).toEqual([-1, -0]);
     expect(at).toEqual([1900, 2000]);

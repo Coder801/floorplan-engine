@@ -1,8 +1,8 @@
-// Боковая панель: вкладки | тело с прокруткой; выдвижная панель шапки — поверх (absolute)
+// Side panel: tabs | scrolling body; the header slide-out panel goes on top (absolute)
 
 @use "@/shared/styles/mixins" as *;
 
-// Полоса (вид у «Электрики») | вкладки | тело; чего нет — строка нулевой высоты
+// Strip (the view for "Electrical") | tabs | body; missing parts are zero-height rows
 .side {
   position: relative; overflow: hidden; min-height: 0;
   display: grid; grid-template-rows: auto auto minmax(0, 1fr);
@@ -10,7 +10,7 @@
   background: var(--panel); border-left: 1px solid var(--line);
 }
 
-// Полоса: вид чертежа сегментами на всю ширину и «▴» шторки (только на узком экране)
+// Strip: the drawing view as full-width segments and the drawer "▴" (narrow screen only)
 .bar {
   grid-area: bar; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px;
   padding: 10px 16px; border-bottom: 1px solid var(--line);
@@ -20,7 +20,7 @@
 .title { font-weight: 500; }
 .toggle { display: none; min-width: 44px; padding: 0; font-size: 16px; }
 
-// Вкладок может не быть (у щита одни таблицы)
+// There may be no tabs (the panel has only tables)
 .tabs {
   grid-area: tabs;
   display: grid; grid-auto-flow: column; grid-auto-columns: 1fr;
@@ -34,7 +34,7 @@
 }
 .body { grid-area: body; }
 
-// Таблица листа: строка со ссылками на объекты подсвечивается вместе с ними
+// Sheet table: a row linked to objects is highlighted together with them
 .table {
   border-collapse: collapse; width: 100%; font-size: 12px;
   th, td { padding: 4px 6px; border-top: 1px solid var(--line); vertical-align: top; text-align: left; }
@@ -47,7 +47,7 @@
   tr.section td { font-weight: 600; padding-top: 10px; }
   tr.total td { border-top: 2px solid var(--text); font-weight: 600; }
 }
-// Итоги сметы: название — сумма
+// Estimate totals: name, sum
 .totals {
   display: grid; grid-template-columns: 1fr auto; gap: 8px 12px; margin: 0; font-size: 14px;
   dt { color: var(--muted); }
@@ -56,7 +56,7 @@
 }
 .notes { margin: 6px 0 0; padding-left: 16px; color: var(--muted); font-size: 12px; }
 
-// Слои: глаз | цвет | название | код слоя; скрытый слой — бледнее
+// Layers: eye | colour | name | layer code; a hidden layer is fainter
 .layers { display: block; }
 .layer {
   display: grid; grid-template-columns: auto 14px minmax(0, 1fr) auto;
@@ -66,8 +66,8 @@
 .swatch { height: 4px; }
 .code { color: var(--muted); }
 
-// Узкий экран — нижняя шторка: свёрнута — одна полоса под чертежом; развёрнута — поверх
-// чертежа снизу (Viewer — position: relative), с вкладками и таблицами
+// Narrow screen, bottom drawer: collapsed it is one strip under the drawing; expanded it covers
+// the drawing from below (Viewer is position: relative), with tabs and tables
 @media (max-width: $narrow) {
   .side { border-left: 0; border-top: 1px solid var(--line); }
   .bar { padding: 8px 12px; border-bottom: 0; }
@@ -75,7 +75,7 @@
   .toggle { display: block; }
   .tabs, .body { display: none; }
   .side[data-open] {
-    // grid-area: auto — иначе рамка абсолютного элемента сетки — его пустая область side
+    // grid-area: auto, otherwise the absolute grid item's frame is its empty side area
     grid-area: auto; position: absolute; left: 0; right: 0; bottom: 0; z-index: 6;
     height: min(72dvh, calc(100% - 96px));
     border-radius: 12px 12px 0 0; box-shadow: 0 -8px 28px rgba(0, 0, 0, .18);
@@ -85,7 +85,7 @@
   }
 }
 
-// Вариант проводки строкой над таблицами: выбор — на вкладке «Общие сведения»
+// Wiring variant as a line above the tables: the choice is on the "Overview" tab
 .variant {
   display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 6px; margin: 0 0 12px;
   padding: 8px 10px; border-radius: 8px; background: var(--soft); font-size: 12px;

@@ -1,14 +1,14 @@
-// Отрисовщики аппаратов по модели каталога (panel_catalog.py): сначала свой для
-// «бренд.вид» (generic.breaker), потом общий по виду (style), потом прямоугольник.
-// Новый бренд с другим видом лицевой панели — свой отрисовщик здесь же.
+// Device renderers by catalogue model (panel_catalog.py): first a specific one for
+// "brand.kind" (generic.breaker), then a shared one by kind (style), then a rectangle.
+// A new brand with a different front panel gets its own renderer right here.
 
 import type { PanelDevice } from "@/shared/types";
 import type { Rect } from "./layout";
 
 export interface Pen {
   ctx: CanvasRenderingContext2D;
-  font: string;     // семейство шрифта страницы
-  ink: string;      // цвет линий и текста по теме
+  font: string;     // page font family
+  ink: string;      // line and text colour for the theme
 }
 
 export type Renderer = (pen: Pen, d: PanelDevice, r: Rect) => void;
@@ -25,7 +25,7 @@ export function text(pen: Pen, s: string, x: number, y: number, size: number,
   ctx.fillText(s, x, y);
 }
 
-// Строка, обрезанная с «…» под ширину, мм
+// String cut with "…" to fit the width, mm
 export function clip(pen: Pen, s: string, width: number, size: number): string {
   const { ctx } = pen;
   ctx.font = `${size}px ${pen.font}`;
@@ -34,12 +34,12 @@ export function clip(pen: Pen, s: string, width: number, size: number): string {
   return s.trimEnd() + "…";
 }
 
-// Габарит модульного аппарата (DIN 43880): лицевая крышка 45 мм по центру — на оси
-// рейки, над и под ней — клеммные зоны с винтами, по винту на модуль
+// Modular device size (DIN 43880): a 45 mm front cover centred on the rail axis, terminal zones
+// with screws above and below it, one screw per module
 export const FRONT = 45;
-export const SCREW = 9;         // от края аппарата до центра винта клеммы
+export const SCREW = 9;         // from the device edge to the terminal screw centre
 const SCREW_R = 3.6;
-export const PLATE = { y: 2, h: 6.5 };  // маркировочная табличка от верха крышки: обозначение
+export const PLATE = { y: 2, h: 6.5 };  // marking plate from the top of the cover: designation
 
 export const shade = (hex: string, k: number) => {
   const n = parseInt(hex.slice(1), 16);
@@ -47,7 +47,7 @@ export const shade = (hex: string, k: number) => {
   return `rgb(${c(n >> 16)},${c((n >> 8) & 255)},${c(n & 255)})`;
 };
 
-// Центр лицевой крышки
+// Front cover centre
 const mid = (r: Rect) => r.y + r.h / 2;
 
 function screw(pen: Pen, x: number, y: number) {
@@ -58,7 +58,7 @@ function screw(pen: Pen, x: number, y: number) {
   ctx.beginPath(); ctx.arc(x, y, SCREW_R + 1.2, 0, 2 * Math.PI); ctx.fill(); ctx.stroke();
   ctx.fillStyle = "#9c9c98";
   ctx.beginPath(); ctx.arc(x, y, SCREW_R, 0, 2 * Math.PI); ctx.fill(); ctx.stroke();
-  // Шлиц «+»
+  // "+" slot
   ctx.strokeStyle = "#4a4a48"; ctx.lineWidth = 0.9;
   ctx.beginPath();
   ctx.moveTo(x - 2.4, y); ctx.lineTo(x + 2.4, y);
@@ -66,7 +66,7 @@ function screw(pen: Pen, x: number, y: number) {
   ctx.stroke();
 }
 
-// Винты клемм: top / bottom — сколько модулей с винтом (по умолчанию — все)
+// Terminal screws: top / bottom is how many modules have a screw (all by default)
 export function plate(r: Rect): Rect {
   return { x: r.x + 2, y: mid(r) - FRONT / 2 + PLATE.y, w: r.w - 4, h: PLATE.h };
 }
@@ -78,19 +78,19 @@ export function screwsX(r: Rect, n = Math.round(r.w / M)): number[] {
 function body(pen: Pen, d: PanelDevice, r: Rect, bottom?: number) {
   const { ctx } = pen;
   const base = d.model.body;
-  // Клеммные зоны — корпус ниже крышки, чуть темнее
+  // Terminal zones: the body below the cover, slightly darker
   ctx.fillStyle = shade(base, 0.93);
   ctx.strokeStyle = "#6b6b68";
   ctx.lineWidth = 0.7;
   ctx.beginPath(); ctx.roundRect(r.x + 0.4, r.y, r.w - 0.8, r.h, 2); ctx.fill(); ctx.stroke();
-  // Лицевая крышка с тенью снизу
+  // Front cover with a shadow below
   const f = { x: r.x + 0.4, y: mid(r) - FRONT / 2, w: r.w - 0.8, h: FRONT };
   ctx.fillStyle = shade(base, 0.8);
   ctx.fillRect(f.x, f.y + f.h, f.w, 1.6);
   ctx.fillStyle = base;
   ctx.fillRect(f.x, f.y, f.w, f.h);
   ctx.strokeRect(f.x, f.y, f.w, f.h);
-  // Стыки модулей у многополюсных — тонкой линией
+  // Module seams on multi-pole devices as a thin line
   const n = Math.round(r.w / M);
   ctx.strokeStyle = shade(base, 0.82); ctx.lineWidth = 0.4;
   for (let k = 1; k < n; k++) {
@@ -103,7 +103,7 @@ function body(pen: Pen, d: PanelDevice, r: Rect, bottom?: number) {
   ctx.fillRect(f.x + 1.6, f.y + PLATE.y, f.w - 3.2, PLATE.h);
 }
 
-// Рычаг в пазу, положение «вкл» (вверх), и зелёный флажок справа внизу
+// Lever in its slot, "on" position (up), and a green flag at the bottom right
 function lever(pen: Pen, d: PanelDevice, cx: number, cy: number) {
   const { ctx } = pen;
   ctx.fillStyle = "#3c3c3a";
@@ -116,7 +116,7 @@ function lever(pen: Pen, d: PanelDevice, cx: number, cy: number) {
   ctx.fillRect(cx + 1, cy + 11.5, 4, 2.2);
 }
 
-// Номинал на крышке: «C16» крупно, остальное («30 мА», «2P») мельче строкой ниже
+// Rating on the cover: "C16" large, the rest ("30 мА", "2P") smaller on the line below
 function rating(pen: Pen, d: PanelDevice, r: Rect, cx = r.x + r.w / 2) {
   const [head, ...rest] = d.label.split(" ");
   const y = mid(r) + FRONT / 2 - (rest.length ? 9 : 6);
@@ -133,7 +133,7 @@ function test(pen: Pen, d: PanelDevice, cx: number, cy: number) {
   text(pen, "T", cx, cy - 0.4, 4.2, "#fff");
 }
 
-// Окно индикатора: тёмное стекло с цифрами
+// Indicator window: dark glass with digits
 function display(pen: Pen, x: number, y: number, w: number, h: number, s: string, color: string) {
   const { ctx } = pen;
   ctx.fillStyle = "#1b1f1c";
@@ -147,7 +147,7 @@ const levers = (n: number): Renderer => (pen, d, r) => {
   rating(pen, d, r);
 };
 
-// Дифавтомат и УЗО: рычаг в первом модуле, кнопка «Тест» во втором
+// RCBO and RCD: lever in the first module, "Test" button in the second
 const withTest: Renderer = (pen, d, r) => {
   body(pen, d, r);
   lever(pen, d, r.x + M / 2, mid(r) - 2);
@@ -166,7 +166,7 @@ const RENDERERS: Record<string, Renderer> = {
     body(pen, d, r);
     const { ctx } = pen, y = mid(r) - FRONT / 2;
     display(pen, r.x + 5, y + 11, r.w - 18, 11, "230", "#ff5a3c");
-    // Кнопки настройки справа от окна
+    // Setting buttons right of the window
     ctx.fillStyle = "#9a9a96";
     for (let k = 0; k < 3; k++) {
       ctx.beginPath(); ctx.arc(r.x + r.w - 7, y + 12 + k * 5, 1.7, 0, 2 * Math.PI); ctx.fill();
@@ -175,9 +175,9 @@ const RENDERERS: Record<string, Renderer> = {
     rating(pen, d, r);
   },
   spd: (pen, d, r) => {
-    body(pen, d, r, 1);  // снизу — одна клемма PE
+    body(pen, d, r, 1);  // one PE terminal at the bottom
     const { ctx } = pen, y = mid(r) - FRONT / 2 + 10;
-    // Сменные вставки с окном исправности
+    // Replaceable inserts with a status window
     for (const x of screwsX(r)) {
       ctx.fillStyle = "#e2e2de"; ctx.strokeStyle = "#7a7a76"; ctx.lineWidth = 0.6;
       ctx.beginPath(); ctx.roundRect(x - 7, y, 14, 22, 1.5); ctx.fill(); ctx.stroke();
@@ -204,7 +204,7 @@ const RENDERERS: Record<string, Renderer> = {
     body(pen, d, r);
     const { ctx } = pen, y = mid(r) - FRONT / 2;
     display(pen, r.x + 6, y + 10, r.w - 12, 10, "ATS", "#ffd54f");
-    // Индикаторы источников I и II
+    // Source I and II indicators
     [["#2e9e44", "I"], ["#9a9a96", "II"]].forEach(([c, s], k) => {
       const x = r.x + r.w / 2 + (k ? 10 : -10);
       ctx.fillStyle = c;
@@ -215,8 +215,8 @@ const RENDERERS: Record<string, Renderer> = {
   },
 };
 
-// DC-аппараты щита АКБ: красная полоса по низу крышки (номинал — «125 А DC 2P») — не
-// спутать с автоматами сети
+// Battery box DC devices: a red strip along the bottom of the cover (rating "125 А DC 2P"),
+// so they are not mistaken for grid breakers
 const dc = (inner: Renderer): Renderer => (pen, d, r) => {
   inner(pen, d, r);
   pen.ctx.fillStyle = d.model.accent || "#c62828";

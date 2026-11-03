@@ -1,13 +1,15 @@
-// Развёртка стены в своём canvas: рисуется из данных развёртки (ключ elevations страницы),
-// а не из примитивов листа — у неё своё поведение, без слоёв и подсветки общего чертежа.
-// Стена в мм (x — от левого угла, вид изнутри; y — от пола), подписи — в px экрана: номера
-// точек — плашками цвета группы (как линии проводки), отступы снизу, высоты справа.
-// Под курсором — точка, коробка или щит (store.hover), клик закрепляет (store.pinned);
-// подсвечено то же, что строка «На стене» в боковой панели (store.lit).
-// Изометрия (mode "iso", iso.ts) — стена под 45° и часть соседней в углу: тот же плоский
-// рисунок стены (плашки, пунктиры, шкалы с подписями) через матрицу её плоскости — подписи и
-// размеры тоже изометрические; сосед — полупрозрачный, без шкал, обрыв — волной.
-// Под курсором и закреплённое — поверх остального (плашки и символы рисуются последними).
+// Wall elevation in its own canvas: drawn from the elevation data (page key elevations), not
+// from sheet primitives: it behaves differently, without the layers and highlighting of the
+// combined drawing. The wall is in mm (x from the left corner, view from inside; y from the
+// floor), labels in screen px: point numbers as badges in the group colour (like the wiring
+// lines), offsets at the bottom, heights on the right.
+// Under the cursor: a point, box or panel (store.hover); a click pins it (store.pinned);
+// highlighted is the same as the "On the wall" row in the side panel (store.lit).
+// Isometry (mode "iso", iso.ts): the wall at 45° and part of the neighbouring one at the
+// corner: the same flat wall drawing (badges, dashes, labelled scales) through its plane
+// matrix, so labels and dimensions are isometric too; the neighbour is translucent, without
+// scales, its cut edge drawn as a wave.
+// Hovered and pinned items go on top of everything else (badges and symbols are drawn last).
 
 import { Pinch } from "@/engine/sheet/pinch";
 import { FIT_SHRINK } from "@/shared/consts";
@@ -18,34 +20,34 @@ import { clampStep, Glide, LAST_STEP, PinchSteps, RAIL_PX, WheelSteps, type Zoom
 import { apply, flatToIso, invert, isoBounds, isoScene, wallOutline, type Affine, type IsoScene, type Mat } from "./iso";
 import { badgePlaces, spread, type Rect } from "./layout";
 
-const PAD = 20;            // px вокруг развёртки
-const RULER_X = 64;        // px под полом: отступы
-const RULER_Y = 58;        // px справа: высоты
-const HEAD = 8;            // px над потолком
-const PAGER = 52;          // px сверху: пейджер стен (Viewer) — над развёрткой
-const MAP = { w: 264, h: 250 };  // мини-схема внизу слева (WallMap, 240 px и поля) — место под неё
-const LABEL_PX = 11;       // подписи размеров
-const BADGE_PX = 12;       // номер точки
-const SYMBOL_MM = 34;      // радиус подрозетника Ø68
-const PITCH_MM = 71;       // шаг постов в рамке
-const MIN_R = 5;           // px: символ не мельче
-const ISO_PAD = 28;        // px вокруг изометрии: плашки номеров
-const SIDE_ALPHA = 0.45;   // соседняя стена в изометрии — полупрозрачная
+const PAD = 20;            // px around the elevation
+const RULER_X = 64;        // px below the floor: offsets
+const RULER_Y = 58;        // px on the right: heights
+const HEAD = 8;            // px above the ceiling
+const PAGER = 52;          // px on top: wall pager (Viewer) above the elevation
+const MAP = { w: 264, h: 250 };  // mini map at the bottom left (WallMap, 240 px plus margins): room for it
+const LABEL_PX = 11;       // dimension labels
+const BADGE_PX = 12;       // point number
+const SYMBOL_MM = 34;      // Ø68 flush box radius
+const PITCH_MM = 71;       // post step in a frame
+const MIN_R = 5;           // px: symbol no smaller than this
+const ISO_PAD = 28;        // px around the isometry: number badges
+const SIDE_ALPHA = 0.45;   // neighbouring wall in isometry is translucent
 const SWITCHES = new Set(["switch", "pass_switch"]);
 const LOW = new Set(["data", "tv"]);
 
 const INK = "#29251f", GREY = "#9a9288", LIGHT = "#d9d3c8", BACK = "#b0a99d";
 const CHASE = "#e4ded3", CHASE_LOW = "#cfe3f3", BOX = "#b3261e", LOW_INK = "#1f6fb2";
-// Сантехника — цвета сетей, как на листе «Сантехника» (drawing/plumbing.COLORS)
+// Plumbing: network colours, as on the "Plumbing" sheet (drawing/plumbing.COLORS)
 export const WATER: Record<PipeKind, string> = { cold: "#1f77b4", hot: "#d62728", sewer: "#8c564b" };
 
-interface Hit { key: string; r: Rect; inv: Affine | null }  // inv — экран → плоский вид стены
+interface Hit { key: string; r: Rect; inv: Affine | null }  // inv: screen → flat wall view
 
 export type ElevMode = "flat" | "iso";
 
-// Как рисовать стену: видимая часть from…to (мм), контур (мм; волна обрыва — у соседа) и
-// обрезать ли по нему, шкалы размеров и с какой стороны высоты (null — без шкал), выводы с
-// обратной стороны, заливка
+// How to draw a wall: visible part from…to (mm), outline (mm; the neighbour has the wavy cut)
+// and whether to clip by it, dimension scales and which side heights go on (null means no
+// scales), outlets from the far side, fill
 interface WallOpts {
   from: number; to: number; outline: XY[] | null; clip: boolean;
   rulers: "right" | "left" | null; back: boolean; alpha: number; shade: number;
@@ -54,17 +56,17 @@ interface WallOpts {
 export class ElevationView {
   onZoom: (zoom: Zoom) => void = () => {};
   private ctx: CanvasRenderingContext2D;
-  private step = 0;  // шаг масштаба (zoom.ts)
+  private step = 0;  // zoom step (zoom.ts)
   private readonly wheel = new WheelSteps();
   private readonly pinchSteps = new PinchSteps();
   private readonly glide = new Glide();
   private w = 1; private h = 1; private dpr = 1;
-  private scale = 1; private fitScale = 1; private ox = 0; private oy = 0;  // экран = o + мм·scale (y вверх)
+  private scale = 1; private fitScale = 1; private ox = 0; private oy = 0;  // screen = o + mm·scale (y up)
   private drag: { x: number; y: number; ox: number; oy: number } | null = null;
   private down: { x: number; y: number } | null = null;
   private hits: Hit[] = [];
-  private iso: IsoScene | null = null;  // изометрия; null — плоская развёртка
-  private inv: Affine | null = null;    // пока рисуется стена изометрии — экран → её плоский вид
+  private iso: IsoScene | null = null;  // isometry; null means a flat elevation
+  private inv: Affine | null = null;    // while the isometry wall is drawn: screen → its flat view
   private readonly font: string;
   private readonly cleanup: (() => void)[] = [];
   private readonly pinch = new Pinch();
@@ -102,13 +104,13 @@ export class ElevationView {
     this.canvas.height = Math.round(r.height * this.dpr);
   }
 
-  // Вся стена с подписями; место под мини-схему — слева или снизу, где развёртка крупнее
+  // The whole wall with labels; room for the mini map on the left or at the bottom, whichever makes the elevation larger
   fit() {
     const d = this.data;
     this.glide.stop();
-    // Рамка в мм экрана и поля под подписи в px: у плоской — шкалы снизу и справа
+    // Frame in screen mm and label margins in px: a flat view has scales at the bottom and right
     const [X0, Y0, X1, Y1] = this.iso ? isoBounds(this.iso) : [0, 0, d.length, d.top];
-    // Изометрия: отступы — под полом, высоты — у дальнего от угла края стены
+    // Isometry: offsets under the floor, heights at the wall edge far from the corner
     const [pl, pr, pt, pb] = !this.iso ? [0, RULER_Y, HEAD, RULER_X]
       : this.iso.corner === "left" ? [ISO_PAD, RULER_Y, ISO_PAD, RULER_X] : [RULER_Y, ISO_PAD, ISO_PAD, RULER_X];
     const W = X1 - X0, H = Y1 - Y0;
@@ -125,10 +127,10 @@ export class ElevationView {
     this.draw();
   }
 
-  // Соседний шаг масштаба у точки (x, y) экрана; за крайние — нет
+  // Neighbouring zoom step at screen point (x, y); none past the ends
   zoomStep(dir: number, x = this.cx(), y = this.h / 2) { this.zoomTo(this.step + dir, x, y); }
 
-  // Шаг масштаба — плавно, точка (x, y) экрана стоит на месте
+  // Zoom step, smoothly, keeping screen point (x, y) in place
   zoomTo(step: number, x = this.cx(), y = this.h / 2) {
     step = clampStep(step);
     if (step === this.step) return;
@@ -150,7 +152,7 @@ export class ElevationView {
   private hitAt(ev: { clientX: number; clientY: number }): string | null {
     const r = this.canvas.getBoundingClientRect();
     const x = ev.clientX - r.left, y = ev.clientY - r.top;
-    // Сверху — нарисованное позже (точки поверх коробок)
+    // On top is what was drawn later (points over boxes)
     for (let k = this.hits.length - 1; k >= 0; k--) {
       const { r: [x0, y0, x1, y1], inv } = this.hits[k];
       const [hx, hy] = inv ? apply(inv, x, y) : [x, y];
@@ -192,7 +194,7 @@ export class ElevationView {
       if (key !== view.get().hover) view.set({ hover: key });
     });
     const end = () => { this.drag = null; this.canvas.classList.remove("drag"); };
-    // Клик без сдвига — закрепить объект (строка в панели) или снять
+    // A click without a drag pins the object (the panel row) or unpins it
     this.on("pointerup", (ev) => {
       this.pinch.up(ev);
       const d = this.pinch.used ? null : this.down;
@@ -203,7 +205,7 @@ export class ElevationView {
     });
     this.on("pointercancel", (ev) => { this.pinch.up(ev); end(); });
     this.on("pointerleave", () => { if (view.get().hover) view.set({ hover: null }); });
-    // Двойной клик — на шаг крупнее в точку клика; на последнем шаге — вписать целиком
+    // Double click zooms one step in at the click point; at the last step, fit the whole wall
     this.on("dblclick", (ev) => {
       const r = this.canvas.getBoundingClientRect();
       if (this.step >= LAST_STEP) this.fit(); else this.zoomStep(1, ev.clientX - r.left, ev.clientY - r.top);
@@ -255,14 +257,14 @@ export class ElevationView {
 
   private hit(key: string, r: Rect) { this.hits.push({ key, r, inv: this.inv }); }
 
-  // Стена в px плоского вида (в изометрии — под матрицей плоскости): штробы, края, проёмы,
-  // щит, пунктиры к шкалам, коробки, точки, шкалы, номера. Подсвеченное — последним, поверх
+  // The wall in flat view px (in isometry, under the plane matrix): chases, edges, openings,
+  // panel, dashes to the scales, boxes, points, scales, numbers. Highlighted items last, on top
   private paintWall(e: ElevWall, lit: Set<string>, o: WallOpts) {
     const { ctx } = this, d = this.data, s = this.scale;
     const x0 = this.sx(o.from), x1 = this.sx(o.to), floor = this.sy(0), ceil = this.sy(d.height), top = this.sy(d.top);
     const r = Math.max(SYMBOL_MM * s, MIN_R), pitch = Math.max(PITCH_MM * s, 2 * r + 1);
     const seen = (x: number) => x >= o.from - 1 && x <= o.to + 1;
-    const edge = o.rulers === "left" ? x0 : x1;  // край со шкалой высот
+    const edge = o.rulers === "left" ? x0 : x1;  // the edge with the height scale
     const taken: Rect[] = [];
     const layers = view.get().wallLayers;
     const elec = layers.electrical;
@@ -273,7 +275,7 @@ export class ElevationView {
 
     ctx.save();
     ctx.globalAlpha = o.alpha;
-    // Контур стены — заливка и обрезка (у соседа с обрывом — волной)
+    // Wall outline: fill and clip (the neighbour gets a wavy cut)
     if (o.outline) {
       ctx.beginPath();
       o.outline.forEach(([x, y], i) => (i ? ctx.lineTo(this.sx(x), this.sy(y)) : ctx.moveTo(this.sx(x), this.sy(y))));
@@ -285,14 +287,14 @@ export class ElevationView {
       if (o.clip) ctx.clip();
     }
 
-    // Штробы — под всем
+    // Chases under everything
     for (const c of elec ? e.chases : []) {
       const half = Math.max(((c.wide ? 50 : 30) / 2) * s, 1.5);
       ctx.fillStyle = screenColor(c.low ? CHASE_LOW : CHASE);
       ctx.fillRect(this.sx(c.x) - half, this.sy(c.y1), 2 * half, (c.y1 - c.y0) * s);
     }
 
-    // Стена: пол и потолок толще, торцы — углы помещения
+    // Wall: floor and ceiling lines thicker, ends are the room corners
     this.line(x0, floor, x1, floor, INK, 2.5);
     this.line(x0, ceil, x1, ceil, INK, 2.5);
     if (!o.outline) {
@@ -329,10 +331,10 @@ export class ElevationView {
       this.hit(b.key, [a, y1, c, y0]);
     }
 
-    // Выводы с обратной стороны — бледно, без размеров
+    // Outlets on the far side: faint, without dimensions
     if (o.back && elec) for (const p of d.back) this.symbol(p.type, p.posts, this.sx(p.x), this.sy(p.y), r, pitch, BACK, 1, false);
 
-    // Пунктир от точек к шкалам — под символами
+    // Dashes from points to the scales, under the symbols
     if (o.rulers) {
       for (const p of last(points)) {
         const cx = this.sx(p.x), cy = this.sy(p.y), half = r + (pitch * (p.posts - 1)) / 2;
@@ -357,7 +359,7 @@ export class ElevationView {
       this.hit(b.key, box);
     }
 
-    // Точки: пост рамки — свой символ; обводка — цвет группы, подсвеченная — толще
+    // Points: each frame post gets its own symbol; the outline is the group colour, thicker when highlighted
     const blocks = new Map<string, Rect>();
     for (const p of last(points)) {
       const cx = this.sx(p.x), cy = this.sy(p.y), half = r + (pitch * (p.posts - 1)) / 2;
@@ -375,8 +377,8 @@ export class ElevationView {
       this.hit(p.key, rect);
     }
 
-    // Сантехника: подъём трубы от пола цветом сети, водорозетка — кружок с заливкой, выпуск —
-    // кольцо по диаметру; номер прибора (лист «Сантехника») — плашкой у верхнего подвода
+    // Plumbing: pipe rise from the floor in the network colour, a water outlet is a filled circle,
+    // a drain a ring of its diameter; fixture number ("Plumbing" sheet) as a badge at the top supply
     const water = layers.water ? (e.water ?? []).filter((v) => seen(v.x)) : [];
     const fixtures = new Map<string, { key: string; n: number; assumed: boolean; rect: Rect }>();
     for (const v of water) {
@@ -397,14 +399,14 @@ export class ElevationView {
       else if (v.assumed) was.assumed = true;
     }
 
-    // Шкалы — до номеров: их место занято
+    // Scales before numbers: their space is taken
     if (o.rulers) {
       const shown = { ...e, points, boxes, board: board ?? undefined, water };
       taken.push(this.ordinatesX(shown, floor, x0, x1), this.ordinatesY(shown, edge, floor, top, o.rulers === "left" ? -1 : 1));
     }
 
-    // Номера: плашка цвета группы у символа, где свободно (места — в порядке модели, чтобы не
-    // прыгали); рисуются подсвеченные последними — поверх тех, что их закрывали
+    // Numbers: a badge in the group colour next to the symbol where there is room (spots in model
+    // order so they do not jump); highlighted ones are drawn last, over those that covered them
     ctx.font = `600 ${BADGE_PX}px ${this.font}`;
     const labels = [
       ...points.map((p) => ({ key: p.key, text: String(p.n), color: p.color || INK, box: false, anchor: blocks.get(p.key)! })),
@@ -418,7 +420,7 @@ export class ElevationView {
       else this.badge(l.text, l.at, on ? palette.hl : l.color, on);
       this.hit(l.key, l.at);
     }
-    // Номера выводов той стороны — бледно, после своих
+    // Numbers of the far side's outlets: faint, after our own
     if (o.back && elec) {
       for (const p of d.back) {
         const cx = this.sx(p.x) + r + (pitch * (p.posts - 1)) / 2 + 3;
@@ -457,7 +459,7 @@ export class ElevationView {
 
   private toScreen = ([X, Y]: XY): XY => [this.ox + X * this.scale, this.oy - Y * this.scale];
 
-  // Рисунок плоского вида стены — на её плоскости в изометрии (и попадания — через обратное)
+  // The flat wall drawing on its plane in isometry (and hit tests through the inverse)
   private onWall(m: Mat, draw: () => void) {
     const { ctx } = this, t = flatToIso(m, this.scale, this.ox, this.oy);
     ctx.save();
@@ -468,8 +470,8 @@ export class ElevationView {
     ctx.restore();
   }
 
-  // Изометрия: пол у стен, сосед в углу (полупрозрачный, без шкал, обрыв — волной), стена
-  // развёртки со шкалами у дальнего от угла края
+  // Isometry: floor by the walls, the neighbour at the corner (translucent, no scales, wavy
+  // cut), the elevation wall with scales at the edge far from the corner
   private paintIso(iso: IsoScene, lit: Set<string>) {
     const { ctx } = this, d = this.data;
     ctx.beginPath();
@@ -489,7 +491,7 @@ export class ElevationView {
     }));
   }
 
-  // Отступы от левого угла — под полом, вертикально, разведены; занятая полоса
+  // Offsets from the left corner under the floor, vertical, spread out; the occupied band
   private ordinatesX(d: ElevWall, floor: number, x0: number, x1: number): Rect {
     const xs = new Set<number>([0, d.length]);
     for (const p of d.points) xs.add(Math.round(p.x));
@@ -508,7 +510,7 @@ export class ElevationView {
     return [x0 - LABEL_PX, floor, x1 + LABEL_PX, floor + RULER_X];
   }
 
-  // Высоты от пола — справа (dir 1) или слева (-1); потолок со «*», если высота — допущение
+  // Heights from the floor on the right (dir 1) or left (-1); the ceiling gets "*" if its height is an assumption
   private ordinatesY(d: ElevWall, edge: number, floor: number, top: number, dir: 1 | -1): Rect {
     const { height, height_assumed } = this.data;
     const ys = new Set<number>([height]);
@@ -516,7 +518,7 @@ export class ElevationView {
     for (const b of d.boxes) ys.add(Math.round(b.y));
     for (const v of d.water ?? []) ys.add(Math.round(v.y));
     if (d.board) ys.add(Math.round(d.board.y));
-    const values = [...ys].sort((a, b) => b - a);  // сверху вниз — по экрану по возрастанию
+    const values = [...ys].sort((a, b) => b - a);  // top to bottom: ascending on screen
     const wanted = values.map((v) => this.sy(v));
     const places = spread(wanted, LABEL_PX + 3, top - LABEL_PX, floor);
     const tick = 5, jog = 8;

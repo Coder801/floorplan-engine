@@ -1,9 +1,9 @@
-"""Бот Telegram для входа по номеру телефона (правила на базе — db/telegram_login.py).
+"""Telegram bot for login by phone number (database rules in db/telegram_login.py).
 
-Bot API ходит сюда двумя путями: на https — вебхук /api/auth/telegram/webhook (ставится при
-старте, секрет — в заголовке); локально на http Telegram до сервера не достучится, поэтому
-сервер сам опрашивает getUpdates в фоновом потоке. Разбор обновлений общий — handle_update.
-Сеть — только здесь (httpx), как и положено service/.
+The Bot API reaches us in two ways: over https, the webhook /api/auth/telegram/webhook (set on
+start, the secret in a header); locally over http Telegram cannot reach the server, so the
+server polls getUpdates in a background thread. Update handling is shared: handle_update.
+Network access is only here (httpx), as it should be in service/.
 """
 
 from __future__ import annotations
@@ -23,8 +23,8 @@ from floorplan_engine.service.db.access import AccessError
 
 log = logging.getLogger(__name__)
 API = "https://api.telegram.org"
-POLL_TIMEOUT = 25  # секунд long polling
-POLL_RETRY = 5  # секунд до повтора после ошибки сети
+POLL_TIMEOUT = 25  # long polling seconds
+POLL_RETRY = 5  # seconds before retrying after a network error
 
 TEXTS: dict[str, dict[str, str]] = {
     "share": {
@@ -68,27 +68,27 @@ def text(key: str, lang: str) -> str:
 
 
 class TelegramApi(Protocol):
-    """Что нужно от Bot API; в тестах — подделка."""
+    """What we need from the Bot API; a fake in tests."""
 
     def get_me(self) -> str:
-        """Имя бота (username) для ссылки t.me/<имя>."""
+        """Bot name (username) for the t.me/<name> link."""
         ...
 
     def send_message(self, chat_id: int, body: str, contact_button: str | None = None) -> None:
-        """Сообщение; contact_button — подпись кнопки «поделиться номером» (иначе клавиатура
-        убирается)."""
+        """A message; contact_button is the "share number" button label (otherwise the keyboard
+        is removed)."""
         ...
 
     def get_updates(self, offset: int, timeout: int) -> list[dict[str, Any]]: ...
 
     def set_webhook(self, url: str, secret: str) -> None:
-        """Пустой url — вебхук снимается (перед getUpdates)."""
+        """An empty url removes the webhook (before getUpdates)."""
         ...
 
 
 @dataclass
 class TelegramBot:
-    """Bot API по HTTPS (TELEGRAM_BOT_TOKEN)."""
+    """Bot API over HTTPS (TELEGRAM_BOT_TOKEN)."""
 
     token: str
     client: httpx.Client = field(default_factory=lambda: httpx.Client(timeout=POLL_TIMEOUT + 10))
@@ -134,8 +134,8 @@ def telegram_from_env(env: dict[str, str]) -> TelegramBot | None:
 
 
 def handle_update(db: Session, api: TelegramApi, update: dict[str, Any]) -> None:
-    """Одно обновление Bot API: «/start токен» — привязать чат к билету и попросить номер;
-    контакт — подтвердить номер; остальное — подсказка. Ошибки — ответом пользователю."""
+    """One Bot API update: "/start token" links the chat to a ticket and asks for the number; a
+    contact confirms the number; anything else gets a hint. Errors are replied to the user."""
     msg = update.get("message")
     if not isinstance(msg, dict):
         return
@@ -173,13 +173,15 @@ def handle_update(db: Session, api: TelegramApi, update: dict[str, Any]) -> None
 
 
 def start_polling(api: TelegramApi, handle: Callable[[dict[str, Any]], None]) -> threading.Thread:
-    """Локально (http): вебхук снять и опрашивать getUpdates в фоне до конца процесса."""
+    """Locally (http): remove the webhook and poll getUpdates in the background until the process
+    ends.
+    """
 
     def loop() -> None:
         offset = 0
         try:
             api.set_webhook("", "")
-        except Exception as exc:  # сеть: пишем и пробуем опрос
+        except Exception as exc:  # network: log it and try polling
             log.warning("Telegram deleteWebhook: %s", exc)
         while True:
             try:
@@ -187,9 +189,9 @@ def start_polling(api: TelegramApi, handle: Callable[[dict[str, Any]], None]) ->
                     offset = int(update.get("update_id", offset)) + 1
                     try:
                         handle(update)
-                    except Exception:  # одно обновление не должно ронять опрос
+                    except Exception:  # one update must not break polling
                         log.exception("Telegram: обновление не разобрано")
-            except Exception as exc:  # сеть: подождать и снова
+            except Exception as exc:  # network: wait and retry
                 log.warning("Telegram getUpdates: %s", exc)
                 time.sleep(POLL_RETRY)
 

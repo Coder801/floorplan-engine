@@ -1,8 +1,9 @@
-// Язык интерфейса (i18next + react-i18next): украинский, русский, английский. Строки — в
-// ru.ts (источник ключей), uk.ts, en.ts; компоненты берут t из useTranslation (перерисуются
-// при смене языка), код вне React — i18n.t. Выбор — в настройках, запоминается (remember
-// "lang"); без выбора — язык браузера, иначе русский. Чертежи, таблицы и карточки — на языке
-// проекта (room.yaml: language): их пишет сборка, интерфейс их не переводит.
+// Interface language (i18next + react-i18next): Ukrainian, Russian, English. Strings live in
+// ru.ts (the source of keys), uk.ts, en.ts; components take t from useTranslation (they
+// re-render on language change), code outside React uses i18n.t. The choice is in settings and
+// is remembered (remember "lang"); without a choice, the browser language, otherwise Russian.
+// Drawings, tables and cards are in the project language (room.yaml: language): the build
+// writes them and the interface does not translate them.
 
 import i18n from "i18next";
 import { initReactI18next } from "react-i18next";
@@ -21,7 +22,7 @@ export type UiLanguage = (typeof LANGUAGES)[number]["code"];
 
 const known = (c: string | null | undefined): c is UiLanguage => LANGUAGES.some((l) => l.code === c);
 
-// Сохранённый выбор, иначе первый подходящий язык браузера, иначе русский
+// The saved choice, otherwise the first matching browser language, otherwise Russian
 export function startLanguage(): UiLanguage {
   const saved = remembered("lang");
   if (known(saved)) return saved;
@@ -39,9 +40,9 @@ void i18n.use(initReactI18next).init({
   resources: { ru: { translation: ru }, uk: { translation: uk }, en: { translation: en } },
   lng: startLanguage(),
   fallbackLng: "ru",
-  interpolation: { escapeValue: false },  // React экранирует сам
+  interpolation: { escapeValue: false },  // React escapes on its own
 });
-// Язык страницы и заголовок вкладки — вслед за языком интерфейса
+// The page language and tab title follow the interface language
 const applyDocument = () => {
   if (typeof document === "undefined") return;
   document.documentElement.lang = i18n.language;
@@ -55,15 +56,15 @@ export function setLanguage(code: UiLanguage) {
   void i18n.changeLanguage(code);
 }
 
-// Подпись значения из данных (статус, этап, слой, тип объекта); перевода нет — само значение.
-// Компонент, который её показывает, берёт useTranslation — так он перерисуется при смене языка
+// Label for a value from data (status, stage, layer, object type); without a translation, the
+// value itself. The component that shows it takes useTranslation so it re-renders on language change
 export type LabelGroup = "status" | "stage" | "views" | "qstate" | "severity" | "layer" | "object";
 export function label(group: LabelGroup, key: string): string {
   const k = `${group}.${key}`;
   return i18n.exists(k) ? (i18n.t as (key: string) => string)(k) : key;
 }
 
-// Дата и время — на языке интерфейса
+// Date and time in the interface language
 export const locale = () => (i18n.language === "uk" ? "uk-UA" : i18n.language === "en" ? "en-GB" : "ru-RU");
 
 export default i18n;

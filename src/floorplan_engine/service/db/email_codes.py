@@ -1,11 +1,12 @@
-"""Вход по коду на почту (решение 2026-10-31, docs/database.md, «Вход»): человек вводит email,
-получает 6 цифр, вводит — и вошёл. Паролей нет; код подтверждает почту, поэтому вход по коду —
-учётка провайдера «email» с подтверждённым адресом (access.oauth_login): тот же email из
-Google — тот же пользователь.
+"""Login by e-mail code (decision 2026-10-31, docs/database.md, "Login"): a person enters an
+e-mail, gets 6 digits, enters them and is in. No passwords; the code confirms the e-mail, so a
+code login is a provider account "email" with a confirmed address (access.oauth_login): the
+same e-mail from Google is the same user.
 
-Код живёт CODE_MINUTES, действует последний выданный; неверных вводов — не больше
-CODE_ATTEMPTS, новый код — не чаще CODE_RESEND_SECONDS и не больше CODE_PER_HOUR в час на
-адрес. В базе — только sha256 «email:код». Функции не делают commit, как access.py.
+A code lives CODE_MINUTES, only the last one issued is valid; at most CODE_ATTEMPTS wrong
+entries, a new code no more often than CODE_RESEND_SECONDS and at most CODE_PER_HOUR per hour
+per address. The database stores only the sha256 of "email:code". Functions do not commit,
+like access.py.
 """
 
 from __future__ import annotations
@@ -31,7 +32,7 @@ EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 
 class TooSoonError(AccessError):
-    """Код просят слишком часто; seconds — через сколько можно снова."""
+    """A code is requested too often; seconds is how long until the next one is allowed."""
 
     def __init__(self, message: str, seconds: int) -> None:
         super().__init__(message)
@@ -39,7 +40,7 @@ class TooSoonError(AccessError):
 
 
 def normalize_email(email: str) -> str:
-    """Адрес без пробелов, в нижнем регистре; не похож на email — AccessError."""
+    """Address without spaces, lower case; AccessError if it does not look like an e-mail."""
     email = email.strip().lower()
     if len(email) > 320 or not EMAIL_RE.match(email):
         raise AccessError("Это не похоже на адрес почты")
@@ -51,7 +52,9 @@ def _hash(email: str, code: str) -> str:
 
 
 def issue_code(session: Session, email: str, t: datetime | None = None) -> str:
-    """Новый код для адреса (прежние перестают действовать); вернёт сам код — для письма."""
+    """New code for the address (earlier ones stop working); returns the code itself, for the
+    e-mail.
+    """
     t = t or now()
     email = normalize_email(email)
     recent = list(
@@ -72,7 +75,7 @@ def issue_code(session: Session, email: str, t: datetime | None = None) -> str:
     for row in session.scalars(
         select(EmailCode).where(EmailCode.email == email, EmailCode.used_at.is_(None))
     ):
-        row.used_at = t  # действует только последний код
+        row.used_at = t  # only the last code is valid
     code = f"{secrets.randbelow(1_000_000):06d}"
     session.add(
         EmailCode(
@@ -88,8 +91,8 @@ def issue_code(session: Session, email: str, t: datetime | None = None) -> str:
 
 
 def check_code(session: Session, email: str, code: str, t: datetime | None = None) -> str:
-    """Проверить код; верный — код погашен, вернёт адрес. Неверный, устаревший, кончились
-    попытки — AccessError с сообщением для пользователя."""
+    """Check a code; a correct one is used up and the address is returned. Wrong, expired or out of
+    attempts gives AccessError with a message for the user."""
     t = t or now()
     email = normalize_email(email)
     code = re.sub(r"\D", "", code)

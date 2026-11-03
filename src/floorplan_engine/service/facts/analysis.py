@@ -1,17 +1,17 @@
-"""Разбор примитивов страницы: размеры, масштаб, цепочки, надписи — и выжимка для модели.
+"""Page primitive analysis: dimensions, scale, chains, labels, and a digest for the model.
 
-Не зависит от формата источника: на входе Sheet (primitives.py) из любого адаптера.
+Independent of the source format: the input is a Sheet (primitives.py) from any adapter.
 
-- размер — подпись-число над размерной линией: отрезок параллелен подписи, проходит под
-  её серединой, на обоих концах засечки (непараллельные линии через конец отрезка);
-- масштаб листа — медиана «подпись / длина отрезка» по согласным размерам. Размер, у
-  которого длина на чертеже расходится с подписью, помечается: это вопрос, а не ошибка
-  разбора;
-- цепочки — размерные отрезки на одной линии, которые стыкуются концами;
-- строки одной заметки — в одну надпись.
+- a dimension is a number label above a dimension line: the segment is parallel to the label,
+  passes under its middle and has ticks at both ends (non-parallel lines through the segment end);
+- the sheet scale is the median of "label / segment length" over consistent dimensions. A
+  dimension whose drawn length disagrees with its label is flagged: that is a question, not a
+  parsing error;
+- chains are dimension segments on one line that join end to end;
+- lines of one note are merged into one label.
 
-Стены, символы и выноски не распознаются — это остаётся модели. Координаты в выжимке —
-мм в масштабе чертежа от левого нижнего угла листа (X вправо, Y вверх).
+Walls, symbols and leaders are not recognised: that is left to the model. Digest coordinates
+are mm at drawing scale from the bottom-left corner of the sheet (X right, Y up).
 """
 
 from __future__ import annotations
@@ -26,15 +26,15 @@ from typing import Any
 
 from floorplan_engine.service.facts.primitives import Direction, Label, Segment, Sheet
 
-LINE_DIST = 0.8  # размерная линия не дальше этой доли высоты от базовой линии подписи
-TICK_TOL = 0.6  # pt: засечка проходит через конец отрезка с этим допуском
-SCALE_BAND = 0.015  # согласные размеры — в пределах 1,5 % от моды масштаба
+LINE_DIST = 0.8  # dimension line within this fraction of height from baseline
+TICK_TOL = 0.6  # pt: a tick passes through the segment end within this tolerance
+SCALE_BAND = 0.015  # consistent dimensions are within 1.5 % of the scale mode
 MIN_SCALE_DIMS = 3
-JOIN_TOL = 0.6  # pt: стык отрезков цепочки и общая линия
-OVERALL_DIST = 40.0  # pt: общий размер — на соседней размерной линии, не у другой стены
-# Версия разбора: меняется вместе с правилами — по ней в базе отличают старые выжимки
+JOIN_TOL = 0.6  # pt: chain segment joint and shared line
+OVERALL_DIST = 40.0  # pt: overall dimension on the next dimension line
+# Parser version: changes with the rules; the database uses it to tell old digests apart
 ALGO_VERSION = "facts-1"
-# Множитель допусков TICK_TOL и JOIN_TOL для текущей страницы (Sheet.tolerance)
+# Multiplier of TICK_TOL and JOIN_TOL for the current page (Sheet.tolerance)
 _TOLERANCE: ContextVar[float] = ContextVar("facts_tolerance", default=1.0)
 
 
@@ -49,12 +49,12 @@ HEIGHT = re.compile(r"[НH]\s*=\s*(\d+)")
 class Dimension:
     value: int
     direction: Direction
-    line: float  # pt: Y горизонтальной размерной линии или X вертикальной
-    start: float  # pt вдоль линии
+    line: float  # pt: Y of a horizontal dimension line or X of a vertical one
+    start: float  # pt along the line
     end: float
     chain: int | None = None
-    drawn: float | None = None  # мм по масштабу; None — масштаба нет
-    confidence: float = 1.0  # уверенность в подписи: у вектора 1, у OCR — его оценка
+    drawn: float | None = None  # mm by scale; None means no scale
+    confidence: float = 1.0  # label confidence: 1 for vector, the OCR estimate for OCR
 
     @property
     def length(self) -> float:
@@ -68,22 +68,22 @@ class PageFacts:
     width: float
     height: float
     unit: str = "pt"
-    source: str = "vector"  # адаптер: vector | raster
-    tolerance: float = 1.0  # множитель допусков разбора (Sheet.tolerance)
-    scale: float | None = None  # мм на единицу источника (pt, px)
+    source: str = "vector"  # adapter: vector | raster
+    tolerance: float = 1.0  # parser tolerance multiplier (Sheet.tolerance)
+    scale: float | None = None  # mm per source unit (pt, px)
     scale_dims: int = 0
-    scale_spread: float = 0.0  # %, разброс согласных размеров
+    scale_spread: float = 0.0  # %, spread of consistent dimensions
     dimensions: list[Dimension] = field(default_factory=list)
-    loose_numbers: list[Label] = field(default_factory=list)  # числа без размерной линии
+    loose_numbers: list[Label] = field(default_factory=list)  # numbers without a dimension line
     texts: list[Label] = field(default_factory=list)
 
 
 def _blocks(labels: list[Label]) -> list[Label]:
-    """Строки одной заметки — в одну надпись: друг под другом, с перекрытием по ширине.
+    """Lines of one note are merged into one label: one under another, overlapping in width.
 
-    Координата блока — его первая (верхняя) строка.
+    The block's coordinate is its first (top) line.
     """
-    out: list[tuple[Label, Label]] = []  # (блок, его последняя строка)
+    out: list[tuple[Label, Label]] = []  # (block, its last line)
     for label in sorted(labels, key=lambda t: (t.direction, -t.perp, t.a0)):
         for i in range(len(out) - 1, -1, -1):
             block, last = out[i]
@@ -104,7 +104,7 @@ def _blocks(labels: list[Label]) -> list[Label]:
 
 
 def _span(seg: Segment, direction: Direction) -> tuple[float, float, float]:
-    """(линия, начало, конец) отрезка в осях размера."""
+    """(line, start, end) of a segment in dimension axes."""
     if direction == "h":
         return seg.y0, min(seg.x0, seg.x1), max(seg.x0, seg.x1)
     return seg.x0, min(seg.y0, seg.y1), max(seg.y0, seg.y1)
@@ -118,7 +118,7 @@ def _has_tick(segments: list[Segment], seg: Segment, x: float, y: float) -> bool
 
 
 def _dimension_lines(label: Label, segments: list[Segment]) -> list[Segment]:
-    """Размерные отрезки у базовой линии подписи: параллельны ей, с засечками на концах."""
+    """Dimension segments at the label baseline: parallel to it, with ticks at the ends."""
     out = []
     for seg in segments:
         if seg.direction != label.direction:
@@ -135,7 +135,7 @@ def _dimension_lines(label: Label, segments: list[Segment]) -> list[Segment]:
 
 
 def _centered(label: Label, segments: list[Segment]) -> Dimension | None:
-    """Подпись стоит по середине своего отрезка — обычное положение размера."""
+    """The label sits at the middle of its segment, the usual dimension position."""
     value = label.number
     if value is None or value < 10:
         return None
@@ -148,7 +148,7 @@ def _centered(label: Label, segments: list[Segment]) -> Dimension | None:
 
 
 def _crossings(seg: Segment, segments: list[Segment]) -> list[float]:
-    """Где линию seg пересекают непараллельные отрезки (засечки, выносные), вдоль неё."""
+    """Where non-parallel segments (ticks, extension lines) cross line seg, along it."""
     direction = seg.direction or "h"
     line, start, end = _span(seg, direction)
     tol = _tol(TICK_TOL)
@@ -156,7 +156,7 @@ def _crossings(seg: Segment, segments: list[Segment]) -> list[float]:
     for s in segments:
         if s is seg or s.direction == seg.direction:
             continue
-        # В осях линии: u — вдоль, w — поперёк
+        # In line axes: u along, w across
         (u0, w0, u1, w1) = (
             (s.x0, s.y0, s.x1, s.y1) if direction == "h" else (s.y0, s.x0, s.y1, s.x1)
         )
@@ -169,9 +169,9 @@ def _crossings(seg: Segment, segments: list[Segment]) -> list[float]:
 
 
 def _centered_span(label: Label, segments: list[Segment]) -> Dimension | None:
-    """Неточные примитивы (растр): размерная линия под подписью может быть слита с соседними
-    звеньями цепочки. Звено — ближайшая к подписи пара пересечений линии, середина которой
-    совпадает с серединой подписи."""
+    """Imprecise primitives (raster): the dimension line under a label may be merged with the
+    neighbouring links of a chain. The link is the pair of line crossings nearest to the label
+    whose middle matches the label's middle."""
     value = label.number
     if value is None or value < 10:
         return None
@@ -199,7 +199,9 @@ def _centered_span(label: Label, segments: list[Segment]) -> Dimension | None:
 
 
 def _moved_out(label: Label, segments: list[Segment], scale: float) -> Dimension | None:
-    """Подпись вынесена за короткий отрезок: ближайший отрезок рядом той же длины по масштабу."""
+    """Label placed outside a short segment: the nearest segment of the same scaled length
+    nearby.
+    """
     value = label.number
     if value is None or value < 10:
         return None
@@ -229,7 +231,7 @@ def _scale(dims: list[Dimension]) -> tuple[float | None, int, float]:
 
 
 def _chains(dims: list[Dimension]) -> None:
-    """Номер цепочки — у отрезков на одной линии, которые стыкуются концами."""
+    """Chain number for segments on one line that join end to end."""
     ordered = sorted(dims, key=lambda d: (d.direction, round(d.line, 0), d.start))
     chain_no = 0
     for prev, cur in itertools.pairwise(ordered):
@@ -260,7 +262,7 @@ def _page_facts(sheet: Sheet) -> PageFacts:
         sheet.file, sheet.page, sheet.width, sheet.height, sheet.unit, sheet.source, sheet.tolerance
     )
     numbers: list[Label] = []
-    loose = sheet.tolerance > 1.0  # неточные примитивы: звено ищется и внутри длинной линии
+    loose = sheet.tolerance > 1.0  # imprecise: search a link inside a long line
     for label in labels:
         dim = _centered(label, segments) or (_centered_span(label, segments) if loose else None)
         if dim is not None:
@@ -284,7 +286,7 @@ def _page_facts(sheet: Sheet) -> PageFacts:
     return facts
 
 
-# --- Текст для модели --------------------------------------------------------------
+# --- Text for the model --------------------------------------------------------------
 
 
 def _mismatch(d: Dimension) -> bool:
@@ -292,7 +294,9 @@ def _mismatch(d: Dimension) -> bool:
 
 
 def _overall(dims: list[Dimension], chain: list[Dimension]) -> list[Dimension]:
-    """Размеры вне цепочки от её начала до конца: общий размер над или под цепочкой."""
+    """Dimensions outside the chain from its start to its end: an overall dimension above or
+    below the chain.
+    """
     start, end = chain[0].start, chain[-1].end
     return [
         d
@@ -319,7 +323,7 @@ def render(pages: list[PageFacts]) -> str:
 def _render_page(f: PageFacts) -> list[str]:
     k = f.scale or 1.0
 
-    def c(v: float) -> int:  # координата для модели: мм по масштабу или единицы источника
+    def c(v: float) -> int:  # coordinate for the model: mm by scale or source units
         return round(v * k)
 
     out = [f"### {f.file}, страница {f.page}", _scale_line(f)]
@@ -362,7 +366,7 @@ def _scale_line(f: PageFacts) -> str:
 
 
 def _dimensions_table(f: PageFacts, c: Callable[[float], int]) -> list[str]:
-    """Таблица размеров: подпись, длина по чертежу (≠ — расходится), линия и концы."""
+    """Dimension table: label, drawn length (≠ means it disagrees), line and ends."""
     out = [
         "\nРазмеры (подпись над размерной линией с засечками). «По чертежу» — длина "
         "линии по масштабу; ≠ — подпись расходится с чертежом.",
@@ -383,7 +387,7 @@ def _dimensions_table(f: PageFacts, c: Callable[[float], int]) -> list[str]:
 
 
 def _chain_lines(f: PageFacts, c: Callable[[float], int]) -> list[str]:
-    """Цепочки: сумма подписей, концы и сверка с общим размером рядом."""
+    """Chains: sum of labels, ends and a check against the overall dimension nearby."""
     chains: dict[int, list[Dimension]] = {}
     for d in f.dimensions:
         if d.chain:
@@ -408,7 +412,7 @@ def _chain_lines(f: PageFacts, c: Callable[[float], int]) -> list[str]:
 
 
 def to_dict(f: PageFacts) -> dict[str, Any]:
-    """Выжимка страницы для JSON и базы (колонка facts); обратно — from_dict."""
+    """Page digest for JSON and the database (facts column); the reverse is from_dict."""
     return {"algo_version": ALGO_VERSION, **asdict(f)}
 
 

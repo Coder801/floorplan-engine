@@ -1,11 +1,12 @@
-"""Блоки УГО электрики (упрощённо, по легенде проектов: розетки, выключатели, свет, слаботочка).
+"""Electrical symbol blocks (simplified, following project legends: sockets, switches, lights,
+low-voltage).
 
-Локальная система блока: точка вставки — на внутренней грани стены, стена вдоль оси X,
-помещение — в сторону +Y. Потолочные символы — с центром в точке вставки. Единица блока —
-1 мм листа: в модели блок вставляется с коэффициентом масштаба листа (50 при 1:50), в
-легенде на листе — 1.
-Геометрия на слое 0 с цветом BYBLOCK, поэтому символ принимает цвет слоя своей вставки
-(E-SOCKET, E-SWITCH, ...). Эти же блоки выгружаются в папку symbols/ командой
+Block local system: the insert point is on the inner wall face, the wall runs along X, the
+room is towards +Y. Ceiling symbols are centred on the insert point. Block unit is 1 sheet mm:
+in the model the block is inserted with the sheet scale factor (50 at 1:50), in the legend
+on the sheet with 1.
+Geometry is on layer 0 with colour BYBLOCK, so a symbol takes the colour of its insert's
+layer (E-SOCKET, E-SWITCH, ...). The same blocks are exported to the symbols/ folder by
 `floorplan-engine symbols`.
 """
 
@@ -75,10 +76,10 @@ TICK = 1.0
 class SymbolSpec:
     block: str
     layer: str
-    depth: float  # мм листа: насколько символ выступает от стены (у потолочных — радиус)
+    depth: float  # sheet mm: how far the symbol sticks out from the wall (radius for ceiling ones)
 
 
-# Блок и слой символа по ключу (electrical.anchors.symbol_key); глубина — SYMBOL_DEPTH
+# Symbol block and layer by key (electrical.anchors.symbol_key); depth is SYMBOL_DEPTH
 SYMBOLS: dict[str, SymbolSpec] = {
     key: SymbolSpec(block, layer.name, SYMBOL_DEPTH[key])
     for key, block, layer in (
@@ -98,7 +99,7 @@ SYMBOLS: dict[str, SymbolSpec] = {
     )
 }
 
-# Порядок строк легенды
+# Legend row order
 LEGEND_ORDER: tuple[str, ...] = (
     PointType.SOCKET,
     PointType.SWITCH,
@@ -121,12 +122,12 @@ def _socket(blk: BlockLayout) -> None:
     blk.add_arc(c, SOCKET_R, 0, 180, dxfattribs=_BYBLOCK)
     blk.add_line((-SOCKET_R, WALL_GAP), (SOCKET_R, WALL_GAP), dxfattribs=_BYBLOCK)
     top = WALL_GAP + SOCKET_R
-    # Касательная — защитный контакт
+    # Tangent line: earth contact
     blk.add_line((-SOCKET_R * 0.8, top), (SOCKET_R * 0.8, top), dxfattribs=_BYBLOCK)
 
 
 def _arm(blk: BlockLayout, angle_deg: float, ticks: int) -> None:
-    """Рычаг выключателя из окружности под углом angle_deg с ticks засечками на конце."""
+    """Switch lever from the circle at angle_deg with ticks at the end."""
     cy = WALL_GAP + SWITCH_R
     d = math.radians(angle_deg)
     start = (SWITCH_R * math.cos(d), cy + SWITCH_R * math.sin(d))
@@ -175,7 +176,7 @@ def _solid_circle(blk: BlockLayout, center: tuple[float, float], r: float) -> No
 
 
 def _downlight(blk: BlockLayout) -> None:
-    """Точечный: залитый кружок с перекрестием, выходящим за контур."""
+    """Spot light: filled circle with a cross sticking out of the outline."""
     blk.add_circle((0.0, 0.0), DOWNLIGHT_R, dxfattribs=_BYBLOCK)
     _solid_circle(blk, (0.0, 0.0), DOWNLIGHT_R * 0.6)
     k = DOWNLIGHT_R * 1.8
@@ -184,14 +185,14 @@ def _downlight(blk: BlockLayout) -> None:
 
 
 def _pendant(blk: BlockLayout) -> None:
-    """Подвесной: две концентрические окружности с залитым центром."""
+    """Pendant: two concentric circles with a filled centre."""
     blk.add_circle((0.0, 0.0), PENDANT_R, dxfattribs=_BYBLOCK)
     blk.add_circle((0.0, 0.0), PENDANT_R * 0.55, dxfattribs=_BYBLOCK)
     _solid_circle(blk, (0.0, 0.0), PENDANT_R * 0.3)
 
 
 def _sconce(blk: BlockLayout) -> None:
-    """Бра: полукруг у стены с внутренним полукругом и осью."""
+    """Wall lamp: half circle at the wall with an inner half circle and an axis."""
     c = (0.0, WALL_GAP)
     blk.add_arc(c, SCONCE_R, 0, 180, dxfattribs=_BYBLOCK)
     blk.add_arc(c, SCONCE_R * 0.45, 0, 180, dxfattribs=_BYBLOCK)
@@ -200,7 +201,7 @@ def _sconce(blk: BlockLayout) -> None:
 
 
 def _outlet_with_letter(letter: str) -> Callable[[BlockLayout], None]:
-    """Слаботочная розетка: отвод от стены и залитый треугольник, рядом буква."""
+    """Low-voltage socket: a stub from the wall and a filled triangle, with a letter next to it."""
 
     def build(blk: BlockLayout) -> None:
         tip = WALL_GAP + DATA_LEN
@@ -220,7 +221,7 @@ def _outlet_with_letter(letter: str) -> Callable[[BlockLayout], None]:
 
 
 def _led_output(blk: BlockLayout) -> None:
-    """Вывод под подсветку: точка у стены и волна."""
+    """Lighting output: a dot at the wall and a wave."""
     _solid_circle(blk, (0.0, WALL_GAP + LED_OUTPUT_R), LED_OUTPUT_R)
     w = 0.9
     y0 = WALL_GAP + LED_OUTPUT_R * 2
@@ -229,14 +230,14 @@ def _led_output(blk: BlockLayout) -> None:
 
 
 def _outlet(blk: BlockLayout) -> None:
-    """Силовой вывод кабеля: отвод от стены и полый кружок на конце."""
+    """Power cable output: a stub from the wall and a hollow circle at the end."""
     top = OUTLET_DEPTH - 2 * OUTLET_R
     blk.add_line((0.0, WALL_GAP), (0.0, top), dxfattribs=_BYBLOCK)
     blk.add_circle((0.0, top + OUTLET_R), OUTLET_R, dxfattribs=_BYBLOCK)
 
 
 def _board(blk: BlockLayout) -> None:
-    """Единичный прямоугольник 1×1 (масштабируется вставкой), половина к помещению залита."""
+    """Unit 1×1 rectangle (scaled by the insert), the half towards the room is filled."""
     blk.add_lwpolyline([(-0.5, 0), (0.5, 0), (0.5, 1), (-0.5, 1)], close=True, dxfattribs=_BYBLOCK)
     hatch = blk.add_hatch(color=0, dxfattribs={"layer": "0"})
     hatch.set_solid_fill(color=0)
@@ -260,13 +261,13 @@ _BUILDERS: dict[str, Callable[[BlockLayout], None]] = {
 }
 
 
-# Невидимые атрибуты вставки точки: правятся в AutoCAD (EATTEDIT), читаются update
+# Invisible attributes of a point insert: edited in AutoCAD (EATTEDIT), read by update
 SYMBOL_ATTRIBS = (("ID", "id точки"), ("H", "Высота от пола, мм"), ("GROUP", "Группа"))
 ATTDEF_INVISIBLE = 1
 
 
 def define_blocks(doc: Drawing) -> None:
-    """Добавить в документ определения всех блоков УГО (если их ещё нет)."""
+    """Add all symbol block definitions to the document (if not there yet)."""
     for name, build in _BUILDERS.items():
         if name not in doc.blocks:
             block = doc.blocks.new(name, base_point=(0, 0))
@@ -286,7 +287,7 @@ def define_blocks(doc: Drawing) -> None:
 
 
 def export_symbols(folder: Path) -> list[Path]:
-    """Выгрузить каждый блок в отдельный DXF (определение + одна вставка) для библиотеки CAD."""
+    """Export each block to its own DXF (definition + one insert) for a CAD library."""
     folder.mkdir(parents=True, exist_ok=True)
     paths: list[Path] = []
     for spec in SYMBOLS.values():

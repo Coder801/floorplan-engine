@@ -1,1 +1,1 @@
-"""Тесты документа и печати листов."""
+"""Document and sheet printing tests."""

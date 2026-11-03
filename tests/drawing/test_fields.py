@@ -23,12 +23,12 @@ def _field_value(tags: list[tuple[int, object]], code: int) -> object:
 
 
 def test_text_checksum() -> None:
-    # Σ (i + 1) × код: 'A' = 65, 'B' = 66 → 65 + 132
+    # Σ (i + 1) × code: 'A' = 65, 'B' = 66 → 65 + 132
     assert text_checksum("AB") == 197.0
 
 
 def test_text_checksum_matches_autocad() -> None:
-    # значение из эталонного DWG (AutoCAD 2024)
+    # value from the reference DWG (AutoCAD 2024)
     assert text_checksum(r"{\W0.7;2 мм}") == 26685.0
 
 
@@ -106,7 +106,7 @@ def test_area_sum_field_is_expression_over_area_fields(tmp_path: Path) -> None:
     assert targets == {a.dxf.handle, b.dxf.handle}
     field_list = reread.rootdict["ACAD_FIELDLIST"]
     assert isinstance(field_list, FieldList)
-    assert len(field_list.handles) == 4  # контейнер, выражение, два контура
+    assert len(field_list.handles) == 4  # container, expression, two outlines
 
 
 def _tags(entity: DXFTagStorage) -> list[tuple[int, object]]:

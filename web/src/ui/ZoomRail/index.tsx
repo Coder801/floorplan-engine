@@ -1,6 +1,6 @@
-// Шкала масштаба справа у чертежа (вертикальная): «+» сверху, пять позиций шагов (zoom.ts) —
-// клик по позиции или перетаскивание ползунка, «−» снизу, «вписать» под ней; без процентов
-// (шаг — в aria-valuetext и подсказке деления). Переход на шаг плавный (Glide в холсте).
+// Vertical zoom scale on the right of the drawing: "+" on top, five step positions (zoom.ts),
+// click a position or drag the slider, "−" at the bottom, "fit" below it; no percentages (the
+// step is in aria-valuetext and the division tooltip). Moving to a step is smooth (Glide in the canvas).
 
 import { useRef } from "react";
 import { useTranslation } from "react-i18next";
@@ -10,18 +10,18 @@ import css from "./ZoomRail.module.scss";
 
 interface Props {
   zoom: Zoom;
-  onStep: (step: number) => void;  // шаг, на который перейти (за крайние холст не пустит)
+  onStep: (step: number) => void;  // the step to go to (the canvas will not go past the ends)
   onFit: () => void;
   fitLabel: string;
 }
 
-// Позиция шага на шкале снизу вверх, доля высоты
+// Step position on the scale from bottom to top, as a fraction of the height
 const at = (step: number) => step / LAST_STEP;
 
 export function ZoomRail({ zoom, onStep, onFit, fitLabel }: Props) {
   const { t } = useTranslation();
   const track = useRef<HTMLDivElement>(null);
-  // Ближайший шаг к точке на шкале
+  // The step nearest to a point on the scale
   const stepAt = (clientY: number) => {
     const r = track.current!.getBoundingClientRect();
     return Math.round((1 - (clientY - r.top) / r.height) * LAST_STEP);

@@ -1,5 +1,5 @@
-// Меню проектов: выезжает слева по кнопке «›» в шапке — карточки, как на входном экране
-// (Welcome.ProjectCard). Закрывается кнопкой, Esc, кликом мимо или выбором проекта.
+// Project menu: slides in from the left on the "›" button in the header, with cards as on the
+// start screen (Welcome.ProjectCard). Closed by the button, Esc, a click outside or picking a project.
 
 import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
@@ -13,20 +13,21 @@ import css from "./ProjectsMenu.module.scss";
 interface Props {
   list: ProjectSummary[];
   current: string | null;
-  closing: boolean;                 // попросили закрыть — меню уезжает влево
+  closing: boolean;                 // asked to close: the menu slides out to the left
   onOpen: (name: string) => void;
-  onClose: () => void;              // запустить уезжание
-  onClosed: () => void;             // уехало — убрать
+  onPrices?: () => void;            // open the studio price page; none — no button
+  onClose: () => void;              // start sliding out
+  onClosed: () => void;             // slid out: remove
 }
 
-export function ProjectsMenu({ list, current, closing, onOpen, onClose, onClosed }: Props) {
+export function ProjectsMenu({ list, current, closing, onOpen, onPrices, onClose, onClosed }: Props) {
   const { t } = useTranslation();
   useEffect(() => {
     const onKey = (ev: KeyboardEvent) => { if (ev.key === "Escape") onClose(); };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
-  // Без анимации конца анимации не будет — убрать сразу
+  // Without animation there is no animation end, so remove right away
   useEffect(() => { if (closing && REDUCED_MOTION) onClosed(); }, [closing, onClosed]);
 
   return (
@@ -43,6 +44,7 @@ export function ProjectsMenu({ list, current, closing, onOpen, onClose, onClosed
           {list.map((p) => (
             <ProjectCard key={p.name} p={p} current={p.name === current} onOpen={onOpen} />
           ))}
+          {onPrices && <button className={css.prices} onClick={onPrices}>{t("prices.open")} →</button>}
         </div>
       </nav>
     </>

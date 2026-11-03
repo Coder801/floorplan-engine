@@ -1,5 +1,5 @@
-"""Подключение к базе (только Postgres): адрес — DATABASE_URL (см. .env.example); схему
-строят миграции Alembic, в тестах — tests/service/conftest.py."""
+"""Database connection (Postgres only): the URL is DATABASE_URL (see .env.example); the schema is
+built by Alembic migrations, in tests by tests/service/conftest.py."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ DEFAULT_URL = (
 
 
 def database_url() -> str:
-    """Адрес базы; postgres:// и postgresql:// (так его даёт Railway) — через psycopg 3."""
+    """Database URL; postgres:// and postgresql:// (as Railway gives it) go through psycopg 3."""
     url = os.environ.get("DATABASE_URL", DEFAULT_URL)
     for prefix in ("postgres://", "postgresql://"):
         if url.startswith(prefix):

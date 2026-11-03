@@ -1,23 +1,23 @@
-// Развёртки постранично: одна страница просмотра — одна стена. На печатном листе развёрток
-// много (sheets.elevations_spec), но каждая помечена своим объектом elevation:<комната>.<стена>
-// (ids.tagged) — по нему находится её габарит, и чертёж показывает только его.
-// Есть данные развёрток (ключ elevations страницы) — стена рисуется по ним своим холстом
-// (ElevationStage), примитивы листа — только для печати и PNG.
+// Elevations page by page: one viewer page is one wall. A printed sheet has many elevations
+// (sheets.elevations_spec), but each is tagged with its own object elevation:<room>.<wall>
+// (ids.tagged): that gives its bounding box, and the drawing shows only that.
+// When elevation data exists (page key elevations), the wall is drawn from it in its own
+// canvas (ElevationStage); sheet primitives are only for print and PNG.
 
 import type { Box, Elevation, Page } from "@/shared/types";
 import { bbox } from "./paint";
 
-const PAD_MM = 4;  // поле вокруг развёртки, мм листа
+const PAD_MM = 4;  // margin around the elevation, sheet mm
 
 export interface WallPage {
-  sheet: number;   // лист, на котором развёртка
+  sheet: number;   // sheet the elevation is on
   key: string;     // elevation:bath.w3
-  box: Box;        // габарит на листе, с полем
-  title: string;   // «Санвузол — стіна 3» (карточка объекта) или ключ
-  data?: Elevation;  // развёртка данными: что на стене
+  box: Box;        // bounding box on the sheet, with the margin
+  title: string;   // "Санвузол — стіна 3" (object card) or the key
+  data?: Elevation;  // elevation as data: what is on the wall
 }
 
-// Развёртки листов по порядку: листы — как переданы, на листе — по первому примитиву
+// Sheet elevations in order: sheets as passed, on a sheet by the first primitive
 export function wallPages(sheets: readonly { index: number; page: Page }[]): WallPage[] {
   const out: WallPage[] = [];
   for (const { index, page } of sheets) {
@@ -41,12 +41,13 @@ export function wallPages(sheets: readonly { index: number; page: Page }[]): Wal
   return out;
 }
 
-// Слева от развёртки — поле под мини-схему квартиры (WallMap внизу слева): доля ширины
-// развёртки, но не меньше доли высоты — у узкой высокой стены ширина мала
+// Left of the elevation, a margin for the flat mini map (WallMap at the bottom left): a share
+// of the elevation width, but at least a share of its height: a narrow tall wall has little width
 export const MAP_ROOM = 0.32;
 
-// Лист одной развёртки: только её примитивы (в поле слева — соседняя развёртка листа),
-// видовой экран — её габарит с полем под мини-схему. PNG для альбома — с исходного листа
+// A one-elevation sheet: only its primitives (the margin on the left would show the
+// neighbouring elevation), the viewport is its bounding box plus the mini map margin. The album
+// PNG comes from the original sheet
 export function wallSheet(page: Page, w: WallPage): Page {
   const [x0, y0, x1, y1] = w.box;
   const room = MAP_ROOM * Math.max(x1 - x0, y1 - y0);

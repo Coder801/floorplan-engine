@@ -1,47 +1,48 @@
-// Раскладка щита в лицо, мм щита (ось Y вниз). Корпус — реальный щит из каталога
-// (enclosure: Hager Golf…) в натуральную величину: рейки по его шагу, по центру корпуса,
-// пустые рейки тоже видны. Аппараты по рейкам кладёт бэк (panel.panel_rows: общие, автоматы,
-// дифавтоматы — каждый вид со своей рейки) так, что ни один не выходит за рейку; аппарат —
-// серединой на оси рейки (DIN 43880), ширина — из модели каталога. Питание сверху (гребёнка
-// над аппаратами), группы — из нижних клемм вниз в пучок под рейкой: тонкие провода плотно,
-// у левого аппарата ниже, без пересечений; пучок выходит в правую стенку, а за корпусом
-// провод идёт под любым углом к своей подписи (подписи — колонкой, по порядку проводов).
-// Вверху корпуса — клеммник PE, внизу — N. У гибридного инвертора — щит АКБ (dc): справа
-// от колонки подписей, под инвертором; его провода — вверх в вводы BAT и PV инвертора
-// своими дорожками (у правого провода выше — без пересечений), под ним — АКБ, строки панелей
-// выходят вниз и вправо к подписи. Чистые функции — без canvas, с тестами.
+// Panel front view layout, panel mm (Y axis down). The enclosure is a real catalogue panel
+// (enclosure: Hager Golf…) at full size: rails at its pitch, centred in the enclosure, empty
+// rails visible too. The backend places devices on rails (panel.panel_rows: shared, breakers,
+// RCBOs, each kind from its own rail) so none sticks out of a rail; a device is centred on the
+// rail axis (DIN 43880), its width comes from the catalogue model. Power comes from the top
+// (busbar above the devices), groups go from the bottom terminals down into a bundle under the
+// rail: thin wires packed tight, lower for the leftmost device, no crossings; the bundle exits
+// through the right wall, and outside the enclosure a wire goes at any angle to its label
+// (labels in a column, in wire order). PE terminal block at the top of the enclosure, N at the
+// bottom. A hybrid inverter gets a battery box (dc): right of the label column, under the
+// inverter; its wires go up into the inverter's BAT and PV inputs along their own lanes (the
+// right-hand wire higher, no crossings), the battery under it, solar strings exit down and
+// right to their label. Pure functions, no canvas, with tests.
 
 import type { PanelDc, PanelData, PanelDevice, PanelEnclosure } from "@/shared/types";
 import { SCREW } from "./catalog";
 
-export const MODULE = 17.5;     // ширина модуля DIN, мм
-export const LANE_MAX = 3;      // шаг проводов в пучке групп, мм: не больше
-export const LANE_MIN = 0.9;    // и не меньше — иначе пучок вылезет на соседнюю рейку
-export const LANE_PAD = 2;      // от низа аппарата до пучка и от пучка до следующей рейки
-export const RESERVE_TAG = 5;   // над резервной шиной — её подпись
-export const FEED_LANE = 17;    // под общими аппаратами: ниже перемычек — питание инвертора
-// Над аппаратами: гребёнки (фазная, нулевая у дифавтоматов) и подход резерва
+export const MODULE = 17.5;     // DIN module width, mm
+export const LANE_MAX = 3;      // wire step in the group bundle, mm: at most
+export const LANE_MIN = 0.9;    // and at least, otherwise the bundle spills onto the next rail
+export const LANE_PAD = 2;      // from the device bottom to the bundle and from the bundle to the next rail
+export const RESERVE_TAG = 5;   // above the backup bus: its label
+export const FEED_LANE = 17;    // under the shared devices: the inverter feed is below the jumpers
+// Above the devices: busbars (phase, neutral for RCBOs) and the backup entry
 export const HEAD = { common: 16, single: 13, double: 17 } as const;
-export const FAN = 46;          // от корпуса до подписей — провода веером под углом
-export const STUB = 5;          // прямой выход провода из корпуса до поворота
-export const LABEL_STEP = 10;   // шаг подписей групп
-export const LABELS = 300;      // колонка подписей групп
-export const LEAD = 60;         // ввод над щитом
-export const SIDE = 50;         // от корпуса до инвертора или вилки — просвет для его проводов
-// Инвертор — пропорции гибридного на 5 кВт (330 × 580 мм); высота — от верха чертежа до
-// пучков общей рейки: его провода приходят снизу и не пересекают подписи
+export const FAN = 46;          // from the enclosure to the labels: wires fan out at an angle
+export const STUB = 5;          // straight wire exit from the enclosure before the bend
+export const LABEL_STEP = 10;   // group label step
+export const LABELS = 300;      // group label column
+export const LEAD = 60;         // supply above the panel
+export const SIDE = 50;         // from the enclosure to the inverter or plug: a gap for its wires
+// Inverter: proportions of a 5 kW hybrid (330 × 580 mm); its height runs from the top of the
+// drawing to the shared rail bundles: its wires come from below and do not cross the labels
 export const INVERTER = { top: 10, ratio: 330 / 580, gap: 16 } as const;
-export const BUS_X = 8;         // от стенки щита до клеммника
-// Клеммник N / PE в корпусе (как Hager QuickConnect): лапка, вводная клемма под винт, ряд
-// безвинтовых клемм, бирка, лапка
+export const BUS_X = 8;         // from the enclosure wall to the terminal block
+// N / PE terminal block in the enclosure (like Hager QuickConnect): a foot, a screw input
+// terminal, a row of screwless terminals, a tag, a foot
 export const TERM = { h: 22, foot: 5, big: 12, pitch: 7, tag: 14 } as const;
-export const TERM_PAD = 26;     // от верха и низа корпуса до середины клеммника
-// Щит АКБ: от низа инвертора до дорожек (ниже — провода LOAD и PE инвертора), шаг дорожек,
-// от дорожек до корпуса; под корпусом — провода строк панелей и АКБ
+export const TERM_PAD = 26;     // from the enclosure top and bottom to the terminal block middle
+// Battery box: from the inverter bottom to the lanes (the inverter LOAD and PE wires are below),
+// the lane step, from the lanes to the enclosure; under the enclosure, solar string and battery wires
 export const DC = { gap: 24, lane: 4.5, top: 14, pv: 14, battery: { w: 150, h: 190, gap: 22 } } as const;
 
-// Общие аппараты — в порядке на рейке; питание основной сети идёт ввод → реле, резервной —
-// от АВР (или переключателя)
+// Shared devices in rail order; main power goes main switch → relay, backup power comes from
+// the ATS (or switch)
 const COMMON = ["input", "relay", "spd", "changeover", "ats", "output", "feed"];
 export const CHAIN = new Set(["input", "relay"]);
 export const BACKUP = new Set(["ats", "changeover"]);
@@ -57,18 +58,18 @@ export interface Rect { x: number; y: number; w: number; h: number }
 export interface Placed extends Rect {
   dev: PanelDevice;
   row: number;
-  lane: number | null;   // y провода группы в пучке или питания инвертора; нет — null
-  label: number | null;  // y подписи группы за корпусом
+  lane: number | null;   // y of the group wire in the bundle or of the inverter feed; null if none
+  label: number | null;  // y of the group label outside the enclosure
 }
 
 export interface Row {
   kind: RowKind;
-  top: number;          // верх ряда (гребёнки над аппаратами)
-  devTop: number;       // верх аппаратов
-  devH: number;         // высота самого высокого аппарата; ось рейки — devTop + devH / 2
-  gutterTop: number;    // низ аппаратов
-  gutterBottom: number; // низ пучка проводов
-  pitch: number;        // шаг проводов в пучке
+  top: number;          // top of the row (busbars above the devices)
+  devTop: number;       // top of the devices
+  devH: number;         // height of the tallest device; the rail axis is devTop + devH / 2
+  gutterTop: number;    // bottom of the devices
+  gutterBottom: number; // bottom of the wire bundle
+  pitch: number;        // wire step in the bundle
 }
 
 export interface DcLayout {
@@ -76,32 +77,32 @@ export interface DcLayout {
   enclosure: PanelEnclosure;
   rails: number[];
   placed: Placed[];
-  lanes: number[];      // y дорожки провода к инвертору: АКБ +, −, строка 1 +, − …
-  pvLanes: number[];    // y проводов строк панелей под корпусом: строка 1 +, − …
+  lanes: number[];      // y of a wire lane to the inverter: battery +, −, string 1 +, − …
+  pvLanes: number[];    // y of solar string wires under the enclosure: string 1 +, − …
   battery: Rect;
 }
 
 export interface PanelLayout {
   enclosure: PanelEnclosure;
   perRow: number;
-  width: number;        // всё вместе: ввод, щит, подписи, внешний аппарат
+  width: number;        // everything together: supply, panel, labels, external device
   height: number;
-  box: Rect;            // корпус щита
-  railX: number;        // начало рейки (первый модуль)
-  rails: number[];      // оси всех реек корпуса, и пустых
+  box: Rect;            // panel enclosure
+  railX: number;        // rail start (first module)
+  rails: number[];      // axes of all enclosure rails, empty ones too
   rows: Row[];
   placed: Placed[];
   external: Rect | null;
-  labelX: number;       // начало подписей групп
-  pe: Rect;             // клеммник PE
-  n: Rect;              // клеммник N
-  terminals: number;    // малых клемм в клеммнике
-  dc: DcLayout | null;  // щит АКБ у инвертора
+  labelX: number;       // start of the group labels
+  pe: Rect;             // PE terminal block
+  n: Rect;              // N terminal block
+  terminals: number;    // small terminals in the block
+  dc: DcLayout | null;  // battery box at the inverter
 }
 
-// Рейки по видам: общие, автоматы, дифавтоматы; внутри вида — порядок данных (основные,
-// потом резервные), общие — в порядке COMMON; аппарат не делится между рейками. Так же
-// раскладывает бэк (panel.panel_rows); здесь — для .epd без рейки у аппарата
+// Rails by kind: shared, breakers, RCBOs; within a kind in data order (main first, then
+// backup), shared ones in COMMON order; a device is never split between rails. The backend
+// lays them out the same way (panel.panel_rows); this is for an .epd without rails on devices
 export function splitRows(devices: PanelDevice[], perRow: number): [RowKind, PanelDevice[]][] {
   const rows: [RowKind, PanelDevice[]][] = [];
   for (const kind of ["common", "single", "double"] as const) {
@@ -118,14 +119,14 @@ export function splitRows(devices: PanelDevice[], perRow: number): [RowKind, Pan
   return rows;
 }
 
-// Корпус по месту (как panel_catalog.fitted_enclosure) — у .epd без корпуса
+// On-site enclosure (like panel_catalog.fitted_enclosure), for an .epd without an enclosure
 export function fittedEnclosure(rows: number, perRow: number): PanelEnclosure {
   return { id: `fitted.${rows}x${perRow}`, brand: "", series: "", article: "", title: `${rows}×${perRow}`,
            rows, per_row: perRow, width: perRow * MODULE + 75, height: 252 + (rows - 1) * 125,
            depth: 99, pitch: 125, body: "#f6f6f3" };
 }
 
-// Аппараты по рейкам: из данных (row у аппарата), иначе — splitRows
+// Devices by rail: from the data (row on the device), otherwise splitRows
 function devRows(data: PanelData, perRow: number): [RowKind, PanelDevice[]][] {
   if (!data.devices.every((d) => d.row !== undefined)) return splitRows(data.devices, perRow);
   const out: [RowKind, PanelDevice[]][] = [];
@@ -140,8 +141,8 @@ function devRows(data: PanelData, perRow: number): [RowKind, PanelDevice[]][] {
   return out;
 }
 
-// Подписи колонкой: как можно ближе к wanted (по возрастанию), не ближе step друг к другу
-// и не выше lo; слипшиеся — группой по центру своих проводов
+// Labels in a column: as close to wanted as possible (ascending), at least step apart and not
+// above lo; clumped ones form a group centred on their wires
 export function fan(wanted: readonly number[], step: number, lo: number): number[] {
   const groups: { start: number; n: number; sum: number }[] = [];
   for (const w of wanted) {
@@ -165,7 +166,7 @@ export function layout(data: PanelData): PanelLayout {
   const railX = (box.w - perRow * MODULE) / 2;
   const first = box.y + (box.h - (enc.rows - 1) * enc.pitch) / 2;
   const rails = Array.from({ length: Math.max(enc.rows, split.length) }, (_, k) => first + k * enc.pitch);
-  // Клеммники — по центру корпуса: клемм по группе, вводу и запасу, но не длиннее корпуса
+  // Terminal blocks centred in the enclosure: terminals per group, input and spare, but no longer than the enclosure
   const room = box.w - 2 * BUS_X;
   const terminals = Math.max(2, Math.min(Object.keys(data.groups).length + 2,
                                          Math.floor((room - termWidth(0)) / TERM.pitch)));
@@ -175,13 +176,13 @@ export function layout(data: PanelData): PanelLayout {
 
   const rows: Row[] = [];
   const placed: Placed[] = [];
-  // Свой провод — у групп и у питания внешнего аппарата (инвертора)
+  // A wire of its own for groups and for the external device feed (inverter)
   const out = (d: PanelDevice) => !!d.group || d.id === data.external?.feed;
   const devH = split.map(([, devs]) => Math.max(...devs.map((d) => d.model.height), 0));
   split.forEach(([kind, devs], r) => {
     const devTop = rails[r] - devH[r] / 2;
     const gutterTop = devTop + devH[r];
-    // Пучок — до гребёнок следующей рейки (или до верха пустой рейки, клеммника N)
+    // The bundle goes down to the next rail's busbars (or to the top of an empty rail, the N terminal block)
     const after = split[r + 1];
     const next = after ? rails[r + 1] - devH[r + 1] / 2 - HEAD[after[0]] - (after[1].some((d) => d.reserve) ? RESERVE_TAG : 0)
       : Math.min(n.y, r + 1 < rails.length ? rails[r + 1] - 45 : Infinity);
@@ -201,15 +202,15 @@ export function layout(data: PanelData): PanelLayout {
   const common = rows.find((r) => r.kind === "common");
   const commonLanes = common ? common.gutterTop + FEED_LANE : box.y + 120;
   const eh = Math.max(120, commonLanes - INVERTER.gap - INVERTER.top);
-  // Над колонкой подписей: низ инвертора выше всех проводов групп
+  // Above the label column: the inverter bottom is above all group wires
   const external = data.external
     ? { x: box.w + SIDE * 1.2, y: INVERTER.top, w: eh * INVERTER.ratio, h: eh }
     : null;
   const labelX = box.w + FAN;
   const dc = external && data.dc
     ? dcLayout(data.dc, external, Math.max(labelX + LABELS, external.x + external.w) + SIDE) : null;
-  // Подписи групп — по порядку проводов сверху вниз: веер без пересечений; ниже инвертора и
-  // дорожек щита АКБ
+  // Group labels follow wire order top to bottom: a fan with no crossings; below the inverter
+  // and the battery box lanes
   const groups = placed.filter((p) => p.lane !== null && p.dev.group).sort((a, b) => a.lane! - b.lane!);
   const lo = dc ? Math.max(...dc.lanes) + LABEL_STEP
     : external ? external.y + external.h + LABEL_STEP : box.y + LABEL_STEP / 2;
@@ -222,10 +223,11 @@ export function layout(data: PanelData): PanelLayout {
            pe, n, terminals, dc };
 }
 
-const DC_LABEL = 80;  // справа от щита АКБ — подписи строк панелей
+const DC_LABEL = 80;  // right of the battery box: solar string labels
 
-// Щит АКБ: дорожки к инвертору под ним, корпус ниже, аппараты на рейках (с бэка — row),
-// провода строк панелей под корпусом (у левой строки ниже), АКБ — под автоматом АКБ
+// Battery box: lanes to the inverter under it, the enclosure below, devices on rails (row from
+// the backend), solar string wires under the enclosure (lower for the left string), the battery
+// under the battery breaker
 export function dcLayout(dc: PanelDc, inv: Rect, x: number): DcLayout {
   const enc = dc.enclosure;
   const wires = 2 + 2 * dc.pv_strings;
@@ -256,13 +258,13 @@ export function termWidth(n: number): number {
   return 2 * TERM.foot + TERM.big + n * TERM.pitch + TERM.tag;
 }
 
-// Центр клеммы: 0 — вводная, 1… — малые
+// Terminal centre: 0 is the input terminal, 1… the small ones
 export function termX(r: Rect, k: number): number {
   return k === 0 ? r.x + TERM.foot + TERM.big / 2 : r.x + TERM.foot + TERM.big + (k - 0.5) * TERM.pitch;
 }
 
-// Провод группы: из нижней клеммы вниз в пучок, по пучку в правую стенку, коротко прямо и
-// под углом к подписи
+// Group wire: from the bottom terminal down into the bundle, along the bundle to the right
+// wall, a short straight run and then at an angle to the label
 export function groupPath(l: PanelLayout, p: Placed): [number, number][] {
   const right = l.box.x + l.box.w, from = p.y + p.h - SCREW;
   const cx = p.x + MODULE / 2;
@@ -271,8 +273,8 @@ export function groupPath(l: PanelLayout, p: Placed): [number, number][] {
   return pts;
 }
 
-// Участки фазной гребёнки над рейкой групп: основная и резервная — отдельно,
-// [x0, x1, резерв]; от первого аппарата участка до конца последнего
+// Phase busbar sections above a group rail: main and backup separately, [x0, x1, backup];
+// from the first device of a section to the end of the last
 export function busSegments(row: Placed[]): [number, number, boolean][] {
   const out: [number, number, boolean][] = [];
   for (const reserve of [false, true]) {

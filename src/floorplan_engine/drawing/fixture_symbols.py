@@ -1,10 +1,11 @@
-"""Сантехприборы на плане контуром (лист «Сантехника»): ванна, душ, унитаз, умывальник,
-мойка, машины, бойлер — чтобы прибор узнавался, а не был штриховкой, как стена.
+"""Plumbing fixtures drawn as outlines on the plan ("Plumbing" sheet): bath, shower, WC, basin,
+kitchen sink, machines, boiler, so a fixture is recognisable instead of hatched like a wall.
 
-Только геометрия, без ezdxf: контуры — ломаные в мм модели. Прибор стоит у своей стены:
-локальные оси — u вдоль стены (0 — середина подводки), v от стены в помещение (0 — грань
-стены или лицо короба, на котором прибор висит). Размеры — типовые (`SIZES`), это рисунок,
-а не обмер: ванна и поддон, заданные препятствием, рисуются в его контуре.
+Geometry only, no ezdxf: outlines are polylines in model mm. A fixture stands at its wall:
+local axes are u along the wall (0 is the middle of the supply) and v from the wall into the
+room (0 is the wall face or the face of the box the fixture hangs on). Sizes are typical
+(`SIZES`): this is a drawing, not a survey. A bath or shower tray given as an obstacle is drawn
+inside that outline.
 """
 
 from __future__ import annotations
@@ -15,8 +16,8 @@ from dataclasses import dataclass
 from floorplan_engine.model.geometry import Vec
 from floorplan_engine.model.plumbing import FixtureType
 
-ARC_STEP_DEG = 15.0  # шаг ломаной дуг и эллипсов
-# Типовой размер прибора на плане, мм: вдоль стены × от стены
+ARC_STEP_DEG = 15.0  # polyline step for arcs and ellipses
+# Typical fixture size on the plan, mm: along the wall × away from the wall
 SIZES: dict[FixtureType, tuple[float, float]] = {
     FixtureType.BATH: (1700.0, 750.0),
     FixtureType.SHOWER: (900.0, 900.0),
@@ -33,7 +34,7 @@ SIZES: dict[FixtureType, tuple[float, float]] = {
 
 @dataclass(frozen=True)
 class Shape:
-    """Ломаная контура; closed — замкнута."""
+    """Outline polyline; closed means it is closed."""
 
     points: tuple[Vec, ...]
     closed: bool = True
@@ -41,7 +42,7 @@ class Shape:
 
 @dataclass(frozen=True)
 class Frame:
-    """Место прибора: точка на стене (или на лице короба), вдоль стены и в помещение."""
+    """Fixture place: a point on the wall (or on the box face), along the wall and into the room."""
 
     origin: Vec
     along: Vec
@@ -56,7 +57,7 @@ def _rect(f: Frame, u0: float, v0: float, u1: float, v1: float) -> Shape:
 
 
 def _rounded(f: Frame, u0: float, v0: float, u1: float, v1: float, r: float) -> Shape:
-    """Прямоугольник со скруглёнными углами радиуса r."""
+    """Rectangle with rounded corners of radius r."""
     r = min(r, (u1 - u0) / 2, (v1 - v0) / 2)
     pts: list[Vec] = []
     corners = ((u1 - r, v0 + r, -90.0), (u1 - r, v1 - r, 0.0), (u0 + r, v1 - r, 90.0))
@@ -82,22 +83,23 @@ def _line(f: Frame, u0: float, v0: float, u1: float, v1: float) -> Shape:
 
 
 def symbol(kind: FixtureType, f: Frame, size: tuple[float, float] | None = None) -> list[Shape]:
-    """Контур прибора; size — вдоль стены × от стены (ванна и поддон — по препятствию),
-    иначе типовой SIZES. Первая фигура — внешний контур (место прибора на плане)."""
+    """Fixture outline; size is along the wall × away from the wall (bath and tray: from the
+    obstacle), otherwise the typical SIZES. The first shape is the outer outline (fixture
+    footprint)."""
     w, d = size if size is not None else SIZES[kind]
     h = w / 2
     if kind is FixtureType.BATH:
         return [
             _rounded(f, -h, 0, h, d, 60),
             _rounded(f, -h + 70, 70, h - 70, d - 70, d / 2 - 70),
-            _ellipse(f, -h + 70 + (d / 2 - 70), d / 2, 25, 25),  # слив у торца
+            _ellipse(f, -h + 70 + (d / 2 - 70), d / 2, 25, 25),  # drain at the end
         ]
     if kind is FixtureType.SHOWER:
         return [
             _rect(f, -h, 0, h, d),
             _line(f, -h, 0, h, d),
             _line(f, -h, d, h, 0),
-            _ellipse(f, 0, d / 2, 45, 45),  # трап
+            _ellipse(f, 0, d / 2, 45, 45),  # floor drain
         ]
     if kind is FixtureType.WC_INSTALLATION:
         return [_ellipse(f, 0, d / 2, h, d / 2), _ellipse(f, 0, d / 2 + 30, h - 60, d / 2 - 90)]
@@ -113,13 +115,13 @@ def symbol(kind: FixtureType, f: Frame, size: tuple[float, float] | None = None)
         return [
             _rounded(f, -h, 0, h, d, 40),
             _ellipse(f, 0, d * 0.55, h - 70, d * 0.32),
-            _ellipse(f, 0, 70, 20, 20),  # смеситель
+            _ellipse(f, 0, 70, 20, 20),  # mixer
         ]
     if kind is FixtureType.KITCHEN_SINK:
         return [
             _rect(f, -h, 0, h, d),
             _rounded(f, -h + 60, 110, h - 60, d - 50, 50),
-            _ellipse(f, 0, 60, 20, 20),  # смеситель
+            _ellipse(f, 0, 60, 20, 20),  # mixer
         ]
     if kind is FixtureType.WASHER:
         return [_rect(f, -h, 0, h, d), _ellipse(f, 0, d / 2, h * 0.65, h * 0.65)]
@@ -131,5 +133,5 @@ def symbol(kind: FixtureType, f: Frame, size: tuple[float, float] | None = None)
         ]
     if kind is FixtureType.BOILER:
         return [_ellipse(f, 0, d / 2, h, d / 2), _ellipse(f, 0, d / 2, h * 0.3, h * 0.3)]
-    # Гигиенический душ: лейка на шланге
+    # Hygienic shower: a hand shower on a hose
     return [_ellipse(f, 0, d - h, h, h), _line(f, 0, 0, 0, d - 2 * h)]

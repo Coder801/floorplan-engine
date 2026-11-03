@@ -1,4 +1,4 @@
-"""Трасса: упрощение ломаной и длина по осям; поиск по сетке (цена и отсечение)."""
+"""Route: polyline simplification and axis length; grid search (cost and pruning)."""
 
 from __future__ import annotations
 
@@ -49,7 +49,7 @@ def test_simplify_keeps_diagonal_points() -> None:
         (_v((5, 5)), 0),
         (_v((0, 0), (300, 0)), 300),
         (_v((0, 0), (300, 0), (300, -200)), 500),
-        (_v((0, 0), (300, 400)), 500),  # участок под углом (эконом) — по гипотенузе
+        (_v((0, 0), (300, 400)), 500),  # a slanted piece (economy) counts by the hypotenuse
         (_v((0, 0), (100, 0), (0, 0)), 200),
     ],
 )
@@ -61,9 +61,9 @@ def test_move_end_keeps_right_angles() -> None:
     from floorplan_engine.electrical.routing import move_end
 
     u = _v((0, 0), (0, 1000), (2000, 1000), (2000, 0))
-    # Поперёк первого участка: соседняя вершина едет следом, участок остаётся вертикальным
+    # Across the first piece: the neighbouring vertex follows, the piece stays vertical
     assert move_end(u, True, Vec(200, 0)) == _v((200, 0), (200, 1000), (2000, 1000), (2000, 0))
-    # Трасса из одного участка получает излом
+    # A single-piece route gets a bend
     assert move_end(_v((0, 0), (1000, 0)), False, Vec(1000, 300)) == _v(
         (0, 0), (0, 300), (1000, 300)
     )
@@ -78,7 +78,9 @@ def test_fit_path_snaps_ends_to_nodes() -> None:
 
 
 def test_penalty_makes_path_go_around() -> None:
-    """Доплата за ячейку (сантехника: перегородка) уводит путь в обход, без неё — напрямую."""
+    """An extra cell cost (plumbing: a partition) makes the path go around; without it, straight
+    through.
+    """
     from shapely.geometry import box as rect
 
     from floorplan_engine.electrical.routing import STEP, Grid
@@ -106,7 +108,9 @@ def _square_grid() -> Grid:
 
 
 def test_search45_mult_makes_open_cells_expensive() -> None:
-    """Цена шага × mult ячейки: середина дороже — путь в обход по краю, а не по диагонали."""
+    """Step cost × the cell's mult: the middle costs more, so the path goes around the edge, not
+    the diagonal.
+    """
     grid = _square_grid()
     start = grid.nearest_free(Vec(200, 200))
     goal = grid.nearest_free(Vec(2800, 2800))
@@ -122,7 +126,7 @@ def test_search45_mult_makes_open_cells_expensive() -> None:
 
 
 def test_search45_prune_by_length_from_start() -> None:
-    """prune(ячейка, длина от старта): дальше 1 м от старта посреди — недоступно."""
+    """prune(cell, length from start): beyond 1 m from the start, the middle is unavailable."""
     grid = _square_grid()
     start = grid.nearest_free(Vec(200, 200))
 
@@ -133,6 +137,6 @@ def test_search45_prune_by_length_from_start() -> None:
 
     _, dist = grid.search45(start, prune=prune, start_len=100.0)
     reached = {s // 8 for s in dist}
-    far = grid.nearest_free(Vec(1500, 1500))  # ≈ 1,8 м по прямой — за порогом
-    near = grid.nearest_free(Vec(700, 700))  # ≈ 0,7 м плюс 100 до старта — до порога
+    far = grid.nearest_free(Vec(1500, 1500))  # ≈ 1.8 m straight: past the limit
+    near = grid.nearest_free(Vec(700, 700))  # ≈ 0.7 m plus 100 to the start: within the limit
     assert far not in reached and near in reached

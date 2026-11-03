@@ -25,8 +25,8 @@ describe("Pinch", () => {
     expect(p.down(touch(2, 200, 100))).toBe(true);
     const s = p.move(touch(2, 300, 100), origin)!;
     expect(s.f).toBeCloseTo(2);
-    expect([s.x, s.y]).toEqual([190, 80]);   // середина (200, 100) в px холста
-    expect([s.dx, s.dy]).toEqual([50, 0]);   // середина ушла с 150 на 200
+    expect([s.x, s.y]).toEqual([190, 80]);   // centre (200, 100) in canvas px
+    expect([s.dx, s.dy]).toEqual([50, 0]);   // the centre moved from 150 to 200
   });
 
   it("после щипка клик не засчитывается, пока не отпущены все пальцы", () => {

@@ -1,5 +1,5 @@
-// Фильтр 3D проводки: группы QF (флажки с цветом группы) и помещение. Отфильтрованные линии,
-// точки и коробки не рисуются; щит виден всегда. Сбрасывается сменой листа.
+// Wiring 3D filter: QF groups (checkboxes in the group colour) and the room. Filtered lines,
+// points and boxes are not drawn; the panel is always visible. Reset when the sheet changes.
 
 import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
@@ -50,7 +50,7 @@ export function Filter3D({ scene, index }: { scene: Scene; index: PageIndex }) {
               title={t("filter3d.groupsTitle")}>
         {filter.groups ? t("filter3d.groupsN", { n, total: groups.length }) : t("filter3d.allGroups")}
       </button>
-      {/* Всплывашка — в области чертежа, а не в группе кнопок: та обрезает всё, что за краем */}
+      {/* The popup lives in the drawing area, not in the button group: that one clips everything past its edge */}
       {open && createPortal(
         <div className={css.pop} role="dialog" aria-label={t("filter3d.groups")}>
           <div className={css.head}>

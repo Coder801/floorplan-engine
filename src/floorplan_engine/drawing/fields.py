@@ -1,14 +1,14 @@
-"""Поля AutoCAD (FIELD) в MTEXT: текст, который AutoCAD пересчитывает сам.
+"""AutoCAD fields (FIELD) in MTEXT: text that AutoCAD recalculates itself.
 
-ezdxf 1.4 объект FIELD не создаёт, поэтому цепочка собирается из «сырых» тегов:
-MTEXT → ACAD_XDICTIONARY → ACAD_FIELD → TEXT (контейнер `_text`) → дочернее поле
-`AcObjProp.16.2` со ссылкой на объект. Все поля регистрируются в FIELDLIST документа.
-Порядок и значения групп повторяют поля площади, записанные AutoCAD 2024 (эталонный
-проект 381922.207.1992-МЗ1: таблицы и подписи «Площа - …м²»).
+ezdxf 1.4 does not create FIELD objects, so the chain is assembled from raw tags:
+MTEXT → ACAD_XDICTIONARY → ACAD_FIELD → TEXT (the `_text` container) → child field
+`AcObjProp.16.2` with a reference to the object. All fields are registered in the document's
+FIELDLIST. Group order and values copy the area fields written by AutoCAD 2024 (reference
+project 381922.207.1992-МЗ1: tables and "Площа - …м²" labels).
 
-Площадь в м² из модели в мм: формат `%lu2%pr2%ds44%ct8[1.0…E-006]` — десятичные
-единицы, 2 знака, запятая, множитель 1e-6. В DXF пишется кэш значения; AutoCAD
-пересчитывает его при открытии и REGEN.
+Area in m² from a model in mm: format `%lu2%pr2%ds44%ct8[1.0…E-006]`: decimal units,
+2 digits, comma, factor 1e-6. The DXF stores a cached value; AutoCAD recalculates it on
+open and on REGEN.
 """
 
 from __future__ import annotations
@@ -29,10 +29,10 @@ FIELD_INDEX = r"%<\_FldIdx 0>%"
 OBJ_PROP = "AcObjProp.16.2"
 MM2_TO_M2 = 1e-6
 
-# Значение поля (AcValue): тип данных в группе 90
+# Field value (AcValue): data type in group 90
 _TYPE_UNKNOWN, _TYPE_LONG, _TYPE_DOUBLE, _TYPE_STRING, _TYPE_HANDLE = 0, 1, 2, 4, 64
-# Опции вычисления: 1 открытие, 2 сохранение, 4 печать, 8 eTransmit, 16 регенерация,
-# 32 по запросу; 63 — «автоматически»
+# Evaluation options: 1 open, 2 save, 4 plot, 8 eTransmit, 16 regen, 32 on demand;
+# 63 means "automatic"
 _EVAL_AUTO = 63
 _STATE_MTEXT_CONTAINER = 13
 _STATE_CHILD = 59
@@ -41,7 +41,7 @@ _STATUS_OK = 2
 
 @dataclass(frozen=True)
 class _Value:
-    """AcValue: флаги, тип, тело, формат и показанный текст."""
+    """AcValue: flags, type, body, format and the displayed text."""
 
     flags: int
     type: int
@@ -62,19 +62,19 @@ class _Value:
 
 
 def area_format(precision: int = 2, comma: bool = True) -> str:
-    """Формат поля площади в м² для модели в мм (как пишет AutoCAD)."""
+    """Area field format in m² for a model in mm (as AutoCAD writes it)."""
     separator = "%ds44" if comma else ""
     return f"%lu2%pr{precision}{separator}%ct8[1.000000000000000E-006]"
 
 
 def format_area(area_mm2: float, precision: int = 2, comma: bool = True) -> str:
-    """То же значение, что покажет поле: 12000000 мм² → «12,00»."""
+    """The same value the field will show: 12000000 mm² → "12,00"."""
     text = f"{area_mm2 * MM2_TO_M2:.{precision}f}"
     return text.replace(".", ",") if comma else text
 
 
 def text_checksum(text: str) -> float:
-    """Контрольная сумма текста носителя: Σ (позиция + 1) × код UTF-16."""
+    """Checksum of the host text: Σ (position + 1) × UTF-16 code."""
     units = text.encode("utf-16-le")
     codes = [int.from_bytes(units[i : i + 2], "little") for i in range(0, len(units), 2)]
     return float(sum((i + 1) * code for i, code in enumerate(codes)))
@@ -153,12 +153,12 @@ def _field_tags(
 
 
 def _area_child_tags(target_h: str, area_mm2: float, fmt: str) -> list[DXFTag]:
-    """Поле «площадь объекта target_h» (AcObjProp), как его пишет AutoCAD 2024."""
+    """Field "area of object target_h" (AcObjProp), as AutoCAD 2024 writes it."""
     display = format_area(area_mm2) if "%ct8" in fmt else f"{area_mm2:g}"
     return _field_tags(
         OBJ_PROP,
         rf'\{OBJ_PROP} Object(%<\_ObjIdx 0>%).Area \f "{fmt}"',
-        # у дочернего поля AutoCAD хранит опцию в ACAD_ROUNDTRIP_2008_FIELD_EVALOPTION
+        # for a child field AutoCAD keeps the option in ACAD_ROUNDTRIP_2008_FIELD_EVALOPTION
         eval_option=0,
         state=_STATE_CHILD,
         children=[],
@@ -176,14 +176,14 @@ def _area_child_tags(target_h: str, area_mm2: float, fmt: str) -> list[DXFTag]:
 
 
 def _attach(doc: Drawing, host: MText, prefix: str, display: str, suffix: str, top: _Node) -> None:
-    """Сделать host полем: контейнер `_text` с одним дочерним полем-деревом top."""
+    """Turn host into a field: a `_text` container with one child field tree top."""
     _register_classes(doc)
     host.text = f"{prefix}{display}{suffix}"
     xdict = host.new_extension_dict() if not host.has_extension_dict else host.get_extension_dict()
     field_dict = xdict.add_dictionary("ACAD_FIELD", hard_owned=True)
     field_dict.set_reactors([xdict.dictionary.dxf.handle])
-    # Записи словарей-владельцев AutoCAD пишет кодом 360; ezdxf по умолчанию — 350,
-    # и тогда AutoCAD считает поля «сиротами»
+    # AutoCAD writes owner-dictionary entries with code 360; ezdxf defaults to 350,
+    # and then AutoCAD treats the fields as orphans
     for owner in (xdict.dictionary, field_dict):
         owner._value_code = 360
 
@@ -210,14 +210,14 @@ def _attach(doc: Drawing, host: MText, prefix: str, display: str, suffix: str, t
 
 @dataclass(frozen=True)
 class _Node:
-    """Поле с дочерними полями: build(хэндлы детей) → теги поля."""
+    """Field with child fields: build(child handles) → field tags."""
 
     build: Callable[[list[str]], list[DXFTag]]
     children: tuple[_Node, ...] = ()
 
 
 def _add_tree(doc: Drawing, node: _Node, owner: str) -> str:
-    # next_handle() сдвигает счётчик: хэндл занят, даже пока объекта ещё нет
+    # next_handle() advances the counter: the handle is taken even before the object exists
     handle = doc.entitydb.next_handle()
     child_handles = [_add_tree(doc, child, handle) for child in node.children]
     _add_raw_object(doc, handle, owner, node.build(child_handles))
@@ -235,10 +235,10 @@ def add_area_field(
     prefix: str = "",
     suffix: str = "",
 ) -> None:
-    """Сделать `host` полем «площадь `target` в м²» с текстом вокруг.
+    """Turn `host` into the field "area of `target` in m²" with text around it.
 
-    `target` — замкнутая полилиния; `area_mm2` — её площадь сейчас: кэш для превью и
-    программ, которые поля не считают.
+    `target` is a closed polyline; `area_mm2` is its current area: a cache for previews and
+    programs that do not evaluate fields.
     """
     fmt = area_format(precision, comma)
     node = _Node(lambda _: _area_child_tags(target.dxf.handle, area_mm2, fmt))
@@ -246,7 +246,7 @@ def add_area_field(
 
 
 def _leaf_area(target_h: str, area_mm2: float, _children: list[str]) -> list[DXFTag]:
-    """Площадь контура внутри выражения: без перевода в м² — его делает само выражение."""
+    """Outline area inside an expression: no conversion to m², the expression does that itself."""
     return _area_child_tags(target_h, area_mm2, "%lu2")
 
 
@@ -260,10 +260,10 @@ def add_area_sum_field(
     prefix: str = "",
     suffix: str = "",
 ) -> None:
-    """Поле «сумма площадей в м²» (AcExpr над полями площади каждого контура).
+    """Field "sum of areas in m²" (AcExpr over the area fields of each outline).
 
-    targets — пары (полилиния, её площадь в мм² сейчас). В выражение AutoCAD
-    подставляет сырые значения дочерних полей (мм²), поэтому сумма × 1e-6.
+    targets are pairs (polyline, its current area in mm²). AutoCAD substitutes the raw values
+    of the child fields (mm²) into the expression, hence sum × 1e-6.
     """
     total = sum(area for _, area in targets)
     fmt = area_format(precision, comma).split("%ct8")[0]
@@ -288,7 +288,7 @@ def add_area_sum_field(
 
 
 def finalize_fields(doc: Drawing) -> None:
-    """Записать FIELDLIST (ACAD_FIELDLIST в корневом словаре). Вызывать перед saveas."""
+    """Write FIELDLIST (ACAD_FIELDLIST in the root dictionary). Call before saveas."""
     handles = [e.dxf.handle for e in doc.objects if e.dxftype() == "FIELD"]
     if not handles:
         return
@@ -298,7 +298,7 @@ def finalize_fields(doc: Drawing) -> None:
     field_list = doc.objects.new_entity("FIELDLIST", {"owner": root.dxf.handle})
     assert isinstance(field_list, FieldList)
     field_list.set_reactors([root.dxf.handle])
-    # группа 90 у Autodesk — число полей; ezdxf называет её flags
+    # Autodesk's group 90 is the number of fields; ezdxf calls it flags
     field_list.dxf.flags = len(handles)
     field_list.handles = handles
     root["ACAD_FIELDLIST"] = field_list

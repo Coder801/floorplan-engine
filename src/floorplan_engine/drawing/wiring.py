@@ -1,21 +1,22 @@
-"""Отрисовка проводки через коробки и таблица кабелей на её лист.
+"""Wiring drawing through junction boxes and the cable table for its sheet.
 
-Расчёт — в wiring.py; здесь только то, что попадает в DXF: коробки, линии кабеля
-по группам (цвет группы как на листе электрики) и таблица «группа → марка → длина».
+The calculation is in wiring.py; here is only what goes into the DXF: boxes, cable lines by
+group (group colour as on the electrical sheet) and the "group → cable type → length" table.
 
-Кабели, чьи трассы лежат на одной линии, идут пучком: у каждого своя полоса со сдвигом
-LANE_MM на листе (lanes), перекрывающиеся кабели в одну полосу не попадают; пучок не шире
-BAND_MM и не заходит на стены: у стены сдвигается от неё, а шаг сжимается, только если места
-между стенами меньше, чем нужно пучку (clearance). Линия режется
-на отрезки, где набор кабелей не меняется (bundles); над каждым — одна подпись сбоку
-от пучка: длина отрезка, м, и число кабелей, если их больше одного: «L2,0 ×3».
-У точки на стене — спуск «↓h1,9», у щита — подъём «↑h1,0»; у трасс по полу (свой слой,
-штрихпунктир) наоборот: к точке — подъём от пола «↑h0,3», у щита — спуск «↓h1,7». Пучки
-считаются отдельно для потолка и пола. Повороты скруглены (дуга в той же полилинии).
-Подпись не ставится поверх трасс, коробок, точек и других подписей: пробуются
-обе стороны и несколько мест вдоль отрезка; не нашлось места — подписи нет (длина есть
-в таблице и в журнале). Длины считаются по исходной трассе (wiring.py): сдвиг полос
-и скругления их не меняют.
+Cables whose routes lie on one line run as a bundle: each has its own lane offset by LANE_MM
+on the sheet (lanes), overlapping cables never share a lane; a bundle is at most BAND_MM wide
+and does not run onto walls: next to a wall it shifts away from it, and the step shrinks only
+if the space between walls is less than the bundle needs (clearance). A line is cut into
+pieces where the set of cables does not change (bundles); each piece gets one label beside
+the bundle: piece length in m, and the number of cables if more than one: "L2,0 ×3".
+At a wall point there is a drop "↓h1,9", at the panel a rise "↑h1,0"; floor routes (own
+layer, dash-dot) are the other way round: a rise from the floor to the point "↑h0,3", a drop
+at the panel "↓h1,7". Bundles are computed separately for ceiling and floor. Corners are
+rounded (an arc in the same polyline).
+A label is never placed over routes, boxes, points or other labels: both sides and several
+spots along the piece are tried; if nothing fits there is no label (the length is in the
+table and the log). Lengths come from the original route (wiring.py): lane shifts and
+rounding do not change them.
 """
 
 from __future__ import annotations
@@ -54,20 +55,20 @@ from floorplan_engine.model.schema import Electrical
 from floorplan_engine.model.texts import Language, tr
 
 LABEL_GAP_MM = 1.0
-FILLET_MM = 1.5  # радиус поворота трассы на листе
-LANE_MM = 0.7  # шаг полос кабелей в пучке на листе: линии не сливаются (решение 2026-10-24)
-BAND_MM = 14.0  # пучок не шире этого на листе: в большом пучке шаг меньше
-WALL_CLEAR_MM = 0.4  # от крайней линии пучка до стены на листе
-_SAMPLES = (0.1, 0.3, 0.5, 0.7, 0.9)  # где вдоль участка мерить место до стен, доли длины
-LENGTH_MM = 1.8  # высота подписи длины на листе
-# Обозначения в подписях (решение 2026-10-24): длина участка «L1,4 ×3», спуск «↓h1,9» — по
-# вертикали, как высота точки «h300» на листе электрики; цифры без букв не читались
+FILLET_MM = 1.5  # route corner radius on the sheet
+LANE_MM = 0.7  # cable lane step on the sheet (decision 2026-10-24)
+BAND_MM = 14.0  # a bundle is no wider than this on the sheet: a big bundle gets a smaller step
+WALL_CLEAR_MM = 0.4  # from the outermost bundle line to a wall on the sheet
+_SAMPLES = (0.1, 0.3, 0.5, 0.7, 0.9)  # where to measure room to walls, fractions
+LENGTH_MM = 1.8  # length label height on the sheet
+# Label notation (decision 2026-10-24): piece length "L1,4 ×3", vertical drop "↓h1,9",
+# like the point height "h300" on the electrical sheet; bare digits were unreadable
 LENGTH = "L"
 VERT = "h"
-LENGTH_OFFSET_MM = 0.6  # от линии (края пучка) до подписи
-LENGTH_SLOTS = (0.5, 0.3, 0.7, 0.15, 0.85)  # места подписи вдоль отрезка, доли длины
-POINT_CLEAR_MM = 2.5  # вокруг точки подключения подписи не ставим
-_TOL = 1.0  # мм модели: точки на одной линии
+LENGTH_OFFSET_MM = 0.6  # from the line (bundle edge) to the label
+LENGTH_SLOTS = (0.5, 0.3, 0.7, 0.15, 0.85)  # label spots along the piece, fractions of length
+POINT_CLEAR_MM = 2.5  # no labels around a connection point
+_TOL = 1.0  # model mm: points on one line
 
 
 def draw_wiring(msp: Modelspace, wiring: Wiring, elec: Electrical) -> None:
@@ -84,14 +85,14 @@ def draw_wiring(msp: Modelspace, wiring: Wiring, elec: Electrical) -> None:
 
 
 def lay_out(wiring: Wiring) -> tuple[list[list[Vec]], list[Bundle]]:
-    """Пути линий со сдвигом полос и отрезки пучков — отдельно по потолку и по полу
-    (номера линий в пучках — в общем списке wiring.runs)."""
+    """Line paths with lane shifts and bundle pieces, separately for ceiling and floor
+    (line numbers in bundles index the shared wiring.runs list)."""
     paths: list[list[Vec]] = [list(r.path) for r in wiring.runs]
     plane_bundles: list[Bundle] = []
     for route in ("ceiling", "floor"):
         idx = [k for k, r in enumerate(wiring.runs) if r.route == route]
         segs = segments([wiring.runs[k].path for k in idx])
-        margin = max(sheet(WALL_CLEAR_MM), CLEARANCE)  # пучок — тоже не ближе CLEARANCE к стенам
+        margin = max(sheet(WALL_CLEAR_MM), CLEARANCE)  # bundle also stays CLEARANCE from walls
         room = clearance(wiring.free, margin) if wiring.free is not None else None
         offsets = lanes(segs, sheet(LANE_MM), sheet(BAND_MM), room)
         for j, k in enumerate(idx):
@@ -111,7 +112,7 @@ def _draw_runs(
     labels: _Labels,
     colors: dict[str, int],
 ) -> None:
-    """Линии со скруглёнными поворотами и спуск (подъём у трасс по полу) у точки."""
+    """Lines with rounded corners and a drop (a rise for floor routes) at the point."""
     for k, run in enumerate(wiring.runs):
         floor = run.route == "floor"
         attribs: dict[str, object] = {"layer": (W_CABLE_FLOOR if floor else W_CABLE).name}
@@ -138,7 +139,7 @@ def _draw_bundle_lengths(
     labels: _Labels,
     colors: dict[str, int],
 ) -> None:
-    """Подпись на отрезок пучка: длина, м, и число кабелей, если их больше одного."""
+    """Label for a bundle piece: length in m and the number of cables if more than one."""
     for bundle in plane_bundles:
         runs = [wiring.runs[k] for k in bundle.runs]
         text = length_label(bundle.length, len(runs))
@@ -155,7 +156,7 @@ def _draw_bundle_lengths(
 def _draw_board_rises(
     msp: Modelspace, wiring: Wiring, paths: Sequence[Sequence[Vec]], labels: _Labels
 ) -> None:
-    """У щита — подъём к потолку «↑» и спуск к полу «↓», по одной подписи на плоскость."""
+    """At the panel: a rise to the ceiling "↑" and a drop to the floor "↓", one label per plane."""
     for route, arrow in (("ceiling", "↑"), ("floor", "↓")):
         board = next(
             (
@@ -181,7 +182,9 @@ def _box_center(b: JunctionBox, size: float) -> Vec:
 
 
 def _draw_boxes(msp: Modelspace, wiring: Wiring) -> None:
-    """Коробки — квадрат у стены (на потолке — по осям, в точке коробки) и подпись «К1»."""
+    """Boxes: a square at the wall (on the ceiling, on the axes at the box point) and a "К1"
+    label.
+    """
     size = sheet(BOX_SIZE_MM)
     half = size / 2
     for b in wiring.boxes:
@@ -201,16 +204,16 @@ def _draw_boxes(msp: Modelspace, wiring: Wiring) -> None:
             add_text(msp, b.label, label_at, TEXT_SMALL_MM, W_TEXT.name)
 
 
-# --- Пучки -------------------------------------------------------------------
+# --- Bundles -----------------------------------------------------------------
 
 
 @dataclass(frozen=True)
 class Segment:
-    """Прямой участок трассы вдоль оси: axis «h» — горизонталь (fixed = y), «v» — вертикаль
-    (fixed = x); lo < hi — координаты концов вдоль оси."""
+    """Straight route piece along an axis: axis "h" is horizontal (fixed = y), "v" is vertical
+    (fixed = x); lo < hi are the end coordinates along the axis."""
 
     run: int
-    index: int  # номер участка в трассе
+    index: int  # piece index in the route
     axis: str
     fixed: float
     lo: float
@@ -219,14 +222,14 @@ class Segment:
 
 @dataclass(frozen=True)
 class Bundle:
-    """Отрезок линии, на котором набор кабелей не меняется."""
+    """Line piece on which the set of cables does not change."""
 
     axis: str
     fixed: float
     lo: float
     hi: float
     runs: tuple[int, ...]
-    band: tuple[float, float]  # сдвиги крайних полос, мм модели
+    band: tuple[float, float]  # offsets of the outermost lanes, model mm
 
     @property
     def length(self) -> float:
@@ -234,8 +237,8 @@ class Bundle:
 
 
 def segments(paths: Sequence[Sequence[Vec]]) -> list[Segment]:
-    """Участки трасс вдоль осей; косые участки (эконом, routing.any_angle) в пучки не
-    собираются: линии из коробки к точкам расходятся веером, по одной полосе они не идут."""
+    """Route pieces along the axes; slanted pieces (economy, routing.any_angle) are not bundled:
+    lines from a box fan out to the points and do not share a lane."""
     out: list[Segment] = []
     for k, path in enumerate(paths):
         for i, (a, b) in enumerate(itertools.pairwise(path)):
@@ -253,13 +256,13 @@ def _by_line(segs: Iterable[Segment]) -> dict[tuple[str, float], list[Segment]]:
     return lines
 
 
-# Место до стен по обе стороны участка линии: (ось, координата, от, до) → (к −, к +), мм модели
+# Room to walls on both sides of a line piece: (axis, coord, from, to) → (to −, to +), model mm
 Room = Callable[[str, float, float, float], tuple[float, float]]
 
 
 def clearance(free: BaseGeometry, margin: float) -> Room:
-    """Место по обе стороны участка до края свободной области (стены), за вычетом margin:
-    наименьшее по нескольким точкам вдоль участка; точки вне области не в счёт."""
+    """Room on both sides of a piece up to the edge of the free area (walls), minus margin: the
+    smallest over several points along the piece; points outside the area do not count."""
     edge = free.boundary
     reach = 1e6
 
@@ -286,15 +289,16 @@ def clearance(free: BaseGeometry, margin: float) -> Room:
 def lanes(
     segs: Sequence[Segment], pitch: float, band: float, room: Room | None = None
 ) -> dict[tuple[int, int], float]:
-    """Сдвиг каждого участка от линии: (трасса, участок) → мм модели, по +y у горизонтали
-    и +x у вертикали. Полосы считаются по группам перекрывающихся участков линии:
-    перекрывающиеся — в разных полосах (раскраска интервалов), шаг pitch, вся группа
-    не шире band. room — место до стен: пучок симметричен линии, а у стены сдвигается
-    от неё; места меньше, чем нужно пучку, — шаг меньше, пучок во всю ширину места."""
+    """Offset of each piece from the line: (route, piece) → model mm, along +y for horizontal and
+    +x for vertical. Lanes are computed per group of overlapping pieces of a line: overlapping
+    ones go in different lanes (interval colouring), step pitch, the whole group no wider than
+    band. room is the space to walls: the bundle is symmetric about the line, but next to a wall
+    it shifts away; if there is less space than the bundle needs, the step shrinks and the
+    bundle takes the full width."""
     out: dict[tuple[int, int], float] = {}
     for line in _by_line(segs).values():
         for cluster in _overlapping(line):
-            ends: list[float] = []  # конец последнего участка в каждой полосе
+            ends: list[float] = []  # end of the last piece in each lane
             lane_of: dict[tuple[int, int], int] = {}
             for s in cluster:
                 free = next((n for n, end in enumerate(ends) if end <= s.lo + _TOL), None)
@@ -316,9 +320,9 @@ def lanes(
                 neg, pos = room(
                     s0.axis, s0.fixed, min(s.lo for s in cluster), max(s.hi for s in cluster)
                 )
-                if neg + pos < width:  # места мало: шаг меньше, во всю ширину
+                if neg + pos < width:  # not enough room: smaller step, full width
                     width, center = neg + pos, (pos - neg) / 2
-                else:  # у стены — сдвиг от неё
+                else:  # next to a wall: shift away from it
                     center = min(max(0.0, width / 2 - neg), pos - width / 2)
             step = width / (count - 1)
             for key, n in lane_of.items():
@@ -327,7 +331,9 @@ def lanes(
 
 
 def _overlapping(line: Sequence[Segment]) -> list[list[Segment]]:
-    """Участки линии группами: в группе каждый перекрывается хотя бы с одним (не касанием)."""
+    """Line pieces in groups: in a group each overlaps at least one other (touching does not
+    count).
+    """
     groups: list[list[Segment]] = []
     reach = -math.inf
     for s in sorted(line, key=lambda s: (s.lo, s.hi, s.run)):
@@ -341,7 +347,7 @@ def _overlapping(line: Sequence[Segment]) -> list[list[Segment]]:
 
 
 def bundles(segs: Sequence[Segment], offsets: dict[tuple[int, int], float]) -> list[Bundle]:
-    """Отрезки линий с постоянным набором кабелей: точки разреза — концы участков."""
+    """Line pieces with a constant set of cables: cut points are the piece ends."""
     out: list[Bundle] = []
     for (axis, fixed), line in _by_line(segs).items():
         cuts = sorted({c for s in line for c in (s.lo, s.hi)})
@@ -356,8 +362,8 @@ def bundles(segs: Sequence[Segment], offsets: dict[tuple[int, int], float]) -> l
 
 
 def offset_path(path: Sequence[Vec], shifts: Sequence[float]) -> list[Vec]:
-    """Трасса со сдвигом каждого участка в свою полосу; вершина между горизонталью и
-    вертикалью — пересечение сдвинутых участков, концы сдвигаются поперёк своего участка."""
+    """Route with each piece shifted into its lane; a vertex between horizontal and vertical is the
+    intersection of the shifted pieces, the ends move across their own piece."""
     if len(path) < 2:
         return list(path)
 
@@ -378,8 +384,8 @@ def offset_path(path: Sequence[Vec], shifts: Sequence[float]) -> list[Vec]:
 
 
 def fillet(path: Sequence[Vec], radius: float) -> list[tuple[float, float, float]]:
-    """Вершины полилинии (x, y, bulge) со скруглёнными поворотами: дуга касается обоих
-    участков; на коротком участке радиус меньше — каждый отдаёт дуге не больше половины."""
+    """Polyline vertices (x, y, bulge) with rounded corners: the arc touches both pieces; on a short
+    piece the radius is smaller, each piece gives the arc at most half its length."""
     if len(path) < 3:
         return [(p.x, p.y, 0.0) for p in path]
     out: list[tuple[float, float, float]] = [(path[0].x, path[0].y, 0.0)]
@@ -389,9 +395,9 @@ def fillet(path: Sequence[Vec], radius: float) -> list[tuple[float, float, float
             continue
         u, v = _unit(d_in), _unit(d_out)
         cross = u.x * v.y - u.y * v.x
-        turn = math.atan2(cross, u.dot(v))  # угол поворота, со знаком: + — влево
+        turn = math.atan2(cross, u.dot(v))  # turn angle, signed: + is left
         if abs(turn) < 1e-6:
-            continue  # прямо — вершина не нужна
+            continue  # straight: no vertex needed
         tangent = min(radius * math.tan(abs(turn) / 2), d_in.length() / 2, d_out.length() / 2)
         start, end = p - u * tangent, p + v * tangent
         out.append((start.x, start.y, math.tan(turn / 4)))
@@ -400,14 +406,14 @@ def fillet(path: Sequence[Vec], radius: float) -> list[tuple[float, float, float
     return out
 
 
-# --- Подписи -----------------------------------------------------------------
+# --- Labels ------------------------------------------------------------------
 
-Label = tuple[str, Vec, float]  # текст, центр, угол
+Label = tuple[str, Vec, float]  # text, centre, angle
 
 
 class _Labels:
-    """Места подписей на листе проводки: подпись не пересекает трассы, коробки, точки
-    подключения и уже поставленные подписи."""
+    """Label spots on the wiring sheet: a label does not cross routes, boxes, connection points
+    or labels already placed."""
 
     def __init__(self, paths: Sequence[Sequence[Vec]]) -> None:
         lines = [LineString([p.as_tuple() for p in path]) for path in paths if len(path) > 1]
@@ -450,7 +456,7 @@ class _Labels:
         return None
 
     def place_bundle(self, text: str, b: Bundle) -> Label | None:
-        """Подпись отрезка пучка — сбоку от крайней полосы; короткий отрезок — без подписи."""
+        """Bundle piece label beside the outermost lane; a short piece gets no label."""
         if sheet(text_width(text, LENGTH_MM)) + 2 * self.gap > b.length:
             return None
         along = Vec(1.0, 0.0) if b.axis == "h" else Vec(0.0, 1.0)
@@ -465,7 +471,7 @@ class _Labels:
         return self._try(text, spots)
 
     def place_end(self, path: Sequence[Vec], text: str, at_end: bool) -> Label | None:
-        """Подпись у конца (или начала) трассы: по бокам последнего участка или за концом."""
+        """Label at the end (or start) of a route: beside the last piece or past the end."""
         if len(path) < 2:
             return None
         tip, prev = (path[-1], path[-2]) if at_end else (path[0], path[1])
@@ -486,14 +492,14 @@ def _unit(v: Vec) -> Vec:
 
 
 def _readable(direction: Vec) -> Vec:
-    """Направление текста вдоль участка: слева направо или снизу вверх."""
+    """Text direction along a piece: left to right or bottom to top."""
     if direction.x < -1e-9 or (abs(direction.x) <= 1e-9 and direction.y < 0):
         return direction * -1.0
     return direction
 
 
 def length_label(mm: float, cables: int) -> str:
-    """Подпись участка пучка: «L1,4» — длина, м; «×3» — кабелей на участке, если больше одного."""
+    """Bundle piece label: "L1,4" is the length in m; "×3" is the cable count if more than one."""
     return f"{LENGTH}{_m(mm)}" + (f" ×{cables}" if cables > 1 else "")
 
 
@@ -502,7 +508,7 @@ def _m(mm: float) -> str:
 
 
 def wiring_notes(wiring: Wiring, language: Language) -> list[str]:
-    """Допущения расчёта — строками под таблицей."""
+    """Calculation assumptions as rows under the table."""
     default = tr("wiring_default", language) if wiring.height_assumed else ""
     notes = [
         tr("wiring_note", language, h=f"{wiring.ceiling_height:g}", default=default),
@@ -541,7 +547,7 @@ def wiring_notes(wiring: Wiring, language: Language) -> list[str]:
 
 
 def write_chases(wiring: Wiring, path: Path) -> Path:
-    """Ведомость штроб: каждая штроба — стена, место, длина, кабели и точки, м."""
+    """Chase schedule: each chase with wall, place, length, cables and points, m."""
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8", newline="") as fh:
         w = csv.writer(fh)
@@ -578,8 +584,8 @@ def write_chases(wiring: Wiring, path: Path) -> Path:
 
 
 def write_journal(wiring: Wiring, path: Path, titles: dict[str, str] | None = None) -> Path:
-    """Кабельный журнал: каждая линия с длинами по частям, м; titles — названия линий по
-    смыслу (objects.wire_titles), иначе колонка label пустая."""
+    """Cable log: each line with lengths by part, m; titles are meaningful line names
+    (objects.wire_titles), otherwise the label column is empty."""
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8", newline="") as fh:
         w = csv.writer(fh)

@@ -1,4 +1,4 @@
-"""Проводка через коробки: топология, длины, допущения."""
+"""Wiring through boxes: topology, lengths, assumptions."""
 
 from __future__ import annotations
 
@@ -74,7 +74,7 @@ def _elec(cables: list[dict[str, Any]] | None = None) -> Electrical:
                     "group": "QF1",
                 },
                 _wall("k1", "switch", "w1", 2500, 900, "QF1"),
-                _wall("s1", "socket", "w4", 1000, 300, "QF2"),  # одна точка группы — от щита
+                _wall("s1", "socket", "w4", 1000, 300, "QF2"),  # single point: from the panel
                 _wall("s2", "socket", "w3", 500, 300, "QF3"),
                 _wall("s3", "socket", "w3", 2500, 300, "QF3"),
                 {
@@ -84,7 +84,7 @@ def _elec(cables: list[dict[str, Any]] | None = None) -> Electrical:
                     "wall": "w4",
                     "offset": 3000,
                     "height": 300,
-                },  # без группы — не в расчёте
+                },  # no group: not in the calculation
             ],
             "board": {"room": "r", "wall": "w1", "offset": 500, "height": 1700},
             "cables": cables or [],
@@ -103,11 +103,11 @@ def _wiring(plan: Plan, elec: Electrical) -> Any:
 def test_topology_board_box_point_only() -> None:
     w = _wiring(make_plan(RECT, [DOOR]), _elec())
     boxes = {b.id: b for b in w.boxes}
-    assert sorted(b.group for b in w.boxes) == ["QF1", "QF3"]  # QF2 — одна точка, без коробки
+    assert sorted(b.group for b in w.boxes) == ["QF1", "QF3"]  # QF2 has one point, no box
     for r in w.runs:
-        assert r.source == "board" or r.source in boxes  # от потребителя кабель не идёт
+        assert r.source == "board" or r.source in boxes  # no cable runs from a load
         if r.target in boxes:
-            assert r.source == "board"  # к коробке — только от щита
+            assert r.source == "board"  # a box is fed only from the panel
     targets = {r.target: r.source for r in w.runs}
     assert targets["s1"] == "board"
     assert {targets["l1"], targets["l2"], targets["k1"]} == {"box_1"}
@@ -117,16 +117,16 @@ def test_topology_board_box_point_only() -> None:
 def test_run_length_parts() -> None:
     w = _wiring(make_plan(RECT, [DOOR]), _elec())
     s2 = next(r for r in w.runs if r.target == "s2")
-    assert s2.vertical_mm == pytest.approx(2700 - 300)  # коробка на потолке — без спуска
+    assert s2.vertical_mm == pytest.approx(2700 - 300)  # ceiling box: no drop
     assert s2.ends_mm == 2 * END_ALLOWANCE
     plan_mm = sum(abs(b.x - a.x) + abs(b.y - a.y) for a, b in itertools.pairwise(s2.path))
     assert s2.plan_mm == pytest.approx(plan_mm)
-    # Трасса — только под прямыми углами
+    # The route has right angles only
     assert all(
         abs(b.x - a.x) < 1e-6 or abs(b.y - a.y) < 1e-6 for a, b in itertools.pairwise(s2.path)
     )
     l1 = next(r for r in w.runs if r.target == "l1")
-    assert l1.vertical_mm == 0.0  # коробка и светильник на потолке — без спусков
+    assert l1.vertical_mm == 0.0  # box and light on the ceiling: no drops
 
 
 def test_ceiling_height_default_is_assumption() -> None:
@@ -152,7 +152,7 @@ def test_box_not_in_doorway() -> None:
     w = _wiring(make_plan(RECT, [DOOR]), _elec())
     for b in w.boxes:
         a = b.anchor
-        # Коробка на верхней стене (w2, y = 3000) не попадает в дверь 1000…1900 с отступом
+        # The box on the top wall (w2, y = 3000) stays clear of the door 1000…1900 with a margin
         if abs(a.pos.y - 3000) < 1e-6:
             assert not (1000 - BOX_CLEARANCE < a.pos.x < 1900 + BOX_CLEARANCE)
 
@@ -165,7 +165,9 @@ def test_no_board_no_wiring() -> None:
 
 
 def _two_rooms_with_door() -> Plan:
-    """Комнаты a и b 3000 × 3000 через перегородку 100 с дверью 800 (в a — дверь, в b — проём)."""
+    """Rooms a and b, 3000 × 3000, with a 100 partition and an 800 door (a door in a, an opening
+    in b).
+    """
 
     def room(rid: str, x: float, inner: str, opening: dict[str, Any]) -> dict[str, Any]:
         walls = [
@@ -206,15 +208,15 @@ def test_cable_to_other_room_goes_through_door() -> None:
         }
     )
     w = _wiring(plan, elec)
-    # Один светильник — всё равно через коробку; одна розетка — от щита
+    # A single light still goes through a box; a single socket comes from the panel
     assert [b.group for b in w.boxes] == ["QF1"] and w.boxes[0].room == "b"
     assert {r.target: r.source for r in w.runs}["s1"] == "board"
     for run in w.runs:
         for a, b in itertools.pairwise(run.path):
-            # Пересечение перегородки (x 3000…3100) — только в проёме: y 1200…2000
+            # Crossing the partition (x 3000…3100) only in the opening: y 1200…2000
             if min(a.x, b.x) < 3000 and max(a.x, b.x) > 3100:
                 assert 1200 <= a.y <= 2000 and a.y == b.y
-    # Кабели коробки не выходят из её комнаты
+    # Box cables do not leave its room
     for run in w.runs:
         if run.source == w.boxes[0].id:
             assert all(p.x >= 3100 for p in run.path)
@@ -223,15 +225,15 @@ def test_cable_to_other_room_goes_through_door() -> None:
 def test_fillet_rounds_right_angles() -> None:
     path = [Vec(0, 0), Vec(1000, 0), Vec(1000, 1000), Vec(2000, 1000)]
     pts = fillet(path, 50)
-    # Каждый поворот — две вершины касания, дуга 90° (bulge = tan 22,5°) со знаком поворота
+    # Each turn is two tangent vertices, a 90° arc (bulge = tan 22.5°) signed by the turn direction
     assert len(pts) == 6
-    assert pts[1] == pytest.approx((950, 0, math.tan(math.radians(22.5))))  # влево
+    assert pts[1] == pytest.approx((950, 0, math.tan(math.radians(22.5))))  # left
     assert pts[2] == pytest.approx((1000, 50, 0))
-    assert pts[3] == pytest.approx((1000, 950, -math.tan(math.radians(22.5))))  # вправо
-    # Короткий участок отдаёт дуге не больше половины
+    assert pts[3] == pytest.approx((1000, 950, -math.tan(math.radians(22.5))))  # right
+    # A short piece gives the arc at most half
     short = fillet([Vec(0, 0), Vec(40, 0), Vec(40, 1000)], 50)
     assert short[1][0] == pytest.approx(20)
-    # Прямая — без лишних вершин
+    # A straight line has no extra vertices
     assert fillet([Vec(0, 0), Vec(500, 0), Vec(1000, 0)], 50) == [(0, 0, 0), (1000, 0, 0)]
 
 
@@ -247,15 +249,15 @@ def test_wiring_sheet_labels_lengths_and_drops() -> None:
     draw_wiring(msp, wiring, elec)
     texts = [t.dxf.text for t in msp.query("TEXT")]
     s2 = next(r for r in wiring.runs if r.target == "s2")
-    assert f"↓h{s2.rise_end_mm / 1000:.1f}".replace(".", ",") in texts  # спуск к розетке
-    assert any(t.startswith("↑") for t in texts)  # подъём от щита
-    # Подписи длин — по отрезкам пучков: длина и число кабелей, если их больше одного
+    assert f"↓h{s2.rise_end_mm / 1000:.1f}".replace(".", ",") in texts  # drop to the socket
+    assert any(t.startswith("↑") for t in texts)  # rise from the panel
+    # Length labels follow bundle pieces: length and cable count if more than one
     segs = segments([r.path for r in wiring.runs])
     expected = {_length_label(b.length, len(b.runs)) for b in bundles(segs, lanes(segs, 1.0, 3.0))}
     numbers = [t for t in texts if t.startswith("L")]
     assert numbers and set(numbers) <= expected
-    assert any("×" in t for t in numbers)  # у коробки кабели идут пучком
-    # Подписи не пересекаются друг с другом
+    assert any("×" in t for t in numbers)  # cables run as a bundle at the box
+    # Labels do not overlap each other
     boxes = []
     for t in msp.query("TEXT"):
         if t.dxf.layer != W_TEXT.name:
@@ -273,31 +275,31 @@ def _length_label(mm: float, n: int) -> str:
 def test_lanes_separate_overlapping_cables() -> None:
     paths = [
         [Vec(0, 0), Vec(3000, 0)],
-        [Vec(1000, 0), Vec(4000, 0)],  # перекрывает первую на 1000..3000
-        [Vec(3000, 0), Vec(5000, 0)],  # касается первой концом — может лечь в её полосу
+        [Vec(1000, 0), Vec(4000, 0)],  # overlaps the first on 1000..3000
+        [Vec(3000, 0), Vec(5000, 0)],  # touches the first at an end: may share its lane
     ]
     segs = segments(paths)
     off = lanes(segs, 30.0, 90.0)
     assert off[(0, 0)] != off[(1, 0)]
     assert off[(2, 0)] == off[(0, 0)]
-    assert sorted({off[(0, 0)], off[(1, 0)]}) == [-15.0, 15.0]  # полосы симметрично линии
+    assert sorted({off[(0, 0)], off[(1, 0)]}) == [-15.0, 15.0]  # lanes symmetric about the line
     shared = [(b.lo, b.hi, b.runs) for b in bundles(segs, off)]
     assert (1000, 3000, (0, 1)) in shared and (0, 1000, (0,)) in shared
 
 
 def test_offset_path_moves_corner_to_both_lanes() -> None:
     path = [Vec(0, 0), Vec(1000, 0), Vec(1000, 1000)]
-    out = offset_path(path, [30.0, -20.0])  # горизонталь вверх на 30, вертикаль влево на 20
+    out = offset_path(path, [30.0, -20.0])  # horizontal up by 30, vertical left by 20
     assert out == [Vec(0, 30), Vec(980, 30), Vec(980, 1000)]
 
 
 def test_lanes_only_where_cables_overlap_and_band_is_limited() -> None:
     far = [[Vec(0, 0), Vec(1000, 0)], [Vec(500, 0), Vec(1500, 0)], [Vec(5000, 0), Vec(6000, 0)]]
     off = lanes(segments(far), 30.0, 90.0)
-    assert off[(2, 0)] == 0.0  # одиночный участок на той же линии — без сдвига
+    assert off[(2, 0)] == 0.0  # a single piece on the same line: no shift
     many = [[Vec(0, 0), Vec(1000 + k, 0)] for k in range(11)]
     shifts = sorted(lanes(segments(many), 30.0, 90.0).values())
-    assert shifts[-1] - shifts[0] == pytest.approx(90.0)  # 11 кабелей — в полосе 90, не 300
+    assert shifts[-1] - shifts[0] == pytest.approx(90.0)  # 11 cables in a band of 90, not 300
 
 
 def _point(pid: str, offset: float, height: float, group: str = "QF5") -> dict[str, Any]:
@@ -308,9 +310,9 @@ def test_wall_chases_share_nearby_drops_up_to_four() -> None:
     plan = make_plan(RECT, [DOOR])
     pts = [
         _point("a", 500, 300),
-        _point("b", 600, 900),  # 100 мм от a — в ту же штробу
-        _point("c", 1200, 300),  # дальше 150 — своя штроба
-        *(_point(f"d{k}", 2000 + 20 * k, 300) for k in range(5)),  # пять рядом — 4 + 1
+        _point("b", 600, 900),  # 100 mm from a: same chase
+        _point("c", 1200, 300),  # beyond 150: its own chase
+        *(_point(f"d{k}", 2000 + 20 * k, 300) for k in range(5)),  # five in a row: 4 + 1
     ]
     elec = Electrical.model_validate(
         {"points": pts, "board": {"room": "r", "wall": "w1", "offset": 500, "height": 1700}}
@@ -319,12 +321,12 @@ def test_wall_chases_share_nearby_drops_up_to_four() -> None:
     points = [c for c in w.chases if c.kind == "point"]
     shared = next(c for c in points if "a" in c.targets)
     assert shared.targets == ("a", "b") and shared.cables == 2
-    assert shared.length_mm == pytest.approx(2700 - 300)  # до самой низкой точки
+    assert shared.length_mm == pytest.approx(2700 - 300)  # down to the lowest point
     assert next(c for c in points if "c" in c.targets).cables == 1
     near = sorted(c.cables for c in points if any(t.startswith("d") for t in c.targets))
     assert near == [1, 4]
-    # Над коробкой на стене — по штробе на каждые 4 кабеля, длина — от потолка до коробки;
-    # у коробки на потолке штробы нет
+    # Above a wall box: one chase per 4 cables, length from the ceiling to the box;
+    # a ceiling box has no chase
     box = [c for c in w.chases if c.kind == "box"]
     on_wall = {b.id for b in w.boxes if not b.on_ceiling}
     n_box = sum(1 for r in w.runs if r.source in on_wall or r.target in on_wall)
@@ -345,16 +347,16 @@ def test_outlet_is_power_point_with_own_estimate_line() -> None:
     )
     w = _wiring(make_plan(RECT, [DOOR]), elec)
     ac = next(r for r in w.runs if r.target == "ac")
-    assert ac.source == "board" and ac.mark == "3x2.5"  # силовой, не свет
+    assert ac.source == "board" and ac.mark == "3x2.5"  # power, not lighting
     names = {ln.name: ln.qty for ln in build_estimate(w, elec, PriceList(), "ru").lines}
     assert names["Вывод кабеля к технике"] == 1 and names["Вывод под подсветку"] == 1
 
 
 def test_board_tail_reaches_floor() -> None:
     w = _wiring(make_plan(RECT, [DOOR]), _elec())
-    s1 = next(r for r in w.runs if r.target == "s1")  # от щита
-    assert s1.ends_mm == pytest.approx(END_ALLOWANCE + 1700)  # в щите — до пола
-    l1 = next(r for r in w.runs if r.target == "l1")  # от коробки
+    s1 = next(r for r in w.runs if r.target == "s1")  # from the panel
+    assert s1.ends_mm == pytest.approx(END_ALLOWANCE + 1700)  # inside the panel down to the floor
+    l1 = next(r for r in w.runs if r.target == "l1")  # from the box
     assert l1.ends_mm == 2 * END_ALLOWANCE
 
 
@@ -365,12 +367,12 @@ def test_floor_route_rises_from_floor() -> None:
     assert box.route == "floor" and box.rise_mm == BOX_ABOVE_FLOOR
     feed = next(r for r in w.runs if r.target == box.id)
     assert feed.route == "floor"
-    assert feed.vertical_mm == pytest.approx(1700 + BOX_ABOVE_FLOOR)  # из щита вниз, к коробке
+    assert feed.vertical_mm == pytest.approx(1700 + BOX_ABOVE_FLOOR)  # down from panel, to box
     s2 = next(r for r in w.runs if r.target == "s2")
-    assert s2.vertical_mm == pytest.approx(BOX_ABOVE_FLOOR + 300)  # от пола до розетки
+    assert s2.vertical_mm == pytest.approx(BOX_ABOVE_FLOOR + 300)  # from the floor to the socket
     floor = [c for c in w.chases if c.route == "floor"]
     assert floor and all(c.length_mm < 2000 for c in floor)
-    # Подъёмы от пола и спуски с потолка в одну штробу не попадают
+    # Rises from the floor and drops from the ceiling never share a chase
     assert all(c.route == "ceiling" for c in w.chases if c.targets and "l1" in c.targets)
 
 
@@ -396,14 +398,14 @@ def test_heavy_lines_and_outlets_go_without_boxes() -> None:
         }
     )
     w = _wiring(make_plan(RECT, [DOOR]), elec)
-    assert [b.group for b in w.boxes] == ["QF4"]  # 3x6 и выводы к технике — без коробок
+    assert [b.group for b in w.boxes] == ["QF4"]  # 3x6 and appliance outputs: no boxes
     src = {r.target: r.source for r in w.runs}
     assert all(src[p] == "board" for p in ("h1", "h2", "ac", "tw"))
-    # direct: false в модели — снова через коробку
+    # direct: false in the model: through a box again
     forced = [{**cables[0], "direct": False}, cables[1]]
     w2 = _wiring(make_plan(RECT, [DOOR]), elec.model_copy(update={"cables": []}))
-    assert "QF9" in {b.group for b in w2.boxes}  # без кабеля марка 3x2.5 — через коробку
-    assert "QF7" not in {b.group for b in w2.boxes}  # выводы к технике — всё равно без коробок
+    assert "QF9" in {b.group for b in w2.boxes}  # without a cable the type is 3x2.5: through a box
+    assert "QF7" not in {b.group for b in w2.boxes}  # appliance outputs: still no boxes
     w3 = _wiring(
         make_plan(RECT, [DOOR]),
         Electrical.model_validate({**elec.model_dump(by_alias=True), "cables": forced}),
@@ -415,7 +417,7 @@ def test_low_voltage_in_own_chases() -> None:
     pts = [
         _wall("s1", "socket", "w3", 500, 300, "QF5"),
         _wall("s2", "socket", "w3", 1500, 300, "QF5"),
-        _wall("lan", "data", "w3", 560, 300, "LAN"),  # 60 мм от розетки
+        _wall("lan", "data", "w3", 560, 300, "LAN"),  # 60 mm from the socket
     ]
     elec = Electrical.model_validate(
         {"points": pts, "board": {"room": "r", "wall": "w1", "offset": 500, "height": 1700}}
@@ -424,7 +426,7 @@ def test_low_voltage_in_own_chases() -> None:
     lan = next(r for r in w.runs if r.target == "lan")
     assert lan.circuit == "low" and lan.source == "board" and lan.mark == "UTP cat.6"
     chases = [c for c in w.chases if c.kind == "point"]
-    assert all(not ({"s1", "lan"} <= set(c.targets)) for c in chases)  # рядом, но раздельно
+    assert all(not ({"s1", "lan"} <= set(c.targets)) for c in chases)  # close, but separate
     board = [c for c in w.chases if c.kind == "board"]
     assert {c.circuit for c in board} == {"power", "low"}
 
@@ -457,16 +459,16 @@ def test_wall_holes_over_doors_for_ceiling_runs() -> None:
     ]
     board = {"room": "a", "wall": "w1", "offset": 500, "height": 1700}
     w = _wiring(plan, Electrical.model_validate({"points": pts, "board": board}))
-    # Дверь в a и проём в b на том же месте — один проход, id двери
+    # A door in a and an opening in b at the same spot: one pass, the door id
     assert {h.passage for h in w.holes} == {"a_door_1"}
-    assert sorted(h.cables for h in w.holes) == [1, HOLE_CABLES]  # 5 кабелей: 4 + 1
+    assert sorted(h.cables for h in w.holes) == [1, HOLE_CABLES]  # 5 cables: 4 + 1
     cables = [
         {"id": f"c{k}", "from": "board", "to": [f"s{k}"], "group": f"QF{k + 1}", "cable": "3x2.5"}
         for k in range(5)
     ]
     floor = [{**c, "route": "floor"} for c in cables]
     w2 = _wiring(plan, Electrical.model_validate({"points": pts, "board": board, "cables": floor}))
-    assert w2.holes == ()  # по полу — под проёмом, без сверления
+    assert w2.holes == ()  # on the floor: under the opening, no drilling
 
 
 def test_boxes_in_wet_rooms_marked() -> None:
@@ -481,18 +483,18 @@ def test_lanes_keep_clear_of_walls() -> None:
 
     from floorplan_engine.drawing.wiring import clearance
 
-    many = [[Vec(0, 50), Vec(1000 + k, 50)] for k in range(5)]  # 5 кабелей в 50 мм от стены y=0
+    many = [[Vec(0, 50), Vec(1000 + k, 50)] for k in range(5)]  # 5 cables 50 mm from the wall y=0
     room = clearance(box(-100, 0, 2000, 3000), 10.0)
     shifts = sorted(lanes(segments(many), 30.0, 300.0, room).values())
-    assert shifts[-1] - shifts[0] == pytest.approx(120.0)  # шаг не сжат
-    assert 50 + shifts[0] == pytest.approx(10.0)  # пучок сдвинут от стены, а не на неё
-    tight = clearance(box(-100, 0, 2000, 100), 10.0)  # коридор 100 мм: места 80
+    assert shifts[-1] - shifts[0] == pytest.approx(120.0)  # step not compressed
+    assert 50 + shifts[0] == pytest.approx(10.0)  # the bundle moves away from the wall, not onto it
+    tight = clearance(box(-100, 0, 2000, 100), 10.0)  # 100 mm corridor: 80 of room
     shifts = sorted(lanes(segments(many), 30.0, 300.0, tight).values())
     assert 50 + shifts[0] == pytest.approx(10.0) and 50 + shifts[-1] == pytest.approx(90.0)
 
 
 def test_ceiling_box_in_center_of_its_points() -> None:
-    """Коробка по потолку — в центре своих точек, а не у стены со стороны щита."""
+    """A ceiling box sits at the centre of its points, not at the wall on the panel side."""
     plan = make_plan(RECT, [DOOR])
     pts = [
         _wall("s1", "socket", "w1", 1500, 300, "QF1"),
@@ -542,7 +544,7 @@ def test_split_points_by_zones() -> None:
     right = [Vec(5000 + 10 * k, 500) for k in range(6)]
     zones = split_points(left + right, 7)
     assert sorted(len(z) for z in zones) == [6, 6]
-    assert all(max(z) < 6 or min(z) >= 6 for z in zones)  # соседние — вместе
+    assert all(max(z) < 6 or min(z) >= 6 for z in zones)  # neighbours go together
     assert split_points(left, 7) == [list(range(6))]
 
 
@@ -568,7 +570,7 @@ def test_switch_outside_room_goes_into_its_light_box() -> None:
             "points": [
                 {"id": "l1", "room": "b", "type": "light", "ceiling": [1500, 1500], "group": "QF1"},
                 {"id": "l2", "room": "b", "type": "light", "ceiling": [800, 800], "group": "QF1"},
-                # выключатель света комнаты b — в комнате a, у двери
+                # switch for room b's light is in room a, by the door
                 {
                     "id": "k1",
                     "room": "a",
@@ -583,15 +585,15 @@ def test_switch_outside_room_goes_into_its_light_box() -> None:
         }
     )
     w = _wiring(plan, elec)
-    (box,) = w.boxes  # у выключателя нет своей коробки
+    (box,) = w.boxes  # the switch has no box of its own
     assert box.room == "b"
     to_switch = next(r for r in w.runs if r.target == "k1")
-    assert to_switch.source == box.id  # от коробки света, не от щита
+    assert to_switch.source == box.id  # from the light box, not from the panel
     assert not any(r.source == "board" and r.target == "k1" for r in w.runs)
-    assert box.size == "100x100"  # 4 линии: питающая, два светильника, выключатель
+    assert box.size == "100x100"  # 4 lines: feed, two lights, switch
 
 
-# --- Ручные правки (wiring.yaml) ---------------------------------------------
+# --- Manual edits (wiring.yaml) ---------------------------------------------
 
 
 def _edited(edits: dict[str, Any], elec: Electrical | None = None) -> Any:
@@ -608,7 +610,7 @@ def test_manual_wire_path_replaces_route() -> None:
     auto = _wiring(make_plan(RECT, [DOOR]), _elec())
     run = next(r for r in auto.runs if r.target == "s1")
     a, b = run.path[0], run.path[-1]
-    # Обход через середину комнаты: от щита вправо, вверх до 1500, к розетке
+    # Detour through the room middle: right from the panel, up to 1500, to the socket
     path = [[a.x, a.y], [1500, a.y], [1500, b.y], [b.x, b.y]]
     w = _edited({"wires": {run.id: {"from": "board", "to": "s1", "path": path}}})
     manual = next(r for r in w.runs if r.id == run.id)
@@ -625,21 +627,21 @@ def test_stale_wire_edit_is_ignored() -> None:
 
 
 def test_wall_box_slides_along_its_wall() -> None:
-    # Коробка на стене — только у трассы по полу
+    # A wall box only for a floor route
     elec = _elec().model_copy(update={"route": "floor"})
     auto = _wiring(make_plan(RECT, [DOOR]), elec)
     box = next(b for b in auto.boxes if not b.on_ceiling)
     a = box.anchor
     assert a.wall_dir is not None and a.inward is not None
-    # Далеко вдоль стены и в сторону от неё — коробка у конца стены, на стене
+    # Far along the wall and away from it: the box goes to the wall end, on the wall
     far = a.pos + a.wall_dir * 100000 + a.inward * 700
     edit = {"room": box.room, "group": box.group, "at": list(far.as_tuple())}
     w = _edited({"boxes": {box.id: edit}}, elec)
     moved = next(b for b in w.boxes if b.id == box.id)
     assert moved.anchor.inward == a.inward
-    assert abs((moved.anchor.pos - a.pos).cross(a.wall_dir)) < 1e-6  # на той же стене
+    assert abs((moved.anchor.pos - a.pos).cross(a.wall_dir)) < 1e-6  # on the same wall
     assert moved.anchor.pos != a.pos
-    # Линии коробки — от нового места
+    # Box lines start from the new spot
     for r in w.runs:
         if r.source == box.id:
             assert r.path[0] == moved.anchor.node
@@ -658,7 +660,7 @@ def test_ceiling_box_moves_only_inside_room() -> None:
     box = Anchor(Vec(1000, 1000), None, None, 75.0)
     assert moved_anchor(g, box, Vec(2000, 1500)) == Anchor(Vec(2000, 1500), None, None, 75.0)
     assert moved_anchor(g, box, Vec(-5000, -5000)) is None
-    # К стене ближе 150 мм — на 150 мм от неё
+    # Closer than 150 mm to a wall: moved to 150 mm from it
     assert moved_anchor(g, box, Vec(50, 1500)) == Anchor(Vec(150, 1500), None, None, 75.0)
 
 
@@ -671,8 +673,8 @@ def test_stale_box_edit_is_ignored() -> None:
 
 
 def test_diagonal_wire_edit_only_in_economy() -> None:
-    """Участок правки под углом: в стандарте не применяется (предупреждение), в экономе —
-    применяется (docs/wiring-variants.md)."""
+    """A slanted edit piece is not applied in standard (a warning) and is applied in economy
+    (docs/wiring-variants.md)."""
     from floorplan_engine.model.schema import WiringEdits
 
     plan = make_plan(RECT, [DOOR])
@@ -680,7 +682,7 @@ def test_diagonal_wire_edit_only_in_economy() -> None:
     auto = _wiring(plan, _elec())
     run = next(r for r in auto.runs if r.target == "s1")
     a, b = run.path[0], run.path[-1]
-    path = [[a.x, a.y], [1500, 1500], [b.x, b.y]]  # напрямую через середину комнаты
+    path = [[a.x, a.y], [1500, 1500], [b.x, b.y]]  # straight through the room middle
     edits = WiringEdits.model_validate(
         {"wires": {run.id: {"from": run.source, "to": "s1", "path": path}}}
     )
@@ -694,8 +696,8 @@ def test_diagonal_wire_edit_only_in_economy() -> None:
 
 
 def test_economy_routes_shorter_at_any_angle() -> None:
-    """Эконом: по потолку кратчайшим путём под любым углом, не ближе 150 мм к стенам;
-    стандарт — под прямыми углами. В эконом-варианте кабеля не больше."""
+    """Economy: on the ceiling along the shortest path at any angle, at least 150 mm from walls;
+    standard at right angles. The economy variant uses no more cable."""
     from shapely.geometry import LineString
 
     from floorplan_engine.electrical.routing import CLEARANCE, free_area, is_ortho
@@ -706,9 +708,10 @@ def test_economy_routes_shorter_at_any_angle() -> None:
     standard = _wiring(plan, _elec())
     economy = _wiring(plan, _elec().model_copy(update={"mode": "economy"}))
     assert all(is_ortho(r.path) for r in standard.runs)
-    assert any(not is_ortho(r.path) for r in economy.runs)  # есть участки под углом
+    assert any(not is_ortho(r.path) for r in economy.runs)  # has slanted pieces
     assert sum(r.plan_mm for r in economy.runs) < sum(r.plan_mm for r in standard.runs)
-    # Срезанные участки не заходят в полосу у стен (кроме подхода к точке у самой стены)
+    # Cut pieces do not enter the band by the walls (except the approach to a point right at the
+    # wall)
     inner = free_area(room_geometries(plan, contours)).buffer(-CLEARANCE + 2)
     for r in economy.runs:
         for p, q in itertools.pairwise(r.path[1:-1]):
@@ -725,9 +728,9 @@ def test_wiring_handles_lane_follows_path() -> None:
     wires = wiring_handles(plan, contours, w)["wires"]
     for r in w.runs:
         h = wires[r.id]
-        assert len(h["lane"]) == len(h["path"])  # полоса — те же вершины со сдвигом
+        assert len(h["lane"]) == len(h["path"])  # a lane is the same vertices with a shift
         for (ax, ay), (bx, by) in itertools.pairwise(h["lane"]):
-            assert abs(ax - bx) < 0.2 or abs(ay - by) < 0.2  # углы прямые
+            assert abs(ax - bx) < 0.2 or abs(ay - by) < 0.2  # right angles
 
 
 @pytest.mark.parametrize(
@@ -735,7 +738,7 @@ def test_wiring_handles_lane_follows_path() -> None:
     [
         ("3x1.5", 1.5),
         ("3x2,5", 2.5),
-        ("3х6", 6.0),  # кириллическая «х»
+        ("3х6", 6.0),  # Cyrillic "х"
         ("5×10", 10.0),
         ("3 x 4", 4.0),
         ("ВВГнг-LS 3x2.5", 2.5),
@@ -815,16 +818,16 @@ def test_empty_wiring_totals_are_zero() -> None:
 
 
 def test_floor_route_never_rises_through_the_room() -> None:
-    """Трасса по полу: к потолочной точке кабель идёт по потолку — группа освещения целиком
-    по потолку, а в смешанной группе ветка поднимается по стене от коробки и идёт по
-    потолку. Подъёма от пола посреди комнаты нет (решение 2026-11-01)."""
+    """Floor route: cable to a ceiling point runs on the ceiling. A lighting group goes entirely on
+    the ceiling, and in a mixed group the branch rises up the wall from the box and runs along the
+    ceiling. No rise from the floor in the middle of a room (decision 2026-11-01)."""
     plan = make_plan(RECT, [DOOR])
     _, contours = validate_plan(plan)
     light = {"id": "l1", "room": "r", "type": "downlight", "ceiling": [1500, 2000]}
     points = [
         {**light, "group": "QF1"},
         _wall("k1", "switch", "w3", 2500, 900, "QF1"),
-        {**light, "id": "l2", "ceiling": [1000, 1000], "group": "QF2"},  # смешанная группа
+        {**light, "id": "l2", "ceiling": [1000, 1000], "group": "QF2"},  # mixed group
         _wall("s1", "socket", "w3", 500, 300, "QF2"),
         _wall("s2", "socket", "w3", 1500, 300, "QF2"),
     ]
@@ -841,10 +844,10 @@ def test_floor_route_never_rises_through_the_room() -> None:
     for r in wiring.runs:
         if r.target in ceiling_points:
             assert r.route == "ceiling" and r.rise_end_mm == 0
-    assert {r.route for r in wiring.runs if r.group == "QF1"} == {"ceiling"}  # освещение
+    assert {r.route for r in wiring.runs if r.group == "QF1"} == {"ceiling"}  # lighting
     qf2 = [r for r in wiring.runs if r.group == "QF2"]
-    assert {r.route for r in qf2 if r.target in {"s1", "s2"}} == {"floor"}  # розетки — по полу
+    assert {r.route for r in qf2 if r.target in {"s1", "s2"}} == {"floor"}  # sockets on the floor
     up = next(r for r in qf2 if r.target == "l2")
     box = next(b for b in wiring.boxes if b.id == up.source)
-    assert box.route == "floor"  # коробка у пола, ветка к светильнику — вверх по стене
+    assert box.route == "floor"  # box at the floor, the branch to the light goes up the wall
     assert up.rise_start_mm == pytest.approx(plan.ceiling_height - box.rise_mm)

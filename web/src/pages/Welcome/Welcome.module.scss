@@ -1,18 +1,18 @@
-// Экран приветствия: выбор проекта поверх всей страницы, карточки — ProjectCard
+// Welcome screen: project choice over the whole page, cards are ProjectCard
 
 @use "@/shared/styles/mixins" as *;
 
 .welcome { position: fixed; inset: 0; z-index: 20; overflow: auto; background: var(--bg); }
 .inner { max-width: 1120px; margin: 0 auto; padding: 56px 24px 64px; }
 
-// Знак | название и девиз
+// Mark | name and tagline
 .head {
-  display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 16px;
+  display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 16px;
   h1 { margin: 0; font-size: 34px; line-height: 1.1; letter-spacing: .01em; }
   p { margin: 2px 0 0; font-size: 15px; }
 }
 .brand { font-family: $brand; font-weight: 600; }
-// Стадия продукта рядом с именем: «альфа» — мелко, без веса
+// Product stage next to the name: "alpha", small and light
 .stage { font-family: inherit; font-size: .5em; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); vertical-align: middle; }
 .lead { text-align: center; margin: 40px 0 20px; font-size: 15px; }
 .none {
@@ -30,3 +30,8 @@
   .lead { margin: 24px 0 16px; }
 }
 .grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+// Studio price page: a quiet button at the right of the head
+.prices {
+  min-height: 36px; padding: 0 14px; border-radius: 6px;
+  border: 1px solid var(--line); background: var(--raise); color: var(--text); font-size: 14px;
+}

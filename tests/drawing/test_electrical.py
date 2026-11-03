@@ -75,7 +75,7 @@ def test_new_point_types_and_led_strip(tmp_path: Path) -> None:
                     "type": "pass_switch",
                     "height": 700,
                 },
-                # Стопка: розетка у стены, под ней интернет
+                # Stack: a socket at the wall, an internet socket under it
                 {
                     "id": "p3",
                     "room": "r",
@@ -128,14 +128,15 @@ def test_new_point_types_and_led_strip(tmp_path: Path) -> None:
         "E_DOWNLIGHT",
         "E_PENDANT",
     } <= names
-    assert len(msp.query('LINE[layer=="E-LED"]')) == 1  # лента на плане
+    assert len(msp.query('LINE[layer=="E-LED"]')) == 1  # strip on the plan
     legend = sheet_layouts(doc)[1]
-    (led_row,) = legend.query('LINE[layer=="E-LED"]')  # строка легенды — на листе
-    assert object_id(led_row) == ("legend", "led_strip")  # значок — для плашки просмотра
+    (led_row,) = legend.query('LINE[layer=="E-LED"]')  # legend row on the sheet
+    assert object_id(led_row) == ("legend", "led_strip")  # icon for the viewer badge
     assert {object_id(i) for i in legend.query("INSERT") if i.dxf.name == "E_PENDANT"} == {
         ("legend", "pendant")
     }
-    # Символы стопки разведены: интернет стоит дальше от стены, чем розетка
+    # The stack symbols are spread apart: the internet one stands farther from the wall than the
+    # socket
     sock = next(
         i for i in msp.query("INSERT") if i.dxf.name == "E_SOCKET" and i.dxf.insert.y < 3500
     )
@@ -144,8 +145,8 @@ def test_new_point_types_and_led_strip(tmp_path: Path) -> None:
 
 
 def test_legend_rows_only_symbol_and_meaning() -> None:
-    """Легенда — значок и что он значит: без количества и без цветов групп (они в
-    «Точках» и «Группах»)."""
+    """The legend is an icon and what it means: no counts and no group colours (those are in
+    "Points" and "Groups")."""
     elec, _ = _rect_plan_elec(
         {
             "points": [
@@ -250,11 +251,11 @@ def test_sheets_show_own_layers_at_common_scale(tmp_path: Path) -> None:
     doc = _save(build_project_document(plan, contours, elec), tmp_path / "project.dxf")
     plan_sheet, elec_sheet, points_sheet, walls_sheet = sheet_layouts(doc)
     assert [plan_sheet.name, elec_sheet.name] == ["01 План", "02 Электрика"]
-    assert points_sheet.name == "03 Точки"  # ведомость точек — приложением в конце
-    assert walls_sheet.name == "04 Развёртки"  # и развёртки стен
+    assert points_sheet.name == "03 Точки"  # point schedule as an appendix at the end
+    assert walls_sheet.name == "04 Развёртки"  # and wall elevations
     assert "Layout1" not in doc.layout_names()
 
-    # Масштаб — один из стандартных и общий для всех листов
+    # The scale is a standard one, shared by all sheets
     scales = {
         round(v.dxf.view_height / v.dxf.height, 6)
         for lay in (plan_sheet, elec_sheet)
@@ -270,21 +271,23 @@ def test_sheets_show_own_layers_at_common_scale(tmp_path: Path) -> None:
         assert vp.dxf.view_height / vp.dxf.height == pytest.approx(scale)
         return set(vp.frozen_layers)
 
-    # План: без электрики; электрика: стены и проёмы без размеров, подписей и контуров
+    # Plan: no electrical; electrical: walls and openings without dimensions, labels or outlines
     assert {"E-SOCKET", "W-CABLE", "E-TEXT", "A-AREA"} <= frozen(plan_sheet)
     assert {"A-WALL", "A-DOOR", "A-DIMS", "A-TEXT"}.isdisjoint(frozen(plan_sheet))
     assert {"A-DIMS", "A-TEXT", "A-AREA"} <= frozen(elec_sheet)
     assert {"A-WALL", "A-DOOR", "E-SOCKET"}.isdisjoint(frozen(elec_sheet))
-    # Рамка и штамп — на листе, в модели их нет
+    # Frame and title block are on the sheet, not in the model
     assert not doc.modelspace().query('*[layer=="A-SHEET"]')
     assert plan_sheet.query('LINE[layer=="A-SHEET"]')
     assert plan_sheet.dxf_layout.dxf.paper_size.startswith("ISO_full_bleed_A")
-    # Легенда — вставки УГО на листе электрики
+    # Legend: symbol block inserts on the electrical sheet
     assert "E_SOCKET" in {i.dxf.name for i in elec_sheet.query("INSERT")}
 
 
 def test_board_attributes_do_not_inflate_view(tmp_path: Path) -> None:
-    """Щит растянут под ширину; его невидимые атрибуты — нет, иначе вид листа раздувается."""
+    """The panel is stretched to its width; its invisible attributes are not, otherwise the sheet
+    view inflates.
+    """
     plan = make_plan([{"length": 3000}, {"length": 4000}, {"length": 3000}, {"length": 4000}])
     _, contours = validate_plan(plan)
     elec, _ = _rect_plan_elec(
@@ -294,8 +297,8 @@ def test_board_attributes_do_not_inflate_view(tmp_path: Path) -> None:
     (board,) = doc.modelspace().query("INSERT[name=='E_BOARD']")
     box = bbox.extents([board])
     assert box.size.x < 1000 and box.size.y < 1000
-    _, elec_sheet, _ = sheet_layouts(doc)  # точек нет — листа «Точки» нет; развёртка — щит
-    # Маленькая комната — маленький формат, а не A0 из-за раздутого габарита
+    _, elec_sheet, _ = sheet_layouts(doc)  # no points: no Points sheet; elevation shows the panel
+    # A small room gets small paper, not A0 from an inflated extent
     assert elec_sheet.dxf_layout.dxf.paper_size.split("_(")[0][-2:] in ("A4", "A3")
 
 
@@ -315,7 +318,7 @@ def test_sheet_png_name(tab: str, name: str) -> None:
 
 
 def test_all_sheets_share_one_format(tmp_path: Path) -> None:
-    """Формат комплекта — по самому большому листу, у всех листов одинаковый."""
+    """The set's paper size follows the largest sheet and is the same for all sheets."""
     plan = make_plan([{"length": 3000}, {"length": 4000}, {"length": 3000}, {"length": 4000}])
     _, contours = validate_plan(plan)
     point = {"room": "r", "wall": "w2", "type": "socket", "height": 300, "group": "QF1"}
@@ -327,5 +330,5 @@ def test_all_sheets_share_one_format(tmp_path: Path) -> None:
     )
     doc = _save(build_project_document(plan, contours, elec), tmp_path / "project.dxf")
     sizes = {lay.dxf_layout.dxf.paper_size for lay in sheet_layouts(doc)}
-    # план, электрика, проводка, щит, точки, развёртки
+    # plan, electrical, wiring, panel, points, elevations
     assert len(sheet_layouts(doc)) == 6 and len(sizes) == 1

@@ -1,23 +1,22 @@
 ---
-description: Ревью изменений в два прохода — встроенный /code-review (баги в diff) и агент reviewer (доменные случаи, правила Штробы, границы слоёв, документация); сводный список находок
-argument-hint: [уровень low|medium|high] [диапазон коммитов, например HEAD~1..]
+description: Two-pass review of changes: the built-in /code-review (bugs in the diff) and the reviewer agent (domain cases, Shtroba rules, layer boundaries, docs); one combined list of findings
+argument-hint: [level low|medium|high] [commit range, for example HEAD~1..]
 ---
 
-Проверь изменения двумя независимыми проходами и сведи находки. Код не правь — только сообщи.
+Check the changes with two independent passes and merge the findings. Do not edit code; only report.
 
-Аргументы: `$ARGUMENTS`. Первое слово из `low | medium | high` — уровень встроенного ревью (не
-указан — `medium`); остальное — диапазон коммитов (`HEAD~1..`, `abc123..def456`). Без диапазона
-проверяются несохранённые изменения, включая новые файлы (`git status --porcelain`,
-`git diff HEAD`, непроиндексированные `??` — целиком через Read); после `/commit` их уже нет —
-тогда укажи диапазон.
+Arguments: `$ARGUMENTS`. A first word from `low | medium | high` is the level of the built-in review
+(`medium` if not given); the rest is a commit range (`HEAD~1..`, `abc123..def456`). Without a range,
+check the uncommitted changes, including new files (`git status --porcelain`, `git diff HEAD`, and
+read untracked `??` files in full with Read). After `/commit` there are none left, so give a range.
 
-1. Встроенное ревью: скилл `code-review` с уровнем и, если задан, диапазоном. Оно ищет обычные
-   ошибки корректности в diff.
-2. Параллельно запусти субагента `reviewer` (Agent, subagent_type: reviewer) с задачей:
-   проверить те же изменения (тот же диапазон или несохранённое, новые файлы — целиком) по его
-   порядку — доменные граничные случаи (оба языка `ru`/`uk`, нет щита, нет масштаба,
-   потолочные точки, соседние комнаты), границы слоёв, правила проекта, детерминизм,
-   документация, тесты. Общие баги он не ищет — это сделал шаг 1.
-3. Сведи оба результата в один список от серьёзных к мелким: файл:строка, что не так,
-   сценарий, как исправить. Одинаковые находки объедини, укажи, откуда каждая
-   (`code-review` / `reviewer`). Нет находок — так и скажи.
+1. Built-in review: the `code-review` skill with the level and, if given, the range. It looks for
+   ordinary correctness bugs in the diff.
+2. In parallel, start the `reviewer` subagent (Agent, subagent_type: reviewer) with this task: check
+   the same changes (the same range or the uncommitted ones, new files in full) in its own order:
+   domain edge cases (both languages `ru`/`uk`, no panel, no scale, ceiling points, neighbouring
+   rooms), layer boundaries, project rules, determinism, docs, tests. It does not look for general
+   bugs: step 1 did that.
+3. Merge both results into one list from most to least serious: file:line, what is wrong, the
+   scenario, how to fix it. Merge identical findings and say where each came from
+   (`code-review` / `reviewer`). If there are no findings, say so.

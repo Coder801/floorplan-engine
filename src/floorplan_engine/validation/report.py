@@ -1,6 +1,6 @@
-"""Отчёт по проекту для человека (report.md) и для сервиса (report.json).
+"""Project report for humans (report.md) and for the service (report.json).
 
-Итог по этапам, открытые вопросы по весу, ответы, ошибки и предупреждения валидации.
+Summary by stage, open questions by weight, answers, validation errors and warnings.
 """
 
 from __future__ import annotations

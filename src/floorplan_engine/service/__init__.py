@@ -1,4 +1,5 @@
-"""Сервис Shtroba: API загрузки источников, вопросов и ответов, сборки проекта.
+"""Shtroba service: API for uploading sources, questions and answers, building the project.
 
-Ядро (`floorplan_engine`) от сервиса не зависит; сервис вызывает конвейер ядра (`pipeline.py`).
+The core (`floorplan_engine`) does not depend on the service; the service calls the core
+pipeline (`pipeline.py`).
 """

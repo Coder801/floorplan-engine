@@ -1,4 +1,4 @@
-// Карточка аппарата щита — поверх чертежа справа сверху, по клику
+// Panel device card over the drawing at the top right, on click
 
 @use "@/shared/styles/mixins" as *;
 
@@ -20,7 +20,7 @@
   to { opacity: 1; transform: none; }
 }
 
-// Цвет | QF | название (тянется) | ×
+// Colour | QF | name (stretches) | ×
 .head {
   display: flex; align-items: baseline; gap: 8px; margin-bottom: 10px;
   b { font-size: 15px; }
@@ -31,7 +31,7 @@
 }
 .title { flex: 1; }
 
-// Потребитель: название | помещение | мощность
+// Load: name | room | power
 .loads li {
   display: grid; grid-template-columns: 1fr auto auto; gap: 8px;
   padding: 3px 0; border-top: 1px solid var(--line);

@@ -1,11 +1,11 @@
-// «Общие сведения» — документом по центру области чертежа, как смета: карточки разделов,
-// прокрутка — внутри области
+// "Overview" as a document centred in the drawing area, like the estimate: section cards,
+// scrolling inside the area
 
 @use "@/shared/styles/mixins" as *;
 
 .stage { position: absolute; inset: 0; display: grid; grid-template-rows: minmax(0, 1fr) auto; background: var(--bg); }
 .body { overflow: auto; padding: 24px 16px 24px; }
-// Итог — внизу области, не прокручивается
+// The total sits at the bottom of the area and does not scroll
 .dock { border-top: 1px solid var(--line); background: var(--paper); padding: 12px 16px; }
 .page { display: grid; gap: 16px; max-width: 960px; margin: 0 auto; }
 .head { h1 { margin: 0; font-size: 22px; font-weight: 500; } p { margin: 4px 0 0; } }
@@ -26,7 +26,7 @@
 .scroll { overflow-x: auto; }
 .pickable tbody tr { cursor: pointer; }
 .pickable tbody tr:hover { background: var(--soft); }
-.picked td { background: var(--soft); box-shadow: inset 0 1px 0 var(--hl), inset 0 -1px 0 var(--hl); }  // отмечен, не рассчитан
+.picked td { background: var(--soft); box-shadow: inset 0 1px 0 var(--hl), inset 0 -1px 0 var(--hl); }  // selected, not computed
 .edit input {
   width: 72px; padding: 2px 6px; font: inherit; text-align: right; border-radius: 6px;
   border: 1px solid var(--line); background: var(--paper); color: var(--text);
@@ -58,8 +58,8 @@
 
 @media (max-width: $phone) { .card { padding: 16px; } .total { grid-template-columns: 1fr; grid-template-areas: "h" "sum" "note" "btn"; row-gap: 4px; } .primary { width: 100%; } }
 
-// Пересборка: блоки и подписи на местах, значения скрыты полосами-заглушками (skeleton) —
-// раскладка не прыгает, пока приходят новые данные
+// Rebuild: blocks and labels stay in place, values are hidden by skeleton bars, so the
+// layout does not jump while the new data arrives
 .skeleton {
   pointer-events: none; user-select: none;
   .head p, dd, td, .line, .sum, .tag, .pairs dd {

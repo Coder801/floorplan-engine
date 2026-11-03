@@ -1,5 +1,6 @@
-// Пересборка проекта (смена варианта проводки, сохранение правок трасс): интерфейс заблокирован
-// модалом с иконкой, пока сервер не вернёт новую сборку. Клики закрыты вуалью, Tab и Esc — перехватом.
+// Project rebuild (wiring variant change, saving route edits): the interface is blocked by a
+// modal with an icon until the server returns the new build. Clicks are blocked by the veil,
+// Tab and Esc are intercepted.
 
 import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
@@ -23,7 +24,7 @@ export function RebuildModal() {
     <div className={css.veil}>
       <div ref={box} className={css.modal} role="alertdialog" aria-modal="true" aria-busy="true"
            aria-labelledby="rebuild-title" tabIndex={-1}>
-        {/* Калькулятор: корпус, экран и кнопки 3×3 — пульсируют волной по диагонали */}
+        {/* Calculator: body, screen and 3×3 buttons pulsing in a diagonal wave */}
         <svg className={css.icon} viewBox="0 0 80 100" width="64" height="80" fill="none" stroke="currentColor"
              strokeWidth="2.5" aria-hidden="true">
           <rect x="3" y="3" width="74" height="94" rx="10" />

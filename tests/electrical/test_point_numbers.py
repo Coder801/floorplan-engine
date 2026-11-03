@@ -1,4 +1,4 @@
-"""Номера точек и таблица «Точки» (point_numbers.py)."""
+"""Point numbers and the "Points" table (point_numbers.py)."""
 
 from __future__ import annotations
 

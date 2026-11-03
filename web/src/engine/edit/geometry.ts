@@ -1,6 +1,6 @@
-// Геометрия правки трасс: точки — [x, y] в мм модели. Трассы ортогональные, а в экономе
-// бывают и косые участки (routing.any_angle): такой участок сдвигается параллельно себе.
-// Те же правила, что routing.simplify / move_end в ядре.
+// Route edit geometry: points are [x, y] in model mm. Routes are orthogonal, but economy may
+// have slanted pieces too (routing.any_angle): such a piece moves parallel to itself.
+// The same rules as routing.simplify / move_end in the core.
 
 import { SNAP_MM } from "@/shared/consts";
 import type { XY } from "@/shared/types";
@@ -9,11 +9,11 @@ export const snap = (v: number) => Math.round(v / SNAP_MM) * SNAP_MM;
 const same = (a: number, b: number) => Math.abs(a - b) < 0.01;
 export const samePt = (a: XY, b: XY) => same(a[0], b[0]) && same(a[1], b[1]);
 export const isH = (a: XY, b: XY) => Math.abs(a[1] - b[1]) <= Math.abs(a[0] - b[0]);
-// Участок вдоль оси (с допуском, как ORTHO в ядре)
+// Piece along an axis (with a tolerance, like ORTHO in the core)
 export const isAxis = (a: XY, b: XY) => Math.abs(a[0] - b[0]) <= 0.5 || Math.abs(a[1] - b[1]) <= 0.5;
 export const clamp = (v: number, a: number, b: number) => Math.min(Math.max(v, Math.min(a, b)), Math.max(a, b));
 
-// Без повторов и без точек на прямой
+// No duplicates and no collinear points
 export function simplifyPath(path: XY[]): XY[] {
   let out = path;
   for (let pass = 0; pass < 4; pass++) {
@@ -33,10 +33,10 @@ export function simplifyPath(path: XY[]): XY[] {
   return out;
 }
 
-// Сдвиг выделенных участков: горизонталь — на dy, вертикаль — на dx, косой участок (эконом) —
-// параллельно себе на проекцию сдвига на его нормаль; соседние участки удлиняются или
-// укорачиваются. Концы линии пристёгнуты к коробке и точке: сдвинутый крайний участок
-// получает отвод от конца
+// Moving selected pieces: a horizontal one by dy, a vertical one by dx, a slanted one (economy)
+// parallel to itself by the projection of the shift onto its normal; the neighbouring pieces
+// get longer or shorter. Line ends are pinned to the box and the point: a moved end piece
+// gets a stub from the end
 export function dragPath(orig: XY[], segs: Set<number>, dx: number, dy: number): XY[] {
   const pts: XY[] = orig.map((p) => [p[0], p[1]]);
   for (const i of segs) {
@@ -57,7 +57,7 @@ export function dragPath(orig: XY[], segs: Set<number>, dx: number, dy: number):
   return simplifyPath(pts);
 }
 
-// Конец трассы — в точку p, углы прямые
+// Move the route end to point p, keeping right angles
 export function moveEnd(path: XY[], atStart: boolean, p: XY): XY[] {
   let pts: XY[] = (atStart ? path : [...path].reverse()).map((q) => [q[0], q[1]]);
   const [a, b] = pts;

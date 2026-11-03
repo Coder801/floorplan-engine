@@ -1,7 +1,7 @@
-"""Доступ к базе для сервиса: проекты, источники, кэш выжимок, версии модели, расход LLM.
+"""Database access for the service: projects, sources, digest cache, model versions, LLM usage.
 
-Функции получают открытую Session и не делают commit — транзакцией управляет вызывающий
-(одна операция Workflow — одна транзакция).
+Functions take an open Session and do not commit: the caller manages the transaction (one
+Workflow operation is one transaction).
 """
 
 from __future__ import annotations
@@ -59,7 +59,7 @@ def add_source(
     object_key: str,
     pages: int = 0,
 ) -> Source:
-    """Источник проекта; тот же файл (по хешу) второй раз не добавляется — вернётся прежний."""
+    """Project source; the same file (by hash) is not added twice, the existing one is returned."""
     digest = sha256(data)
     same = session.scalar(
         select(Source).where(Source.project_id == project_id, Source.sha256 == digest)
@@ -80,7 +80,7 @@ def add_source(
 
 
 def save_facts(session: Session, source_id: uuid.UUID, pages: Sequence[PageFacts]) -> None:
-    """Выжимка источника текущей версии алгоритма: JSON и сводка колонками."""
+    """Source digest from the current algorithm version: JSON and a summary in columns."""
     for f in pages:
         confidence = statistics.mean(d.confidence for d in f.dimensions) if f.dimensions else 0.0
         session.add(
@@ -101,7 +101,7 @@ def save_facts(session: Session, source_id: uuid.UUID, pages: Sequence[PageFacts
 
 
 def cached_facts(session: Session, source_id: uuid.UUID) -> list[PageFacts] | None:
-    """Выжимка из кэша, если её считала текущая версия алгоритма; None — считать заново."""
+    """Digest from the cache if the current algorithm version computed it; None means recompute."""
     rows = session.scalars(
         select(FactsPage)
         .where(FactsPage.source_id == source_id, FactsPage.algo_version == ALGO_VERSION)
@@ -113,7 +113,7 @@ def cached_facts(session: Session, source_id: uuid.UUID) -> list[PageFacts] | No
 def add_model_version(
     session: Session, project_id: uuid.UUID, files: dict[str, str], author: str
 ) -> ModelVersion:
-    """Новая версия модели: тексты YAML по именам файлов (room.yaml…); номер — следующий."""
+    """New model version: YAML texts by file name (room.yaml…); the number is the next one."""
     unknown = sorted(set(files) - set(MODEL_COLUMNS))
     if unknown:
         raise ValueError(f"не файлы модели: {', '.join(unknown)}")
@@ -138,7 +138,7 @@ def latest_model(session: Session, project_id: uuid.UUID) -> ModelVersion | None
 
 
 def model_files(version: ModelVersion) -> dict[str, str]:
-    """Файлы модели версии — чтобы выложить их в рабочую папку перед сборкой."""
+    """Model files of a version, to put them into the working folder before a build."""
     out = {}
     for name, column in MODEL_COLUMNS.items():
         text = getattr(version, column)

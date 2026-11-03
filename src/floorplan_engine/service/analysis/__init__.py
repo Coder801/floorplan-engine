@@ -1,1 +1,1 @@
-"""Анализ источников: интерфейс анализатора, LLM-анализатор и его промпт, выжимка из PDF."""
+"""Source analysis: analyzer interface, the LLM analyzer and its prompt, PDF digest."""

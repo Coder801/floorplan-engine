@@ -1,7 +1,8 @@
-// Вкладка «Общие сведения» — первая вкладка проекта (ключи overview и variants манифеста .epd):
-// объект и помещения, что заложено (точки по видам, щит), сантехника (приборы, вода, канализация, смета), вариант проводки с
-// выбором и сравнением всех вариантов, исходные данные и вопросы, итог проекта: электрика выбранного варианта + сантехника.
-// Всё посчитано кодом при сборке (epd/overview.py, pipeline.variant_block); здесь только показ.
+// "Overview" tab, the first project tab (manifest keys overview and variants of the .epd):
+// object and rooms, what is planned (points by kind, panel), plumbing (fixtures, water, sewer,
+// estimate), the wiring variant with a choice and a comparison of all variants, source data
+// and questions, and the project total: electrical of the chosen variant + plumbing.
+// Everything is computed by code at build time (epd/overview.py, pipeline.variant_block); this only displays it.
 
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -20,7 +21,7 @@ interface Props {
   openQuestions: number;
   canChoose: boolean;
   busy: boolean;
-  refreshing?: boolean;  // идёт пересборка: значения скрыты заглушками, блоки на местах
+  refreshing?: boolean;  // a rebuild is in progress: values hidden by placeholders, blocks in place
   onChoose: (v: { mode: VariantMode; route: VariantRoute; distribution: "boxes" }, ceiling?: number) => void;
   onEstimate?: () => void;
   onDrawer: (tab: "questions" | "sources") => void;
@@ -33,7 +34,7 @@ export function OverviewStage({ overview, variants, project, openQuestions, canC
   const num = (n: number, digits = 2) => n.toLocaleString(i18n.language, { maximumFractionDigits: digits });
   const cash = (n: number, currency: string) => `${Math.round(n).toLocaleString(i18n.language)} ${currency}`;
   const money = (s: VariantSummary) => cash(s.total, s.currency);
-  // Правки копятся до «Пересчитать»: отмеченный вариант и высота потолка; после пересборки сбрасываются
+  // Edits accumulate until "Recalculate": the selected variant and the ceiling height; they reset after the rebuild
   const [pending, setPending] = useState<{ mode: VariantMode; route: VariantRoute } | null>(null);
   const [ceilText, setCeilText] = useState<string | null>(null);
   useEffect(() => { setPending(null); setCeilText(null); }, [overview?.ceiling.height, variants?.active]);
@@ -49,13 +50,13 @@ export function OverviewStage({ overview, variants, project, openQuestions, canC
   const active = variants ? parseKey(variants.active) : null;
   const current = variants && active ? findVariant(variants, active.mode, active.route) : undefined;
   const grand = projectTotal(current, overview.plumbing?.estimate);
-  // Обе сметы — расшифровка итога: электрика выбранного варианта и сантехника
+  // Both estimates explain the total: electrical of the chosen variant and plumbing
   const parts = grand && grand.electrical !== undefined && grand.plumbing !== undefined
     ? t("overview.totalParts", { electrical: cash(grand.electrical, grand.currency), plumbing: cash(grand.plumbing, grand.currency) })
     : null;
   const editable = canChoose && !!variants && !busy;
   const ceilNum = ceilText === null ? null : parseCeiling(ceilText);
-  const ceilBad = ceilText !== null && ceilNum === null;  // введено, но не от 2000 до 4000
+  const ceilBad = ceilText !== null && ceilNum === null;  // entered, but not between 2000 and 4000
   const ceilNew = ceilNum !== null && ceilNum !== overview.ceiling.height ? ceilNum : undefined;
   const dirty = pending !== null || ceilNew !== undefined;
   const recalc = () => {
@@ -235,7 +236,7 @@ export function OverviewStage({ overview, variants, project, openQuestions, canC
       </article>
       </div>
       {grand && (
-        // Итог закреплён внизу области: не уезжает с прокруткой, кнопка одного размера в обоих состояниях
+        // The total is pinned to the bottom of the area: it does not scroll away, the button keeps one size in both states
         <footer className={css.dock}>
           <section className={css.total}>
             <h2>{t("overview.total")}{parts && <> · {parts}</>}</h2>
@@ -252,7 +253,7 @@ export function OverviewStage({ overview, variants, project, openQuestions, canC
   );
 }
 
-// Боковая панель вкладки: вариант, итог проекта (электрика + сантехника), вопросы
+// Tab side panel: variant, project total (electrical + plumbing), questions
 interface SummaryProps {
   variants: Variants | null;
   plumbing?: OverviewPlumbing["estimate"];

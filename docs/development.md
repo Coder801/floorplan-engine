@@ -43,20 +43,34 @@
 6. В ответе: что сделано, что проверено и чем, что не проверено и почему. Не пиши «готово»,
    если шаг пропущен.
 
-## Коммиты и версии
+## Ветки и релизы
 
-Решение 2026-11-03: версия поднимается при релизе, не при каждом коммите.
+Решение 2026-11-03: `develop` — разработка, `feature/<имя>` — работа, `main` — только релизы с
+тегами; релизных веток нет. Версия поднимается при релизе, не при каждом коммите. Ветками
+управляет `scripts/flow.py`, пуш всегда руками.
+
+- **Новая работа:** на `develop` → `uv run python scripts/flow.py feature <имя>` — ветка
+  `feature/<имя>`, незакоммиченные правки переезжают в неё. `/commit` делает это сам, если
+  ты стоишь на `develop` с правками.
+- **В develop:** `uv run python scripts/flow.py integrate` — rebase на `develop`, fast-forward,
+  ветка удаляется (`--keep` — оставить). История `develop` линейная. Конфликт при rebase
+  скрипт не решает: `git rebase --continue` или `--abort`, потом снова `integrate`.
+  Пуш: `git push origin develop`.
+- **Релиз** (`/release`): на чистом `develop` → `uv run python scripts/flow.py release`
+  (сначала `--dry-run`): `main` fast-forward до `develop`, `cz bump` на `main`, `develop`
+  fast-forward до `main`. В `main` коммитов мимо `develop` быть не должно — скрипт откажет,
+  пока не сделан `git merge main` в `develop`. Пуш: `git push origin main develop --follow-tags`.
 
 - **Заголовок коммита — Conventional Commits:** `feat(viewer): zoom in on double click`,
   `fix(electrical): …`, `docs: …`, `chore(projects): rebuild out/`. Типы и области — в
   `.claude/agents/committer.md`. Проверяет хук `commit-msg` (husky из `web/`, файл
   `web/.husky/commit-msg` → `uv run cz check`); хук ставится при `npm install` в `web/`
   (`prepare`). Коммит с другим заголовком не проходит.
-- **Релиз:** `uv run cz bump` (сначала `--dry-run`). Commitizen (`pyproject.toml`,
+- **Версия:** `cz bump` внутри `flow.py release`. Commitizen (`pyproject.toml`,
   `[tool.commitizen]`) считает новую версию по коммитам с прошлого тега (`feat` — minor,
   `fix` — patch; пока версия 0.x, breaking — тоже minor), правит `pyproject.toml`,
   `src/floorplan_engine/__init__.py`, `web/package.json` и `web/package-lock.json`
   (`scripts/release_lock.py`), дописывает `CHANGELOG.md`, коммитит `bump: version …` и ставит
-  тег `vX.Y.Z`. Пуш с тегом — руками: `git push --follow-tags`. Версия видна в настройках
+  тег `vX.Y.Z`. Версия видна в настройках
   просмотра (`web/src/shared/version.ts`), совпадение трёх файлов проверяет
   `tests/test_version.py`.

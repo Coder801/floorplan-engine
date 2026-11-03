@@ -1,6 +1,7 @@
-"""Развёртка стены на листе (elevations.py → блок листа): рисуется прямо на листе, в масштабе
-комплекта, как щит в лицо. Снизу — отступы от левого угла стены, справа — высоты от пола
-(ординатные размеры: близкие значения разводятся, к месту ведёт излом выноски).
+"""Wall elevation on the sheet (elevations.py → sheet block): drawn directly on the sheet at
+the set's scale, like the panel front view. Below: offsets from the left wall corner; on the
+right: heights from the floor (ordinate dimensions: close values are spread out, a bent
+leader points to the place).
 """
 
 from __future__ import annotations
@@ -32,36 +33,36 @@ GREY = 0x9A9288
 LIGHT = 0xD9D3C8
 CHASE = 0xE4DED3
 CHASE_LOW = 0xCFE3F3
-BACK = 0xB0A99D  # выводы с обратной стороны стены — бледно
-LOW = 0x1F6FB2  # слаботочка
+BACK = 0xB0A99D  # outlets on the far side of the wall are drawn faint
+LOW = 0x1F6FB2  # low-voltage
 BOX = 0xB3261E
-WATER = {"cold": 0x1F77B4, "hot": 0xD62728, "sewer": 0x8C564B}  # как на листе «Сантехника»
+WATER = {"cold": 0x1F77B4, "hot": 0xD62728, "sewer": 0x8C564B}  # as on the "Plumbing" sheet
 
 LW_FLOOR = 50
 LW_WALL = 25
 LW_THIN = 13
 
 TITLE_H = TEXT_DIM_MM
-SIDE_H = TEXT_SMALL_MM  # строка под заголовком: вид изнутри, что за стеной
+SIDE_H = TEXT_SMALL_MM  # line under the heading: view from inside, what is behind the wall
 SIDE_GAP = 1.0
 TITLE_GAP = 3.0
-HEAD = TITLE_H + SIDE_GAP + SIDE_H + TITLE_GAP  # заголовок над стеной
-ORD_TEXT = TEXT_SMALL_MM  # подписи размеров
-ORD_GAP = 0.8  # между соседними подписями
-TICK = 1.2  # выноска до излома
-JOG = 2.0  # излом
-MIN_SYMBOL = 1.0  # радиус символа на листе — не меньше, мм
-DASH, DASH_GAP = 0.8, 0.6  # пунктир выносок от вывода к шкалам, мм листа
+HEAD = TITLE_H + SIDE_GAP + SIDE_H + TITLE_GAP  # heading above the wall
+ORD_TEXT = TEXT_SMALL_MM  # dimension labels
+ORD_GAP = 0.8  # between neighbouring labels
+TICK = 1.2  # leader up to the bend
+JOG = 2.0  # bend
+MIN_SYMBOL = 1.0  # symbol radius on the sheet, not less than this, mm
+DASH, DASH_GAP = 0.8, 0.6  # dashed leaders from an outlet to the scales, sheet mm
 
 SWITCHES = frozenset({PointType.SWITCH, PointType.PASS_SWITCH})
 LOW_TYPES = frozenset({PointType.DATA, PointType.TV})
 
-Box = tuple[float, float, float, float]  # x0, y0, x1, y1 — мм листа
+Box = tuple[float, float, float, float]  # x0, y0, x1, y1 in sheet mm
 
 
 def spread(wanted: Sequence[float], gap: float, lo: float, hi: float) -> list[float]:
-    """Места подписей вдоль оси: как можно ближе к wanted (по возрастанию), не ближе gap друг
-    к другу, в пределах lo…hi, если влезают."""
+    """Label positions along an axis: as close to wanted as possible (ascending), at least gap
+    apart, within lo…hi if they fit."""
     out: list[float] = []
     for w in wanted:
         out.append(max(w, lo, out[-1] + gap) if out else max(w, lo))
@@ -80,7 +81,7 @@ class ElevationPanel:
 
 
 def elevation_panel(e: WallElevation, scale: float, language: Language) -> ElevationPanel:
-    """Развёртка стены e на листе в масштабе 1:scale; draw — от левого верхнего угла блока."""
+    """Elevation of wall e on the sheet at 1:scale; draw is from the block's top-left corner."""
     w, h = e.length / scale, e.top / scale
     right = _ord_width([*e.heights(), e.height])
     bottom = _ord_width([*e.offsets(), 0.0, e.length])
@@ -103,13 +104,13 @@ def _title(e: WallElevation, language: Language) -> str:
 
 
 def _side(e: WallElevation, language: Language) -> str:
-    """Вторая строка: с какой стороны вид и что за стеной — у общей перегородки две
-    развёртки, и каждая называет другую."""
+    """Second line: which side the view is from and what is behind the wall. A shared partition has
+    two elevations, and each names the other."""
     return tr("elev_side", language, behind=behind_text(e, language))
 
 
 def _ord_width(values: Sequence[float]) -> float:
-    """Место под ординатные размеры: выноска, излом и самая длинная подпись."""
+    """Room for ordinate dimensions: leader, bend and the longest label."""
     longest = max((text_width(f"{v:.0f}*", ORD_TEXT) for v in values), default=0.0)
     return TICK + JOG + 0.5 + longest
 
@@ -126,7 +127,7 @@ def _draw(
     x0 = top_left.x
     floor = top_left.y - HEAD - h
     top = floor + h
-    ceil = floor + e.height / scale  # потолок; выше — только если точка выше потолка
+    ceil = floor + e.height / scale  # ceiling; higher only if a point is above the ceiling
 
     def at(x: float, y: float) -> Vec:
         return Vec(x0 + x / scale, floor + y / scale)
@@ -154,7 +155,7 @@ def _draw(
         )
 
     def dashed(a: Vec, b: Vec, color: int = GREY) -> None:
-        """Пунктир штрихами-отрезками: так он один и тот же в DXF, PNG и просмотре."""
+        """Dashes as separate segments, so the line looks the same in DXF, PNG and the viewer."""
         length = (b - a).length()
         if length < 1e-6:
             return
@@ -188,13 +189,13 @@ def _draw(
         align=TextEntityAlignment.MIDDLE_LEFT,
     )
 
-    # Штробы — под всем остальным
+    # Chases go under everything else
     for ch in e.chases:
         half = max((50.0 if ch.wide else 30.0) / 2 / scale, 0.3)
         a, b = at(ch.x, ch.y0), at(ch.x, ch.y1)
         rect((a.x - half, a.y, a.x + half, b.y), LW_THIN, GREY, CHASE_LOW if ch.low else CHASE)
 
-    # Стена: пол и потолок толще, торцы — углы помещения
+    # Wall: floor and ceiling lines are thicker, the ends are room corners
     line(Vec(x0, floor), Vec(x0 + w, floor), LW_FLOOR)
     line(Vec(x0, ceil), Vec(x0 + w, ceil), LW_FLOOR)
     line(Vec(x0, floor), Vec(x0, top), LW_WALL)
@@ -204,16 +205,16 @@ def _draw(
         a, b = at(o.x0, o.y0), at(o.x1, o.y1)
         color = GREY if o.assumed else DARK
         rect((a.x, a.y, b.x, b.y), LW_WALL, color, 0xFFFFFF)
-        if o.kind == "window":  # переплёт
+        if o.kind == "window":  # window frame
             mid = (a.x + b.x) / 2
             line(Vec(mid, a.y), Vec(mid, b.y), LW_THIN, color)
-        elif o.kind == "door":  # открывание — треугольник к петлям
+        elif o.kind == "door":  # swing: a triangle pointing to the hinges
             line(Vec(a.x, a.y), Vec((a.x + b.x) / 2, b.y), LW_THIN, LIGHT)
             line(Vec(b.x, a.y), Vec((a.x + b.x) / 2, b.y), LW_THIN, LIGHT)
         if o.assumed:
             text("*", Vec(b.x - 0.4, b.y - ORD_TEXT), align=TextEntityAlignment.MIDDLE_RIGHT)
 
-    # Зоны шкал размеров: справа от стены и под полом — подписи точек туда не ставятся
+    # Dimension scale zones: right of the wall and under the floor; point labels avoid them
     taken: list[Box] = [
         (x0 + w, floor - 1.0, x0 + w + TICK + JOG + 12.0, top + 1.0),
         (x0 - 1.0, floor - TICK - JOG - 12.0, x0 + w + 1.0, floor),
@@ -234,9 +235,9 @@ def _draw(
         taken.append((c.x - half, c.y - half, c.x + half, c.y + half))
         _label(bx.label, c, half, taken, text, BOX)
 
-    # Выводы с обратной стороны стены — бледно, под своими, без размеров (они — на развёртке
-    # той стороны)
-    r = max(34.0 / scale, MIN_SYMBOL)  # подрозетник Ø68
+    # Outlets on the far side of the wall are faint, below their own, without dimensions
+    # (those are on the elevation of that side)
+    r = max(34.0 / scale, MIN_SYMBOL)  # flush box Ø68
     pitch = max(POST_PITCH_MM / scale, 2 * r)
     for p in e.back:
         c = at(p.x, p.y)
@@ -252,8 +253,8 @@ def _draw(
                     dxfattribs={"layer": E_ELEV.name, "lineweight": LW_THIN, "true_color": BACK},
                 )
 
-    # Точки: пунктир вниз к шкале отступов и вправо к шкале высот, символ (пост блока —
-    # свой кружок), номер
+    # Points: dashes down to the offset scale and right to the height scale, the symbol (each
+    # post of a block gets its own circle), the number
     labels: dict[tuple[float, float], tuple[list[int], float]] = {}
     for p in e.points:
         c = at(p.x, p.y)
@@ -278,8 +279,9 @@ def _draw(
         labels[key] = ([*nums, p.number], max(half, r + pitch * (p.posts - 1) / 2))
     for (cx, cy), (nums, half) in labels.items():
         _label(ranges(nums), Vec(cx, cy), half, taken, text, DARK)
-    # Сантехника: подъём трубы от пола цветом сети, водорозетка — кружок с заливкой, выпуск —
-    # кружок по диаметру трубы; номер прибора — как на листе «Сантехника» (* — высота типовая)
+    # Plumbing: pipe rise from the floor in the network colour, a water outlet is a filled circle,
+    # a drain is a circle of the pipe diameter; fixture number as on the "Plumbing" sheet (* =
+    # typical height)
     fixtures: dict[str, tuple[Vec, float, int, bool]] = {}
     for v in e.water:
         c = at(v.x, v.y)
@@ -304,7 +306,8 @@ def _draw(
         fixtures[v.fixture] = (top_c, top_r, v.number, assumed or v.assumed)
     for c, rr, number, assumed in fixtures.values():
         _label(f"{number}{'*' if assumed else ''}", c, rr, taken, text, WATER["sewer"])
-    # Номера выводов той стороны — после своих: место у символа — сначала своим
+    # Numbers of the far side's outlets come after our own: the spot by the symbol goes to ours
+    # first
     for p in e.back:
         c = at(p.x, p.y)
         _label(str(p.number), c, r + pitch * (p.posts - 1) / 2, taken, text, BACK)
@@ -321,7 +324,7 @@ def _label(
     text: Callable[..., None],
     color: int,
 ) -> None:
-    """Подпись у символа: справа, слева, сверху или снизу — где не занято."""
+    """Label next to a symbol: right, left, above or below, wherever is free."""
     tw, th = text_width(s, ORD_TEXT), max(ORD_TEXT, MIN_TEXT_MM)
     gap = 0.6
     options = [
@@ -348,7 +351,9 @@ def _ordinates_x(
     line: Callable[..., None],
     text: Callable[..., None],
 ) -> None:
-    """Отступы от левого угла — под полом: подписи вертикально, разведены по ширине."""
+    """Offsets from the left corner, under the floor: vertical labels spread out across the
+    width.
+    """
     values = sorted({0.0, *e.offsets(), e.length})
     wanted = [x0 + v / scale for v in values]
     th = max(ORD_TEXT, MIN_TEXT_MM)
@@ -373,7 +378,9 @@ def _ordinates_y(
     line: Callable[..., None],
     text: Callable[..., None],
 ) -> None:
-    """Высоты от пола — справа от стены; высота потолка — со «*», если допущение."""
+    """Heights from the floor, right of the wall; ceiling height gets "*" when it is an
+    assumption.
+    """
     values = sorted({*e.heights(), e.height})
     wanted = [floor + v / scale for v in values]
     th = max(ORD_TEXT, MIN_TEXT_MM)

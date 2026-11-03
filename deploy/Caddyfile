@@ -5,8 +5,8 @@ handle /api/* {
 	reverse_proxy 127.0.0.1:8000
 }
 handle {
-	# Файлы сборки с хешем в имени не меняются — кэш надолго; index.html и version.json —
-	# всегда свежие, иначе вкладка не узнает о новой выкладке (web/src/version.ts)
+	# Build files with a hash in the name never change, so cache them long; index.html and
+	# version.json are always fresh, otherwise a tab will not learn about a new deploy (web/src/version.ts)
 	@hashed path /assets/*
 	header @hashed Cache-Control "public, max-age=31536000, immutable"
 	@fresh not path /assets/*

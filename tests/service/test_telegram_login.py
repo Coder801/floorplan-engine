@@ -1,6 +1,6 @@
-"""Вход по телефону через бота Telegram: билеты (db/telegram_login.py), разбор обновлений
-бота с подделкой Bot API (api/telegram.py), маршруты, вход, суперпользователь и владелец
-папок по номеру (api/auth.py)."""
+"""Phone login through a Telegram bot: tickets (db/telegram_login.py), bot update handling with a
+fake Bot API (api/telegram.py), routes, login, superuser and folder owner by number
+(api/auth.py)."""
 
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ from tests.service.test_auth import SECRET, _folder
 
 
 class FakeBot:
-    """Bot API без сети: помнит отправленное и вебхук."""
+    """Bot API without network: remembers what was sent and the webhook."""
 
     def __init__(self) -> None:
         self.sent: list[tuple[int, str, str | None]] = []
@@ -68,17 +68,17 @@ def test_normalize_phone_and_identity() -> None:
 
 def test_ticket_lifecycle(db: Session) -> None:
     token = tg.issue_ticket(db, "uk")
-    assert tg.claim_ticket(db, token) is None  # номера ещё нет — ждём
+    assert tg.claim_ticket(db, token) is None  # no number yet: waiting
     assert tg.bind_chat(db, "нет-такого", 1, "u1") is None
     ticket = tg.bind_chat(db, token, 1, "u1", "Ann")
     assert ticket is not None and ticket.lang == "uk" and ticket.name == "Ann"
-    assert tg.bind_chat(db, token, 2, "u2") is None  # билет уже за другим чатом
-    assert tg.confirm_phone(db, 1, "u2", "380501234567") is None  # не тот пользователь
+    assert tg.bind_chat(db, token, 2, "u2") is None  # the ticket already belongs to another chat
+    assert tg.confirm_phone(db, 1, "u2", "380501234567") is None  # the wrong user
     confirmed = tg.confirm_phone(db, 1, "u1", "380501234567")
     assert confirmed is not None and confirmed.phone == "+380501234567"
     claimed = tg.claim_ticket(db, token)
     assert claimed is not None and claimed.phone == "+380501234567"
-    with pytest.raises(acc.AccessError):  # одноразовый
+    with pytest.raises(acc.AccessError):  # one-time
         tg.claim_ticket(db, token)
     old = tg.issue_ticket(db, "ru", t=acc.now() - timedelta(minutes=tg.TICKET_MINUTES + 1))
     with pytest.raises(acc.AccessError):
@@ -91,7 +91,7 @@ def test_handle_update_replies(db: Session) -> None:
     telegram.handle_update(db, bot, start_update(7, 42, token))
     assert bot.sent[-1][0] == 7 and bot.sent[-1][2] == "Поділитися номером"
     telegram.handle_update(db, bot, contact_update(7, 42, "+380501112233", owner=99))
-    assert "власний" in bot.sent[-1][1] and bot.sent[-1][2] is not None  # чужой контакт
+    assert "власний" in bot.sent[-1][1] and bot.sent[-1][2] is not None  # someone else's contact
     telegram.handle_update(db, bot, contact_update(7, 42, "+380501112233"))
     assert bot.sent[-1][1].startswith("Готово") and bot.sent[-1][2] is None
     telegram.handle_update(db, bot, start_update(8, 43, "мусор"))
@@ -100,7 +100,7 @@ def test_handle_update_replies(db: Session) -> None:
     telegram.handle_update(db, bot, plain)
     assert "только для входа" in bot.sent[-1][1]
     before = len(bot.sent)
-    telegram.handle_update(db, bot, {"update_id": 4, "edited_message": {}})  # не сообщение
+    telegram.handle_update(db, bot, {"update_id": 4, "edited_message": {}})  # not a message
     assert len(bot.sent) == before
 
 
@@ -139,7 +139,7 @@ def test_telegram_routes_login_superuser_and_owner(pg: Engine, tmp_path: Path) -
     assert me["phone"] == "+380501112233" and me["superuser"] and me["name"] == "Ann"
     assert client.get("/api/auth/telegram/status", params={"token": token}).status_code == 410
 
-    # Вебхук: без секрета — 403, с секретом — обновление разобрано
+    # Webhook: 403 without the secret, the update is handled with it
     assert client.post("/api/auth/telegram/webhook", json={}).status_code == 403
     hello = {"update_id": 5, "message": {"chat": {"id": 1}, "from": {"id": 2}, "text": "hi"}}
     ok = client.post(
@@ -149,12 +149,12 @@ def test_telegram_routes_login_superuser_and_owner(pg: Engine, tmp_path: Path) -
     )
     assert ok.status_code == 200 and bot.sent[-1][0] == 1
 
-    # Владелец папок по телефону: выбрал «Фирма» — папки в его студии
+    # Folder owner by phone: chose "Firm", folders are in their studio
     r = client.post("/api/auth/firm", json={"name": "Штроба", "business": "electric"})
     assert r.status_code == 200
     assert {p["name"] for p in client.get("/api/projects").json()} == {"kv1"}
 
-    # На https при старте ставится вебхук с секретом
+    # Over https a webhook with a secret is set on start
     secure = Auth(AuthConfig(SECRET, "https://t"), make_sessions(engine), telegram=bot)
     secure.start_telegram()
     assert bot.webhook == ("https://t/api/auth/telegram/webhook", secure.webhook_secret())

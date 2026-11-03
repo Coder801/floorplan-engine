@@ -1,10 +1,10 @@
-"""Проверка проекта целиком до отрисовки: загрузка моделей, профиль студии и ответы,
-проверки плана и электрики по этапам, отчёт (Report). Сообщения — по-русски, с путём к полю
-в YAML; сами проверки — validation/plan.py и validation/electrical.py, замечания и загрузка —
-validation/issues.py, ответы — validation/answers.py.
+"""Whole-project check before drawing: model loading, studio profile and answers, plan and
+electrical checks by stage, the report (Report). Messages are in Russian, with a path to the
+YAML field; the checks themselves are in validation/plan.py and validation/electrical.py,
+remarks and loading in validation/issues.py, answers in validation/answers.py.
 
-Ничего не подгоняется молча: при невязке контура выдаётся ошибка с её величиной
-и списком стен, которые вероятно заданы неверно.
+Nothing is silently adjusted: an outline closure error reports its size and the list of walls
+that are probably wrong.
 """
 
 from __future__ import annotations
@@ -69,25 +69,26 @@ class Report:
     issues: list[Issue] = field(default_factory=list)
     plan: Plan | None = None
     electrical: Electrical | None = None
-    plumbing: Plumbing | None = None  # plumbing.yaml — вода и канализация
+    plumbing: Plumbing | None = None  # plumbing.yaml: water and sewer
     contours: dict[str, Contour] = field(default_factory=dict)
     intake: Intake | None = None
-    # open — нет ответа; answered — значение подставлено; accepted — оставлено допущение;
-    # text — текстовый ответ ждёт анализатора
+    # open: no answer; answered: value applied; accepted: assumption kept;
+    # text: a text answer waits for the analyzer
     question_states: dict[str, QuestionState] = field(default_factory=dict)
-    wiring_edits: WiringEdits | None = None  # правки выбранного варианта; сверка — при сборке
-    wiring_file: WiringFile | None = None  # wiring.yaml целиком: правки всех вариантов
-    # Вариант проводки (docs/wiring-variants.md): выбранный в просмотре (variant.yaml) или
-    # «как в проекте»; source_electrical — электрика из electrical.yaml до варианта
+    wiring_edits: WiringEdits | None = None  # edits of the chosen variant; checked at build time
+    wiring_file: WiringFile | None = None  # the whole wiring.yaml: edits of all variants
+    # Wiring variant (docs/wiring-variants.md): the one chosen in the viewer (variant.yaml) or
+    # "as in project"; source_electrical is the electrical.yaml model before the variant
     variant: Variant | None = None
     default_variant: Variant | None = None
     source_electrical: Electrical | None = None
-    # Вопросы щита, составленные кодом по расчёту (panel_questions.panel_questions), id «panel_…»
+    # Panel questions built by code from the calculation (panel_questions.panel_questions), id
+    # "panel_…"
     auto_questions: list[Question] = field(default_factory=list)
 
     @property
     def questions(self) -> list[Question]:
-        """Все вопросы проекта: из intake.yaml и составленные кодом."""
+        """All project questions: from intake.yaml and built by code."""
         return [*(self.intake.questions if self.intake else []), *self.auto_questions]
 
     @property
@@ -103,23 +104,23 @@ class Report:
         return not self.errors
 
 
-# --- Загрузка YAML и перевод ошибок pydantic ---------------------------------
+# --- YAML loading and pydantic error translation -----------------------------
 
 
-# --- Правила плана -----------------------------------------------------------
+# --- Plan rules --------------------------------------------------------------
 
 
-# --- Правила электрики -------------------------------------------------------
+# --- Electrical rules --------------------------------------------------------
 
 
-# --- Проект целиком ----------------------------------------------------------
+# --- Whole project -----------------------------------------------------------
 
 
-# --- Вопросы и ответы ---------------------------------------------------------
+# --- Questions and answers ----------------------------------------------------
 
 
 def validate_project(project_dir: Path) -> Report:
-    """Загрузить и проверить проект: intake, ответы, план, электрику."""
+    """Load and check the project: intake, answers, plan, electrical."""
     report = Report()
     intake, issues = load_optional(project_dir / INTAKE_FILE, Intake)
     report.issues += issues
@@ -155,7 +156,7 @@ def validate_project(project_dir: Path) -> Report:
     report.question_states.update(states)
     report.issues += issues
     _validate_stages(report, raw, project_dir)
-    # Предупреждение о поле, по которому уже есть вопрос, дублирует вопрос
+    # A warning about a field that already has a question duplicates the question
     report.issues = [
         i for i in report.issues if i.severity is Severity.ERROR or (i.file, i.path) not in covered
     ]
@@ -163,7 +164,7 @@ def validate_project(project_dir: Path) -> Report:
 
 
 def _question_paths(intake: Intake, raw: dict[Stage, Any]) -> set[tuple[str, str]]:
-    """(файл, путь по индексам) всех полей, по которым есть вопросы."""
+    """(file, index path) of every field that has a question."""
     out: set[tuple[str, str]] = set()
     for q in intake.questions:
         data, file = raw.get(q.stage), STAGE_FILE.get(q.stage)
@@ -173,7 +174,7 @@ def _question_paths(intake: Intake, raw: dict[Stage, Any]) -> set[tuple[str, str
             try:
                 out.add((file, index_path(data, target)))
             except StopIteration:
-                continue  # несуществующий target уже отмечен ошибкой
+                continue  # a missing target is already reported as an error
     return out
 
 
@@ -191,7 +192,7 @@ def _validate_stages(report: Report, raw: dict[Stage, Any], project_dir: Path) -
         for i in issues
     ]
     if chosen is not None and chosen.ceiling_height is not None:
-        # Правка из просмотра: поле считается заданным (не допущение 2700)
+        # An edit from the viewer: the field counts as set (not the 2700 assumption)
         plan = plan.model_copy(update={"ceiling_height": chosen.ceiling_height})
     report.plan = plan
     issues, report.contours = validate_plan(plan)
@@ -235,9 +236,9 @@ def _validate_electrical(
     elec_issues = validate_electrical(elec, plan, report.contours)
     report.issues += elec_issues
     if not any(i.severity is Severity.ERROR for i in [*report.issues, *elec_issues]):
-        # premium и proper: у каждой линии от щита — своя группа (lines.py)
+        # premium and proper: each line from the panel has its own group (lines.py)
         report.electrical = split_by_lines(plan, report.contours, elec)
-    # Ошибка в правках проводки сборку не останавливает: проводка строится автоматически
+    # An error in wiring edits does not stop the build: wiring is built automatically
     wiring_file, issues = load_optional(project_dir / WIRING_FILE, WiringFile)
     report.issues += [
         Issue(i.file, i.path, f"{i.message} — правки проводки не применены", Severity.WARNING)

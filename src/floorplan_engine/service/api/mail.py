@@ -1,10 +1,10 @@
-"""Письма входа: код на почту (db/email_codes.py). SMTP — из стандартной библиотеки, подходит
-любой сервис отправки (Resend, Postmark, SES, Gmail); без SMTP_HOST на локальной разработке
-(адрес страницы — http) код пишется в лог сервера, в работе (https) вход по коду выключен.
+"""Login e-mails: a code by e-mail (db/email_codes.py). SMTP from the standard library, any
+sending service works (Resend, Postmark, SES, Gmail); without SMTP_HOST in local development
+(page address is http) the code goes to the server log, in production (https) code login is off.
 
-Окружение:
-  SMTP_HOST, SMTP_PORT (587 — STARTTLS, 465 — SSL), SMTP_USER, SMTP_PASSWORD
-  MAIL_FROM                    отправитель: «Shtroba <login@…>»
+Environment:
+  SMTP_HOST, SMTP_PORT (587 for STARTTLS, 465 for SSL), SMTP_USER, SMTP_PASSWORD
+  MAIL_FROM                    sender: "Shtroba <login@…>"
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ from floorplan_engine.service.db.email_codes import CODE_MINUTES
 
 log = logging.getLogger("floorplan_engine.mail")
 
-# Тема и текст письма по языку страницы
+# Subject and body by page language
 TEXTS: dict[str, tuple[str, str]] = {
     "ru": (
         "Код входа в Shtroba: {code}",
@@ -41,7 +41,7 @@ TEXTS: dict[str, tuple[str, str]] = {
 
 
 class MailError(RuntimeError):
-    """Письмо не ушло."""
+    """The e-mail was not sent."""
 
 
 class Mailer(Protocol):
@@ -80,15 +80,17 @@ class SmtpMailer:
 
 
 class LogMailer:
-    """Локальная разработка без SMTP: письмо — в лог сервера (код виден в терминале)."""
+    """Local development without SMTP: the e-mail goes to the server log (the code shows in the
+    terminal).
+    """
 
     def send(self, to: str, subject: str, text: str) -> None:
         print(f"\n[почта → {to}] {subject}\n", flush=True)
 
 
 def mailer_from_env(env: dict[str, str], local: bool) -> Mailer | None:
-    """SMTP по окружению; без SMTP_HOST — лог на локальной разработке (local), иначе None
-    (вход по коду выключен)."""
+    """SMTP from the environment; without SMTP_HOST, the log in local development (local), otherwise
+    None (code login is off)."""
     host = env.get("SMTP_HOST", "").strip()
     if not host:
         return LogMailer() if local else None

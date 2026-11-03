@@ -1,12 +1,12 @@
-"""Хранилище проектов сервиса на файловой системе.
+"""Service project storage on the file system.
 
-Проект — та же папка, что у CLI (`intake.yaml`, `room.yaml`, `answers.yaml`, `source/`,
-`out/`), плюс:
+A project is the same folder as for the CLI (`intake.yaml`, `room.yaml`, `answers.yaml`,
+`source/`, `out/`), plus:
 
-    service.json         состояние проекта (ProjectInfo)
-    rounds/NNN/          раунд вопросов: answers.json (что прислали), report.json (итог)
+    service.json         project state (ProjectInfo)
+    rounds/NNN/          a question round: answers.json (what was sent), report.json (result)
 
-Позже это место займут база данных и объектное хранилище — за тем же интерфейсом.
+Later a database and object storage will take this place behind the same interface.
 """
 
 from __future__ import annotations
@@ -43,13 +43,13 @@ class Storage:
         self._guard = threading.Lock()
 
     def lock(self, project_id: str) -> threading.Lock:
-        """Один процесс над проектом за раз: анализ, ответы, сборка."""
+        """One process per project at a time: analysis, answers, build."""
         with self._guard:
             return self._locks.setdefault(project_id, threading.Lock())
 
     def path(self, project_id: str) -> Path:
         path = self.root / project_id
-        # id — только hex из uuid4: путь не может выйти за root
+        # id is hex from uuid4 only: the path cannot escape root
         if not project_id.isalnum() or not (path / STATE_FILE).exists():
             raise NotFoundError(project_id)
         return path
@@ -61,7 +61,7 @@ class Storage:
         names = []
         for filename, content in sources:
             safe = Path(filename).name or "file"
-            if safe in OPERATOR_FILES:  # готовая модель — в папку проекта, а не в источники
+            if safe in OPERATOR_FILES:  # ready model goes to the project folder
                 (path / safe).write_bytes(content)
                 continue
             (path / SOURCE_DIR / safe).write_bytes(content)
@@ -86,7 +86,7 @@ class Storage:
         path = self.root / info.id / STATE_FILE
         tmp = path.with_suffix(".tmp")
         tmp.write_text(info.model_dump_json(indent=2), encoding="utf-8")
-        tmp.replace(path)  # атомарно: читатель не увидит половину файла
+        tmp.replace(path)  # atomic: a reader never sees half a file
 
     def list(self) -> list[ProjectInfo]:
         infos = [
@@ -97,7 +97,7 @@ class Storage:
         return sorted(infos, key=lambda i: i.created, reverse=True)
 
     def delete(self, project_id: str) -> None:
-        """Удалить проект целиком: источники, модель, результаты, раунды."""
+        """Delete the whole project: sources, model, results, rounds."""
         path = self.path(project_id)
         with self.lock(project_id):
             shutil.rmtree(path)

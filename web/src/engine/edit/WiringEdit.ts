@@ -1,5 +1,5 @@
-// Правки проводки на листе: линии (участки) и распаечные коробки. Потребители и щит стоят
-// на месте. Сохраняются в wiring.yaml проекта (POST /wiring), затем проект пересобирается.
+// Wiring edits on the sheet: lines (pieces) and junction boxes. Loads and the panel stay in
+// place. Saved to the project's wiring.yaml (POST /wiring), then the project is rebuilt.
 
 import type { DrawItem } from "@/engine/sheet/paint";
 import {
@@ -31,19 +31,19 @@ export class WiringEdit {
   readonly k: number; readonly tx: number; readonly ty: number;
   readonly wires = new Map<string, Wire>();
   readonly boxes = new Map<string, WBox>();
-  readonly style = new Map<string, DrawItem>();  // линия → её обводка на листе: цвет, толщина, слой
-  sel = new Set<string>();      // выделенные участки «wire_1#2»
-  box: string | null = null;    // коробка, по которой кликнули последней
-  hover: Hit | null = null;     // что под курсором
+  readonly style = new Map<string, DrawItem>();  // line → its stroke on the sheet: colour, width, layer
+  sel = new Set<string>();      // selected pieces "wire_1#2"
+  box: string | null = null;    // the box clicked last
+  hover: Hit | null = null;     // what is under the cursor
   drag: Drag | null = null;
   history: Snapshot[] = [];
 
-  // model — переход модель → мм чертежа: у общего чертежа это лист base, а не лист проводки
+  // model is the model → drawing mm transform: for the combined drawing it is sheet base, not the wiring sheet
   constructor(page: Page, items: DrawItem[], private readonly layerOn: (layer: string) => boolean,
               model = page.model!) {
     [this.k, this.tx, this.ty] = model;
-    // Правится то, что видно: линия в своей полосе пучка (lane), концы — в узлах щита,
-    // коробки и точки; полоса сдвинута поперёк участка, поэтому отвод к узлу — под 90°
+    // What is edited is what is visible: the line in its bundle lane, ends at the panel, box and
+    // point nodes; the lane is shifted across the piece, so the stub to a node is at 90°
     const shown = (w: EditWire) => (w.lane ? simplifyPath([w.path[0], ...w.lane, w.path[w.path.length - 1]]) : w.path);
     for (const [id, w] of Object.entries(page.edit!.wires)) {
       this.wires.set(id, { ...w, orig: copy(shown(w)), path: copy(shown(w)), keep: false, reset: false });
@@ -64,7 +64,7 @@ export class WiringEdit {
 
   moved(b: WBox) { return !samePt(b.at, b.orig); }
 
-  // Узел подключения коробки (откуда идут её линии) и середина квадрата
+  // Box connection node (where its lines start) and the square's centre
   node(b: WBox, at: XY = b.at): XY {
     return b.inward ? [at[0] + b.inward[0] * b.size, at[1] + b.inward[1] * b.size] : at;
   }
@@ -73,7 +73,7 @@ export class WiringEdit {
     return b.inward ? [b.at[0] + (b.inward[0] * b.size) / 2, b.at[1] + (b.inward[1] * b.size) / 2] : b.at;
   }
 
-  // Примитивы листа, вместо которых рисуется правка
+  // Sheet primitives that the edit is drawn in place of
   hiddenKeys(): Set<string> {
     const out = new Set<string>();
     for (const [id, w] of this.wires) if (this.changed(w)) out.add(`wire:${id}`);
@@ -88,7 +88,7 @@ export class WiringEdit {
     return n;
   }
 
-  // Что вернуть к автотрассе: выделенные линии с ручной трассой и выбранная коробка
+  // What to reset to the auto route: selected lines with a manual route and the selected box
   resettable(): { wires: string[]; box: string | null } {
     const wires = [...new Set([...this.sel].map((k) => k.split("#")[0]))]
       .filter((id) => this.wires.get(id)!.manual || this.wires.get(id)!.keep);
@@ -96,7 +96,7 @@ export class WiringEdit {
     return { wires, box: b && (b.manual || this.moved(b)) ? this.box : null };
   }
 
-  // Вернуть к автотрассе: ручная трасса из файла — убрать (null в POST), новая — откатить
+  // Reset to the auto route: a manual route from the file is removed (null in POST), a new one is rolled back
   reset() {
     const { wires, box } = this.resettable();
     for (const id of wires) {
@@ -111,9 +111,9 @@ export class WiringEdit {
     }
   }
 
-  // Под курсором (мм листа): коробка важнее линии; линия — ближайший участок. Линии пучка
-  // в модели лежат друг на друге (полосы — только на листе): prefer — линия, чья полоса
-  // на листе под курсором
+  // Under the cursor (sheet mm): a box beats a line; a line means the nearest piece. Bundle lines
+  // lie on top of each other in the model (lanes exist only on the sheet): prefer is the line
+  // whose lane on the sheet is under the cursor
   hit(mx: number, my: number, tol: number, prefer: string | null = null): Hit | null {
     for (const [id, b] of this.boxes) {
       const [cx, cy] = this.toSheet(this.center(b)), half = (b.size * this.k) / 2 + tol;
@@ -160,8 +160,8 @@ export class WiringEdit {
 
   clearSelection() { this.sel.clear(); this.hover = null; this.box = null; }
 
-  // Нажатие на участок или коробку; true — можно тянуть. Cmd/Ctrl — добавить участок
-  // к выделению или убрать; коробки в выделение не попадают
+  // Press on a piece or a box; true means it can be dragged. Cmd/Ctrl adds a piece to the
+  // selection or removes it; boxes never join the selection
   press(hit: Hit, additive: boolean, mx: number, my: number): boolean {
     if (hit.kind === "box") {
       this.box = hit.id;
@@ -202,7 +202,7 @@ export class WiringEdit {
     }
     const b = this.boxes.get(d.id)!;
     let at: XY = [d.at[0] + dx, d.at[1] + dy];
-    if (b.span) {  // коробка на стене ездит вдоль своей стены
+    if (b.span) {  // a wall box slides along its wall
       const [s0, s1] = b.span;
       at = isH(s0, s1) ? [clamp(at[0], s0[0], s1[0]), s0[1]] : [s0[0], clamp(at[1], s0[1], s1[1])];
     }
@@ -210,7 +210,7 @@ export class WiringEdit {
     for (const f of d.wires) this.wires.get(f.id)!.path = moveEnd(f.path, f.atStart, this.node(b));
   }
 
-  // Конец перетаскивания: выделение — на те же участки в новых трассах
+  // End of drag: the selection moves to the same pieces in the new routes
   release() {
     const d = this.drag;
     this.drag = null;
@@ -230,8 +230,8 @@ export class WiringEdit {
     this.sel = sel;
   }
 
-  // Для POST /wiring: ручные трассы — только у линий, которые тянули; линии, что лишь
-  // следуют за коробкой, после сборки проложатся заново. null — вернуть автотрассу
+  // For POST /wiring: manual routes only for the lines that were dragged; lines that only
+  // follow a box will be routed again after the build. null restores the auto route
   payload() {
     const wires: Record<string, unknown> = {}, boxes: Record<string, unknown> = {};
     const r = (p: XY) => p.map((v) => Math.round(v * 10) / 10);
@@ -246,8 +246,7 @@ export class WiringEdit {
     return { wires, boxes };
   }
 
-  // Линии, которые сейчас правятся: с выделенными участками, перетаскиваемые и идущие
-  // за переносимой коробкой
+  // Lines being edited now: with selected pieces, being dragged, or following a moved box
   flowing(): Set<string> {
     const out = new Set([...this.sel].map((k) => k.split("#")[0]));
     const d = this.drag;
@@ -256,12 +255,12 @@ export class WiringEdit {
     return out;
   }
 
-  // Поверх листа: изменённые линии и коробки, бегущий пунктир правки, выделение и участок
-  // под курсором; now — время кадра, мс
+  // On top of the sheet: changed lines and boxes, the running dashes of the edit, the selection
+  // and the piece under the cursor; now is the frame time, ms
   paint(ctx: CanvasRenderingContext2D, pxPerMm: number, now: number, dpr: number) {
     ctx.lineCap = "round"; ctx.lineJoin = "round";
     const minW = MIN_LINE_PX / pxPerMm;
-    const px = (n: number) => (n * dpr) / pxPerMm;  // px экрана → мм листа
+    const px = (n: number) => (n * dpr) / pxPerMm;  // screen px → sheet mm
     const line = (pts: XY[]) => {
       ctx.beginPath();
       pts.forEach((p, n) => { const [x, y] = this.toSheet(p); if (n) ctx.lineTo(x, y); else ctx.moveTo(x, y); });
@@ -292,7 +291,7 @@ export class WiringEdit {
         ctx.strokeRect(cx - s / 2 - px(1.5), cy - s / 2 - px(1.5), s + px(3), s + px(3));
       }
     }
-    // Правящиеся линии — бегущим пунктиром от источника к цели
+    // Lines being edited: running dashes from source to target
     const flow = this.flowing();
     if (flow.size) {
       const t = REDUCED_MOTION ? 0 : now / 1000;

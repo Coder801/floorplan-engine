@@ -1,5 +1,5 @@
-# Просмотр проектов для Railway: фронт web/dist (Caddy) + API `floorplan-engine view`.
-# Caddy слушает $PORT, отдаёт статику и проксирует /api на view (127.0.0.1:8000).
+# Project viewer for Railway: the web/dist frontend (Caddy) + the `floorplan-engine view` API.
+# Caddy listens on $PORT, serves static files and proxies /api to view (127.0.0.1:8000).
 
 FROM node:22-slim AS web
 WORKDIR /web
@@ -11,8 +11,8 @@ RUN npm run build
 FROM caddy:2.8.4 AS caddy
 
 FROM python:3.12-slim
-# libglib — для opencv-headless из группы service; DejaVu — запасной шрифт ezdxf для стилей
-# DXF, кроме IBM Plex (в slim-образе шрифтов нет: «no fonts available» при сборке листов)
+# libglib is for opencv-headless from the service group; DejaVu is the ezdxf fallback font for
+# DXF styles other than IBM Plex (the slim image has no fonts: "no fonts available" when building sheets)
 RUN apt-get update && apt-get install -y --no-install-recommends libglib2.0-0 fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=ghcr.io/astral-sh/uv:0.5.11 /uv /usr/local/bin/uv
@@ -24,12 +24,12 @@ COPY pyproject.toml uv.lock README.md ./
 RUN uv sync --frozen --no-dev --no-install-project
 COPY src/ src/
 RUN uv sync --frozen --no-dev
-# Миграции базы — применяются при старте, если включён вход (deploy/start.sh)
+# Database migrations run on start when login is on (deploy/start.sh)
 COPY alembic.ini ./
 COPY migrations/ migrations/
 
 COPY --from=web /web/dist /srv/web
-# Проекты в образе — начальные; рабочая папка — volume PROJECTS_DIR (правки wiring.yaml)
+# Projects in the image are the seed; the working folder is the PROJECTS_DIR volume (wiring.yaml edits)
 COPY projects/ /app/projects-seed/
 COPY deploy/Caddyfile /etc/caddy/Caddyfile
 COPY deploy/start.sh /app/start.sh

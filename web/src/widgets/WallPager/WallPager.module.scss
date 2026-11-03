@@ -1,4 +1,4 @@
-// Пейджер развёрток вверху по центру чертежа и список стен под ним
+// Elevation pager at the top centre of the drawing and the wall list under it
 
 @use "@/shared/styles/mixins" as *;
 
@@ -9,7 +9,7 @@
   display: grid; grid-template-columns: auto minmax(0, 1fr) auto; overflow: hidden;
   > button { @include bare-button; border-radius: 0; min-width: 40px; font-size: 16px; }
   > button:disabled { opacity: .35; }
-  // Имя стены — кнопка списка: имя обрезается, номер и «▾» видны всегда
+  // The wall name is the list button: the name is truncated, the number and "▾" are always visible
   > .title {
     display: flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 10px;
     max-width: min(56vw, 480px); white-space: nowrap; font-size: 14px;
@@ -20,7 +20,7 @@
 .name { overflow: hidden; text-overflow: ellipsis; }
 .caret { color: var(--muted); font-size: 11px; }
 
-// Список: по центру под пейджером, прокрутка; помещение — подзаголовком
+// List: centred under the pager, scrolling; the room as a subheading
 .list {
   left: 50%; right: auto; transform: translateX(-50%);
   width: max(100%, 280px); max-height: min(60vh, 520px); overflow-y: auto;
@@ -33,7 +33,7 @@
 .roomName { padding: 6px 10px 2px; font-size: 12px; font-weight: 600; color: var(--muted); }
 
 @media (max-width: $narrow) {
-  // Пейджер — слева, справа — «Скачать»
+  // Pager on the left, "Download" on the right
   .at { left: 8px; top: 8px; transform: none; max-width: calc(100% - 84px); }
   .pager > .title { max-width: none; }
   .list { left: 0; transform: none; width: min(320px, calc(100vw - 16px)); }

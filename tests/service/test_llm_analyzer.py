@@ -77,7 +77,7 @@ def test_valid_model_in_one_call(tmp_path: Path) -> None:
     backend = FakeBackend([_envelope(ROOM)])
     result = LlmAnalyzer(lambda: backend).analyze(project, 1)
     assert result.done and result.calls == 1
-    assert result.cost_usd == pytest.approx(4.0 + 2.0)  # 1M ввода × $4 + 0,1M вывода × $20
+    assert result.cost_usd == pytest.approx(4.0 + 2.0)  # 1M input × $4 + 0.1M output × $20
     assert (project / "room.yaml").exists() and (project / "intake.yaml").exists()
     assert "Модели ещё нет" in backend.prompts[0]
     (record,) = [json.loads(line) for line in (project / USAGE_FILE).read_text().splitlines()]
@@ -122,8 +122,8 @@ def test_electrical_is_a_separate_step(tmp_path: Path) -> None:
     result = LlmAnalyzer(lambda: plan, lambda: elec).analyze(project, 1)
     assert result.calls == 2
     assert "только план" in plan.prompts[0] and "электрика и сантехника" in elec.prompts[0]
-    assert "--- room.yaml" in elec.prompts[0]  # электрика видит готовый план
-    # Каждый шаг пишет только свои файлы
+    assert "--- room.yaml" in elec.prompts[0]  # electrical sees the finished plan
+    # Each step writes only its own files
     assert yaml.safe_load((project / "room.yaml").read_text("utf-8")) == ROOM
     assert "r_socket_1" in (project / "electrical.yaml").read_text("utf-8")
 
@@ -154,12 +154,12 @@ def test_api_source_blocks(tmp_path: Path) -> None:
     (project / "source" / "plan.dwg").write_bytes(b"AC1032")
     blocks = ApiBackend.source_blocks(project)
     kinds = [b["type"] for b in blocks]
-    # По имени: photo.JPG, plan.dwg (пояснение текстом), plan.pdf и выжимка из него
+    # By name: photo.JPG, plan.dwg (explained in text), plan.pdf and its digest
     assert kinds == ["text", "image", "text", "text", "document", "text"]
     assert blocks[1]["source"]["media_type"] == "image/jpeg"
     assert "plan.dwg не читается" in blocks[2]["text"]
     assert "Выжимка из source/plan.pdf" in blocks[5]["text"]
-    assert "PDF не разобран" in blocks[5]["text"]  # в тесте не настоящий PDF
+    assert "PDF не разобран" in blocks[5]["text"]  # not a real PDF in the test
 
 
 def test_api_rejects_oversized_sources(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -178,7 +178,7 @@ def test_claude_code_command(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) ->
         out = {
             "structured_output": _envelope(ROOM),
             "session_id": "s-1",
-            # Claude Code отдаёт нарастающий итог сессии: 0.42, затем 0.60
+            # Claude Code returns the running session total: 0.42, then 0.60
             "total_cost_usd": 0.42 if len(calls) == 1 else 0.60,
             "usage": {"input_tokens": 10, "output_tokens": 5},
         }
@@ -191,7 +191,7 @@ def test_claude_code_command(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) ->
     reply = backend.start(project, "контекст")
     assert reply.usage.cost_usd == 0.42 and reply.envelope["summary"] == "готово"
     again = backend.follow_up(project, "исправь")
-    assert again.usage.cost_usd == pytest.approx(0.18)  # цена вызова, а не итог сессии
+    assert again.usage.cost_usd == pytest.approx(0.18)  # the call price, not the session total
     first, second = calls
     cmd = first["cmd"]
     assert cmd[:2] == ["/bin/claude", "-p"] and "source/plan.pdf" in cmd[2]
@@ -202,7 +202,7 @@ def test_claude_code_command(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) ->
         "summary",
     ]
     assert cmd[cmd.index("--allowedTools") + 1] == "Read"
-    assert "ANTHROPIC_API_KEY" not in first["env"]  # работает подписка, а не ключ
+    assert "ANTHROPIC_API_KEY" not in first["env"]  # the subscription is used, not the key
     assert first["cwd"] == project
     assert second["cmd"][-2:] == ["--resume", "s-1"]
 
@@ -237,7 +237,7 @@ def test_service_accumulates_llm_cost(tmp_path: Path) -> None:
 
 
 def test_unusable_sources_rejected_before_llm(tmp_path: Path) -> None:
-    """Порог «не удалось»: по источнику ничего не построить — модель не вызывается."""
+    """The "failed" gate: nothing can be built from the source, so the model is not called."""
     from fastapi.testclient import TestClient
 
     from floorplan_engine.service.api.app import create_app
@@ -247,7 +247,7 @@ def test_unusable_sources_rejected_before_llm(tmp_path: Path) -> None:
     pid = client.post(
         "/projects",
         data={"name": "x"},
-        files=[("files", ("plan.pdf", b"%PDF", "application/pdf"))],  # битый PDF
+        files=[("files", ("plan.pdf", b"%PDF", "application/pdf"))],  # broken PDF
     ).json()["id"]
     client.post(f"/projects/{pid}/analyze")
     info = client.get(f"/projects/{pid}").json()

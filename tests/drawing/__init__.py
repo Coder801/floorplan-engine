@@ -1,1 +1,1 @@
-"""Тесты рисования DXF: план, электрика, проводка, подписи, штамп."""
+"""DXF drawing tests: plan, electrical, wiring, labels, title block."""

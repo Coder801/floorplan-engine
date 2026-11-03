@@ -1,11 +1,11 @@
-"""вход и доступ: OAuth, сессии, участники проекта, приглашения, поддержка, журнал
+"""login and access: OAuth, sessions, project members, invites, support, audit log
 
 Revision ID: 0002
 Revises: 0001
 Create Date: 2026-10-28
 
-Решения — docs/database.md, разделы «Доступ» и «Вход». price_list пересоздаётся (свой id,
-прайс студии или проекта): база ещё не подключена к сервису, данных в ней нет.
+Decisions: docs/database.md, sections "Access" and "Login". price_list is recreated (own id,
+studio or project price list): the database is not wired to the service yet, so it holds no data.
 """
 
 from __future__ import annotations
@@ -96,7 +96,7 @@ def upgrade() -> None:
         sa.Column("invited_by", sa.Uuid(), _user_fk("SET NULL"), nullable=True),
         sa.Column("created_at", TS, nullable=False),
     )
-    # Клиент — только в одном проекте
+    # A client belongs to one project only
     op.create_index(
         "uq_project_member_one_client",
         "project_member",

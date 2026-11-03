@@ -1,4 +1,4 @@
-"""Окружение Alembic: таблицы — из service/db/models.py, адрес — DATABASE_URL."""
+"""Alembic environment: tables come from service/db/models.py, the URL from DATABASE_URL."""
 
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ def run_offline() -> None:
 
 
 def run_online() -> None:
-    given = context.config.attributes.get("connection")  # тесты: своя база (tests/service)
+    given = context.config.attributes.get("connection")  # tests: own database
     if given is not None:
         context.configure(connection=given, target_metadata=target_metadata)
         with context.begin_transaction():

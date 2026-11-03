@@ -1,17 +1,17 @@
-"""HTTP API сервиса (FastAPI). Документация — /docs.
+"""Service HTTP API (FastAPI). Docs at /docs.
 
-POST /projects                        создать проект: name + файлы-источники
-GET  /projects                        список проектов
-GET  /projects/{id}                   состояние, этапы, готовые файлы
-DELETE /projects/{id}                 удалить проект целиком
-PUT  /projects/{id}/model/{file}      загрузить YAML модели (ручной анализатор)
-POST /projects/{id}/analyze           запустить анализ (в фоне)
-GET  /projects/{id}/questions         открытые вопросы раунда
-POST /projects/{id}/answers           ответы раунда (в фоне — пересборка)
+POST /projects                        create a project: name + source files
+GET  /projects                        list projects
+GET  /projects/{id}                   state, stages, ready files
+DELETE /projects/{id}                 delete the whole project
+PUT  /projects/{id}/model/{file}      upload a model YAML (manual analyzer)
+POST /projects/{id}/analyze           start analysis (in the background)
+GET  /projects/{id}/questions         open questions of the round
+POST /projects/{id}/answers           round answers (rebuild in the background)
 GET  /projects/{id}/report            report.json
 GET  /projects/{id}/files/{path}      project.dxf, project.epd, report.md, …
-GET  /projects/{id}/model/{file}      YAML модели
-GET  /projects/{id}/sources/{name}    загруженный источник
+GET  /projects/{id}/model/{file}      model YAML
+GET  /projects/{id}/sources/{name}    an uploaded source
 """
 
 from __future__ import annotations
@@ -48,7 +48,7 @@ def create_app(data_dir: Path, analyzer: Analyzer | None = None) -> FastAPI:
 
     def report_json(project_id: str) -> dict[str, Any]:
         info = load(project_id)
-        if info.state.busy:  # отчёт сейчас перезаписывается
+        if info.state.busy:  # the report is being rewritten now
             raise HTTPException(409, f"проект занят: {info.state.value}, повторите позже")
         path = storage.path(project_id) / OUT_DIR / REPORT_JSON
         if not path.exists():
@@ -143,7 +143,7 @@ def create_app(data_dir: Path, analyzer: Analyzer | None = None) -> FastAPI:
     @app.get("/projects/{project_id}/files/{path:path}")
     def file(project_id: str, path: str) -> FileResponse:
         info = load(project_id)
-        if path not in info.files:  # только файлы, которые собрал сервис
+        if path not in info.files:  # only files built by the service
             raise HTTPException(404, f"файла {path} нет; есть: {', '.join(info.files)}")
         return FileResponse(storage.path(project_id) / OUT_DIR / path, filename=Path(path).name)
 

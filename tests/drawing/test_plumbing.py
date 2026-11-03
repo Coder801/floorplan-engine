@@ -1,4 +1,4 @@
-"""Лист «Сантехника»: метки объектов в модели, таблицы, легенда."""
+"""The "Plumbing" sheet: object tags in the model, tables, legend."""
 
 from __future__ import annotations
 
@@ -64,7 +64,9 @@ def test_legend_variants_get_lower_with_more_columns() -> None:
 
 
 def test_lanes_do_not_push_pipes_into_walls() -> None:
-    """Участок по грани стены (к смесителю за ванной) на листе не сдвигается в стену."""
+    """A piece along a wall face (to the mixer behind the bath) is not shifted into the wall on
+    the sheet.
+    """
     import shapely
     from shapely.geometry import LineString
 
@@ -106,8 +108,8 @@ def test_lanes_do_not_push_pipes_into_walls() -> None:
 
 
 def test_water_pipes_not_drawn_on_top_of_each_other() -> None:
-    """Холодная и горячая на листе не лежат одна на другой: у стены к водорозеткам — в
-    полосах от стены, на соседних линиях — одним пучком; отвод без «шпильки»."""
+    """Cold and hot do not lie on top of each other on the sheet: at a wall towards the outlets in
+    lanes from the wall, on neighbouring lines as one bundle; a branch without a hairpin."""
     from shapely.geometry import LineString
 
     from floorplan_engine.drawing.plumbing import _lay_out, _square
@@ -137,14 +139,16 @@ def test_water_pipes_not_drawn_on_top_of_each_other() -> None:
         line = LineString([v.as_tuple() for v in a])
         for q, b in water[i + 1 :]:
             if p.id in (q.parent, q.source) or q.id in (p.parent, p.source):
-                continue  # отвод начинается на своей трубе
+                continue  # the branch starts on its own pipe
             common = line.intersection(LineString([v.as_tuple() for v in b]).buffer(tol))
             parts = getattr(common, "geoms", [common])
-            # Пересечение даёт кусок около 2·tol — это не наложение; вдоль — длиннее
+            # A crossing gives a piece of about 2·tol, which is not an overlap; along the line it is
+            # longer
             along = sum(g.length for g in parts if g.length > 3 * tol)
             assert along < 50.0, (p.id, q.id)
     spike = [Vec(0, 0), Vec(0, 100), Vec(0, 300), Vec(0, 200), Vec(500, 200), Vec(510, 260)]
-    # Возврат по линии — без «шпильки»; косой хвост — уголком вдоль предыдущего участка
+    # Going back along a line has no hairpin; a slanted tail becomes an elbow along the previous
+    # piece
     assert _square(spike) == [Vec(0, 0), Vec(0, 200), Vec(510, 200), Vec(510, 260)]
 
 
@@ -154,7 +158,7 @@ def test_bath_drawn_as_fixture_boxes_hatched_not_like_walls() -> None:
     msp = doc.modelspace()
     draw_plumbing(msp, plan, PLUMBING, net)
     hatches = [e for e in msp if e.dxftype() == "HATCH" and e.dxf.layer == "P-OBST"]
-    assert hatches == []  # единственное препятствие — ванна: рисунком, без штриховки
+    assert hatches == []  # the only obstacle is a bath: drawn, no hatch
     symbols = Counter(t for e in msp if e.dxf.layer == "P-SYMB" and (t := object_id(e)))
-    assert any(k == "obstacle" for k, _ in symbols)  # ванна — в контуре препятствия
+    assert any(k == "obstacle" for k, _ in symbols)  # the bath is inside the obstacle outline
     assert {i for k, i in symbols if k == "fixture"} == {"wc", "s"}

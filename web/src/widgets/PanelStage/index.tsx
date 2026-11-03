@@ -1,6 +1,6 @@
-// Лист «Щит»: щит в лицо в своём canvas (PanelView) из данных щита, кнопки масштаба
-// и слабые места под чертежом, карточка аппарата по клику (DeviceCard). PNG для альбома —
-// «Скачать» (Viewer), весь лист из примитивов страницы.
+// "Panel" sheet: the panel front view in its own canvas (PanelView) from the panel data, zoom
+// buttons and weak spots under the drawing, a device card on click (DeviceCard). The album PNG
+// comes from "Download" (Viewer): the whole sheet from page primitives.
 
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -16,7 +16,7 @@ import type { StageHandle } from "@/widgets/SheetStage";
 interface Props {
   page: Page;
   panel: PanelData;
-  language?: string;  // язык проекта (манифест) — для подписей, которых нет в старом .epd
+  language?: string;  // project language (manifest), for labels missing in an old .epd
 }
 
 

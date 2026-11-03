@@ -1,4 +1,4 @@
-// Типы ответов API просмотра (service/viewer.py) и страницы .epd (docs/epd-format.md)
+// Types of the viewer API responses (service/viewer.py) and the .epd page (docs/epd-format.md)
 
 export type XY = [number, number];
 export type XYZ = [number, number, number];
@@ -40,11 +40,11 @@ export interface ProjectSummary {
   stale: boolean;
   stages: Stage[];
   open_questions: number;
-  preview: boolean;  // есть out/preview.svg — превью плана из модели
+  preview: boolean;  // out/preview.svg exists: the plan preview from the model
 }
 
 export interface Project extends ProjectSummary {
-  can?: { edit_wiring: boolean; choose_variant: boolean };  // нет — старый сервер: всё можно
+  can?: { edit_wiring: boolean; choose_variant: boolean };  // missing on an old server: everything allowed
   report: Report | null;
   answers: Record<string, unknown>;
   artifact: boolean;
@@ -61,43 +61,43 @@ export interface ManifestPage {
   format: string | null;
   size: XY;
   file: string;
-  stage?: string;  // тема листа; «points» — ведомость для печати, вкладки нет; «elevations» — развёртки
+  stage?: string;  // sheet topic; "points" is the print schedule, no tab; "elevations" are the elevations
 }
 
 export interface Manifest {
-  version: number;  // версия формата .epd (version.ts, FORMAT_VERSION)
+  version: number;  // .epd format version (version.ts, FORMAT_VERSION)
   pages: ManifestPage[];
-  variants?: Variants;  // варианты проводки: выбранный и сводка всех (pipeline.variant_block)
-  overview?: Overview;  // общие сведения о проекте — вкладка «Общие сведения» (overview.py)
+  variants?: Variants;  // wiring variants: the chosen one and a summary of all (pipeline.variant_block)
+  overview?: Overview;  // project overview for the "Overview" tab (overview.py)
 }
 
 export interface Overview {
   object: { name: string; object: string; building: string; code: string; stage: string; organization: string };
   language: string;
   rooms: { id: string; name: string; area: number; wet: boolean }[];
-  area: number;           // м²
-  ceiling: { height: number; assumed: boolean };  // мм
+  area: number;           // m²
+  ceiling: { height: number; assumed: boolean };  // mm
   points?: { key: string; text: string; count: number; unit: string }[];
   panel?: {
     scheme: "economy" | "standard" | "premium"; input: string; input_assumed: boolean;
     devices: number; groups: number; modules: number; installed_w: number; calculated_w: number;
   };
-  plumbing?: OverviewPlumbing;  // сантехника: приборы, вода, канализация (нет plumbing.yaml — нет)
+  plumbing?: OverviewPlumbing;  // plumbing: fixtures, water, sewer (absent without plumbing.yaml)
 }
 
 export interface OverviewPlumbing {
   fixtures: { type: string; text: string; count: number }[];
   water: {
     distribution: "collector" | "tee"; hot: "riser" | "boiler" | null;
-    cold_m: number; hot_m: number; outlets: number; input_assumed: boolean;  // м — по трассам, без запаса
+    cold_m: number; hot_m: number; outlets: number; input_assumed: boolean;  // m, along routes, without margin
   };
   sewer: { pipes: { d: number; m: number }[]; risers: number; bends: number; tees: number; errors: number };
-  weak: number;  // слабых мест сантехники
-  // Итог сметы сантехники (out/plumbing-estimate.*): в итоге проекта вместе с электрикой
+  weak: number;  // plumbing weak spots
+  // Plumbing estimate total (out/plumbing-estimate.*): goes into the project total together with electrical
   estimate?: { total: number; currency: string; unpriced: number };
 }
 
-// Варианты проводки (docs/wiring-variants.md): режим, трасса, разводка
+// Wiring variants (docs/wiring-variants.md): mode, route, distribution
 export type VariantMode = "economy" | "standard" | "proper";
 export type VariantRoute = "ceiling" | "floor";
 export type VariantDistribution = "boxes";
@@ -107,23 +107,23 @@ export interface VariantSummary {
   mode: VariantMode;
   route: VariantRoute;
   distribution: VariantDistribution;
-  total: number;          // всего по смете
+  total: number;          // estimate total
   currency: string;
   unpriced: number;
   cable_m: number;
-  devices: number;        // аппаратов в щите
+  devices: number;        // devices in the panel
   chases_m: number;
-  conduit_m: number;      // гофра по трассам
-  edited: boolean;        // есть ручные правки трасс
+  conduit_m: number;      // conduit along routes
+  edited: boolean;        // has manual route edits
 }
 
 export interface Variants {
-  active: string;         // ключ выбранного
-  default: string;        // «как в проекте»
+  active: string;         // key of the chosen one
+  default: string;        // "as in project"
   items: VariantSummary[];
 }
 
-// --- Страница .epd ---
+// --- .epd page ---
 
 export interface Item {
   k: "s" | "f";
@@ -134,10 +134,10 @@ export interface Item {
   d: string;
 }
 
-// Легенда для плашки просмотра (ключ legend страниц электрики и освещения): значок — те же
-// примитивы, что на листе (мм листа), и что он значит
+// Legend for the viewer badge (key legend of the electrical and lighting pages): the icon is
+// the same primitives as on the sheet (sheet mm), and what it means
 export interface LegendEntry {
-  key: string;     // символ: socket, switch, board, led_strip…
+  key: string;     // symbol: socket, switch, board, led_strip…
   text: string;
   items: Item[];
 }
@@ -152,8 +152,8 @@ export interface TableRow {
   keys?: string[];
   color?: string;
   section?: boolean;
-  hint?: string;          // пояснение к строке (смета): значок «i» у наименования
-  marker?: "square";      // значок без цвета: аппарат щита не на линии группы
+  hint?: string;          // row note (estimate): an "i" icon next to the name
+  marker?: "square";      // icon without colour: a panel device not on a group line
 }
 
 export interface SideTable {
@@ -190,7 +190,7 @@ export interface SceneWire {
   route: "ceiling" | "floor";
   from: string;
   to: string;
-  room?: string;  // помещение цели — для фильтра
+  room?: string;  // target room, for the filter
   pts: XYZ[];
 }
 
@@ -203,7 +203,7 @@ export interface Scene {
   points: Record<string, { pos: XYZ; inward: XY | null; type: string; room?: string; group: string | null; color: string }>;
   boxes: Record<string, { pos: XYZ; inward: XY | null; label: string; room?: string; group: string }>;
   board?: { pos: XYZ; inward: XY | null };
-  // Сантехника (epd/plumbing.plumbing_scene): трубы по высоте, подводы на стене, стояки
+  // Plumbing (epd/plumbing.plumbing_scene): pipes by height, supplies on the wall, risers
   pipes?: Record<string, ScenePipe>;
   fixtures?: Record<string, { key: string; kind: PipeKind; color: string; pos: XYZ; inward: XY; room?: string }>;
   risers?: { key: string; pos: XY; r: number; z: [number, number]; room?: string }[];
@@ -214,77 +214,77 @@ export type PipeKind = "cold" | "hot" | "sewer";
 export interface ScenePipe {
   key: string;      // pipe:<id>
   kind: PipeKind;
-  d: number;        // Ø, мм
+  d: number;        // Ø, mm
   color: string;
   room?: string;
   pts: XYZ[];
 }
 
-// --- Щит в лицо (ключ panel страницы листа «Щит») ---
+// --- Panel front view (key panel of the "Panel" sheet page) ---
 
 export interface PanelModel {
   id: string;           // «generic.breaker»
   brand: string;
   series: string;
   modules: number;
-  width: number;        // мм
-  height: number;       // мм
-  style: string;        // как рисовать: breaker, diff, rcd, relay, spd, changeover, ats, input, feed
+  width: number;        // mm
+  height: number;       // mm
+  style: string;        // how to draw: breaker, diff, rcd, relay, spd, changeover, ats, input, feed
   body: string;
   lever: string;
   accent?: string;
 }
 
-// Корпус щита из каталога (panel_catalog.Enclosure): реальный щит, мм
+// Panel enclosure from the catalogue (panel_catalog.Enclosure): a real panel, mm
 export interface PanelEnclosure {
-  id: string;           // «hager.VS212PD»; подобранный по месту — «fitted.3x24»
+  id: string;           // "hager.VS212PD"; an on-site one is "fitted.3x24"
   brand: string;
   series: string;
-  article: string;      // артикул; у подобранного по месту — пусто
+  article: string;      // article; empty for an on-site enclosure
   title: string;        // «Hager Golf VS212PD»
   rows: number;
-  per_row: number;      // модулей в рейке
+  per_row: number;      // modules per rail
   width: number;
   height: number;
   depth: number;
-  pitch: number;        // шаг реек
+  pitch: number;        // rail step
   body: string;
 }
 
 export interface PanelDevice {
   id: string;           // QS1, KV1, QF4…
-  key: string;          // device:QF4 — как ключи строк таблиц
+  key: string;          // device:QF4, like the table row keys
   kind: string;
-  label: string;        // на аппарате: «C16 30 мА»
+  label: string;        // on the device: "C16 30 мА"
   title: string;
   model: PanelModel;
   group?: string;
   feeds?: string[];
   assumed?: boolean;
   reserve?: boolean;
-  row?: number;         // рейка корпуса сверху, с 0
+  row?: number;         // enclosure rail from the top, from 0
 }
 
 export interface PanelGroup {
   purpose: string;
   purpose_assumed: boolean;
   cable: string;
-  power: number;        // Вт
-  current: number;      // А
+  power: number;        // W
+  current: number;      // A
   assumed: boolean;
   loads: number;
   color: string | null;
-  split_of: string | null;  // линия перегруженной группы, разделённой на щите (QF8.2)
+  split_of: string | null;  // a line of an overloaded group split on the panel (QF8.2)
 }
 
-// Щит АКБ у гибридного инвертора (ключ panel.dc): автомат АКБ, строки солнечных панелей
+// Battery box at a hybrid inverter (key panel.dc): battery breaker, solar strings
 export interface PanelDc {
   enclosure: PanelEnclosure;
   devices: PanelDevice[];
   battery: { voltage: number; voltage_assumed: boolean; capacity: number | null; power: number;
              power_assumed: boolean; current: number; rating: number; cable: number };
   pv_strings: number;
-  texts: { title: string; battery: string; pv: string; kwh?: string };  // kwh — нет в старом .epd
+  texts: { title: string; battery: string; pv: string; kwh?: string };  // kwh is missing in an old .epd
 }
 
 export interface PanelData {
@@ -292,14 +292,14 @@ export interface PanelData {
   phases: number;
   scheme: "economy" | "standard" | "premium";
   input: { label: string; assumed: boolean };
-  enclosure?: PanelEnclosure | null;  // нет — корпус по месту (старый .epd)
+  enclosure?: PanelEnclosure | null;  // missing means an on-site enclosure (old .epd)
   devices: PanelDevice[];
   groups: Record<string, PanelGroup>;
   totals: { installed: number; demand: number; calculated: number; current: number; modules: number };
   warnings: { severity: string; text: string; group: string | null }[];
   texts: { title: string; grid: string; reserve: string };
-  // to — куда приходит LOAD (автомат выхода QS3 или сразу переключатель), switch — АВР KM1
-  // или переключатель SA1: с QS3 — в его вход II
+  // to is where LOAD arrives (the QS3 output breaker or the switch directly), switch is the ATS
+  // KM1 or the switch SA1: from QS3 into its input II
   external?: { id: string; kind: string; title: string; to: string; switch?: string; feed: string | null };
   dc?: PanelDc;
 }
@@ -320,25 +320,25 @@ export interface Page {
   edit?: { wires: Record<string, EditWire>; boxes: Record<string, EditBox> };
   scene?: Scene;
   panel?: PanelData;
-  estimate?: SideTable;  // смета — на странице проводки (вкладка «Смета», side.estimate_side_table)
+  estimate?: SideTable;  // the estimate is on the wiring page ("Estimate" tab, side.estimate_side_table)
   elevations?: Elevation[];
-  legend?: LegendEntry[];  // условные обозначения — плашкой на чертеже (widgets/Legend)
+  legend?: LegendEntry[];  // the legend is a badge on the drawing (widgets/Legend)
 }
 
-// Развёртки данными (ключ elevations страниц «Развёртки», elevations.elevation_data):
-// мм стены — x от левого угла (вид изнутри), y от пола
+// Elevations as data (key elevations of the "Elevations" pages, elevations.elevation_data):
+// wall mm, x from the left corner (view from inside), y from the floor
 export interface ElevPoint {
   id: string;
-  key: string;            // point:<id> — как на листах электрики и проводки
-  n: number;              // номер на листе электрики
+  key: string;            // point:<id>, as on the electrical and wiring sheets
+  n: number;              // number on the electrical sheet
   type: string;
   name: string;
   x: number;
   y: number;
   posts: number;
   group: string | null;
-  color: string | null;   // цвет группы, как линии проводки
-  from: string | null;    // откуда линия проводки: коробка «К3» или щит
+  color: string | null;   // group colour, like the wiring lines
+  from: string | null;    // where the wiring line comes from: box "К3" or the panel
 }
 
 export interface ElevBox {
@@ -353,26 +353,26 @@ export interface ElevBox {
   from: string | null;
 }
 
-// Что на стене — у развёртки и у соседней стены в углу (ElevSide)
-// Водорозетка или выпуск на стене: key — прибор (fixture:<id>), name — прибор словами
+// What is on the wall, for the elevation and the neighbouring wall at a corner (ElevSide)
+// Water outlet or drain on the wall: key is the fixture (fixture:<id>), name the fixture in words
 export interface ElevWater {
   fixture: string; key: string; name: string; n: number; kind: PipeKind;
   x: number; y: number; d: number; assumed: boolean;
 }
 
 export interface ElevWall {
-  key: string;            // elevation:<комната>.<стена>
+  key: string;            // elevation:<room>.<wall>
   length: number;
   openings: { kind: string; x0: number; x1: number; y0: number; y1: number; assumed: boolean }[];
   chases: { x: number; y0: number; y1: number; wide: boolean; low: boolean }[];
   boxes: ElevBox[];
   points: ElevPoint[];
   board?: { key: string; name: string; x: number; y: number; width: number; height: number };
-  // Водорозетки и выпуски сантехники: n — номер прибора на листе «Сантехника»
+  // Plumbing water outlets and drains: n is the fixture number on the "Plumbing" sheet
   water?: ElevWater[];
 }
 
-// Соседняя стена в углу: внутренний угол (90 — видна вместе с развёрткой) и что на ней
+// Neighbouring wall at a corner: the inner angle (90 means visible together with the elevation) and what is on it
 export interface ElevSide extends ElevWall {
   turn: number;
 }
@@ -384,7 +384,43 @@ export interface Elevation extends ElevWall {
   height_assumed: boolean;
   top: number;
   back: { id: string; n: number; type: string; x: number; y: number; posts: number }[];
-  face?: [XY, XY];        // внутренняя грань на плане (мм модели): начало — левый угол
-  left?: ElevSide;        // сосед у левого угла (предыдущая по обходу)
-  right?: ElevSide;       // сосед у правого угла (следующая)
+  face?: [XY, XY];        // inner face on the plan (model mm): starts at the left corner
+  left?: ElevSide;        // neighbour at the left corner (previous in the walk)
+  right?: ElevSide;       // neighbour at the right corner (next)
+}
+
+// Studio price page (GET /api/prices, pipeline.price_page): electrical works, the studio price
+// (prices.yaml next to the projects) and the market spread (market.yaml)
+export interface MarketQuote { source: string; price: number; text: string }
+export interface MarketSpread {
+  n: number; min: number; q1: number; median: number; q3: number; max: number;
+  basis: string;              // what is compared: wall material, unit
+  quotes: MarketQuote[];      // by price, cheapest first
+}
+export interface PriceRow {
+  key: string;                // estimate item key, work.*
+  section: "rough" | "finish";
+  unit: string;
+  name: { ru: string; uk: string };
+  hint: { ru: string; uk: string } | null;
+  price: number | null;       // studio price; null — none in prices.yaml
+  service: number | null;     // no studio price: the price service's one (a mock for now)
+  market: MarketSpread | null;
+}
+// Period of market prices: "YYYY" or "YYYY-MM"; no dated sources — empty strings
+export interface MarketPeriod { start: string; end: string; dated: number; undated: number }
+export interface MarketSource {
+  id: string; name: string; url: string; date: string;
+  kind: "company" | "master" | "platform" | "review"; note: string;
+}
+export interface PricePage {
+  file: string;
+  exists: boolean;
+  currency: string;
+  date: string;
+  note: string;
+  rows: PriceRow[];
+  market: { region: string; collected: string; currency: string; period: MarketPeriod; sources: MarketSource[] } | null;
+  issues: string[];
+  editable: boolean;
 }

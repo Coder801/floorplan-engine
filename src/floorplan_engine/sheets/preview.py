@@ -1,7 +1,7 @@
-"""PNG-превью листов DXF через ezdxf.addons.drawing + matplotlib: светлый фон, 150 dpi.
+"""PNG previews of DXF sheets via ezdxf.addons.drawing + matplotlib: light background, 150 dpi.
 
-Рисуется лист целиком: рамка, штамп, панели и видовые экраны с моделью (заморожённые
-в видовом экране слои ezdxf не показывает, как и AutoCAD).
+The whole sheet is drawn: frame, title block, panels and viewports with the model (ezdxf, like
+AutoCAD, does not show layers frozen in a viewport).
 """
 
 from __future__ import annotations
@@ -34,12 +34,12 @@ LONG_SIDE_INCHES = 14.0
 MARGIN = 0.03
 EDGE_PAD = 0.005
 
-# Цвета ACI, плохо видимые на белом фоне, → более тёмные оттенки (только в превью)
+# ACI colours that are hard to see on white → darker shades (preview only)
 _DARKEN = {
-    "#ffff00": "#a07800",  # 2 жёлтый
-    "#00ff00": "#008a00",  # 3 зелёный
-    "#00ffff": "#00838f",  # 4 голубой
-    "#ff00ff": "#9c27b0",  # 6 пурпурный
+    "#ffff00": "#a07800",  # 2 yellow
+    "#00ff00": "#008a00",  # 3 green
+    "#00ffff": "#00838f",  # 4 cyan
+    "#ff00ff": "#9c27b0",  # 6 magenta
 }
 
 
@@ -50,14 +50,14 @@ def _darken_colors(entity: Any, properties: Any) -> None:
 
 
 def frozen_in_viewports(layout: Paperspace) -> set[str]:
-    """Слои, замороженные в видовых экранах листа (имена в верхнем регистре)."""
+    """Layers frozen in the sheet viewports (names in upper case)."""
     return {name.upper() for vp in layout.viewports() for name in vp.frozen_layers}
 
 
 def _hide_layers(layout: Paperspace, names: set[str]) -> Callable[[Any, Any], None]:
-    """ezdxf не применяет заморозку видового экрана к примитивам внутри блоков (слой 0
-    наследует слой вставки), поэтому символы УГО прячем сами по итоговому слою.
-    То, что нарисовано прямо на листе, не трогаем."""
+    """ezdxf does not apply viewport freezing to primitives inside blocks (layer 0 inherits the
+    insert layer), so symbol blocks are hidden by hand by their effective layer.
+    What is drawn directly on the sheet is left alone."""
     sheet_owner = layout.layout_key
 
     def hide(entity: Any, properties: Any) -> None:
@@ -68,39 +68,39 @@ def _hide_layers(layout: Paperspace, names: set[str]) -> Callable[[Any, Any], No
 
 
 def sheet_layouts(doc: Drawing) -> list[Paperspace]:
-    """Листы документа в порядке вкладок."""
+    """Document sheets in tab order."""
     return [doc.paperspace(name) for name in doc.layout_names_in_taborder() if name != "Model"]
 
 
 def draw_sheet_layout(
     doc: Drawing, layout: Paperspace, backend: BackendInterface, config: Configuration
 ) -> None:
-    """Отрисовать лист движком ezdxf в любой бэкенд — так же для PNG и для артефакта:
-    белый фон, тёмные варианты светлых цветов, заморозка слоёв видовых экранов и в блоках."""
+    """Draw a sheet with the ezdxf engine into any backend, the same for PNG and for the artifact:
+    white background, dark variants of light colours, viewport layer freezing also inside blocks."""
     register_fonts()
     frontend = Frontend(RenderContext(doc), backend, config=config)
     frontend.push_property_override_function(_darken_colors)
     frontend.push_property_override_function(_hide_layers(layout, frozen_in_viewports(layout)))
     props = LayoutProperties.from_layout(layout)
     props.set_colors(BACKGROUND)
-    # Штриховку ezdxf сдвигает на случайные доли миллиметра (чтобы линии не шли через
-    # вершины). Фиксируем случайность на время листа: одинаковый документ — одинаковые байты
+    # ezdxf shifts hatching by random fractions of a millimetre (so lines do not pass through
+    # vertices). Fix the randomness for the sheet: the same document gives the same bytes
     state = random.getstate()
     random.seed(0)
     try:
-        # finalize бэкенда matplotlib перестраивает фигуру — кадр задаёт save_axes
+        # the matplotlib backend's finalize rebuilds the figure, so save_axes sets the frame
         frontend.draw_layout(layout, finalize=False, layout_properties=props)
     finally:
         random.setstate(state)
 
 
 def paper_size(layout: Paperspace) -> tuple[float, float]:
-    """Ширина и высота листа, мм."""
+    """Sheet width and height, mm."""
     return layout.dxf_layout.dxf.paper_width, layout.dxf_layout.dxf.paper_height
 
 
 def render_png(doc: Drawing, layout: Paperspace, png_path: Path, dpi: int = PREVIEW_DPI) -> Path:
-    """Отрисовать лист в PNG по размеру бумаги."""
+    """Draw the sheet to a PNG at paper size."""
     width, height = paper_size(layout)
     scale = LONG_SIDE_INCHES / max(width, height)
     fig = plt.figure(figsize=(width * scale, height * scale), dpi=dpi)
@@ -115,7 +115,7 @@ def render_png(doc: Drawing, layout: Paperspace, png_path: Path, dpi: int = PREV
 
 
 def save_axes(fig: Figure, ax: Axes, width: float, height: float, png_path: Path, dpi: int) -> None:
-    """Кадр — лист целиком с небольшим полем, белый фон."""
+    """Frame: the whole sheet with a small margin, white background."""
     pad = max(width, height) * EDGE_PAD
     ax.set_aspect("equal", "datalim")
     ax.set_xlim(-pad, width + pad)

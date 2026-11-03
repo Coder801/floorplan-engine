@@ -1,1 +1,1 @@
-"""API сервиса (FastAPI): маршруты, просмотр собранных проектов, вход."""
+"""Service API (FastAPI): routes, viewer of built projects, login."""

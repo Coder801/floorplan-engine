@@ -1,23 +1,23 @@
-"""plumbing.yaml — водоснабжение и канализация квартиры (docs/plumbing.md).
+"""plumbing.yaml: water supply and sewer of the flat (docs/plumbing.md).
 
-    distribution: collector        # collector — лучевая от коллекторов; tee — тройниковая
-    risers:                        # стояки: канализация Д110, вода — если стояк водяной
+    distribution: collector        # collector: radial from manifolds; tee: tee-based
+    risers:                        # risers: sewer D110, water if the riser carries water
       - { id: riser_1, room: bath, at: [150, 2100], sewer: true, water: true }
-    input:                         # узел ввода: краны, фильтр, редуктор, коллекторы
+    input:                         # supply unit: valves, filter, reducer, manifolds
       { room: bath, wall: w1, offset: 300, hot: true, height: 1300 }
-    fixtures:                      # мокрые точки: прибор у стены
+    fixtures:                      # wet points: a fixture at a wall
       - { id: bath_wc_1, room: bath, type: wc_installation, wall: w2, offset: 600 }
-    obstacles:                     # что трубы обходят: инсталляция, ванна, поддон, короб
+    obstacles:                     # what pipes go around: installation frame, bath, tray, box
       - { id: bath_inst_1, room: bath, type: installation, wall: w2, offset: 350,
           width: 500, depth: 200 }
 
-Координаты `at` и `rect` — мм от `origin` помещения, как `ceiling` у точек электрики.
-Прибор стоит у стены: `offset` — от начала стены до середины подводки. Какие подводы
-нужны прибору, на какой высоте и какого диаметра — `FIXTURE_SPECS`; высоты из источника
-(`supply_height`, `drain_height`) важнее типовых. Типовые — допущение, оно перечисляется
-на листе. Трассы идут по полу (вода — в стяжке), в обход стен и препятствий; канализация —
-не через дверные проёмы, отводами 45°, в стяжке или скрыто (короб, инсталляция, под
-ванной); считает их `plumbing/network.py`.
+Coordinates `at` and `rect` are mm from the room `origin`, like `ceiling` of electrical points.
+A fixture stands at a wall: `offset` is from the wall start to the middle of the supply. Which
+supplies a fixture needs, at what height and of what diameter is in `FIXTURE_SPECS`; heights
+from the source (`supply_height`, `drain_height`) beat the typical ones. Typical values are
+assumptions and are listed on the sheet. Routes run on the floor (water in the screed), around
+walls and obstacles; sewer never through door openings, with 45° bends, in the screed or
+hidden (box, installation frame, under the bath); `plumbing/network.py` computes them.
 """
 
 from __future__ import annotations
@@ -31,33 +31,33 @@ from pydantic import Field, model_validator
 from floorplan_engine.model.schema import ID_PATTERN, StrictModel
 
 PLUMBING_FILE = "plumbing.yaml"
-SEWER_INLET_MM = 100.0  # ось врезки в стояк от чистого пола — допущение, если не задана
+SEWER_INLET_MM = 100.0  # riser inlet axis from the finished floor; an assumption if unset
 
 
 class FixtureType(StrEnum):
-    WC = "wc"  # унитаз напольный
-    WC_INSTALLATION = "wc_installation"  # унитаз подвесной на инсталляции
-    SINK = "sink"  # умывальник
-    KITCHEN_SINK = "kitchen_sink"  # мойка на кухне
-    BATH = "bath"  # ванна: смеситель на стене, выпуск у пола
-    SHOWER = "shower"  # душ: смеситель на стене, трап поддона
-    WASHER = "washer"  # стиральная машина
-    DISHWASHER = "dishwasher"  # посудомоечная машина
-    BOILER = "boiler"  # бойлер: вход холодной, выход горячей
-    HYGIENIC_SHOWER = "hygienic_shower"  # гигиенический душ: смеситель без выпуска
+    WC = "wc"  # floor-standing WC
+    WC_INSTALLATION = "wc_installation"  # wall-hung WC on an installation frame
+    SINK = "sink"  # basin
+    KITCHEN_SINK = "kitchen_sink"  # kitchen sink
+    BATH = "bath"  # bath: mixer on the wall, drain at the floor
+    SHOWER = "shower"  # shower: mixer on the wall, tray drain
+    WASHER = "washer"  # washing machine
+    DISHWASHER = "dishwasher"  # dishwasher
+    BOILER = "boiler"  # boiler: cold in, hot out
+    HYGIENIC_SHOWER = "hygienic_shower"  # hygienic shower: mixer without a drain
 
 
 @dataclass(frozen=True)
 class FixtureSpec:
-    """Подводы прибора: холодная, горячая, выпуск (диаметр, мм) и типовые высоты оси от
-    чистого пола, мм. Высоты — ориентир по типовым моделям; у конкретной модели — по паспорту."""
+    """Fixture supplies: cold, hot, drain (diameter, mm) and typical axis heights from the finished
+    floor, mm. Heights are a guide for typical models; for a specific model use its datasheet."""
 
     cold: bool
     hot: bool
-    sewer: int | None  # Ø выпуска, мм; None — без канализации
+    sewer: int | None  # drain Ø, mm; None means no sewer
     supply_height: float
     drain_height: float | None
-    hot_source: bool = False  # выдаёт горячую воду (бойлер)
+    hot_source: bool = False  # produces hot water (boiler)
 
 
 FIXTURE_SPECS: dict[FixtureType, FixtureSpec] = {
@@ -65,25 +65,25 @@ FIXTURE_SPECS: dict[FixtureType, FixtureSpec] = {
     FixtureType.WC_INSTALLATION: FixtureSpec(True, False, 110, 1000.0, 230.0),
     FixtureType.SINK: FixtureSpec(True, True, 50, 550.0, 500.0),
     FixtureType.KITCHEN_SINK: FixtureSpec(True, True, 50, 550.0, 500.0),
-    FixtureType.BATH: FixtureSpec(True, True, 50, 800.0, 100.0),  # сифон ванны на ножках
+    FixtureType.BATH: FixtureSpec(True, True, 50, 800.0, 100.0),  # siphon of a bath on legs
     FixtureType.SHOWER: FixtureSpec(True, True, 50, 1100.0, 50.0),
     FixtureType.WASHER: FixtureSpec(True, False, 50, 700.0, 600.0),
     FixtureType.DISHWASHER: FixtureSpec(True, False, 50, 400.0, 400.0),
     FixtureType.BOILER: FixtureSpec(True, False, None, 1300.0, None, hot_source=True),
     FixtureType.HYGIENIC_SHOWER: FixtureSpec(True, True, None, 800.0, None),
 }
-# Приборы, которые бывают вне мокрых помещений (кухня, коридор, кладовка)
+# Fixtures that can be outside wet rooms (kitchen, hallway, storage)
 DRY_ROOM_FIXTURES = frozenset(
     {FixtureType.KITCHEN_SINK, FixtureType.DISHWASHER, FixtureType.WASHER, FixtureType.BOILER}
 )
 
 
 class ObstacleType(StrEnum):
-    INSTALLATION = "installation"  # рама инсталляции в коробе
+    INSTALLATION = "installation"  # installation frame inside a box
     BATH = "bath"
-    SHOWER_TRAY = "shower_tray"  # душевой поддон
-    BOX = "box"  # короб из гипсокартона
-    CABINET = "cabinet"  # шкаф, тумба на полу
+    SHOWER_TRAY = "shower_tray"  # shower tray
+    BOX = "box"  # plasterboard box
+    CABINET = "cabinet"  # cabinet, floor unit
     COLUMN = "column"
     OTHER = "other"
 
@@ -105,7 +105,7 @@ class Riser(StrictModel):
 
 
 class WaterInput(StrictModel):
-    """Узел ввода: краны, фильтр, редуктор, счётчики и коллекторы — на стене."""
+    """Supply unit: valves, filter, reducer, meters and manifolds, on a wall."""
 
     room: str
     wall: str = Field(description="id стены помещения")
@@ -145,8 +145,8 @@ class Fixture(StrictModel):
 
 
 class Obstacle(StrictModel):
-    """Препятствие на полу: прямоугольник у стены (wall, offset — от начала стены до края,
-    width — вдоль стены, depth — от стены в помещение) или rect [x0, y0, x1, y1] от origin."""
+    """Floor obstacle: a rectangle at a wall (wall, offset from the wall start to the edge, width
+    along the wall, depth from the wall into the room) or rect [x0, y0, x1, y1] from origin."""
 
     id: str = Field(pattern=ID_PATTERN)
     room: str

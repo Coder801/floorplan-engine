@@ -1,4 +1,4 @@
-"""3D-сцена проводки: трассы по высоте, стены с проёмами — из модели."""
+"""3D wiring scene: routes by height, walls with openings, from the model."""
 
 from __future__ import annotations
 
@@ -34,13 +34,13 @@ def test_wires_are_orthogonal_and_end_at_point_heights() -> None:
     for r in wiring.runs:
         pts = scene["wires"][r.id]["pts"]
         for a, b in itertools.pairwise(pts):
-            assert sum(abs(a[i] - b[i]) > 0.5 for i in range(3)) == 1  # участок по одной оси
+            assert sum(abs(a[i] - b[i]) > 0.5 for i in range(3)) == 1  # a piece along one axis
         assert pts[0][2] == pytest.approx(2700 - r.rise_start_mm)
         assert pts[-1][2] == pytest.approx(2700 - r.rise_end_mm)
-        assert max(p[2] for p in pts) == pytest.approx(2700)  # по потолку
+        assert max(p[2] for p in pts) == pytest.approx(2700)  # on the ceiling
     s1 = next(r for r in wiring.runs if r.target == "s1")
-    assert scene["wires"][s1.id]["pts"][-1][2] == pytest.approx(300)  # розетка на 300
-    # Помещение линии — помещение цели: по нему фильтр 3D в просмотре
+    assert scene["wires"][s1.id]["pts"][-1][2] == pytest.approx(300)  # socket at 300
+    # A line's room is the target's room: the viewer filters 3D by it
     point_rooms = {pid: p["room"] for pid, p in scene["points"].items()}
     box_rooms = {bid: b["room"] for bid, b in scene["boxes"].items()}
     for r in wiring.runs:
@@ -67,16 +67,20 @@ def test_floor_route_runs_in_screed() -> None:
 
 
 def test_walls_have_lintel_and_sill_and_assumptions() -> None:
-    """Над дверью — перемычка, у окна без высоты — только подоконник: окно до потолка."""
+    """A lintel above a door; a window without a height has only a sill: the window goes up to
+    the ceiling.
+    """
     scene, _ = _scene()
     spans = sorted({tuple(w["z"]) for w in scene["walls"]})
     assert spans == sorted({(0.0, 2700), (DOOR_TOP_MM, 2700), (0.0, WINDOW_SILL_MM)})
     assert scene["assumed"] == {"ceiling": True, "openings": ["o1", "o2"]}
-    assert all(len(w["normals"]) == 1 for w in scene["walls"])  # одна комната — без общих стен
+    assert all(len(w["normals"]) == 1 for w in scene["walls"])  # one room: no shared walls
 
 
 def test_window_with_given_height_keeps_lintel() -> None:
-    """Высота окна из room.yaml берётся как есть: над окном — стена; допущением оно не числится."""
+    """A window height from room.yaml is used as is: there is wall above the window; it is not an
+    assumption.
+    """
     window = {**WINDOW, "sill": 700, "height": 1300}
     plan = make_plan(RECT, [DOOR, window])
     _, contours = validate_plan(plan)
@@ -86,11 +90,11 @@ def test_window_with_given_height_keeps_lintel() -> None:
     scene = build_scene(plan, contours, elec, wiring)
     spans = {tuple(w["z"]) for w in scene["walls"]}
     assert {(0.0, 700), (2000.0, 2700)} <= spans
-    assert scene["assumed"]["openings"] == ["o1"]  # только дверь
+    assert scene["assumed"]["openings"] == ["o1"]  # door only
 
 
 def _two_rooms(openings_a: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
-    """Стены двух комнат 4000×3000 рядом, общая перегородка — a.w3 и b.w1."""
+    """Walls of two 4000×3000 rooms side by side; the shared partition is a.w3 and b.w1."""
     from floorplan_engine.epd.scene3d import _walls
     from floorplan_engine.model.geometry import room_geometries
     from floorplan_engine.model.schema import Plan
@@ -119,9 +123,9 @@ def test_shared_partition_is_one_piece_with_both_normals() -> None:
 
 
 def test_all_pieces_of_a_shared_wall_share_normals() -> None:
-    """Окно в перегородке описано только в одной комнате: подоконник и перемычка лежат в
-    полосе проёма, с которой тело соседа не перекрывается, — но это та же стена, и срез в
-    просмотре должен опускать её целиком, а не оставлять подоконник в полный рост."""
+    """A window in a partition described in only one room: the sill and lintel lie in the opening
+    band, which the neighbour's body does not overlap, but it is the same wall, and the viewer cut
+    must lower it entirely instead of leaving the sill at full height."""
     window = {
         "id": "o1",
         "wall": "w3",
@@ -140,9 +144,10 @@ def test_all_pieces_of_a_shared_wall_share_normals() -> None:
 
 
 def test_outer_wall_keeps_corner_at_partition() -> None:
-    """Угол на стыке перегородки с наружной стеной — у наружной: в срезе перегородка
-    бортиком, а периметр без выреза. Перегородка — только между комнатами (y 0…3000),
-    наружная стена понизу — сплошная от угла до угла."""
+    """The corner where a partition meets an exterior wall belongs to the exterior wall: in a cut
+    view
+    the partition is a low rim and the perimeter has no notch. The partition is only between the
+    rooms (y 0…3000); the bottom exterior wall is solid from corner to corner."""
     walls = _two_rooms()
     partition = [w for w in walls if len(w["normals"]) == 2]
     ys = [y for w in partition for ring in w["polys"] for x, y in ring[0]]
@@ -150,14 +155,14 @@ def test_outer_wall_keeps_corner_at_partition() -> None:
     bottom = unary_union(
         [Polygon(ring[0]) for w in walls if w["key"].endswith(".w4") for ring in w["polys"]]
     )
-    assert bottom.geom_type == "Polygon"  # без разрыва над стыком x 4000…4100
-    assert bottom.bounds == pytest.approx((0, -100, 8100, 0))  # углы квартиры — у w1 и b.w3
+    assert bottom.geom_type == "Polygon"  # no gap above the joint x 4000…4100
+    assert bottom.bounds == pytest.approx((0, -100, 8100, 0))  # flat corners at w1 and b.w3
 
 
 def test_corner_does_not_give_wall_a_foreign_normal() -> None:
-    """Короткая стена (уступ 200 мм) перекрывается с соседней угловым квадратом — заметная
-    доля её площади, но это стык, а не общая стена: чужая (перпендикулярная) нормаль
-    заставила бы «срез» прятать соседнюю стену, когда та дальняя."""
+    """A short wall (a 200 mm step) overlaps its neighbour by a corner square, a noticeable share of
+    its area, but that is a joint, not a shared wall: a foreign (perpendicular) normal would make
+    the cut hide the neighbouring wall when it is the far one."""
     from floorplan_engine.epd.scene3d import _walls
     from floorplan_engine.model.geometry import room_geometries
 

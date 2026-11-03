@@ -58,8 +58,8 @@ ElectricalModelOpt = Annotated[
 ]
 
 
-# Команды сервиса читают .env (вход Google, база, ключ API); сборка и проверка — нет, им
-# окружение не нужно, а тестам CLI не нужен чужой .env
+# Service commands read .env (Google login, database, API key); build and check do not: they
+# need no environment, and CLI tests must not pick up someone else's .env
 ENV_COMMANDS = frozenset({"serve", "view", "dev", "analyze", "access"})
 
 
@@ -71,8 +71,8 @@ def main(ctx: typer.Context) -> None:
 
 
 def load_env(path: Path) -> None:
-    """Переменные из .env в окружение (вход, база — .env.example): KEY=VALUE, # — комментарий,
-    кавычки вокруг значения снимаются. Уже заданное в окружении не перезаписывается."""
+    """Load variables from .env into the environment (login, database: see .env.example): KEY=VALUE,
+    # starts a comment, quotes around a value are stripped. Existing environment values are kept."""
     if not path.is_file():
         return
     for raw in path.read_text("utf-8").splitlines():
@@ -83,7 +83,7 @@ def load_env(path: Path) -> None:
         if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
             value = value[1:-1]
         elif " #" in value:
-            value = value.split(" #", 1)[0].rstrip()  # комментарий в конце строки
+            value = value.split(" #", 1)[0].rstrip()  # trailing comment
         if key and key not in os.environ:
             os.environ[key] = value
 
@@ -268,7 +268,7 @@ def serve(
     electrical_model: ElectricalModelOpt = None,
 ) -> None:
     """Запустить API сервиса (документация — http://host:port/docs)."""
-    # Зависимости сервиса (группа service) нужны только этой команде
+    # Service dependencies (group service) are needed only by this command
     import uvicorn
 
     from floorplan_engine.service.analysis.llm_analyzer import make_analyzer
@@ -298,9 +298,10 @@ def estimate(
         raise typer.Exit(code=1)
     est = result.estimate
     cur = est.currency
-    typer.echo(f"Материалы: {est.subtotal('material'):,.0f} {cur}".replace(",", " "))
-    typer.echo(f"Работы:    {est.subtotal('work'):,.0f} {cur}".replace(",", " "))
-    typer.echo(f"Всего:     {est.total:,.0f} {cur}".replace(",", " "))
+    typer.echo(f"Материалы:        {est.subtotal('material'):,.0f} {cur}".replace(",", " "))
+    typer.echo(f"Черновые работы:  {est.subtotal('rough'):,.0f} {cur}".replace(",", " "))
+    typer.echo(f"Чистовые работы:  {est.subtotal('finish'):,.0f} {cur}".replace(",", " "))
+    typer.echo(f"Всего:            {est.total:,.0f} {cur}".replace(",", " "))
     if est.unpriced:
         typer.secho(f"Без цены: {est.unpriced} поз. — в итог не входят", fg=typer.colors.YELLOW)
     for path in result.files:
@@ -326,12 +327,12 @@ def view(
     uvicorn.run(create_viewer(projects, _viewer_auth()), host=host, port=port)
 
 
-DEV_PROJECTS_ENV = "SHTROBA_DEV_PROJECTS"  # папка проектов для API `dev` (между перезапусками)
+DEV_PROJECTS_ENV = "SHTROBA_DEV_PROJECTS"  # projects folder for the `dev` API (survives restarts)
 
 
 def dev_viewer() -> FastAPI:
-    """Приложение API для `dev`: uvicorn зовёт фабрику заново после каждого перезапуска по
-    правке кода, папку проектов берёт из окружения."""
+    """API app for `dev`: uvicorn calls the factory again after every code-change restart; the
+    projects folder comes from the environment."""
     from floorplan_engine.service.api.viewer import create_viewer
 
     return create_viewer(Path(os.environ.get(DEV_PROJECTS_ENV, "projects")), _viewer_auth())
@@ -368,7 +369,7 @@ def dev(
     env = {**os.environ, "API_URL": f"http://127.0.0.1:{port}"}
     front = subprocess.Popen([npm, "run", "dev"], cwd=web, env=env)
     typer.echo(f"Страница: http://127.0.0.1:5173 · API: http://127.0.0.1:{port}/api")
-    os.environ[DEV_PROJECTS_ENV] = str(projects.resolve())  # фабрика API читает после перезапуска
+    os.environ[DEV_PROJECTS_ENV] = str(projects.resolve())  # read by the API factory
     try:
         uvicorn.run(
             "floorplan_engine.cli:dev_viewer",
@@ -465,7 +466,7 @@ def symbols(
 
 
 def _viewer_auth() -> Auth | None:
-    """Вход в просмотр по окружению (SHTROBA_AUTH=on, service/api/auth.py); выключен — None."""
+    """Viewer login from the environment (SHTROBA_AUTH=on, service/api/auth.py); None when off."""
     from floorplan_engine.service.api.auth import Auth, AuthConfig, ConfigError
     from floorplan_engine.service.api.mail import LogMailer, mailer_from_env
     from floorplan_engine.service.api.telegram import telegram_from_env
@@ -569,8 +570,9 @@ def access_invite(
 
 
 def _db_project(db: Session, project: Path, create: bool = False) -> Project:
-    """Строка проекта в базе по папке; нет — выход с подсказкой или, с create, строка без
-    владельца (владелец заберёт её при входе)."""
+    """Project row in the database for a folder; if missing, exit with a hint or, with create, make
+    a
+    row without an owner (the owner claims it on login)."""
     from floorplan_engine.service.db import access as acc
 
     target = acc.project_by_slug(db, project.name)

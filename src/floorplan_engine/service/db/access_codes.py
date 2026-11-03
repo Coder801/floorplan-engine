@@ -1,11 +1,11 @@
-"""Код доступа к проекту (решение 2026-11-02, docs/database.md, «Вход»): студия выдаёт код
-(`floorplan-engine access code projects/<имя>`), человек вводит его на экране входа и видит этот
-один проект — без учётки, только чтение (роль `viewer`, access.project_role).
+"""Project access code (decision 2026-11-02, docs/database.md, "Login"): the studio issues a code
+(`floorplan-engine access code projects/<name>`), a person enters it on the login screen and
+sees that one project, without an account, read only (role `viewer`, access.project_role).
 
-Код — CODE_LENGTH знаков из CODE_ALPHABET (без 0/O и 1/I, чтобы не путать на слух и в
-переписке), показывается как «XXXX-XXXX»; действует CODE_DAYS, входов по нему сколько угодно,
-отзывается студией. В базе (`access_code`) — только sha256 кода. Функции не делают commit, как
-access.py.
+A code is CODE_LENGTH characters from CODE_ALPHABET (no 0/O and 1/I, so they are not confused
+by ear or in chat), shown as "XXXX-XXXX"; it is valid for CODE_DAYS, can be used any number of
+times and can be revoked by the studio. The database (`access_code`) stores only the sha256 of
+the code. Functions do not commit, like access.py.
 """
 
 from __future__ import annotations
@@ -33,12 +33,14 @@ from floorplan_engine.service.db.models import AccessCode, AppUser, Project
 CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 CODE_LENGTH = 8
 CODE_DAYS = 30
-FIXED_DAYS = 3650  # постоянный код из окружения (ensure_code) — продлевается при каждом старте
+FIXED_DAYS = 3650  # permanent code from the environment (ensure_code), extended on every start
 BAD_CODE = "Код не подходит или срок его истёк"
 
 
 def normalize_code(value: str) -> str:
-    """Код как в базе: без пробелов и дефисов, заглавными; не похож на код — AccessError."""
+    """Code as stored: no spaces or dashes, upper case; AccessError if it does not look like a
+    code.
+    """
     code = re.sub(r"[^A-Za-z0-9]", "", value).upper()
     if len(code) != CODE_LENGTH or any(c not in CODE_ALPHABET for c in code):
         raise AccessError(BAD_CODE)
@@ -46,7 +48,7 @@ def normalize_code(value: str) -> str:
 
 
 def format_code(code: str) -> str:
-    """Код для человека: «XXXX-XXXX»."""
+    """Code for a human: "XXXX-XXXX"."""
     half = CODE_LENGTH // 2
     return f"{code[:half]}-{code[half:]}"
 
@@ -62,8 +64,8 @@ def issue_code(
     label: str = "",
     days: int = CODE_DAYS,
 ) -> str:
-    """Новый код доступа к проекту; by — кто выдаёт (None — суперпользователь из командной
-    строки), нужно право приглашать. Вернёт код в виде «XXXX-XXXX» — показать один раз."""
+    """New project access code; by is who issues it (None means a superuser from the command line),
+    the invite permission is required. Returns the code as "XXXX-XXXX", to be shown once."""
     if (
         by is not None
         and not by.is_superuser
@@ -93,11 +95,11 @@ def issue_code(
 def ensure_code(
     session: Session, project: Project, value: str, label: str = "постоянный код"
 ) -> AccessCode:
-    """Постоянный код доступа с известным значением (SHTROBA_ACCESS_CODES, ставит сервис
-    при старте): нет в базе — записать, отозван — вернуть к жизни (снять отзыв, продлить на
-    FIXED_DAYS): переменная окружения — источник правды, отзыв такого кода действует до
-    перезапуска. Тот же код у другого проекта — AccessError. Действующий код — ничего не
-    пишется и не журналируется: повторный старт не плодит записей."""
+    """Permanent access code with a known value (SHTROBA_ACCESS_CODES, set by the service on start):
+    missing in the database means write it, revoked means bring it back (clear the revocation,
+    extend by FIXED_DAYS): the environment variable is the source of truth, so revoking such a
+    code lasts until restart. The same code on another project is an AccessError. A valid code
+    means nothing is written or logged: a restart does not pile up records."""
     wanted = _hash(normalize_code(value))
     row = session.scalar(select(AccessCode).where(AccessCode.code_hash == wanted))
     if row is not None and row.project_id != project.id:
@@ -119,9 +121,9 @@ def ensure_code(
 
 
 def use_code(session: Session, value: str) -> AccessCode:
-    """Вход по коду: действующий код — счётчик входов и журнал, вернёт строку кода (проект —
-    project_id). Нет такого, отозван или истёк — AccessError с одним и тем же сообщением:
-    чужой код не раскрывается."""
+    """Login by code: a valid code bumps the login counter and the log and returns the code row (the
+    project is project_id). Unknown, revoked or expired gives AccessError with one and the same
+    message: someone else's code is not revealed."""
     wanted = _hash(normalize_code(value))
     row = session.scalar(select(AccessCode).where(AccessCode.code_hash == wanted))
     if row is None or not _alive(row):
@@ -135,7 +137,7 @@ def use_code(session: Session, value: str) -> AccessCode:
 
 
 def active_code(session: Session, code_id: uuid.UUID) -> AccessCode | None:
-    """Код по id для проверки каждого запроса: отозван, истёк или удалён — None."""
+    """Code by id, for checking every request: None if revoked, expired or deleted."""
     row = session.get(AccessCode, code_id)
     return row if row is not None and _alive(row) else None
 
@@ -157,8 +159,8 @@ def list_codes(session: Session, project: Project) -> list[AccessCode]:
 def revoke_code(
     session: Session, project: Project, code_id: str, by: AppUser | None = None
 ) -> AccessCode:
-    """Отозвать код по id (можно по началу id, если он один такой); входы по нему кончаются
-    со следующего запроса."""
+    """Revoke a code by id (a prefix of the id works if it is unique); logins with it stop from the
+    next request."""
     rows = [
         r for r in list_codes(session, project) if str(r.id).startswith(code_id.strip().lower())
     ]

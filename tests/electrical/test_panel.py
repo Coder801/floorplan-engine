@@ -1,4 +1,4 @@
-"""Щит в лицо: потребители, автоматы, состав щита по схеме и слабые места."""
+"""Panel front view: loads, breakers, panel set by scheme and weak spots."""
 
 from __future__ import annotations
 
@@ -104,8 +104,8 @@ def test_breakers_by_kind_light_10_sockets_16_heavy_by_current() -> None:
     g = {x.group: x for x in panel.groups}
     assert (g["QF1"].kind, g["QF1"].breaker.rating) == (Kind.LIGHT, 10)
     assert (g["QF2"].kind, g["QF2"].breaker.rating) == (Kind.SOCKETS, 16)
-    assert g["QF2"].power == 200  # два поста по 100 Вт — допущение
-    assert g["QF3"].kind is Kind.HEAVY and g["QF3"].breaker.rating == 16  # кабель 2,5 держит 16
+    assert g["QF2"].power == 200  # two 100 W posts, an assumption
+    assert g["QF3"].kind is Kind.HEAVY and g["QF3"].breaker.rating == 16  # a 2.5 cable carries 16
     assert all(gr.breaker.assumed for gr in panel.groups)
 
 
@@ -120,7 +120,7 @@ def test_source_power_and_breaker_win_over_defaults() -> None:
     grp = panel.groups[0]
     assert grp.power == 3000 and not grp.assumed and grp.breaker.label == "C25"
     texts = [w.text["ru"] for w in panel.warnings]
-    assert any("не защищает кабель 3x1.5" in t for t in texts)  # 25 А на 1,5 мм²
+    assert any("не защищает кабель 3x1.5" in t for t in texts)  # 25 A on 1.5 mm²
 
 
 def test_overloaded_group_is_split_into_lines_and_asked() -> None:
@@ -137,13 +137,13 @@ def test_overloaded_group_is_split_into_lines_and_asked() -> None:
     assert panel is not None
     lines = {g.group: g for g in panel.groups}
     assert set(lines) == {"QF1", "QF1.2"}
-    assert {ld.point for ld in lines["QF1"].loads} == {"s2", "s3"}  # 2,2 + 0,1 кВт
+    assert {ld.point for ld in lines["QF1"].loads} == {"s2", "s3"}  # 2.2 + 0.1 kW
     assert [ld.point for ld in lines["QF1.2"].loads] == ["s1"]
     assert all(g.current <= g.breaker.rating and g.split_of == "QF1" for g in lines.values())
     qs = {q.id: q for q in panel_questions(elec, panel)}
     split = qs["panel_split_QF1"]
     assert split.severity == "major" and "дифавтомат" in split.text and "QF1.2" in split.text
-    assert "panel_backup" not in qs  # резерв задан
+    assert "panel_backup" not in qs  # backup is set
 
 
 def test_single_heavy_load_over_breaker_asks_for_cable() -> None:
@@ -155,7 +155,7 @@ def test_single_heavy_load_over_breaker_asks_for_cable() -> None:
     panel = build_panel(_plan(), elec)
     assert panel is not None
     g = next(x for x in panel.groups if x.group == "QF1")
-    assert g.power == 7200 and g.split_of is None  # один прибор не делится
+    assert g.power == 7200 and g.split_of is None  # a single appliance is not split
     q = next(q for q in panel_questions(elec, panel) if q.id == "panel_cable_QF1")
     assert "3x6" in q.text and "32 А" in q.text
     texts = [w.text["ru"] for w in panel.warnings]
@@ -179,22 +179,22 @@ def test_schemes_rcd_curve_relay_spd_ats() -> None:
         return {d.id: d for d in panel.devices}
 
     eco = build("economy")
-    assert "KV1" in eco and "FV1" not in eco  # реле — во всех схемах
+    assert "KV1" in eco and "FV1" not in eco  # relay in every scheme
     assert "SA1" in eco and "KM1" not in eco and eco["QS3"].kind is DeviceKind.OUTPUT
     rcd = next(d for d in eco.values() if d.kind is DeviceKind.RCD)
-    assert set(rcd.feeds) == {"QF2", "QF4"}  # мокрые — под одним УЗО
+    assert set(rcd.feeds) == {"QF2", "QF4"}  # wet groups under one RCD
     assert eco["QF1"].kind is DeviceKind.BREAKER and eco["QF1"].label == "C16"
     std = build("standard")
     assert "KV1" in std and "FV1" not in std
-    assert "SA1" in std and "KM1" not in std  # гибридный сам переключает — обходной
-    assert "KM1" in build("standard", inverter="basic")  # без своего переключения — АВР
-    assert "KM1" in build("economy", ats=True)  # явно задано — важнее
+    assert "SA1" in std and "KM1" not in std  # a hybrid switches itself: bypass switch
+    assert "KM1" in build("standard", inverter="basic")  # no switching of its own: ATS
+    assert "KM1" in build("economy", ats=True)  # explicitly set wins
     assert std["QF2"].kind is DeviceKind.DIFF and std["QF1"].kind is DeviceKind.BREAKER
     prem = build("premium")
     assert "KV1" in prem and "FV1" in prem
     assert all(prem[g].kind is DeviceKind.DIFF for g in ("QF1", "QF2", "QF3", "QF4", "QF5"))
     assert prem["QF1"].label.startswith("B16") and prem["QF3"].label.startswith("B10")
-    assert prem["QF5"].label.startswith("C16")  # кондиционер — пусковой ток
+    assert prem["QF5"].label.startswith("C16")  # air conditioner: inrush current
 
 
 def test_mode_maps_to_scheme_and_backup_defaults_to_inverter_with_question() -> None:
@@ -210,7 +210,7 @@ def test_mode_maps_to_scheme_and_backup_defaults_to_inverter_with_question() -> 
     assert panel.backup == "inverter" and panel.backup_assumed
     assert not panel.input.assumed or panel.input.rating == 63
     reserved = {g.group for g in panel.groups if g.reserved}
-    assert reserved == {"QF1", "QF3"}  # кухня: розетки и холодильник; свет; санузел — нет
+    assert reserved == {"QF1", "QF3"}  # kitchen: sockets and fridge; lighting; bathroom: no
     qs = {q.id: q for q in panel_questions(elec, panel)}
     assert qs["panel_backup"].target == "panel.backup" and qs["panel_backup"].options
     assert qs["panel_input"].assumption == 63
@@ -246,7 +246,7 @@ def test_panel_data_carries_catalog_models_and_texts() -> None:
     assert isinstance(devices, list)
     qf1 = next(d for d in devices if d["id"] == "QF1")
     assert qf1["key"] == "device:QF1" and qf1["model"]["id"] == "generic.diff"
-    assert qf1["model"]["width"] == 35.0  # 2 модуля по 17,5 мм
+    assert qf1["model"]["width"] == 35.0  # 2 modules of 17.5 mm
     assert data["groups"]["QF1"]["color"] == "#4e79a7"  # type: ignore[index]
     assert "звичайний, резерв: інвертор*" in data["texts"]["title"]  # type: ignore[index]
 
@@ -273,7 +273,7 @@ def test_answers_to_panel_questions_apply_to_model(tmp_path: Path) -> None:
     assert report.electrical.panel.backup == "none" and report.electrical.panel.input == 40
     states = report.question_states
     assert states["panel_backup"] == "answered" and states["panel_input"] == "answered"
-    assert "panel_reserve" not in states  # резерва нет — вопроса нет
+    assert "panel_reserve" not in states  # no backup, no question
     assert not report.errors
     assert any(i.path == "answers.panel_xyz" for i in report.warnings)
     stages = {r.stage: r for r in assess(report)}
@@ -312,10 +312,10 @@ def test_panel_rows_by_kind_never_wider_than_rail() -> None:
     devices = common + _breakers(13) + _breakers(3, DeviceKind.DIFF)
     rows = panel_rows(devices, 12)
     assert rows is not None
-    assert [d.id for d in rows[0]] == ["QS1", "KV1"]  # общие — своей рейкой, по порядку
-    assert [len(r) for r in rows] == [2, 12, 1, 3]  # автоматы — 12 + 1, дифавтоматы — отдельно
+    assert [d.id for d in rows[0]] == ["QS1", "KV1"]  # shared devices on their own rail, in order
+    assert [len(r) for r in rows] == [2, 12, 1, 3]  # breakers 12 + 1, RCBOs separately
     assert all(sum(d.modules for d in r) <= 12 for r in rows)
-    assert panel_rows([Device("KM1", DeviceKind.ATS, "АВР", "")], 3) is None  # шире рейки
+    assert panel_rows([Device("KM1", DeviceKind.ATS, "АВР", "")], 3) is None  # wider than a rail
 
 
 def test_smallest_enclosure_that_fits() -> None:
@@ -323,8 +323,8 @@ def test_smallest_enclosure_that_fits() -> None:
     enc, rows, note = choose_enclosure(devices)
     assert enc.article == "VS212PD" and len(rows) == 2 and note is None
     assert (enc.width, enc.height) == (282.0, 377.0)
-    enc, rows, note = choose_enclosure([*devices, *_breakers(14)])  # 24 автомата
-    assert enc.article == "VS312PD"  # 3 × 12 — меньше модулей, чем 2 × 18
+    enc, rows, note = choose_enclosure([*devices, *_breakers(14)])  # 24 breakers
+    assert enc.article == "VS312PD"  # 3 × 12 has fewer modules than 2 × 18
     assert all(sum(d.modules for d in r) <= enc.per_row for r in rows)
 
 
@@ -332,17 +332,17 @@ def test_asked_enclosure_and_fallbacks() -> None:
     devices = [Device("QS1", DeviceKind.INPUT, "C63 2P", ""), *_breakers(10)]
     enc, _, note = choose_enclosure(devices, "VS418PD")
     assert enc.article == "VS418PD" and note is None
-    enc, _, note = choose_enclosure(devices, "VS112PD")  # не влезает — больше и замечание
+    enc, _, note = choose_enclosure(devices, "VS112PD")  # does not fit: larger, with a remark
     assert enc.article == "VS212PD" and note is not None and "VS112PD" in note.text["ru"]
     many = [*devices, *_breakers(80)]
-    enc, rows, note = choose_enclosure(many)  # никуда — корпус по месту
+    enc, rows, note = choose_enclosure(many)  # fits nowhere: on-site enclosure
     assert not enc.article and enc.rows == len(rows) and note is not None
     assert all(sum(d.modules for d in r) <= enc.per_row for r in rows)
 
 
 def test_enclosure_catalog_is_hager_golf_and_goes_to_epd() -> None:
     assert {e.article for e in ENCLOSURES} >= {"VS112PD", "VS418PD"}
-    assert all(e.per_row * 17.5 < e.width for e in ENCLOSURES)  # рейка внутри корпуса
+    assert all(e.per_row * 17.5 < e.width for e in ENCLOSURES)  # rail inside the enclosure
     elec = _elec([_pt("s1", "socket", "QF1")], {"QF1": "3x2.5"}, panel={"enclosure": "VS218PD"})
     panel = build_panel(_plan(), elec)
     assert panel is not None and panel.enclosure is not None
@@ -367,8 +367,8 @@ def test_inverter_gets_battery_box_with_assumptions_and_questions() -> None:
     assert panel is not None and panel.backup == "inverter" and panel.dc is not None
     dc = panel.dc
     assert (dc.voltage, dc.voltage_assumed, dc.power) == (48, True, 5.0)
-    assert dc.rating == 125 and dc.cable == 35  # 5 кВт / 48 В ≈ 104 А → 125 А, 35 мм²
-    assert [d.id for d in dc.devices] == ["QB1"]  # панелей нет
+    assert dc.rating == 125 and dc.cable == 35  # 5 kW / 48 V ≈ 104 A → 125 A, 35 mm²
+    assert [d.id for d in dc.devices] == ["QB1"]  # no solar panels
     assert dc.enclosure.article == "VS112PD"
     assert any("АКБ 48 В" in w.text["ru"] for w in panel.warnings)
     assert [d.id for d in panel.all_devices][-1] == "QB1"
@@ -382,16 +382,16 @@ def test_battery_box_from_source_with_pv_strings() -> None:
     panel = build_panel(_plan(), elec)
     assert panel is not None and panel.dc is not None
     dc = panel.dc
-    assert dc.rating == 200 and dc.cable == 70  # 8 кВт / 48 В ≈ 167 А
+    assert dc.rating == 200 and dc.cable == 70  # 8 kW / 48 V ≈ 167 A
     assert [d.id for d in dc.devices] == ["QB1", "QP1", "FP1", "QP2", "FP2"]
-    assert dc.enclosure.per_row == 18  # 13 модулей
+    assert dc.enclosure.per_row == 18  # 13 modules
     ids = {q.id for q in panel_questions(elec, panel)}
     assert "panel_battery" not in ids and "panel_pv" not in ids
     data = panel_data(panel, {}, "ЩР", "ru")
     block = data["dc"]
     assert isinstance(block, dict) and block["pv_strings"] == 2
     assert block["battery"]["rating"] == 200
-    assert block["texts"]["kwh"] == "кВт·ч"  # единица ёмкости — на языке проекта
+    assert block["texts"]["kwh"] == "кВт·ч"  # capacity unit in the project language
     uk = panel_data(panel, {}, "ЩР", "uk")["dc"]
     assert isinstance(uk, dict) and uk["texts"]["kwh"] == "кВт·год"
 
@@ -414,7 +414,7 @@ def test_inverter_output_breaker_and_npe_question() -> None:
     panel = build_panel(_plan(), elec)
     assert panel is not None
     ids = [d.id for d in panel.devices]
-    assert ids.index("QS3") == ids.index("SA1") + 1  # выход инвертора — рядом с переключателем
+    assert ids.index("QS3") == ids.index("SA1") + 1  # inverter output next to the switch
     assert any("N з PE" in w.text["uk"] and w.severity == "major" for w in panel.warnings)
     qs = {q.id: q for q in panel_questions(elec, panel)}
     assert severity(qs["panel_npe"]).value == "major"

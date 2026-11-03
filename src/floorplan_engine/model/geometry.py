@@ -1,8 +1,8 @@
-"""Геометрия: обход контура, невязка, площадь, внешний контур стен, привязка к стенам;
-помещение с контуром и внешними углами (RoomGeometry) — общая основа плана, трасс и развёрток.
+"""Geometry: outline walk, closure error, area, outer wall outline, wall anchoring; a room with
+its outline and outer corners (RoomGeometry) is the shared base of plan, routes and elevations.
 
-Система координат чертежа: X вправо, Y вверх, мм. Обход стен — по часовой стрелке,
-поэтому помещение лежит справа от направления стены, а толщина стены откладывается влево.
+Drawing coordinates: X right, Y up, mm. Walls are walked clockwise, so the room lies to the
+right of the wall direction and the wall thickness goes to the left.
 """
 
 from __future__ import annotations
@@ -13,7 +13,7 @@ from dataclasses import dataclass
 
 from floorplan_engine.model.schema import Plan, Room
 
-# Высоты проёмов, которых нет в room.yaml, — допущения (3D-сцена, развёртки)
+# Opening heights missing in room.yaml are assumptions (3D scene, elevations)
 DOOR_TOP_MM = 2100.0
 WINDOW_SILL_MM = 900.0
 WINDOW_HEIGHT_MM = 1400.0
@@ -47,7 +47,7 @@ class Vec:
         return math.hypot(self.x, self.y)
 
     def left(self) -> Vec:
-        """Нормаль влево (поворот на +90°)."""
+        """Left normal (rotation by +90°)."""
         return Vec(-self.y, self.x)
 
     def as_tuple(self) -> tuple[float, float]:
@@ -56,19 +56,19 @@ class Vec:
 
 @dataclass(frozen=True)
 class WallSegment:
-    index: int  # номер в обходе
+    index: int  # index in the walk
     id: str
     start: Vec
     end: Vec
-    direction: Vec  # единичный вектор
+    direction: Vec  # unit vector
     length: float
     thickness: float
     bearing: bool
-    partition: bool = False  # ненесущая явно: сквозь неё трубы при любой толщине
+    partition: bool = False  # explicitly non-load-bearing: pipes go through at any thickness
 
     @property
     def outward(self) -> Vec:
-        """Единичная нормаль наружу помещения."""
+        """Unit normal pointing out of the room."""
         return self.direction.left()
 
     @property
@@ -80,30 +80,30 @@ class WallSegment:
         return math.degrees(math.atan2(self.direction.y, self.direction.x))
 
     def point_at(self, offset: float) -> Vec:
-        """Точка на внутренней грани стены на расстоянии offset от её начала."""
+        """Point on the inner wall face at offset from its start."""
         return self.start + self.direction * offset
 
 
 @dataclass(frozen=True)
 class ClosureSuspect:
-    wall: str  # id стены
+    wall: str  # wall id
     current_length: float
-    fixed_length: float | None  # длина, при которой контур замкнётся (если её достаточно)
+    fixed_length: float | None  # length that would close the outline (if enough)
 
 
 @dataclass(frozen=True)
 class Contour:
     segments: tuple[WallSegment, ...]
-    gap: Vec  # конец последней стены минус origin
-    angle_sum_error: float  # отклонение суммы поворотов от 360°, градусы
+    gap: Vec  # end of the last wall minus origin
+    angle_sum_error: float  # deviation of the sum of turns from 360°, degrees
 
     def segment(self, wall_id: str) -> WallSegment:
-        """Стена по id; id проверяются валидацией до геометрии."""
+        """Wall by id; ids are validated before geometry."""
         return next(s for s in self.segments if s.id == wall_id)
 
     @property
     def vertices(self) -> list[Vec]:
-        """Вершины внутреннего контура (начала стен)."""
+        """Inner outline vertices (wall starts)."""
         return [s.start for s in self.segments]
 
     @property
@@ -128,12 +128,12 @@ class Contour:
 
 def _unit(angle_deg: float) -> Vec:
     rad = math.radians(angle_deg)
-    # округление убирает шум вида 6e-17 у осевых направлений
+    # rounding removes noise like 6e-17 on axis-aligned directions
     return Vec(round(math.cos(rad), 12), round(math.sin(rad), 12))
 
 
 def trace_contour(room: Room, default_thickness: float) -> Contour:
-    """Строит внутренний контур комнаты обходом стен по часовой стрелке."""
+    """Build the room's inner outline by walking the walls clockwise."""
     heading = room.start_angle
     pos = Vec(*room.origin)
     segments: list[WallSegment] = []
@@ -154,7 +154,7 @@ def trace_contour(room: Room, default_thickness: float) -> Contour:
                 partition=wall.partition,
             )
         )
-        # Внутренний угол 90° — поворот направо на 90°, 270° — налево на 90°
+        # Inner angle 90° is a right turn by 90°, 270° a left turn by 90°
         right_turn = 180.0 - wall.turn
         turn_total += right_turn
         heading -= right_turn
@@ -164,17 +164,17 @@ def trace_contour(room: Room, default_thickness: float) -> Contour:
 
 
 def expected_angle_sum(n_walls: int) -> float:
-    """Сумма внутренних углов многоугольника."""
+    """Sum of the polygon's inner angles."""
     return (n_walls - 2) * 180.0
 
 
 def closure_suspects(
     contour: Contour, tolerance: float = CLOSURE_TOLERANCE_MM
 ) -> list[ClosureSuspect]:
-    """Стены, исправлением длины которых можно замкнуть контур.
+    """Walls whose length can be corrected to close the outline.
 
-    Сначала — стены, параллельные вектору невязки (их длину можно поправить точно).
-    Если таких нет — стены, у которых есть составляющая вдоль невязки.
+    First the walls parallel to the closure error vector (their length can be fixed exactly).
+    If there are none, the walls that have a component along the error.
     """
     gap = contour.gap
     if gap.length() <= _EPS:
@@ -194,7 +194,7 @@ def closure_suspects(
 
 
 def signed_area(points: Sequence[Vec]) -> float:
-    """Площадь по формуле Гаусса: > 0 для обхода против часовой стрелки."""
+    """Shoelace area: > 0 for a counter-clockwise walk."""
     total = 0.0
     n = len(points)
     for i in range(n):
@@ -204,7 +204,7 @@ def signed_area(points: Sequence[Vec]) -> float:
 
 
 def _segments_intersect(p1: Vec, p2: Vec, q1: Vec, q2: Vec) -> bool:
-    """Собственное пересечение отрезков (касание концами не считается)."""
+    """Proper intersection of segments (touching at the ends does not count)."""
     d1 = (p2 - p1).cross(q1 - p1)
     d2 = (p2 - p1).cross(q2 - p1)
     d3 = (q2 - q1).cross(p1 - q1)
@@ -213,21 +213,21 @@ def _segments_intersect(p1: Vec, p2: Vec, q1: Vec, q2: Vec) -> bool:
 
 
 def self_intersections(contour: Contour) -> list[tuple[str, str]]:
-    """Пары несмежных стен (их id), которые пересекаются."""
+    """Pairs of non-adjacent walls (their ids) that intersect."""
     segs = contour.segments
     n = len(segs)
     result: list[tuple[str, str]] = []
     for i in range(n):
         for j in range(i + 2, n):
             if i == 0 and j == n - 1:
-                continue  # смежные через замыкание
+                continue  # adjacent through closure
             if _segments_intersect(segs[i].start, segs[i].end, segs[j].start, segs[j].end):
                 result.append((segs[i].id, segs[j].id))
     return result
 
 
 def point_in_polygon(point: Vec, polygon: Sequence[Vec]) -> bool:
-    """Луч вправо; точка на границе считается внутри."""
+    """Ray to the right; a point on the boundary counts as inside."""
     inside = False
     n = len(polygon)
     for i in range(n):
@@ -253,9 +253,9 @@ def _line_intersection(p: Vec, d: Vec, q: Vec, e: Vec) -> Vec | None:
 
 
 def outer_corners(contour: Contour) -> list[Vec]:
-    """Внешние углы стен: пересечения смещённых наружу граней соседних стен.
+    """Outer wall corners: intersections of the outward-shifted faces of neighbouring walls.
 
-    corners[i] — внешняя точка в начале стены i (стык со стеной i-1).
+    corners[i] is the outer point at the start of wall i (joint with wall i-1).
     """
     segs = contour.segments
     n = len(segs)
@@ -265,7 +265,7 @@ def outer_corners(contour: Contour) -> list[Vec]:
         p = prev.start + prev.outward * prev.thickness
         q = cur.start + cur.outward * cur.thickness
         hit = _line_intersection(p, prev.direction, q, cur.direction)
-        # Коллинеарные стены (turn 180): стык по нормали текущей стены
+        # Collinear walls (turn 180): the joint goes along the current wall's normal
         corners.append(hit if hit is not None else q)
     return corners
 
@@ -274,7 +274,7 @@ def outer_corners(contour: Contour) -> list[Vec]:
 class RoomGeometry:
     room: Room
     contour: Contour
-    corners: list[Vec]  # внешние углы стен
+    corners: list[Vec]  # outer wall corners
 
     def outer_point(self, seg: WallSegment, offset: float) -> Vec:
         return seg.point_at(offset) + seg.outward * seg.thickness

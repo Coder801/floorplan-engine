@@ -1,4 +1,6 @@
-"""Код доступа к проекту (service/db/access_codes.py): выдача, вход, срок, отзыв, роль viewer."""
+"""Project access code (service/db/access_codes.py): issuing, login, expiry, revocation, viewer
+role.
+"""
 
 from __future__ import annotations
 
@@ -33,7 +35,7 @@ def test_issue_use_and_viewer_role(db: Session) -> None:
     code = codes.issue_code(db, kv1, studio, label="Иван")
     assert len(code) == 9 and code[4] == "-" and code.upper() == code
 
-    row = codes.use_code(db, code.lower().replace("-", " "))  # как ни введи
+    row = codes.use_code(db, code.lower().replace("-", " "))  # however it is typed
     assert row.project_id == kv1.id and row.uses == 1 and row.label == "Иван"
     who = acc.Principal(None, code_project=row.project_id)
     assert who.by_code and not who.visitor
@@ -44,7 +46,7 @@ def test_issue_use_and_viewer_role(db: Session) -> None:
     assert not acc.can("viewer", "answer") and not acc.can("viewer", "choose_variant")
     assert acc.visible_slugs(db, who, {"kv1", "kv2", "other"}) == {"kv1"}
     assert codes.active_code(db, row.id) is row
-    assert codes.use_code(db, code).uses == 2  # входов сколько угодно
+    assert codes.use_code(db, code).uses == 2  # any number of logins
 
 
 def test_wrong_code_same_message(db: Session) -> None:
@@ -86,8 +88,9 @@ def test_issue_needs_invite_right(db: Session) -> None:
 
 
 def test_ensure_fixed_code(db: Session) -> None:
-    """Постоянный код (SHTROBA_ACCESS_CODES): записывается с известным значением, повтор не
-    дублирует, отозванный оживает, тот же код у другого проекта — ошибка."""
+    """Permanent code (SHTROBA_ACCESS_CODES): written with a known value, a repeat does not
+    duplicate
+    it, a revoked one comes back, the same code on another project is an error."""
     studio = _user(db, "studio", "pro")
     kv1 = acc.create_project_for(db, studio, "Кв 1", "kv1")
     kv2 = acc.create_project_for(db, studio, "Кв 2", "kv2")
@@ -100,7 +103,7 @@ def test_ensure_fixed_code(db: Session) -> None:
 
     assert fixes() == 1
     assert codes.ensure_code(db, kv1, "ABCD2345").id == row.id
-    assert len(codes.list_codes(db, kv1)) == 1 and fixes() == 1  # действующий код — без записей
+    assert len(codes.list_codes(db, kv1)) == 1 and fixes() == 1  # a valid code: nothing written
     codes.revoke_code(db, kv1, str(row.id))
     with pytest.raises(acc.AccessError, match="не подходит"):
         codes.use_code(db, "ABCD-2345")

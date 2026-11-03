@@ -1,4 +1,4 @@
-// Цвета темы для холста и 3D — читаются из CSS-переменных один раз за кадр
+// Theme colours for the canvas and 3D, read from CSS variables once per frame
 
 import { THEMES, type Theme } from "./consts";
 
@@ -13,7 +13,7 @@ export function refreshPalette() {
 
 export const isDark = () => !!palette.ink && palette.ink !== "none";
 
-// Цвет на экране: в тёмной теме чёрное и тёмно-серое — светлым «чернилом», белое — бумагой
+// Screen colour: in the dark theme black and dark grey become light "ink", white becomes paper
 export function screenColor(c: string): string {
   const ink = palette.ink;
   if (!ink || ink === "none" || !c) return c;
@@ -24,17 +24,17 @@ export function screenColor(c: string): string {
   return c;
 }
 
-// Удобства одного зрителя (тема, вкладка): хранилище может быть недоступно
+// Per-viewer conveniences (theme, tab): storage may be unavailable
 export function remembered(key: string): string | null {
   try { return localStorage.getItem(key); } catch { return null; }
 }
 export function remember(key: string, value: string) {
-  try { localStorage.setItem(key, value); } catch { /* без запоминания */ }
+  try { localStorage.setItem(key, value); } catch { /* not remembered */ }
 }
 
 export function savedTheme(): Theme {
   const t = remembered("theme");
-  return (THEMES as readonly string[]).includes(t || "") ? (t as Theme) : "system";  // по умолчанию — «Авто», как в системе
+  return (THEMES as readonly string[]).includes(t || "") ? (t as Theme) : "system";  // "Auto" by default, as in the system
 }
 
 export function applyTheme(theme: Theme) {

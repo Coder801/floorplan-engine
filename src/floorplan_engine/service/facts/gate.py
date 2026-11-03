@@ -1,15 +1,15 @@
-"""Порог «не удалось»: можно ли по источникам что-то построить — до вызова модели.
+"""The "failed" gate: whether anything can be built from the sources, before calling the model.
 
-Если ни один чертёж проекта не даёт геометрии, модель не вызывается: проект сразу получает
-отказ с причиной по каждому файлу, токены не тратятся. Чертёж годится, если хотя бы на одной
-его странице:
+If no drawing of the project gives geometry, the model is not called: the project is rejected
+right away with a reason for each file, and no tokens are spent. A drawing is usable if at
+least one of its pages has:
 
-- найден масштаб (по согласным размерам, как в analysis._scale);
-- размеров не меньше MIN_DIMS;
-- средняя уверенность в подписях не ниже MIN_CONFIDENCE (у вектора — 1, у OCR — оценка).
+- a scale found (from consistent dimensions, as in analysis._scale);
+- at least MIN_DIMS dimensions;
+- an average label confidence of at least MIN_CONFIDENCE (1 for vector, an estimate for OCR).
 
-Текстовое описание (.md, .txt) годится всегда: его разбирает модель. Рисунок от руки сюда
-не проходит сам: на нём нет ни масштаба, ни размерных линий (правило 6 CLAUDE.md).
+A text description (.md, .txt) is always usable: the model parses it. A hand drawing does not
+pass on its own: it has no scale and no dimension lines (rule 6 in CLAUDE.md).
 """
 
 from __future__ import annotations
@@ -30,7 +30,7 @@ ADVICE = "Пришлите PDF-экспорт из программы проек
 @dataclass
 class Gate:
     ok: bool
-    reasons: list[str] = field(default_factory=list)  # почему файл не годится, по файлам
+    reasons: list[str] = field(default_factory=list)  # why each file is unusable, by file
 
     @property
     def message(self) -> str:
@@ -40,7 +40,7 @@ class Gate:
 
 
 def page_problem(f: PageFacts) -> str | None:
-    """Что не так со страницей; None — годится."""
+    """What is wrong with the page; None if it is usable."""
     if f.scale is None:
         return "масштаб не найден"
     if len(f.dimensions) < MIN_DIMS:
@@ -52,10 +52,10 @@ def page_problem(f: PageFacts) -> str | None:
 
 
 def file_problem(path: Path) -> str | None:
-    """Что не так с файлом-чертежом; None — хотя бы одна страница годится."""
+    """What is wrong with the drawing file; None if at least one page is usable."""
     try:
         pages = [page_facts(s) for s in read_source(path)]
-    except Exception as exc:  # битый файл — тоже причина отказа, не падение сервиса
+    except Exception as exc:  # a broken file is also a reason to reject, not a service crash
         return f"не открывается ({exc})"
     problems = [page_problem(f) for f in pages]
     if any(p is None for p in problems):
@@ -64,7 +64,7 @@ def file_problem(path: Path) -> str | None:
 
 
 def check_sources(source_dir: Path) -> Gate:
-    """Годятся ли источники проекта для анализа."""
+    """Whether the project sources are usable for analysis."""
     files = sorted(p for p in source_dir.iterdir() if p.is_file() and not p.name.startswith("."))
     if any(p.suffix.lower() in TEXT_TYPES for p in files):
         return Gate(True)

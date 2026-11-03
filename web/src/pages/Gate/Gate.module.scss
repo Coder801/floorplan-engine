@@ -1,5 +1,5 @@
-// Вход: карточка по центру страницы (знак, заголовок, Telegram, «или», Google, «или», почта; внизу —
-// код доступа к проекту отдельным блоком); выбор «кто вы» — в такой же карточке, пошире
+// Login: a card in the middle of the page (mark, heading, Telegram, "or", Google, "or", e-mail;
+// at the bottom the project access code as a separate block); "who are you" goes in a similar, wider card
 
 @use "@/shared/styles/mixins" as *;
 
@@ -19,7 +19,7 @@
 .brand {
   display: flex; align-items: center; gap: 10px; margin-bottom: 4px;
   b { font-family: $brand; font-size: 18px; font-weight: 600; letter-spacing: .02em; }
-  i { font-style: normal; font-size: 10px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }  // стадия: «альфа»
+  i { font-style: normal; font-size: 10px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }  // stage: "alpha"
 }
 .head { display: grid; gap: 4px; }
 .invite { padding: 10px 12px; border-radius: 8px; background: var(--soft); font-size: 14px; }
@@ -31,19 +31,19 @@
     &:hover { border-color: var(--muted); }
   }
 }
-// «или» между Google и кодом на почту — с линиями по бокам
+// "or" between Google and the e-mail code, with lines on both sides
 .or {
   display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px;
   font-size: 12px; color: var(--muted);
   &::before, &::after { content: ""; border-top: 1px solid var(--line); }
 }
-// Код доступа к проекту — своим блоком под чертой: это не учётка, а ключ к одному проекту
+// Project access code as its own block under a line: it is not an account but a key to one project
 .byCode {
   display: grid; gap: 10px; padding-top: 16px; border-top: 1px solid var(--line);
   h2 { margin: 0; font-size: 15px; font-weight: 500; }
 }
 .visitor { width: 100%; }
-// Вход для разработки — только локально: пунктирная рамка, чтобы не путать с настоящим входом
+// Development login, local only: a dashed frame so it is not confused with the real login
 .dev { width: 100%; min-height: 40px; border-style: dashed; color: var(--muted); }
 .error { color: var(--critical); }
 .titleRow { display: flex; align-items: center; justify-content: space-between; gap: 12px; }

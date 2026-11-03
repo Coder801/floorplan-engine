@@ -1,10 +1,10 @@
-// Вариант проводки (docs/wiring-variants.md, манифест .epd — variants): режим (эконом,
-// стандарт, премиум) карточками с ценой и отличия режимов списком, трасса и разводка —
-// переключателями. Клик только отмечает вариант (pending, «будет выбран») — пересчёт запускает
-// страница кнопкой «Пересчитать» (variant.yaml и пересборка, api.saveVariant). Строит все
-// варианты код: здесь только сводка.
-// Нельзя выбирать (клиент студии) — то же самое без кнопок, с пояснением.
-// Трасса одна в проекте (electrical.yaml routes: [ceiling]) — вместо переключателя текст.
+// Wiring variant (docs/wiring-variants.md, .epd manifest variants): the mode (economy, standard,
+// premium) as cards with a price and a list of mode differences, route and distribution as
+// toggles. A click only marks the variant (pending, "will be chosen"); the page starts the
+// recalculation with the "Recalculate" button (variant.yaml and a rebuild, api.saveVariant).
+// The code builds all variants: this is only the summary.
+// If choosing is not allowed (a studio client), the same view without buttons, with an explanation.
+// If the project has one route (electrical.yaml routes: [ceiling]), text replaces the toggle.
 
 import { useTranslation } from "react-i18next";
 import { cx } from "@/shared/cx";
@@ -13,15 +13,15 @@ import type { VariantMode, VariantRoute, Variants, VariantSummary } from "@/shar
 import { MODES, availableRoutes, findVariant, parseKey } from "./variants";
 import css from "./VariantPicker.module.scss";
 
-// Чем режимы отличаются в расчёте (docs/wiring-variants.md): трассы, автоматы, щит, гофра
+// How the modes differ in the calculation (docs/wiring-variants.md): routes, breakers, panel, conduit
 const DETAILS = ["route", "breakers", "panel", "conduit"] as const;
 
 interface Props {
   variants: Variants;
   canChoose: boolean;
   busy: boolean;
-  pending: { mode: VariantMode; route: VariantRoute } | null;  // отмечен, ещё не рассчитан
-  onPick: (v: { mode: VariantMode; route: VariantRoute } | null) => void;  // null — вернуть текущий
+  pending: { mode: VariantMode; route: VariantRoute } | null;  // selected, not computed yet
+  onPick: (v: { mode: VariantMode; route: VariantRoute } | null) => void;  // null restores the current one
 }
 
 export function VariantPicker({ variants, canChoose, busy, pending, onPick }: Props) {
@@ -29,7 +29,7 @@ export function VariantPicker({ variants, canChoose, busy, pending, onPick }: Pr
   const active = parseKey(variants.active);
   const money = (s: VariantSummary | undefined) =>
     s ? `${Math.round(s.total).toLocaleString(i18n.language)} ${s.currency}` : "—";
-  const chosen = pending ?? active;  // что отмечено сейчас: выбранное, а не рассчитанное
+  const chosen = pending ?? active;  // what is marked now: the chosen one, not the computed one
   const pick = (mode: VariantMode, route: VariantRoute) => {
     if (!canChoose || busy) return;
     onPick(mode === active.mode && route === active.route ? null : { mode, route });

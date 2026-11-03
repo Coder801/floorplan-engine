@@ -1,4 +1,4 @@
-// Рядки інтерфейсу — українська (ключі — як у ru.ts)
+// Interface strings in Ukrainian (keys as in ru.ts)
 
 import type { Messages } from "./ru";
 
@@ -67,7 +67,7 @@ export const uk: Messages = {
     model: "Модель",
   },
   app: {
-    stages: { alpha: "альфа" },  // стадия продукта у имени и в настройках (shared/version.ts STAGE)
+    stages: { alpha: "альфа" },  // product stage next to the name and in settings (shared/version.ts STAGE)
     leave: "Правки трас не збережено. Піти без збереження?",
     stale: "YAML правили після збирання — аркуші застаріли: uv run floorplan-engine build projects/{{name}}",
     notBuilt: "Проєкт не зібрано: uv run floorplan-engine build projects/{{name}}",
@@ -155,6 +155,24 @@ export const uk: Messages = {
     lead: "Оберіть проєкт — аркуші, проводка й питання відкриються в перегляді.",
     empty: "Немає проєктів у projects/ — зберіть хоча б один:",
     placeholder: "назва",
+  },
+  prices: {
+    title: "Прайс студії · електрика", open: "Прайс студії",
+    lead: "Роботи: ціна студії поруч із ринком {{region}}. Кошториси проєктів беруть ціни звідси під час наступного збирання.",
+    back: "До проєктів", leave: "Є незбережені ціни. Піти без збереження?",
+    work: "Робота", unit: "Од.", studio: "Ціна студії, {{currency}}", market: "Ринок, {{region}}: мін · медіана · макс",
+    noMarket: "Ринок", vsMedian: "До медіани", priceOf: "Ціна: {{name}}",
+    service: "у кошторисі — імітація", serviceNote: "Своєї ціни немає: кошторис бере ціну сервісу цін (поки імітація, не ринкова)",
+    lists: "прайсів: {{n}}", takeMedian: "взяти", takeMedianNote: "Поставити медіану ринку ціною студії",
+    noData: "немає в прайсах", median: "Медіана", spreadLabel: "мін {{min}}, медіана {{median}}, макс {{max}}",
+    places: { below: "дешевше за всі прайси", low: "у нижній чверті ринку", mid: "у середній половині ринку", high: "у верхній чверті ринку", above: "дорожче за всі прайси" },
+    invalid: "Ціна — число не менше 0", saved: "Збережено в prices.yaml — кошториси перерахуються під час збирання",
+    reset: "Скинути", save: "Зберегти", saving: "Зберігаю…",
+    footnote: "Ринок {{region}}: {{n}} відкритих прайсів студій, майстрів і майданчиків, ціни за {{period}}; зібрано — {{collected}}.",
+    undated: "Без дати на сторінці: {{n}}.", undatedOnly: "період невідомий",
+    method: "Ціни — робота без матеріалів, стіна — бетон; медіана, а не середнє: прайси різняться в рази.",
+    noDate: "без дати",
+    kinds: { company: "компанія", master: "майстер", platform: "майданчик", review: "огляд ринку" },
   },
   projects: { title: "Проєкти", empty: "Немає зібраних проєктів." },
   source: { noPreview: "Попереднього перегляду немає — відкрийте файл у новій вкладці", back: "← До аркуша" },

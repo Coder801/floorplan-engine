@@ -1,10 +1,10 @@
-// Раскладка подписей развёртки в px экрана: подписи шкал вдоль оси и плашки номеров у
-// символов — без наложений, где получится.
+// Layout of elevation labels in screen px: scale labels along an axis and number badges next
+// to symbols, without overlaps where possible.
 
 export type Rect = [number, number, number, number];  // x0, y0, x1, y1
 
-// Места подписей вдоль оси: как можно ближе к wanted (по возрастанию), не ближе gap друг
-// к другу, в пределах lo…hi, если влезают (как draw_elevations.spread)
+// Label spots along an axis: as close to wanted as possible (ascending), at least gap apart,
+// within lo…hi if they fit (like draw_elevations.spread)
 export function spread(wanted: readonly number[], gap: number, lo: number, hi: number): number[] {
   const out: number[] = [];
   for (const w of wanted) out.push(out.length ? Math.max(w, lo, out[out.length - 1] + gap) : Math.max(w, lo));
@@ -19,8 +19,8 @@ const hit = (a: Rect, b: Rect) => a[0] < b[2] && b[0] < a[2] && a[1] < b[3] && b
 
 export interface Label { w: number; anchor: Rect }
 
-// Плашка у символа: справа сверху, справа, слева, сверху, снизу, слева сверху — первое
-// свободное место (taken дополняется); всё занято — справа сверху
+// Badge next to a symbol: top right, right, left, top, bottom, top left; the first free spot
+// (taken is updated); if all are taken, top right
 export function badgePlaces(labels: readonly Label[], h: number, taken: Rect[]): Rect[] {
   const gap = 3;
   return labels.map(({ w, anchor: [x0, y0, x1, y1] }) => {

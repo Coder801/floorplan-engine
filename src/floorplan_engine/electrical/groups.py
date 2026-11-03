@@ -1,9 +1,9 @@
-"""Группы щита отдельной таблицей: QF, назначение, кабель, точки, автомат. На чертеже
-и в остальных таблицах у групп только «QF4» — подробности здесь, чтобы не мусорить.
+"""Panel groups as a separate table: QF, purpose, cable, points, breaker. On the drawing and in
+the other tables a group is just "QF4"; details live here to keep the rest clean.
 
-Назначение и автомат берутся из electrical.yaml (groups) — только из источника. Нет
-назначения — оно составляется по точкам группы («Розетки — Спальня») и помечается «*»
-как допущение; автомат не составляется никогда.
+Purpose and breaker come from electrical.yaml (groups), only from the source. Without a
+purpose it is built from the group's points ("Розетки — Спальня") and marked "*" as an
+assumption; a breaker is never made up.
 """
 
 from __future__ import annotations
@@ -65,10 +65,10 @@ def text(key: str, language: Language) -> str:
 class GroupRow:
     group: str
     purpose: str
-    assumed: bool  # назначение составлено по точкам, а не взято из модели
+    assumed: bool  # purpose built from points, not taken from the model
     cable: str
     points: int
-    breaker: str  # автомат и УЗО из модели; нет — пусто
+    breaker: str  # breaker and RCD from the model; empty if absent
     point_ids: tuple[str, ...]
     cable_ids: tuple[str, ...]
 
@@ -76,8 +76,8 @@ class GroupRow:
 def composed_purpose(
     points: Sequence[ElectricalPoint], rooms: dict[str, str], language: Language
 ) -> str:
-    """Назначение по точкам группы: виды точек (выключатели — к освещению) и помещения.
-    Одна розетка или вывод с пометкой — по пометке: «Розетка: духовка»."""
+    """Purpose from the group's points: point kinds (switches count as lighting) and rooms.
+    A single socket or output with a note uses the note: "Розетка: духовка"."""
     types = {p.type for p in points}
     where = ", ".join(dict.fromkeys(rooms.get(p.room, p.room) for p in points))
     single = {PointType.SOCKET: "socket", PointType.OUTLET: "outlet"}
@@ -101,7 +101,7 @@ def composed_purpose(
 
 
 def group_rows(plan: Plan, elec: Electrical) -> list[GroupRow]:
-    """Строки по группам в порядке номеров; группа — у точки или у кабеля."""
+    """Rows by group in number order; the group comes from the point or the cable."""
     lang = plan.language
     rooms = {r.id: r.name for r in plan.rooms}
     names = {p.group for p in elec.points if p.group} | {c.group for c in elec.cables if c.group}
@@ -127,39 +127,39 @@ def group_rows(plan: Plan, elec: Electrical) -> list[GroupRow]:
     return out
 
 
-# Цвета групп — мягкие, RGB (true color в DXF), различимые между собой и читаемые тонкой
-# линией на белом (решение 2026-10-25); серых нет: просмотр в тёмной теме перекрашивает серое
+# Group colours: soft RGB (true color in DXF), distinct from each other and readable as a
+# thin line on white (decision 2026-10-25); no greys: the dark viewer theme recolours grey
 GROUP_PALETTE = (
-    "#4e79a7",  # синий
-    "#f28e2b",  # оранжевый
-    "#59a14f",  # зелёный
-    "#e15759",  # красный
-    "#76b7b2",  # бирюзовый
-    "#d4a72c",  # охра
-    "#b07aa1",  # сиреневый
-    "#e67f8a",  # розовый
-    "#9c755f",  # коричневый
-    "#5f9ed1",  # голубой
-    "#8cbf5f",  # салатовый
-    "#c9845c",  # терракота
-    "#7f7fc9",  # лавандовый
-    "#4fb0a0",  # морская волна
+    "#4e79a7",  # blue
+    "#f28e2b",  # orange
+    "#59a14f",  # green
+    "#e15759",  # red
+    "#76b7b2",  # turquoise
+    "#d4a72c",  # ochre
+    "#b07aa1",  # lilac
+    "#e67f8a",  # pink
+    "#9c755f",  # brown
+    "#5f9ed1",  # light blue
+    "#8cbf5f",  # lime
+    "#c9845c",  # terracotta
+    "#7f7fc9",  # lavender
+    "#4fb0a0",  # sea green
 )
 
 
 def group_key(group: str) -> tuple[str, int, int]:
-    """QF2 раньше QF10, линия QF1.2 — сразу после QF1: сортировка по числам в имени группы."""
+    """QF2 before QF10, line QF1.2 right after QF1: sort by the numbers in the group name."""
     m = re.match(r"^(\D*)(\d+)(?:\.(\d+))?", group)
     return (m.group(1), int(m.group(2)), int(m.group(3) or 1)) if m else (group, 0, 0)
 
 
 def rgb(hex_color: str) -> int:
-    """«#4e79a7» → число true color DXF (0xRRGGBB)."""
+    """Convert "#4e79a7" → DXF true color number (0xRRGGBB)."""
     return int(hex_color.lstrip("#"), 16)
 
 
 def group_colors(elec: Electrical) -> dict[str, int]:
-    """Свой цвет (true color, 0xRRGGBB) для каждой группы — по порядку номеров."""
+    """A colour of its own (true color, 0xRRGGBB) for each group, in number order."""
     groups = sorted(
         {p.group for p in elec.points if p.group} | {c.group for c in elec.cables if c.group},
         key=group_key,

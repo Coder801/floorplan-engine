@@ -23,7 +23,7 @@ describe("isoScene", () => {
     const corner = onPlane(s.main.mat, 0, 0);
     expect(onPlane(s.main.mat, 4000, 0)[0]).toBeGreaterThan(corner[0]);
     const n = s.side!;
-    // Конец левого соседа — в углу; видна часть у угла
+    // The left neighbour's end is at the corner; the part near the corner is visible
     expect(onPlane(n.mat, 3000, 0)[0]).toBeCloseTo(corner[0]);
     expect(onPlane(n.mat, 3000, 0)[1]).toBeCloseTo(corner[1]);
     expect(onPlane(n.mat, n.from, 0)[0]).toBeLessThan(corner[0]);
@@ -37,7 +37,7 @@ describe("isoScene", () => {
     const n = s.side!;
     expect(onPlane(n.mat, 0, 0)[0]).toBeCloseTo(corner[0]);
     expect(onPlane(n.mat, 1000, 0)[0]).toBeGreaterThan(corner[0]);
-    expect([n.from, n.to]).toEqual([0, 1000]);  // короче видимой части — целиком
+    expect([n.from, n.to]).toEqual([0, 1000]);  // shorter than the visible part: shown whole
   });
 
   it("вверх по стене — вверх по экрану; рамка охватывает стены", () => {

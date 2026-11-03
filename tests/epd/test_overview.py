@@ -1,5 +1,5 @@
-"""Общие сведения для первой вкладки просмотра (epd/overview.py): объект, помещения,
-потолок, точки по видам, щит, сантехника — и что они попадают в манифест .epd."""
+"""Overview for the first viewer tab (epd/overview.py): object, rooms, ceiling, points by kind,
+panel, plumbing, and that they land in the .epd manifest."""
 
 from __future__ import annotations
 
@@ -18,11 +18,11 @@ from tests.plumbing.test_estimate import PLUMBING, _net
 def test_overview_counts_points_rooms_and_panel() -> None:
     plan, contours, elec, _ = _model()
     data = overview_data(plan, contours, elec, build_panel(plan, elec))
-    assert data["object"]["object"] == plan.name  # графа «объект» не задана — имя проекта
-    assert data["rooms"][0]["area"] == 12.0 and data["area"] == 12.0  # 3 × 4 м
+    assert data["object"]["object"] == plan.name  # no "object" box: project name
+    assert data["rooms"][0]["area"] == 12.0 and data["area"] == 12.0  # 3 × 4 m
     assert data["ceiling"] == {"height": 2700, "assumed": True}
     points = {p["key"]: p["count"] for p in data["points"]}
-    assert points == {"socket": 4, "board": 1}  # s1 ×2, s2, s3 — как в условных обозначениях
+    assert points == {"socket": 4, "board": 1}  # s1 ×2, s2, s3, as in the legend
     assert data["panel"]["devices"] > 0 and data["panel"]["input"]
 
 
@@ -48,10 +48,10 @@ def test_overview_plumbing_water_and_sewer() -> None:
     assert {f["type"]: f["count"] for f in data["fixtures"]} == {"wc": 1, "sink": 1}
     assert data["water"]["distribution"] == "collector" and data["water"]["outlets"] == 3
     assert data["water"]["hot"] == "riser" and data["water"]["cold_m"] > 0
-    assert {p["d"] for p in data["sewer"]["pipes"]} == {50, 110}  # умывальник и унитаз
+    assert {p["d"] for p in data["sewer"]["pipes"]} == {50, 110}  # basin and WC
     assert data["sewer"]["risers"] == 1 and data["sewer"]["bends"] > 0
     assert "plumbing" not in overview_data(plan, contours, None, None)
-    assert "estimate" not in data  # смету не передали — итога сантехники нет
+    assert "estimate" not in data  # no estimate passed: no plumbing total
 
 
 def test_overview_plumbing_estimate_total() -> None:

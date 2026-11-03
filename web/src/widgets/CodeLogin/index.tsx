@@ -1,6 +1,6 @@
-// Вход по коду доступа к проекту (service/api/auth.py, /api/auth/code): студия дала код
-// «XXXX-XXXX» — человек вводит его и смотрит этот один проект без учётки. Ошибка (код не
-// подходит, истёк, слишком много попыток) — под полем, текст с сервера.
+// Login by project access code (service/api/auth.py, /api/auth/code): the studio gave a
+// "XXXX-XXXX" code, the person enters it and views that one project without an account. An
+// error (wrong code, expired, too many attempts) shows under the field, text from the server.
 
 import { type FormEvent, useState } from "react";
 import { useTranslation } from "react-i18next";

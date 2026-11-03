@@ -1,5 +1,5 @@
-"""Штробы и отверстия: спуски и подъёмы кабелей по стенам к точкам и коробкам (общие —
-одной штробой, шире — больше CHASE_NARROW кабелей), проходы кабелей через дверные проёмы."""
+"""Chases and holes: cable drops and rises along walls to points and boxes (shared ones in one
+chase, a wider one above CHASE_NARROW cables), cable passes through door openings."""
 
 from __future__ import annotations
 
@@ -28,9 +28,9 @@ from floorplan_engine.model.schema import (
     OpeningType,
 )
 
-CHASE_SHARE = 150.0  # мм вдоль стены: спуски ближе — в общей штробе
-CHASE_CABLES = 4  # кабелей в одной штробе, не больше
-HOLE_CABLES = 4  # кабелей в одном отверстии через стену, не больше
+CHASE_SHARE = 150.0  # mm along the wall: closer drops share a chase
+CHASE_CABLES = 4  # cables per chase, at most
+HOLE_CABLES = 4  # cables per hole through a wall, at most
 
 
 def wall_chases(
@@ -39,7 +39,7 @@ def wall_chases(
     board: Board | None,
     boxes: Sequence[JunctionBox],
 ) -> tuple[Chase, ...]:
-    """Штробы по стенам: общие для спусков рядом (CHASE_SHARE), до CHASE_CABLES кабелей."""
+    """Wall chases: shared by drops close together (CHASE_SHARE), up to CHASE_CABLES cables."""
     by_id = {p.id: p for p in points}
     drops: dict[ChaseKey, list[tuple[float, float, str]]] = defaultdict(list)
     for r in runs:
@@ -72,7 +72,7 @@ def wall_chases(
     if board is not None and from_board:
         bundle("board", board.room, board.wall, board.offset, from_board)
     for b in boxes:
-        if b.on_ceiling:  # на потолке — без штробы в стене
+        if b.on_ceiling:  # on the ceiling: no chase in the wall
             continue
         n = sum(1 for r in runs if b.id in (r.source, r.target))
         for k in range(math.ceil(n / CHASE_CABLES)):
@@ -82,7 +82,7 @@ def wall_chases(
 
 
 def _shared(key: ChaseKey, group: Sequence[tuple[float, float, str]]) -> Chase:
-    """Общая штроба группы спусков: середина по стене, длина — до самой дальней точки."""
+    """Shared chase for a group of drops: middle along the wall, length to the farthest point."""
     room, wall, route, circuit = key
     offsets = [g[0] for g in group]
     return Chase(
@@ -99,8 +99,8 @@ def _shared(key: ChaseKey, group: Sequence[tuple[float, float, str]]) -> Chase:
 
 
 def passages(geoms: Sequence[RoomGeometry]) -> list[tuple[str, Polygon]]:
-    """Двери и проёмы между помещениями: id и место на плане. Пара «дверь в одной
-    комнате — проём в соседней на том же месте» — один проход с id двери."""
+    """Doors and openings between rooms: id and position on the plan. The pair "door in one
+    room, opening in the neighbour at the same spot" is one pass with the door id."""
     out: list[tuple[str, Polygon]] = []
     for g in geoms:
         for op in g.room.openings:
@@ -123,7 +123,7 @@ def passages(geoms: Sequence[RoomGeometry]) -> list[tuple[str, Polygon]]:
 
 
 def wall_holes(runs: Sequence[Run], passes: Sequence[tuple[str, Polygon]]) -> tuple[Hole, ...]:
-    """Отверстия над дверями и проёмами для трасс по потолку, до HOLE_CABLES кабелей."""
+    """Holes above doors and openings for ceiling routes, up to HOLE_CABLES cables."""
     lines = [
         (r, LineString([v.as_tuple() for v in r.path]))
         for r in runs

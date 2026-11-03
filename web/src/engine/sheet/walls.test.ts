@@ -15,7 +15,7 @@ describe("wallPages", () => {
     );
     const [a, b] = wallPages([{ index: 7, page: p }]);
     expect(a).toEqual({ sheet: 7, key: "elevation:bath.w1", box: [6, 6, 54, 64], title: "Санвузол — стена 1" });
-    expect(b.title).toBe("bath.w2");  // без карточки — ключ
+    expect(b.title).toBe("bath.w2");  // no card: the key
   });
 
   it("листы по порядку, развёртки листа — по первому примитиву", () => {
@@ -32,7 +32,7 @@ describe("wallPages", () => {
     const [x0, y0, x1, y1] = w.box;
     const view = wallSheet(p, w).view!;
     expect(view.slice(1)).toEqual([y0, x1, y1]);
-    expect(view[0]).toBeLessThan(x0);  // слева — поле под мини-схему
+    expect(view[0]).toBeLessThan(x0);  // on the left, a margin for the mini map
     expect(wallSheet(p, w).items.map((i) => i.o)).toEqual(["elevation:a.w1"]);
   });
 });

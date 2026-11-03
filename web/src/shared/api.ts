@@ -1,7 +1,7 @@
-// Запросы к серверу просмотра (service/viewer.py)
+// Requests to the viewer server (service/viewer.py)
 
 import i18n from "@/shared/i18n";
-import type { Manifest, Page, Project, ProjectSummary } from "./types";
+import type { Manifest, Page, PricePage, Project, ProjectSummary } from "./types";
 import { FORMAT_VERSION } from "./version";
 
 async function get<T>(path: string): Promise<T> {
@@ -19,7 +19,7 @@ export const base = (name: string) => `/api/projects/${encodeURIComponent(name)}
 
 export const listProjects = () => get<ProjectSummary[]>("/api/projects");
 export const getProject = (name: string) => get<Project>(base(name));
-// Листы другой версии формата эта страница нарисует неверно — лучше сказать сразу
+// This page would draw sheets of another format version wrongly, so say so right away
 export async function getManifest(name: string): Promise<Manifest> {
   const m = await get<Manifest>(`${base(name)}/sheets`);
   if (m.version !== FORMAT_VERSION) {
@@ -37,7 +37,7 @@ export async function getText(path: string): Promise<string> {
 
 export interface SaveAnswer { built: boolean; notes: string[] }
 
-// Вариант проводки и высота потолка (мм) → variant.yaml и пересборка проекта
+// Wiring variant and ceiling height (mm) → variant.yaml and a project rebuild
 export async function saveVariant(
   name: string, variant: { mode: string; route: string; distribution: string; ceiling_height?: number },
 ): Promise<SaveAnswer> {
@@ -48,11 +48,23 @@ export async function saveVariant(
   return (await r.json()) as SaveAnswer;
 }
 
-// Правки проводки → wiring.yaml и пересборка проекта
+// Wiring edits → wiring.yaml and a project rebuild
 export async function saveWiring(name: string, body: unknown): Promise<SaveAnswer> {
   const r = await fetch(`${base(name)}/wiring`, {
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
   });
   if (!r.ok) throw new Error(`${r.status}: ${await detail(r)}`);
   return (await r.json()) as SaveAnswer;
+}
+
+// Studio price page: works, own price and the market (pipeline.price_page)
+export const getPrices = () => get<PricePage>("/api/prices");
+
+// Studio price edits → prices.yaml next to the projects; null removes the price
+export async function savePrices(items: Record<string, number | null>): Promise<PricePage> {
+  const r = await fetch("/api/prices", {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ items }),
+  });
+  if (!r.ok) throw new Error(`${r.status}: ${await detail(r)}`);
+  return (await r.json()) as PricePage;
 }

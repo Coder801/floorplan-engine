@@ -1,8 +1,8 @@
-"""Доступ и вход: кто какой проект видит и что может, пользователи OAuth, сессии,
-приглашения, доступ поддержки, журнал. Правила — docs/database.md, «Доступ» и «Вход».
+"""Access and login: who sees which project and what they may do, OAuth users, sessions, invites,
+support access, audit log. Rules: docs/database.md, "Access" and "Login".
 
-Функции получают открытую Session и не делают commit, как и repositories.py. Токены
-(сессия, приглашение) — случайные строки; в базе только их sha256.
+Functions take an open Session and do not commit, like repositories.py. Tokens (session,
+invite) are random strings; only their sha256 is stored.
 """
 
 from __future__ import annotations
@@ -33,9 +33,9 @@ from floorplan_engine.service.db.models import (
 )
 
 AccountType = Literal["client", "pro"]
-# Роль в проекте: из студии (owner, designer, installer), из проекта (client, installer),
-# поддержка по support_grant, суперпользователь, гость отладки (visitor), вход по коду
-# доступа к одному проекту (viewer, db/access_codes.py)
+# Project role: from the studio (owner, designer, installer), from the project (client, installer),
+# support via support_grant, superuser, debug guest (visitor), login by an access code to one
+# project (viewer, db/access_codes.py)
 Role = Literal[
     "owner", "designer", "installer", "client", "support", "superuser", "visitor", "viewer"
 ]
@@ -47,8 +47,8 @@ CAN: dict[Action, frozenset[str]] = {
     ),
     "answer": frozenset({"owner", "designer", "client", "superuser"}),
     "edit_wiring": frozenset({"owner", "designer", "installer", "support", "superuser"}),
-    # Вариант проводки (docs/wiring-variants.md): выбирает тот, кто правит трассы — студия или
-    # хозяин «Моего ремонта» (owner своего пространства); клиент студии только смотрит
+    # Wiring variant (docs/wiring-variants.md): chosen by whoever edits routes, the studio or the
+    # owner of "Мой ремонт" (owner of their own workspace); a studio client only views
     "choose_variant": frozenset({"owner", "designer", "installer", "support", "superuser"}),
     "invite": frozenset({"owner", "designer", "client", "superuser"}),
 }
@@ -61,7 +61,7 @@ SUPPORT_HOURS = 72
 
 
 class AccessError(ValueError):
-    """Действие нельзя выполнить: сообщение — для пользователя, на русском."""
+    """The action cannot be performed: the message is for the user, in Russian."""
 
 
 def now() -> datetime:
@@ -69,7 +69,7 @@ def now() -> datetime:
 
 
 def _aware(t: datetime) -> datetime:
-    """SQLite отдаёт время без пояса — считаем его UTC."""
+    """SQLite returns time without a zone: treat it as UTC."""
     return t if t.tzinfo is not None else t.replace(tzinfo=UTC)
 
 
@@ -83,8 +83,8 @@ def new_token() -> str:
 
 @dataclass(frozen=True)
 class Principal:
-    """Кто делает запрос: пользователь базы, вошедший по коду доступа (user is None,
-    code_project — проект кода) или гость отладки (ни того, ни другого)."""
+    """Who makes the request: a database user, someone logged in by an access code (user is None,
+    code_project is the code's project) or a debug guest (neither)."""
 
     user: AppUser | None
     code_project: uuid.UUID | None = None
@@ -105,14 +105,15 @@ def can(role: str | None, action: Action) -> bool:
     return role is not None and role in CAN[action]
 
 
-# --- Роль в проекте ------------------------------------------------------------------
+# --- Project role ----------------------------------------------------------------------
 
 
 def project_role(session: Session, who: Principal, project: Project | None) -> Role | None:
-    """Роль в проекте или None — проекта не видно. Гость отладки видит всё (только чтение),
-    суперпользователь — всё; вошедший по коду — только проект кода (viewer, только чтение);
-    остальные — по студии, участию в проекте или доступу поддержки. Проект вне базы (папка
-    без строки) — только гостю и суперпользователю."""
+    """Project role, or None if the project is not visible. A debug guest sees everything (read
+    only),
+    a superuser everything; someone logged in by code only the code's project (viewer, read only);
+    everyone else by studio, project membership or support access. A project outside the
+    database (a folder without a row) is visible only to a guest and a superuser."""
     if who.by_code:
         return "viewer" if project is not None and project.id == who.code_project else None
     if who.user is None:
@@ -163,8 +164,8 @@ def _active_grant(
 
 
 def visible_slugs(session: Session, who: Principal, slugs: Collection[str]) -> set[str]:
-    """Какие папки проектов из slugs видны: гостю и суперпользователю — все, вошедшему по
-    коду — проект кода."""
+    """Which project folders from slugs are visible: all for a guest and a superuser, the code's
+    project for someone logged in by code."""
     if who.by_code:
         project = session.get(Project, who.code_project)
         return {project.slug} & set(slugs) if project is not None and project.slug else set()
@@ -180,7 +181,7 @@ def project_by_slug(session: Session, slug: str) -> Project | None:
     return session.scalar(select(Project).where(Project.slug == slug))
 
 
-# --- Пользователи OAuth и тип учётки -------------------------------------------------
+# --- OAuth users and account type ----------------------------------------------------
 
 
 def oauth_login(
@@ -193,10 +194,9 @@ def oauth_login(
     superusers: Collection[str] = (),
     phone: str | None = None,
 ) -> AppUser:
-    """Пользователь по учётке провайдера; новой учётке — новый пользователь или, если
-    провайдер подтвердил email или телефон (phone, «+380…» — вход через Telegram) и он уже
-    есть, тот же пользователь. superusers — email и телефоны владельцев платформы (из
-    окружения)."""
+    """User by provider account; a new account gets a new user or, if the provider confirmed an
+    e-mail or phone (phone, "+380…", Telegram login) that already exists, the same user.
+    superusers are e-mails and phones of the platform owners (from the environment)."""
     email = email.strip().lower() if email else None
     account = session.scalar(
         select(OAuthAccount).where(
@@ -233,10 +233,10 @@ def oauth_login(
 
 
 def set_account_type(session: Session, user: AppUser, kind: AccountType) -> Studio:
-    """Пространство при первом входе: client — личное («Мой ремонт», один проект), pro —
-    фирма (регистрация с названием и видом — register_firm); пользователь — владелец. Тип
-    пространства — studio.kind, у пользователя account_type — подсказка стартового экрана;
-    выбранный тип не меняется."""
+    """Workspace on first login: client is personal ("Мой ремонт", one project), pro is a firm
+    (registration with name and kind, register_firm); the user is the owner. The workspace type is
+    studio.kind; the user's account_type is a hint for the start screen; the chosen type never
+    changes."""
     if user.account_type is not None:
         raise AccessError("тип учётной записи уже выбран")
     user.account_type = kind
@@ -249,8 +249,8 @@ def set_account_type(session: Session, user: AppUser, kind: AccountType) -> Stud
     return studio
 
 
-# Вид фирмы при регистрации: дизайн или проект, электромонтаж, ремонт и строительство,
-# частный мастер
+# Firm kind at registration: design or project, electrical installation, renovation and
+# construction, private tradesperson
 FIRM_KINDS = ("design", "electric", "construction", "master")
 PHONE_RE = re.compile(r"^\+?[\d\s()\-]{5,40}$")
 
@@ -258,8 +258,8 @@ PHONE_RE = re.compile(r"^\+?[\d\s()\-]{5,40}$")
 def register_firm(
     session: Session, user: AppUser, name: str, business: str, city: str = "", phone: str = ""
 ) -> Studio:
-    """Регистрация фирмы при первом входе (тип pro): название, вид, город и телефон;
-    пользователь — владелец. Фирма — одна на человека (несколько — позже)."""
+    """Firm registration on first login (type pro): name, kind, city and phone; the user is the
+    owner. One firm per person (several later)."""
     name, city, phone = name.strip(), city.strip(), phone.strip()
     if not name:
         raise AccessError("Укажите название фирмы")
@@ -286,8 +286,8 @@ def register_firm(
 
 
 def user_space(session: Session, user: AppUser) -> Studio | None:
-    """Пространство пользователя для экрана: своё (фирма или личное) или фирма, где он
-    сотрудник."""
+    """The user's workspace for the screen: their own (firm or personal) or the firm where they are
+    an employee."""
     return own_studio(session, user) or session.scalar(
         select(Studio)
         .join(Membership, Membership.studio_id == Studio.id)
@@ -298,7 +298,7 @@ def user_space(session: Session, user: AppUser) -> Studio | None:
 
 
 def own_studio(session: Session, user: AppUser) -> Studio | None:
-    """Студия (или личное пространство), где пользователь — владелец."""
+    """The studio (or personal workspace) where the user is the owner."""
     return session.scalar(
         select(Studio)
         .join(Membership, Membership.studio_id == Studio.id)
@@ -309,7 +309,7 @@ def own_studio(session: Session, user: AppUser) -> Studio | None:
 
 
 def client_projects(session: Session, user: AppUser) -> int:
-    """Сколько проектов у клиента: в личном пространстве и по приглашению."""
+    """How many projects a client has: in the personal workspace and by invite."""
     personal = session.scalar(
         select(func.count(Project.id))
         .join(Studio, Studio.id == Project.studio_id)
@@ -322,14 +322,14 @@ def client_projects(session: Session, user: AppUser) -> int:
     return int(personal or 0) + int(invited or 0)
 
 
-# studio.kind проектов, записанных в базу из командной строки до входа владельца
+# studio.kind of projects written to the database from the command line before the owner logs in
 UNOWNED_KIND = "unowned"
 
 
 def unowned_studio(session: Session) -> Studio:
-    """Студия «без владельца» (одна на базу, без участников): сюда попадают проекты, которые
-    записала командная строка до входа владельца (`access code`, `access link` без --owner).
-    При входе владельца (SHTROBA_OWNER) adopt_folders переводит их к нему."""
+    """The "no owner" studio (one per database, no members): projects written from the command line
+    before the owner logged in end up here (`access code`, `access link` without --owner). When
+    the owner (SHTROBA_OWNER) logs in, adopt_folders moves them to the owner."""
     studio = session.scalar(select(Studio).where(Studio.kind == UNOWNED_KIND))
     if studio is None:
         studio = Studio(name="Без владельца", kind=UNOWNED_KIND)
@@ -339,7 +339,7 @@ def unowned_studio(session: Session) -> Studio:
 
 
 def create_project_unowned(session: Session, name: str, slug: str) -> Project:
-    """Строка проекта без владельца — чтобы выдать код доступа до того, как владелец вошёл."""
+    """Project row without an owner, so an access code can be issued before the owner logs in."""
     if project_by_slug(session, slug) is not None:
         raise AccessError(f"проект {slug} уже в базе")
     project = Project(studio_id=unowned_studio(session).id, name=name, slug=slug)
@@ -350,7 +350,7 @@ def create_project_unowned(session: Session, name: str, slug: str) -> Project:
 
 
 def create_project_for(session: Session, user: AppUser, name: str, slug: str) -> Project:
-    """Новый проект в своей студии; у клиента — только один проект."""
+    """New project in the user's own studio; a client may have only one project."""
     studio = own_studio(session, user)
     if studio is None:
         raise AccessError("сначала выберите тип учётной записи")
@@ -363,17 +363,17 @@ def create_project_for(session: Session, user: AppUser, name: str, slug: str) ->
     return project
 
 
-# --- Сессии --------------------------------------------------------------------------
+# --- Sessions ------------------------------------------------------------------------
 
 
 def adopt_folders(
     session: Session, owner: str, slugs: Collection[str]
 ) -> tuple[list[str], str | None]:
-    """Папки проектов без строки в базе и проекты «без владельца» (create_project_unowned) — в
-    студию владельца (`SHTROBA_OWNER` — email или телефон «+380…»: зовёт вход,
-    `api/auth.Auth._adopt`). Повторный вызов ничего не меняет. Вернёт связанные slug и причину,
-    если связать нельзя: владелец ещё не входил, не выбрал тип учётной записи или у него «Мой
-    ремонт» с одним проектом."""
+    """Project folders without a database row and "no owner" projects (create_project_unowned) move
+    into the owner's studio (`SHTROBA_OWNER` is an e-mail or a phone "+380…"; called on login,
+    `api/auth.Auth._adopt`). Calling it again changes nothing. Returns the linked slugs and the
+    reason if linking is impossible: the owner has not logged in yet, has not chosen an account
+    type, or has "Мой ремонт" with its single project."""
     owner = owner.strip().lower()
     user = session.scalar(
         select(AppUser).where(or_(func.lower(AppUser.email) == owner, AppUser.phone == owner))
@@ -408,7 +408,7 @@ def adopt_folders(
 
 
 def create_session(session: Session, user: AppUser, user_agent: str = "") -> str:
-    """Новая сессия; вернёт токен для cookie (в базе — только его хеш)."""
+    """New session; returns the token for the cookie (only its hash is stored)."""
     token = new_token()
     t = now()
     session.add(
@@ -426,7 +426,7 @@ def create_session(session: Session, user: AppUser, user_agent: str = "") -> str
 
 
 def session_user(session: Session, token: str) -> AppUser | None:
-    """Пользователь по токену сессии; истёкшая сессия или заблокированный — None."""
+    """User by session token; None for an expired session or a blocked user."""
     row = session.scalar(select(UserSession).where(UserSession.token_hash == token_hash(token)))
     if row is None or _aware(row.expires_at) <= now():
         return None
@@ -450,7 +450,7 @@ def end_all_sessions(session: Session, user: AppUser) -> None:
     session.flush()
 
 
-# --- Приглашения ---------------------------------------------------------------------
+# --- Invites -------------------------------------------------------------------------
 
 
 def create_invite(
@@ -462,8 +462,8 @@ def create_invite(
     email: str | None = None,
     days: int = INVITE_DAYS,
 ) -> str:
-    """Приглашение в проект (client, installer) или в студию (designer, installer).
-    by — кто приглашает (None — суперпользователь из командной строки). Вернёт токен."""
+    """Invite to a project (client, installer) or to a studio (designer, installer).
+    by is who invites (None means a superuser from the command line). Returns the token."""
     if (project is None) == (studio is None):
         raise AccessError("приглашение — в проект или в студию")
     if project is not None and role not in PROJECT_ROLES:
@@ -504,7 +504,7 @@ def create_invite(
 
 
 def find_invite(session: Session, token: str) -> Invite:
-    """Действующее приглашение по токену; иначе AccessError с причиной."""
+    """Valid invite by token; otherwise AccessError with the reason."""
     invite = session.scalar(select(Invite).where(Invite.token_hash == token_hash(token)))
     if invite is None or invite.revoked_at is not None:
         raise AccessError("приглашение не найдено или отозвано")
@@ -516,8 +516,9 @@ def find_invite(session: Session, token: str) -> Invite:
 
 
 def accept_invite(session: Session, user: AppUser, token: str) -> Invite:
-    """Принять приглашение: ссылка — ключ, email не сверяется (студия видит, кто принял).
-    Приглашённый без типа учётки получает его по роли: клиент — client, остальные — pro."""
+    """Accept an invite: the link is the key, the e-mail is not checked (the studio sees who
+    accepted). An invitee without an account type gets one by role: a client gets client, the
+    rest get pro."""
     invite = find_invite(session, token)
     kind = user.account_type or ("client" if invite.role == "client" else "pro")
     if invite.role == "client" and kind != "client":
@@ -554,7 +555,7 @@ def project_of(session: Session, invite: Invite) -> Project | None:
     return session.get(Project, invite.project_id) if invite.project_id else None
 
 
-# --- Поддержка и журнал --------------------------------------------------------------
+# --- Support and audit log -----------------------------------------------------------
 
 
 def grant_support(
@@ -565,7 +566,7 @@ def grant_support(
     reason: str,
     hours: int = SUPPORT_HOURS,
 ) -> SupportGrant:
-    """Владелец студии открывает проект разработчику на срок — чинить баг."""
+    """The studio owner opens a project to a developer for a limited time, to fix a bug."""
     if project_role(session, Principal(by), project) not in {"owner", "superuser"}:
         raise AccessError("доступ поддержке выдаёт владелец студии")
     grant = SupportGrant(

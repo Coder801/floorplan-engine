@@ -1,4 +1,4 @@
-"""начальная схема сервиса
+"""initial service schema
 
 Revision ID: 0001
 Revises:

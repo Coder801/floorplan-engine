@@ -1,5 +1,5 @@
-// Раскладка src по группам (web/README.md, «Устройство»): компонент — папка ИмяКомпонента/
-// с index.tsx и ИмяКомпонента.module.scss; группа импортирует только разрешённые группы.
+// src layout by group (web/README.md, "Structure"): a component is a ComponentName/ folder
+// with index.tsx and ComponentName.module.scss; a group imports only the allowed groups.
 
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
@@ -10,7 +10,7 @@ const GROUPS = ["pages", "widgets", "ui", "engine", "shared"] as const;
 type Group = (typeof GROUPS)[number];
 const COMPONENT_GROUPS: Group[] = ["pages", "widgets", "ui"];
 
-// Кого можно импортировать из группы
+// What each group may import
 const ALLOWED: Record<Group, Group[]> = {
   pages: ["pages", "widgets", "ui", "engine", "shared"],
   widgets: ["widgets", "ui", "engine", "shared"],

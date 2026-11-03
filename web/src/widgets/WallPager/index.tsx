@@ -1,5 +1,5 @@
-// Пейджер развёрток: «‹ Кухня — стена 3 · 5 / 32 ›», имя стены — кнопка выпадающего списка
-// всех стен по помещениям для быстрого перехода (Esc и клик мимо — закрыть).
+// Elevation pager: "‹ Кухня — стена 3 · 5 / 32 ›"; the wall name is a dropdown button listing
+// all walls by room for quick jumps (Esc and a click outside close it).
 
 import { useEffect, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
@@ -17,7 +17,7 @@ interface Props {
   onPick: (index: number) => void;
 }
 
-// «Санвузол 2 (пральня) — стіна 2» → помещение и стена; без « — » — всё имя стеной
+// "Санвузол 2 (пральня) — стіна 2" → room and wall; without " — " the whole name is the wall
 const split = (title: string): [string, string] => {
   const k = title.lastIndexOf(" — ");
   return k < 0 ? ["", title] : [title.slice(0, k), title.slice(k + 3)];
@@ -27,7 +27,7 @@ export function WallPager({ walls, at, onTurn, onPick }: Props) {
   const { open, setOpen, toggle, ref } = usePopover<HTMLDivElement>();
   const { t } = useTranslation();
   const list = useRef<HTMLDivElement>(null);
-  // Стены по помещениям в порядке листов
+  // Walls by room in sheet order
   const rooms = useMemo(() => {
     const out: { room: string; items: { index: number; wall: string }[] }[] = [];
     walls.forEach((w, index) => {
@@ -39,7 +39,7 @@ export function WallPager({ walls, at, onTurn, onPick }: Props) {
     return out;
   }, [walls]);
 
-  // Открыли — текущая стена в поле зрения
+  // On open, the current wall is scrolled into view
   useEffect(() => {
     if (open) list.current?.querySelector("[aria-selected='true']")?.scrollIntoView({ block: "center" });
   }, [open]);

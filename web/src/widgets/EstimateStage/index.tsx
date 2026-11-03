@@ -1,7 +1,7 @@
-// Вкладка «Смета»: сметы во всю ширину одна под другой — электрики (ключ estimate страницы
-// проводки) и сантехники (страницы «Сантехника»): разделы, позиции, итоги; без прайса —
-// ведомость объёмов. Excel — тот же расчёт файлом (build пишет out/estimate.xlsx и
-// out/plumbing-estimate.xlsx). На печати смета — на листе своего этапа.
+// "Estimate" tab: full-width estimates one under another, electrical (key estimate of the
+// wiring page) and plumbing (the "Plumbing" page): sections, items, totals; without a price
+// list, a bill of quantities. Excel is the same calculation as a file (build writes
+// out/estimate.xlsx and out/plumbing-estimate.xlsx). In print, an estimate is on its stage's sheet.
 
 import { useTranslation } from "react-i18next";
 import { cx } from "@/shared/cx";

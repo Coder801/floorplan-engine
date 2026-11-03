@@ -9,7 +9,7 @@ const dev = (id: string, modules: number, extra: Partial<PanelDevice> = {}): Pan
   ...extra,
 });
 
-// Hager Golf VS212PD / VS318PD — как в panel_catalog.ENCLOSURES
+// Hager Golf VS212PD / VS318PD, as in panel_catalog.ENCLOSURES
 const golf = (rows: number, perRow: 12 | 18): PanelEnclosure => ({
   id: `hager.VS${rows}${perRow}PD`, brand: "hager", series: "Golf", article: `VS${rows}${perRow}PD`,
   title: `Hager Golf VS${rows}${perRow}PD`, rows, per_row: perRow, width: perRow === 12 ? 282 : 390,
@@ -24,7 +24,7 @@ const data = (devices: PanelDevice[], enclosure: PanelEnclosure | null = golf(2,
   ...(external ? { external: { id: "XP1", kind: "plug", title: "", to: "SA1", feed: null } } : {}),
 });
 
-// Щит как с бэка: рейка у каждого аппарата
+// A panel as it comes from the backend: each device has a rail
 const rowed = (rows: PanelDevice[][]) => rows.flatMap((r, k) => r.map((d) => ({ ...d, row: k })));
 
 const groups = (n: number, kind = "breaker", modules = 1) =>
@@ -53,7 +53,7 @@ describe("раскладка щита", () => {
     expect(l.box.w).toBe(282);
     expect(l.box.h).toBe(500);
     expect(l.railX).toBeCloseTo((282 - 12 * MODULE) / 2);
-    expect(l.rails).toHaveLength(3);  // и пустая
+    expect(l.rails).toHaveLength(3);  // including an empty one
     expect(l.rails[1] - l.rails[0]).toBe(125);
     expect((l.rails[0] + l.rails[2]) / 2).toBeCloseTo(l.box.y + l.box.h / 2);
   });
@@ -110,10 +110,10 @@ describe("раскладка щита", () => {
     expect(row[0].lane!).toBeGreaterThan(row[11].lane!);
     expect(row[11].lane!).toBeGreaterThan(row[11].y + row[11].h);
     expect(l.rows[1].pitch).toBeLessThanOrEqual(3);
-    // Сверху вниз по проводам — сверху вниз по подписям, не ближе шага: веер без пересечений
+    // Wires top to bottom map to labels top to bottom, at least a step apart: a fan with no crossings
     const byLane = [...row].sort((a, b) => a.lane! - b.lane!);
     byLane.slice(1).forEach((p, k) => expect(p.label! - byLane[k].label!).toBeGreaterThanOrEqual(LABEL_STEP - 1e-9));
-    // Внутри корпуса провод горизонтален; за корпусом — к подписи
+    // Inside the enclosure the wire is horizontal; outside it goes to the label
     const path = groupPath(l, row[0]);
     expect(path[2][1]).toBe(row[0].lane);
     expect(path[2][0]).toBeGreaterThan(l.box.x + l.box.w);
@@ -167,15 +167,15 @@ describe("раскладка щита", () => {
     const x = l.dc!;
     expect(x.box.x).toBeGreaterThan(l.labelX + 290);
     expect(x.box.x).toBeGreaterThan(l.external!.x + l.external!.w);
-    expect(x.lanes).toHaveLength(4);  // АКБ + −, строка + −
-    // Правый провод — дорожка выше, все дорожки — между инвертором и корпусом
+    expect(x.lanes).toHaveLength(4);  // battery + −, string + −
+    // The right-hand wire gets the higher lane; all lanes are between the inverter and the enclosure
     x.lanes.slice(1).forEach((y, k) => expect(y).toBeLessThan(x.lanes[k]));
     expect(Math.min(...x.lanes)).toBeGreaterThan(l.external!.y + l.external!.h);
     expect(Math.max(...x.lanes)).toBeLessThan(x.box.y);
     for (const p of x.placed) expect(p.x + p.w).toBeLessThanOrEqual(x.box.x + x.box.w);
     expect(x.battery.y).toBeGreaterThan(Math.max(...x.pvLanes));
     expect(l.height).toBeGreaterThan(x.battery.y + x.battery.h);
-    // Подписи групп — ниже дорожек щита АКБ
+    // Group labels sit below the battery box lanes
     for (const p of l.placed.filter((q) => q.label !== null)) expect(p.label!).toBeGreaterThan(Math.max(...x.lanes));
   });
 });

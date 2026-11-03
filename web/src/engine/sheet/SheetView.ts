@@ -1,8 +1,8 @@
-// Чертёж в canvas: масштаб, сдвиг, подсказки, выделение линии и правка трасс.
-// Рисование — вне React (тысячи примитивов, каждый кадр); с остальным интерфейсом лист
-// связан через общее состояние (store.ts): под курсором, выделение, подсказка, слои.
-// Чертёж общий у листов с планом (sheet/drawing.ts): смена вкладки — setPage, без нового
-// холста — слои, подсказки и правка другого листа при тех же масштабе и сдвиге.
+// Drawing in canvas: zoom, pan, hints, line selection and route editing.
+// Drawing happens outside React (thousands of primitives, every frame); the sheet talks to the
+// rest of the interface through shared state (store.ts): hover, selection, hint, layers.
+// Sheets with a plan share one drawing (sheet/drawing.ts): switching the tab calls setPage
+// without a new canvas, giving the other sheet's layers, hints and editing at the same zoom and pan.
 
 import { WiringEdit, type Hit } from "@/engine/edit/WiringEdit";
 import {
@@ -18,9 +18,9 @@ import { layerShown, sceneOf, type Drawing, type DrawingItem } from "./drawing";
 import { inBox, paint, type DrawItem } from "./paint";
 import { Pinch } from "./pinch";
 
-const TIP_WIDTH = 320;  // закреплённая подсказка (max-width в CSS) — место справа при наезде
+const TIP_WIDTH = 320;  // pinned hint (max-width in CSS): room on the right when they overlap
 
-// Путь примитива на чертеже: с чужого листа — сдвинутый на лист base
+// Primitive path on the drawing: from another sheet, shifted onto sheet base
 function pathOf(it: DrawingItem): Path2D {
   const p = new Path2D(it.d), { f, dx, dy } = it.shift;
   if (f === 1 && !dx && !dy) return p;
@@ -39,15 +39,15 @@ interface Drag {
 
 export class SheetView {
   readonly items: DrawItem[];
-  readonly has3d: boolean;  // у чертежа есть 3D (сцена листа проводки) — на любой вкладке
+  readonly has3d: boolean;  // the drawing has 3D (the wiring sheet scene), on any tab
   ed: WiringEdit | null = null;
   page!: Page;
   index!: PageIndex;
   private own = new Set<string>();
-  saved = false;          // правки записаны, лист пересобирается
+  saved = false;          // edits saved, the sheet is being rebuilt
   onEditChange: () => void = () => {};
   onZoom: (zoom: Zoom) => void = () => {};
-  private step = 0;  // шаг масштаба (zoom.ts)
+  private step = 0;  // zoom step (zoom.ts)
   private readonly wheel = new WheelSteps();
   private readonly pinchSteps = new PinchSteps();
   private readonly glide = new Glide();
@@ -57,7 +57,7 @@ export class SheetView {
   private frame = 0; private flowFrame = 0;
   private drag: Drag | null = null;
   private readonly pinch = new Pinch();
-  private fitted = true;  // вид — «весь чертёж»: при новом размере вписать заново, иначе оставить
+  private fitted = true;  // the view is "whole drawing": refit on resize, otherwise keep it
   private readonly cleanup: (() => void)[] = [];
 
   constructor(private readonly canvas: HTMLCanvasElement, private readonly wrap: HTMLElement,
@@ -66,12 +66,12 @@ export class SheetView {
     this.has3d = !!sceneOf(drawing);
     this.setPage(page, index, false);
     this.ctx = canvas.getContext("2d")!;
-    // Новый размер (окно, поворот телефона, нижняя панель): вписанный чертёж — вписать заново,
-    // приближенный — оставить как есть
+    // New size (window, phone rotation, bottom panel): a fitted drawing is fitted again, a
+    // zoomed one stays as it is
     const resize = new ResizeObserver(() => { this.layout(); if (this.fitted) this.fit(); else this.draw(); });
     resize.observe(wrap);
     this.cleanup.push(() => resize.disconnect());
-    // Перерисовка — только когда меняется то, что видно на листе (подсказка у курсора — нет)
+    // Redraw only when something visible on the sheet changes (the hint at the cursor does not count)
     let seen: unknown[] = [];
     this.cleanup.push(view.subscribe(() => {
       const s = view.get();
@@ -81,8 +81,8 @@ export class SheetView {
     this.bind();
   }
 
-  // Другая вкладка того же чертежа: её слои, подсказки и правка; масштаб и сдвиг — те же.
-  // Несохранённые правки трасс пропадают — Viewer спрашивает до переключения
+  // Another tab of the same drawing: its layers, hints and editing; zoom and pan stay the same.
+  // Unsaved route edits are lost, so Viewer asks before switching
   setPage(page: Page, index: PageIndex, redraw = true) {
     this.page = page;
     this.index = index;
@@ -93,7 +93,7 @@ export class SheetView {
     if (redraw) this.draw();
   }
 
-  // Слой виден на этой вкладке: свой — пока не выключен, с другого листа — если включён
+  // A layer is visible on this tab: its own until switched off, one from another sheet if switched on
   readonly shown = (l: string) => {
     const { hidden, extra } = view.get();
     return layerShown(this.own, hidden, extra, l);
@@ -129,15 +129,15 @@ export class SheetView {
     this.draw();
   }
 
-  // Соседний шаг масштаба у точки (x, y) экрана; за крайние — нет
+  // Neighbouring zoom step at screen point (x, y); none past the ends
   zoomStep(dir: number, x = (this.w - RAIL_PX) / 2, y = this.h / 2) { this.zoomTo(this.step + dir, x, y); }
 
-  // Двойной клик: на шаг крупнее к точке (x, y) экрана; крупнее некуда — вписать целиком
+  // Double click: one step in towards screen point (x, y); if there is no step left, fit the whole drawing
   zoomIn({ x, y }: { x: number; y: number }) {
     if (this.step >= LAST_STEP) this.fit(); else this.zoomStep(1, x, y);
   }
 
-  // Шаг масштаба — плавно, точка (x, y) экрана стоит на месте
+  // Zoom step, smoothly, keeping screen point (x, y) in place
   zoomTo(step: number, x = (this.w - RAIL_PX) / 2, y = this.h / 2) {
     step = clampStep(step);
     if (step === this.step) return;
@@ -155,7 +155,7 @@ export class SheetView {
     return !!lit && expand(o).some((k) => lit.has(k));
   }
 
-  // Как рисовать примитив: цвет, прозрачность, во сколько толще
+  // How to draw a primitive: colour, opacity, how much thicker
   private look(it: DrawItem): [string, number, number] {
     const o = it.o;
     if (this.isLit(o)) return [palette.hl, 1, 2];
@@ -166,7 +166,7 @@ export class SheetView {
     return neighbors && neighbors.has(o) ? [c, NEIGHBOR_ALPHA, 1] : [c, DIM_ALPHA, 1];
   }
 
-  // Выделить линию и закрепить подсказку; focus — ещё и навести на неё вид (двойной клик)
+  // Select a line and pin the hint; focus also brings the view to it (double click)
   select(o: string | null, focus = false) {
     if (!o) { this.clearSelection(); return; }
     const chain = this.index.chainOf(o);
@@ -174,7 +174,7 @@ export class SheetView {
     if (focus) this.showKeys(chain);
   }
 
-  // Открыть лист сразу на объекте (переход с развёртки): вписать, выделить линию и навести
+  // Open the sheet right on an object (coming from an elevation): fit, select the line and focus on it
   reveal(o: string) {
     this.layout(); this.fit();
     if (this.index.interactive(o)) this.select(o, true);
@@ -184,8 +184,8 @@ export class SheetView {
     view.set({ selected: null, neighbors: null, pinned: null });
   }
 
-  // Вписать объекты в свободную часть экрана (левее подсказки), плавно; сильнее
-  // последнего шага масштаба не увеличивать (zoom.ts)
+  // Fit objects into the free part of the screen (left of the hint), smoothly; never zoom in
+  // past the last zoom step (zoom.ts)
   private showKeys(keys: Set<string>) {
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
     for (const it of this.items) {
@@ -194,10 +194,10 @@ export class SheetView {
       x1 = Math.max(x1, it.box[2]); y1 = Math.max(y1, it.box[3]);
     }
     if (!isFinite(x0)) return;
-    const right = TIP_WIDTH + 2 * TIP_GAP;  // занято подсказкой справа
+    const right = TIP_WIDTH + 2 * TIP_GAP;  // taken by the hint on the right
     const aw = Math.max(this.w - right - 2 * VIEW_PAD, 80), ah = Math.max(this.h - 2 * VIEW_PAD, 80);
     const bw = Math.max(x1 - x0, 1), bh = Math.max(y1 - y0, 1);
-    // Крупнейший шаг масштаба, на котором объекты видны целиком
+    // The largest zoom step at which the objects are fully visible
     this.step = stepBelow(Math.min(aw / bw, ah / bh) / this.fitScale);
     const scale = this.fitScale * ZOOM_STEPS[this.step];
     this.animate(scale, VIEW_PAD + (aw - bw * scale) / 2 - x0 * scale, VIEW_PAD + (ah - bh * scale) / 2 - y0 * scale);
@@ -209,7 +209,7 @@ export class SheetView {
     this.fitted = false;
     const step = (now: number) => {
       const t = Math.min((now - t0) / FOCUS_MS, 1), e = 1 - (1 - t) ** 3;
-      this.scale = from.scale * (scale / from.scale) ** e;  // масштаб — по логарифму
+      this.scale = from.scale * (scale / from.scale) ** e;  // zoom on a log scale
       this.ox = from.ox + (ox - from.ox) * e;
       this.oy = from.oy + (oy - from.oy) * e;
       this.draw();
@@ -220,28 +220,28 @@ export class SheetView {
   }
 
   draw() {
-    if (view.get().show3d && this.has3d) return;  // чертёж закрыт 3D
+    if (view.get().show3d && this.has3d) return;  // the drawing is covered by 3D
     const { ctx } = this;
     refreshPalette();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.fillStyle = palette.paper;  // фон блока и чертежа — один
+    ctx.fillStyle = palette.paper;  // the block and drawing background are the same
     ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
     const k = this.dpr * this.scale;
     ctx.setTransform(k, 0, 0, k, this.dpr * this.ox, this.dpr * this.oy);
     const [x0, y0, x1, y1] = this.drawing.view;
     ctx.save();
     ctx.beginPath(); ctx.rect(x0, y0, x1 - x0, y1 - y0); ctx.clip();
-    // Изменённые линии и коробки рисуются по правке, а не примитивами листа
+    // Changed lines and boxes are drawn from the edit, not from sheet primitives
     const skip = this.ed ? this.ed.hiddenKeys() : null;
     const items = skip && skip.size ? this.items.filter((it) => !it.o || !skip.has(it.o)) : this.items;
     paint(ctx, items, k, (it) => this.look(it), this.shown, CABLE_MIN_PX * this.dpr);
     if (this.ed) this.ed.paint(ctx, k, performance.now(), this.dpr);
     ctx.restore();
-    // Бегущий пунктир — следующий кадр, пока есть правящиеся линии
+    // Running dashes: request the next frame while there are lines being edited
     if (this.editing() && !REDUCED_MOTION && !this.flowFrame && this.ed!.flowing().size) {
       this.flowFrame = requestAnimationFrame(() => { this.flowFrame = 0; this.draw(); });
     }
-    // Линейка — в мм модели (лист без плана — без линейки)
+    // Scale bar in model mm (a sheet without a plan has none)
     const m = this.drawing.base.model?.[0];
     this.onZoom({ step: this.step, label: zoomLabel(this.step), pxPerMm: m ? this.scale * m : null });
   }
@@ -274,13 +274,13 @@ export class SheetView {
       if (dir) this.zoomStep(dir, x, y);
     }, { passive: false });
     this.on("pointerdown", (ev) => {
-      // Второй палец — щипок: перетаскивание первым пальцем отменяется
+      // A second finger means a pinch: dragging with the first finger is cancelled
       if (this.pinch.down(ev)) {
         c.setPointerCapture(ev.pointerId);
         this.stop();
         return;
       }
-      // Режим правки: участок линии или коробка — тянуть их, мимо — сдвиг чертежа
+      // Edit mode: a line piece or a box gets dragged, anything else pans the drawing
       const hit = this.editHit(ev);
       if (hit) {
         const { mx, my } = this.toSheet(ev);
@@ -330,10 +330,10 @@ export class SheetView {
       }
       this.pick(ev);
     });
-    // Клик без сдвига — выделить линию и закрепить подсказку; мимо — снять выделение
+    // A click without a drag selects a line and pins the hint; elsewhere it clears the selection
     this.on("pointerup", (ev) => {
       this.pinch.up(ev);
-      if (this.pinch.used) { this.stop(); return; }  // конец щипка — не клик
+      if (this.pinch.used) { this.stop(); return; }  // end of a pinch is not a click
       const drag = this.drag;
       if (drag?.edit) { this.stop(); this.editChanged(); return; }
       const click = drag && !drag.moved, additive = drag?.additive;
@@ -342,7 +342,7 @@ export class SheetView {
       if (this.editing() && !additive) { this.ed!.sel.clear(); this.ed!.box = null; this.onEditChange(); }
       this.select(this.objectAt(ev));
     });
-    // Закреплённая подсказка — до потери фокуса; Esc снимает и выделение
+    // A pinned hint stays until focus is lost; Esc also clears the selection
     this.on("blur", () => { if (view.get().pinned) view.set({ pinned: null }); });
     this.on("keydown", (ev) => {
       if (ev.key === "Escape") {
@@ -356,7 +356,7 @@ export class SheetView {
     });
     this.on("pointercancel", (ev) => { this.pinch.up(ev); this.stop(); });
     this.on("pointerleave", () => this.setHover(null));
-    // Двойной клик — на шаг крупнее в точку клика; на последнем шаге — весь чертёж
+    // Double click zooms one step in at the click point; at the last step, the whole drawing
     this.on("dblclick", (ev) => this.zoomIn(this.toSheet(ev)));
   }
 
@@ -370,14 +370,14 @@ export class SheetView {
 
   undo() { if (this.ed?.undo()) this.editChanged(); }
 
-  // Режим «Править трассы» выключен — выделение участков и подсветка правки снимаются
+  // "Edit routes" mode is off: piece selection and edit highlighting are cleared
   editModeChanged() {
     if (!view.get().editMode && this.ed) this.ed.clearSelection();
     this.canvas.style.cursor = "";
     this.editChanged();
   }
 
-  // Объект под курсором: кандидаты по габаритам, затем точная проверка пути; меньший — главнее
+  // Object under the cursor: candidates by bounding box, then an exact path check; the smaller one wins
   private objectAt(ev: MouseEvent): string | null {
     const { x, y, mx, my } = this.toSheet(ev);
     const tol = 4 / this.scale;
@@ -402,7 +402,7 @@ export class SheetView {
   private pick(ev: MouseEvent) {
     const o = this.objectAt(ev);
     this.setHover(o);
-    if (!o || view.get().pinned) return;  // закреплённая подсказка стоит на месте
+    if (!o || view.get().pinned) return;  // a pinned hint stays in place
     const { x, y } = this.toSheet(ev);
     view.set({ tip: { key: o, x, y } });
   }

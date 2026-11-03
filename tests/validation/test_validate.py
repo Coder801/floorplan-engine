@@ -243,7 +243,7 @@ def test_studio_profile_fills_empty_stamp_fields(tmp_path: Path) -> None:
     assert report.ok, report.issues
     assert report.plan is not None
     sheet = report.plan.sheet
-    assert sheet.organization == "MV Group" and sheet.stage == "П"  # проект важнее профиля
+    assert sheet.organization == "MV Group" and sheet.stage == "П"  # the project beats the profile
     assert [(s.role, s.name) for s in sheet.signatures] == [("Розробив", "Іваненко")]
 
 

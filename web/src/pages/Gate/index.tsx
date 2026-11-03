@@ -1,8 +1,8 @@
-// Вход (service/api/auth.py): пока не вошли — карточка входа по центру (Telegram по номеру
-// телефона, Google или код на почту; внизу — код доступа к проекту от студии, без учётки);
-// первый вход — выбор «кто вы» в такой же карточке; ссылка-приглашение (?invite=…) — принять
-// после входа. Вход выключен на сервере ({"auth": false}, локально) — страница открыта, как
-// раньше.
+// Login (service/api/auth.py): until logged in, a login card in the middle (Telegram by phone
+// number, Google or an e-mail code; at the bottom a project access code from the studio,
+// without an account); on first login, "who are you" in a similar card; an invite link
+// (?invite=…) is accepted after login. With login off on the server ({"auth": false},
+// locally) the page is open, as before.
 
 import { type ReactNode, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -25,18 +25,18 @@ const isRole = (r: string): r is (typeof ROLES)[number] => (ROLES as readonly st
 
 const params = () => new URLSearchParams(location.search);
 
-// Убрать ?invite и ?auth_error из адреса, оставив #проект
+// Remove ?invite and ?auth_error from the address, keeping #project
 function cleanUrl() {
   history.replaceState(null, "", `${location.pathname}${location.hash}`);
 }
 
-// children получает, кто вошёл (настройки в шапке); вход выключен — null
+// children receive who is logged in (settings in the header); null if login is off
 export function Gate({ children }: { children: (account: Account | null) => ReactNode }) {
   const [me, setMe] = useState<Me | null>(null);
   const [invite, setInvite] = useState<Invite | null>(null);
   const [error, setError] = useState<string | null>(() => params().get("auth_error"));
   const [busy, setBusy] = useState(false);
-  const [firm, setFirm] = useState(false);  // первый вход: шаг регистрации фирмы
+  const [firm, setFirm] = useState(false);  // first login: the firm registration step
   const { t } = useTranslation();
   const token = params().get("invite");
 
@@ -46,7 +46,7 @@ export function Gate({ children }: { children: (account: Account | null) => Reac
     if (!token) return;
     getInvite(token).then(setInvite).catch((e: Error) => setError(e.message));
   }, [token]);
-  // Вошли, а в адресе приглашение — принять
+  // Logged in and the address has an invite: accept it
   useEffect(() => {
     if (!token || !me?.user) return;
     acceptInvite(token)
@@ -54,7 +54,7 @@ export function Gate({ children }: { children: (account: Account | null) => Reac
       .catch((e: Error) => { setError(e.message); cleanUrl(); });
   }, [token, me?.user?.id]);
 
-  // Знак и имя продукта над формой
+  // Product mark and name above the form
   const brand = <span className={css.brand}><Logo size={32} /><b>{BRAND}</b><i>{t(`app.stages.${STAGE}`)}</i></span>;
 
   if (me === null) return <div className={ui.empty}>{error ?? t("common.loading")}</div>;
@@ -147,7 +147,7 @@ export function Gate({ children }: { children: (account: Account | null) => Reac
       <section className={css.byCode}>
         <h2>{t("gate.code")}</h2>
         <CodeLogin onDone={(project) => {
-          if (project) location.hash = encodeURIComponent(project);  // сразу в проект кода
+          if (project) location.hash = encodeURIComponent(project);  // straight into the code's project
           void refresh();
         }} />
       </section>

@@ -1,5 +1,5 @@
-"""Версия продукта одна: пакет Python (`floorplan_engine.__version__`, pyproject.toml) и
-страница просмотра (web/package.json — её показывают настройки просмотра)."""
+"""There is one product version: the Python package (`floorplan_engine.__version__`,
+pyproject.toml) and the viewer page (web/package.json, shown in the viewer settings)."""
 
 from __future__ import annotations
 

@@ -1,9 +1,9 @@
 #!/bin/bash
-# Запуск в контейнере. Источник правды — проекты из образа (git): при каждом деплое они
-# заменяют копию на volume. С сервера сохраняются только wiring.yaml (правки трасс) и
-# variant.yaml (выбранный вариант проводки) из просмотра; затем проект пересобирается.
-# Проекты, которых нет в образе, на volume не трогаются.
-# Дальше — API просмотра и Caddy; упал любой — контейнер перезапускается.
+# Container start. The source of truth is the projects in the image (git): every deploy
+# replaces the copy on the volume. Only wiring.yaml (route edits) and variant.yaml (the chosen
+# wiring variant) from the viewer are kept from the server; then the project is rebuilt.
+# Projects that are not in the image are left alone on the volume.
+# Then the viewer API and Caddy start; if either dies, the container restarts.
 set -e
 mkdir -p "$PROJECTS_DIR"
 for seed in /app/projects-seed/*/; do
@@ -19,9 +19,9 @@ for seed in /app/projects-seed/*/; do
   rm -rf "$kept"
   floorplan-engine build "$dest" > /dev/null || echo "Сборка $name не удалась" >&2
 done
-cp /app/projects-seed/*.yaml "$PROJECTS_DIR"/ 2>/dev/null || true  # профиль студии и т. п.
-# Вход включён (SHTROBA_AUTH=on) — сначала миграции базы (DATABASE_URL). Папки проектов
-# с владельцем связывает сам сервис при его входе (SHTROBA_OWNER, service/api/auth.py)
+cp /app/projects-seed/*.yaml "$PROJECTS_DIR"/ 2>/dev/null || true  # studio profile and the like
+# Login is on (SHTROBA_AUTH=on): run database migrations first (DATABASE_URL). The service
+# links project folders to the owner itself when they log in (SHTROBA_OWNER, service/api/auth.py)
 if [ "$SHTROBA_AUTH" = "on" ]; then
   (cd /app && alembic upgrade head)
 fi
