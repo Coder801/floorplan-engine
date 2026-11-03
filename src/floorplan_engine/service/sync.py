@@ -109,7 +109,7 @@ def _parsed_prices(text: str) -> dict[str, Any]:
     return out
 
 
-def _put_price_list(session: Session, owner: dict[str, uuid.UUID], text: str | None) -> None:
+def put_price_list(session: Session, owner: dict[str, uuid.UUID], text: str | None) -> None:
     """Write (or remove, text None) the price list of a studio or a project."""
     column = PriceList.studio_id if "studio_id" in owner else PriceList.project_id
     row = session.scalar(select(PriceList).where(column == next(iter(owner.values()))))
@@ -174,7 +174,7 @@ def push(
     version = repo.add_model_version(session, project.id, files, author) if new else latest
     assert version is not None
     prices = folder / PRICES_FILE
-    _put_price_list(
+    put_price_list(
         session,
         {"project_id": project.id},
         prices.read_text("utf-8") if prices.is_file() else None,
@@ -267,7 +267,7 @@ def push_studio(session: Session, studio: Studio, root: Path) -> list[str]:
     taken = []
     prices = root / PRICES_FILE
     if prices.is_file():
-        _put_price_list(session, {"studio_id": studio.id}, prices.read_text("utf-8"))
+        put_price_list(session, {"studio_id": studio.id}, prices.read_text("utf-8"))
         taken.append(PRICES_FILE)
     profile_path = root / STUDIO_FILE
     if profile_path.is_file():

@@ -209,6 +209,14 @@ def project_by_slug(session: Session, slug: str) -> Project | None:
     return session.scalar(select(Project).where(Project.slug == slug))
 
 
+def project_by_key(session: Session, key: str) -> Project | None:
+    """A project from an address: its id; an old link by name (slug) still opens."""
+    try:
+        return session.get(Project, uuid.UUID(key))
+    except ValueError:
+        return project_by_slug(session, key)
+
+
 # --- OAuth users and account type ----------------------------------------------------
 
 

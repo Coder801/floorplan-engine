@@ -364,7 +364,7 @@ class Auth:
                 return self._prices(db, who, request)
             if len(parts) < 4 or parts[2] != "projects" or not parts[3]:
                 return None
-            project = acc.project_by_slug(db, parts[3])
+            project = acc.project_by_key(db, parts[3])
             role = acc.project_role(db, who, project)
             if not acc.can(role, "view"):
                 return JSONResponse({"detail": f"проекта {parts[3]} нет"}, status_code=404)
@@ -401,6 +401,7 @@ class Auth:
             return JSONResponse({"detail": "прайс — только для студии"}, status_code=403)
         request.state.edit_prices = edit
         request.state.folder = acc.studio_folder(space) if space is not None else acc.ROOT_FOLDER
+        request.state.studio_id = space.id if space is not None else None  # viewer_db
         return None
 
     def project_folders(self, request: Request, root_names: Collection[str]) -> dict[str, str]:

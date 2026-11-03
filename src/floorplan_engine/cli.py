@@ -35,6 +35,7 @@ if TYPE_CHECKING:
 
     from floorplan_engine.service.api.auth import Auth
     from floorplan_engine.service.db.models import Project, Studio
+    from floorplan_engine.service.objects import ObjectStore
 
 app = typer.Typer(
     help="Чертежи DXF (план, электрика) из room.yaml / electrical.yaml.",
@@ -324,7 +325,7 @@ def view(
         typer.echo(f"Папки {projects} нет", err=True)
         raise typer.Exit(1)
     typer.echo(f"API просмотра: http://{host}:{port}/api; {FRONT_HINT}")
-    uvicorn.run(create_viewer(projects, _viewer_auth()), host=host, port=port)
+    uvicorn.run(create_viewer(projects, _viewer_auth(), _viewer_store()), host=host, port=port)
 
 
 DEV_PROJECTS_ENV = "SHTROBA_DEV_PROJECTS"  # projects folder for the `dev` API (survives restarts)
@@ -335,7 +336,22 @@ def dev_viewer() -> FastAPI:
     projects folder comes from the environment."""
     from floorplan_engine.service.api.viewer import create_viewer
 
-    return create_viewer(Path(os.environ.get(DEV_PROJECTS_ENV, "projects")), _viewer_auth())
+    root = Path(os.environ.get(DEV_PROJECTS_ENV, "projects"))
+    return create_viewer(root, _viewer_auth(), _viewer_store())
+
+
+STORAGE_ENV = "SHTROBA_STORAGE"  # db — projects from the database (stage B); otherwise folders
+
+
+def _viewer_store() -> ObjectStore | None:
+    """File storage when projects live in the database (SHTROBA_STORAGE=db, login is required);
+    None — projects from the folder, as before."""
+    if os.environ.get(STORAGE_ENV, "").lower() != "db":
+        return None
+    from floorplan_engine.service.objects import store_from_env
+
+    typer.echo("Проекты — из базы (SHTROBA_STORAGE=db), файлы — SHTROBA_OBJECTS", err=True)
+    return store_from_env()
 
 
 @app.command()

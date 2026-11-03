@@ -43,7 +43,6 @@ from fastapi.responses import FileResponse, PlainTextResponse, Response
 
 from floorplan_engine import BRAND, __version__
 from floorplan_engine.electrical.estimate import PRICES_FILE
-from floorplan_engine.epd.artifact import FORMAT_VERSION, MANIFEST
 from floorplan_engine.epd.thumbnail import PREVIEW_FILE
 from floorplan_engine.model.intake import ANSWERS_FILE, INTAKE_FILE
 from floorplan_engine.pipeline import (
@@ -58,7 +57,9 @@ from floorplan_engine.pipeline import (
     save_wiring_edits,
 )
 from floorplan_engine.service.api.auth import Auth
+from floorplan_engine.service.api.viewer_db import check_manifest, install_db_routes
 from floorplan_engine.service.db import access as acc
+from floorplan_engine.service.objects import ObjectStore
 from floorplan_engine.validation.issues import (
     ELECTRICAL_FILE,
     ROOM_FILE,
@@ -129,11 +130,24 @@ def _summary(project: Path) -> dict[str, Any]:
     }
 
 
-def create_viewer(root: Path, auth: Auth | None = None) -> FastAPI:
+def create_viewer(
+    root: Path, auth: Auth | None = None, store: ObjectStore | None = None
+) -> FastAPI:
     """Viewer API for folder root; auth is login and access (None means everything is open,
-    locally).
-    """
+    locally). With store, projects come from the database and file storage (viewer_db.py; login
+    is required), root keeps only the shared market sample (market.yaml)."""
     app = FastAPI(title=f"{BRAND} · просмотр", version=__version__)
+    if store is not None:
+        if auth is None:
+            raise ValueError("проекты из базы — только со входом (SHTROBA_AUTH=on)")
+        auth.install(app)
+
+        @app.get("/")
+        def about_db() -> dict[str, str]:
+            return {"service": f"{BRAND} · API просмотра", "front": FRONT_HINT, "docs": "/docs"}
+
+        install_db_routes(app, auth, store, root)
+        return app
     if auth is not None:
         auth.folders = lambda: [p.name for p in project_folders(root)]
         auth.install(app)
@@ -228,23 +242,15 @@ def create_viewer(root: Path, auth: Auth | None = None) -> FastAPI:
             raise HTTPException(404, f"нет {OUT_DIR}/{ARTIFACT_FILE} — сначала build")
         return zipfile.ZipFile(path)
 
-    def manifest(zf: zipfile.ZipFile) -> dict[str, Any]:
-        data: dict[str, Any] = json.loads(zf.read(MANIFEST))
-        if data.get("version") != FORMAT_VERSION:
-            raise HTTPException(
-                409, f"версия .epd {data.get('version')}, поддерживается {FORMAT_VERSION}"
-            )
-        return data
-
     @app.get("/api/projects/{name}/sheets")
     def sheets(request: Request, name: str) -> dict[str, Any]:
         with artifact(request, name) as zf:
-            return manifest(zf)
+            return check_manifest(zf)
 
     @app.get("/api/projects/{name}/sheets/{index}")
     def sheet(request: Request, name: str, index: int) -> Response:
         with artifact(request, name) as zf:
-            pages = manifest(zf)["pages"]
+            pages = check_manifest(zf)["pages"]
             page = next((p for p in pages if p["index"] == index), None)
             if page is None:
                 raise HTTPException(404, f"листа {index} нет")
