@@ -27,6 +27,7 @@ packages = ["src/floorplan_engine"]
 
 [dependency-groups]
 dev = [
+    "commitizen>=4.19.3",
     "httpx2>=2.15.1",
     "import-linter>=2.1",
     "mypy>=1.10",
@@ -147,3 +148,18 @@ source_modules = [
 ]
 forbidden_modules = ["ezdxf"]
 allow_indirect_imports = true
+
+# Версия и релиз (docs/development.md, «Коммиты и версии»): заголовки коммитов — Conventional
+# Commits (проверяет хук web/.husky/commit-msg), `uv run cz bump` поднимает версию по типам
+# коммитов с прошлого тега, правит файлы версии, пишет CHANGELOG.md, коммитит и ставит тег
+[tool.commitizen]
+name = "cz_conventional_commits"
+version_provider = "pep621"
+tag_format = "v$version"
+major_version_zero = true          # пока альфа: feat — minor, fix — patch, breaking — тоже minor
+update_changelog_on_bump = true
+version_files = [
+    "src/floorplan_engine/__init__.py:__version__",
+    "web/package.json:\"version\"",
+]
+pre_bump_hooks = ["uv run --no-sync python scripts/release_lock.py"]  # web/package-lock.json

@@ -42,3 +42,21 @@
    и `src/structure.test.ts` фронта.
 6. В ответе: что сделано, что проверено и чем, что не проверено и почему. Не пиши «готово»,
    если шаг пропущен.
+
+## Коммиты и версии
+
+Решение 2026-11-03: версия поднимается при релизе, не при каждом коммите.
+
+- **Заголовок коммита — Conventional Commits:** `feat(viewer): zoom in on double click`,
+  `fix(electrical): …`, `docs: …`, `chore(projects): rebuild out/`. Типы и области — в
+  `.claude/agents/committer.md`. Проверяет хук `commit-msg` (husky из `web/`, файл
+  `web/.husky/commit-msg` → `uv run cz check`); хук ставится при `npm install` в `web/`
+  (`prepare`). Коммит с другим заголовком не проходит.
+- **Релиз:** `uv run cz bump` (сначала `--dry-run`). Commitizen (`pyproject.toml`,
+  `[tool.commitizen]`) считает новую версию по коммитам с прошлого тега (`feat` — minor,
+  `fix` — patch; пока версия 0.x, breaking — тоже minor), правит `pyproject.toml`,
+  `src/floorplan_engine/__init__.py`, `web/package.json` и `web/package-lock.json`
+  (`scripts/release_lock.py`), дописывает `CHANGELOG.md`, коммитит `bump: version …` и ставит
+  тег `vX.Y.Z`. Пуш с тегом — руками: `git push --follow-tags`. Версия видна в настройках
+  просмотра (`web/src/shared/version.ts`), совпадение трёх файлов проверяет
+  `tests/test_version.py`.

@@ -45,13 +45,22 @@ tools: Read, Bash, Glob, Grep
 
 ## Сообщение
 
-По-английски. Заголовок — до 72 символов, повелительное наклонение, без точки, с областью:
-`Core`, `Electrical`, `Plumbing`, `Drawing`, `Viewer`, `Service`, `DB`, `Deploy`, `Docs`,
-`Projects`, `Tests`, `Agents` (несколько — через запятую). Имена модулей и полей YAML — как
-в коде. Без подписей и трейлеров (`Co-Authored-By` и подобных).
+По-английски, в формате Conventional Commits (решение 2026-11-03, `docs/development.md`,
+«Коммиты и версии»): заголовок `<type>(<scope>): <what was done>` — до 72 символов,
+повелительное наклонение, без точки. Хук `commit-msg` (husky → `cz check`) отклонит другой
+формат. По заголовкам `uv run cz bump` считает версию: `feat` — minor, `fix` — patch,
+`!` после скобок — breaking.
+
+- `type`: `feat` — новая возможность или новое поведение; `fix` — исправление; `refactor` —
+  без изменения поведения; `perf`; `test`; `docs`; `build` — зависимости, сборка, husky;
+  `ci`; `chore` — данные проектов (`projects/`), пересборка `out/`, агенты, прочее.
+- `scope` (без пробелов, несколько — через запятую): `core`, `electrical`, `plumbing`,
+  `drawing`, `viewer`, `service`, `db`, `deploy`, `docs`, `projects`, `tests`, `agents`.
+  Имена модулей и полей YAML — как в коде. Без подписей и трейлеров (`Co-Authored-By` и
+  подобных).
 
 ```
-<Area>: <what was done>
+<type>(<scope>): <what was done>
 
 - <what changed, one line per module or feature>
 - …
