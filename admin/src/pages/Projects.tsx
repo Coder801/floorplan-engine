@@ -58,6 +58,7 @@ export function ProjectView({ id, onChanged }: { id: string; onChanged: () => vo
         <a className={css.link} href={href("studios", p.studio.id)}>«{p.studio.name}»</a>
         <span>с {date(p.created, false)}</span>
         <a className={css.link} href={href("events", null, { project: p.id })}>журнал</a>
+        <a className={css.link} href={`/#${encodeURIComponent(p.id)}`} target="_blank" rel="noreferrer">открыть в просмотре ↗</a>
       </div>
       <ErrorLine error={action.error} />
 
