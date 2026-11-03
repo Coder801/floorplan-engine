@@ -22,6 +22,8 @@
 .row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px; }
 .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
 .themes > button { flex: 1; }
+.about { font-size: 13px; }  // версия и сборка — последним разделом
+.brand { font-family: $brand; font-weight: 600; letter-spacing: .02em; }  // имя продукта — брендовым шрифтом
 
 // Язык: название | ▾ (в меню: название | ✓)
 .lang {

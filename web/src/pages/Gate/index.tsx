@@ -9,6 +9,7 @@ import { useTranslation } from "react-i18next";
 import { acceptInvite, chooseAccountType, devLogin, enterAsVisitor, getInvite, getMe, logout, type Invite, type Me } from "@/shared/auth";
 import { cx } from "@/shared/cx";
 import ui from "@/shared/styles/ui.module.scss";
+import { BRAND, STAGE } from "@/shared/version";
 import { GoogleButton } from "@/ui/GoogleButton";
 import { HelpTip } from "@/ui/HelpTip";
 import { Logo } from "@/ui/Logo";
@@ -54,7 +55,7 @@ export function Gate({ children }: { children: (account: Account | null) => Reac
   }, [token, me?.user?.id]);
 
   // Знак и имя продукта над формой
-  const brand = <span className={css.brand}><Logo size={32} /><b>{t("gate.brand")}</b></span>;
+  const brand = <span className={css.brand}><Logo size={32} /><b>{BRAND}</b><i>{t(`app.stages.${STAGE}`)}</i></span>;
 
   if (me === null) return <div className={ui.empty}>{error ?? t("common.loading")}</div>;
   if (!me.auth) return <>{children(null)}</>;

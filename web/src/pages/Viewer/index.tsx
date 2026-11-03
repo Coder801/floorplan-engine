@@ -17,7 +17,7 @@ import ui from "@/shared/styles/ui.module.scss";
 import { sheetTabs, tabOf, VIEWS } from "@/shared/tabs";
 import type { ManifestPage, Overview, Page, Project, ProjectSummary, Scene, Variants } from "@/shared/types";
 import { watchRebuild } from "@/shared/rebuild";
-import { watchBuild } from "@/shared/version";
+import { BRAND, watchBuild } from "@/shared/version";
 import { Boundary } from "@/ui/Boundary";
 import { Logo } from "@/ui/Logo";
 import { DownloadMenu } from "@/widgets/DownloadMenu";
@@ -436,7 +436,7 @@ export function Viewer({ account = null }: { account?: Account | null }) {
       <div className={css.banners}>
         {outdated && (
           <div className={css.banner}>
-            {t("app.newVersion")}{" "}
+            {t("app.newVersion", { brand: BRAND })}{" "}
             <button className={css.pill} onClick={() => location.reload()}>{t("common.refresh")}</button>
           </div>
         )}

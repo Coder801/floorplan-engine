@@ -37,6 +37,7 @@ import yaml
 from fastapi import Body, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, PlainTextResponse, Response
 
+from floorplan_engine import BRAND, __version__
 from floorplan_engine.electrical.estimate import PRICES_FILE
 from floorplan_engine.epd.artifact import FORMAT_VERSION, MANIFEST
 from floorplan_engine.epd.thumbnail import PREVIEW_FILE
@@ -119,7 +120,7 @@ def _summary(project: Path) -> dict[str, Any]:
 
 def create_viewer(root: Path, auth: Auth | None = None) -> FastAPI:
     """API просмотра папки root; auth — вход и доступ (None — всё открыто, локально)."""
-    app = FastAPI(title="Штроба · просмотр", version="0.1.0")
+    app = FastAPI(title=f"{BRAND} · просмотр", version=__version__)
     if auth is not None:
         auth.folders = lambda: [p.name for p in project_folders(root)]
         auth.install(app)
@@ -144,7 +145,7 @@ def create_viewer(root: Path, auth: Auth | None = None) -> FastAPI:
 
     @app.get("/")
     def about() -> dict[str, str]:
-        return {"service": "Штроба · API просмотра", "front": FRONT_HINT, "docs": "/docs"}
+        return {"service": f"{BRAND} · API просмотра", "front": FRONT_HINT, "docs": "/docs"}
 
     @app.get("/api/projects")
     def projects(request: Request) -> list[dict[str, Any]]:

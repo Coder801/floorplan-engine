@@ -4,6 +4,7 @@
 import { useTranslation } from "react-i18next";
 import { cx } from "@/shared/cx";
 import type { ProjectSummary } from "@/shared/types";
+import { BRAND, STAGE } from "@/shared/version";
 import { Logo } from "@/ui/Logo";
 import { ProjectCard } from "@/widgets/ProjectCard";
 import css from "./Welcome.module.scss";
@@ -16,7 +17,7 @@ export function Welcome({ list, onOpen }: { list: ProjectSummary[]; onOpen: (nam
         <div className={css.head}>
           <Logo size={56} />
           <div>
-            <h1 id="welcome-title" className={css.brand}>Shtroba</h1>
+            <h1 id="welcome-title" className={css.brand}>{BRAND} <span className={css.stage}>{t(`app.stages.${STAGE}`)}</span></h1>
             <p className="muted">{t("welcome.tagline")}</p>
           </div>
         </div>

@@ -4,7 +4,7 @@
 
 Окружение:
   SMTP_HOST, SMTP_PORT (587 — STARTTLS, 465 — SSL), SMTP_USER, SMTP_PASSWORD
-  MAIL_FROM                    отправитель: «Штроба <login@…>»
+  MAIL_FROM                    отправитель: «Shtroba <login@…>»
 """
 
 from __future__ import annotations
@@ -23,14 +23,14 @@ log = logging.getLogger("floorplan_engine.mail")
 # Тема и текст письма по языку страницы
 TEXTS: dict[str, tuple[str, str]] = {
     "ru": (
-        "Код входа в Штробу: {code}",
+        "Код входа в Shtroba: {code}",
         "Ваш код входа: {code}\n\nКод действует {minutes} минут. Если вы не входили в "
-        "Штробу, просто удалите это письмо.",
+        "Shtroba, просто удалите это письмо.",
     ),
     "uk": (
-        "Код входу до Штроби: {code}",
+        "Код входу до Shtroba: {code}",
         "Ваш код входу: {code}\n\nКод дійсний {minutes} хвилин. Якщо ви не входили до "
-        "Штроби, просто видаліть цей лист.",
+        "Shtroba, просто видаліть цей лист.",
     ),
     "en": (
         "Your Shtroba sign-in code: {code}",

@@ -5,6 +5,15 @@
 declare const __BUILD_ID__: string;
 export const BUILD_ID = __BUILD_ID__;
 
+// Версия продукта (package.json, vite.config.ts) и стадия: пока альфа — внутренняя, функции
+// ещё меняются. Показываются в настройках и рядом с именем (i18n app.stage)
+declare const __APP_VERSION__: string;
+export const APP_VERSION = __APP_VERSION__;
+export const STAGE = "alpha";
+// Имя продукта — бренд: всегда латиницей и брендовым шрифтом ($brand), на всех языках
+// одинаково; в словарях i18n его нет (решение 2026-11-03)
+export const BRAND = "Shtroba";
+
 // Версия формата .epd, которую понимает эта страница (artifact.FORMAT_VERSION)
 export const FORMAT_VERSION = 1;
 

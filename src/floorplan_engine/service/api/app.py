@@ -23,6 +23,7 @@ from typing import Annotated, Any
 from fastapi import BackgroundTasks, Body, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, PlainTextResponse
 
+from floorplan_engine import BRAND, __version__
 from floorplan_engine.model.intake import TextAnswer
 from floorplan_engine.pipeline import OUT_DIR
 from floorplan_engine.service.analysis.analyzer import OPERATOR_FILES, Analyzer, ManualAnalyzer
@@ -37,7 +38,7 @@ MAX_UPLOAD_BYTES = 50 * 1024 * 1024
 def create_app(data_dir: Path, analyzer: Analyzer | None = None) -> FastAPI:
     storage = Storage(data_dir)
     flow = Workflow(storage, analyzer or ManualAnalyzer())
-    app = FastAPI(title="Штроба", version="0.1.0")
+    app = FastAPI(title=BRAND, version=__version__)
 
     def load(project_id: str) -> ProjectInfo:
         try:

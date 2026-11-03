@@ -1,11 +1,13 @@
 // Настройки — шестерёнка в шапке: аккаунт (кто вошёл, «Выйти»), план (тип учётки), тема
-// и язык интерфейса (i18n: украинский, русский, английский; выбор запоминается)
+// и язык интерфейса (i18n: украинский, русский, английский; выбор запоминается); внизу —
+// версия и стадия продукта с номером сборки (shared/version.ts)
 
 import { useTranslation } from "react-i18next";
 import { THEMES, type Theme } from "@/shared/consts";
 import { cx } from "@/shared/cx";
 import { LANGUAGES, setLanguage } from "@/shared/i18n";
 import { usePopover } from "@/shared/popover";
+import { APP_VERSION, BRAND, BUILD_ID, STAGE } from "@/shared/version";
 import menu from "@/shared/styles/menu.module.scss";
 import ui from "@/shared/styles/ui.module.scss";
 import css from "./Settings.module.scss";
@@ -67,6 +69,10 @@ export function Settings({ account, theme, onTheme }: Props) {
           <section>
             <h3>{t("settings.language")}</h3>
             <LanguageSelect />
+          </section>
+          <section className={css.about}>
+            <span><b className={css.brand}>{BRAND}</b> {t("settings.version", { version: APP_VERSION, stage: t(`app.stages.${STAGE}`) })}</span>
+            <span className="small muted">{t("settings.build", { build: BUILD_ID })}</span>
           </section>
         </div>
       )}

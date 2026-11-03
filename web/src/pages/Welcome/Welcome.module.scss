@@ -12,6 +12,8 @@
   p { margin: 2px 0 0; font-size: 15px; }
 }
 .brand { font-family: $brand; font-weight: 600; }
+// Стадия продукта рядом с именем: «альфа» — мелко, без веса
+.stage { font-family: inherit; font-size: .5em; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); vertical-align: middle; }
 .lead { text-align: center; margin: 40px 0 20px; font-size: 15px; }
 .none {
   display: grid; justify-items: center; gap: 10px;

@@ -19,6 +19,7 @@
 .brand {
   display: flex; align-items: center; gap: 10px; margin-bottom: 4px;
   b { font-family: $brand; font-size: 18px; font-weight: 600; letter-spacing: .02em; }
+  i { font-style: normal; font-size: 10px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }  // стадия: «альфа»
 }
 .head { display: grid; gap: 4px; }
 .invite { padding: 10px 12px; border-radius: 8px; background: var(--soft); font-size: 14px; }

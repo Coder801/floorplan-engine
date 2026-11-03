@@ -67,6 +67,7 @@ export const en: Messages = {
     model: "Model",
   },
   app: {
+    stages: { alpha: "alpha" },  // стадия продукта у имени и в настройках (shared/version.ts STAGE)
     leave: "Route edits are not saved. Leave without saving?",
     stale: "YAML changed after the build — sheets are outdated: uv run floorplan-engine build projects/{{name}}",
     notBuilt: "Project not built: uv run floorplan-engine build projects/{{name}}",
@@ -75,7 +76,7 @@ export const en: Messages = {
     nothingToDraw: "Nothing to draw on sheet {{name}} — rebuild the project or refresh the page",
     projects: "Projects", sheets: "Sheets", more: "More", project: "Project",
     openCount: "{{name}}: {{n}} open", pages: "Pages: {{n}}",
-    newVersion: "A new version of Shtroba is available — this tab was opened before the update and may show sheets incorrectly.",
+    newVersion: "A new version of {{brand}} is available — this tab was opened before the update and may show sheets incorrectly.",
     loadingSheet: "Loading sheet…", loadingProject: "Loading project…",
     sheetPages: "Sheet pages", prevPage: "Previous page", nextPage: "Next page",
     savedNotes: "wiring.yaml: {{notes}}",
@@ -97,7 +98,7 @@ export const en: Messages = {
     ownerNote: "Your own flat or house: one project — drawings, estimate, questions. You can invite an installer.",
     studio: "Company",
     studioNote: "Design studio, electrical contractor, renovation company or independent tradesperson: unlimited projects.",
-    brand: "Shtroba", title: "Sign in", subtitle: "Sign in to open your projects.",
+    title: "Sign in", subtitle: "Sign in to open your projects.",
     invited: "You were invited to the project “{{project}}” as {{role}}.", studioProject: "of the studio",
     acceptInvite: "Sign in to accept the invitation.",
     google: "Continue with Google", loginOff: "Sign-in with Telegram, Google or email is not configured on the server yet.", or: "or",
@@ -138,7 +139,7 @@ export const en: Messages = {
   },
   settings: {
     title: "Settings", account: "Account", loginOff: "Sign-in is off — local viewing",
-    plan: "Plan", theme: "Theme", language: "Language",
+    plan: "Plan", theme: "Theme", language: "Language", version: "{{version}} · {{stage}}", build: "build {{build}}",
     plans: {
       client: "My renovation", clientNote: "your own flat or house, one project",
       pro: "Company", proNote: "unlimited projects, invitations",
@@ -158,7 +159,7 @@ export const en: Messages = {
   projects: { title: "Projects", empty: "No built projects." },
   source: { noPreview: "No preview — open the file in a new tab", back: "← Back to sheet" },
   sheet: {
-    hint: "wheel — zoom by steps, drag — pan, double click — to object or whole drawing",
+    hint: "wheel — zoom by steps, drag — pan, double click — zoom in at that point (at the last step — whole drawing)",
     editHint: "Drag a line segment or a box · ⌘/Ctrl+click — several segments · Esc — clear selection",
     editTitle: "Drag a line segment: neighbouring segments stretch, corners stay square. ⌘/Ctrl+click — select several segments. A box on a wall slides along the wall, on the ceiling — freely. Consumers and the panel do not move.",
     saveFailed: "Route edits not saved — {{message}}",
@@ -180,7 +181,7 @@ export const en: Messages = {
     all: "All", none: "None", only: "only", onlyGroup: "Only {{group}}",
   },
   panel: {
-    hint: "wheel — zoom by steps, drag — pan, double click — whole panel; click a device or table row — card",
+    hint: "wheel — zoom by steps, drag — pan, double click — zoom in at that point (at the last step — whole panel); click a device or table row — card",
     canvas: "Panel front view", fit: "Whole panel",
     totals: "{{installed}} kW installed · {{calculated}} kW / {{current}} A calculated · supply {{input}}",
     weak: "weak spots: {{n}}",
@@ -192,11 +193,11 @@ export const en: Messages = {
     weak: "Weak spots",
   },
   elevation: {
-    hint: "wheel — zoom by steps, drag — pan, double click — whole wall; numbers as on the electrical sheet",
+    hint: "wheel — zoom by steps, drag — pan, double click — zoom in at that point (at the last step — whole wall); numbers as on the electrical sheet",
     canvas: "Elevation: {{title}}", fit: "Whole wall", ceiling: "ceiling {{h}}* — assumption · ",
     where: "Where the wall is: {{title}}",
     iso: "Isometric", isoTitle: "The wall at 45° with part of the adjacent wall in the corner",
-    isoHint: "the adjacent wall is translucent, a wavy edge means it continues; offsets from the left corner, heights from the floor; wheel — zoom, double-click — whole wall",
+    isoHint: "the adjacent wall is translucent, a wavy edge means it continues; offsets from the left corner, heights from the floor; wheel — zoom, double-click — zoom in at that point",
   },
   wall: {
     from: "from {{from}}", box: "Junction box", board: "Panel",
@@ -272,7 +273,7 @@ export const en: Messages = {
       },
     },
     common: "In every mode the points, their places and heights come from the design, and the codes are met. Under the floor the cable is always in conduit; to ceiling lights it runs along the ceiling.",
-    routes: { ceiling: "Along the ceiling", floor: "Under the floor" },
+    routes: { ceiling: "Along the ceiling", floor: "Under the floor" }, routeOnly: "the only route in this design",
     distributions: { boxes: "Junction boxes", loop: "Through socket boxes" },
     soon: "soon", asProject: "as in the design", edited: "has your route edits",
     stats: "{{devices}} devices · {{cable}} m cable · {{chases}} m chases",

@@ -10,6 +10,7 @@ import { remember, remembered } from "@/shared/palette";
 import { en } from "./en";
 import { ru, type Messages } from "./ru";
 import { uk } from "./uk";
+import { BRAND, STAGE } from "@/shared/version";
 
 export const LANGUAGES = [
   { code: "uk", name: "Українська" },
@@ -44,7 +45,7 @@ void i18n.use(initReactI18next).init({
 const applyDocument = () => {
   if (typeof document === "undefined") return;
   document.documentElement.lang = i18n.language;
-  document.title = `Shtroba · ${i18n.t("app.projects").toLowerCase()}`;
+  document.title = `${BRAND} ${i18n.t(`app.stages.${STAGE}`)} · ${i18n.t("app.projects").toLowerCase()}`;
 };
 applyDocument();
 i18n.on("languageChanged", applyDocument);

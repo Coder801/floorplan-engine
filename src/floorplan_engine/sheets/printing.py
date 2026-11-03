@@ -33,6 +33,7 @@ from ezdxf.entities.text import Text
 from ezdxf.layouts.layout import Paperspace
 from matplotlib.backends.backend_pdf import PdfPages
 
+from floorplan_engine import BRAND
 from floorplan_engine.drawing.layers import A_SHEET, MIN_TEXT_MM
 from floorplan_engine.drawing.titleblock import frame_region
 from floorplan_engine.sheets.preview import (
@@ -85,7 +86,7 @@ def write_album(doc: Drawing, path: Path, title: str) -> Path:
         lineweight_scaling=PT_PER_MM,
         min_lineweight=MIN_LINE_MM * PT_PER_MM,
     )
-    metadata = {"Title": title, "Creator": "Штроба (floorplan-engine)"}
+    metadata = {"Title": title, "Creator": f"{BRAND} (floorplan-engine)"}
     with PdfPages(path, metadata=metadata) as pdf:
         for layout in sheet_layouts(doc):
             width, height = paper_size(layout)

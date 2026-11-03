@@ -3,6 +3,7 @@
 // API_URL=http://127.0.0.1:8765 npm run dev). Запросы /api идут к нему через прокси:
 // CORS не нужен; при выкладке так же — обратный прокси (nginx и т. п.).
 import { execFile } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { basename, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import react from "@vitejs/plugin-react";
@@ -13,6 +14,9 @@ const api = { "/api": process.env.API_URL || "http://127.0.0.1:8000" };
 // Номер сборки: зашит в бандл (__BUILD_ID__) и лежит рядом в dist/version.json. Вкладка,
 // открытая до деплоя, сверяет их и показывает «Доступна новая версия» (version.ts)
 const BUILD_ID = process.env.BUILD_ID || new Date().toISOString().replace(/[-:.TZ]/g, "");
+// Версия продукта — из package.json (та же, что у пакета Python: tests/test_version.py);
+// показывается в настройках (__APP_VERSION__)
+const APP_VERSION = (JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8")) as { version: string }).version;
 const version = (): Plugin => ({
   name: "version",
   apply: "build",
@@ -35,7 +39,10 @@ export default defineConfig({
   plugins: [react(), version(), cssTypes()],
   // @/… — от src: компоненты по группам (pages, widgets, ui), общее (shared), холсты (engine)
   resolve: { alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) } },
-  define: { __BUILD_ID__: JSON.stringify(process.env.NODE_ENV === "production" ? BUILD_ID : "dev") },
+  define: {
+    __BUILD_ID__: JSON.stringify(process.env.NODE_ENV === "production" ? BUILD_ID : "dev"),
+    __APP_VERSION__: JSON.stringify(APP_VERSION),
+  },
   // Стили — SCSS-модули рядом с компонентами: .row-btns в файле → styles.rowBtns в коде
   css: {
     modules: { localsConvention: "camelCaseOnly" },

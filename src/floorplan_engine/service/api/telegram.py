@@ -37,8 +37,8 @@ TEXTS: dict[str, dict[str, str]] = {
     },
     "button": {"ru": "Поделиться номером", "uk": "Поділитися номером", "en": "Share phone number"},
     "done": {
-        "ru": "Готово — вернитесь на страницу Штробы, вход уже выполнен.",
-        "uk": "Готово — поверніться на сторінку Штроби, вхід уже виконано.",
+        "ru": "Готово — вернитесь на страницу Shtroba, вход уже выполнен.",
+        "uk": "Готово — поверніться на сторінку Shtroba, вхід уже виконано.",
         "en": "Done — go back to the Shtroba page, you are signed in.",
     },
     "stale": {
@@ -53,9 +53,9 @@ TEXTS: dict[str, dict[str, str]] = {
         "en": "Please share your own number using the button.",
     },
     "hint": {
-        "ru": "Этот бот только для входа на сайт Штробы: откройте страницу входа и нажмите "
+        "ru": "Этот бот только для входа на сайт Shtroba: откройте страницу входа и нажмите "
         "«Войти через Telegram».",
-        "uk": "Цей бот лише для входу на сайт Штроби: відкрийте сторінку входу й натисніть "
+        "uk": "Цей бот лише для входу на сайт Shtroba: відкрийте сторінку входу й натисніть "
         "«Увійти через Telegram».",
         "en": "This bot only signs you in to Shtroba: open the sign-in page and tap "
         "“Sign in with Telegram”.",
