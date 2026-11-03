@@ -31,7 +31,7 @@ Development starts from `develop`, work happens in `feature/<name>`, `main` hold
 1. `git status --porcelain`, `git diff --stat HEAD`, `git log --oneline -5` (title style).
    If something is already staged (`git diff --cached --stat`), treat it as part of the working
    tree and spread it over the commits like the rest.
-2. Read the diff only for code (`src/`, `service/`, `web/src/`, `tests/`, `migrations/`,
+2. Read the diff only for code (`src/`, `service/`, `web/src/`, `admin/src/`, `tests/`, `migrations/`,
    `deploy/`, `.claude/`), and only until the point is clear: `git diff HEAD -- <folder>`.
    For docs and project YAML use `--stat` and `git diff -U0 <file> | head -40`. For artifacts (DXF,
    `.epd`, `.xlsx`, PNG, PDF, `.csv` in `out/`) look at the names only. For new files use `head -30`.
@@ -71,7 +71,7 @@ format. `uv run cz bump` computes the version from the titles: `feat` is minor, 
   behaviour; `perf`; `test`; `docs`; `build` is dependencies, build, husky; `ci`; `chore` is project
   data (`projects/`), `out/` rebuilds, agents and everything else.
 - `scope` (no spaces, several separated by commas): `core`, `electrical`, `plumbing`, `drawing`,
-  `viewer`, `service`, `db`, `deploy`, `docs`, `projects`, `tests`, `agents`. Module and YAML field
+  `viewer`, `admin`, `service`, `db`, `deploy`, `docs`, `projects`, `tests`, `agents`. Module and YAML field
   names are written as in the code. No sign-offs or trailers (`Co-Authored-By` and the like).
 
 ```
