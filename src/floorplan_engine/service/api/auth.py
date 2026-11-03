@@ -57,6 +57,8 @@ from starlette.concurrency import run_in_threadpool
 from starlette.middleware.sessions import SessionMiddleware
 
 from floorplan_engine.service.api import telegram
+from floorplan_engine.service.api.admin import PREFIX as ADMIN_PREFIX
+from floorplan_engine.service.api.admin import admin_router
 from floorplan_engine.service.api.mail import Mailer, MailError, send_code
 from floorplan_engine.service.db import access as acc
 from floorplan_engine.service.db import access_codes
@@ -350,6 +352,13 @@ class Auth:
             who = self.principal(db, request)
             if who is None:
                 return JSONResponse({"detail": "нужен вход"}, status_code=401)
+            if path.startswith(ADMIN_PREFIX):  # platform admin (api/admin.py): superuser only
+                if who.user is None or not who.user.is_superuser or not who.user.is_active:
+                    return JSONResponse(
+                        {"detail": "только для владельца платформы"}, status_code=403
+                    )
+                request.state.admin = who.user.id
+                return None
             parts = path.split("/")  # ["", "api", "projects", name, …]
             if path == PRICES_PATH:  # the price list of the caller's own studio
                 return self._prices(db, who, request)
@@ -432,6 +441,7 @@ class Auth:
             https_only=self.config.secure,
         )
         app.include_router(self.router())
+        app.include_router(admin_router(self))
         if self.config.fixed_codes:
             app.router.on_startup.append(self.seed_codes)
         if self.telegram is not None:
