@@ -784,20 +784,38 @@ def project_import(
     root: Annotated[Path, typer.Argument(help="Папка проектов, например projects")],
     owner: Annotated[str, typer.Option(help="Почта или телефон владельца студии")],
     build: Annotated[bool, typer.Option(help="Собрать проекты")] = True,
+    create_owner: Annotated[
+        bool, typer.Option(help="Нет владельца или его фирмы — создать (фирма «Shtroba»)")
+    ] = False,
+    only_new: Annotated[
+        bool,
+        typer.Option(
+            help="Только то, чего в базе нет: проекты студии и её прайс с профилем не трогать "
+            "(старт сервера: правда — база)"
+        ),
+    ] = False,
 ) -> None:
     """Перенести папку проектов в базу: прайс и профиль студии (prices.yaml, studio.yaml), затем
-    каждый проект — как project push. Повторный запуск заливает только изменения."""
+    каждый проект — как project push. Повторный запуск заливает только изменения; с --only-new
+    уже перенесённое не трогает вовсе."""
     from floorplan_engine.service import sync
     from floorplan_engine.service.api.viewer import project_folders
+    from floorplan_engine.service.db import access as acc
     from floorplan_engine.service.db.session import make_engine, make_sessions
 
     with make_sessions(make_engine())() as db:
-        studio = _owner_studio(db, owner)
+        studio = sync.ensure_owner(db, owner) if create_owner else _owner_studio(db, owner)
         assert studio is not None
-        taken = sync.push_studio(db, studio, root)
+        if only_new and sync.has_studio_files(db, studio):
+            taken = ["уже в базе"]
+        else:
+            taken = sync.push_studio(db, studio, root)
         db.commit()
         typer.echo(f"Студия «{studio.name}»: {', '.join(taken) or 'файлов студии нет'}")
         for folder in project_folders(root):
+            if only_new and acc.project_by_slug(db, folder.name, studio) is not None:
+                typer.echo(f"{folder.name}: уже в базе — пропущен")
+                continue
             _push_one(db, folder, studio, build)
 
 

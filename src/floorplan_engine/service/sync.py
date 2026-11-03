@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from floorplan_engine.electrical.estimate import PRICES_FILE
@@ -29,7 +29,9 @@ from floorplan_engine.pipeline import OUT_DIR
 from floorplan_engine.service import project_store as ps
 from floorplan_engine.service.db import access as acc
 from floorplan_engine.service.db import repositories as repo
+from floorplan_engine.service.db import telegram_login as tg
 from floorplan_engine.service.db.models import (
+    AppUser,
     Build,
     ModelVersion,
     PriceList,
@@ -291,3 +293,33 @@ def pull_studio(session: Session, studio: Studio, root: Path) -> list[str]:
     for name, text in files.items():
         (root / name).write_text(text, "utf-8")
     return sorted(files)
+
+
+def has_studio_files(session: Session, studio: Studio) -> bool:
+    """The studio already has a price list or a profile in the database."""
+    prices = session.scalar(select(PriceList.id).where(PriceList.studio_id == studio.id))
+    return prices is not None or session.get(StudioProfile, studio.id) is not None
+
+
+def ensure_owner(session: Session, owner: str, firm: str = "Shtroba") -> Studio:
+    """The studio of the projects' owner (SHTROBA_OWNER: an e-mail or a phone "+380…"), created if
+    there is none: a user with that e-mail or phone and their firm. When the owner later logs in
+    with Google (the same confirmed e-mail) or Telegram (the same phone), it is the same user
+    (access.oauth_login)."""
+    value = owner.strip()
+    phone = tg.normalize_phone(value) if tg.is_phone(value) else None
+    email = None if phone else value.lower()
+    user = session.scalar(
+        select(AppUser).where(
+            AppUser.phone == phone if phone else func.lower(AppUser.email) == email
+        )
+    )
+    if user is None:
+        user = AppUser(email=email, phone=phone, name="")
+        session.add(user)
+        session.flush()
+        acc.audit(session, "owner_create", user=user)
+    studio = acc.own_studio(session, user)
+    if studio is None:
+        studio = acc.register_firm(session, user, firm, "electric")
+    return studio

@@ -16,7 +16,7 @@ from floorplan_engine.cli import app
 from floorplan_engine.service import sync
 from floorplan_engine.service.db import access as acc
 from floorplan_engine.service.db import repositories as repo
-from floorplan_engine.service.db.models import Studio
+from floorplan_engine.service.db.models import AppUser, Studio
 from floorplan_engine.service.objects import LocalObjectStore
 from tests.electrical.test_variants import _project
 from tests.service import conftest
@@ -138,3 +138,58 @@ def test_same_folder_name_in_two_studios(db: Session, tmp_path: Path) -> None:
     assert a.project.slug == b.project.slug == "kv" and a.project.id != b.project.id
     with pytest.raises(sync.SyncError, match="уже в студии"):
         sync.push(db, store, _project(tmp_path / "c"), first)
+
+
+def test_ensure_owner_creates_user_and_firm_once(db: Session) -> None:
+    """The server start creates the owner and the firm if missing; the owner logging in later with
+    the same confirmed e-mail is the same user."""
+    studio = sync.ensure_owner(db, "Boss@Example.com")
+    assert studio.kind == "studio" and studio.name == "Shtroba"
+    assert sync.ensure_owner(db, "boss@example.com").id == studio.id  # once
+    user = acc.oauth_login(db, "google", "g-1", "boss@example.com", True, "Boss")
+    assert acc.own_studio(db, user) is not None and acc.own_studio(db, user).id == studio.id  # type: ignore[union-attr]
+    by_phone = sync.ensure_owner(db, "+380 50 123 45 67")
+    assert by_phone.id != studio.id
+
+
+def test_import_only_new_keeps_the_database(
+    pg: Engine, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Server start: projects and the studio price list already in the database are not
+    overwritten by the image (the database is the truth); new ones are added."""
+    monkeypatch.setenv("DATABASE_URL", conftest.test_database_url())
+    monkeypatch.setenv("SHTROBA_OBJECTS", str(tmp_path / "store"))
+    root = tmp_path / "seed"
+    root.mkdir()
+    _project(root)
+    (root / "prices.yaml").write_text(STUDIO_PRICES, "utf-8")
+    args = ["project", "import", str(root), "--owner", "boss@example.com", "--create-owner",
+            "--only-new", "--no-build"]  # fmt: skip
+    runner = CliRunner()
+    first = runner.invoke(app, args)
+    assert first.exit_code == 0, first.output
+    assert "kv: версия 1" in first.output
+    (root / "kv" / "answers.yaml").write_text("answers: {}\n", "utf-8")  # git changed
+    (root / "prices.yaml").write_text("currency: грн\nitems: {}\n", "utf-8")
+    again = runner.invoke(app, args)
+    assert "kv: уже в базе — пропущен" in again.output and "уже в базе" in again.output
+    from floorplan_engine.service.db.session import make_sessions
+
+    with make_sessions(pg)() as db:
+        project = acc.project_by_slug(db, "kv")
+        assert project is not None
+        latest = repo.latest_model(db, project.id)
+        assert latest is not None and latest.version == 1  # git did not overwrite the database
+        studio = acc.own_studio(db, _owner(db))
+        assert studio is not None
+        files = sync.pull_studio(db, studio, tmp_path / "back")
+        assert files == ["prices.yaml"]
+        assert (tmp_path / "back" / "prices.yaml").read_text("utf-8") == STUDIO_PRICES
+
+
+def _owner(db: Session) -> AppUser:
+    from sqlalchemy import select
+
+    user = db.scalar(select(AppUser).where(AppUser.email == "boss@example.com"))
+    assert user is not None
+    return user
