@@ -346,13 +346,45 @@ def client_projects(session: Session, user: AppUser) -> int:
 UNOWNED_KIND = "unowned"
 
 
+# studio.folder of the studio that owns the viewer root (the operator's projects/)
+ROOT_FOLDER = ""
+
+
+def studio_folder(studio: Studio) -> str:
+    """Folder of the studio's projects relative to the viewer root, with its prices.yaml and
+    studio.yaml: "" is the root itself (the operator's projects/ and "no owner" projects),
+    otherwise the studio's own folder named by its id. Studios do not share price lists."""
+    if studio.kind == UNOWNED_KIND:
+        return ROOT_FOLDER
+    return studio.folder if studio.folder is not None else str(studio.id)
+
+
+def claim_root(session: Session, studio: Studio) -> None:
+    """The studio takes the viewer root: project folders lying in the root become its projects
+    (adopt_folders, `access link`). The root has one owner, and a studio with projects in its own
+    folder does not move."""
+    if studio.folder == ROOT_FOLDER:
+        return
+    other = session.scalar(
+        select(Studio).where(
+            Studio.folder == ROOT_FOLDER, Studio.kind != UNOWNED_KIND, Studio.id != studio.id
+        )
+    )
+    if other is not None:
+        raise AccessError(f"папка проектов в корне уже у «{other.name}»")
+    if session.scalar(select(func.count(Project.id)).where(Project.studio_id == studio.id)):
+        raise AccessError(f"у «{studio.name}» уже есть проекты в своей папке")
+    studio.folder = ROOT_FOLDER
+    session.flush()
+
+
 def unowned_studio(session: Session) -> Studio:
     """The "no owner" studio (one per database, no members): projects written from the command line
     before the owner logged in end up here (`access code`, `access link` without --owner). When
     the owner (SHTROBA_OWNER) logs in, adopt_folders moves them to the owner."""
     studio = session.scalar(select(Studio).where(Studio.kind == UNOWNED_KIND))
     if studio is None:
-        studio = Studio(name="Без владельца", kind=UNOWNED_KIND)
+        studio = Studio(name="Без владельца", kind=UNOWNED_KIND, folder=ROOT_FOLDER)
         session.add(studio)
         session.flush()
     return studio
@@ -389,11 +421,12 @@ def create_project_for(session: Session, user: AppUser, name: str, slug: str) ->
 def adopt_folders(
     session: Session, owner: str, slugs: Collection[str]
 ) -> tuple[list[str], str | None]:
-    """Project folders without a database row and "no owner" projects (create_project_unowned) move
-    into the owner's studio (`SHTROBA_OWNER` is an e-mail or a phone "+380…"; called on login,
-    `api/auth.Auth._adopt`). Calling it again changes nothing. Returns the linked slugs and the
+    """Project folders in the viewer root without a database row and "no owner" projects
+    (create_project_unowned, also in the root) move into the owner's studio, which takes the root
+    (claim_root). The owner is `SHTROBA_OWNER`, an e-mail or a phone "+380…"; called on login,
+    `api/auth.Auth._adopt`. Calling it again changes nothing. Returns the linked slugs and the
     reason if linking is impossible: the owner has not logged in yet, has not chosen an account
-    type, or has "Мой ремонт" with its single project."""
+    type, has "Мой ремонт" with its single project, or the root belongs to another studio."""
     owner = owner.strip().lower()
     user = session.scalar(
         select(AppUser).where(or_(func.lower(AppUser.email) == owner, AppUser.phone == owner))
@@ -404,19 +437,26 @@ def adopt_folders(
     if studio is None:
         return [], f"{owner} ещё не выбрал тип учётной записи"
     taken = set(session.scalars(select(Project.slug).where(Project.slug.in_(list(slugs)))))
-    linked: list[str] = []
-    for slug in sorted(set(slugs) - taken):
-        try:
-            create_project_for(session, user, slug, slug)
-        except AccessError as exc:
-            return linked, str(exc)
-        linked.append(slug)
+    new = sorted(set(slugs) - taken)
     unowned = session.scalars(
         select(Project)
         .join(Studio, Studio.id == Project.studio_id)
         .where(Studio.kind == UNOWNED_KIND, Project.slug.in_(list(slugs)))
         .order_by(Project.slug)
     ).all()
+    if not new and not unowned:
+        return [], None
+    try:
+        claim_root(session, studio)
+    except AccessError as exc:
+        return [], str(exc)
+    linked: list[str] = []
+    for slug in new:
+        try:
+            create_project_for(session, user, slug, slug)
+        except AccessError as exc:
+            return linked, str(exc)
+        linked.append(slug)
     for project in unowned:
         if user.account_type == "client" and client_projects(session, user) >= 1:
             return linked, "у хозяина квартиры — один проект"

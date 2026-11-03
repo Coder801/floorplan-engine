@@ -61,11 +61,14 @@ class Studio(Base):
     __tablename__ = "studio"
     id: Mapped[uuid.UUID] = _id()
     name: Mapped[str] = mapped_column(String(200))
-    kind: Mapped[str] = mapped_column(String(20), default="studio")  # studio | personal
+    kind: Mapped[str] = mapped_column(String(20), default="studio")  # studio | personal | unowned
     # Firm (kind = studio) at registration: kind, city, phone (access.register_firm)
     business: Mapped[str | None] = mapped_column(String(20))  # design | electric | …
     city: Mapped[str] = mapped_column(String(100), default="")
     phone: Mapped[str] = mapped_column(String(40), default="")
+    # Folder of the studio's projects in the viewer root (access.studio_folder): None — its own
+    # folder named by id, "" — the root itself (the operator's projects/, access.claim_root)
+    folder: Mapped[str | None] = mapped_column(String(100))
     created_at: Mapped[datetime] = _created()
     profile: Mapped[StudioProfile | None] = relationship(back_populates="studio")
     projects: Mapped[list[Project]] = relationship(back_populates="studio")

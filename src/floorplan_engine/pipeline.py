@@ -714,13 +714,14 @@ def load_market(path: Path) -> tuple[MarketSample | None, list[Issue]]:
     return parse_model(MarketSample, data, path.name)
 
 
-def price_page(root: Path) -> dict[str, Any]:
+def price_page(root: Path, market_root: Path | None = None) -> dict[str, Any]:
     """Studio price page (viewer, GET /api/prices): electrical works in estimate order — the
-    studio price from root/prices.yaml next to the market spread from root/market.yaml, the
-    period of the market prices and its sources. Errors of either file — in issues."""
+    studio price from root/prices.yaml next to the market spread from market.yaml (in
+    market_root, by default in root: the sample is shared by all studios), the period of the
+    market prices and its sources. Errors of either file — in issues."""
     prices_path = root / PRICES_FILE
     own, issues = load_prices(prices_path) if prices_path.is_file() else (None, [])
-    market, market_issues = load_market(root / MARKET_FILE)
+    market, market_issues = load_market((market_root or root) / MARKET_FILE)
     issues = [*issues, *market_issues]
     rows = []
     for key, (section, unit, ru, uk) in LINES.items():
@@ -805,6 +806,7 @@ def save_prices(root: Path, changes: dict[str, Any]) -> list[Issue]:
     parsed, issues = parse_model(PriceList, data, PRICES_FILE)
     if parsed is None:
         return issues
+    root.mkdir(parents=True, exist_ok=True)  # a new studio has no folder yet
     path.write_text(text, encoding="utf-8")
     return []
 

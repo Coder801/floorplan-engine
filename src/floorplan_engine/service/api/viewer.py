@@ -74,13 +74,15 @@ MODEL_FILES = (ROOM_FILE, ELECTRICAL_FILE, INTAKE_FILE, ANSWERS_FILE, WIRING_FIL
 
 def project_folders(root: Path) -> list[Path]:
     """Project folders in root: not hidden, with model YAML or a built out/ (the studio price list
-    and
-    other files next to them are not projects). Login links these same folders to an owner
-    (auth.Auth._adopt)."""
-    return sorted(
-        p
-        for p in root.iterdir()
-        if p.is_dir()
+    and other files next to them are not projects, nor are studio folders). Login links these same
+    folders to an owner (auth.Auth._adopt); the other studios' projects live in their own folders
+    (access.studio_folder)."""
+    return sorted(p for p in root.iterdir() if _is_project(p))
+
+
+def _is_project(p: Path) -> bool:
+    return (
+        p.is_dir()
         and not p.name.startswith(".")
         and (any((p / f).exists() for f in MODEL_FILES) or (p / OUT_DIR).is_dir())
     )
@@ -141,9 +143,13 @@ def create_viewer(root: Path, auth: Auth | None = None) -> FastAPI:
         def me() -> dict[str, bool]:
             return {"auth": False}
 
-    def project_dir(name: str) -> Path:
-        path = root / name
-        # Only direct subfolders of root: a name without separators or a leading dot
+    def studio_dir(request: Request) -> Path:
+        """Folder of the caller's studio (auth.check: request.state.folder); login off — root."""
+        return root / getattr(request.state, "folder", "")
+
+    def project_dir(request: Request, name: str) -> Path:
+        path = studio_dir(request) / name
+        # Only direct subfolders of the studio folder: a name without separators or a leading dot
         if "/" in name or "\\" in name or name.startswith(".") or not path.is_dir():
             raise HTTPException(404, f"проекта {name} нет")
         return path
@@ -162,8 +168,11 @@ def create_viewer(root: Path, auth: Auth | None = None) -> FastAPI:
     def projects(request: Request) -> list[dict[str, Any]]:
         folders = project_folders(root)
         if auth is not None:
-            shown = auth.visible(request, [p.name for p in folders])
-            folders = [p for p in folders if p.name in shown]
+            shown = auth.project_folders(request, [p.name for p in folders])
+            folders = sorted(
+                (p for name, folder in shown.items() if _is_project(p := root / folder / name)),
+                key=lambda p: p.name,
+            )
         return [_summary(p) for p in folders]
 
     def allowed(request: Request, action: acc.Action) -> bool:
@@ -174,7 +183,7 @@ def create_viewer(root: Path, auth: Auth | None = None) -> FastAPI:
 
     @app.get("/api/projects/{name}")
     def project(name: str, request: Request) -> dict[str, Any]:
-        path = project_dir(name)
+        path = project_dir(request, name)
         report_path = path / OUT_DIR / REPORT_JSON
         report = json.loads(report_path.read_text("utf-8")) if report_path.exists() else None
         answers_path = path / ANSWERS_FILE
@@ -213,8 +222,8 @@ def create_viewer(root: Path, auth: Auth | None = None) -> FastAPI:
             },
         }
 
-    def artifact(name: str) -> zipfile.ZipFile:
-        path = project_dir(name) / OUT_DIR / ARTIFACT_FILE
+    def artifact(request: Request, name: str) -> zipfile.ZipFile:
+        path = project_dir(request, name) / OUT_DIR / ARTIFACT_FILE
         if not path.is_file():
             raise HTTPException(404, f"нет {OUT_DIR}/{ARTIFACT_FILE} — сначала build")
         return zipfile.ZipFile(path)
@@ -228,13 +237,13 @@ def create_viewer(root: Path, auth: Auth | None = None) -> FastAPI:
         return data
 
     @app.get("/api/projects/{name}/sheets")
-    def sheets(name: str) -> dict[str, Any]:
-        with artifact(name) as zf:
+    def sheets(request: Request, name: str) -> dict[str, Any]:
+        with artifact(request, name) as zf:
             return manifest(zf)
 
     @app.get("/api/projects/{name}/sheets/{index}")
-    def sheet(name: str, index: int) -> Response:
-        with artifact(name) as zf:
+    def sheet(request: Request, name: str, index: int) -> Response:
+        with artifact(request, name) as zf:
             pages = manifest(zf)["pages"]
             page = next((p for p in pages if p["index"] == index), None)
             if page is None:
@@ -243,10 +252,12 @@ def create_viewer(root: Path, auth: Auth | None = None) -> FastAPI:
             return Response(zf.read(page["file"]), media_type="application/json")
 
     @app.post("/api/projects/{name}/wiring")
-    def save_wiring(name: str, changes: Annotated[dict[str, Any], Body()]) -> dict[str, Any]:
+    def save_wiring(
+        request: Request, name: str, changes: Annotated[dict[str, Any], Body()]
+    ) -> dict[str, Any]:
         """Wiring edits: {"wires": {id: {from, to, path} | null}, "boxes": {id: {room, group, at} |
         null}}, model mm; null restores the auto route. Then a rebuild."""
-        path = project_dir(name)
+        path = project_dir(request, name)
         issues = save_wiring_edits(path, changes)
         if issues:
             raise HTTPException(422, "; ".join(f"{i.path}: {i.message}" for i in issues))
@@ -258,10 +269,12 @@ def create_viewer(root: Path, auth: Auth | None = None) -> FastAPI:
         return {"built": result.built, "notes": [f"{i.path}: {i.message}" for i in notes]}
 
     @app.post("/api/projects/{name}/variant")
-    def choose_variant(name: str, data: Annotated[dict[str, Any], Body()]) -> dict[str, Any]:
+    def choose_variant(
+        request: Request, name: str, data: Annotated[dict[str, Any], Body()]
+    ) -> dict[str, Any]:
         """Wiring variant: {mode, route, distribution} → variant.yaml, then a rebuild.
         Each variant has its own route edits (wiring.yaml, variants)."""
-        path = project_dir(name)
+        path = project_dir(request, name)
         issues = save_variant(path, data)
         if issues:
             raise HTTPException(422, "; ".join(f"{i.path}: {i.message}" for i in issues))
@@ -277,9 +290,10 @@ def create_viewer(root: Path, auth: Auth | None = None) -> FastAPI:
 
     @app.get("/api/prices")
     def prices(request: Request) -> dict[str, Any]:
-        """Studio price page: electrical works with the studio price (prices.yaml next to the
-        projects) and the market spread (market.yaml), the period and sources of market prices."""
-        return {**price_page(root), "editable": edit_prices(request)}
+        """Studio price page: electrical works with the price of the caller's studio (prices.yaml
+        in the studio folder) and the market spread (market.yaml in the root, shared), the period
+        and sources of market prices."""
+        return {**price_page(studio_dir(request), root), "editable": edit_prices(request)}
 
     @app.post("/api/prices")
     def save_price_list(
@@ -289,24 +303,24 @@ def create_viewer(root: Path, auth: Auth | None = None) -> FastAPI:
         rebuilt (the estimate is rebuilt by build or estimate)."""
         if not edit_prices(request):
             raise HTTPException(403, "прайс правит только студия")
-        issues = save_prices(root, changes)
+        issues = save_prices(studio_dir(request), changes)
         if issues:
             raise HTTPException(422, "; ".join(f"{i.path}: {i.message}" for i in issues))
-        return {**price_page(root), "editable": True}
+        return {**price_page(studio_dir(request), root), "editable": True}
 
     @app.get("/api/projects/{name}/out/{rel:path}")
-    def out_file(name: str, rel: str) -> FileResponse:
-        return FileResponse(inside(project_dir(name) / OUT_DIR, rel))
+    def out_file(request: Request, name: str, rel: str) -> FileResponse:
+        return FileResponse(inside(project_dir(request, name) / OUT_DIR, rel))
 
     @app.get("/api/projects/{name}/source/{rel:path}")
-    def source_file(name: str, rel: str) -> FileResponse:
-        return FileResponse(inside(project_dir(name) / SOURCE_DIR, rel))
+    def source_file(request: Request, name: str, rel: str) -> FileResponse:
+        return FileResponse(inside(project_dir(request, name) / SOURCE_DIR, rel))
 
     @app.get("/api/projects/{name}/model/{filename}")
-    def model(name: str, filename: str) -> PlainTextResponse:
+    def model(request: Request, name: str, filename: str) -> PlainTextResponse:
         if filename not in SHOWN_FILES:
             raise HTTPException(400, f"файл модели — один из: {', '.join(SHOWN_FILES)}")
-        path = inside(project_dir(name), filename)
+        path = inside(project_dir(request, name), filename)
         return PlainTextResponse(path.read_text("utf-8"), media_type="text/yaml")
 
     return app

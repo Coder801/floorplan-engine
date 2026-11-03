@@ -340,12 +340,6 @@ class Auth:
             return None
         return {"project": project.slug, "name": project.name}
 
-    def visible(self, request: Request, slugs: Collection[str]) -> set[str]:
-        """Project folders the caller can see (for the project list)."""
-        with self.db() as db:
-            who = self.principal(db, request)
-            return set() if who is None else acc.visible_slugs(db, who, slugs)
-
     def check(self, request: Request) -> Response | None:
         """API request check; None means let it through. Not logged in gives 401, no access to the
         project gives 404 (other people's projects are not revealed), no permission gives 403."""
@@ -357,13 +351,8 @@ class Auth:
             if who is None:
                 return JSONResponse({"detail": "нужен вход"}, status_code=401)
             parts = path.split("/")  # ["", "api", "projects", name, …]
-            if path == PRICES_PATH:  # studio price list: a studio account; the debug guest reads
-                user = who.user
-                pro = user is not None and (user.is_superuser or user.account_type == "pro")
-                if not pro and not (who.visitor and request.method == "GET"):
-                    return JSONResponse({"detail": "прайс — только для студии"}, status_code=403)
-                request.state.edit_prices = pro
-                return None
+            if path == PRICES_PATH:  # the price list of the caller's own studio
+                return self._prices(db, who, request)
             if len(parts) < 4 or parts[2] != "projects" or not parts[3]:
                 return None
             project = acc.project_by_slug(db, parts[3])
@@ -381,7 +370,46 @@ class Auth:
                 payload = {"path": path}
                 acc.audit(db, "support_access", user=who.user, project=project, payload=payload)
             request.state.role = role
+            # Where the project folder is: its studio folder; a folder without a row — the root
+            request.state.folder = (
+                acc.studio_folder(project.studio) if project is not None else acc.ROOT_FOLDER
+            )
         return None
+
+    def _prices(self, db: Session, who: acc.Principal, request: Request) -> Response | None:
+        """Studio price list: a studio account edits the list of its own studio (prices.yaml in
+        the studio folder); a superuser outside a studio and the debug guest — the root list (the
+        guest only reads)."""
+        user = who.user
+        space = acc.user_space(db, user) if user is not None else None
+        if user is not None and (
+            user.is_superuser or (user.account_type == "pro" and space is not None)
+        ):
+            edit = True
+        elif who.visitor and request.method == "GET":
+            edit = False
+        else:
+            return JSONResponse({"detail": "прайс — только для студии"}, status_code=403)
+        request.state.edit_prices = edit
+        request.state.folder = acc.studio_folder(space) if space is not None else acc.ROOT_FOLDER
+        return None
+
+    def project_folders(self, request: Request, root_names: Collection[str]) -> dict[str, str]:
+        """Projects the caller sees: folder name → studio folder relative to the root. Database
+        projects by their studio; folders in the root without a row (root_names) — for the guest
+        and a superuser."""
+        with self.db() as db:
+            who = self.principal(db, request)
+            if who is None:
+                return {}
+            shown = {
+                p.slug: acc.studio_folder(p.studio)
+                for p in db.scalars(acc.visible_projects(db, who))
+                if p.slug is not None
+            }
+            for name in acc.visible_slugs(db, who, root_names):
+                shown.setdefault(name, acc.ROOT_FOLDER)
+            return shown
 
     # --- wiring into the app -----------------------------------------------------------
 

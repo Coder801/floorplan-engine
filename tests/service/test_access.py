@@ -310,3 +310,20 @@ def test_one_workspace_per_person(db: Session) -> None:
     db.add(Membership(studio_id=firm_b.id, user_id=staff.id, role="installer"))
     with pytest.raises(IntegrityError):
         db.flush()
+
+
+def test_studio_folder_and_root_owner(db: Session) -> None:
+    """A studio keeps its projects in its own folder named by id; the owner who adopts the root
+    folders takes the root, and the root has one owner."""
+    owner, other = user(db, "owner", "pro"), user(db, "other", "pro")
+    mine, theirs = acc.own_studio(db, owner), acc.own_studio(db, other)
+    assert mine is not None and theirs is not None
+    assert acc.studio_folder(theirs) == str(theirs.id)
+    assert acc.adopt_folders(db, "owner@example.com", []) == ([], None)  # nothing: no claim
+    assert acc.studio_folder(mine) == str(mine.id)
+    assert acc.adopt_folders(db, "owner@example.com", ["kv1"]) == (["kv1"], None)
+    assert acc.studio_folder(mine) == acc.ROOT_FOLDER
+    assert acc.studio_folder(acc.unowned_studio(db)) == acc.ROOT_FOLDER
+    acc.create_project_for(db, other, "Своя", "own")
+    linked, reason = acc.adopt_folders(db, "other@example.com", ["kv2"])
+    assert linked == [] and reason is not None and "уже" in reason

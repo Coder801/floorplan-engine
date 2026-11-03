@@ -103,7 +103,7 @@ def test_roles_filter_projects_and_actions(auth: Auth, root: Path) -> None:
     with auth.db() as db:
         studio = acc.session_user(db, studio_token)
         assert studio is not None
-        acc.set_account_type(db, studio, "pro")
+        acc.claim_root(db, acc.set_account_type(db, studio, "pro"))  # folders lie in the root
         kv1 = acc.create_project_for(db, studio, "Кв 1", "kv1")
         acc.create_project_for(db, studio, "Кв 2", "kv2")
         invite = acc.create_invite(db, studio, "client", project=kv1)
@@ -232,7 +232,7 @@ def test_access_code_login(auth: Auth, root: Path) -> None:
     with auth.db() as db:
         studio = acc.session_user(db, studio_token)
         assert studio is not None
-        acc.set_account_type(db, studio, "pro")
+        acc.claim_root(db, acc.set_account_type(db, studio, "pro"))  # folders lie in the root
         kv1 = acc.create_project_for(db, studio, "Кв 1", "kv1")
         acc.create_project_for(db, studio, "Кв 2", "kv2")
         code = access_codes.issue_code(db, kv1, studio, label="Иван")
@@ -365,3 +365,42 @@ def test_fixed_codes_skip_unknown_folder_and_taken_code(pg: Engine, root: Path) 
         assert client.post("/api/auth/code", json={"code": "ABCD-2345"}).status_code != 200
     with Auth(config, make_sessions(pg)).db() as db:
         assert {p.slug for p in db.query(Project).all()} == {"kv1"}
+
+
+def test_studios_have_own_folders_and_price_lists(auth: Auth, root: Path) -> None:
+    """The studio that took the root sees the root projects; another studio sees only the
+    projects in its own folder (<root>/<studio id>/) and edits its own price list there — neither
+    sees nor changes the other's prices."""
+    a_token, _ = _login(auth, "studio-a")
+    b_token, _ = _login(auth, "studio-b")
+    with auth.db() as db:
+        a = acc.session_user(db, a_token)
+        b = acc.session_user(db, b_token)
+        assert a is not None and b is not None
+        acc.claim_root(db, acc.set_account_type(db, a, "pro"))
+        acc.create_project_for(db, a, "Кв 1", "kv1")
+        firm_b = acc.set_account_type(db, b, "pro")
+        with pytest.raises(acc.AccessError, match="уже у"):
+            acc.claim_root(db, firm_b)
+        acc.create_project_for(db, b, "Б 1", "b1")
+        folder_b = root / acc.studio_folder(firm_b)
+    assert folder_b.parent == root and folder_b.name != ""
+    _folder(folder_b, "b1")
+
+    client = TestClient(create_viewer(root, auth))
+    client.cookies.set(COOKIE, b_token)
+    assert [p["name"] for p in client.get("/api/projects").json()] == ["b1"]
+    assert client.get("/api/projects/b1").status_code == 200
+    assert client.get("/api/projects/kv1").status_code == 404
+    assert client.get("/api/prices").json()["exists"] is False  # no inherited list
+    assert client.post("/api/prices", json={"items": {"work.chase": 111}}).status_code == 200
+    assert "111" in (folder_b / "prices.yaml").read_text("utf-8")
+    assert not (root / "prices.yaml").exists()
+
+    client.cookies.set(COOKIE, a_token)
+    assert [p["name"] for p in client.get("/api/projects").json()] == ["kv1"]
+    assert client.get("/api/projects/b1").status_code == 404
+    assert client.get("/api/prices").json()["exists"] is False  # B's list is not A's
+    assert client.post("/api/prices", json={"items": {"work.chase": 222}}).status_code == 200
+    assert "222" in (root / "prices.yaml").read_text("utf-8")
+    assert "111" in (folder_b / "prices.yaml").read_text("utf-8")

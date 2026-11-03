@@ -533,6 +533,9 @@ def access_link(
             typer.secho(f"Нет пользователя {owner} — пусть сначала войдёт", fg=typer.colors.RED)
             raise typer.Exit(1)
         try:
+            studio = acc.own_studio(db, user)
+            if studio is not None:  # the folder lies in the root: the root becomes the studio's
+                acc.claim_root(db, studio)
             acc.create_project_for(db, user, project.name, project.name)
         except acc.AccessError as exc:
             typer.secho(str(exc), fg=typer.colors.RED)
