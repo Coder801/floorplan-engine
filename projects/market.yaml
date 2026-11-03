@@ -1,0 +1,182 @@
+# Рыночные цены работ электрики: выборка из открытых прайсов (electrical/market.py).
+# Страница «Прайс студии» показывает рядом со своей ценой вилку рынка: мин, медиана, макс.
+# Цены — как в прайсе (без материалов, где это сказано); составная цена — сумма строк (text).
+# Где цена зависит от стены — бетон. date источника — дата прайса на странице:
+# "ГГГГ-ММ-ДД", "ГГГГ-ММ", "ГГГГ" или "" (на странице даты нет). Цены не выдумывать —
+# только со страницы источника; пересобирать выборку раз в квартал.
+region: Київ
+collected: "2026-11-03"
+currency: грн
+sources:
+  relicon:
+    name: Relicon
+    url: https://relicon.kiev.ua/elektromontazh
+    date: "2026-03-24"
+    kind: company
+  kabanchik:
+    name: Kabanchik.ua
+    url: https://kabanchik.ua/ua/kyiv/category/elektromontazhni-roboty
+    date: "2026-11"
+    kind: platform
+    note: "мінімальні ставки виконавців; назви робіт переказані"
+  rabotniki:
+    name: Rabotniki.ua
+    url: https://www.rabotniki.ua/elektromontazhnye-raboty/kiev
+    date: "2026"
+    kind: platform
+    note: "середня ціна за пропозиціями майстрів"
+  budver:
+    name: Budver
+    url: https://budver.com/elektromontazhni-roboti
+    date: "2026"
+    kind: platform
+    note: "середня ціна «від», регіон не вказано"
+  rating:
+    name: Rating remont kvartir
+    url: https://rating-remont-kvartir.com.ua/ua/rozcinki-na-elektromontazhni-roboti-kiiv/
+    date: "2026"
+    kind: review
+    note: "середина вилки огляду ринку"
+  master_elektrik:
+    name: Мастер-электрик
+    url: https://master-elektrik.com.ua/rascenki-html/
+    date: "2024"
+    kind: master
+  remont_plus:
+    name: Remont Plus
+    url: https://remont-plus.com.ua/elektromontazhnye-raboty/
+    date: ""
+    kind: company
+  volt220:
+    name: 220volt
+    url: https://220volt.com.ua/ua/information/uslugi/elektromontazh/
+    date: ""
+    kind: company
+  kontsept:
+    name: Концепт-мастер
+    url: https://kontsept-master.com.ua/pricelist/electric-price/index.html
+    date: ""
+    kind: company
+    note: "назви робіт переказані"
+  san_sanych:
+    name: San Sanych
+    url: https://san-sanych.ua/czini-na-poslugi/posluga-elektruk.html
+    date: ""
+    kind: company
+  yut_komfort:
+    name: Уют-Комфорт
+    url: https://yut-komfort.kiev.ua/-Elektromontazhnye-raboty-.html
+    date: ""
+    kind: company
+items:
+  work.cable:
+    basis: "открытая прокладка, за метр"
+    quotes:
+      relicon: { price: 25, text: "Прокладка кабеля 4 мм.кв открытым способом" }
+      kabanchik: { price: 8, text: "Відкрита проводка на скобах, бетон (від)" }
+      rabotniki: { price: 44, text: "Подвод провода и его закрепление, открытая проводка" }
+      budver: { price: 27, text: "Прокладання кабелю відкритим способом" }
+      rating: { price: 27.5, text: "Прокладання відкритої електропроводки на скобах (20–35)" }
+      master_elektrik: { price: 25, text: "Крепление открытой проводки на крепёж «ёлочка»" }
+      remont_plus: { price: 20, text: "Прокладка кабеля" }
+      volt220: { price: 14, text: "На скобах по бетонній стіні" }
+      kontsept: { price: 15, text: "Прокладка кабеля по потолку" }
+      san_sanych: { price: 300, text: "Прокладання відкритої проводки на скобах по бетону/цеглі" }
+  work.conduit:
+    basis: "кабель в гофре целиком, за метр (в смете — надбавка к прокладке)"
+    quotes:
+      relicon: { price: 10, text: "Прокладка гофры" }
+      kabanchik: { price: 9, text: "Відкрита проводка в гофрі (від)" }
+      rabotniki: { price: 59, text: "Подвод провода и его закрепление, гофротруба и т.п." }
+      budver: { price: 38, text: "Прокладання кабелю в гофрі" }
+      rating: { price: 35, text: "Прокладання кабелю в гофрі по стелі/стіні (25–45)" }
+      master_elektrik: { price: 30, text: "Прокладка открытой проводки в гофре" }
+      remont_plus: { price: 30, text: "Прокладка кабеля в гофре" }
+      volt220: { price: 16, text: "У гофрі або в ПВХ трубі" }
+      kontsept: { price: 5, text: "Протяжка кабеля в гофре" }
+      san_sanych: { price: 250, text: "Прокладання відкритої проводки в гофрі/ПВХ трубі" }
+  work.chase:
+    basis: "штроба в бетоне, за метр"
+    quotes:
+      relicon: { price: 80, text: "Подготовка штроб 25Х25, бетон" }
+      kabanchik: { price: 15, text: "Штроблення стіни під провід (від, без матеріалу стіни)" }
+      rabotniki: { price: 197, text: "Штробление под проводку в бетоне, глубина штробы 2 см" }
+      budver: { price: 168, text: "Штроблення під проводку в бетоні" }
+      rating: { price: 80, text: "Штроблення стіни під кабель (цегла/бетон) (40–120)" }
+      master_elektrik: { price: 80, text: "Штроба: бетон, керамзит, шлакобетон, белый кирпич" }
+      remont_plus: { price: 90, text: "Штробление под проводку (бетон)" }
+      kontsept: { price: 25, text: "Штробление под проводку, бетонная стена" }
+      san_sanych: { price: 550, text: "Штроблення стіни під провід у бетоні" }
+      yut_komfort: { price: 190, text: "Штробление бетона и прокладка провода" }
+  work.chase_wide:
+    basis: "широкая штроба в бетоне, за метр"
+    quotes:
+      relicon: { price: 100, text: "Подготовка штроб 25Х50, бетон" }
+  work.wall_hole:
+    basis: "сквозное отверстие в стене, бетон, до Ø25"
+    quotes:
+      rabotniki: { price: 160, text: "Сверление сквозных отверстий в стене до 25 мм (бетон, кирпич)" }
+      master_elektrik: { price: 30, text: "Сверление сквозных отверстий, до 20 см" }
+      remont_plus: { price: 75, text: "Сверление сквозных отверстий в бетонной перегородке, до 25 мм" }
+      san_sanych: { price: 400, text: "Свердління наскрізних отворів у стіні до 25мм (несуча стіна)" }
+  work.socket_box:
+    basis: "сверление и установка подрозетника, бетон"
+    quotes:
+      relicon: { price: 140, text: "Подготовка отверстий и фиксация подрозетников, бетон" }
+      kabanchik: { price: 70, text: "Підрозетник: висвердлювання і встановлення, бетон (від)" }
+      rabotniki: { price: 233, text: "Вырезка отверстия и установка коробки (бетон)" }
+      budver: { price: 176, text: "Встановлення підрозетника в бетон" }
+      rating: { price: 80, text: "Монтаж настановної коробки (підрозетника) (від)" }
+      master_elektrik: { price: 170, text: "Вырез под подрозетник, бетон 100 + установка 70" }
+      remont_plus: { price: 90, text: "Установка подрозетников в бетонной стене" }
+      volt220: { price: 85, text: "Висвердлювання отвору, бетон 75 + установка підрозетника 10" }
+      kontsept: { price: 12, text: "Подрозетник, бетон" }
+      san_sanych: { price: 250, text: "Монтаж установочної коробки (підрозетника)" }
+  work.junction_box:
+    basis: "распаечная коробка: установка и коммутация"
+    quotes:
+      relicon: { price: 180, text: "Монтаж накладной распределительной коробки и подключение до 20 проводников" }
+      kabanchik: { price: 170, text: "Розподільча коробка в бетоні 90 + збирання і зрощування 80 (від)" }
+      rabotniki: { price: 586, text: "Установка распредкоробки (бетон) 246 + сборка, распайка 340" }
+      budver: { price: 451, text: "Розподільча коробка в бетон 176 + збір з розпаюванням 275" }
+      rating: { price: 170, text: "Монтаж та комутація розподільної коробки (100–240)" }
+      master_elektrik: { price: 400, text: "Распределительная коробка «под ключ»" }
+      volt220: { price: 186, text: "Отвір під коробку, бетон 90 + накладна коробка з підключенням 96" }
+      kontsept: { price: 65, text: "Накладная коробка 15 + коммутация от 50" }
+      san_sanych: { price: 1250, text: "Коробка в бетоні 700 + складання схеми розподкоробки 550" }
+  work.board_install:
+    basis: "ниша в бетоне и установка щита, около 24 модулей"
+    quotes:
+      relicon: { price: 1000, text: "Подготовка ниши и монтаж корпуса щита 24М, бетон" }
+      kabanchik: { price: 450, text: "Ніша під щит до 24 модулів 250 + встановлення 200 (від)" }
+      rabotniki: { price: 2240, text: "Устройство ниши (бетон) 1532 + установка электрощитка 708" }
+      budver: { price: 1045, text: "Влаштування ніші під електрощит у бетонній стіні" }
+      rating: { price: 1000, text: "Монтаж електричного щитка (внутрішнього) до 12 автоматів (від)" }
+      master_elektrik: { price: 1000, text: "Долбление ниши 16–24 мод., бетон 700 + установка щита 300" }
+      remont_plus: { price: 850, text: "Ниша под щит (бетон) от 400 + монтаж встроенного щита от 450" }
+      san_sanych: { price: 2650, text: "Влаштування ніші під щит до 24 модулів у бетоні" }
+  work.board_module:
+    basis: "сборка щита за модуль (автомат 1P ≈ 1 модуль)"
+    quotes:
+      relicon: { price: 100, text: "Установка и подключение автоматического выключателя" }
+      rabotniki: { price: 194, text: "Установка автоматов, 1 фаза" }
+      budver: { price: 121, text: "Встановлення автоматичного вимикача" }
+      rating: { price: 120, text: "Встановлення автоматичного вимикача" }
+      master_elektrik: { price: 100, text: "Сборка щита от 12 автоматов: 1 модуль" }
+      remont_plus: { price: 45, text: "Сборка электрощита, за модуль (от)" }
+      volt220: { price: 45, text: "Монтаж ел.автоматів 220В" }
+      kontsept: { price: 40, text: "Установка автомата однополюсного" }
+      san_sanych: { price: 550, text: "Встановлення авт. вимикача (1-полюсний/3-полюсний)" }
+  work.mechanism:
+    basis: "установка механизма розетки или выключателя"
+    quotes:
+      relicon: { price: 80, text: "Монтаж механизма розетки/выключателя" }
+      kabanchik: { price: 45, text: "Встановлення механізму розетки/вимикача з підключенням (від)" }
+      rabotniki: { price: 137, text: "Установка и подключение розеток и выключателей" }
+      budver: { price: 99, text: "Встановлення розеток та вимикачів" }
+      rating: { price: 115, text: "Встановлення розетки/вимикача (80–150)" }
+      master_elektrik: { price: 100, text: "Установка механизма розетки, выключателя" }
+      remont_plus: { price: 65, text: "Установка розеток и выключателей (от)" }
+      volt220: { price: 40, text: "Установка розетки, вимикача (механізму)" }
+      kontsept: { price: 30, text: "Механизм розетки/выключателя, внутренний" }
+      san_sanych: { price: 300, text: "Встановлення внутрішньої розетки/вимикача" }

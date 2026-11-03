@@ -1,0 +1,78 @@
+// Studio price page over the whole screen, like the welcome screen: a table of works with the
+// studio price, the market spread bar and the deviation; the period footnote and sources below
+
+@use "@/shared/styles/mixins" as *;
+
+.page { position: fixed; inset: 0; z-index: 20; overflow: auto; background: var(--bg); }
+.inner { max-width: 1120px; margin: 0 auto; padding: 40px 24px 64px; }
+
+// Back | mark | title and lead
+.head {
+  display: grid; grid-template-columns: auto auto 1fr; align-items: center; gap: 12px; margin-bottom: 24px;
+  h1 { margin: 0; font-size: 26px; font-weight: 500; }
+  p { margin: 2px 0 0; font-size: 14px; }
+}
+.back { @include bare-button; min-width: 40px; min-height: 40px; font-size: 20px; line-height: 1; }
+.issue { margin-bottom: 12px; padding: 8px 12px; border-radius: 6px; background: var(--soft); color: var(--critical); font-size: 13px; }
+
+.table {
+  @include raised(10px);
+  width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; overflow: hidden;
+  th, td { padding: 8px 10px; border-top: 1px solid var(--line); text-align: left; vertical-align: middle; }
+  th { color: var(--muted); font-weight: 500; border-top: 0; }
+}
+.num { text-align: right !important; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.spreadHead { min-width: 300px; }
+.basis { font-size: 11px; margin-top: 2px; }
+.changed td { background: var(--soft); }
+.far { color: var(--critical); font-weight: 500; }
+.input {
+  width: 84px; padding: 4px 6px; text-align: right; font: inherit; font-variant-numeric: tabular-nums;
+  border: 1px solid var(--line); border-radius: 5px; background: var(--raise); color: var(--text);
+  &::placeholder { color: var(--muted); opacity: .7; }
+}
+
+// Spread bar: min | bar | max | median in bold, then the buttons
+.spreadCell { display: flex; align-items: center; gap: 10px; }
+.spread { display: grid; grid-template-columns: 36px 160px 44px; align-items: center; gap: 6px; }
+.edge { font-variant-numeric: tabular-nums; &:first-child { text-align: right; } }
+// Median: "take" button (sets it as the studio price) and the number in bold
+.medianCell { display: inline-flex; align-items: center; gap: 6px; }
+.take {
+  @include bare-button; min-height: 22px; padding: 0 6px; font-size: 11px; color: var(--muted);
+  border: 1px solid var(--line); border-radius: 11px; white-space: nowrap;
+}
+.bar { position: relative; height: 14px; }
+.whisker { position: absolute; left: 0; right: 0; top: 6px; height: 2px; background: var(--line); }
+.box { position: absolute; top: 2px; height: 10px; border-radius: 3px; background: var(--soft); border: 1px solid var(--line); }
+.median { position: absolute; top: 0; width: 2px; height: 14px; margin-left: -1px; background: var(--text); }
+.own {
+  position: absolute; top: 2px; width: 10px; height: 10px; margin-left: -5px; border-radius: 50%;
+  box-shadow: 0 0 0 2px var(--raise);
+  &.low, &.mid, &.high { background: var(--accent); }
+  &.below, &.above { background: var(--critical); }
+}
+.quotes {
+  @include bare-button; min-height: 26px; padding: 0 8px; font-size: 12px; color: var(--muted);
+  border: 1px solid var(--line); border-radius: 13px; white-space: nowrap;
+}
+.quotesRow td { background: var(--soft); padding-top: 4px; }
+.quotesRow ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; font-size: 12px; }
+.quotesRow li { display: grid; grid-template-columns: 56px 1fr auto; gap: 10px; }
+.money { text-align: right; font-variant-numeric: tabular-nums; }
+
+.actions { display: flex; justify-content: flex-end; align-items: center; gap: 10px; margin-top: 16px; }
+.actions button { min-height: 36px; padding: 0 14px; border-radius: 6px; }
+.primary { background: var(--accent); color: var(--accent-text); border: 0; }
+.bad { color: var(--critical); font-size: 13px; }
+
+.footnote { margin-top: 28px; color: var(--muted); font-size: 12px; line-height: 1.6; }
+.footnote p { margin: 0 0 8px; }
+.sources { margin: 0; padding-left: 20px; }
+
+@media (max-width: $phone) {
+  .inner { padding: 20px 8px 40px; }
+  .spreadHead { min-width: 0; }
+  .spread { grid-template-columns: 28px 80px 36px; }
+  .table { font-size: 12px; th, td { padding: 6px 4px; } }
+}
