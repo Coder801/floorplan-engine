@@ -70,6 +70,7 @@ def test_list_and_project(root: Path) -> None:
     client = TestClient(create_viewer(root))
     [item] = client.get("/api/projects").json()
     assert item["name"] == "kv1" and item["title"] == "Квартира 1"
+    assert item["id"] == "kv1"  # the key in addresses: the folder name here
     assert item["open_questions"] == 1 and item["stale"] is False
 
     p = client.get("/api/projects/kv1").json()

@@ -34,7 +34,7 @@ export function Welcome({ list, onOpen, settings }: { list: ProjectSummary[]; on
         )}
         <div className={css.grid}>
           {list.map((p) => (
-            <ProjectCard key={p.name} p={p} onOpen={onOpen} />
+            <ProjectCard key={p.id} p={p} onOpen={onOpen} />
           ))}
         </div>
       </div>

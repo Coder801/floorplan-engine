@@ -113,7 +113,7 @@ function Sources({ project: p, shown, onSource }: { project: Project; shown: str
           {s.exists && (
             <div className={css.rowBtns}>
               <button onClick={() => onSource(s.file)}>{t("common.show")}</button>
-              <a href={`${base(p.name)}/source/${enc(s.file)}`} target="_blank" rel="noreferrer">{t("common.openNewTab")}</a>
+              <a href={`${base(p.id)}/source/${enc(s.file)}`} target="_blank" rel="noreferrer">{t("common.openNewTab")}</a>
             </div>
           )}
         </div>
@@ -134,11 +134,11 @@ function ProjectInfo({ project: p }: { project: Project }) {
     if (!file) return;
     let alive = true;
     setText("…");
-    getText(`${base(p.name)}/model/${file}`).then((s) => alive && setText(s), (e) => alive && setText((e as Error).message));
+    getText(`${base(p.id)}/model/${file}`).then((s) => alive && setText(s), (e) => alive && setText((e as Error).message));
     return () => { alive = false; };
-  }, [p.name, file]);
+  }, [p.id, file]);
   const link = (dir: string, f: string) => (
-    <a key={f} href={`${base(p.name)}/${dir}/${enc(f)}`} target="_blank" rel="noreferrer"
+    <a key={f} href={`${base(p.id)}/${dir}/${enc(f)}`} target="_blank" rel="noreferrer"
        download={/\.(dxf|epd|csv|json)$/i.test(f) ? f.split("/").pop() : undefined}>{f}</a>
   );
   return (

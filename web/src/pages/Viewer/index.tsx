@@ -8,7 +8,7 @@ import { downloadSheetPng } from "@/engine/sheet/paint";
 import { wallPages, wallSheet } from "@/engine/sheet/walls";
 import { STUDIO_SECTIONS, Studio, type StudioSection } from "@/pages/Studio";
 import { Welcome } from "@/pages/Welcome";
-import { base, enc, getManifest, getPage, getProject, listProjects, saveVariant } from "@/shared/api";
+import { base, enc, getManifest, getPage, getProject, isProject, listProjects, saveVariant } from "@/shared/api";
 import { DRAWER_TABS, SIDE_TABS, type DrawerTab, type SideTab, type Theme } from "@/shared/consts";
 import { cx } from "@/shared/cx";
 import { label } from "@/shared/i18n";
@@ -424,7 +424,7 @@ export function Viewer({ account = null }: { account?: Account | null }) {
                 title={t("app.projects")} onClick={() => setMenu(menu === "open" ? "closing" : "open")}>
           <span className={css.arrow} aria-hidden="true">›</span>
           <span className={css.projectName}>
-            {list.find((p) => p.name === current)?.title ?? current ?? t("app.projects")}
+            {list.find((p) => isProject(p, current))?.title ?? current ?? t("app.projects")}
           </span>
         </button>
         <nav className={cx(ui.segmented, css.sheets)} aria-label={t("app.sheets")}>
@@ -476,7 +476,7 @@ export function Viewer({ account = null }: { account?: Account | null }) {
         {/* Download: sheet PNG (the whole sheet, at most A3 150 dpi) and the project DXF */}
         {project && current && !estimate && !info && (
           <DownloadMenu
-            onPng={page && !source && !estimate && !loading ? () => downloadSheetPng(page, `${current}-${page.name}.png`) : null}
+            onPng={page && !source && !estimate && !loading ? () => downloadSheetPng(page, `${project.name}-${page.name}.png`) : null}
             dxf={project.dxf ? { href: `${base(current)}/out/${enc(project.dxf)}`, name: project.dxf } : null} />
         )}
         {loading && !info && (

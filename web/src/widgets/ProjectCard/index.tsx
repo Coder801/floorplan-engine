@@ -68,9 +68,9 @@ function Preview({ p }: { p: ProjectSummary }) {
   useEffect(() => {
     if (!p.preview) return;
     let alive = true;
-    getText(`${base(p.name)}/out/preview.svg?t=${p.built ?? 0}`).then((t) => alive && setSvg(t), () => {});
+    getText(`${base(p.id)}/out/preview.svg?t=${p.built ?? 0}`).then((t) => alive && setSvg(t), () => {});
     return () => { alive = false; };
-  }, [p.name, p.preview, p.built]);
+  }, [p.id, p.preview, p.built]);
   if (!svg) return <Plan name={p.name} />;
   return <div className={cx(css.plan, css.real)} aria-hidden="true" dangerouslySetInnerHTML={{ __html: svg }} />;
 }
@@ -80,14 +80,14 @@ const date = (t: number | null) =>
 
 export function ProjectCard({ p, onOpen, current = false }: {
   p: ProjectSummary;
-  onOpen: (name: string) => void;
+  onOpen: (key: string) => void;
   current?: boolean;
 }) {
   const { t } = useTranslation();
   const built = date(p.built);
   return (
     <button className={cx(css.card, current && css.current)} aria-current={current || undefined}
-            onClick={() => onOpen(p.name)}>
+            onClick={() => onOpen(p.id)}>
       <Preview p={p} />
       <div className={css.body}>
         <div className={css.title}>{p.title}</div>

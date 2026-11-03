@@ -15,7 +15,10 @@ async function detail(r: Response): Promise<string> {
 }
 
 export const enc = (path: string) => path.split("/").map(encodeURIComponent).join("/");
-export const base = (name: string) => `/api/projects/${encodeURIComponent(name)}`;
+export const base = (key: string) => `/api/projects/${encodeURIComponent(key)}`;
+// The key from the address may be the id or an old link by name (invites, access codes): both open
+export const isProject = (p: { id: string; name: string }, key: string | null) =>
+  key !== null && (p.id === key || p.name === key);
 
 export const listProjects = () => get<ProjectSummary[]>("/api/projects");
 export const getProject = (name: string) => get<Project>(base(name));

@@ -34,7 +34,10 @@ export interface Report {
 }
 
 export interface ProjectSummary {
-  name: string;
+  // Key of the project in addresses (/api/projects/{id}, #id): the id in the database (projects in
+  // the database, docs/database.md), the folder name in the folder viewer
+  id: string;
+  name: string;  // folder name (slug): shown under the title
   title: string;
   built: number | null;
   stale: boolean;

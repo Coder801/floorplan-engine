@@ -3,6 +3,7 @@
 
 import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
+import { isProject } from "@/shared/api";
 import { REDUCED_MOTION } from "@/shared/consts";
 import { cx } from "@/shared/cx";
 import ui from "@/shared/styles/ui.module.scss";
@@ -41,7 +42,7 @@ export function ProjectsMenu({ list, current, closing, onOpen, onClose, onClosed
         <div className={css.list}>
           {!list.length && <p className="muted small">{t("projects.empty")}</p>}
           {list.map((p) => (
-            <ProjectCard key={p.name} p={p} current={p.name === current} onOpen={onOpen} />
+            <ProjectCard key={p.id} p={p} current={isProject(p, current)} onOpen={onOpen} />
           ))}
         </div>
       </nav>

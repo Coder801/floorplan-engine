@@ -9,7 +9,7 @@ import type { Project } from "@/shared/types";
 import css from "./SourceView.module.scss";
 
 export function SourceView({ project, file, onBack }: { project: Project; file: string; onBack: () => void }) {
-  const url = `${base(project.name)}/source/${enc(file)}`;
+  const url = `${base(project.id)}/source/${enc(file)}`;
   const kind = kindOf(file);
   const { t } = useTranslation();
   const [text, setText] = useState("…");

@@ -118,6 +118,7 @@ def _summary(project: Path) -> dict[str, Any]:
     model_times = [t for f in MODEL_FILES if (t := _mtime(project / f)) is not None]
     questions = report.get("questions", [])
     return {
+        "id": project.name,  # the key in addresses; in the database viewer — the project id
         "name": project.name,
         "title": report.get("project") or project.name,
         "built": built,
