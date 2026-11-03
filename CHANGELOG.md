@@ -1,3 +1,28 @@
+## v0.3.0 (2026-11-03)
+
+### Feat
+
+- **deploy,service**: deploy on the database with a one-time seed import
+- **viewer**: link admin project page to the viewer by id
+- **service,db**: make project slug unique per studio
+- **viewer,service**: key viewer projects by id instead of name
+- **service,db**: serve the viewer API from the database
+- **service,db**: sync a project folder with the database
+- **service,db**: build a project from the database into object storage
+- **service,db**: keep all model files and add object storage by key
+- **admin,deploy**: add the platform admin front at /admin/
+- **service,db**: return state words and event names from the admin API
+- **service,db**: add platform admin API for the superuser
+- **service,db**: keep each studio's projects and prices in its own folder
+- **service,db**: enforce one workspace per person and query visible projects
+- **viewer**: move studio price list into studio settings
+
+### Fix
+
+- **deploy**: exit non-zero when view or Caddy stops
+- **core**: reject non-dict wiring edits with a field error
+- **deploy**: keep server studio prices and profile on redeploy
+
 ## v0.2.0 (2026-11-03)
 
 ### Feat
