@@ -22,7 +22,7 @@ items:
   work.chase: 200                # узкая, 1–2 кабеля; бетон — дороже
   work.chase_wide: 300           # широкая, 3–4 кабеля
   work.wall_hole: 150            # проход через стену над дверью, Ø25–32
-  work.socket_box: 100
+  work.socket_box: 115
   work.junction_box: 450         # установка и коммутация с опрессовкой
   work.board_install: 2500       # ниша и установка щита на 5 рядов
   work.board_module: 120         # сборка щита, за модуль
