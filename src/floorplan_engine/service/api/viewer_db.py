@@ -18,6 +18,7 @@ import mimetypes
 import tempfile
 import zipfile
 from collections.abc import Callable
+from datetime import UTC, datetime
 from io import BytesIO
 from pathlib import Path
 from typing import Annotated, Any
@@ -30,11 +31,13 @@ from sqlalchemy.orm import Session
 from floorplan_engine.electrical.estimate import PRICES_FILE
 from floorplan_engine.epd.artifact import FORMAT_VERSION, MANIFEST
 from floorplan_engine.epd.thumbnail import PREVIEW_FILE
-from floorplan_engine.model.intake import ANSWERS_FILE, INTAKE_FILE
+from floorplan_engine.model.intake import ANSWERS_FILE, INTAKE_FILE, AnswerNote
 from floorplan_engine.pipeline import (
     ARTIFACT_FILE,
     PROJECT_FILE,
+    AnswerSaved,
     price_page,
+    save_answer,
     save_prices,
     save_variant,
     save_wiring_edits,
@@ -52,6 +55,7 @@ from floorplan_engine.service.db.models import (
     Source,
 )
 from floorplan_engine.service.objects import ObjectStore
+from floorplan_engine.validation.answers_file import build_digest, with_pending_text
 from floorplan_engine.validation.issues import WIRING_FILE, Issue
 
 SOURCE_DIR = ps.SOURCE_DIR
@@ -67,8 +71,56 @@ def check_manifest(zf: zipfile.ZipFile) -> dict[str, Any]:
     return data
 
 
+def refused_answer(saved: AnswerSaved) -> HTTPException:
+    """422 of a refused answer: errors by field and the answers in the way of them, for the
+    question card."""
+    return HTTPException(
+        422,
+        {
+            "issues": [
+                {"file": i.file, "path": i.path, "message": i.message} for i in saved.issues
+            ],
+            "blocked_by": [{"id": q.id, "text": q.text} for q in saved.blocked_by],
+        },
+    )
+
+
+def answer_note(who: acc.Principal | None) -> AnswerNote:
+    """Who answered and when, for the log of answers.yaml; a code or a guest has no name."""
+    user = who.user if who is not None else None
+    return AnswerNote(
+        at=datetime.now(UTC).isoformat(timespec="seconds"),
+        by=(user.name or user.email) if user is not None else None,
+    )
+
+
+def answer_body(data: dict[str, Any]) -> tuple[str, Any]:
+    """{id, answer} of POST /answers; answer null removes it."""
+    qid = data.get("id")
+    if not isinstance(qid, str) or not qid:
+        raise HTTPException(422, "id: нужен id вопроса")
+    return qid, data.get("answer")
+
+
 def _version_of(session: Session, build: Build | None) -> ModelVersion | None:
     return session.get(ModelVersion, build.model_version_id) if build is not None else None
+
+
+def _answers_of(version: ModelVersion | None) -> dict[str, Any]:
+    answers = version.data.get(ANSWERS_FILE) if version is not None else None
+    found = answers.get("answers") if isinstance(answers, dict) else None
+    return found if isinstance(found, dict) else {}
+
+
+def _stale(built_on: ModelVersion, latest: ModelVersion, report: dict[str, Any]) -> bool:
+    """The model was changed after the build; a pending text answer alone changes nothing in it."""
+    if latest.version <= built_on.version:
+        return False
+    old, new = repo.model_files(built_on), repo.model_files(latest)
+    others = (new | old).keys() - {ANSWERS_FILE}
+    if any(old.get(f) != new.get(f) for f in others):
+        return True
+    return report.get("answers_digest") != build_digest(new.get(ANSWERS_FILE))
 
 
 def summary(session: Session, project: Project) -> dict[str, Any]:
@@ -77,14 +129,14 @@ def summary(session: Session, project: Project) -> dict[str, Any]:
     latest = repo.latest_model(session, project.id)
     built_on = _version_of(session, build)
     report = build.report if build is not None else {}
-    questions = report.get("questions", [])
+    questions = (with_pending_text(report, _answers_of(latest)) or {}).get("questions", [])
     return {
         "id": str(project.id),
         "name": project.slug or str(project.id),
         "title": report.get("project") or project.name,
         "built": build.created_at.timestamp() if build is not None else None,
         # The model was changed after the build: the sheets show the old state
-        "stale": built_on is not None and latest is not None and latest.version > built_on.version,
+        "stale": built_on is not None and latest is not None and _stale(built_on, latest, report),
         "stages": report.get("stages", []),
         "open_questions": sum(1 for q in questions if q.get("state") == "open"),
         "preview": build is not None and ps.build_file(session, build, PREVIEW_FILE) is not None,
@@ -131,14 +183,16 @@ def install_db_routes(app: FastAPI, auth: Auth, store: ObjectStore, market_root:
             version = repo.latest_model(db, p.id)
             data = version.data if version is not None else {}
             names = [f.name for f in build.files] if build is not None else []
-            answers = data.get(ANSWERS_FILE)
+            answers = _answers_of(version)
             intake = data.get(INTAKE_FILE)
             model = repo.model_files(version) if version is not None else {}
             own_prices = db.scalar(select(PriceList.id).where(PriceList.project_id == p.id))
             return {
                 **summary(db, p),
-                "report": build.report if build is not None and build.report else None,
-                "answers": answers.get("answers", {}) if isinstance(answers, dict) else {},
+                "report": with_pending_text(
+                    build.report if build is not None and build.report else None, answers
+                ),
+                "answers": answers,
                 "artifact": ARTIFACT_FILE in names,
                 "dxf": PROJECT_FILE if PROJECT_FILE in names else None,
                 "files": sorted(n for n in names if "/" not in n),
@@ -158,6 +212,7 @@ def install_db_routes(app: FastAPI, auth: Auth, store: ObjectStore, market_root:
                 "can": {
                     "edit_wiring": allowed(request, "edit_wiring"),
                     "choose_variant": allowed(request, "choose_variant"),
+                    "answer": allowed(request, "answer"),
                 },
             }
 
@@ -214,9 +269,15 @@ def install_db_routes(app: FastAPI, auth: Auth, store: ObjectStore, market_root:
                 raise HTTPException(404, f"файла {filename} нет")
             return PlainTextResponse(files[filename], media_type="text/yaml")
 
-    def rewrite(request: Request, key: str, apply: Callable[[Path], list[Issue]]) -> dict[str, Any]:
+    def rewrite(
+        request: Request,
+        key: str,
+        apply: Callable[[Path], list[Issue]],
+        rebuild: Callable[[], bool] = lambda: True,
+    ) -> dict[str, Any]:
         """A change by a core function in the latest version's folder → a new version by the user
-        and a rebuild; errors (with a field path) give 422 and change nothing."""
+        and a rebuild (unless rebuild() says the change does not need one, it is asked after
+        apply); errors (with a field path) give 422 and change nothing."""
         with auth.db() as db:
             p = project_of(db, request, key)
             ps.lock(db, p)
@@ -228,6 +289,8 @@ def install_db_routes(app: FastAPI, auth: Auth, store: ObjectStore, market_root:
             version = repo.add_model_version(db, p.id, files, "user")
             who = auth.principal(db, request)
             version.user_id = who.user.id if who is not None and who.user is not None else None
+            if not rebuild():
+                return {"built": False, "notes": []}
             build = ps.build(db, store, p, version)
             notes = [
                 f"{i.get('path')}: {i.get('message')}"
@@ -242,6 +305,27 @@ def install_db_routes(app: FastAPI, auth: Auth, store: ObjectStore, market_root:
     ) -> dict[str, Any]:
         """Wiring edits → wiring.yaml of a new model version, then a rebuild."""
         return rewrite(request, key, lambda folder: save_wiring_edits(folder, changes))
+
+    @app.post("/api/projects/{key}/answers")
+    def answer(
+        request: Request, key: str, data: Annotated[dict[str, Any], Body()]
+    ) -> dict[str, Any]:
+        """One answer: {id, answer} → answers.yaml of a new model version; a rebuild unless the
+        answer is text waiting for the analyzer."""
+        qid, raw = answer_body(data)
+        with auth.db() as db:
+            note = answer_note(auth.principal(db, request))
+        saved = AnswerSaved()
+
+        def apply(folder: Path) -> list[Issue]:
+            nonlocal saved
+            saved = save_answer(folder, qid, raw, note)
+            if saved.issues:
+                raise refused_answer(saved)
+            return []
+
+        result = rewrite(request, key, apply, lambda: saved.rebuild)
+        return {"built": result["built"], "rebuilt": saved.rebuild}
 
     @app.post("/api/projects/{key}/variant")
     def choose_variant(

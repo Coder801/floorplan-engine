@@ -103,6 +103,7 @@ def render_markdown(name: str, report: Report, results: list[StageResult]) -> st
 def to_json(name: str, report: Report, results: list[StageResult]) -> str:
     data: dict[str, Any] = {
         "project": name,
+        "answers_digest": report.answers_digest,
         "stages": [
             {
                 "stage": r.stage.value,

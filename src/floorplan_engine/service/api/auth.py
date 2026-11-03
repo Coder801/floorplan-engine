@@ -373,6 +373,8 @@ class Auth:
                 action = "edit_wiring"
             elif request.method == "POST" and parts[-1] == "variant":
                 action = "choose_variant"
+            elif request.method == "POST" and parts[-1] == "answers":
+                action = "answer"
             if not acc.can(role, action):
                 return JSONResponse({"detail": "нет права на это действие"}, status_code=403)
             if role == "support" and project is not None:

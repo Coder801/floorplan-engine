@@ -40,6 +40,11 @@ def panel_questions(elec: Electrical, panel: BoardPanel) -> list[Question]:
                 target="panel.backup",
                 answer="choice",
                 options=BACKUP_OPTIONS,
+                option_labels={
+                    "none": "Без резерва",
+                    "inverter": "Инвертор с АКБ",
+                    "plug": "Генератор через силовую вилку",
+                },
                 assumption="inverter",
                 text="Нужен ли резерв питания? Сейчас — гибридный инвертор с АКБ (допущение): "
                 "none — без резерва, inverter — инвертор, plug — генератор через силовую вилку",
@@ -120,6 +125,7 @@ def _dc_questions(elec: Electrical, panel: BoardPanel) -> list[Question]:
                 target="panel.npe_relay",
                 answer="choice",
                 options=["yes", "no"],
+                option_labels={"yes": "Да, связывает", "no": "Нет, поставить контактор N–PE"},
                 assumption="yes",
                 text="Связывает ли инвертор N с PE в резервном режиме (встроенное реле N–PE, "
                 "включается в настройках)? Без этой связи УЗО и дифавтоматы на резерве не "
@@ -135,6 +141,7 @@ def _dc_questions(elec: Electrical, panel: BoardPanel) -> list[Question]:
                 target="panel.inverter",
                 answer="choice",
                 options=["hybrid", "basic"],
+                option_labels={"hybrid": "Гибридный", "basic": "Без своего переключения"},
                 assumption="hybrid",
                 text=f"Какой инвертор? Сейчас гибридный (допущение) — сам переключает сеть и АКБ, "
                 f"в щите {switch}. basic — без своего переключения: резерв через АВР",

@@ -4,18 +4,20 @@ versions with a rebuild, the price list of the caller's own studio."""
 
 from __future__ import annotations
 
+import uuid
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import Engine
 
+from floorplan_engine.service import project_store as ps
 from floorplan_engine.service import sync
 from floorplan_engine.service.api.auth import COOKIE, Auth, AuthConfig
 from floorplan_engine.service.api.viewer import create_viewer
 from floorplan_engine.service.db import access as acc
 from floorplan_engine.service.db import repositories as repo
-from floorplan_engine.service.db.models import PriceList
+from floorplan_engine.service.db.models import PriceList, Project
 from floorplan_engine.service.db.session import make_sessions
 from floorplan_engine.service.objects import LocalObjectStore
 from tests.electrical.test_variants import _project
@@ -75,7 +77,7 @@ def test_project_sheets_and_files_from_storage(
     p = client.get(f"/api/projects/{pid}").json()
     assert p["artifact"] and p["dxf"] == "project.dxf" and p["sources"] == ["plan.pdf"]
     assert p["model"] == ["room.yaml", "electrical.yaml"]
-    assert p["can"] == {"edit_wiring": True, "choose_variant": True}
+    assert p["can"] == {"edit_wiring": True, "choose_variant": True, "answer": True}
     assert client.get("/api/projects/kv").json()["id"] == pid  # an old link by name
     manifest = client.get(f"/api/projects/{pid}/sheets").json()
     first = manifest["pages"][0]["index"]
@@ -132,3 +134,75 @@ def test_price_list_of_own_studio(
     with auth.db() as db:
         rows = db.query(PriceList).all()
         assert len(rows) == 1 and rows[0].text is not None and "111" in rows[0].text
+
+
+def _with_questions(auth: Auth, store: LocalObjectStore, pid: str) -> None:
+    """A new model version with two questions, built."""
+    intake = (
+        "questions:\n"
+        '  - { id: q1, stage: plan, text: "Есть обмер?", answer: text, severity: major }\n'
+        '  - { id: q2, stage: plan, text: "Потолок?", answer: value,'
+        " target: rooms.r.walls.w2.thickness }\n"
+    )
+    with auth.db() as db:
+        project = db.get(Project, uuid.UUID(pid))
+        assert project is not None
+        latest = repo.latest_model(db, project.id)
+        assert latest is not None
+        files = {**repo.model_files(latest), "intake.yaml": intake}
+        ps.build(db, store, project, repo.add_model_version(db, project.id, files, "user"))
+
+
+def test_answers_are_new_versions(
+    auth: Auth, setup: tuple[TestClient, LocalObjectStore, dict[str, str]]
+) -> None:
+    client, store, tokens = setup
+    pid = tokens["id"]
+    _with_questions(auth, store, pid)
+    client.cookies.set(COOKIE, tokens["client"])
+    first = client.get(f"/api/projects/{pid}").json()
+    assert first["can"]["answer"] is True
+
+    def versions() -> int:
+        with auth.db() as db:
+            latest = repo.latest_model(db, uuid.UUID(pid))
+            assert latest is not None
+            return latest.version
+
+    start = versions()
+    # A text answer: a new version, no rebuild, the sheets are not stale
+    saved = client.post(
+        f"/api/projects/{pid}/answers", json={"id": "q1", "answer": {"text": "нет"}}
+    )
+    assert saved.json() == {"built": False, "rebuilt": False}
+    assert versions() == start + 1
+    p = client.get(f"/api/projects/{pid}").json()
+    assert p["stale"] is False
+    assert next(q for q in p["report"]["questions"] if q["id"] == "q1")["state"] == "text"
+    assert p["open_questions"] == first["open_questions"] - 1
+    assert p["answers"]["q1"] == {"text": "нет"}
+    # A refused value changes nothing
+    bad = client.post(f"/api/projects/{pid}/answers", json={"id": "q2", "answer": "много"})
+    assert bad.status_code == 422
+    assert bad.json()["detail"]["issues"][0]["path"] == "answers.q2"
+    assert versions() == start + 1
+    # A value: a new version and a rebuild; the log names who answered
+    saved = client.post(f"/api/projects/{pid}/answers", json={"id": "q2", "answer": 2700})
+    assert saved.json() == {"built": True, "rebuilt": True}
+    p = client.get(f"/api/projects/{pid}").json()
+    assert p["stale"] is False and p["open_questions"] == first["open_questions"] - 2
+    assert next(q for q in p["report"]["questions"] if q["id"] == "q2")["state"] == "answered"
+    with auth.db() as db:
+        latest = repo.latest_model(db, uuid.UUID(pid))
+        assert latest is not None
+        assert latest.version == start + 2 and latest.user_id is not None
+        assert latest.data["answers.yaml"]["log"]["q2"]["by"] == "client"
+
+
+def test_answers_need_the_right(
+    setup: tuple[TestClient, LocalObjectStore, dict[str, str]],
+) -> None:
+    client, _, tokens = setup
+    client.cookies.set(COOKIE, tokens["b"])
+    url = f"/api/projects/{tokens['id']}/answers"
+    assert client.post(url, json={"id": "q1", "answer": 1}).status_code == 404

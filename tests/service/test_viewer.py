@@ -8,7 +8,9 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+from floorplan_engine.pipeline import build_project
 from floorplan_engine.service.api.viewer import create_viewer
+from tests.electrical.test_variants import _project
 
 PAGE = {
     "name": "01 План",
@@ -166,6 +168,7 @@ def test_choose_variant_open_viewer(root: Path) -> None:
     assert client.get("/api/projects/kv1").json()["can"] == {
         "edit_wiring": True,
         "choose_variant": True,
+        "answer": True,
     }
     bad = client.post("/api/projects/kv1/variant", json={"route": "air"})
     assert bad.status_code == 422 and "route" in bad.json()["detail"]
@@ -228,3 +231,63 @@ def test_price_page_without_files(root: Path) -> None:
     assert page["exists"] is False and page["market"] is None
     assert client.post("/api/prices", json={"items": {"work.chase": 90}}).status_code == 200
     assert "work.chase: 90" in (root / "prices.yaml").read_text("utf-8")
+
+
+def _answers_project(tmp_path: Path) -> Path:
+    project = _project(tmp_path)
+    intake = (
+        "questions:\n"
+        '  - { id: q1, stage: plan, text: "Есть обмер?", answer: text, severity: major }\n'
+        '  - { id: q2, stage: plan, text: "Левая стена?", answer: value,'
+        " target: rooms.r.walls.w1.length }\n"
+    )
+    (project / "intake.yaml").write_text(intake, "utf-8")
+    build_project(project)
+    return project
+
+
+def test_answer_text_keeps_sheets_fresh_and_value_rebuilds(tmp_path: Path) -> None:
+    project = _answers_project(tmp_path)
+    (project / "answers.yaml").write_text("answers: {}\n", "utf-8")
+    build_project(project)
+    client = TestClient(create_viewer(tmp_path))
+    # The answer is written after the build, its mtime is newer: only the digest can tell
+    saved = client.post("/api/projects/kv/answers", json={"id": "q1", "answer": {"text": "нет"}})
+    assert saved.json() == {"built": False, "rebuilt": False}
+    p = client.get("/api/projects/kv").json()
+    assert p["stale"] is False
+    assert next(q for q in p["report"]["questions"] if q["id"] == "q1")["state"] == "text"
+    assert p["answers"] == {"q1": {"text": "нет"}}
+    assert "q1:" in (project / "answers.yaml").read_text("utf-8")
+
+    saved = client.post("/api/projects/kv/answers", json={"id": "q2", "answer": {"accept": True}})
+    assert saved.json() == {"built": True, "rebuilt": True}
+    p = client.get("/api/projects/kv").json()
+    assert next(q for q in p["report"]["questions"] if q["id"] == "q2")["state"] == "accepted"
+    assert p["stale"] is False
+
+
+def test_changed_answers_make_the_build_stale(tmp_path: Path) -> None:
+    project = _answers_project(tmp_path)
+    (project / "answers.yaml").write_text("answers:\n  q2: { accept: true }\n", "utf-8")
+    report = project / "out" / "report.json"
+    os.utime(report, (1, 1))
+    assert TestClient(create_viewer(tmp_path)).get("/api/projects/kv").json()["stale"] is True
+
+
+def test_answer_refused_with_field_and_blocker(tmp_path: Path) -> None:
+    _answers_project(tmp_path)
+    client = TestClient(create_viewer(tmp_path))
+    assert client.post("/api/projects/kv/answers", json={"answer": 1}).status_code == 422
+    assert client.post("/api/projects/nope/answers", json={"id": "q1"}).status_code == 404
+    assert (
+        client.post("/api/projects/kv/answers", json={"id": "panel_battery", "answer": 48}).json()[
+            "rebuilt"
+        ]
+        is True
+    )
+    bad = client.post("/api/projects/kv/answers", json={"id": "panel_backup", "answer": "none"})
+    assert bad.status_code == 422
+    detail = bad.json()["detail"]
+    assert detail["issues"][0]["path"] and detail["issues"][0]["message"]
+    assert [b["id"] for b in detail["blocked_by"]] == ["panel_battery"]

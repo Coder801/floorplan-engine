@@ -48,6 +48,7 @@ from floorplan_engine.service.analysis.analyzer import (
     ManualAnalyzer,
 )
 from floorplan_engine.service.analysis.pdf_facts import describe
+from floorplan_engine.validation.answers_file import dump_answers
 from floorplan_engine.validation.issues import ELECTRICAL_FILE, ROOM_FILE, Issue
 from floorplan_engine.validation.validate import validate_project
 
@@ -396,12 +397,7 @@ def _mark_resolved(project: Path, ids: list[str]) -> None:
             answers.answers[qid] = TextAnswer(text=answer.text, resolved=True)
             changed = True
     if changed:
-        plain = {
-            k: v.model_dump() if hasattr(v, "model_dump") else v for k, v in answers.answers.items()
-        }
-        (project / ANSWERS_FILE).write_text(
-            yaml.safe_dump({"answers": plain}, allow_unicode=True), encoding="utf-8"
-        )
+        (project / ANSWERS_FILE).write_text(dump_answers(answers), encoding="utf-8")
 
 
 def _apply(project: Path, envelope: dict[str, Any], files: tuple[str, ...]) -> list[str]:

@@ -24,6 +24,7 @@ from floorplan_engine.service.analysis.analyzer import MODEL_FILES, AnalysisResu
 from floorplan_engine.service.facts.gate import Gate, check_sources
 from floorplan_engine.service.models import AnswersIn, ProjectInfo, ProjectState, StageInfo
 from floorplan_engine.service.storage import SOURCE_DIR, Storage
+from floorplan_engine.validation.answers_file import dump_answers
 from floorplan_engine.validation.assess import Status
 from floorplan_engine.validation.report import REPORT_JSON
 
@@ -148,13 +149,8 @@ class Workflow:
             if path.exists()
             else Answers()
         )
-        merged = {**current.answers, **answers.answers}
-        path.write_text(
-            yaml.safe_dump(
-                {"answers": {k: _plain(v) for k, v in merged.items()}}, allow_unicode=True
-            ),
-            encoding="utf-8",
-        )
+        merged = current.model_copy(update={"answers": {**current.answers, **answers.answers}})
+        path.write_text(dump_answers(merged), encoding="utf-8")
         self.storage.save_round(
             project_id,
             info.round,

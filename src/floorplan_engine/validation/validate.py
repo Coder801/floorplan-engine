@@ -47,6 +47,7 @@ from floorplan_engine.validation.answers import (
     apply_studio,
     load_optional,
 )
+from floorplan_engine.validation.answers_file import build_digest
 from floorplan_engine.validation.electrical import validate_electrical
 from floorplan_engine.validation.issues import (
     ELECTRICAL_FILE,
@@ -85,6 +86,8 @@ class Report:
     # Panel questions built by code from the calculation (panel_questions.panel_questions), id
     # "panel_…"
     auto_questions: list[Question] = field(default_factory=list)
+    # Digest of the answers this report is built on (answers_file.build_digest): is a build stale
+    answers_digest: str = ""
 
     @property
     def questions(self) -> list[Question]:
@@ -127,6 +130,10 @@ def validate_project(project_dir: Path) -> Report:
     report.intake = intake
     answers, issues = load_optional(project_dir / ANSWERS_FILE, Answers)
     report.issues += issues
+    answers_path = project_dir / ANSWERS_FILE
+    report.answers_digest = build_digest(
+        answers_path.read_text("utf-8") if answers_path.exists() else None
+    )
     own = [k for k in (answers.answers if answers else {}) if not k.startswith(AUTO_PREFIX)]
     if own and intake is None:
         report.issues.append(Issue(ANSWERS_FILE, "", f"есть ответы, но нет {INTAKE_FILE}"))

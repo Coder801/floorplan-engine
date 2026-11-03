@@ -17,6 +17,7 @@ GET /api/projects/{name}/sheets         sheet manifest from out/project.epd
 GET /api/projects/{name}/sheets/{n}     sheet n (1, 2…): vector primitives for canvas
 POST /api/projects/{name}/wiring        wiring edits → wiring.yaml and rebuild
 POST /api/projects/{name}/variant       wiring variant → variant.yaml and rebuild
+POST /api/projects/{name}/answers       one answer → answers.yaml and rebuild (not for text)
 GET /api/prices                         studio price page: works, own price, market spread
 POST /api/prices                        studio price edits → prices.yaml next to the projects
 GET /api/auth/me                        who is logged in ({"auth": false} means login is off)
@@ -52,14 +53,22 @@ from floorplan_engine.pipeline import (
     AuditError,
     build_project,
     price_page,
+    save_answer,
     save_prices,
     save_variant,
     save_wiring_edits,
 )
 from floorplan_engine.service.api.auth import Auth
-from floorplan_engine.service.api.viewer_db import check_manifest, install_db_routes
+from floorplan_engine.service.api.viewer_db import (
+    answer_body,
+    answer_note,
+    check_manifest,
+    install_db_routes,
+    refused_answer,
+)
 from floorplan_engine.service.db import access as acc
 from floorplan_engine.service.objects import ObjectStore
+from floorplan_engine.validation.answers_file import build_digest, with_pending_text
 from floorplan_engine.validation.issues import (
     ELECTRICAL_FILE,
     ROOM_FILE,
@@ -109,21 +118,43 @@ def _mtime(path: Path) -> float | None:
     return path.stat().st_mtime if path.exists() else None
 
 
+def _answers_of(project: Path) -> dict[str, Any]:
+    path = project / ANSWERS_FILE
+    data = (yaml.safe_load(path.read_text("utf-8")) or {}) if path.exists() else {}
+    found = data.get("answers") if isinstance(data, dict) else None
+    return found if isinstance(found, dict) else {}
+
+
+def _stale(project: Path, built: float | None, report: dict[str, Any]) -> bool:
+    """The model was edited after the build; a pending text answer alone changes nothing in it."""
+    if built is None:
+        return False
+    if any(
+        (t := _mtime(project / f)) is not None and t > built
+        for f in MODEL_FILES
+        if f != ANSWERS_FILE
+    ):
+        return True
+    path = project / ANSWERS_FILE
+    changed = (_mtime(path) or 0) > built
+    text = path.read_text("utf-8") if path.exists() else None
+    return changed and report.get("answers_digest") != build_digest(text)
+
+
 def _summary(project: Path) -> dict[str, Any]:
     report_path = project / OUT_DIR / REPORT_JSON
     report: dict[str, Any] = (
         json.loads(report_path.read_text("utf-8")) if report_path.exists() else {}
     )
     built = _mtime(report_path)
-    model_times = [t for f in MODEL_FILES if (t := _mtime(project / f)) is not None]
-    questions = report.get("questions", [])
+    questions = (with_pending_text(report, _answers_of(project)) or {}).get("questions", [])
     return {
         "id": project.name,  # the key in addresses; in the database viewer — the project id
         "name": project.name,
         "title": report.get("project") or project.name,
         "built": built,
         # The model was edited after the build: the sheets show the old state
-        "stale": built is not None and bool(model_times) and max(model_times) > built,
+        "stale": _stale(project, built, report),
         "stages": report.get("stages", []),
         "open_questions": sum(1 for q in questions if q.get("state") == "open"),
         # Plan preview for the card: GET /api/projects/{name}/out/preview.svg
@@ -201,12 +232,7 @@ def create_viewer(
         path = project_dir(request, name)
         report_path = path / OUT_DIR / REPORT_JSON
         report = json.loads(report_path.read_text("utf-8")) if report_path.exists() else None
-        answers_path = path / ANSWERS_FILE
-        answers = (
-            (yaml.safe_load(answers_path.read_text("utf-8")) or {}).get("answers", {})
-            if answers_path.exists()
-            else {}
-        )
+        answers = _answers_of(path)
         out = _files(path / OUT_DIR)
         intake_path = path / INTAKE_FILE
         intake = (
@@ -214,7 +240,7 @@ def create_viewer(
         )
         return {
             **_summary(path),
-            "report": report,
+            "report": with_pending_text(report, answers),
             "answers": answers,
             "artifact": ARTIFACT_FILE in out,
             "dxf": PROJECT_FILE if PROJECT_FILE in out else None,
@@ -234,6 +260,7 @@ def create_viewer(
             "can": {
                 "edit_wiring": allowed(request, "edit_wiring"),
                 "choose_variant": allowed(request, "choose_variant"),
+                "answer": allowed(request, "answer"),
             },
         }
 
@@ -274,6 +301,29 @@ def create_viewer(
             raise HTTPException(500, str(exc)) from exc
         notes = [i for i in result.assessment.report.issues if i.file == WIRING_FILE]
         return {"built": result.built, "notes": [f"{i.path}: {i.message}" for i in notes]}
+
+    @app.post("/api/projects/{name}/answers")
+    def answer(
+        request: Request, name: str, data: Annotated[dict[str, Any], Body()]
+    ) -> dict[str, Any]:
+        """One answer: {id, answer} → answers.yaml, null removes it; then a rebuild, unless the
+        answer is text waiting for the analyzer (it changes nothing in the sheets)."""
+        path = project_dir(request, name)
+        qid, raw = answer_body(data)
+        who = None
+        if auth is not None:
+            with auth.db() as db:
+                who = auth.principal(db, request)
+        saved = save_answer(path, qid, raw, answer_note(who))
+        if saved.issues:
+            raise refused_answer(saved)
+        if not saved.rebuild:
+            return {"built": False, "rebuilt": False}
+        try:
+            result = build_project(path)
+        except AuditError as exc:
+            raise HTTPException(500, str(exc)) from exc
+        return {"built": result.built, "rebuilt": True}
 
     @app.post("/api/projects/{name}/variant")
     def choose_variant(

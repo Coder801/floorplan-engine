@@ -188,6 +188,13 @@ Slash-команды: `/plan`, `/electrical`, `/check`, `/review`, `/commit`, `/
   Значение подставляется в `target` при загрузке. `room.yaml` и `electrical.yaml` с ответом
   не правь, пока пользователь не попросит перенести ответы в исходники. Текстовый ответ
   разбираешь ты: правишь YAML и закрываешь вопрос.
+- Просмотр тоже пишет ответы (решение 2026-11-04, `POST /api/projects/{key}/answers`, право
+  `answer`): строки `answers` правит код и оставляет комментарии рядом, кто и когда — в разделе
+  `log`. Ответ, дающий новую ошибку проверки, не сохраняется. Текстовый ответ только
+  сохраняется: чертёж не меняется, сборка не считается устаревшей; разбор — кнопкой после Б6.
+  Разобранный (`resolved: true`) ответ можно изменить, но не снять.
+- `option_labels` у вопроса `choice` — подписи вариантов для заказчика, на языке проекта
+  (`{ none: "Без резерва" }`): значения остаются машинными.
 
 ## Ручные правки проводки: wiring.yaml
 
@@ -349,6 +356,9 @@ group, at }`), по вариантам проводки (`variants.<режим-�
     `validation/plan.py` — проверки плана (контур, проёмы); `validation/electrical.py` —
     проверки электрики; `validation/answers.py` — профиль студии, ответы и автоответы;
   - `model/intake.py` — схема intake.yaml / answers.yaml, пути к полям по id;
+  - `validation/answers_file.py` — answers.yaml как файл: правка строк с сохранением комментариев
+    (`edit_answers`), отпечаток ответов, от которых зависит сборка (`build_digest`, в report.json
+    — `answers_digest`), состояние вопроса с ещё не разобранным текстом (`with_pending_text`);
   - `validation/assess.py` — вес вопросов и статус этапов (строить / мало данных / данных нет);
   - `validation/report.py` — out/report.md и report.json;
   - `drawing/layers.py` — слои, стили, шрифт (IBM Plex Sans Light из `drawing/fonts/`), метрики текста;
@@ -491,7 +501,7 @@ group, at }`), по вариантам проводки (`variants.<режим-�
   - `pipeline.py` — конвейер без вывода: оценка, отчёт, сборка DXF и артефакта `.epd`
     (его вызывают и CLI, и сервис; логику сборки держи здесь, а не в cli.py);
   - `cli.py` — команды: печать и коды выхода поверх `pipeline.py`;
-  - `service/` — API (FastAPI): `app.py` маршруты, `viewer.py` — API просмотра собранных `projects/` (страница — фронт `web/`, см. ниже) (команда `view`; листы рисуются в canvas из `.epd`, PNG листа для альбома — из canvas, не больше A3 150 dpi; печать — DXF; запись — правка трасс на листе проводки → `wiring.yaml` и пересборка, вариант проводки → `variant.yaml`, цены работ из настроек студии → `prices.yaml` папки студии), `workflow.py` цикл и состояния,
+  - `service/` — API (FastAPI): `app.py` маршруты, `viewer.py` — API просмотра собранных `projects/` (страница — фронт `web/`, см. ниже) (команда `view`; листы рисуются в canvas из `.epd`, PNG листа для альбома — из canvas, не больше A3 150 dpi; печать — DXF; запись — правка трасс на листе проводки → `wiring.yaml` и пересборка, вариант проводки → `variant.yaml`, ответ из карточки вопроса → `answers.yaml` (`pipeline.save_answer`), цены работ из настроек студии → `prices.yaml` папки студии), `workflow.py` цикл и состояния,
     `storage.py` хранение на диске, `analyzer.py` интерфейс анализатора и ручной анализатор,
     `llm_analyzer.py` LLM-анализатор (бэкенды claude-code и api, расход в usage.jsonl),
     `analyzer_prompt.md` его системный промпт, `pdf_facts.py` выжимка из PDF без LLM
@@ -539,7 +549,7 @@ group, at }`), по вариантам проводки (`variants.<режим-�
   (`SheetStage` — чертёж, кнопки, 3D; `PanelStage` — щит в лицо; `ElevationStage`,
   `WallItems`, `WallPager` — развёртки; `Legend` — условные обозначения плашкой на чертеже;
   `OverviewStage` — вкладка «Общие сведения» с выбором варианта проводки (`VariantPicker`);
-  `SidePanel`, `Drawer`, `Settings`, `ProjectsMenu`,
+  `SidePanel`, `Drawer`, `Questions` — вопросы с ответом в карточке, логика — `shared/questions.ts`, `Settings`, `ProjectsMenu`,
   `DownloadMenu`, `Scene3D`, `Filter3D`…), `ui/` — мелкие переиспользуемые (`ZoomRail` — шкала
   масштаба, `ScaleBar` — линейка, `EyeToggle` — глаз видимости слоя вместо галочки), `engine/` — холсты вне React (`sheet/SheetView.ts`,
   `sheet/drawing.ts` — план, электрика, освещение и проводка одним чертежом; `panel/`,

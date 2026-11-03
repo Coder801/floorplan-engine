@@ -129,6 +129,7 @@ def test_roles_filter_projects_and_actions(auth: Auth, root: Path) -> None:
     assert client.get("/api/projects/kv1").json()["can"] == {
         "edit_wiring": False,
         "choose_variant": False,
+        "answer": True,
     }
 
     # The studio sees its projects but not a folder outside the database; chooses the variant and

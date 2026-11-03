@@ -27,6 +27,8 @@ answers.yaml holds answers, applied to the stage YAML on load (the sources are n
       q1: 1800                       # value / choice: put into target
       q2: { text: "обмера нет" }      # text: waits for the analyzer; once handled, resolved: true
       q3: { accept: true }           # keep the assumption
+    log:                             # written by the viewer: who answered and when
+      q1: { at: "2026-11-04T10:00:00+00:00", by: "Иван" }
 """
 
 from __future__ import annotations
@@ -84,6 +86,10 @@ class Question(StrictModel):
     answer: Literal["value", "choice", "text"] = "text"
     unit: str | None = None
     options: list[str] = Field(default_factory=list)
+    option_labels: dict[str, str] = Field(
+        default_factory=dict,
+        description="Подпись варианта для человека, на языке проекта: {значение: подпись}",
+    )
     assumption: float | str | None = Field(
         default=None, description="Значение, которое сейчас стоит в модели; null — его нет"
     )
@@ -97,6 +103,8 @@ class Question(StrictModel):
             raise ValueError("для answer: choice нужен список options")
         if self.answer != "choice" and self.options:
             raise ValueError("options бывают только у answer: choice")
+        if set(self.option_labels) - set(self.options):
+            raise ValueError("option_labels — только для значений из options")
         if self.target is None and self.severity is None:
             raise ValueError("у вопроса без target нужен severity: critical | major | minor")
         if self.target is not None and self.severity is not None:
@@ -127,8 +135,16 @@ class TextAnswer(StrictModel):
 Answer = float | str | Accept | TextAnswer
 
 
+class AnswerNote(StrictModel):
+    """Who answered in the viewer and when; not used in a build."""
+
+    at: str
+    by: str | None = None
+
+
 class Answers(StrictModel):
     answers: dict[str, Answer] = Field(default_factory=dict)
+    log: dict[str, AnswerNote] = Field(default_factory=dict)
 
 
 # --- Field paths --------------------------------------------------------------
