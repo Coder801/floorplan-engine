@@ -50,6 +50,7 @@ from urllib.parse import quote
 from authlib.integrations.starlette_client import OAuth, OAuthError
 from fastapi import APIRouter, Body, FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, RedirectResponse, Response
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 from starlette.concurrency import run_in_threadpool
 from starlette.middleware.sessions import SessionMiddleware
@@ -252,17 +253,27 @@ class Auth:
 
     def seed_codes(self) -> None:
         """При старте сервера: постоянные коды из SHTROBA_ACCESS_CODES — в базу
-        (access_codes.ensure_code); проекта нет в базе — строка «без владельца»."""
+        (access_codes.ensure_code); проекта нет в базе — строка «без владельца». Папки с
+        таким именем нет или код занят другим проектом — предупреждение, в базе ничего
+        (ошибка внутри `db()` откатывает и созданный проект). Два процесса стартовали
+        разом — второй увидит нарушение уникальности, код уже записал первый."""
+        folders = None if self.folders is None else set(self.folders())
         for slug, code in self.config.fixed_codes:
-            with self.db() as db:
-                project = acc.project_by_slug(db, slug)
-                if project is None:
-                    project = acc.create_project_unowned(db, slug, slug)
-                try:
+            if folders is not None and slug not in folders:
+                log.warning("SHTROBA_ACCESS_CODES %s: папки проекта нет — код пропущен", slug)
+                continue
+            try:
+                with self.db() as db:
+                    project = acc.project_by_slug(db, slug)
+                    if project is None:
+                        project = acc.create_project_unowned(db, slug, slug)
                     access_codes.ensure_code(db, project, code)
-                except acc.AccessError as exc:
-                    log.warning("SHTROBA_ACCESS_CODES %s: %s", slug, exc)
-                    continue
+            except acc.AccessError as exc:
+                log.warning("SHTROBA_ACCESS_CODES %s: %s", slug, exc)
+                continue
+            except IntegrityError:
+                log.info("Постоянный код доступа к проекту %s записал другой процесс", slug)
+                continue
             log.info("Постоянный код доступа к проекту %s — в базе", slug)
 
     # --- Telegram ------------------------------------------------------------------------

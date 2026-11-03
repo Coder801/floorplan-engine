@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from floorplan_engine.service.db import access as acc
 from floorplan_engine.service.db import access_codes as codes
-from floorplan_engine.service.db.models import AppUser
+from floorplan_engine.service.db.models import AppUser, AuditEvent
 
 
 def _user(db: Session, name: str, kind: acc.AccountType) -> AppUser:
@@ -94,12 +94,17 @@ def test_ensure_fixed_code(db: Session) -> None:
     row = codes.ensure_code(db, kv1, "abcd-2345")
     assert codes.use_code(db, "ABCD-2345").id == row.id
     assert row.expires_at.date() > (acc.now() + timedelta(days=365)).date()
+
+    def fixes() -> int:
+        return db.query(AuditEvent).filter_by(action="code_fix").count()
+
+    assert fixes() == 1
     assert codes.ensure_code(db, kv1, "ABCD2345").id == row.id
-    assert len(codes.list_codes(db, kv1)) == 1
+    assert len(codes.list_codes(db, kv1)) == 1 and fixes() == 1  # действующий код — без записей
     codes.revoke_code(db, kv1, str(row.id))
     with pytest.raises(acc.AccessError, match="не подходит"):
         codes.use_code(db, "ABCD-2345")
-    assert codes.ensure_code(db, kv1, "ABCD-2345").revoked_at is None
+    assert codes.ensure_code(db, kv1, "ABCD-2345").revoked_at is None and fixes() == 2
     assert codes.use_code(db, "ABCD-2345").id == row.id
     with pytest.raises(acc.AccessError, match="другому проекту"):
         codes.ensure_code(db, kv2, "ABCD-2345")

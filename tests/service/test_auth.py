@@ -344,3 +344,16 @@ def test_fixed_codes_seeded_at_startup(pg: Engine, root: Path) -> None:
     with auth.db() as db:
         kv1 = acc.project_by_slug(db, "kv1")
         assert kv1 is not None and len(access_codes.list_codes(db, kv1)) == 1
+
+
+def test_fixed_codes_skip_unknown_folder_and_taken_code(pg: Engine, root: Path) -> None:
+    """Папки нет (опечатка в SHTROBA_ACCESS_CODES) или код уже у другого проекта — строка
+    проекта не создаётся, остальные коды записываются."""
+    codes = (("kv-typo", "ABCD2345"), ("kv1", "WXYZ6789"), ("kv2", "WXYZ6789"))
+    config = AuthConfig(SECRET, "http://t", fixed_codes=codes)
+    app = create_viewer(root, Auth(config, make_sessions(pg)))
+    with TestClient(app) as client:
+        assert client.post("/api/auth/code", json={"code": "WXYZ-6789"}).json()["project"] == "kv1"
+        assert client.post("/api/auth/code", json={"code": "ABCD-2345"}).status_code != 200
+    with Auth(config, make_sessions(pg)).db() as db:
+        assert {p.slug for p in db.query(Project).all()} == {"kv1"}

@@ -94,13 +94,16 @@ def ensure_code(
     session: Session, project: Project, value: str, label: str = "постоянный код"
 ) -> AccessCode:
     """Постоянный код доступа с известным значением (SHTROBA_ACCESS_CODES, ставит сервис
-    при старте): нет в базе — записать, есть — вернуть к жизни (снять отзыв, продлить на
-    FIXED_DAYS). Тот же код у другого проекта — AccessError. Повторный вызов ничего не
-    дублирует."""
+    при старте): нет в базе — записать, отозван — вернуть к жизни (снять отзыв, продлить на
+    FIXED_DAYS): переменная окружения — источник правды, отзыв такого кода действует до
+    перезапуска. Тот же код у другого проекта — AccessError. Действующий код — ничего не
+    пишется и не журналируется: повторный старт не плодит записей."""
     wanted = _hash(normalize_code(value))
     row = session.scalar(select(AccessCode).where(AccessCode.code_hash == wanted))
     if row is not None and row.project_id != project.id:
         raise AccessError(f"код уже выдан другому проекту (не {project.slug})")
+    if row is not None and _alive(row):
+        return row
     expires = now() + timedelta(days=FIXED_DAYS)
     if row is None:
         row = AccessCode(
