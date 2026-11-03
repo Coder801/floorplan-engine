@@ -162,5 +162,6 @@ update_changelog_on_bump = true
 version_files = [
     "src/floorplan_engine/__init__.py:__version__",
     "web/package.json:\"version\"",
+    "admin/package.json:\"version\"",
 ]
-pre_bump_hooks = ["uv run --no-sync python scripts/release_lock.py"]  # web/package-lock.json
+pre_bump_hooks = ["uv run --no-sync python scripts/release_lock.py"]  # web/ and admin/ package-lock.json

@@ -69,8 +69,7 @@
 - **Версия:** `cz bump` внутри `flow.py release`. Commitizen (`pyproject.toml`,
   `[tool.commitizen]`) считает новую версию по коммитам с прошлого тега (`feat` — minor,
   `fix` — patch; пока версия 0.x, breaking — тоже minor), правит `pyproject.toml`,
-  `src/floorplan_engine/__init__.py`, `web/package.json` и `web/package-lock.json`
-  (`scripts/release_lock.py`), дописывает `CHANGELOG.md`, коммитит `bump: version …` и ставит
-  тег `vX.Y.Z`. Версия видна в настройках
-  просмотра (`web/src/shared/version.ts`), совпадение трёх файлов проверяет
-  `tests/test_version.py`.
+  `src/floorplan_engine/__init__.py`, `package.json` и `package-lock.json` в `web/` и
+  `admin/`, `uv.lock` (lock-файлы — `scripts/release_lock.py`), дописывает `CHANGELOG.md`, коммитит
+  `bump: version …` и ставит тег `vX.Y.Z`. Версия видна в настройках просмотра
+  (`web/src/shared/version.ts`), совпадение всех файлов проверяет `tests/test_version.py`.
