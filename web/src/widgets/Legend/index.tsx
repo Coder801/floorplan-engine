@@ -6,6 +6,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { symbolBox, viewBoxOf } from "@/engine/sheet/legend";
+import { NARROW_PX } from "@/shared/consts";
 import { cx } from "@/shared/cx";
 import { refreshPalette, remember, remembered, screenColor } from "@/shared/palette";
 import { useView } from "@/shared/store";
@@ -13,7 +14,6 @@ import type { Item, LegendEntry } from "@/shared/types";
 import css from "./Legend.module.scss";
 
 const KEY = "legend";  // localStorage: open | closed
-const NARROW_PX = 900;
 const STROKE_PX = 1.3;
 
 export function Legend({ entries }: { entries: LegendEntry[] }) {

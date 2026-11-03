@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { groupOf, keepOrder, listOrder, nextOpen, parseNumber, plainNumber, shortMessage, statusOf } from "./questions";
+import {
+  groupOf, keepOrder, listOrder, nextOpen, objectOf, parseNumber, plainNumber, shortMessage, shownOn, statusOf,
+} from "./questions";
 import type { Question } from "./types";
 
 const q = (id: string, state = "open", severity = "major"): Question =>
@@ -47,5 +49,27 @@ describe("вопросы", () => {
 
   it("сообщение для заказчика — первая фраза", () => {
     expect(shortMessage("контур не замыкается: 117 мм. Замкнётся, если исправить стену")).toBe("контур не замыкается: 117 мм");
+  });
+
+  it("поле вопроса → объект на листе", () => {
+    expect(objectOf("points.kitchen_socket_1.height")).toBe("point:kitchen_socket_1");
+    expect(objectOf("rooms.kitchen.openings.kitchen_door_1.width")).toBe("opening:kitchen_door_1");
+    expect(objectOf("rooms.kitchen.walls.w3.length")).toBe("wall:kitchen.w3");
+    expect(objectOf("rooms.kitchen.ceiling_height")).toBe("room:kitchen");
+    expect(objectOf("board.offset")).toBe("board:board");
+    expect(objectOf("risers.r1.at")).toBe("riser:r1");
+    expect(objectOf("default_wall_thickness")).toBeNull();
+    expect(objectOf("boards")).toBeNull();
+    expect(objectOf(undefined)).toBeNull();
+  });
+
+  it("куда ведёт «показать»: объект своего этапа, вопрос щита — вкладка без объекта", () => {
+    const stages = ["plan", "electrical", "panel"];
+    expect(shownOn({ ...q("a"), stage: "electrical", target: "points.p1.height" }, stages))
+      .toEqual({ stage: "electrical", key: "point:p1" });
+    expect(shownOn({ ...q("a"), stage: "panel", target: "panel.backup" }, stages)).toEqual({ stage: "panel", key: null });
+    expect(shownOn({ ...q("a"), stage: "panel" }, ["plan"])).toBeNull();
+    expect(shownOn({ ...q("a"), stage: "plan" }, stages)).toBeNull();
+    expect(shownOn({ ...q("a"), stage: "plumbing", target: "risers.r1.at" }, stages)).toBeNull();
   });
 });

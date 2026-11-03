@@ -61,7 +61,7 @@ export const en: Messages = {
     rebuilding: "Rebuilding the project…", rebuilt: "Done, sheets updated.",
     fewer: "{{n}} fewer questions: this answer made them unnecessary.", more: "New questions: {{n}}.",
     locked: "You can save after the build. Your text stays here.", notSaved: "Not saved. The project is unchanged.",
-    notNumber: "Enter a number", blockedBy: "Blocked by the answer to:", also: "same answer in {{n}} more fields",
+    show: "Show on the drawing", showPanel: "Open the panel", notNumber: "Enter a number", blockedBy: "Blocked by the answer to:", also: "same answer in {{n}} more fields",
     status: { answered: "answer applied", accepted: "kept as is", pending: "answer received, awaiting review", resolved: "answer reviewed", rebuilding: "rebuilding" },
   },
   drawer: {

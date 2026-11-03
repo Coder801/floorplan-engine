@@ -37,7 +37,8 @@ export interface ViewState {
   wallMode: WallMode;
   filter3d: Filter3D;               // 3D: only these QF groups and the room
   themeTick: number;                // the theme changed: recolour
-  goto: string | null;              // open the sheet right at this object (from an elevation to wiring)
+  // Open this sheet right at the object (from an elevation, from a question); around: SheetView.reveal
+  goto: { key: string; stage: string; around?: number } | null;
   wallLayers: WallLayers;           // what is visible on the elevation (the eye in the "On the wall" table)
 }
 

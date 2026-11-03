@@ -79,14 +79,14 @@ export const SheetStage = forwardRef<StageHandle, Props>(function SheetStage({ p
     tick();
   }, [page, index]);
 
-  // Coming from an elevation: the wiring sheet opens right at the point's line (store.goto).
-  // While it loads, the previous sheet is still here, so wait for wiring
+  // Coming from an elevation or a question: the sheet opens right at the object (store.goto).
+  // While it loads, the previous sheet is still here, so wait for the right one
+  const goto = useView((s) => s.goto);
   useEffect(() => {
-    const goto = view.get().goto;
-    if (!goto || page.stage !== "wiring" || !sheet.current) return;
+    if (!goto || page.stage !== goto.stage || !sheet.current) return;
     view.set({ goto: null });
-    sheet.current.reveal(goto);
-  }, [drawing, page]);
+    sheet.current.reveal(goto.key, goto.around);
+  }, [drawing, page, goto]);
 
   useImperativeHandle(ref, () => ({
     pending: () => (sheet.current && !sheet.current.saved && sheet.current.ed ? sheet.current.ed.pending() : 0),

@@ -9,8 +9,8 @@ import { AnswerRefused, type AnswerResult } from "@/shared/api";
 import { cx } from "@/shared/cx";
 import i18n, { label } from "@/shared/i18n";
 import {
-  keepOrder, listOrder, nextOpen, parseNumber, plainNumber, shortMessage, statusOf,
-  type Answer, type Group, type Status,
+  keepOrder, listOrder, nextOpen, parseNumber, plainNumber, shortMessage, shownOn, statusOf,
+  type Answer, type Group, type QuestionsMemory, type Status,
 } from "@/shared/questions";
 import ui from "@/shared/styles/ui.module.scss";
 import type { Project, Question } from "@/shared/types";
@@ -21,6 +21,9 @@ interface Props {
   busy: boolean;  // an answer is being saved or the project reloaded
   // null: the person chose to stay with unsaved route edits
   onAnswer: (id: string, answer: Answer | null) => Promise<AnswerResult | null>;
+  stages: string[];  // stages of the sheets: where "show" can lead
+  onShow: (to: { stage: string; key: string | null }) => void;
+  memory: React.MutableRefObject<QuestionsMemory>;  // the panel closes, this stays
 }
 
 type Failure = AnswerRefused | string;
@@ -45,7 +48,7 @@ interface CardProps {
   onLocal: (message: string) => void;
 }
 
-export function Questions({ project: p, busy, onAnswer }: Props) {
+export function Questions({ project: p, busy, onAnswer, stages, onShow, memory }: Props) {
   const { t } = useTranslation();
   const qs = p.report?.questions ?? [];
   const can = p.can?.answer === true;
@@ -56,8 +59,10 @@ export function Questions({ project: p, busy, onAnswer }: Props) {
   const byId = new Map(qs.map((q) => [q.id, q]));
   const status = (id: string): Status => statusOf(p.answers[id]);
   const firstOpen = ids.find((id) => status(id) === "open");
-  const [expanded, setExpanded] = useState<string | null>(can ? firstOpen ?? null : null);
-  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [expanded, setExpanded] = useState<string | null>(
+    memory.current.expanded !== undefined ? memory.current.expanded : can ? firstOpen ?? null : null);
+  const [drafts, setDrafts] = useState<Record<string, string>>(memory.current.drafts);
+  memory.current = { drafts, expanded };
   const [failures, setFailures] = useState<Record<string, Failure>>({});
   const [editing, setEditing] = useState<string | null>(null);
   const [asking, setAsking] = useState<string | null>(null);
@@ -125,6 +130,7 @@ export function Questions({ project: p, busy, onAnswer }: Props) {
           busy={busy} working={working === q.id} editing={editing === q.id} asking={asking === q.id}
           draft={drafts[q.id]} failure={failures[q.id]}
           open={expanded === q.id}
+          shows={shownOn(q, stages)} onShow={onShow}
           onToggle={() => setExpanded(expanded === q.id ? null : q.id)}
           onDraft={(text) => setDrafts((all) => ({ ...all, [q.id]: text }))}
           onSave={(answer) => void save(q, answer)}
@@ -174,8 +180,15 @@ export function Questions({ project: p, busy, onAnswer }: Props) {
   );
 }
 
-function Card(props: CardProps & { open: boolean; onToggle: () => void }) {
-  const { q, answer, status, can, studio, working, failure, open, onToggle } = props;
+interface RowProps extends CardProps {
+  open: boolean;
+  onToggle: () => void;
+  shows: { stage: string; key: string | null } | null;  // where "show" leads
+  onShow: (to: { stage: string; key: string | null }) => void;
+}
+
+function Card(props: RowProps) {
+  const { q, answer, status, can, studio, working, failure, open, onToggle, shows, onShow } = props;
   const { t } = useTranslation();
   const word = working ? "rebuilding" : status === "open" ? null : status;
   return (
@@ -198,6 +211,13 @@ function Card(props: CardProps & { open: boolean; onToggle: () => void }) {
             <div className={css.now}>{t("questions.now", { value: shown(q, q.assumption) })}</div>
           )}
           {can ? <Controls {...props} /> : <Answered q={q} answer={answer} status={status} empty />}
+          {shows && (
+            <div className={css.actions}>
+              <button className={css.quiet} onClick={() => onShow(shows)}>
+                {t(shows.key ? "questions.show" : "questions.showPanel")}
+              </button>
+            </div>
+          )}
           {studio && q.target && <div className={css.path}>{q.target}</div>}
           {studio && q.also && q.also.length > 0 && <div className={css.hint}>{t("questions.also", { n: q.also.length })}</div>}
         </div>

@@ -175,9 +175,11 @@ export class SheetView {
   }
 
   // Open the sheet right on an object (coming from an elevation): fit, select the line and focus on it
-  reveal(o: string) {
+  reveal(o: string, around = 0) {
     this.layout(); this.fit();
-    if (this.index.interactive(o)) this.select(o, true);
+    if (!this.index.interactive(o)) return;
+    this.select(o);
+    this.showKeys(this.index.chainOf(o), around);
   }
 
   clearSelection() {
@@ -185,8 +187,9 @@ export class SheetView {
   }
 
   // Fit objects into the free part of the screen (left of the hint), smoothly; never zoom in
-  // past the last zoom step (zoom.ts)
-  private showKeys(keys: Set<string>) {
+  // past the last zoom step (zoom.ts). around: the share of the drawing to keep in view, so a
+  // single point is seen in its room
+  private showKeys(keys: Set<string>, around = 0) {
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
     for (const it of this.items) {
       if (!it.o || !keys.has(it.o)) continue;
@@ -196,6 +199,9 @@ export class SheetView {
     if (!isFinite(x0)) return;
     const right = TIP_WIDTH + 2 * TIP_GAP;  // taken by the hint on the right
     const aw = Math.max(this.w - right - 2 * VIEW_PAD, 80), ah = Math.max(this.h - 2 * VIEW_PAD, 80);
+    const [vx0, vy0, vx1, vy1] = this.drawing.view;
+    const grow = Math.max(0, Math.max(around * (vx1 - vx0) - (x1 - x0), around * (vy1 - vy0) - (y1 - y0)) / 2);
+    x0 -= grow; y0 -= grow; x1 += grow; y1 += grow;
     const bw = Math.max(x1 - x0, 1), bh = Math.max(y1 - y0, 1);
     // The largest zoom step at which the objects are fully visible
     this.step = stepBelow(Math.min(aw / bw, ah / bh) / this.fitScale);

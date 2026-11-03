@@ -9,6 +9,9 @@ export type DrawerTab = (typeof DRAWER_TABS)[number];
 export const THEMES = ["system", "light", "dark"] as const;
 export type Theme = (typeof THEMES)[number];
 
+// The width where the side panel moves under the drawing ($narrow in styles/_mixins.scss)
+export const NARROW_PX = 900;
+
 // Sheet PNG for the album: at most A3 at 150 dpi
 export const PNG_DPI = 150, PNG_LONG = 2480, PNG_SHORT = 1754;
 export const MIN_LINE_PX = 0.6;  // no line is drawn thinner than this on screen

@@ -57,3 +57,36 @@ export const plainNumber = (v: unknown) => String(v).replace(/\.0+$/, "");
 
 // The first phrase of a check message: the rest lists walls and is for the studio
 export const shortMessage = (message: string) => message.split(/\. (?=[А-ЯЁЇІЄ])/)[0];
+
+// The model field of a question → the object on the sheet (тип:id, as in .epd objects)
+const OBJECTS: [RegExp, (m: RegExpMatchArray) => string][] = [
+  [/^points\.([^.]+)/, (m) => `point:${m[1]}`],
+  [/^rooms\.[^.]+\.openings\.([^.]+)/, (m) => `opening:${m[1]}`],
+  [/^rooms\.([^.]+)\.walls\.([^.]+)/, (m) => `wall:${m[1]}.${m[2]}`],
+  [/^rooms\.([^.]+)/, (m) => `room:${m[1]}`],
+  [/^board(\.|$)/, () => "board:board"],
+  [/^led_strips\.([^.]+)/, (m) => `led_strip:${m[1]}`],
+  [/^risers\.([^.]+)/, (m) => `riser:${m[1]}`],
+  [/^fixtures\.([^.]+)/, (m) => `fixture:${m[1]}`],
+  [/^obstacles\.([^.]+)/, (m) => `obstacle:${m[1]}`],
+];
+
+export function objectOf(target: string | undefined): string | null {
+  if (!target) return null;
+  for (const [pattern, key] of OBJECTS) {
+    const m = target.match(pattern);
+    if (m) return key(m);
+  }
+  return null;
+}
+
+// Where "show" leads: an object on the sheet of its stage; panel questions — the "Panel" tab,
+// they have no object on it. null: nothing to show (no such sheet, or no object)
+export function shownOn(q: Question, stages: string[]): { stage: string; key: string | null } | null {
+  if (!stages.includes(q.stage)) return null;
+  const key = objectOf(q.target);
+  return key || q.stage === "panel" ? { stage: q.stage, key } : null;
+}
+
+// What survives closing the panel: typed answers and the open question
+export interface QuestionsMemory { drafts: Record<string, string>; expanded?: string | null }

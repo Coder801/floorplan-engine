@@ -9,7 +9,7 @@ import { wallPages, wallSheet } from "@/engine/sheet/walls";
 import { STUDIO_SECTIONS, Studio, type StudioSection } from "@/pages/Studio";
 import { Welcome } from "@/pages/Welcome";
 import { base, enc, getManifest, getPage, getProject, isProject, listProjects, saveAnswer, saveVariant } from "@/shared/api";
-import { DRAWER_TABS, SIDE_TABS, type DrawerTab, type SideTab, type Theme } from "@/shared/consts";
+import { DRAWER_TABS, NARROW_PX, SIDE_TABS, type DrawerTab, type SideTab, type Theme } from "@/shared/consts";
 import { cx } from "@/shared/cx";
 import { label } from "@/shared/i18n";
 import { applyTheme, remember, remembered, savedTheme } from "@/shared/palette";
@@ -17,7 +17,7 @@ import { resetSelection, view } from "@/shared/store";
 import ui from "@/shared/styles/ui.module.scss";
 import { sheetTabs, tabOf, VIEWS } from "@/shared/tabs";
 import type { ManifestPage, Overview, Page, Project, ProjectSummary, Scene, Variants } from "@/shared/types";
-import type { Answer } from "@/shared/questions";
+import type { Answer, QuestionsMemory } from "@/shared/questions";
 import { watchRebuild } from "@/shared/rebuild";
 import { BRAND, watchBuild } from "@/shared/version";
 import { Boundary } from "@/ui/Boundary";
@@ -58,6 +58,8 @@ export const unresolved = (p: Project | null) =>
   (p?.report ? p.report.questions.filter((q) => UNRESOLVED.has(q.state)).length : 0);
 
 // account is who is logged in (Gate, for settings); null if login is off
+const QUESTION_AROUND = 0.4;  // a question's object is seen in its room, not alone at the largest zoom
+
 export function Viewer({ account = null }: { account?: Account | null }) {
   const { t } = useTranslation();
   const [list, setList] = useState<ProjectSummary[]>([]);
@@ -98,6 +100,7 @@ export function Viewer({ account = null }: { account?: Account | null }) {
   const prevProject = useRef<string | null>(null);
   const [variants, setVariants] = useState<Variants | null>(null);  // wiring variants (manifest)
   const [choosing, setChoosing] = useState(false);  // the variant is being saved and the project rebuilt
+  const questionsMemory = useRef<QuestionsMemory>({ drafts: {} });
   const [answering, setAnswering] = useState(false);  // an answer from a question card is being saved
   const [saving, setSaving] = useState(false);  // route edits are being saved and the project rebuilt
   const [outdated, setOutdated] = useState(false);  // a new version was deployed after the tab was opened
@@ -169,6 +172,7 @@ export function Viewer({ account = null }: { account?: Account | null }) {
       setProject(null); setPages([]); setPage(null); setLoaded(null); setDrawn([]); setElevs([]); setScene(null);
       setError(null); setSource(null); setEstimate(false); setInfo(false); setOverview(null);
       setRefreshing(false); setShown(reloadsRef.current);
+      questionsMemory.current = { drafts: {} };
     }
     cache.current = new Map();
     listProjects().then((l) => alive && setList(l)).catch(() => {});
@@ -256,20 +260,30 @@ export function Viewer({ account = null }: { account?: Account | null }) {
   drawnRef.current = drawn;
 
   // Another sheet: drop the hint, 3D and edits right away, without waiting for the page to load
-  const openSheet = (index: number) => {
+  const openSheet = (index: number): boolean => {
     setEstimate(false); setInfo(false);
-    if (source) { setSource(null); resetSelection(); setSheet(index); return; }
+    if (source) { setSource(null); resetSelection(); setSheet(index); return true; }
     if (page && index === sheet) {  // the sheet is already open: keep the edits, leave 3D for the sheet
       if (view.get().show3d) view.set({ show3d: false, pinned: null, selected: null, neighbors: null, tip: null });
-      return;
+      return true;
     }
     const sameDrawing = sheet !== null && drawingSheets.includes(sheet) && drawingSheets.includes(index);
-    if (confirmLeave()) { resetSelection(sameDrawing); setSheet(index); }
+    if (!confirmLeave()) return false;
+    resetSelection(sameDrawing);
+    setSheet(index);
+    return true;
   };
   // From an elevation to the wiring sheet, straight to the line of a point or box (store.goto)
   const toWiring = sceneSheet === undefined ? undefined : (key: string) => {
-    view.set({ goto: key });
-    openSheet(sceneSheet);
+    if (openSheet(sceneSheet)) view.set({ goto: { key, stage: "wiring" } });
+  };
+  // From a question to its object, or to the "Panel" tab; on a narrow screen the panel covers
+  // the drawing, so it closes (what was typed stays in questionsMemory)
+  const showQuestion = ({ stage, key }: { stage: string; key: string | null }) => {
+    const index = pages.find((pg) => pg.stage === stage)?.index;
+    if (index === undefined || !openSheet(index)) return;
+    if (key) view.set({ goto: { key, stage, around: QUESTION_AROUND } });
+    if (window.innerWidth <= NARROW_PX) closeDrawer();
   };
   // "Estimate" is not a sheet: it is the wiring page (which has the estimate key) without the
   // drawing; the plumbing estimate comes from the "Plumbing" page, which is part of the same
@@ -526,6 +540,7 @@ export function Viewer({ account = null }: { account?: Account | null }) {
         {drawer && project && (
           <Drawer tab={drawer} project={project} shownSource={source} onSource={showSource}
                   busy={answering || refreshing} onAnswer={answerQuestion}
+                  stages={pages.flatMap((pg) => pg.stage ?? [])} onShow={showQuestion} memory={questionsMemory}
                   closing={closing} onClose={closeDrawer} onClosed={drawerClosed} />
         )}
       </SidePanel>

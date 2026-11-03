@@ -8,7 +8,7 @@ import { REDUCED_MOTION, type DrawerTab } from "@/shared/consts";
 import { cx } from "@/shared/cx";
 import { kindOf } from "@/shared/files";
 import i18n, { label, locale } from "@/shared/i18n";
-import type { Answer } from "@/shared/questions";
+import type { Answer, QuestionsMemory } from "@/shared/questions";
 import ui from "@/shared/styles/ui.module.scss";
 import type { Project } from "@/shared/types";
 import { Questions } from "@/widgets/Questions";
@@ -21,12 +21,15 @@ interface Props {
   onSource: (file: string) => void;
   busy: boolean;                // an answer is being saved or the project reloaded
   onAnswer: (id: string, answer: Answer | null) => Promise<AnswerResult | null>;
+  stages: string[];             // stages of the sheets: where "show" can lead
+  onShow: (to: { stage: string; key: string | null }) => void;
+  memory: React.MutableRefObject<QuestionsMemory>;  // outlives the panel
   closing: boolean;             // asked to close: the panel slides out to the right
   onClose: () => void;          // close: start sliding out
   onClosed: () => void;         // slid out: remove
 }
 
-export function Drawer({ tab, project, shownSource, onSource, busy, onAnswer, closing, onClose, onClosed }: Props) {
+export function Drawer({ tab, project, shownSource, onSource, busy, onAnswer, stages, onShow, memory, closing, onClose, onClosed }: Props) {
   const { t } = useTranslation();
   useEffect(() => {
     const onKey = (ev: KeyboardEvent) => { if (ev.key === "Escape") onClose(); };
@@ -36,7 +39,7 @@ export function Drawer({ tab, project, shownSource, onSource, busy, onAnswer, cl
   // Without animation (reduced motion) there is no animation end, so remove right away
   useEffect(() => { if (closing && REDUCED_MOTION) onClosed(); }, [closing, onClosed]);
   let body: React.ReactNode;
-  if (tab === "questions") body = <Questions project={project} busy={busy} onAnswer={onAnswer} />;
+  if (tab === "questions") body = <Questions project={project} busy={busy} onAnswer={onAnswer} stages={stages} onShow={onShow} memory={memory} />;
   else if (tab === "sources") body = <Sources project={project} shown={shownSource} onSource={onSource} />;
   else body = <ProjectInfo project={project} />;
   return (
