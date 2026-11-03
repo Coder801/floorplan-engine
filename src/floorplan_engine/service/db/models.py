@@ -196,11 +196,13 @@ class Symbol(Base):
 
 class Project(Base):
     __tablename__ = "project"
+    # The name (slug) is unique inside a studio: two studios may each have their own kv42
+    __table_args__ = (UniqueConstraint("studio_id", "slug", name="uq_project_studio_slug"),)
     id: Mapped[uuid.UUID] = _id()
     studio_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("studio.id", ondelete="CASCADE"))
     name: Mapped[str] = mapped_column(String(200))
     # Project folder in the viewer (projects/<slug>), while projects live in folders
-    slug: Mapped[str | None] = mapped_column(String(100), unique=True)
+    slug: Mapped[str | None] = mapped_column(String(100))
     # State: values of service.models.ProjectState
     state: Mapped[str] = mapped_column(String(20), default="created")
     message: Mapped[str] = mapped_column(Text, default="")

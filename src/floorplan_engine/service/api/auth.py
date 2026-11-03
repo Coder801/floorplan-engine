@@ -364,7 +364,7 @@ class Auth:
                 return self._prices(db, who, request)
             if len(parts) < 4 or parts[2] != "projects" or not parts[3]:
                 return None
-            project = acc.project_by_key(db, parts[3])
+            project = acc.project_by_key(db, parts[3], who)
             role = acc.project_role(db, who, project)
             if not acc.can(role, "view"):
                 return JSONResponse({"detail": f"проекта {parts[3]} нет"}, status_code=404)

@@ -327,3 +327,21 @@ def test_studio_folder_and_root_owner(db: Session) -> None:
     acc.create_project_for(db, other, "Своя", "own")
     linked, reason = acc.adopt_folders(db, "other@example.com", ["kv2"])
     assert linked == [] and reason is not None and "уже" in reason
+
+
+def test_same_name_in_two_studios(db: Session) -> None:
+    """A name is unique inside a studio: two studios may each have kv1. A link by name opens the
+    one the caller sees; without a caller the name must be unique in the database, and the id
+    always works."""
+    a, b = user(db, "a", "pro"), user(db, "b", "pro")
+    pa = acc.create_project_for(db, a, "Кв А", "kv1")
+    pb = acc.create_project_for(db, b, "Кв Б", "kv1")
+    with pytest.raises(IntegrityError), db.begin_nested():  # but not twice in one studio
+        acc.create_project_for(db, a, "Ещё", "kv1")
+    assert acc.project_by_key(db, "kv1", acc.Principal(a)) is pa
+    assert acc.project_by_key(db, "kv1", acc.Principal(b)) is pb
+    assert acc.project_by_key(db, str(pb.id), acc.Principal(a)) is pb  # access is checked apart
+    assert acc.project_by_key(db, "kv1") is None  # ambiguous without a caller
+    with pytest.raises(acc.AccessError, match="несколько"):
+        acc.project_by_slug(db, "kv1")
+    assert acc.project_by_slug(db, "kv1", acc.own_studio(db, b)) is pb

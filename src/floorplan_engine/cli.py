@@ -536,7 +536,7 @@ def access_link(
     from floorplan_engine.service.db.session import make_engine, make_sessions
 
     with make_sessions(make_engine())() as db:
-        if acc.project_by_slug(db, project.name) is not None:
+        if _find_project(db, project.name) is not None:
             typer.secho(f"Проект {project.name} уже в базе", fg=typer.colors.YELLOW)
             raise typer.Exit(1)
         if owner is None:
@@ -588,13 +588,28 @@ def access_invite(
     typer.echo(f"{public}/?invite={token}")
 
 
+def _find_project(db: Session, key: str, studio: Studio | None = None) -> Project | None:
+    """A project by its id or name (in a studio, if given); the same name in several studios —
+    exit with a hint to say which."""
+    from floorplan_engine.service.db import access as acc
+
+    try:
+        project = acc.project_by_key(db, key) if studio is None else None
+        if project is None:
+            project = acc.project_by_slug(db, key, studio)
+    except acc.AccessError as exc:
+        typer.secho(str(exc), fg=typer.colors.RED)
+        raise typer.Exit(1) from exc
+    return project
+
+
 def _db_project(db: Session, project: Path, create: bool = False) -> Project:
     """Project row in the database for a folder; if missing, exit with a hint or, with create, make
     a
     row without an owner (the owner claims it on login)."""
     from floorplan_engine.service.db import access as acc
 
-    target = acc.project_by_slug(db, project.name)
+    target = _find_project(db, project.name)
     if target is None and create:
         target = acc.create_project_unowned(db, project.name, project.name)
         typer.echo(f"Проект {project.name} записан в базу без владельца", err=True)
@@ -736,8 +751,9 @@ def project_push(
 
 @project_app.command("pull")
 def project_pull(
-    slug: Annotated[str, typer.Argument(help="Имя проекта (папки) в базе")],
+    slug: Annotated[str, typer.Argument(help="Имя проекта (папки) или его id")],
     to: Annotated[Path, typer.Option(help="Куда: папка проектов")] = Path("projects"),
+    owner: OwnerOpt = None,
     force: Annotated[
         bool, typer.Option(help="Затереть правки в папке, которых нет в базе")
     ] = False,
@@ -746,15 +762,15 @@ def project_pull(
     исходники и out/ последней сборки. Правки в папке, которых нет в базе, не затираются без
     --force."""
     from floorplan_engine.service import sync
-    from floorplan_engine.service.db import access as acc
     from floorplan_engine.service.db.session import make_engine, make_sessions
     from floorplan_engine.service.objects import store_from_env
 
     with make_sessions(make_engine())() as db:
-        target = acc.project_by_slug(db, slug)
+        target = _find_project(db, slug, _owner_studio(db, owner))
         if target is None:
             typer.secho(f"Проекта {slug} в базе нет", fg=typer.colors.RED)
             raise typer.Exit(1)
+        slug = target.slug or str(target.id)
         try:
             version = sync.pull(db, store_from_env(), target, to / slug, force=force)
         except sync.SyncError as exc:

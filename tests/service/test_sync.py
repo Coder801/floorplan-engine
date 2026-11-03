@@ -56,7 +56,7 @@ def test_push_new_project_then_only_changes(db: Session, tmp_path: Path) -> None
 
     other = tmp_path / "copy" / "kv"
     shutil.copytree(folder, other, ignore=shutil.ignore_patterns(".shtroba.yaml"))
-    with pytest.raises(sync.SyncError, match="уже в базе"):
+    with pytest.raises(sync.SyncError, match="уже в студии"):
         sync.push(db, store, other, studio)
 
 
@@ -124,3 +124,17 @@ def test_import_and_pull_commands(
     assert pulled.exit_code == 0 and (tmp_path / "out" / "kv" / "room.yaml").is_file()
     missing = runner.invoke(app, ["project", "pull", "nope", "--to", str(tmp_path / "out")])
     assert missing.exit_code == 1
+
+
+def test_same_folder_name_in_two_studios(db: Session, tmp_path: Path) -> None:
+    store = LocalObjectStore(tmp_path / "store")
+    first = _studio(db)
+    other = acc.oauth_login(db, "google", "x", "x@example.com", True, "X")
+    second = acc.register_firm(db, other, "Другая", "design")
+    for d in "abc":
+        (tmp_path / d).mkdir()
+    a = sync.push(db, store, _project(tmp_path / "a"), first, build=False)
+    b = sync.push(db, store, _project(tmp_path / "b"), second, build=False)
+    assert a.project.slug == b.project.slug == "kv" and a.project.id != b.project.id
+    with pytest.raises(sync.SyncError, match="уже в студии"):
+        sync.push(db, store, _project(tmp_path / "c"), first)

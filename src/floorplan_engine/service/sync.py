@@ -156,12 +156,12 @@ def push(
                 f"сначала project pull, потом push"
             )
     else:
-        if acc.project_by_slug(session, folder.name) is not None:
-            raise SyncError(
-                f"проект {folder.name} уже в базе — выгрузите его: project pull {folder.name}"
-            )
         if studio is None:
             raise SyncError("новый проект: укажите студию (--owner)")
+        if acc.project_by_slug(session, folder.name, studio) is not None:
+            raise SyncError(
+                f"проект {folder.name} уже в студии — выгрузите его: project pull {folder.name}"
+            )
         project = Project(
             studio_id=studio.id, name=_project_name(files, folder.name), slug=folder.name
         )

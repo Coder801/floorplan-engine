@@ -205,16 +205,32 @@ def visible_slugs(session: Session, who: Principal, slugs: Collection[str]) -> s
     return {p.slug for p in session.scalars(query) if p.slug is not None}
 
 
-def project_by_slug(session: Session, slug: str) -> Project | None:
-    return session.scalar(select(Project).where(Project.slug == slug))
+def project_by_slug(session: Session, slug: str, studio: Studio | None = None) -> Project | None:
+    """A project by its name: in a studio, or in the whole database if the name is unique there
+    (several studios with the same name — AccessError: say which studio)."""
+    query = select(Project).where(Project.slug == slug)
+    if studio is not None:
+        query = query.where(Project.studio_id == studio.id)
+    rows = session.scalars(query.limit(2)).all()
+    if len(rows) > 1:
+        raise AccessError(f"проектов {slug} несколько, в разных студиях — укажите студию или id")
+    return rows[0] if rows else None
 
 
-def project_by_key(session: Session, key: str) -> Project | None:
-    """A project from an address: its id; an old link by name (slug) still opens."""
+def project_by_key(session: Session, key: str, who: Principal | None = None) -> Project | None:
+    """A project from an address: its id; an old link by name (slug) still opens — among the
+    projects the caller sees (who), and only if the name is unique there."""
     try:
         return session.get(Project, uuid.UUID(key))
     except ValueError:
-        return project_by_slug(session, key)
+        pass
+    if who is None:
+        try:
+            return project_by_slug(session, key)
+        except AccessError:
+            return None
+    rows = session.scalars(visible_projects(session, who).where(Project.slug == key).limit(2)).all()
+    return rows[0] if len(rows) == 1 else None
 
 
 # --- OAuth users and account type ----------------------------------------------------
@@ -400,9 +416,10 @@ def unowned_studio(session: Session) -> Studio:
 
 def create_project_unowned(session: Session, name: str, slug: str) -> Project:
     """Project row without an owner, so an access code can be issued before the owner logs in."""
-    if project_by_slug(session, slug) is not None:
+    studio = unowned_studio(session)
+    if project_by_slug(session, slug, studio) is not None:
         raise AccessError(f"проект {slug} уже в базе")
-    project = Project(studio_id=unowned_studio(session).id, name=name, slug=slug)
+    project = Project(studio_id=studio.id, name=name, slug=slug)
     session.add(project)
     session.flush()
     audit(session, "project_create", project=project, payload={"unowned": True})

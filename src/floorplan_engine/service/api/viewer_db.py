@@ -103,8 +103,10 @@ def install_db_routes(app: FastAPI, auth: Auth, store: ObjectStore, market_root:
     """The viewer's project and price routes on the database; market.yaml (the shared market
     sample) stays a file in market_root."""
 
-    def project_of(db: Session, key: str) -> Project:
-        project = acc.project_by_key(db, key)
+    def project_of(db: Session, request: Request, key: str) -> Project:
+        """The project of the address, found as auth.check found it: by id, or by name among the
+        projects the caller sees."""
+        project = acc.project_by_key(db, key, auth.principal(db, request))
         if project is None:
             raise HTTPException(404, f"проекта {key} нет")
         return project
@@ -124,7 +126,7 @@ def install_db_routes(app: FastAPI, auth: Auth, store: ObjectStore, market_root:
     @app.get("/api/projects/{key}")
     def project(key: str, request: Request) -> dict[str, Any]:
         with auth.db() as db:
-            p = project_of(db, key)
+            p = project_of(db, request, key)
             build = ps.latest_build(db, p)
             version = repo.latest_model(db, p.id)
             data = version.data if version is not None else {}
@@ -159,9 +161,9 @@ def install_db_routes(app: FastAPI, auth: Auth, store: ObjectStore, market_root:
                 },
             }
 
-    def artifact(key: str) -> zipfile.ZipFile:
+    def artifact(request: Request, key: str) -> zipfile.ZipFile:
         with auth.db() as db:
-            p = project_of(db, key)
+            p = project_of(db, request, key)
             build = ps.latest_build(db, p)
             f = ps.build_file(db, build, ARTIFACT_FILE) if build is not None else None
             if f is None:
@@ -169,13 +171,13 @@ def install_db_routes(app: FastAPI, auth: Auth, store: ObjectStore, market_root:
             return zipfile.ZipFile(BytesIO(store.get(f.object_key)))
 
     @app.get("/api/projects/{key}/sheets")
-    def sheets(key: str) -> dict[str, Any]:
-        with artifact(key) as zf:
+    def sheets(request: Request, key: str) -> dict[str, Any]:
+        with artifact(request, key) as zf:
             return check_manifest(zf)
 
     @app.get("/api/projects/{key}/sheets/{index}")
-    def sheet(key: str, index: int) -> Response:
-        with artifact(key) as zf:
+    def sheet(request: Request, key: str, index: int) -> Response:
+        with artifact(request, key) as zf:
             pages = check_manifest(zf)["pages"]
             page = next((p for p in pages if p["index"] == index), None)
             if page is None:
@@ -183,27 +185,27 @@ def install_db_routes(app: FastAPI, auth: Auth, store: ObjectStore, market_root:
             return Response(zf.read(page["file"]), media_type="application/json")
 
     @app.get("/api/projects/{key}/out/{rel:path}")
-    def out_file(key: str, rel: str) -> Response:
+    def out_file(request: Request, key: str, rel: str) -> Response:
         with auth.db() as db:
-            build = ps.latest_build(db, project_of(db, key))
+            build = ps.latest_build(db, project_of(db, request, key))
             f = ps.build_file(db, build, rel) if build is not None else None
             if f is None:
                 raise HTTPException(404, f"файла {rel} нет")
             return _file_response(store, f.object_key, rel)
 
     @app.get("/api/projects/{key}/source/{rel:path}")
-    def source_file(key: str, rel: str) -> Response:
+    def source_file(request: Request, key: str, rel: str) -> Response:
         with auth.db() as db:
-            p = project_of(db, key)
+            p = project_of(db, request, key)
             s = db.scalar(select(Source).where(Source.project_id == p.id, Source.file_name == rel))
             if s is None:
                 raise HTTPException(404, f"файла {rel} нет")
             return _file_response(store, s.object_key, rel)
 
     @app.get("/api/projects/{key}/model/{filename}")
-    def model(key: str, filename: str) -> PlainTextResponse:
+    def model(request: Request, key: str, filename: str) -> PlainTextResponse:
         with auth.db() as db:
-            p = project_of(db, key)
+            p = project_of(db, request, key)
             try:
                 files = ps.project_files(db, p)
             except ps.NoModelError:
@@ -216,7 +218,7 @@ def install_db_routes(app: FastAPI, auth: Auth, store: ObjectStore, market_root:
         """A change by a core function in the latest version's folder → a new version by the user
         and a rebuild; errors (with a field path) give 422 and change nothing."""
         with auth.db() as db:
-            p = project_of(db, key)
+            p = project_of(db, request, key)
             ps.lock(db, p)
             with ps.workdir(db, store, p) as folder:
                 issues = apply(folder)
