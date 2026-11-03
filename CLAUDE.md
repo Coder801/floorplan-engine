@@ -26,6 +26,9 @@ uv run floorplan-engine view                                 # только API 
 uv run floorplan-engine access link projects/<имя> --owner <email>  # связать папку с базой (вход)
 uv run floorplan-engine access invite projects/<имя> --role client  # ссылка-приглашение
 uv run floorplan-engine access code projects/<имя> --label "Иван"   # код доступа: просмотр проекта без учётки (codes, revoke-code)
+uv run floorplan-engine project push projects/<имя> [--owner <email>]   # папку — в базу: новая версия модели, исходники, сборка (правда — база)
+uv run floorplan-engine project pull <имя> [--to projects] [--force]    # из базы — в папку: модель, исходники, out/ последней сборки
+uv run floorplan-engine project import projects --owner <email>         # перенести папку проектов и прайс/профиль студии в базу (studio push|pull — только студия)
 cd web && npm install && npm run dev                    # только страница просмотра (API — view)
 cd web && npm run build                                 # сборка фронта в web/dist (выкладка — README в web/)
 cd web && npm run check && npm test                     # типы TypeScript и тесты фронта (vitest)
@@ -506,7 +509,9 @@ group, at }`), по вариантам проводки (`variants.<режим-�
     `LocalObjectStore`, R2/S3 потом; ключи — `source_key`, `build_key`); `project_store.py` —
     проект из базы: последняя версия модели, прайс и профиль студии — во временную папку
     (`workdir`), сборка ядром и `out/` — в хранилище (`build`: строки `build`, `build_file`; одна
-    сборка проекта за раз — блокировка Postgres);
+    сборка проекта за раз — блокировка Postgres); `sync.py` — папка ↔ база (`push`, `pull`,
+    `push_studio`, `pull_studio`; метка рабочей копии `.shtroba.yaml` — id проекта и версия:
+    push не затирает более новую версию в базе, pull — несохранённые правки папки);
     `db/` — база сервиса (SQLAlchemy 2, Postgres; миграции — `migrations/`, Alembic): таблицы,
     подключение, репозитории; к `Workflow` пока не подключена, план переезда — `docs/database.md`.
     `db/access.py` — доступ: роль в проекте, права, OAuth-пользователи, тип учётки (client —

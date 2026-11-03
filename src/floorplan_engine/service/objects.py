@@ -9,6 +9,7 @@ Keys are slash-separated paths of safe segments: `projects/<project id>/sources/
 
 from __future__ import annotations
 
+import os
 import re
 import uuid
 from pathlib import Path
@@ -95,3 +96,12 @@ class LocalObjectStore:
     def local_path(self, key: str) -> Path | None:
         path = self._path(key)
         return path if path.is_file() else None
+
+
+OBJECTS_ENV = "SHTROBA_OBJECTS"  # folder of the file storage; default data/objects
+
+
+def store_from_env(env: dict[str, str] | None = None) -> LocalObjectStore:
+    """File storage of this server: a folder from SHTROBA_OBJECTS (on Railway — on the volume)."""
+    env = dict(os.environ) if env is None else env
+    return LocalObjectStore(Path(env.get(OBJECTS_ENV, "data/objects")))

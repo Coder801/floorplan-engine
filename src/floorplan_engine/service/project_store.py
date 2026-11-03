@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import tempfile
+import uuid
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
@@ -54,14 +55,14 @@ def lock(session: Session, project: Project) -> None:
     session.execute(select(func.pg_advisory_xact_lock(func.hashtext(str(project.id)))))
 
 
-def studio_files(session: Session, project: Project) -> dict[str, str]:
-    """Files of the project's studio next to the project folder: prices.yaml (as written, with
-    comments) and studio.yaml (the profile: organization, stage, signatures)."""
+def studio_files(session: Session, studio_id: uuid.UUID) -> dict[str, str]:
+    """Files of a studio next to its project folders: prices.yaml (as written, with comments) and
+    studio.yaml (the profile: organization, stage, signatures)."""
     files: dict[str, str] = {}
-    prices = session.scalar(select(PriceList).where(PriceList.studio_id == project.studio_id))
+    prices = session.scalar(select(PriceList).where(PriceList.studio_id == studio_id))
     if prices is not None and prices.text:
         files[PRICES_FILE] = prices.text
-    profile = session.get(StudioProfile, project.studio_id)
+    profile = session.get(StudioProfile, studio_id)
     if profile is not None:
         data: dict[str, Any] = {
             k: v
@@ -107,7 +108,7 @@ def workdir(
         studio_dir = Path(tmp) / "studio"
         folder = studio_dir / (project.slug or str(project.id))
         folder.mkdir(parents=True)
-        for name, text in studio_files(session, project).items():
+        for name, text in studio_files(session, project.studio_id).items():
             (studio_dir / name).write_text(text, "utf-8")
         for name, text in project_files(session, project, version).items():
             (folder / name).write_text(text, "utf-8")

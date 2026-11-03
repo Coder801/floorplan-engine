@@ -34,7 +34,7 @@ if TYPE_CHECKING:
     from sqlalchemy.orm import Session
 
     from floorplan_engine.service.api.auth import Auth
-    from floorplan_engine.service.db.models import Project
+    from floorplan_engine.service.db.models import Project, Studio
 
 app = typer.Typer(
     help="Чертежи DXF (план, электрика) из room.yaml / electrical.yaml.",
@@ -60,7 +60,7 @@ ElectricalModelOpt = Annotated[
 
 # Service commands read .env (Google login, database, API key); build and check do not: they
 # need no environment, and CLI tests must not pick up someone else's .env
-ENV_COMMANDS = frozenset({"serve", "view", "dev", "analyze", "access"})
+ENV_COMMANDS = frozenset({"serve", "view", "dev", "analyze", "access", "project", "studio"})
 
 
 @app.callback()
@@ -648,3 +648,155 @@ def access_revoke_code(
             raise typer.Exit(1) from exc
         db.commit()
     typer.echo(f"Код {str(row.id)[:8]} отозван")
+
+
+project_app = typer.Typer(
+    help="Проект в базе ↔ папка (правда — база): push — папку в базу, pull — из базы в папку."
+)
+app.add_typer(project_app, name="project")
+studio_app = typer.Typer(help="Прайс и профиль студии (prices.yaml, studio.yaml) ↔ база.")
+app.add_typer(studio_app, name="studio")
+
+OwnerOpt = Annotated[
+    str | None, typer.Option(help="Почта или телефон владельца студии (уже входил и выбрал тип)")
+]
+
+
+def _owner_studio(db: Session, owner: str | None) -> Studio | None:
+    """The studio of its owner by e-mail or phone; None without --owner; exit with a hint if there
+    is none."""
+    from sqlalchemy import func, or_, select
+
+    from floorplan_engine.service.db import access as acc
+    from floorplan_engine.service.db.models import AppUser
+
+    if owner is None:
+        return None
+    key = owner.strip().lower()
+    user = db.scalar(
+        select(AppUser).where(or_(func.lower(AppUser.email) == key, AppUser.phone == key))
+    )
+    studio = acc.own_studio(db, user) if user is not None else None
+    if studio is None:
+        typer.secho(f"Нет студии у {owner} — пусть войдёт и выберет тип", fg=typer.colors.RED)
+        raise typer.Exit(1)
+    return studio
+
+
+def _push_one(db: Session, folder: Path, studio: Studio | None, build: bool) -> None:
+    from floorplan_engine.service import sync
+    from floorplan_engine.service.objects import store_from_env
+
+    try:
+        result = sync.push(db, store_from_env(), folder, studio, build=build)
+    except sync.SyncError as exc:
+        typer.secho(f"{folder.name}: {exc}", fg=typer.colors.RED)
+        raise typer.Exit(1) from exc
+    db.commit()
+    what = (
+        f"версия {result.version}"
+        if result.new_version
+        else f"без изменений (версия {result.version})"
+    )
+    extra = f", исходников +{len(result.sources)}" if result.sources else ""
+    built = f", сборка: {result.build.status}" if result.build is not None else ""
+    typer.echo(f"{folder.name}: {what}{extra}{built}")
+
+
+@project_app.command("push")
+def project_push(
+    project: ProjectArg,
+    owner: OwnerOpt = None,
+    build: Annotated[bool, typer.Option(help="Собрать новую версию")] = True,
+) -> None:
+    """Папку — в базу: новая версия модели, если файлы изменились; прайс проекта, новые
+    исходники, сборка. Новый проект — в студию --owner. Отказ, если в базе версия новее той,
+    с которой папка выгружена (сначала pull)."""
+    from floorplan_engine.service.db.session import make_engine, make_sessions
+
+    with make_sessions(make_engine())() as db:
+        _push_one(db, project, _owner_studio(db, owner), build)
+
+
+@project_app.command("pull")
+def project_pull(
+    slug: Annotated[str, typer.Argument(help="Имя проекта (папки) в базе")],
+    to: Annotated[Path, typer.Option(help="Куда: папка проектов")] = Path("projects"),
+    force: Annotated[
+        bool, typer.Option(help="Затереть правки в папке, которых нет в базе")
+    ] = False,
+) -> None:
+    """Из базы — в папку <to>/<имя>: последняя версия модели, прайс проекта, недостающие
+    исходники и out/ последней сборки. Правки в папке, которых нет в базе, не затираются без
+    --force."""
+    from floorplan_engine.service import sync
+    from floorplan_engine.service.db import access as acc
+    from floorplan_engine.service.db.session import make_engine, make_sessions
+    from floorplan_engine.service.objects import store_from_env
+
+    with make_sessions(make_engine())() as db:
+        target = acc.project_by_slug(db, slug)
+        if target is None:
+            typer.secho(f"Проекта {slug} в базе нет", fg=typer.colors.RED)
+            raise typer.Exit(1)
+        try:
+            version = sync.pull(db, store_from_env(), target, to / slug, force=force)
+        except sync.SyncError as exc:
+            typer.secho(str(exc), fg=typer.colors.RED)
+            raise typer.Exit(1) from exc
+    typer.echo(f"{to / slug}: версия {version}")
+
+
+@project_app.command("import")
+def project_import(
+    root: Annotated[Path, typer.Argument(help="Папка проектов, например projects")],
+    owner: Annotated[str, typer.Option(help="Почта или телефон владельца студии")],
+    build: Annotated[bool, typer.Option(help="Собрать проекты")] = True,
+) -> None:
+    """Перенести папку проектов в базу: прайс и профиль студии (prices.yaml, studio.yaml), затем
+    каждый проект — как project push. Повторный запуск заливает только изменения."""
+    from floorplan_engine.service import sync
+    from floorplan_engine.service.api.viewer import project_folders
+    from floorplan_engine.service.db.session import make_engine, make_sessions
+
+    with make_sessions(make_engine())() as db:
+        studio = _owner_studio(db, owner)
+        assert studio is not None
+        taken = sync.push_studio(db, studio, root)
+        db.commit()
+        typer.echo(f"Студия «{studio.name}»: {', '.join(taken) or 'файлов студии нет'}")
+        for folder in project_folders(root):
+            _push_one(db, folder, studio, build)
+
+
+@studio_app.command("push")
+def studio_push(
+    root: Annotated[Path, typer.Argument(help="Папка с prices.yaml и studio.yaml")],
+    owner: Annotated[str, typer.Option(help="Почта или телефон владельца студии")],
+) -> None:
+    """Прайс и профиль студии из папки — в базу."""
+    from floorplan_engine.service import sync
+    from floorplan_engine.service.db.session import make_engine, make_sessions
+
+    with make_sessions(make_engine())() as db:
+        studio = _owner_studio(db, owner)
+        assert studio is not None
+        taken = sync.push_studio(db, studio, root)
+        db.commit()
+    typer.echo(f"Студия «{studio.name}»: {', '.join(taken) or 'файлов нет'}")
+
+
+@studio_app.command("pull")
+def studio_pull(
+    root: Annotated[Path, typer.Argument(help="Куда: папка проектов")],
+    owner: Annotated[str, typer.Option(help="Почта или телефон владельца студии")],
+) -> None:
+    """Прайс и профиль студии из базы — в папку."""
+    from floorplan_engine.service import sync
+    from floorplan_engine.service.db.session import make_engine, make_sessions
+
+    with make_sessions(make_engine())() as db:
+        studio = _owner_studio(db, owner)
+        assert studio is not None
+        written = sync.pull_studio(db, studio, root)
+    typer.echo(f"{root}: {', '.join(written) or 'у студии нет прайса и профиля'}")
