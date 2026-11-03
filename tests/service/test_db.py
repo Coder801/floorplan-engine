@@ -73,6 +73,24 @@ def test_model_versions_increment_and_restore(session: Session) -> None:
         repo.add_model_version(session, project.id, {"notes.md": "…"}, "user")
 
 
+def test_model_version_keeps_text_and_parsed_copy(session: Session) -> None:
+    """Every model file goes in as written and comes back byte for byte (comments included);
+    the jsonb copy is parsed, and a broken file is kept as text with no copy."""
+    project = repo.create_project(session, repo.create_studio(session, "С").id, "Кв")
+    files = {
+        "room.yaml": "# план\nname: Кухня  # PDF, масштаб\ndate: 2026-10-01\n",
+        "plumbing.yaml": "fixtures: []\n",
+        "variant.yaml": "mode: economy\n",
+        "wiring.yaml": "wires: {}\n",
+        "answers.yaml": "answers: [\n",
+    }
+    version = repo.add_model_version(session, project.id, files, "operator")
+    assert repo.model_files(version) == files
+    assert version.data["room.yaml"] == {"name": "Кухня", "date": "2026-10-01"}
+    assert version.data["variant.yaml"] == {"mode": "economy"}
+    assert version.data["answers.yaml"] is None
+
+
 def test_usage_sums_per_project(session: Session) -> None:
     project = repo.create_project(session, repo.create_studio(session, "С").id, "Кв")
     repo.record_usage(session, project.id, 1, "api", 1.25, input_tokens=1000)

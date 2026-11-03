@@ -361,7 +361,9 @@ class FactsPage(Base):
 
 
 class ModelVersion(Base):
-    """Project model version: YAML texts, who wrote them and when."""
+    """Project model version: YAML texts, who wrote them and when. The text is the truth
+    (comments like "# PDF, масштаб" and the field order survive, a pull writes the files back
+    byte for byte); `data` is a parsed copy by file name for queries and the admin."""
 
     __tablename__ = "model_version"
     __table_args__ = (UniqueConstraint("project_id", "version"),)
@@ -373,6 +375,9 @@ class ModelVersion(Base):
     intake_yaml: Mapped[str | None] = mapped_column(Text)
     answers_yaml: Mapped[str | None] = mapped_column(Text)
     wiring_yaml: Mapped[str | None] = mapped_column(Text)  # route edits from the viewer
+    plumbing_yaml: Mapped[str | None] = mapped_column(Text)
+    variant_yaml: Mapped[str | None] = mapped_column(Text)  # wiring variant chosen in the viewer
+    data: Mapped[dict[str, Any]] = mapped_column(default=dict)
     author: Mapped[str] = mapped_column(String(20))  # analyzer | user | operator
     user_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("app_user.id", ondelete="SET NULL")
@@ -465,6 +470,8 @@ class PriceList(Base):
     note: Mapped[str] = mapped_column(Text, default="")
     items: Mapped[dict[str, Any]] = mapped_column(default=dict)
     board_kit: Mapped[list[Any]] = mapped_column(default=list)
+    # prices.yaml as written, with its comments: the truth; the columns above are its parsed copy
+    text: Mapped[str | None] = mapped_column(Text)
 
 
 class Usage(Base):

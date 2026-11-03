@@ -7,10 +7,13 @@ Workflow operation is one transaction).
 from __future__ import annotations
 
 import hashlib
+import json
 import statistics
 import uuid
 from collections.abc import Sequence
+from typing import Any
 
+import yaml
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -27,8 +30,11 @@ from floorplan_engine.service.facts.analysis import ALGO_VERSION, PageFacts, fro
 MODEL_COLUMNS = {
     "room.yaml": "room_yaml",
     "electrical.yaml": "electrical_yaml",
+    "plumbing.yaml": "plumbing_yaml",
     "intake.yaml": "intake_yaml",
     "answers.yaml": "answers_yaml",
+    "wiring.yaml": "wiring_yaml",
+    "variant.yaml": "variant_yaml",
 }
 
 
@@ -120,12 +126,26 @@ def add_model_version(
     last = session.scalar(
         select(func.max(ModelVersion.version)).where(ModelVersion.project_id == project_id)
     )
-    version = ModelVersion(project_id=project_id, version=(last or 0) + 1, author=author)
+    version = ModelVersion(
+        project_id=project_id,
+        version=(last or 0) + 1,
+        author=author,
+        data={name: parsed_copy(text) for name, text in files.items()},
+    )
     for name, text in files.items():
         setattr(version, MODEL_COLUMNS[name], text)
     session.add(version)
     session.flush()
     return version
+
+
+def parsed_copy(text: str) -> Any:
+    """The jsonb copy of a YAML text: dates and other non-JSON values become strings; a file that
+    does not parse is kept as None (the text is the truth, the check reports the error)."""
+    try:
+        return json.loads(json.dumps(yaml.safe_load(text), default=str))
+    except yaml.YAMLError:
+        return None
 
 
 def latest_model(session: Session, project_id: uuid.UUID) -> ModelVersion | None:
