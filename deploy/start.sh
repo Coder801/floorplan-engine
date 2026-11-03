@@ -19,7 +19,12 @@ for seed in /app/projects-seed/*/; do
   rm -rf "$kept"
   floorplan-engine build "$dest" > /dev/null || echo "Сборка $name не удалась" >&2
 done
-cp /app/projects-seed/*.yaml "$PROJECTS_DIR"/ 2>/dev/null || true  # studio profile and the like
+# Files next to the projects: the market sample comes from git; the studio price list and profile
+# are edited on the server (studio settings), so git only seeds them when the server has none
+cp /app/projects-seed/market.yaml "$PROJECTS_DIR"/ 2>/dev/null || true
+for f in prices.yaml studio.yaml; do
+  [ -f "/app/projects-seed/$f" ] && [ ! -f "$PROJECTS_DIR/$f" ] && cp "/app/projects-seed/$f" "$PROJECTS_DIR/$f"
+done
 # Login is on (SHTROBA_AUTH=on): run database migrations first (DATABASE_URL). The service
 # links project folders to the owner itself when they log in (SHTROBA_OWNER, service/api/auth.py)
 if [ "$SHTROBA_AUTH" = "on" ]; then
