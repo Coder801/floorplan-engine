@@ -32,3 +32,8 @@
 }
 .langs { left: 0; right: 0; min-width: 0; }
 .langs > button { grid-template-columns: minmax(0, 1fr) auto; }
+// "Studio settings": a full-width button with a note, opens the settings page
+.studio {
+  display: grid; justify-items: start; gap: 2px; width: 100%; padding: 8px 10px; text-align: left;
+  border: 1px solid var(--line); border-radius: 6px; background: var(--raise); color: var(--text);
+}

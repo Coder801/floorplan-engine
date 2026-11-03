@@ -138,6 +138,7 @@ export const en: Messages = {
     none: "No estimate: rebuild the project (floorplan-engine build)",
   },
   settings: {
+    studio: "Studio settings", studioNote: "profile, price list",
     title: "Settings", account: "Account", loginOff: "Sign-in is off — local viewing",
     plan: "Plan", theme: "Theme", language: "Language", version: "{{version}} · {{stage}}", build: "build {{build}}",
     plans: {
@@ -156,10 +157,17 @@ export const en: Messages = {
     empty: "No projects in projects/ — build at least one:",
     placeholder: "name",
   },
+  studio: {
+    title: "Studio settings", back: "Back",
+    sections: { profile: "Studio", prices: "Prices · electrical", plumbing: "Prices · plumbing" }, soon: "soon",
+    logo: "Logo", uploadLogo: "Upload logo", name: "Name", kind: "Business", city: "City",
+    empty: "not set", later: "The name and logo can be changed later.",
+    loginOff: "Login is off — the studio profile lives in the firm account.", noFirm: "The firm profile is empty: the account has no firm.",
+  },
   prices: {
-    title: "Studio prices · electrical", open: "Studio prices",
+    title: "Studio prices · electrical",
     lead: "Works: the studio price next to the {{region}} market. Project estimates take prices from here at the next build.",
-    back: "To projects", leave: "Some prices are not saved. Leave without saving?",
+    leave: "Some prices are not saved. Leave without saving?",
     work: "Work", unit: "Unit", studio: "Studio price, {{currency}}", market: "Market, {{region}}: min · median · max",
     noMarket: "Market", vsMedian: "Vs median", priceOf: "Price: {{name}}",
     service: "estimate uses a mock", serviceNote: "No studio price: the estimate takes the price service's (a mock for now, not the market)",

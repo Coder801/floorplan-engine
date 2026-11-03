@@ -1,8 +1,9 @@
-// Settings, a gear in the header: account (who is logged in, "Log out"), plan (account type),
-// theme and interface language (i18n: Ukrainian, Russian, English; the choice is remembered);
+// Settings, a gear in the header (and on the welcome screen): account (who is logged in, "Log
+// out"), plan (account type), "Studio settings" (pages/Studio, studio only), theme and interface language (i18n: Ukrainian, Russian, English; the choice is remembered);
 // at the bottom the product version and stage with the build number (shared/version.ts)
 
 import { useTranslation } from "react-i18next";
+import type { Space } from "@/shared/auth";
 import { THEMES, type Theme } from "@/shared/consts";
 import { cx } from "@/shared/cx";
 import { LANGUAGES, setLanguage } from "@/shared/i18n";
@@ -17,6 +18,7 @@ export interface Account {
   name: string;
   plan: "client" | "pro" | null;
   space?: string | null;  // firm name ("Мой ремонт" has none)
+  firm?: Space | null;    // the firm's profile for the studio settings (kind "studio" only)
   visitor: boolean;
   code?: boolean;         // logged in by a project access code (no account)
   logout: () => void;
@@ -27,10 +29,11 @@ interface Props {
   account: Account | null;
   theme: Theme;
   onTheme: (t: Theme) => void;
+  onStudio?: () => void;  // open the studio settings (studio only; no button otherwise)
 }
 
-export function Settings({ account, theme, onTheme }: Props) {
-  const { open, toggle, ref } = usePopover<HTMLDivElement>();
+export function Settings({ account, theme, onTheme, onStudio }: Props) {
+  const { open, setOpen, toggle, ref } = usePopover<HTMLDivElement>();
   const { t } = useTranslation();
   const plan = account?.visitor ? "guest" : account?.code ? "code" : account?.plan ?? "none";
   return (
@@ -55,6 +58,14 @@ export function Settings({ account, theme, onTheme }: Props) {
               <h3>{t("settings.plan")}</h3>
               <div>{account.space ?? t(`settings.plans.${plan}`)}</div>
               <div className="small muted">{t(`settings.plans.${plan}Note`)}</div>
+            </section>
+          )}
+          {onStudio && (
+            <section>
+              <button className={css.studio} onClick={() => { setOpen(false); onStudio(); }}>
+                <span>{t("settings.studio")}</span>
+                <span className="small muted">{t("settings.studioNote")}</span>
+              </button>
             </section>
           )}
           <section>

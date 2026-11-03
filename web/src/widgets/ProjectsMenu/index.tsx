@@ -15,12 +15,11 @@ interface Props {
   current: string | null;
   closing: boolean;                 // asked to close: the menu slides out to the left
   onOpen: (name: string) => void;
-  onPrices?: () => void;            // open the studio price page; none — no button
   onClose: () => void;              // start sliding out
   onClosed: () => void;             // slid out: remove
 }
 
-export function ProjectsMenu({ list, current, closing, onOpen, onPrices, onClose, onClosed }: Props) {
+export function ProjectsMenu({ list, current, closing, onOpen, onClose, onClosed }: Props) {
   const { t } = useTranslation();
   useEffect(() => {
     const onKey = (ev: KeyboardEvent) => { if (ev.key === "Escape") onClose(); };
@@ -44,7 +43,6 @@ export function ProjectsMenu({ list, current, closing, onOpen, onPrices, onClose
           {list.map((p) => (
             <ProjectCard key={p.name} p={p} current={p.name === current} onOpen={onOpen} />
           ))}
-          {onPrices && <button className={css.prices} onClick={onPrices}>{t("prices.open")} →</button>}
         </div>
       </nav>
     </>

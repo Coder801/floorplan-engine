@@ -30,8 +30,4 @@
   .lead { margin: 24px 0 16px; }
 }
 .grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
-// Studio price page: a quiet button at the right of the head
-.prices {
-  min-height: 36px; padding: 0 14px; border-radius: 6px;
-  border: 1px solid var(--line); background: var(--raise); color: var(--text); font-size: 14px;
-}
+.settings { align-self: start; }

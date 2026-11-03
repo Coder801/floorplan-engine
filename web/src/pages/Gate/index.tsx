@@ -68,6 +68,7 @@ export function Gate({ children }: { children: (account: Account | null) => Reac
     name: me.user?.name || me.user?.email || me.user?.phone || me.code?.name || (me.visitor ? t("gate.guest") : ""),
     plan: me.user?.account_type ?? null,
     space: me.user?.space?.kind === "studio" ? me.user.space.name : null,
+    firm: me.user?.space?.kind === "studio" ? me.user.space : null,
     visitor: !me.user && !!me.visitor,
     code: !me.user && !!me.code,
     logout: () => run(async () => { await logout(); cleanUrl(); }),

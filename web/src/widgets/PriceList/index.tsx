@@ -1,7 +1,7 @@
-// Studio price page (#@prices): electrical works with the studio price and the market spread
-// (min — median — max of public price lists, market.yaml) and a footnote on the period and
-// sources. The studio edits its prices here → prices.yaml next to the projects
-// (POST /api/prices); estimates take them at the next build.
+// Studio price list, a section of the studio settings (#@studio/prices): electrical works with
+// the studio price and the market spread (min — median — max of public price lists,
+// market.yaml) and a footnote on the period and sources. The studio edits its prices here →
+// prices.yaml next to the projects (POST /api/prices); estimates take them at the next build.
 
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -10,12 +10,12 @@ import { cx } from "@/shared/cx";
 import { deviation, monthText, periodText, place } from "@/shared/market";
 import ui from "@/shared/styles/ui.module.scss";
 import type { MarketSpread, PricePage, PriceRow } from "@/shared/types";
-import { Logo } from "@/ui/Logo";
-import css from "./Prices.module.scss";
+import css from "./PriceList.module.scss";
 
 const money = (v: number, lng: string) => v.toLocaleString(lng, { maximumFractionDigits: 1 });
 
-export function Prices({ onBack }: { onBack: () => void }) {
+// onDirty — whether there are unsaved prices (the settings page asks before leaving)
+export function PriceList({ onDirty }: { onDirty?: (dirty: boolean) => void }) {
   const { t, i18n } = useTranslation();
   const lng = i18n.language;
   const [data, setData] = useState<PricePage | null>(null);
@@ -26,11 +26,7 @@ export function Prices({ onBack }: { onBack: () => void }) {
   const [saved, setSaved] = useState(false);
 
   useEffect(() => { getPrices().then(setData).catch((e: Error) => setError(e.message)); }, []);
-  useEffect(() => {
-    const onKey = (ev: KeyboardEvent) => { if (ev.key === "Escape" && !Object.keys(draft).length) onBack(); };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [draft, onBack]);
+  useEffect(() => { onDirty?.(Object.keys(draft).length > 0); }, [draft, onDirty]);
 
   const names = useMemo(() => new Map(data?.market?.sources.map((s) => [s.id, s]) ?? []), [data]);
   const changes = useMemo(() => {
@@ -51,7 +47,6 @@ export function Prices({ onBack }: { onBack: () => void }) {
       .catch((e: Error) => setError(e.message))
       .finally(() => setBusy(false));
   };
-  const back = () => { if (!Object.keys(draft).length || confirm(t("prices.leave"))) onBack(); };
   const edit = (key: string, text: string) => { setSaved(false); setDraft((d) => ({ ...d, [key]: text })); };
 
   const name = (r: PriceRow) => (lng === "uk" ? r.name.uk : r.name.ru);
@@ -59,15 +54,10 @@ export function Prices({ onBack }: { onBack: () => void }) {
   const period = market ? periodText(market.period, lng) : "";
 
   return (
-    <div className={css.page} role="dialog" aria-modal="true" aria-labelledby="prices-title">
-      <div className={css.inner}>
+    <section className={css.list} aria-labelledby="prices-title">
         <header className={css.head}>
-          <button className={css.back} onClick={back} aria-label={t("prices.back")} title={t("common.closeEsc")}>←</button>
-          <Logo size={36} />
-          <div>
-            <h1 id="prices-title">{t("prices.title")}</h1>
-            <p className="muted">{t("prices.lead", { region: market?.region ?? "" })}</p>
-          </div>
+          <h2 id="prices-title">{t("prices.title")}</h2>
+          <p className="muted">{t("prices.lead", { region: market?.region ?? "" })}</p>
         </header>
 
         {error && <div className={ui.error} role="alert">{error}</div>}
@@ -197,8 +187,7 @@ export function Prices({ onBack }: { onBack: () => void }) {
             )}
           </>
         )}
-      </div>
-    </div>
+    </section>
   );
 }
 

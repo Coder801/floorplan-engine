@@ -6,7 +6,7 @@ import { useTranslation } from "react-i18next";
 import { buildDrawing, DRAWING_STAGES } from "@/engine/sheet/drawing";
 import { downloadSheetPng } from "@/engine/sheet/paint";
 import { wallPages, wallSheet } from "@/engine/sheet/walls";
-import { Prices } from "@/pages/Prices";
+import { STUDIO_SECTIONS, Studio, type StudioSection } from "@/pages/Studio";
 import { Welcome } from "@/pages/Welcome";
 import { base, enc, getManifest, getPage, getProject, listProjects, saveVariant } from "@/shared/api";
 import { DRAWER_TABS, SIDE_TABS, type DrawerTab, type SideTab, type Theme } from "@/shared/consts";
@@ -38,11 +38,18 @@ import { WallMap } from "@/widgets/WallMap";
 import { WallPager } from "@/widgets/WallPager";
 import css from "./Viewer.module.scss";
 
-// #<project> — a project; #@prices — the studio price page (project names never start with @)
-const PRICES_HASH = "@prices";
+// #<project> — a project; #@studio[/<section>] — the studio settings (project names never start
+// with @); the old #@prices — its price list
 const hashValue = () => decodeURIComponent(location.hash.slice(1));
-const fromHash = () => (hashValue() === PRICES_HASH ? null : hashValue() || null);
-const onPricesHash = () => hashValue() === PRICES_HASH;
+const fromHash = () => (hashValue().startsWith("@") ? null : hashValue() || null);
+function studioFromHash(): StudioSection | null {
+  const v = hashValue();
+  if (v === "@prices") return "prices";
+  if (v !== "@studio" && !v.startsWith("@studio/")) return null;
+  const s = v.slice("@studio/".length) as StudioSection;
+  return STUDIO_SECTIONS.includes(s) ? s : "profile";
+}
+const studioHash = (s: StudioSection) => (s === "profile" ? "@studio" : `@studio/${s}`);
 
 // Unresolved questions: without an answer, or with a text answer not handled yet
 const UNRESOLVED = new Set(["open", "text"]);
@@ -54,7 +61,8 @@ export function Viewer({ account = null }: { account?: Account | null }) {
   const { t } = useTranslation();
   const [list, setList] = useState<ProjectSummary[]>([]);
   const [current, setCurrent] = useState<string | null>(fromHash);
-  const [prices, setPrices] = useState(onPricesHash);  // the studio price page is open
+  const [studio, setStudio] = useState(studioFromHash);  // the open studio settings section
+  const outside = useRef(studioFromHash() ? "" : location.hash.slice(1));  // where the settings were opened from
   const [project, setProject] = useState<Project | null>(null);
   const [pages, setPages] = useState<ManifestPage[]>([]);
   const [sheet, setSheet] = useState<number | null>(null);
@@ -106,7 +114,8 @@ export function Viewer({ account = null }: { account?: Account | null }) {
         return;
       }
       setCurrent(fromHash());
-      setPrices(onPricesHash());
+      setStudio(studioFromHash());
+      if (!studioFromHash()) outside.current = location.hash.slice(1);
     };
     const onUnload = (ev: BeforeUnloadEvent) => { if (stage.current?.pending()) ev.preventDefault(); };
     window.addEventListener("hashchange", onHash);
@@ -390,20 +399,22 @@ export function Viewer({ account = null }: { account?: Account | null }) {
   }
   if (page && project && main) main = <Boundary key={`${current}/${drawn.length > 1 ? "drawing" : loaded}/${shown}`}>{main}</Boundary>;
 
-  // The studio price page is the studio's: login off, a firm account or the debug guest (reads)
-  const openPrices = account === null || account.plan === "pro" || account.visitor
-    ? () => { location.hash = PRICES_HASH; }
+  // The studio settings are the studio's: login off, a firm account or the debug guest (reads)
+  const openStudio = account === null || account.plan === "pro" || account.visitor
+    ? () => { location.hash = studioHash("profile"); }
     : undefined;
+  const settings = <Settings account={account} theme={theme} onTheme={(th) => { remember("theme", th); setTheme(th); }} onStudio={openStudio} />;
 
   return (
     <div className={css.app}>
       {(choosing || saving) && <RebuildModal />}
-      {prices && <Prices onBack={() => { location.hash = ""; }} />}
-      {!current && !prices && (
-        <Welcome list={list} onOpen={(name) => { location.hash = encodeURIComponent(name); }} onPrices={openPrices} />
+      {studio && (
+        <Studio account={account} section={studio} onSection={(s) => { location.hash = studioHash(s); }}
+                onBack={() => { location.hash = outside.current; }} />
       )}
+      {!current && !studio && <Welcome list={list} onOpen={(name) => { location.hash = encodeURIComponent(name); }} settings={settings} />}
       {menu && (
-        <ProjectsMenu list={list} current={current} closing={menu === "closing"} onPrices={openPrices && (() => { openPrices(); setMenu("closing"); })}
+        <ProjectsMenu list={list} current={current} closing={menu === "closing"}
                       onOpen={(name) => { location.hash = encodeURIComponent(name); setMenu("closing"); }}
                       onClose={closeMenu} onClosed={menuClosed} />
       )}
@@ -447,7 +458,8 @@ export function Viewer({ account = null }: { account?: Account | null }) {
             </div>
           )}
         </div>
-        <Settings account={account} theme={theme} onTheme={(th) => { remember("theme", th); setTheme(th); }} />
+        {/* Without a project the welcome screen covers the header and has its own gear */}
+        {current && settings}
       </header>
       <div className={css.banners}>
         {outdated && (

@@ -1,18 +1,14 @@
-// Studio price page over the whole screen, like the welcome screen: a table of works with the
-// studio price, the market spread bar and the deviation; the period footnote and sources below
+// Studio price list (a settings section): a table of works with the studio price, the market
+// median and spread bar and the deviation; the period footnote and sources below
 
 @use "@/shared/styles/mixins" as *;
 
-.page { position: fixed; inset: 0; z-index: 20; overflow: auto; background: var(--bg); }
-.inner { max-width: 1120px; margin: 0 auto; padding: 40px 24px 64px; }
-
-// Back | mark | title and lead
+.list { min-width: 0; }
 .head {
-  display: grid; grid-template-columns: auto auto 1fr; align-items: center; gap: 12px; margin-bottom: 24px;
-  h1 { margin: 0; font-size: 26px; font-weight: 500; }
-  p { margin: 2px 0 0; font-size: 14px; }
+  margin-bottom: 16px;
+  h2 { margin: 0; font-size: 20px; font-weight: 500; }
+  p { margin: 4px 0 0; font-size: 14px; }
 }
-.back { @include bare-button; min-width: 40px; min-height: 40px; font-size: 20px; line-height: 1; }
 .issue { margin-bottom: 12px; padding: 8px 12px; border-radius: 6px; background: var(--soft); color: var(--critical); font-size: 13px; }
 
 .table {
@@ -71,7 +67,6 @@
 .sources { margin: 0; padding-left: 20px; }
 
 @media (max-width: $phone) {
-  .inner { padding: 20px 8px 40px; }
   .spreadHead { min-width: 0; }
   .spread { grid-template-columns: 28px 80px 36px; }
   .table { font-size: 12px; th, td { padding: 6px 4px; } }
