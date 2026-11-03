@@ -138,6 +138,8 @@ def test_save_wiring_edits(root: Path) -> None:
     r = client.post("/api/projects/kv1/wiring", json={"wires": {"wire_2": broken}})
     assert r.status_code == 422 and "wires.wire_2" in r.json()["detail"]
     assert path.read_text("utf-8") == text  # file untouched
+    r = client.post("/api/projects/kv1/wiring", json={"wires": "x"})  # not a dict: no crash
+    assert r.status_code == 422 and "wires" in r.json()["detail"]
 
     box = {"room": "r", "group": "QF1", "at": [100, 200]}
     client.post(

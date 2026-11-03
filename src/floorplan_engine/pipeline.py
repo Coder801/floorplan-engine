@@ -450,6 +450,13 @@ def save_wiring_edits(project: Path, changes: dict[str, Any]) -> list[Issue]:
     boxes) move into the "as in project" section when that variant is edited. No edits means
     no file. Errors come with a field path, and the file is left unchanged."""
     path = project / WIRING_FILE
+    bad = [
+        Issue(WIRING_FILE, kind, "ожидается словарь «id: правка»")
+        for kind in ("wires", "boxes")
+        if not isinstance(changes.get(kind) or {}, dict)
+    ]
+    if bad:
+        return bad
     report = validate_project(project)
     # Electrical cannot be read, so there is no variant: edits go the old way, outside variant
     # sections
