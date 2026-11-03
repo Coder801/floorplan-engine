@@ -291,14 +291,21 @@ erDiagram
   (`access.register_firm`, `POST /api/auth/firm`): название, вид (`studio.business`:
   `design` — дизайн и проект, `electric` — электромонтаж, `construction` — ремонт и
   строительство, `master` — частный мастер), город и телефон по желанию. Тип пространства —
-  `studio.kind`; `app_user.account_type` — подсказка стартового экрана. Фирма — одна на
-  человека: сотрудник чужой фирмы свою не заводит; несколько фирм и переключатель — позже.
+  `studio.kind`; `app_user.account_type` — подсказка стартового экрана.
+- **Связи по ключу** (решение 2026-11-03): всё, что принадлежит студии, ведёт к одному
+  `studio.id` — напрямую (`studio_id`) или через проект (`project_id → project.studio_id`);
+  человек связан со студией строкой `membership`. **Пространство — одно на человека**:
+  `membership.user_id` уникален (миграция `0007`) — своя фирма, «Мой ремонт» или чужая фирма
+  сотрудником; приглашение в другую фирму не принимается. Несколько фирм и переключатель —
+  позже.
   Вид фирмы пока ни на что не влияет — заведён, чтобы потом развести права, листы и тарифы.
 - **Клиент — один проект**: частичный уникальный индекс Postgres
   `project_member (user_id) WHERE role = 'client'`.
-- **Проверка доступа — одна функция** `access(user, project) → роль | None`:
-  суперпользователь → всё; `membership` по `project.studio_id`; `project_member`;
-  действующий `support_grant`. Ею фильтруются список проектов и каждый запрос API.
+- **Проверка доступа — одно правило в двух видах**: `project_role(user, project) → роль |
+  None` для запроса к проекту и `visible_projects(user)` — тот же список одним запросом по
+  ключам для списка проектов: суперпользователь → всё; `membership` по `project.studio_id`;
+  `project_member`; действующий `support_grant`. Что они совпадают для каждой роли и что
+  студии не пересекаются — тест `test_studios_do_not_cross`.
 
 ### Вход (решения пользователя 2026-10-28)
 
@@ -362,7 +369,7 @@ erDiagram
 
 | Модуль | Что в нём |
 | --- | --- |
-| `service/db/access.py` | Правила: роль в проекте (`project_role`), права (`can`), пользователи OAuth, тип учётки, сессии, приглашения, доступ поддержки, журнал |
+| `service/db/access.py` | Правила: роль в проекте (`project_role`), видимые проекты (`visible_projects`), права (`can`), пользователи OAuth, тип учётки, сессии, приглашения, доступ поддержки, журнал |
 | `service/db/email_codes.py` | Код на почту: выдать (`issue_code`, частота), проверить (`check_code`, срок, попытки) |
 | `service/db/access_codes.py` | Код доступа к проекту: выдать (`issue_code`), постоянный из окружения (`ensure_code`), вход (`use_code`), проверка на каждом запросе (`active_code`), список и отзыв (`list_codes`, `revoke_code`) |
 | `service/db/telegram_login.py`, `service/api/telegram.py` | Вход через Telegram: билеты (`issue_ticket`, `bind_chat`, `confirm_phone`, `claim_ticket`, номер — `normalize_phone`); бот — клиент Bot API, разбор обновлений (`handle_update`), вебхук или опрос |

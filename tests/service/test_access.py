@@ -11,7 +11,13 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from floorplan_engine.service.db import access as acc
-from floorplan_engine.service.db.models import AppUser, Project, ProjectMember, UserSession
+from floorplan_engine.service.db.models import (
+    AppUser,
+    Membership,
+    Project,
+    ProjectMember,
+    UserSession,
+)
 
 
 def user(db: Session, sub: str, kind: acc.AccountType | None = None) -> AppUser:
@@ -238,3 +244,69 @@ def test_personal_owner_chooses_variant_studio_client_does_not(db: Session) -> N
     acc.accept_invite(db, guest, acc.create_invite(db, studio, "client", project=flat))
     assert role(db, guest, flat) == "client"
     assert not acc.can("client", "choose_variant") and not acc.can("client", "edit_wiring")
+
+
+def test_studios_do_not_cross(db: Session) -> None:
+    """Two firms with every role: each person sees exactly their projects — the one query
+    visible_projects agrees with project_role, nothing of the other studio leaks, and no one can
+    invite into or open support for a project of the other studio."""
+    people: dict[str, AppUser] = {}
+    projects: dict[str, Project] = {}
+    for firm in ("a", "b"):
+        owner = people[f"{firm}-owner"] = user(db, f"{firm}-owner", "pro")
+        studio = acc.own_studio(db, owner)
+        assert studio is not None
+        for n in (1, 2):
+            projects[f"{firm}{n}"] = acc.create_project_for(db, owner, f"{firm}{n}", f"{firm}{n}")
+        for staff in ("designer", "installer"):
+            p = people[f"{firm}-{staff}"] = user(db, f"{firm}-{staff}")
+            acc.accept_invite(db, p, acc.create_invite(db, owner, staff, studio=studio))
+        client = people[f"{firm}-client"] = user(db, f"{firm}-client")
+        acc.accept_invite(
+            db, client, acc.create_invite(db, owner, "client", project=projects[f"{firm}1"])
+        )
+        outside = people[f"{firm}-outside"] = user(db, f"{firm}-outside")
+        acc.accept_invite(
+            db, outside, acc.create_invite(db, owner, "installer", project=projects[f"{firm}2"])
+        )
+    expected = {
+        "owner": {"1", "2"},
+        "designer": {"1", "2"},
+        "installer": {"1", "2"},
+        "client": {"1"},
+        "outside": {"2"},
+    }
+    for name, person in people.items():
+        firm, kind = name.split("-")
+        want = {firm + n for n in expected[kind]}
+        who = acc.Principal(person)
+        assert {p.slug for p in db.scalars(acc.visible_projects(db, who))} == want, name
+        assert {s for s, p in projects.items() if role(db, person, p) is not None} == want, name
+        assert acc.visible_slugs(db, who, set(projects)) == want, name
+    other = projects["b1"]
+    for name in ("a-owner", "a-designer"):
+        with pytest.raises(acc.AccessError, match="нет права"):
+            acc.create_invite(db, people[name], "installer", project=other)
+    with pytest.raises(acc.AccessError, match="владелец"):
+        acc.grant_support(db, other, people["a-designer"], people["a-owner"], "чужой проект")
+
+
+def test_one_workspace_per_person(db: Session) -> None:
+    """A firm employee is not taken into a second firm, nor is an owner; the database
+    keeps it too."""
+    a, b = user(db, "a", "pro"), user(db, "b", "pro")
+    firm_a, firm_b = acc.own_studio(db, a), acc.own_studio(db, b)
+    assert firm_a is not None and firm_b is not None
+    staff = user(db, "staff")
+    acc.accept_invite(db, staff, acc.create_invite(db, a, "installer", studio=firm_a))
+    with pytest.raises(acc.AccessError, match="в другую фирму нельзя"):
+        acc.accept_invite(db, staff, acc.create_invite(db, b, "installer", studio=firm_b))
+    with pytest.raises(acc.AccessError, match="в другую фирму нельзя"):
+        acc.accept_invite(db, a, acc.create_invite(db, b, "designer", studio=firm_b))
+    acc.accept_invite(
+        db, staff, acc.create_invite(db, a, "designer", studio=firm_a)
+    )  # same firm: no-op
+    assert acc.user_space(db, staff) is firm_a
+    db.add(Membership(studio_id=firm_b.id, user_id=staff.id, role="installer"))
+    with pytest.raises(IntegrityError):
+        db.flush()

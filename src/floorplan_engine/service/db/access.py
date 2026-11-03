@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import Select, false, func, or_, select
 from sqlalchemy.orm import Session
 
 from floorplan_engine.service.db.models import (
@@ -163,18 +163,46 @@ def _active_grant(
     return next((g for g in grants if _aware(g.expires_at) > t), None)
 
 
-def visible_slugs(session: Session, who: Principal, slugs: Collection[str]) -> set[str]:
-    """Which project folders from slugs are visible: all for a guest and a superuser, the code's
-    project for someone logged in by code."""
+def visible_projects(session: Session, who: Principal) -> Select[Project]:
+    """Projects the caller sees — one query by the keys, the same rule as project_role: a guest
+    and a superuser see all, someone logged in by code the code's project; everyone else the
+    projects of their workspace (membership → project.studio_id), the projects they are
+    members of (project_member) and those under an active support grant."""
+    query = select(Project)
     if who.by_code:
-        project = session.get(Project, who.code_project)
-        return {project.slug} & set(slugs) if project is not None and project.slug else set()
-    if who.user is None or who.user.is_superuser:
-        return set(slugs) if who.user is None or who.user.is_active else set()
-    projects = session.scalars(select(Project).where(Project.slug.in_(list(slugs)))).all()
-    return {
-        p.slug for p in projects if p.slug is not None and project_role(session, who, p) is not None
-    }
+        return query.where(Project.id == who.code_project)
+    if who.user is None:
+        return query
+    user = who.user
+    if not user.is_active:
+        return query.where(false())
+    if user.is_superuser:
+        return query
+    studios = select(Membership.studio_id).where(
+        Membership.user_id == user.id, Membership.role.in_(STUDIO_ROLES)
+    )
+    members = select(ProjectMember.project_id).where(
+        ProjectMember.user_id == user.id, ProjectMember.role.in_(PROJECT_ROLES)
+    )
+    grants = select(SupportGrant.project_id).where(
+        SupportGrant.user_id == user.id,
+        SupportGrant.revoked_at.is_(None),
+        SupportGrant.expires_at > now(),
+    )
+    return query.where(
+        or_(Project.studio_id.in_(studios), Project.id.in_(members), Project.id.in_(grants))
+    )
+
+
+def visible_slugs(session: Session, who: Principal, slugs: Collection[str]) -> set[str]:
+    """Which project folders from slugs are visible (visible_projects): a guest and an active
+    superuser also see folders without a database row."""
+    if who.user is None and not who.by_code:
+        return set(slugs)
+    if who.user is not None and who.user.is_superuser and who.user.is_active:
+        return set(slugs)
+    query = visible_projects(session, who).where(Project.slug.in_(list(slugs)))
+    return {p.slug for p in session.scalars(query) if p.slug is not None}
 
 
 def project_by_slug(session: Session, slug: str) -> Project | None:
@@ -259,7 +287,7 @@ def register_firm(
     session: Session, user: AppUser, name: str, business: str, city: str = "", phone: str = ""
 ) -> Studio:
     """Firm registration on first login (type pro): name, kind, city and phone; the user is the
-    owner. One firm per person (several later)."""
+    owner. One workspace per person (several firms later)."""
     name, city, phone = name.strip(), city.strip(), phone.strip()
     if not name:
         raise AccessError("Укажите название фирмы")
@@ -271,13 +299,9 @@ def register_firm(
         raise AccessError("Город — не длиннее 100 символов")
     if phone and not PHONE_RE.match(phone):
         raise AccessError("Телефон — цифры, пробелы, скобки и «+»")
-    firm = session.scalar(
-        select(Studio)
-        .join(Membership, Membership.studio_id == Studio.id)
-        .where(Membership.user_id == user.id, Studio.kind == "studio")
-    )
-    if firm is not None:
-        raise AccessError(f"Вы уже в фирме «{firm.name}»")
+    space = user_space(session, user)
+    if space is not None:
+        raise AccessError(f"Вы уже в «{space.name}»")
     studio = set_account_type(session, user, "pro")
     studio.name, studio.business, studio.city, studio.phone = name, business, city, phone
     session.flush()
@@ -286,25 +310,21 @@ def register_firm(
 
 
 def user_space(session: Session, user: AppUser) -> Studio | None:
-    """The user's workspace for the screen: their own (firm or personal) or the firm where they are
-    an employee."""
-    return own_studio(session, user) or session.scalar(
+    """The user's one workspace (membership.user_id is unique): their firm or "Мой ремонт", or
+    the firm where they are an employee."""
+    return session.scalar(
         select(Studio)
         .join(Membership, Membership.studio_id == Studio.id)
         .where(Membership.user_id == user.id)
-        .order_by(Studio.created_at)
-        .limit(1)
     )
 
 
 def own_studio(session: Session, user: AppUser) -> Studio | None:
-    """The studio (or personal workspace) where the user is the owner."""
+    """The user's workspace if they are its owner: their firm or "Мой ремонт"."""
     return session.scalar(
         select(Studio)
         .join(Membership, Membership.studio_id == Studio.id)
         .where(Membership.user_id == user.id, Membership.role == "owner")
-        .order_by(Studio.created_at)
-        .limit(1)
     )
 
 
@@ -527,6 +547,9 @@ def accept_invite(session: Session, user: AppUser, token: str) -> Invite:
         raise AccessError("приглашение для студии или монтажника, а вход — хозяина квартиры")
     if invite.role == "client" and client_projects(session, user) >= 1:
         raise AccessError("у хозяина квартиры уже есть проект")
+    space = user_space(session, user) if invite.studio_id is not None else None
+    if space is not None and space.id != invite.studio_id:
+        raise AccessError(f"Вы уже в «{space.name}» — в другую фирму нельзя")
     user.account_type = kind
     if invite.project_id is not None:
         exists = session.get(ProjectMember, (invite.project_id, user.id))

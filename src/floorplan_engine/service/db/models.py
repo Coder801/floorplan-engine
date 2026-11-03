@@ -150,7 +150,11 @@ class LoginTicket(Base):
 
 
 class Membership(Base):
+    """A person in a workspace (studio.id is the key): the owner of a firm or of "Мой ремонт",
+    or a firm employee. One workspace per person (several firms — later): the unique user_id."""
+
     __tablename__ = "membership"
+    __table_args__ = (UniqueConstraint("user_id", name="uq_membership_one_space"),)
     studio_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("studio.id", ondelete="CASCADE"), primary_key=True
     )
