@@ -391,6 +391,7 @@ def test_battery_box_from_source_with_pv_strings() -> None:
     block = data["dc"]
     assert isinstance(block, dict) and block["pv_strings"] == 2
     assert block["battery"]["rating"] == 200
+    assert block["texts"]["kwh"] == "кВт·ч"  # единица ёмкости — на языке проекта
 
 
 def test_no_battery_box_without_inverter() -> None:

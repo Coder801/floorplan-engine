@@ -48,7 +48,10 @@ BRAND = "REHAU RAUTITAN"  # система водоснабжения: труб�
 DIAMETERS = (16, 20)  # мм: луч и концевой отвод — 16, магистраль и подача от бойлера — 20
 
 
-def _water(key: str, unit: str, ru: str, uk: str) -> dict[str, tuple[Section, str, str, str]]:
+Unit = str | dict[Language, str]  # единица одна на оба языка («шт», «м») или по языку
+
+
+def _water(key: str, unit: Unit, ru: str, uk: str) -> dict[str, tuple[Section, Unit, str, str]]:
     """Позиция воды на каждый диаметр: water.<key>16, water.<key>20."""
     return {
         f"water.{key}{d}": ("material", unit, ru.format(b=BRAND, d=d), uk.format(b=BRAND, d=d))
@@ -56,8 +59,12 @@ def _water(key: str, unit: str, ru: str, uk: str) -> dict[str, tuple[Section, st
     }
 
 
+def unit_text(unit: Unit, language: Language) -> str:
+    return unit if isinstance(unit, str) else unit[language]
+
+
 # Позиции сметы: ключ → раздел, единица, наименование (ru, uk)
-LINES: dict[str, tuple[Section, str, str, str]] = {
+LINES: dict[str, tuple[Section, Unit, str, str]] = {
     **_water("pipe", "м", "Труба {b} flex {d}", "Труба {b} flex {d}"),
     "water.insulation": (
         "material",
@@ -97,7 +104,7 @@ LINES: dict[str, tuple[Section, str, str, str]] = {
     **_water("sleeve", "шт", "Гильза монтажная {b} {d}", "Гільза монтажна {b} {d}"),
     "water.collector": (
         "material",
-        "вых.",
+        {"ru": "вых.", "uk": "вих."},
         "Коллектор с кранами (за выход)",
         "Колектор із кранами (за вихід)",
     ),
@@ -364,7 +371,15 @@ def build_estimate(
         p, exact = quote.price, quote.exact
         name = exact.name if exact and exact.name else (ru if language == "ru" else uk)
         lines.append(
-            Line(section, key, name, unit, qty, p.price if p else None, service=quote.service)
+            Line(
+                section,
+                key,
+                name,
+                unit_text(unit, language),
+                qty,
+                p.price if p else None,
+                service=quote.service,
+            )
         )
     lines.sort(key=lambda ln: 0 if ln.section == "material" else 1)
     return Estimate(tuple(lines), prices.currency)

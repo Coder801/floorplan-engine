@@ -641,7 +641,8 @@ export class PanelView {
     ctx.beginPath(); ctx.roundRect(dx, dy, dw, dh, 2); ctx.fill();
     text(pen, `${b.voltage} V  ▮▮▮▮▯`, dx + dw / 2, dy + dh / 2, 7, "#173b33");
     const v = `${b.voltage} В${b.voltage_assumed ? "*" : ""}`;
-    const cap = b.capacity ? ` · ${String(b.capacity).replace(".", ",")} кВт·год` : "";
+    const kwh = data.texts.kwh ?? "кВт·год";  // старый .epd — без единицы на языке проекта
+    const cap = b.capacity ? ` · ${String(b.capacity).replace(".", ",")} ${kwh}` : "";
     text(pen, `${data.texts.battery} ${v}${cap}`, r.x + r.w / 2, r.y + r.h * 0.42 + 2, 6.5, "#e8e8e6");
     // Рёбра на нижней части
     ctx.strokeStyle = "#2d3136"; ctx.lineWidth = 1;

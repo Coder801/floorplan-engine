@@ -14,7 +14,7 @@ material;water.eurocone20;Перехідник REHAU RAUTITAN 20-G¾ єврок�
 material;water.adapter20;Перехідник REHAU RAUTITAN 20-R½ зовнішня різьба;шт;1;280;280,00
 material;water.sleeve16;Гільза монтажна REHAU RAUTITAN 16;шт;118;45;5310,00
 material;water.sleeve20;Гільза монтажна REHAU RAUTITAN 20;шт;76;60;4560,00
-material;water.collector;Колектор із кранами (за вихід);вых.;6;350;2100,00
+material;water.collector;Колектор із кранами (за вихід);вих.;6;350;2100,00
 material;water.valve;Кран кульовий на вводі;шт;1;350;350,00
 material;water.filter;Фільтр грубого очищення;шт;1;450;450,00
 material;water.reducer;Редуктор тиску;шт;1;1500;1500,00

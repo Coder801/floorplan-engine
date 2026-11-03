@@ -284,7 +284,7 @@ export interface PanelDc {
   battery: { voltage: number; voltage_assumed: boolean; capacity: number | null; power: number;
              power_assumed: boolean; current: number; rating: number; cable: number };
   pv_strings: number;
-  texts: { title: string; battery: string; pv: string };
+  texts: { title: string; battery: string; pv: string; kwh?: string };  // kwh — нет в старом .epd
 }
 
 export interface PanelData {

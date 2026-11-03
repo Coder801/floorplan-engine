@@ -254,7 +254,8 @@ pages/02.json
   щита: `QB1` — автомат АКБ, `QP1`, `QP2` — автоматы строк панелей, `FP1`, `FP2` — УЗИП DC),
   `battery` (`voltage`, `voltage_assumed`, `capacity` кВт·ч или null, `power` кВт инвертора,
   `power_assumed`, `current` — ток разряда, А, `rating` — автомат АКБ, А, `cable` — сечение
-  кабеля АКБ, мм²), `pv_strings` (строк панелей, 0–2), `texts`. Без инвертора ключа нет.
+  кабеля АКБ, мм²), `pv_strings` (строк панелей, 0–2), `texts` (`title`, `battery`, `pv`,
+  `kwh` — единица ёмкости на языке проекта). Без инвертора ключа нет.
 
 ```json
 "panel": {"name": "ЩР", "scheme": "proper", "input": {"label": "C40", "assumed": true},

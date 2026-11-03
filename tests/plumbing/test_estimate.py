@@ -58,6 +58,14 @@ def test_no_prices_is_volumes() -> None:
     assert est.unpriced == len(est.lines)
 
 
+def test_units_follow_language() -> None:
+    def unit(language: str) -> str:
+        est = build_estimate(_net(), PLUMBING, Prices(), language)  # type: ignore[arg-type]
+        return next(ln.unit for ln in est.lines if ln.key == "water.collector")
+
+    assert unit("ru") == "вых." and unit("uk") == "вих."
+
+
 def _pipe(path: Sequence[tuple[float, float]], parent: str | None = None) -> Pipe:
     pts = tuple(Vec(x, y) for x, y in path)
     return Pipe("cold_1", "cold", "collector_cold", "s", pts, 16, 900.0, 0.0, parent=parent)

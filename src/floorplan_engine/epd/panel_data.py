@@ -135,6 +135,7 @@ def dc_data(dc: DcBox, language: Language) -> dict[str, object]:
         "texts": {
             "title": text("dc_title", language),
             "battery": text("battery", language),
+            "kwh": text("kwh", language),
             "pv": text("pv_in", language),
         },
     }
