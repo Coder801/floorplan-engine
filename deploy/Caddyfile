@@ -4,6 +4,16 @@ encode gzip
 handle /api/* {
 	reverse_proxy 127.0.0.1:8000
 }
+# Platform admin (admin/, built with base /admin/): files under /srv/admin/admin/…
+handle /admin* {
+	@hashed path /admin/assets/*
+	header @hashed Cache-Control "public, max-age=31536000, immutable"
+	@fresh not path /admin/assets/*
+	header @fresh Cache-Control "no-cache"
+	root * /srv/admin
+	try_files {path} /admin/index.html
+	file_server
+}
 handle {
 	# Build files with a hash in the name never change, so cache them long; index.html and
 	# version.json are always fresh, otherwise a tab will not learn about a new deploy (web/src/version.ts)

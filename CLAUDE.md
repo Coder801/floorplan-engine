@@ -29,6 +29,7 @@ uv run floorplan-engine access code projects/<имя> --label "Иван"   # к�
 cd web && npm install && npm run dev                    # только страница просмотра (API — view)
 cd web && npm run build                                 # сборка фронта в web/dist (выкладка — README в web/)
 cd web && npm run check && npm test                     # типы TypeScript и тесты фронта (vitest)
+cd admin && npm install && npm run dev                  # админка платформы http://127.0.0.1:5174/admin/ (API — view, вход — в просмотре)
 uv run floorplan-engine analyze projects/<имя>               # LLM-анализ source/ → YAML (подписка)
 uv run floorplan-engine pdf-facts projects/<имя>/source/x.pdf # выжимка из векторного PDF без LLM (--json)
 uv run floorplan-engine facts projects/<имя>/source/x.jpg   # выжимка из любого источника: вектор или растр

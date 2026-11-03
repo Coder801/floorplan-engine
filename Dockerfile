@@ -1,4 +1,5 @@
-# Project viewer for Railway: the web/dist frontend (Caddy) + the `floorplan-engine view` API.
+# Project viewer for Railway: the web/dist frontend and the admin/dist platform admin (Caddy) + the
+# `floorplan-engine view` API.
 # Caddy listens on $PORT, serves static files and proxies /api to view (127.0.0.1:8000).
 
 FROM node:22-slim AS web
@@ -6,6 +7,14 @@ WORKDIR /web
 COPY web/package.json web/package-lock.json ./
 RUN npm ci
 COPY web/ ./
+RUN npm run build
+
+# Platform admin (admin/): its own front, served at /admin/ on the same domain (shared login cookie)
+FROM node:22-slim AS admin
+WORKDIR /admin
+COPY admin/package.json admin/package-lock.json ./
+RUN npm ci
+COPY admin/ ./
 RUN npm run build
 
 FROM caddy:2.8.4 AS caddy
@@ -29,6 +38,7 @@ COPY alembic.ini ./
 COPY migrations/ migrations/
 
 COPY --from=web /web/dist /srv/web
+COPY --from=admin /admin/dist /srv/admin/admin
 # Projects in the image are the seed; the working folder is the PROJECTS_DIR volume (wiring.yaml edits)
 COPY projects/ /app/projects-seed/
 COPY deploy/Caddyfile /etc/caddy/Caddyfile
