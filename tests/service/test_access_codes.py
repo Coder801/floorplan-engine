@@ -83,3 +83,25 @@ def test_issue_needs_invite_right(db: Session) -> None:
         codes.issue_code(db, kv1, other)
     with pytest.raises(acc.AccessError, match="Срок"):
         codes.issue_code(db, kv1, studio, days=0)
+
+
+def test_ensure_fixed_code(db: Session) -> None:
+    """Постоянный код (SHTROBA_ACCESS_CODES): записывается с известным значением, повтор не
+    дублирует, отозванный оживает, тот же код у другого проекта — ошибка."""
+    studio = _user(db, "studio", "pro")
+    kv1 = acc.create_project_for(db, studio, "Кв 1", "kv1")
+    kv2 = acc.create_project_for(db, studio, "Кв 2", "kv2")
+    row = codes.ensure_code(db, kv1, "abcd-2345")
+    assert codes.use_code(db, "ABCD-2345").id == row.id
+    assert row.expires_at.date() > (acc.now() + timedelta(days=365)).date()
+    assert codes.ensure_code(db, kv1, "ABCD2345").id == row.id
+    assert len(codes.list_codes(db, kv1)) == 1
+    codes.revoke_code(db, kv1, str(row.id))
+    with pytest.raises(acc.AccessError, match="не подходит"):
+        codes.use_code(db, "ABCD-2345")
+    assert codes.ensure_code(db, kv1, "ABCD-2345").revoked_at is None
+    assert codes.use_code(db, "ABCD-2345").id == row.id
+    with pytest.raises(acc.AccessError, match="другому проекту"):
+        codes.ensure_code(db, kv2, "ABCD-2345")
+    with pytest.raises(acc.AccessError, match="не подходит"):
+        codes.ensure_code(db, kv2, "ABCD-234")

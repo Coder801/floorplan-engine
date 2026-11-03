@@ -318,3 +318,29 @@ def test_owner_login_adopts_project_folders(pg: Engine, root: Path) -> None:
     with auth.db() as db:
         assert acc.project_by_slug(db, "kv3") is not None
         assert len(db.query(Project).all()) == 4  # повторный вход ничего не дублирует
+
+
+def test_fixed_codes_from_env() -> None:
+    """SHTROBA_ACCESS_CODES: «папка=КОД» через запятую, код как в базе; кривая запись — ошибка."""
+    config = AuthConfig.from_env({**ENV, "SHTROBA_ACCESS_CODES": " kv1=abcd-2345, kv2=WXYZ 6789 ,"})
+    assert config is not None and config.fixed_codes == (("kv1", "ABCD2345"), ("kv2", "WXYZ6789"))
+    for bad in ("kv1", "=ABCD-2345", "kv1=ABCD-234O"):
+        with pytest.raises(ConfigError, match="SHTROBA_ACCESS_CODES"):
+            AuthConfig.from_env({**ENV, "SHTROBA_ACCESS_CODES": bad})
+
+
+def test_fixed_codes_seeded_at_startup(pg: Engine, root: Path) -> None:
+    """Постоянный код при старте сервера — в базе: проект без строки записан «без владельца»,
+    по коду открывается только он; повторный старт ничего не дублирует."""
+    engine = pg
+    config = AuthConfig(SECRET, "http://t", fixed_codes=(("kv1", "ABCD2345"),))
+    app = create_viewer(root, Auth(config, make_sessions(engine)))
+    for _ in range(2):  # два старта — одна строка кода
+        with TestClient(app) as client:
+            r = client.post("/api/auth/code", json={"code": "abcd-2345"})
+            assert r.status_code == 200 and r.json()["project"] == "kv1"
+            assert {p["name"] for p in client.get("/api/projects").json()} == {"kv1"}
+    auth = Auth(config, make_sessions(engine))
+    with auth.db() as db:
+        kv1 = acc.project_by_slug(db, "kv1")
+        assert kv1 is not None and len(access_codes.list_codes(db, kv1)) == 1

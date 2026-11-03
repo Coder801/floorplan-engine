@@ -343,6 +343,10 @@ erDiagram
   при входе владельца `adopt_folders` переводит такие проекты к нему. Список — `access
   codes`, отзыв — `access revoke-code <имя> <id>` (входы кончаются со следующего запроса). Чужой, отозванный и истёкший код отвечают одинаково; больше 20
   неверных кодов с адреса за 10 минут — 429. Выдача из просмотра (кнопка у проекта) — позже.
+  Постоянный код с известным значением — переменная `SHTROBA_ACCESS_CODES=папка=КОД,…`:
+  при старте сервис записывает его в базу (`ensure_code`, срок 10 лет, продлевается при
+  каждом старте, отозванный снова действует); для тестов, чтобы код не выдавать вручную
+  против базы сервера.
 - **Вход для разработки** (`SHTROBA_DEV_LOGIN=1`, решение 2026-10-31): кнопка «Зайти для
   разработки» — вход без Google и письма под первым адресом `SHTROBA_SUPERUSERS` (полные
   права, не только чтение). Только http (локально): на https или в Railway `production`
@@ -358,7 +362,7 @@ erDiagram
 | --- | --- |
 | `service/db/access.py` | Правила: роль в проекте (`project_role`), права (`can`), пользователи OAuth, тип учётки, сессии, приглашения, доступ поддержки, журнал |
 | `service/db/email_codes.py` | Код на почту: выдать (`issue_code`, частота), проверить (`check_code`, срок, попытки) |
-| `service/db/access_codes.py` | Код доступа к проекту: выдать (`issue_code`), вход (`use_code`), проверка на каждом запросе (`active_code`), список и отзыв (`list_codes`, `revoke_code`) |
+| `service/db/access_codes.py` | Код доступа к проекту: выдать (`issue_code`), постоянный из окружения (`ensure_code`), вход (`use_code`), проверка на каждом запросе (`active_code`), список и отзыв (`list_codes`, `revoke_code`) |
 | `service/db/telegram_login.py`, `service/api/telegram.py` | Вход через Telegram: билеты (`issue_ticket`, `bind_chat`, `confirm_phone`, `claim_ticket`, номер — `normalize_phone`); бот — клиент Bot API, разбор обновлений (`handle_update`), вебхук или опрос |
 | `service/api/mail.py` | Письмо с кодом на языке страницы: SMTP или лог (локально) |
 | `service/api/auth.py` | Веб: настройки из окружения (`AuthConfig.from_env`), Google через Authlib, код на почту (`/api/auth/email/start`, `/verify`), код доступа (`/api/auth/code`, подбор — `CodeLimiter`), маршруты `/api/auth/*` и `/api/invites/*`, проверка доступа к `/api/projects/{имя}/…` (нет входа — 401, чужой проект — 404, нет права — 403) |

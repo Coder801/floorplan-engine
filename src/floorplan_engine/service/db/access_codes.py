@@ -33,6 +33,7 @@ from floorplan_engine.service.db.models import AccessCode, AppUser, Project
 CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 CODE_LENGTH = 8
 CODE_DAYS = 30
+FIXED_DAYS = 3650  # постоянный код из окружения (ensure_code) — продлевается при каждом старте
 BAD_CODE = "Код не подходит или срок его истёк"
 
 
@@ -87,6 +88,31 @@ def issue_code(
     session.flush()
     audit(session, "code_issue", user=by, project=project, payload={"label": label})
     return format_code(code)
+
+
+def ensure_code(
+    session: Session, project: Project, value: str, label: str = "постоянный код"
+) -> AccessCode:
+    """Постоянный код доступа с известным значением (SHTROBA_ACCESS_CODES, ставит сервис
+    при старте): нет в базе — записать, есть — вернуть к жизни (снять отзыв, продлить на
+    FIXED_DAYS). Тот же код у другого проекта — AccessError. Повторный вызов ничего не
+    дублирует."""
+    wanted = _hash(normalize_code(value))
+    row = session.scalar(select(AccessCode).where(AccessCode.code_hash == wanted))
+    if row is not None and row.project_id != project.id:
+        raise AccessError(f"код уже выдан другому проекту (не {project.slug})")
+    expires = now() + timedelta(days=FIXED_DAYS)
+    if row is None:
+        row = AccessCode(
+            project_id=project.id, code_hash=wanted, label=label.strip()[:200], expires_at=expires
+        )
+        session.add(row)
+    else:
+        row.revoked_at = None
+        row.expires_at = expires
+    session.flush()
+    audit(session, "code_fix", project=project, payload={"code": str(row.id)})
+    return row
 
 
 def use_code(session: Session, value: str) -> AccessCode:

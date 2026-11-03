@@ -20,6 +20,10 @@ docs/database.md, «Вход»).
                                сервер сам опрашивает Bot API
   Код доступа к проекту (db/access_codes.py) настройки не требует: его выдаёт команда
   `floorplan-engine access code projects/<имя>`, вход — /api/auth/code.
+  SHTROBA_ACCESS_CODES         постоянные коды доступа «папка=КОД» через запятую
+                               (kv42=ABCD-2345): при старте сервис записывает их в базу
+                               (проект без строки — «без владельца»), отозванный — снова
+                               действует; для тестов, пока коды не выдаются из просмотра
   SHTROBA_SUPERUSERS           email или телефоны («+380…») владельцев платформы через запятую
   SHTROBA_OWNER                email или телефон владельца проектов из папок: при его входе и
                                выборе «Фирма» папки без строки в базе уходят в его студию
@@ -83,6 +87,7 @@ class AuthConfig:
     visitor: bool = False
     dev_login: bool = False  # «Зайти для разработки» — под первым суперпользователем
     owner: str | None = None  # SHTROBA_OWNER: чьи папки проектов без строки в базе
+    fixed_codes: tuple[tuple[str, str], ...] = ()  # SHTROBA_ACCESS_CODES: (папка, код)
 
     @property
     def google(self) -> bool:
@@ -126,6 +131,17 @@ class AuthConfig:
             raise ConfigError(
                 "SHTROBA_DEV_LOGIN — нужен SHTROBA_SUPERUSERS: вход под первым адресом"
             )
+        fixed: list[tuple[str, str]] = []
+        for item in env.get("SHTROBA_ACCESS_CODES", "").split(","):
+            if not item.strip():
+                continue
+            slug, sep, code = item.partition("=")
+            try:
+                if not sep or not slug.strip():
+                    raise acc.AccessError("нужно «папка=КОД»")
+                fixed.append((slug.strip(), access_codes.normalize_code(code)))
+            except acc.AccessError as exc:
+                raise ConfigError(f"SHTROBA_ACCESS_CODES — «{item.strip()}»: {exc}") from exc
         return cls(
             secret=secret,
             public_url=public,
@@ -135,6 +151,7 @@ class AuthConfig:
             visitor=visitor,
             dev_login=dev,
             owner=identity(env["SHTROBA_OWNER"]) if env.get("SHTROBA_OWNER", "").strip() else None,
+            fixed_codes=tuple(fixed),
         )
 
 
@@ -232,6 +249,21 @@ class Auth:
         owner = self.config.owner
         if owner and self.folders is not None and owner in (user.email, user.phone):
             acc.adopt_folders(db, owner, self.folders())
+
+    def seed_codes(self) -> None:
+        """При старте сервера: постоянные коды из SHTROBA_ACCESS_CODES — в базу
+        (access_codes.ensure_code); проекта нет в базе — строка «без владельца»."""
+        for slug, code in self.config.fixed_codes:
+            with self.db() as db:
+                project = acc.project_by_slug(db, slug)
+                if project is None:
+                    project = acc.create_project_unowned(db, slug, slug)
+                try:
+                    access_codes.ensure_code(db, project, code)
+                except acc.AccessError as exc:
+                    log.warning("SHTROBA_ACCESS_CODES %s: %s", slug, exc)
+                    continue
+            log.info("Постоянный код доступа к проекту %s — в базе", slug)
 
     # --- Telegram ------------------------------------------------------------------------
 
@@ -348,6 +380,8 @@ class Auth:
             https_only=self.config.secure,
         )
         app.include_router(self.router())
+        if self.config.fixed_codes:
+            app.router.on_startup.append(self.seed_codes)
         if self.telegram is not None:
             app.router.on_startup.append(self.start_telegram)
 
