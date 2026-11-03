@@ -16,6 +16,10 @@ export interface Question {
   severity: string;
   state: string;
   text: string;
+  answer: "value" | "choice" | "text";
+  options?: string[];
+  option_labels?: Record<string, string>;  // how an option reads for a person, in the project language
+  also?: string[];
   assumption?: unknown;
   unit?: string;
   target?: string;
@@ -47,7 +51,8 @@ export interface ProjectSummary {
 }
 
 export interface Project extends ProjectSummary {
-  can?: { edit_wiring: boolean; choose_variant: boolean };  // missing on an old server: everything allowed
+  // Missing on an old server: everything allowed, except answers (they write nothing there)
+  can?: { edit_wiring: boolean; choose_variant: boolean; answer?: boolean };
   report: Report | null;
   answers: Record<string, unknown>;
   artifact: boolean;

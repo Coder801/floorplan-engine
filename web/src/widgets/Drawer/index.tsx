@@ -3,13 +3,15 @@
 
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { base, enc, getText } from "@/shared/api";
+import { base, enc, getText, type AnswerResult } from "@/shared/api";
 import { REDUCED_MOTION, type DrawerTab } from "@/shared/consts";
 import { cx } from "@/shared/cx";
 import { kindOf } from "@/shared/files";
 import i18n, { label, locale } from "@/shared/i18n";
+import type { Answer } from "@/shared/questions";
 import ui from "@/shared/styles/ui.module.scss";
 import type { Project } from "@/shared/types";
+import { Questions } from "@/widgets/Questions";
 import css from "./Drawer.module.scss";
 
 interface Props {
@@ -17,12 +19,14 @@ interface Props {
   project: Project;
   shownSource: string | null;
   onSource: (file: string) => void;
+  busy: boolean;                // an answer is being saved or the project reloaded
+  onAnswer: (id: string, answer: Answer | null) => Promise<AnswerResult | null>;
   closing: boolean;             // asked to close: the panel slides out to the right
   onClose: () => void;          // close: start sliding out
   onClosed: () => void;         // slid out: remove
 }
 
-export function Drawer({ tab, project, shownSource, onSource, closing, onClose, onClosed }: Props) {
+export function Drawer({ tab, project, shownSource, onSource, busy, onAnswer, closing, onClose, onClosed }: Props) {
   const { t } = useTranslation();
   useEffect(() => {
     const onKey = (ev: KeyboardEvent) => { if (ev.key === "Escape") onClose(); };
@@ -32,7 +36,7 @@ export function Drawer({ tab, project, shownSource, onSource, closing, onClose, 
   // Without animation (reduced motion) there is no animation end, so remove right away
   useEffect(() => { if (closing && REDUCED_MOTION) onClosed(); }, [closing, onClosed]);
   let body: React.ReactNode;
-  if (tab === "questions") body = <Questions project={project} />;
+  if (tab === "questions") body = <Questions project={project} busy={busy} onAnswer={onAnswer} />;
   else if (tab === "sources") body = <Sources project={project} shown={shownSource} onSource={onSource} />;
   else body = <ProjectInfo project={project} />;
   return (
@@ -44,44 +48,6 @@ export function Drawer({ tab, project, shownSource, onSource, closing, onClose, 
       </div>
       <div className={ui.panelBody}>{body}</div>
     </section>
-  );
-}
-
-function answerText(a: unknown): string {
-  if (a === undefined) return "";
-  if (a && typeof a === "object") {
-    const o = a as Record<string, unknown>;
-    if (o.accept) return i18n.t("drawer.keepAssumption");
-    if ("text" in o) return `«${o.text}»${o.resolved ? i18n.t("drawer.parsedMark") : ""}`;
-    return JSON.stringify(a);
-  }
-  return String(a);
-}
-
-function Questions({ project: p }: { project: Project }) {
-  const { t } = useTranslation();
-  if (!p.report) return <div className="muted">{t("drawer.noReport")}</div>;
-  const qs = p.report.questions;
-  if (!qs.length) return <div className="muted">{t("drawer.noQuestions")}</div>;
-  const order: Record<string, number> = { open: 0, text: 1, answered: 2, accepted: 3 };
-  return (
-    <>
-      {[...qs].sort((a, b) => (order[a.state] ?? 9) - (order[b.state] ?? 9)).map((q) => (
-        <div key={q.id} className={cx(css.card, q.state !== "open" && css.done)}>
-          <div className={cx(css.sev, `sev-${q.severity}`)}>
-            {`${label("severity", q.severity)} · ${label("stage", q.stage)}`}
-            <span className="mono muted">{` · ${q.id}`}</span>
-          </div>
-          <div className={css.text}>{q.text}</div>
-          {q.assumption !== undefined && (
-            <div className="small muted">{t("drawer.inModel", { value: `${String(q.assumption)}${q.unit ? " " + q.unit : ""}` })}</div>
-          )}
-          {p.answers[q.id] !== undefined && <div className="small">{t("drawer.answer", { value: answerText(p.answers[q.id]) })}</div>}
-          <div className={`small ${q.state === "open" ? "sev-major" : "muted"}`}>{label("qstate", q.state)}</div>
-          {q.target && <div className="mono muted">{q.target}</div>}
-        </div>
-      ))}
-    </>
   );
 }
 

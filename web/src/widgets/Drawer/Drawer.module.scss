@@ -18,11 +18,10 @@
 @keyframes drawer-in { from { transform: translateX(100%); } to { transform: none; } }
 @keyframes drawer-out { from { transform: none; } to { transform: translateX(100%); } }
 
-// Question, source, check remark
+// Source, check remark
 .card {
   @include raised;
   padding: 10px 12px; margin-bottom: 8px;
-  &.done { opacity: .7; }
   &.lit { border-color: var(--hl); }
 }
 .sev { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; font-weight: 600; }

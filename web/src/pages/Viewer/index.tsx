@@ -8,7 +8,7 @@ import { downloadSheetPng } from "@/engine/sheet/paint";
 import { wallPages, wallSheet } from "@/engine/sheet/walls";
 import { STUDIO_SECTIONS, Studio, type StudioSection } from "@/pages/Studio";
 import { Welcome } from "@/pages/Welcome";
-import { base, enc, getManifest, getPage, getProject, isProject, listProjects, saveVariant } from "@/shared/api";
+import { base, enc, getManifest, getPage, getProject, isProject, listProjects, saveAnswer, saveVariant } from "@/shared/api";
 import { DRAWER_TABS, SIDE_TABS, type DrawerTab, type SideTab, type Theme } from "@/shared/consts";
 import { cx } from "@/shared/cx";
 import { label } from "@/shared/i18n";
@@ -17,6 +17,7 @@ import { resetSelection, view } from "@/shared/store";
 import ui from "@/shared/styles/ui.module.scss";
 import { sheetTabs, tabOf, VIEWS } from "@/shared/tabs";
 import type { ManifestPage, Overview, Page, Project, ProjectSummary, Scene, Variants } from "@/shared/types";
+import type { Answer } from "@/shared/questions";
 import { watchRebuild } from "@/shared/rebuild";
 import { BRAND, watchBuild } from "@/shared/version";
 import { Boundary } from "@/ui/Boundary";
@@ -97,6 +98,7 @@ export function Viewer({ account = null }: { account?: Account | null }) {
   const prevProject = useRef<string | null>(null);
   const [variants, setVariants] = useState<Variants | null>(null);  // wiring variants (manifest)
   const [choosing, setChoosing] = useState(false);  // the variant is being saved and the project rebuilt
+  const [answering, setAnswering] = useState(false);  // an answer from a question card is being saved
   const [saving, setSaving] = useState(false);  // route edits are being saved and the project rebuilt
   const [outdated, setOutdated] = useState(false);  // a new version was deployed after the tab was opened
   const stage = useRef<StageHandle>(null);
@@ -309,6 +311,21 @@ export function Viewer({ account = null }: { account?: Account | null }) {
       .finally(() => setChoosing(false));
   };
 
+  // An answer from the question card: no modal, the panel stays usable during the rebuild.
+  // A text answer changes no sheet, so only the project is read again
+  const answerQuestion = async (id: string, answer: Answer | null) => {
+    if (!current || !confirmLeave()) return null;
+    setAnswering(true);
+    try {
+      const result = await saveAnswer(current, id, answer);
+      if (result.rebuilt) saved([]);
+      else setProject(await getProject(current));
+      return result;
+    } finally {
+      setAnswering(false);
+    }
+  };
+
   // Continuations (elevations) are one tab with pages inside the drawing; electrical, lighting
   // and wiring are one tab, the view is picked with the switch on the right (SidePanel)
   const tabs = sheetTabs(pages);
@@ -508,6 +525,7 @@ export function Viewer({ account = null }: { account?: Account | null }) {
                  summary={info && !source ? <OverviewSummary variants={variants} plumbing={overview?.plumbing?.estimate} openQuestions={openQs} refreshing={refreshing || choosing} /> : undefined}>
         {drawer && project && (
           <Drawer tab={drawer} project={project} shownSource={source} onSource={showSource}
+                  busy={answering || refreshing} onAnswer={answerQuestion}
                   closing={closing} onClose={closeDrawer} onClosed={drawerClosed} />
         )}
       </SidePanel>

@@ -58,7 +58,7 @@ export function setLanguage(code: UiLanguage) {
 
 // Label for a value from data (status, stage, layer, object type); without a translation, the
 // value itself. The component that shows it takes useTranslation so it re-renders on language change
-export type LabelGroup = "status" | "stage" | "views" | "qstate" | "severity" | "layer" | "object";
+export type LabelGroup = "status" | "stage" | "views" | "severity" | "layer" | "object";
 export function label(group: LabelGroup, key: string): string {
   const k = `${group}.${key}`;
   return i18n.exists(k) ? (i18n.t as (key: string) => string)(k) : key;

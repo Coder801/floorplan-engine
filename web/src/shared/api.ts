@@ -1,6 +1,7 @@
 // Requests to the viewer server (service/viewer.py)
 
 import i18n from "@/shared/i18n";
+import type { Answer } from "./questions";
 import type { Manifest, Page, PricePage, Project, ProjectSummary } from "./types";
 import { FORMAT_VERSION } from "./version";
 
@@ -58,6 +59,30 @@ export async function saveWiring(name: string, body: unknown): Promise<SaveAnswe
   });
   if (!r.ok) throw new Error(`${r.status}: ${await detail(r)}`);
   return (await r.json()) as SaveAnswer;
+}
+
+export interface AnswerResult { built: boolean; rebuilt: boolean }
+export interface RefusedIssue { file: string; path: string; message: string }
+
+// The check refused an answer (422): nothing changed. blockedBy: answered questions in its way
+export class AnswerRefused extends Error {
+  constructor(readonly issues: RefusedIssue[], readonly blockedBy: { id: string; text: string }[]) {
+    super(issues.map((i) => i.message).join("; "));
+  }
+}
+
+// One answer → answers.yaml and a rebuild (not for a text answer); null removes it
+export async function saveAnswer(name: string, id: string, answer: Answer | null): Promise<AnswerResult> {
+  const r = await fetch(`${base(name)}/answers`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, answer }),
+  });
+  if (r.status === 422) {
+    const found = (await r.json()).detail as string | { issues: RefusedIssue[]; blocked_by: { id: string; text: string }[] };
+    if (typeof found === "string") throw new Error(`422: ${found}`);
+    throw new AnswerRefused(found.issues, found.blocked_by);
+  }
+  if (!r.ok) throw new Error(`${r.status}: ${await detail(r)}`);
+  return (await r.json()) as AnswerResult;
 }
 
 // Studio price page: works, own price and the market (pipeline.price_page)
