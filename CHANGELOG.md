@@ -1,3 +1,11 @@
+## v0.4.0 (2026-11-04)
+
+### Feat
+
+- **service**: fill blank projects on import, add project build
+- **viewer**: answer questions right in the question card
+- **core,service**: save viewer answers to answers.yaml
+
 ## v0.3.0 (2026-11-03)
 
 ### Feat
