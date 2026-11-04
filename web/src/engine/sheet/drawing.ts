@@ -95,6 +95,29 @@ export function objectLayers(d: Drawing): Map<string, string> {
   return out;
 }
 
-// The sheet shows a layer: its own until switched off, one from another sheet if switched on
-export const layerShown = (own: Set<string>, hidden: Set<string>, extra: Set<string>, l: string) =>
-  (own.has(l) ? !hidden.has(l) : extra.has(l));
+// A cable layer combines three independent choices (drawing/layers.py), so "Layers" has a row
+// per choice, not per layer: purpose, protection and route. A .epd built earlier has W-CABLE and
+// W-CABLE-FLOOR: only the route row
+const CABLE_LAYER = /^W-CABLE(-LIGHT|-SOCKET|-DEVICE|-LOW)?(-RCD)?(-FLOOR)?$/;
+export const CABLE_ROWS = [
+  "W-CABLE-LIGHT", "W-CABLE-SOCKET", "W-CABLE-DEVICE", "W-CABLE-LOW",
+  "W-CABLE-RCD", "W-CABLE-NORCD", "W-CABLE-CEILING", "W-CABLE-FLOOR",
+];
+
+// Rows of a layer in "Layers": a cable layer has several, the first one is its purpose
+export function layerRows(l: string): string[] {
+  const m = CABLE_LAYER.exec(l);
+  if (!m) return [l];
+  const [, purpose, rcd, floor] = m;
+  const route = floor ? "W-CABLE-FLOOR" : "W-CABLE-CEILING";
+  if (!purpose) return [route];
+  const protection = purpose === "-LOW" ? [] : [rcd ? "W-CABLE-RCD" : "W-CABLE-NORCD"];
+  return [`W-CABLE${purpose}`, ...protection, route];
+}
+
+// The sheet shows a layer: its own until switched off, one from another sheet if switched on;
+// a cable is visible while none of its rows is switched off
+export function layerShown(own: Set<string>, hidden: Set<string>, extra: Set<string>, l: string) {
+  const rows = layerRows(l);
+  return rows.every((r) => !hidden.has(r)) && (own.has(l) || extra.has(rows[0]));
+}

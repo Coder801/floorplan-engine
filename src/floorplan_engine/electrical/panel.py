@@ -33,11 +33,13 @@ import csv
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
+from typing import Literal
 
 from floorplan_engine.electrical.loads import (
     CABLE_LIMITS,
     SOCKETS_A,
     Breaker,
+    Kind,
     PanelGroup,
     current,
     demand_factor,
@@ -54,7 +56,13 @@ from floorplan_engine.model.panel_catalog import (
     fitted_enclosure,
     model_for,
 )
-from floorplan_engine.model.schema import Electrical, PanelScheme, Plan
+from floorplan_engine.model.schema import (
+    Electrical,
+    ElectricalPoint,
+    PanelScheme,
+    Plan,
+    PointType,
+)
 from floorplan_engine.model.texts import Language
 
 INPUT_A = 63  # main breaker when the model has none (assumption, decision 2026-10-27)
@@ -94,6 +102,20 @@ class Warning:
     severity: str  # major | minor
     text: dict[str, str]  # by language: ru for the report, the project language for the sheet
     group: str | None = None
+
+
+LinePurpose = Literal["light", "socket", "device", "low"]
+
+
+@dataclass(frozen=True)
+class LineClass:
+    """What a line is on the wiring sheet: purpose and whether it is under an RCBO or an RCD."""
+
+    purpose: LinePurpose
+    rcd: bool
+
+
+OTHER_LINE = LineClass("socket", False)  # a group the panel does not know
 
 
 @dataclass(frozen=True)
@@ -392,6 +414,24 @@ def choose_enclosure(
 
 def _both(key: str, **kw_: object) -> dict[str, str]:
     return {lang: text(key, lang, **kw_) for lang in ("ru", "uk")}
+
+
+def _purpose(group: PanelGroup, points: dict[str, ElectricalPoint]) -> LinePurpose:
+    """Light, an appliance (heavy, only outputs, or one named point: "холодильник") or sockets."""
+    if group.kind is Kind.LIGHT:
+        return "light"
+    powered = [points[ld.point] for ld in group.loads if ld.point in points]
+    named = len(powered) == 1 and bool(powered[0].note)
+    outputs = bool(powered) and all(p.type is PointType.OUTLET for p in powered)
+    return "device" if group.kind is Kind.HEAVY or named or outputs else "socket"
+
+
+def line_classes(plan: Plan, elec: Electrical) -> dict[str, LineClass]:
+    """What each group is, for the cable layers: by the panel, so RCDs follow the scheme."""
+    panel = build_panel(plan, elec)
+    points = {p.id: p for p in elec.points}
+    groups = panel.groups if panel is not None else ()
+    return {g.group: LineClass(_purpose(g, points), g.rcd is not None) for g in groups}
 
 
 def weak_spots(panel: BoardPanel, relay: bool, npe: bool | None = True) -> list[Warning]:

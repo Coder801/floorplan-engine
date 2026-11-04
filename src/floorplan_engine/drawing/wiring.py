@@ -38,8 +38,7 @@ from floorplan_engine.drawing.ids import tagged
 from floorplan_engine.drawing.layers import (
     TEXT_SMALL_MM,
     W_BOX,
-    W_CABLE,
-    W_CABLE_FLOOR,
+    W_CABLES,
     W_TEXT,
     text_width,
 )
@@ -47,8 +46,9 @@ from floorplan_engine.drawing.plan import add_text
 from floorplan_engine.electrical.boxes import BOX_SIZE_MM
 from floorplan_engine.electrical.chases import CHASE_CABLES, CHASE_SHARE, HOLE_CABLES
 from floorplan_engine.electrical.groups import group_colors
+from floorplan_engine.electrical.panel import OTHER_LINE, LineClass
 from floorplan_engine.electrical.routing import CLEARANCE
-from floorplan_engine.electrical.wiring_model import CHASE_NARROW, JunctionBox, Wiring
+from floorplan_engine.electrical.wiring_model import CHASE_NARROW, JunctionBox, Run, Wiring
 from floorplan_engine.model.geometry import Vec
 from floorplan_engine.model.scale import sheet
 from floorplan_engine.model.schema import Electrical
@@ -71,15 +71,19 @@ POINT_CLEAR_MM = 2.5  # no labels around a connection point
 _TOL = 1.0  # model mm: points on one line
 
 
-def draw_wiring(msp: Modelspace, wiring: Wiring, elec: Electrical) -> None:
+def draw_wiring(
+    msp: Modelspace, wiring: Wiring, elec: Electrical, classes: dict[str, LineClass]
+) -> None:
+    """classes: what each group is (panel.line_classes), it gives the cable layer."""
     colors = group_colors(elec)
+    layers = [cable_layer(r, classes) for r in wiring.runs]
     paths, plane_bundles = lay_out(wiring)
     labels = _Labels(paths)
     size = sheet(BOX_SIZE_MM)
     for b in wiring.boxes:
         labels.block(Point(_box_center(b, size).as_tuple()).buffer(size))
-    _draw_runs(msp, wiring, paths, labels, colors)
-    _draw_bundle_lengths(msp, wiring, plane_bundles, labels, colors)
+    _draw_runs(msp, wiring, paths, layers, labels, colors)
+    _draw_bundle_lengths(msp, wiring, plane_bundles, layers, labels, colors)
     _draw_board_rises(msp, wiring, paths, labels)
     _draw_boxes(msp, wiring)
 
@@ -105,17 +109,25 @@ def lay_out(wiring: Wiring) -> tuple[list[list[Vec]], list[Bundle]]:
     return paths, plane_bundles
 
 
+def cable_layer(run: Run, classes: dict[str, LineClass]) -> str:
+    """Layer of a line: low-voltage by its circuit, the rest by what its group is."""
+    line = LineClass("low", False) if run.circuit == "low" else classes.get(run.group, OTHER_LINE)
+    return W_CABLES[(line.purpose, line.rcd, run.route == "floor")].name
+
+
 def _draw_runs(
     msp: Modelspace,
     wiring: Wiring,
     paths: Sequence[Sequence[Vec]],
+    layers: Sequence[str],
     labels: _Labels,
     colors: dict[str, int],
 ) -> None:
-    """Lines with rounded corners and a drop (a rise for floor routes) at the point."""
+    """Lines with rounded corners and a drop (a rise for floor routes) at the point; the drop label
+    is on the line's layer, it goes away with the line."""
     for k, run in enumerate(wiring.runs):
         floor = run.route == "floor"
-        attribs: dict[str, object] = {"layer": (W_CABLE_FLOOR if floor else W_CABLE).name}
+        attribs: dict[str, object] = {"layer": layers[k]}
         if run.group in colors:
             attribs["true_color"] = colors[run.group]
         with tagged(msp, "wire", run.id):
@@ -128,7 +140,7 @@ def _draw_runs(
                 if placed is not None:
                     text, at, angle = placed
                     add_text(
-                        msp, text, at, LENGTH_MM, W_TEXT.name, angle, color=colors.get(run.group)
+                        msp, text, at, LENGTH_MM, layers[k], angle, color=colors.get(run.group)
                     )
 
 
@@ -136,10 +148,12 @@ def _draw_bundle_lengths(
     msp: Modelspace,
     wiring: Wiring,
     plane_bundles: Sequence[Bundle],
+    layers: Sequence[str],
     labels: _Labels,
     colors: dict[str, int],
 ) -> None:
-    """Label for a bundle piece: length in m and the number of cables if more than one."""
+    """Label for a bundle piece: length in m and the number of cables if more than one. A bundle of
+    one group is on the layer of its lines; a mixed one belongs to no cable layer."""
     for bundle in plane_bundles:
         runs = [wiring.runs[k] for k in bundle.runs]
         text = length_label(bundle.length, len(runs))
@@ -148,9 +162,11 @@ def _draw_bundle_lengths(
             continue
         text, at, angle = placed
         groups = {r.group for r in runs}
-        color = colors.get(next(iter(groups))) if len(groups) == 1 else None
+        one = len(groups) == 1
+        color = colors.get(next(iter(groups))) if one else None
+        layer = layers[bundle.runs[0]] if one and color is not None else W_TEXT.name
         with tagged(msp, "wire", runs[0].id):
-            add_text(msp, text, at, LENGTH_MM, W_TEXT.name, angle, color=color)
+            add_text(msp, text, at, LENGTH_MM, layer, angle, color=color)
 
 
 def _draw_board_rises(

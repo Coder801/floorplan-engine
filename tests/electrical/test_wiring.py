@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import itertools
 import math
+from dataclasses import replace
 from typing import Any
 
 import pytest
@@ -14,6 +15,7 @@ from shapely.geometry import box as shapely_box
 from floorplan_engine.drawing.layers import W_TEXT, new_document
 from floorplan_engine.drawing.wiring import (
     bundles,
+    cable_layer,
     draw_wiring,
     fillet,
     lanes,
@@ -23,6 +25,7 @@ from floorplan_engine.drawing.wiring import (
 from floorplan_engine.electrical.boxes import BOX_CLEARANCE
 from floorplan_engine.electrical.chases import HOLE_CABLES
 from floorplan_engine.electrical.estimate import PriceList, build_estimate
+from floorplan_engine.electrical.panel import LineClass
 from floorplan_engine.electrical.wiring import END_ALLOWANCE, box_wiring, section
 from floorplan_engine.electrical.wiring_model import (
     BOX_ABOVE_FLOOR,
@@ -246,7 +249,7 @@ def test_wiring_sheet_labels_lengths_and_drops() -> None:
     assert wiring is not None
     doc = new_document()
     msp = doc.modelspace()
-    draw_wiring(msp, wiring, elec)
+    draw_wiring(msp, wiring, elec, {})
     texts = [t.dxf.text for t in msp.query("TEXT")]
     s2 = next(r for r in wiring.runs if r.target == "s2")
     assert f"↓h{s2.rise_end_mm / 1000:.1f}".replace(".", ",") in texts  # drop to the socket
@@ -266,6 +269,29 @@ def test_wiring_sheet_labels_lengths_and_drops() -> None:
         boxes.append(shapely_box(ext.extmin.x, ext.extmin.y, ext.extmax.x, ext.extmax.y))
     for a, b in itertools.combinations(boxes, 2):
         assert a.intersection(b).area < 1e-6
+
+
+def testcable_layer_by_purpose_protection_and_route() -> None:
+    """Layer of a line: what its group is and where it runs; low-voltage by its circuit."""
+    plan = make_plan(RECT, [DOOR])
+    issues, contours = validate_plan(plan)
+    assert not issues
+    elec = _elec()
+    wiring = box_wiring(plan, contours, elec)
+    assert wiring is not None
+    run = wiring.runs[0]
+    assert (
+        cable_layer(replace(run, route="floor"), {run.group: LineClass("device", True)})
+        == "W-CABLE-DEVICE-RCD-FLOOR"
+    )
+    assert cable_layer(run, {run.group: LineClass("light", False)}) == "W-CABLE-LIGHT"
+    assert cable_layer(replace(run, circuit="low"), {}) == "W-CABLE-LOW"
+    assert cable_layer(run, {}) == "W-CABLE-SOCKET"  # a group the panel does not know
+    doc = new_document()
+    msp = doc.modelspace()
+    draw_wiring(msp, wiring, elec, {run.group: LineClass("light", False)})
+    drawn = {e.dxf.layer for e in msp.query("LWPOLYLINE") if e.dxf.layer.startswith("W-CABLE")}
+    assert "W-CABLE-LIGHT" in drawn
 
 
 def _length_label(mm: float, n: int) -> str:

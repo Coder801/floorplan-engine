@@ -272,7 +272,7 @@ def test_sheets_show_own_layers_at_common_scale(tmp_path: Path) -> None:
         return set(vp.frozen_layers)
 
     # Plan: no electrical; electrical: walls and openings without dimensions, labels or outlines
-    assert {"E-SOCKET", "W-CABLE", "E-TEXT", "A-AREA"} <= frozen(plan_sheet)
+    assert {"E-SOCKET", "W-CABLE-SOCKET", "E-TEXT", "A-AREA"} <= frozen(plan_sheet)
     assert {"A-WALL", "A-DOOR", "A-DIMS", "A-TEXT"}.isdisjoint(frozen(plan_sheet))
     assert {"A-DIMS", "A-TEXT", "A-AREA"} <= frozen(elec_sheet)
     assert {"A-WALL", "A-DOOR", "E-SOCKET"}.isdisjoint(frozen(elec_sheet))

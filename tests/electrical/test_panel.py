@@ -14,6 +14,7 @@ from floorplan_engine.electrical.panel import (
     build_panel,
     choose_enclosure,
     din_rows,
+    line_classes,
     panel_rows,
 )
 from floorplan_engine.electrical.panel_questions import panel_questions
@@ -58,6 +59,31 @@ def _pt(pid: str, kind: str, group: str, room: str = "k", **kw: Any) -> dict[str
         "group": group,
         **kw,
     }
+
+
+def test_line_classes_purpose_and_protection() -> None:
+    """Light, sockets, appliances; premium puts every line under an RCBO."""
+    points = [
+        _pt("l1", "sconce", "QF1"),
+        _pt("s1", "socket", "QF2"),
+        _pt("s2", "socket", "QF2"),
+        _pt("f1", "socket", "QF3", note="холодильник"),
+        _pt("o1", "outlet", "QF4"),
+        _pt("o2", "outlet", "QF4"),
+        _pt("b1", "socket", "QF5"),  # one socket with no name is still a socket
+    ]
+    cables = {f"QF{k}": "ВВГнг 3x2.5" for k in range(1, 6)}
+    lines = line_classes(_plan(), _elec(points, cables))
+    assert {g: c.purpose for g, c in lines.items()} == {
+        "QF1": "light",
+        "QF2": "socket",
+        "QF3": "device",
+        "QF4": "device",
+        "QF5": "socket",
+    }
+    assert not any(c.rcd for c in lines.values())
+    premium = line_classes(_plan(), _elec(points, cables, panel={"scheme": "premium"}))
+    assert all(c.rcd for c in premium.values())
 
 
 def _ids(points: list[dict[str, Any]], group: str) -> list[str]:

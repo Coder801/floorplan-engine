@@ -280,7 +280,7 @@ function World({ scene, index, own, layerOf, apiRef, onZoom }: Props) {
   // An object is visible if its layer is visible on this tab; an unknown layer is always visible
   const visible = (key: string, w?: SceneWire, fallback?: string) => {
     const l = layerOf.get(key) ?? fallback ?? fallbackLayer(key, w);
-    return !l || (own ? layerShown(own, s.hidden, s.extra, l) : !s.hidden.has(l));
+    return !l || layerShown(own ?? new Set([l]), s.hidden, s.extra, l);
   };
 
   return (

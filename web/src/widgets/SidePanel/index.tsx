@@ -9,7 +9,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { drawingLayers, layerShown, type Drawing } from "@/engine/sheet/drawing";
+import { CABLE_ROWS, drawingLayers, layerRows, type Drawing } from "@/engine/sheet/drawing";
 import { SHEET_ONLY, SIDE_TABS, type SideTab } from "@/shared/consts";
 import { cx } from "@/shared/cx";
 import { label } from "@/shared/i18n";
@@ -185,7 +185,16 @@ function Layers({ page, drawing }: { page: Page | null; drawing: Drawing | null 
   if (!page || !drawing) return <div className="muted">{t("side.noSheet")}</div>;
   refreshPalette();
   const colors = drawingLayers(drawing);
-  const own = drawing.own.get(page) ?? new Set(colors.keys());
+  const ownLayers = drawing.own.get(page) ?? new Set(colors.keys());
+  // A row and its colour: cable layers give several rows (layerRows); from another sheet — only
+  // the purpose, protection and route are chosen on the wiring sheet
+  const rows = new Map<string, string>();
+  const own = new Set<string>();
+  for (const [l, color] of colors) {
+    if (!ownLayers.has(l)) continue;
+    for (const r of layerRows(l)) { own.add(r); if (!rows.has(r)) rows.set(r, color); }
+  }
+  for (const [l, color] of colors) if (!ownLayers.has(l) && !rows.has(layerRows(l)[0])) rows.set(layerRows(l)[0], color);
   // Own layer: switch it off on all sheets; from another sheet: add it to the drawing
   const toggle = (l: string, on: boolean) => {
     const set = new Set(own.has(l) ? hidden : extra);
@@ -194,18 +203,21 @@ function Layers({ page, drawing }: { page: Page | null; drawing: Drawing | null 
   };
   // Layer row: eye (as in Photoshop) | colour | name | code; a click on the row works too
   const row = (l: string) => {
-    const shown = layerShown(own, hidden, extra, l);
+    const shown = own.has(l) ? !hidden.has(l) : extra.has(l);
     return (
       <div key={l} className={cx(css.layer, !shown && css.hiddenLayer)} onClick={() => toggle(l, !shown)}>
         <EyeToggle on={shown} what={label("layer", l)} onToggle={() => toggle(l, !shown)} />
-        <span className={css.swatch} aria-hidden="true" style={{ background: screenColor(colors.get(l)!) }} />
+        <span className={css.swatch} aria-hidden="true" style={{ background: screenColor(rows.get(l)!) }} />
         {label("layer", l)}
         <span className={cx(css.code, "mono")}>{l}</span>
       </div>
     );
   };
-  const mine = [...colors.keys()].filter((l) => own.has(l)).sort();
-  const rest = [...colors.keys()].filter((l) => !own.has(l)).sort();
+  // Cable rows in their own order, where W-CABLE stands in the alphabet
+  const key = (l: string) => (CABLE_ROWS.includes(l) ? `W-CABLE ${CABLE_ROWS.indexOf(l)}` : l);
+  const sorted = (ls: string[]) => ls.sort((a, b) => key(a).localeCompare(key(b)));
+  const mine = sorted([...rows.keys()].filter((l) => own.has(l)));
+  const rest = sorted([...rows.keys()].filter((l) => !own.has(l)));
   return (
     <div className={css.layers}>
       {rest.length > 0 && <h3>{t("side.ownLayers")}</h3>}

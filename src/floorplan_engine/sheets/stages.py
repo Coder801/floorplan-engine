@@ -61,7 +61,7 @@ from floorplan_engine.drawing.wiring import draw_wiring, wiring_notes
 from floorplan_engine.electrical.elevations import WaterMap, wall_elevations
 from floorplan_engine.electrical.estimate import build_estimate
 from floorplan_engine.electrical.groups import group_colors
-from floorplan_engine.electrical.panel import BoardPanel, build_panel
+from floorplan_engine.electrical.panel import BoardPanel, build_panel, line_classes
 from floorplan_engine.electrical.pricing import Prices, price_notes
 from floorplan_engine.electrical.wiring import box_wiring, estimate_wiring
 from floorplan_engine.electrical.wiring_model import Wiring
@@ -271,7 +271,7 @@ def draw_stages(
             specs.append(lighting)
         wiring = box_wiring(plan, contours, elec, edits)
         if wiring is not None:
-            draw_wiring(msp, wiring, elec)
+            draw_wiring(msp, wiring, elec, line_classes(plan, elec))
             specs.append(
                 SheetSpec(
                     "tab_wiring",

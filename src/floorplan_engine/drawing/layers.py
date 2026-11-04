@@ -80,8 +80,24 @@ E_TEXT = LayerSpec("E-TEXT", 7, "Группы, высоты, сечения")
 E_DATA = LayerSpec("E-DATA", 140, "Интернет и TV")
 E_LED = LayerSpec("E-LED", 221, "LED-подсветка и выводы под неё", LED_LINETYPE)
 W_BOX = LayerSpec("W-BOX", 1, "Распаечные коробки (проводка через коробки)")
-W_CABLE = LayerSpec("W-CABLE", 1, "Кабели проводки через коробки", CABLE_LINETYPE)
-W_CABLE_FLOOR = LayerSpec("W-CABLE-FLOOR", 1, "Кабели по полу (в стяжке)", FLOOR_LINETYPE)
+# Cables: a layer per line purpose, protection (-RCD: RCBO or RCD) and route (-FLOOR: in the screed)
+CABLE_PURPOSES = {"light": "свет", "socket": "розетки", "device": "приборы", "low": "слаботочка"}
+
+
+def _cable_spec(purpose: str, rcd: bool, floor: bool) -> LayerSpec:
+    name = f"W-CABLE-{purpose.upper()}{'-RCD' if rcd else ''}{'-FLOOR' if floor else ''}"
+    note = f"Кабели: {CABLE_PURPOSES[purpose]}{', с дифом/УЗО' if rcd else ''}"
+    note += ", по полу (в стяжке)" if floor else ""
+    return LayerSpec(name, 1, note, FLOOR_LINETYPE if floor else CABLE_LINETYPE)
+
+
+W_CABLES = {
+    (purpose, rcd, floor): _cable_spec(purpose, rcd, floor)
+    for purpose in CABLE_PURPOSES
+    for rcd in (False, True)
+    for floor in (False, True)
+    if not (purpose == "low" and rcd)  # low-voltage lines are not in the panel
+}
 W_TEXT = LayerSpec("W-TEXT", 7, "Подписи коробок")
 E_PANEL = LayerSpec("E-PANEL", 7, "Щит в лицо: корпус, рейки, аппараты, подписи")
 E_PANEL_WIRE = LayerSpec("E-PANEL-WIRE", 1, "Щит в лицо: провода групп к автоматам")
@@ -99,7 +115,7 @@ ELECTRICAL_LAYERS = (
     E_TEXT,
     A_SHEET,
 )
-WIRING_LAYERS = (W_BOX, W_CABLE, W_CABLE_FLOOR, W_TEXT, A_SHEET)
+WIRING_LAYERS = (W_BOX, *W_CABLES.values(), W_TEXT, A_SHEET)
 PANEL_LAYERS = (E_PANEL, E_PANEL_WIRE, A_SHEET)
 E_LINK = LayerSpec("E-LINK", 5, "Освещение: что чем включает выключатель", CABLE_LINETYPE)
 L_TEXT = LayerSpec("L-TEXT", 7, "Освещение: номера светильников и выключателей")

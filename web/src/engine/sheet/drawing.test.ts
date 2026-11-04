@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Item, Page } from "@/shared/types";
-import { buildDrawing, drawingLayers, layerShown, objectLayers, shiftOf } from "./drawing";
+import { buildDrawing, drawingLayers, layerRows, layerShown, objectLayers, shiftOf } from "./drawing";
 
 const item = (l: string, d: string, o?: string): Item => ({ k: "s", c: "#000000", l, d, o });
 
@@ -86,5 +86,27 @@ describe("layerShown", () => {
     expect(layerShown(own, new Set(["A-WALL"]), new Set(), "A-WALL")).toBe(false);
     expect(layerShown(own, new Set(), new Set(), "A-DIMS")).toBe(false);
     expect(layerShown(own, new Set(), new Set(["A-DIMS"]), "A-DIMS")).toBe(true);
+  });
+
+  it("кабель виден, пока не выключена ни одна его строка", () => {
+    const l = "W-CABLE-SOCKET-RCD-FLOOR", cables = new Set([l]);
+    expect(layerRows(l)).toEqual(["W-CABLE-SOCKET", "W-CABLE-RCD", "W-CABLE-FLOOR"]);
+    expect(layerShown(cables, new Set(), new Set(), l)).toBe(true);
+    for (const row of layerRows(l)) expect(layerShown(cables, new Set([row]), new Set(), l)).toBe(false);
+    expect(layerShown(cables, new Set(["W-CABLE-LIGHT", "W-CABLE-NORCD"]), new Set(), l)).toBe(true);
+  });
+
+  it("кабель с другого листа включается своим видом", () => {
+    const l = "W-CABLE-LIGHT";
+    expect(layerShown(own, new Set(), new Set(), l)).toBe(false);
+    expect(layerShown(own, new Set(), new Set(["W-CABLE-LIGHT"]), l)).toBe(true);
+    expect(layerShown(own, new Set(["W-CABLE-NORCD"]), new Set(["W-CABLE-LIGHT"]), l)).toBe(false);
+  });
+
+  it("старый .epd и слаботочка: только свои строки", () => {
+    expect(layerRows("W-CABLE")).toEqual(["W-CABLE-CEILING"]);
+    expect(layerRows("W-CABLE-FLOOR")).toEqual(["W-CABLE-FLOOR"]);
+    expect(layerRows("W-CABLE-LOW")).toEqual(["W-CABLE-LOW", "W-CABLE-CEILING"]);
+    expect(layerRows("A-WALL")).toEqual(["A-WALL"]);
   });
 });
