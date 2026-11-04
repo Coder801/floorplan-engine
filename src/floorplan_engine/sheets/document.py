@@ -33,7 +33,8 @@ from floorplan_engine.model.plumbing import Plumbing
 from floorplan_engine.model.scale import DEFAULT_SCALE, SCALES, drawing_scale, sheet_scale
 from floorplan_engine.model.schema import Electrical, Plan, WiringEdits
 from floorplan_engine.model.texts import TEXTS, tr
-from floorplan_engine.plumbing.network import Network, build_network
+from floorplan_engine.plumbing.network import build_network
+from floorplan_engine.plumbing.network_model import Network
 from floorplan_engine.sheets.layout import (
     VIEW_MARGIN,
     Panel,

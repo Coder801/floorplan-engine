@@ -7,7 +7,7 @@
 - `tee45`: a branch enters a pipe through an angled tee: the branch comes in at 45° with the flow;
 - `bends`: how many 45° bends are on the plan route.
 
-Pure geometry on Vec, model mm; grid and walls are in plumbing/network.py.
+Pure geometry on Vec, model mm; grid and walls are in plumbing/context.py.
 """
 
 from __future__ import annotations

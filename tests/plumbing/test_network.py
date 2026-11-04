@@ -9,15 +9,10 @@ from shapely.geometry import LineString
 from floorplan_engine.model.geometry import room_geometries
 from floorplan_engine.model.plumbing import Plumbing
 from floorplan_engine.model.schema import Plan
-from floorplan_engine.plumbing.network import (
-    HOT_COLD_GAP,
-    MAIN_D,
-    SUPPLY_D,
-    Network,
-    build_network,
-    fixture_outlets,
-    partition_strips,
-)
+from floorplan_engine.plumbing.context import partition_strips
+from floorplan_engine.plumbing.network import build_network, fixture_outlets
+from floorplan_engine.plumbing.network_model import Network
+from floorplan_engine.plumbing.rules import HOT_COLD_GAP, MAIN_D, SUPPLY_D
 from floorplan_engine.validation.plan import validate_plan
 from tests.conftest import make_flat
 
@@ -224,7 +219,7 @@ def test_door_only_if_no_other_way_and_flagged() -> None:
 
 
 def test_hot_runs_paired_with_cold() -> None:
-    from floorplan_engine.plumbing.network import PAIR_GAP
+    from floorplan_engine.plumbing.rules import PAIR_GAP
 
     net = network(
         fixtures=[
@@ -250,14 +245,14 @@ def shapely_point(v: Any) -> Any:
 
 def test_parallel_offsets_left_of_travel() -> None:
     from floorplan_engine.model.geometry import Vec
-    from floorplan_engine.plumbing.network import parallel
+    from floorplan_engine.plumbing.supply import parallel
 
     path = [Vec(0, 0), Vec(1000, 0), Vec(1000, 1000)]
     assert parallel(path, 50) == [Vec(0, 50), Vec(950, 50), Vec(950, 1000)]
 
 
 def test_sewer_keeps_to_walls_and_drops_in_wall() -> None:
-    from floorplan_engine.plumbing.network import WALL_BAND_MM
+    from floorplan_engine.plumbing.rules import WALL_BAND_MM
 
     net = network(
         fixtures=[
@@ -316,13 +311,13 @@ def test_wc_outside_box_goes_along_wall() -> None:
 
 def test_screed_110_only_off_walls() -> None:
     from floorplan_engine.model.geometry import Vec
-    from floorplan_engine.plumbing.network import _Zones
+    from floorplan_engine.plumbing.sewer_heights import Zones
 
     net = network(fixtures=[wc(1600)])
     plan = make_flat()
     _, contours = validate_plan(plan)
     geoms = {g.room.id: g for g in room_geometries(plan, contours)}
-    zones = _Zones.of(_ctx_stub(net, geoms))
+    zones = Zones.of(_ctx_stub(net, geoms))
     assert zones.at(Vec(100, 1000), 200.0, 110)[0] == "surface"  # at the bathroom wall
     assert zones.at(Vec(1000, 1250), 200.0, 110)[0] == "screed"  # in the middle: a screed error
     assert zones.at(Vec(1000, 1250), 10.0, 50)[0] == "screed"  # Ø50 fits: in the screed
@@ -483,7 +478,7 @@ DOUBLE_SINK = [
 
 
 def test_supply_groups_double_sink() -> None:
-    from floorplan_engine.plumbing.network import supply_groups
+    from floorplan_engine.plumbing.supply import supply_groups
 
     far = {"id": "s3", "room": "bath", "type": "sink", "wall": "w1", "offset": 2900}
     other = {"id": "k", "room": "kitchen", "type": "kitchen_sink", "wall": "w2", "offset": 1000}
@@ -581,9 +576,9 @@ def test_parallel_lines_stay_apart_over_capacity() -> None:
 
 
 def test_pipe_d_by_flow() -> None:
-    from floorplan_engine.plumbing.network import _pipe_d
+    from floorplan_engine.plumbing.supply import pipe_d
 
-    assert (_pipe_d(0.18), _pipe_d(0.33), _pipe_d(0.4)) == (16, 20, None)
+    assert (pipe_d(0.18), pipe_d(0.33), pipe_d(0.4)) == (16, 20, None)
 
 
 def _room_with_drywall(partition: bool) -> Plan:
@@ -637,7 +632,7 @@ def test_pipes_under_drywall_wall_in_room(partition: bool) -> None:
 
 
 def test_sewer_grid_costs_by_distance_to_wall() -> None:
-    from floorplan_engine.plumbing.network import (
+    from floorplan_engine.plumbing.rules import (
         HIDDEN_COST,
         NEAR_WALL_COST,
         OPEN_ROOM_COST,
@@ -652,9 +647,10 @@ def test_sewer_grid_costs_by_distance_to_wall() -> None:
     assert OPEN_ROOM_COST >= 3 * WALL_COST and WALL_COST < NEAR_WALL_COST < OPEN_ROOM_COST
     plan = make_flat()
     _, contours = validate_plan(plan)
-    from floorplan_engine.plumbing.network import SEWER_VARIANTS, _sewer_grid
+    from floorplan_engine.plumbing.context import sewer_grid
+    from floorplan_engine.plumbing.rules import SEWER_VARIANTS
 
-    grid = _sewer_grid(room_geometries(plan, contours), net, SEWER_VARIANTS[0])
+    grid = sewer_grid(room_geometries(plan, contours), net, SEWER_VARIANTS[0])
     assert grid.tag is not None and grid.mult is not None
     at_wall = grid.nearest_free(_v(2300, 200))  # kitchen, at the bottom wall
     middle = grid.nearest_free(_v(2900, 1250))  # kitchen, in the middle (bath at x 3600–4600)
@@ -683,36 +679,31 @@ def test_far_drain_hugs_walls_instead_of_diagonal() -> None:
 
 
 def test_score_prefers_fewer_errors_then_box_then_length() -> None:
-    from floorplan_engine.plumbing.network import _score
+    from floorplan_engine.plumbing.sewer import sewer_score
 
     net = network(fixtures=[wc(600)])
-    score = _score(net)
+    score = sewer_score(net)
     assert len(score) == 5 and score[0] == 0
     assert score[4] >= sum(p.total for p in net.pipes_of("sewer"))
 
 
 def test_height_prune_open_cells_only_above_screed() -> None:
-    from floorplan_engine.plumbing.network import (
-        SEWER_VARIANTS,
-        TAG_OPEN,
-        TAG_WALL,
-        _height_prune,
-        _sewer_grid,
-    )
+    from floorplan_engine.plumbing.context import height_prune, sewer_grid
+    from floorplan_engine.plumbing.rules import SEWER_VARIANTS, TAG_OPEN, TAG_WALL
 
     net = network(fixtures=[wc(600)])
     plan = make_flat()
     _, contours = validate_plan(plan)
-    grid = _sewer_grid(room_geometries(plan, contours), net, SEWER_VARIANTS[0])
+    grid = sewer_grid(room_geometries(plan, contours), net, SEWER_VARIANTS[0])
     assert grid.tag is not None
     open_cell = next(k for k, t in enumerate(grid.tag) if t == TAG_OPEN and grid.free[k])
     wall_cell = next(k for k, t in enumerate(grid.tag) if t == TAG_WALL and grid.free[k])
-    prune = _height_prune(grid, z0=0.0, slope=0.025, d=50)  # 25 mm into screed: 1 m of pipe
+    prune = height_prune(grid, z0=0.0, slope=0.025, d=50)  # 25 mm into screed: 1 m of pipe
     assert prune is not None
     assert not prune(open_cell, 900.0) and prune(open_cell, 1100.0)
     assert not prune(wall_cell, 5000.0)  # by a wall: a box above the floor, not pruned
-    big = _height_prune(grid, z0=0.0, slope=0.02, d=110)
+    big = height_prune(grid, z0=0.0, slope=0.02, d=110)
     assert big is not None and big(open_cell, 0.0)  # Ø110 never fits in the screed
     # From a fixture the length is unknown: lower bound is the straight distance to the riser
-    far = _height_prune(grid, z0=0.0, slope=0.025, d=50, lower=grid.center(open_cell) + _v(5000, 0))
+    far = height_prune(grid, z0=0.0, slope=0.025, d=50, lower=grid.center(open_cell) + _v(5000, 0))
     assert far is not None and far(open_cell, 0.0)

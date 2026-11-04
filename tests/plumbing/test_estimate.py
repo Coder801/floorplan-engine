@@ -14,7 +14,9 @@ from floorplan_engine.plumbing.estimate import (
     quantities,
     water_fittings,
 )
-from floorplan_engine.plumbing.network import DROP_TURN, Network, Pipe, build_network, drop_bends
+from floorplan_engine.plumbing.network import build_network
+from floorplan_engine.plumbing.network_model import Network, Pipe, drop_bends
+from floorplan_engine.plumbing.rules import DROP_TURN
 from floorplan_engine.validation.plan import validate_plan
 from tests.conftest import make_flat
 from tests.plumbing.test_network import network

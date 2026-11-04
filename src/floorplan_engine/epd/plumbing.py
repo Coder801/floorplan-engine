@@ -22,9 +22,10 @@ from floorplan_engine.model.schema import Plan
 from floorplan_engine.model.texts import Language
 from floorplan_engine.plumbing.estimate import build_estimate
 from floorplan_engine.plumbing.estimate import text as estimate_text
-from floorplan_engine.plumbing.network import SCREED_MM, Network, Pipe, fixture_name
+from floorplan_engine.plumbing.network_model import Network, Pipe, fixture_name
 from floorplan_engine.plumbing.rows import fixture_numbers, fixture_rows, pipe_rows, plumbing_notes
 from floorplan_engine.plumbing.rows import text as rows_text
+from floorplan_engine.plumbing.rules import SCREED_MM
 
 FLOOR_Z_MM = 30.0  # water in the screed: slightly above the scene floor so it is visible
 SEWER_MIN_Z_MM = 30.0  # sewer in the screed: on the scene floor, axis not lower

@@ -17,7 +17,8 @@ from floorplan_engine.model.geometry import Contour
 from floorplan_engine.model.plumbing import FixtureType, Plumbing
 from floorplan_engine.model.schema import Electrical, Plan
 from floorplan_engine.model.texts import Language
-from floorplan_engine.plumbing.network import FIXTURE_NAMES, Network, drop_bends
+from floorplan_engine.plumbing.network_model import Network, drop_bends
+from floorplan_engine.plumbing.rules import FIXTURE_NAMES
 
 
 def overview_data(

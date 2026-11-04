@@ -59,13 +59,14 @@ from floorplan_engine.model.plumbing import Fixture, FixtureType, ObstacleType, 
 from floorplan_engine.model.scale import sheet
 from floorplan_engine.model.schema import Plan
 from floorplan_engine.model.texts import Language
-from floorplan_engine.plumbing.network import Collector, Kind, Network, Pipe
+from floorplan_engine.plumbing.network_model import Collector, Network, Pipe
 from floorplan_engine.plumbing.rows import (
     fixture_numbers,
     fixture_rows,
     pipe_rows,
 )
 from floorplan_engine.plumbing.rows import text as rows_text
+from floorplan_engine.plumbing.rules import Kind
 
 COLORS: dict[Kind, int] = {"cold": 0x1F77B4, "hot": 0xD62728, "sewer": 0x8C564B}
 # Sewer along the wall above the floor: own colour (viewer and PNG do not draw line types) and

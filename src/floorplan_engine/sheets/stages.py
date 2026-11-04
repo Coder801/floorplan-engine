@@ -72,7 +72,7 @@ from floorplan_engine.model.schema import LIGHT_TYPES, Electrical, Plan, WiringE
 from floorplan_engine.model.texts import Language, tr
 from floorplan_engine.plumbing.estimate import build_estimate as plumbing_estimate
 from floorplan_engine.plumbing.estimate import text as plumbing_estimate_text
-from floorplan_engine.plumbing.network import Network
+from floorplan_engine.plumbing.network_model import Network
 from floorplan_engine.plumbing.rows import plumbing_notes, water_views
 from floorplan_engine.sheets.layout import (
     Panel,

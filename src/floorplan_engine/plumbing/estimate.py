@@ -14,17 +14,17 @@ sheet table are shared with electrical.
 - supply unit: for each water feed from a riser a valve, a filter, a reducer; meters only if
   plumbing.yaml has meters: true; a safety group at the boiler;
 - sewer by diameter with a margin; 45° bends: a 90° turn always takes two, along the route
-  (network.Pipe.bends) and on the drop from the drain in the wall (network.drop_bends: down
-  and onto the floor is four, a short offset two); an angled tee for each branch into a pipe
+  (network_model.Pipe.bends) and on the drop from the drain in the wall (network_model.drop_bends:
+  down and onto the floor is four, a short offset two); an angled tee for each branch into a pipe
   (by the diameter of the pipe branched into; Ø50 into Ø110 is 110×50); a riser inlet for
   each pipe entering the riser; a 110→50 reducer for each Ø50 entering the riser; a cleanout
   on a pipe with more than SEWER_BENDS bends;
 - fixings at FIXING_STEP along floor pipes;
-- holes in partitions: neighbouring pipes share one (network.Network.holes), water and
+- holes in partitions: neighbouring pipes share one (network_model.Network.holes), water and
   sewer use separate ones;
 - sewer in a chase: down the wall from the drain to the floor pipe (rise) and along the
   walls on the floor (plan length in the screed); what does not fit in the screed runs along
-  the wall above the floor, in a box by the wall (network.Pipe.surface_length);
+  the wall above the floor, in a box by the wall (network_model.Pipe.surface_length);
 - work: laying by length without margin, water outlets, supply unit, tees, chases for rises
   to water outlets and drains (one chase for water and one for the drain per fixture),
   system pressure test. All of it is rough work (`rough`, before screed and tiles): water
@@ -41,7 +41,8 @@ from floorplan_engine.electrical.estimate import SECTIONS, Estimate, Line, Price
 from floorplan_engine.model.plumbing import Plumbing
 from floorplan_engine.model.texts import Language
 from floorplan_engine.plumbing.bends import simplify, turn
-from floorplan_engine.plumbing.network import SEWER_BENDS, Network, Pipe, drop_bends
+from floorplan_engine.plumbing.network_model import Network, Pipe, drop_bends
+from floorplan_engine.plumbing.rules import SEWER_BENDS
 
 RESERVE = 0.1  # pipe margin
 FIXING_STEP = 500.0  # mm: pipe fixing step on the floor

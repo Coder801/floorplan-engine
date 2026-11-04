@@ -11,15 +11,14 @@ from floorplan_engine.electrical.elevations import WaterView
 from floorplan_engine.model.plumbing import Plumbing
 from floorplan_engine.model.schema import Plan
 from floorplan_engine.model.texts import Language
-from floorplan_engine.plumbing.network import (
+from floorplan_engine.plumbing.network_model import Network, fixture_name
+from floorplan_engine.plumbing.rules import (
     COLLECTOR_HEIGHT,
     SCREED_COVER,
     SCREED_MM,
     SLOPE,
     SLOPE_MIN,
     Kind,
-    Network,
-    fixture_name,
 )
 
 ASSUMED = "*"

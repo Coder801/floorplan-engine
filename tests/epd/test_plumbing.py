@@ -8,7 +8,8 @@ from floorplan_engine.epd.plumbing import plumbing_objects, plumbing_scene, plum
 from floorplan_engine.model.geometry import Contour
 from floorplan_engine.model.plumbing import Plumbing
 from floorplan_engine.model.schema import Electrical, Plan
-from floorplan_engine.plumbing.network import Network, build_network
+from floorplan_engine.plumbing.network import build_network
+from floorplan_engine.plumbing.network_model import Network
 from floorplan_engine.plumbing.rows import water_views
 from floorplan_engine.validation.plan import validate_plan
 from tests.conftest import make_flat
