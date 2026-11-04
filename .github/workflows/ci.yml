@@ -1,0 +1,87 @@
+# The same checks as the verify skill, for every pushed branch (docs/development.md, "CI").
+# Tags are left out: a release tag points at a commit already checked on its branch.
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      # Port and credentials as in docker-compose.yml: tests/service/conftest.py connects there
+      db:
+        image: postgres:17
+        env:
+          POSTGRES_USER: floorplan_engine
+          POSTGRES_PASSWORD: floorplan_engine
+          POSTGRES_DB: floorplan_engine
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U floorplan_engine -d floorplan_engine"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@18d369b23da25a81e9458561248e1aafff6a70fa # v10.3.1
+        with:
+          python-version: "3.12" # as in the Dockerfile
+          enable-cache: true
+      - run: uv sync --frozen
+      - run: uv run --frozen ruff check .
+      - run: uv run --frozen ruff format --check .
+      - run: uv run --frozen mypy
+      - run: uv run --frozen lint-imports
+      - run: uv run --frozen pytest -q
+        env:
+          TEST_REQUIRE_DB: "1" # a database test must fail here, not skip
+
+  web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: web
+    env:
+      HUSKY: "0" # npm ci runs prepare; hooks are of no use here
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22 # as in the Dockerfile
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npm run check
+      - run: npm test
+      - run: npm run build
+
+  admin:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: admin
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: admin/package-lock.json
+      - run: npm ci
+      - run: npm run check
+      - run: npm test
+      - run: npm run build
