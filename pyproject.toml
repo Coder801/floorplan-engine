@@ -157,6 +157,7 @@ allow_indirect_imports = true
 name = "cz_conventional_commits"
 version_provider = "pep621"
 tag_format = "v$version"
+annotated_tag = true               # git push --follow-tags sends only annotated tags
 major_version_zero = true          # alpha for now: feat is minor, fix is patch, breaking is minor too
 update_changelog_on_bump = true
 version_files = [
