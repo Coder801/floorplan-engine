@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import base64
 import importlib.util
+import subprocess
 import sys
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -15,6 +17,11 @@ assert spec is not None and spec.loader is not None
 server = importlib.util.module_from_spec(spec)
 sys.modules["server"] = server
 spec.loader.exec_module(server)
+
+
+def test_image_points_every_command_to_the_volume() -> None:
+    """Commands in railway ssh do not go through start.sh."""
+    assert "SHTROBA_OBJECTS=/data/objects" in (ROOT / "Dockerfile").read_text(encoding="utf-8")
 
 
 def test_prelude_points_to_the_volume_like_start_sh() -> None:
@@ -32,6 +39,34 @@ def _recorded(monkeypatch: pytest.MonkeyPatch) -> list[str]:
 
     monkeypatch.setattr(server, "remote", remote)
     return calls
+
+
+def test_remote_sends_one_argument_without_stdin(monkeypatch: pytest.MonkeyPatch) -> None:
+    """railway 4.x: stdin breaks the connection, arguments reach sh -c joined."""
+    seen: dict[str, Any] = {}
+
+    def run(command: list[str], **kw: Any) -> subprocess.CompletedProcess[str]:
+        seen.update(command=command, **kw)
+        return subprocess.CompletedProcess(command, 0, f"ответ\r\n{server.DONE}\r\n", "")
+
+    monkeypatch.setattr(server.subprocess, "run", run)
+    assert server.remote("echo 'ответ'\n", capture=True) == "ответ\n"
+    command = seen["command"]
+    assert command[:3] == ["railway", "ssh", "--"] and len(command) == 4
+    assert seen["stdin"] == subprocess.DEVNULL
+    script = base64.b64decode(command[3].split()[1].split("|")[0]).decode()
+    assert script.startswith(server.PRELUDE) and script.endswith(f"echo {server.DONE}\n")
+
+
+def test_remote_fails_without_the_end_mark(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The script stopped halfway though the CLI returned 0."""
+    monkeypatch.setattr(
+        server.subprocess,
+        "run",
+        lambda c, **_: subprocess.CompletedProcess(c, 0, "половина\n", ""),
+    )
+    with pytest.raises(server.ServerError, match="половина"):
+        server.remote("true\n")
 
 
 def test_rebuild_refuses_an_old_server(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -84,7 +119,8 @@ def _server_file(monkeypatch: pytest.MonkeyPatch, text: str) -> list[str]:
 
     def remote(script: str, capture: bool = False) -> str:
         calls.append(script)
-        return base64.b64encode(text.encode("utf-8")).decode("ascii") if capture else ""
+        packed = base64.b64encode(text.encode("utf-8")).decode("ascii")
+        return f"версия 3\n{server.FILE_START}\n{packed}\n{server.FILE_END}\n" if capture else ""
 
     monkeypatch.setattr(server, "remote", remote)
     return calls

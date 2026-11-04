@@ -23,7 +23,11 @@ import tomllib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-SSH = ("railway", "ssh", "--", "sh", "-s")  # скрипт — через stdin: кавычки не страдают
+# Скрипт — одним аргументом и в base64: CLI склеивает аргументы и отдаёт их sh -c, stdin у него
+# рвёт соединение (railway 4.x, WebSocket), кавычки не страдают
+SSH = ("railway", "ssh", "--")
+DONE = "__shtroba_done__"  # код выхода через CLI не проверен: дошёл ли скрипт до конца — по метке
+FILE_START, FILE_END = "__shtroba_file__", "__shtroba_end__"
 MODEL_FILES = ("room.yaml", "electrical.yaml", "plumbing.yaml")  # остальные пишет просмотр
 WAIT_S = 900.0  # выкладка не дольше этого
 POLL_S = 20.0
@@ -37,7 +41,8 @@ PRELUDE = (
 )
 VERSION_CODE = "from importlib.metadata import version; print(version('floorplan-engine'))"
 CHECK = """
-echo "volume: $(test -d "$SHTROBA_OBJECTS" && echo есть || echo НЕТ) ($SHTROBA_OBJECTS)"
+echo "хранилище: $SHTROBA_OBJECTS, файлов: $(find "$SHTROBA_OBJECTS" -type f 2>/dev/null | wc -l)"
+echo "диск (должен быть отдельный том, а не overlay): $(df -P "$SHTROBA_OBJECTS" | tail -1)"
 for v in DATABASE_URL SHTROBA_OWNER SHTROBA_AUTH; do
   eval "set_=\\${$v+задана}"
   echo "$v: ${set_:-НЕ ЗАДАНА}"
@@ -51,11 +56,17 @@ class ServerError(Exception):
 
 
 def remote(script: str, capture: bool = False) -> str:
-    """Скрипт в контейнере; capture — вернуть вывод, иначе он идёт в терминал."""
-    r = subprocess.run(SSH, input=PRELUDE + script, text=True, capture_output=capture)
-    if r.returncode != 0:
-        raise ServerError(f"railway ssh: код {r.returncode}{': ' + r.stderr if capture else ''}")
-    return r.stdout if capture else ""
+    """Скрипт в контейнере; capture — вернуть вывод, иначе показать его."""
+    packed = base64.b64encode(f"{PRELUDE}{script}echo {DONE}\n".encode()).decode("ascii")
+    command = [*SSH, f"echo {packed}|base64 -d|sh"]
+    r = subprocess.run(command, stdin=subprocess.DEVNULL, text=True, capture_output=True)
+    out = r.stdout.replace("\r\n", "\n")
+    if r.returncode != 0 or DONE not in out:
+        raise ServerError(f"railway ssh: код {r.returncode}\n{out}{r.stderr}".strip())
+    out = out.replace(f"{DONE}\n", "")
+    if not capture:
+        print(out, end="")
+    return out
 
 
 def local_version() -> str:
@@ -65,7 +76,7 @@ def local_version() -> str:
 
 
 def server_version() -> str:
-    return remote(f"python -c {shlex.quote(VERSION_CODE)}\n", capture=True).strip()
+    return remote(f"python -c {shlex.quote(VERSION_CODE)}\n", capture=True).split()[-1]
 
 
 def wait_for_version(version: str, timeout: float = WAIT_S, poll: float = POLL_S) -> None:
@@ -111,8 +122,10 @@ def _pulled(project: str, body: str) -> str:
 def read_file(project: str, name: str) -> str:
     """Файл модели на сервере; нет такого файла — пустая строка."""
     path = f'"$w"/{shlex.quote(project)}/{shlex.quote(name)}'
-    body = f"if [ -f {path} ]; then base64 < {path}; fi\n"
-    return base64.b64decode(remote(_pulled(project, body), capture=True)).decode("utf-8")
+    body = f"echo {FILE_START}\nif [ -f {path} ]; then base64 < {path}; fi\necho {FILE_END}\n"
+    out = remote(_pulled(project, body), capture=True)
+    packed = out.split(FILE_START, 1)[1].split(FILE_END, 1)[0]
+    return base64.b64decode(packed).decode("utf-8")
 
 
 def write_files(project: str, files: dict[str, str]) -> None:
