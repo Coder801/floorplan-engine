@@ -25,6 +25,7 @@ version = "0.1.0"
 name = "cz_conventional_commits"
 version_provider = "pep621"
 tag_format = "v$version"
+annotated_tag = true
 major_version_zero = true
 update_changelog_on_bump = true
 """
@@ -120,6 +121,13 @@ def test_release_bumps_on_main_and_syncs_develop(repo: Path) -> None:
     assert run(repo, "log", "--format=%s", "-1").startswith("bump: version 0.1.0 → 0.2.0")
 
 
+def test_release_increment_overrides_commits(repo: Path) -> None:
+    """feat gives a minor version, --increment patch gives a patch."""
+    commit(repo, "feat: zoom", "zoom.txt")
+    flow.release(repo, increment="patch")
+    assert run(repo, "tag") == "v0.1.1"
+
+
 def test_release_refuses_main_ahead_of_develop(repo: Path) -> None:
     run(repo, "switch", "-q", "main")
     commit(repo, "fix: hot", "hot.txt")
@@ -129,3 +137,71 @@ def test_release_refuses_main_ahead_of_develop(repo: Path) -> None:
     run(repo, "switch", "-q", "main")
     with pytest.raises(flow.FlowError, match="develop"):
         flow.release(repo)
+
+
+def test_free_develop_removes_a_forgotten_worktree(repo: Path, tmp_path: Path) -> None:
+    run(repo, "switch", "-q", "-c", "feature/x")
+    run(repo, "worktree", "add", "-q", str(tmp_path / "wt"), "develop")
+    flow.free_develop(repo)
+    assert not (tmp_path / "wt").exists()
+    run(repo, "switch", "-q", "develop")
+
+
+def test_free_develop_keeps_a_worktree_with_changes(repo: Path, tmp_path: Path) -> None:
+    run(repo, "switch", "-q", "-c", "feature/x")
+    run(repo, "worktree", "add", "-q", str(tmp_path / "wt"), "develop")
+    (tmp_path / "wt" / "work.txt").write_text("x", encoding="utf-8")
+    with pytest.raises(flow.FlowError):
+        flow.free_develop(repo)
+    assert (tmp_path / "wt" / "work.txt").exists()
+
+
+def _with_origin(repo: Path, tmp_path: Path) -> Path:
+    origin = tmp_path / "origin.git"
+    run(tmp_path, "init", "-q", "--bare", str(origin))
+    run(repo, "remote", "add", "origin", str(origin))
+    return origin
+
+
+def test_ship_integrates_releases_and_pushes(
+    repo: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    origin = _with_origin(repo, tmp_path)
+    monkeypatch.setattr(flow, "CHECKS", ("true",))
+    flow.feature("zoom", repo)
+    commit(repo, "feat: zoom", "zoom.txt")
+    flow.ship(repo, increment="patch", yes=True)
+    assert flow.current_branch(repo) == "develop"
+    assert not flow.branch_exists("feature/zoom", repo)
+    assert run(origin, "tag") == "v0.1.1"
+    assert run(origin, "rev-parse", "main") == run(repo, "rev-parse", "main")
+    assert run(origin, "rev-parse", "develop") == run(repo, "rev-parse", "develop")
+
+
+def test_ship_stops_on_a_failed_check(
+    repo: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    origin = _with_origin(repo, tmp_path)
+    monkeypatch.setattr(flow, "CHECKS", ("false",))
+    commit(repo, "feat: zoom", "zoom.txt")
+    with pytest.raises(flow.FlowError, match="проверка"):
+        flow.ship(repo, yes=True)
+    assert run(repo, "tag") == ""  # no release, nothing pushed
+    assert run(origin, "for-each-ref") == ""
+
+
+def test_ship_refuses_changes_and_a_no_answer(
+    repo: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    origin = _with_origin(repo, tmp_path)
+    monkeypatch.setattr(flow, "CHECKS", ())
+    commit(repo, "feat: zoom", "zoom.txt")
+    (repo / "dirty.txt").write_text("x", encoding="utf-8")
+    with pytest.raises(flow.FlowError, match="незакоммиченные"):
+        flow.ship(repo, yes=True)
+    (repo / "dirty.txt").unlink()
+    monkeypatch.setattr("builtins.input", lambda _: "n")
+    with pytest.raises(flow.FlowError, match="отменено"):
+        flow.ship(repo)
+    assert run(repo, "tag") == ""
+    assert run(origin, "for-each-ref") == ""

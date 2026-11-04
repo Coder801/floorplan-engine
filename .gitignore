@@ -15,3 +15,6 @@ data/
 # Working copy marker of a project pulled from the database (floorplan-engine project pull/push):
 # it names a project id in one particular database, so it never goes to git
 .shtroba.yaml
+
+# Копии базы
+*.dump

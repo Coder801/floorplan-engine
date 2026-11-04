@@ -12,5 +12,6 @@ Release following `docs/development.md`, "Branches and releases". Do not push an
 4. Run `uv run python scripts/flow.py release`: develop → main fast-forward, `cz bump` (version
    files, `CHANGELOG.md`, a `bump: …` commit, a `vX.Y.Z` tag), develop ← main.
    $ARGUMENTS
+   If the user asks for a patch or a minor version, add `--increment patch|minor` to both commands.
 5. Result: the version, the tag, the last lines of `CHANGELOG.md`, and a reminder:
    `git push origin main develop --follow-tags`.

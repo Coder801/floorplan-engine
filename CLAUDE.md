@@ -42,6 +42,8 @@ uv run floorplan-engine preview projects/<имя>               # PNG листо
 docker compose up -d db && uv run alembic upgrade head  # база сервиса (docs/database.md), только Postgres
 TEST_REQUIRE_DB=1 uv run pytest && uv run mypy && uv run ruff check . && uv run ruff format --check . && uv run lint-imports
 uv run python scripts/flow.py feature <имя> | integrate | release [--dry-run]  # ветки и релиз: develop → feature → develop → main (docs/development.md)
+uv run python scripts/flow.py ship [--increment patch] [--rebuild]  # всё после /commit: вливание, проверки, релиз, пуш, пересборка
+uv run python scripts/server.py check | rebuild [имена] [--wait] | send <проект> room.yaml  # боевой сервер через railway ssh
 ```
 
 Slash-команды: `/plan`, `/electrical`, `/check`, `/review`, `/commit`, `/release` (в `.claude/commands/`).
@@ -261,7 +263,8 @@ group, at }`), по вариантам проводки (`variants.<режим-�
     длины кабеля (из модели, не из DXF); `electrical/wiring_model.py` — что получилось
     (`JunctionBox`, `Run`, `Chase`, `Hole`, `Wiring`); `electrical/boxes.py` — где стоит
     коробка (стена или потолок, типоразмер, перенос по правке); `electrical/chases.py` —
-    штробы и отверстия в проёмах; `drawing/wiring.py` — лист проводки, таблица и журнал
+    штробы и отверстия в проёмах; слой кабеля — по виду линии (свет, розетки, приборы, слаботочка),
+    защите и маршруту (`layers.W_CABLES`, вид группы — `panel.line_classes`); `drawing/wiring.py` — лист проводки, таблица и журнал
     `out/wiring-boxes.csv`;
   - сантехника (`docs/plumbing.md`): `model/plumbing.py` — схема plumbing.yaml, типовые
     подводы приборов (`FIXTURE_SPECS`); `validation/plumbing.py` — проверка;

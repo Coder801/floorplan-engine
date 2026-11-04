@@ -68,12 +68,23 @@ Postgres (`TEST_REQUIRE_DB=1`), типы, тесты и сборка `web/` и `
   fast-forward до `main`. В `main` коммитов мимо `develop` быть не должно — скрипт откажет,
   пока не сделан `git merge main` в `develop`. Пуш: `git push origin main develop --follow-tags`.
 
+- **Всё одной командой** (после `/commit`, из своего терминала — пуш идёт по вашим ключам):
+  `uv run python scripts/flow.py ship --increment patch --rebuild` — `feature` → `develop`
+  (забытый чистый worktree с `develop` убирается сам), проверки, релиз, вопрос «выпустить и
+  запушить?», пуш, ожидание выкладки, пересборка проектов на сервере. `--dry-run` — только план,
+  `--yes` — без вопроса.
+- **Сервер** (`scripts/server.py`, нужен `railway` с привязанным проектом): `check` — версия,
+  volume и переменные без значений; `rebuild [имена…] [--wait]` — пересобрать проекты текущим
+  кодом; `send <проект> room.yaml` — файл модели новой версией, сначала показывает разницу с
+  базой. Команды идут внутри контейнера: файлы сборок лежат на его volume, `project push` с
+  ноутбука оставил бы их на ноутбуке.
+
 - **Заголовок коммита — Conventional Commits:** `feat(viewer): zoom in on double click`,
   `fix(electrical): …`, `docs: …`, `chore(projects): rebuild out/`. Типы и области — в
   `.claude/agents/committer.md`. Проверяет хук `commit-msg` (husky из `web/`, файл
   `web/.husky/commit-msg` → `uv run cz check`); хук ставится при `npm install` в `web/`
   (`prepare`). Коммит с другим заголовком не проходит.
-- **Версия:** `cz bump` внутри `flow.py release`. Commitizen (`pyproject.toml`,
+- **Версия:** `cz bump` внутри `flow.py release`; `--increment patch` задаёт шаг вместо подсчёта по коммитам. Commitizen (`pyproject.toml`,
   `[tool.commitizen]`) считает новую версию по коммитам с прошлого тега (`feat` — minor,
   `fix` — patch; пока версия 0.x, breaking — тоже minor), правит `pyproject.toml`,
   `src/floorplan_engine/__init__.py`, `package.json` и `package-lock.json` в `web/` и
