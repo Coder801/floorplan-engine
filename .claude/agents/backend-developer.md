@@ -13,14 +13,14 @@ Boundaries:
   imports `service/`.
 - LLM, OCR, FastAPI and the database live only in `service/`. Their dependencies are in the
   `service` group in pyproject.
-- Build logic goes in `pipeline.py`, not in `cli.py`. The CLI only prints and sets exit codes.
+- Build logic goes in `pipeline/`, not in `cli.py`. The CLI only prints and sets exit codes.
 - Do not edit the frontend (`web/`). If you need a new `.epd` page key or API field, describe it in
   `docs/epd-format.md` or `docs/service-api.md`; `frontend-developer` builds the frontend part.
 
 Package layout (import-linter contracts in `pyproject.toml`, `uv run lint-imports`):
 - Packages are grouped by meaning, not by file type: `model/` (schema, intake, labels, outline),
   `electrical/` (electrical and panel calculations), `drawing/` (DXF drawing), `validation/`,
-  `sheets/` (document and printing), `epd/` (viewer artifact). `pipeline.py` and `cli.py` sit on
+  `sheets/` (document and printing), `epd/` (viewer artifact). `pipeline/` and `cli.py` sit on
   top. `service/` holds `api/`, `analysis/`, `facts/`, `db/`.
 - Layers from top to bottom: `cli` → `service` → `pipeline` → `epd` → `sheets` → `validation` →
   `drawing` → `plumbing` → `electrical` → `model`. A higher layer imports a lower one, never the
