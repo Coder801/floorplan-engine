@@ -66,6 +66,19 @@ def test_needs_login(auth: Auth, tmp_path: Path) -> None:
     assert client.get("/api/projects").status_code == 401
 
 
+def test_lost_build_file_is_not_a_server_error(
+    setup: tuple[TestClient, LocalObjectStore, dict[str, str]],
+) -> None:
+    """A build row whose file is gone from storage: 404 with a reason, not a server error."""
+    client, store, tokens = setup
+    pid = tokens["id"]
+    client.cookies.set(COOKIE, tokens["a"])
+    store.delete_prefix(f"projects/{pid}/builds")
+    response = client.get(f"/api/projects/{pid}/sheets")
+    assert response.status_code == 404
+    assert "пересборка" in response.json()["detail"]
+
+
 def test_project_sheets_and_files_from_storage(
     setup: tuple[TestClient, LocalObjectStore, dict[str, str]],
 ) -> None:

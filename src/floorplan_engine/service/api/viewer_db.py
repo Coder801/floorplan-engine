@@ -143,12 +143,20 @@ def summary(session: Session, project: Project) -> dict[str, Any]:
     }
 
 
+def _stored(store: ObjectStore, key: str) -> bytes:
+    """A file of a build; a row in the database with no file is a lost build, not a server error."""
+    try:
+        return store.get(key)
+    except FileNotFoundError as exc:
+        raise HTTPException(404, f"файл сборки потерян, нужна пересборка: {key}") from exc
+
+
 def _file_response(store: ObjectStore, key: str, name: str) -> Response:
     local = store.local_path(key)
     if local is not None:
         return FileResponse(local)
     media = mimetypes.guess_type(name)[0] or "application/octet-stream"
-    return Response(store.get(key), media_type=media)
+    return Response(_stored(store, key), media_type=media)
 
 
 def _read_routes(
@@ -217,7 +225,7 @@ def _read_routes(
             f = ps.build_file(db, build, ARTIFACT_FILE) if build is not None else None
             if f is None:
                 raise HTTPException(404, f"у проекта нет {ARTIFACT_FILE} — сначала сборка")
-            return zipfile.ZipFile(BytesIO(store.get(f.object_key)))
+            return zipfile.ZipFile(BytesIO(_stored(store, f.object_key)))
 
     @app.get("/api/projects/{key}/sheets")
     def sheets(request: Request, key: str) -> dict[str, Any]:

@@ -44,5 +44,6 @@ COPY projects/ /app/projects-seed/
 COPY deploy/Caddyfile /etc/caddy/Caddyfile
 COPY deploy/start.sh /app/start.sh
 
-ENV PROJECTS_DIR=/data/projects PORT=8080
+# In the image, not in start.sh: a command in railway ssh must write to the volume too
+ENV PROJECTS_DIR=/data/projects SHTROBA_OBJECTS=/data/objects PORT=8080
 CMD ["/app/start.sh"]

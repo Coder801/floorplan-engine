@@ -28,6 +28,8 @@ fi
 
 if [ "$STORAGE" = "db" ]; then
   mkdir -p "$SHTROBA_OBJECTS"
+  # Without a volume the files live in the container and the next deploy deletes them
+  mountpoint -q /data || echo "ВНИМАНИЕ: /data — не volume, файлы проектов пропадут при выкладке" >&2
   if [ -n "$SHTROBA_OWNER" ]; then
     floorplan-engine project import /app/projects-seed --owner "$SHTROBA_OWNER" \
       --create-owner --only-new || echo "Перенос проектов из образа в базу не удался" >&2
