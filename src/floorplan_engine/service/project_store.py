@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from floorplan_engine.electrical.estimate import PRICES_FILE
@@ -34,7 +34,7 @@ from floorplan_engine.service.db.models import (
     Source,
     StudioProfile,
 )
-from floorplan_engine.service.objects import ObjectStore, build_key
+from floorplan_engine.service.objects import ObjectStore, build_key, build_prefix
 from floorplan_engine.validation.issues import STUDIO_FILE
 from floorplan_engine.validation.report import REPORT_JSON
 
@@ -91,6 +91,9 @@ def project_files(
     if own is not None and own.text:
         files[PRICES_FILE] = own.text
     return files
+
+
+KEEP_BUILDS = 3  # builds of a project in storage (decision 2026-11-04)
 
 
 @contextmanager
@@ -157,7 +160,25 @@ def build(
                 )
             )
     session.flush()
+    prune_builds(session, store, project, row)
     return row
+
+
+def prune_builds(session: Session, store: ObjectStore, project: Project, newest: Build) -> None:
+    """Keep the newest build and the ones before it, KEEP_BUILDS in all: every edit in the viewer
+    is a build, and the volume is not endless. Model versions stay, an old one can be rebuilt."""
+    ids = session.scalars(
+        select(Build.id)
+        .join(ModelVersion, ModelVersion.id == Build.model_version_id)
+        .where(ModelVersion.project_id == project.id, Build.id != newest.id)
+        .order_by(Build.created_at.desc())
+    ).all()
+    old = ids[KEEP_BUILDS - 1 :]
+    if not old:
+        return
+    session.execute(delete(Build).where(Build.id.in_(old)))  # build_file: cascade in the database
+    for build_id in old:
+        store.delete_prefix(build_prefix(project.id, build_id))
 
 
 def latest_build(session: Session, project: Project) -> Build | None:

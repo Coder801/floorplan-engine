@@ -41,8 +41,12 @@ def source_key(project_id: uuid.UUID, sha256: str, name: str) -> str:
     return check_key(f"projects/{project_id}/sources/{sha256}/{safe_name(name)}")
 
 
+def build_prefix(project_id: uuid.UUID, build_id: uuid.UUID) -> str:
+    return check_key(f"projects/{project_id}/builds/{build_id}")
+
+
 def build_key(project_id: uuid.UUID, build_id: uuid.UUID, rel: str) -> str:
-    return check_key(f"projects/{project_id}/builds/{build_id}/{rel}")
+    return check_key(f"{build_prefix(project_id, build_id)}/{rel}")
 
 
 class ObjectStore(Protocol):

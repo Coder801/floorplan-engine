@@ -9,12 +9,24 @@ from io import BytesIO
 from pathlib import Path
 
 import pytest
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from floorplan_engine.service import project_store as ps
 from floorplan_engine.service.db import repositories as repo
-from floorplan_engine.service.db.models import PriceList, Source, StudioProfile
-from floorplan_engine.service.objects import LocalObjectStore, source_key
+from floorplan_engine.service.db.models import (
+    Build,
+    BuildFile,
+    PriceList,
+    Source,
+    StudioProfile,
+)
+from floorplan_engine.service.objects import (
+    LocalObjectStore,
+    build_key,
+    build_prefix,
+    source_key,
+)
 from tests.electrical.test_variants import _project
 
 PRICES = "# прайс студии\ncurrency: грн\nitems:\n  work.chase: 321  # штроба\n"
@@ -49,6 +61,27 @@ def test_workdir_lays_out_model_studio_and_sources(db: Session, tmp_path: Path) 
         assert (folder / "source" / "План.pdf").read_bytes() == b"%PDF"
         kept = folder
     assert not kept.exists()  # removed after use
+
+
+def test_only_the_last_builds_stay(db: Session, tmp_path: Path) -> None:
+    """Old builds go with their rows and files; the model version stays."""
+    store = LocalObjectStore(tmp_path / "objects")
+    studio = repo.create_studio(db, "Искра")
+    project = repo.create_project(db, studio.id, "Кв")
+    repo.add_model_version(db, project.id, _files(_project(tmp_path)), "operator")
+    db.add(PriceList(studio_id=studio.id, text=PRICES))
+    db.flush()
+    builds = [ps.build(db, store, project) for _ in range(ps.KEEP_BUILDS + 2)]
+    left = list(db.scalars(select(Build.id)))
+    assert len(left) == ps.KEEP_BUILDS and builds[-1].id in left
+    kept = [b for b in builds if b.id in left]
+    for build in kept:
+        assert store.exists(build_key(project.id, build.id, "project.epd"))
+    gone = [b.id for b in builds if b.id not in left]
+    for build_id in gone:
+        assert not (store.root / build_prefix(project.id, build_id)).exists()
+    assert not db.scalar(select(BuildFile.id).where(BuildFile.build_id.in_(gone)))
+    assert repo.latest_model(db, project.id) is not None
 
 
 def test_build_puts_out_into_storage(db: Session, tmp_path: Path) -> None:
