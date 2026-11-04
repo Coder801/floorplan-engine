@@ -1,5 +1,6 @@
 {
   "project": "Квартира, вул. Вавилових, 11",
+  "answers_digest": "1a3dc60481742067",
   "stages": [
     {
       "stage": "plan",
@@ -14,9 +15,8 @@
       "status": "questions",
       "builds": true,
       "reason": "",
-      "weight": 11,
+      "weight": 8,
       "questions": [
-        "q4",
         "q5",
         "q7",
         "q8",
@@ -66,6 +66,7 @@
       "answer": "value",
       "unit": "mm",
       "options": [],
+      "option_labels": {},
       "severity": "minor",
       "state": "answered"
     },
@@ -78,6 +79,7 @@
       "answer": "value",
       "unit": "mm",
       "options": [],
+      "option_labels": {},
       "severity": "minor",
       "state": "answered"
     },
@@ -93,6 +95,7 @@
       "answer": "value",
       "unit": "mm",
       "options": [],
+      "option_labels": {},
       "assumption": 1783.0,
       "severity": "major",
       "state": "answered"
@@ -106,9 +109,10 @@
       "answer": "value",
       "unit": "mm",
       "options": [],
+      "option_labels": {},
       "assumption": 400.0,
       "severity": "major",
-      "state": "open"
+      "state": "answered"
     },
     {
       "id": "q5",
@@ -119,6 +123,7 @@
       "answer": "value",
       "unit": "mm",
       "options": [],
+      "option_labels": {},
       "assumption": 2200.0,
       "severity": "minor",
       "state": "open"
@@ -130,6 +135,7 @@
       "also": [],
       "answer": "text",
       "options": [],
+      "option_labels": {},
       "severity": "minor",
       "state": "answered"
     },
@@ -142,6 +148,7 @@
       "answer": "value",
       "unit": "mm",
       "options": [],
+      "option_labels": {},
       "assumption": 240.0,
       "severity": "major",
       "state": "open"
@@ -155,6 +162,7 @@
       "answer": "value",
       "unit": "mm",
       "options": [],
+      "option_labels": {},
       "assumption": 780.0,
       "severity": "major",
       "state": "open"
@@ -170,6 +178,7 @@
       "answer": "value",
       "unit": "mm",
       "options": [],
+      "option_labels": {},
       "assumption": 900.0,
       "severity": "minor",
       "state": "open"
@@ -181,6 +190,7 @@
       "also": [],
       "answer": "text",
       "options": [],
+      "option_labels": {},
       "severity": "major",
       "state": "open"
     },
@@ -193,6 +203,7 @@
       "answer": "value",
       "unit": "mm",
       "options": [],
+      "option_labels": {},
       "assumption": 100.0,
       "severity": "minor",
       "state": "open"
@@ -204,6 +215,7 @@
       "also": [],
       "answer": "text",
       "options": [],
+      "option_labels": {},
       "severity": "major",
       "state": "open"
     },
@@ -214,13 +226,14 @@
       "also": [],
       "answer": "text",
       "options": [],
+      "option_labels": {},
       "severity": "minor",
       "state": "open"
     },
     {
       "id": "panel_backup",
       "stage": "panel",
-      "text": "Нужен ли резерв питания? Сейчас — гибридный инвертор с АКБ (допущение): none — без резерва, inverter — инвертор, plug — генератор через силовую вилку",
+      "text": "Чи потрібен резерв живлення? Зараз — гібридний інвертор з АКБ (припущення): none — без резерву, inverter — інвертор, plug — генератор через силову вилку",
       "target": "panel.backup",
       "also": [],
       "answer": "choice",
@@ -229,6 +242,11 @@
         "inverter",
         "plug"
       ],
+      "option_labels": {
+        "none": "Без резерву",
+        "inverter": "Інвертор з АКБ",
+        "plug": "Генератор через силову вилку"
+      },
       "assumption": "inverter",
       "severity": "minor",
       "state": "open"
@@ -236,12 +254,13 @@
     {
       "id": "panel_input",
       "stage": "panel",
-      "text": "Вводной автомат по техусловиям? Сейчас 63 А (допущение); расчётный ток квартиры 59,0 А",
+      "text": "Вступний автомат за техумовами? Зараз 63 А (припущення); розрахунковий струм квартири 59,0 А",
       "target": "panel.input",
       "also": [],
       "answer": "value",
       "unit": "А",
       "options": [],
+      "option_labels": {},
       "assumption": 63.0,
       "severity": "minor",
       "state": "open"
@@ -249,17 +268,18 @@
     {
       "id": "panel_reserve",
       "stage": "panel",
-      "text": "Что держать на резерве? Сейчас: QF1, QF2, QF3, QF4, QF5, QF18 — свет, холодильник, роутер, котёл, насос, ворота, розетки кухни (допущение). Список групп — panel.reserve",
+      "text": "Що тримати на резерві? Зараз: QF1, QF2, QF3, QF4, QF5, QF18 — світло, холодильник, роутер, котел, насос, ворота, розетки кухні (припущення). Список груп — panel.reserve",
       "also": [],
       "answer": "text",
       "options": [],
+      "option_labels": {},
       "severity": "minor",
       "state": "open"
     },
     {
       "id": "panel_npe",
       "stage": "panel",
-      "text": "Связывает ли инвертор N с PE в резервном режиме (встроенное реле N–PE, включается в настройках)? Без этой связи УЗО и дифавтоматы на резерве не сработают: no — поставим контактор N–PE",
+      "text": "Чи з'єднує інвертор N з PE в резервному режимі (вбудоване реле N–PE, вмикається в налаштуваннях)? Без цього з'єднання ПЗВ і дифавтомати на резерві не спрацюють: no — поставимо контактор N–PE",
       "target": "panel.npe_relay",
       "also": [],
       "answer": "choice",
@@ -267,6 +287,10 @@
         "yes",
         "no"
       ],
+      "option_labels": {
+        "yes": "Так, з'єднує",
+        "no": "Ні, поставити контактор N–PE"
+      },
       "assumption": "yes",
       "severity": "major",
       "state": "open"
@@ -274,7 +298,7 @@
     {
       "id": "panel_inverter",
       "stage": "panel",
-      "text": "Какой инвертор? Сейчас гибридный (допущение) — сам переключает сеть и АКБ, в щите обходной SA1. basic — без своего переключения: резерв через АВР",
+      "text": "Який інвертор? Зараз гібридний (припущення) — сам перемикає мережу і АКБ, у щиті обвідний SA1. basic — без власного перемикання: резерв через АВР",
       "target": "panel.inverter",
       "also": [],
       "answer": "choice",
@@ -282,6 +306,10 @@
         "hybrid",
         "basic"
       ],
+      "option_labels": {
+        "hybrid": "Гібридний",
+        "basic": "Без власного перемикання"
+      },
       "assumption": "hybrid",
       "severity": "minor",
       "state": "open"
@@ -289,12 +317,13 @@
     {
       "id": "panel_battery",
       "stage": "panel",
-      "text": "Напряжение АКБ инвертора? Сейчас 48 В (допущение): ток разряда 104,2 А при 5,00 кВт — автомат АКБ 125 А, кабель 2×35 мм²",
+      "text": "Напруга АКБ інвертора? Зараз 48 В (припущення): струм розряду 104,2 А при 5,00 кВт — автомат АКБ 125 А, кабель 2×35 мм²",
       "target": "panel.battery_voltage",
       "also": [],
       "answer": "value",
       "unit": "В",
       "options": [],
+      "option_labels": {},
       "assumption": 48.0,
       "severity": "minor",
       "state": "open"
@@ -302,11 +331,12 @@
     {
       "id": "panel_pv",
       "stage": "panel",
-      "text": "Есть ли солнечные панели? Сейчас нет (допущение). Число строк панелей на инвертор (0–2): у каждой — DC-автомат и УЗИП в щите АКБ",
+      "text": "Чи є сонячні панелі? Зараз немає (припущення). Кількість рядків панелей на інвертор (0–2): у кожного — DC-автомат і ПЗІП у щиті АКБ",
       "target": "panel.pv_strings",
       "also": [],
       "answer": "value",
       "options": [],
+      "option_labels": {},
       "assumption": 0.0,
       "severity": "minor",
       "state": "open"
@@ -314,30 +344,33 @@
     {
       "id": "panel_dc_place",
       "stage": "panel",
-      "text": "Где стоят инвертор, щит АКБ и АКБ? Сейчас — рядом с основным щитом (допущение): от этого — длина кабелей GRID, LOAD и АКБ",
+      "text": "Де стоять інвертор, щит АКБ і АКБ? Зараз — поруч з основним щитом (припущення): від цього — довжина кабелів GRID, LOAD і АКБ",
       "also": [],
       "answer": "text",
       "options": [],
+      "option_labels": {},
       "severity": "minor",
       "state": "open"
     },
     {
       "id": "panel_split_QF8",
       "stage": "panel",
-      "text": "QF8: 19,1 А на автомате 16 А — на щите разделена на 2 линии: QF8 — Розетка, Пральна + сушильна (2,40 кВт); QF8.2 — Бойлер (2,00 кВт). Мокрая зона — каждая линия через дифавтомат 30 мА. Подтвердите — второй кабель от щита перенесём в electrical.yaml",
+      "text": "QF8: 19,1 А на автоматі 16 А — на щиті розділена на 2 лінії: QF8 — Розетка, Пральна + сушильна (2,40 кВт); QF8.2 — Бойлер (2,00 кВт). Мокра зона — кожна лінія через дифавтомат 30 мА. Підтвердьте — другий кабель від щита перенесемо в electrical.yaml",
       "also": [],
       "answer": "text",
       "options": [],
+      "option_labels": {},
       "severity": "major",
       "state": "open"
     },
     {
       "id": "panel_cable_QF13",
       "stage": "panel",
-      "text": "QF13: Варильна поверхня (кабель) 7,20 кВт — 31,3 А, а кабель 3x4 и автомат 25 А. Нужен кабель 3x6 и автомат 32 А — или укажите мощность прибора (power у точки)",
+      "text": "QF13: Варильна поверхня (кабель) 7,20 кВт — 31,3 А, а кабель 3x4 і автомат 25 А. Потрібен кабель 3x6 і автомат 32 А — або вкажіть потужність приладу (power у точки)",
       "also": [],
       "answer": "text",
       "options": [],
+      "option_labels": {},
       "severity": "major",
       "state": "open"
     }

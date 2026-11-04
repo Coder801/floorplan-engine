@@ -17,7 +17,7 @@ point,bedroom,w4,1762,2.40,2,narrow,ceiling,power,bedroom_switch_4 bedroom_socke
 point,living,w1,1595,1.60,2,narrow,ceiling,power,living_socket_2 living_switch_1
 point,living,w1,1740,0.50,1,narrow,ceiling,power,living_led_output_1
 point,living,w1,2200,2.60,1,narrow,ceiling,power,living_socket_1
-point,living,w10,400,0.50,1,narrow,ceiling,power,living_socket_14
+point,living,w10,300,0.50,1,narrow,ceiling,power,living_socket_14
 point,living,w10,2550,2.40,1,narrow,ceiling,power,living_socket_9
 point,living,w10,3205,1.60,2,narrow,ceiling,power,living_switch_2 living_socket_8
 point,living,w10,3895,2.60,3,wide,ceiling,power,living_socket_7 living_socket_5 living_socket_6

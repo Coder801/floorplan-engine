@@ -24,8 +24,8 @@ rooms:
       - { id: w5, length: 1135, thickness: 160 }  # права, з коридором: нова перегородка 120, двері Д-04
       - { id: w6, length: 4870, thickness: 160 }  # нижня, з кімнатою (120) і лоджією (240 — у лоджії 280)
     openings:
-      - { id: bedroom_window_1, wall: w1, type: window, offset: 610, width: 2415, sill: 720, height: 1280 }  # А-16: 630 від низу кімнати (чистове 610), Нпд=720 Нвк=2000
-      - { id: bedroom_window_2, wall: w2, type: window, offset: 1765, width: 2400, sill: 720, height: 1280 }  # А-16: 1785 | 2420 — до пілястри гардеробної (до кута); Нпд=720 Нвк=2000
+      - { id: bedroom_window_1, wall: w1, type: window, offset: 610, width: 2415, sill: 720, height: 1980 }  # А-16: 630 від низу кімнати (чистове 610), Нпд=720 Нвк=2000; верх — до стелі, замовник 2026-11-04
+      - { id: bedroom_window_2, wall: w2, type: window, offset: 1765, width: 2400, sill: 720, height: 1980 }  # А-16: 1785 | 2420 — до пілястри гардеробної (до кута); Нпд=720 Нвк=2000; верх — до стелі, замовник 2026-11-04
       - { id: bedroom_door_1, wall: w5, type: door, offset: 125, width: 900, height: 2150, hinge: start, swing: in }  # Д-04 Wпр=900 Нпр=2150, ліворуч всередину; А-19: 145 | 900 від стіни гардеробної
   - id: cabinet
     name: "Кімната (кабінет)"
@@ -36,7 +36,7 @@ rooms:
       - { id: w3, length: 3060, thickness: 160 }  # права, з коридором: нова стіна на всю висоту, двері Д-03
       - { id: w4, length: 3294 }  # нижня зовнішня
     openings:
-      - { id: cabinet_window_1, wall: w1, type: window, offset: 1410, width: 700, sill: 740, height: 1240 }  # А-16: 1430 | 700 | 800 | 170 знизу; Нпд=740 Нвк=1980
+      - { id: cabinet_window_1, wall: w1, type: window, offset: 1410, width: 700, sill: 740, height: 1960 }  # А-16: 1430 | 700 | 800 | 170 знизу; Нпд=740 Нвк=1980; верх — до стелі, замовник 2026-11-04
       - { id: cabinet_door_1, wall: w1, type: door, offset: 2110, width: 800, height: 2720, hinge: end, swing: in }  # балконні двері, Нпд=0 Нвк=2720; петлі зверху (А-21)
       - { id: cabinet_door_2, wall: w3, type: door, offset: 130, width: 900, height: 2150, hinge: end, swing: in }  # Д-03 Wпр=900 Нпр=2150, праворуч всередину; А-19: 2050 | 900 від низу
   - id: loggia
@@ -48,9 +48,9 @@ rooms:
       - { id: w3, length: 2940, thickness: 280 }  # права, з кімнатою (балконний блок)
       - { id: w4, length: 1295 }  # нижня зовнішня
     openings:
-      - { id: loggia_window_1, wall: w1, type: window, offset: 429, width: 2305, sill: 710, height: 1210 }  # А-16: 450 | 2305 | 225; Нпд=710 Нвк=1920
+      - { id: loggia_window_1, wall: w1, type: window, offset: 429, width: 2305, sill: 710, height: 1990 }  # А-16: 450 | 2305 | 225; Нпд=710 Нвк=1920; верх — до стелі, замовник 2026-11-04
       - { id: loggia_opening_1, wall: w3, type: opening, offset: 30, width: 800, height: 2720 }  # балконні двері з боку лоджії (двері — у кімнаті)
-      - { id: loggia_window_2, wall: w3, type: window, offset: 830, width: 700, sill: 740, height: 1240 }  # вікно балконного блоку з боку лоджії
+      - { id: loggia_window_2, wall: w3, type: window, offset: 830, width: 700, sill: 740, height: 1960 }  # вікно балконного блоку з боку лоджії; верх — до стелі, замовник 2026-11-04
   - id: wardrobe
     name: "Гардеробна"
     origin: [4366, 4546]
@@ -81,7 +81,7 @@ rooms:
       - { id: hall_opening_1, wall: w1, type: opening, offset: 2030, width: 900, height: 2150 }  # двері кімнати Д-03 з боку передпокою
       - { id: hall_opening_2, wall: w1, type: opening, offset: 3330, width: 900, height: 2150 }  # двері спальні Д-04 з боку передпокою
       - { id: hall_opening_3, wall: w2, type: opening, offset: 235, width: 800, height: 2150 }  # двері гардеробної Д-05 з боку передпокою
-      - { id: hall_window_1, wall: w4, type: window, offset: 0, width: 1990, sill: 720, height: 1280 }  # PDF, масштаб: вікно від кута з вентшахтою до простінка 560; Нпд=720 Нвк=2000
+      - { id: hall_window_1, wall: w4, type: window, offset: 0, width: 1990, sill: 720, height: 1980 }  # PDF, масштаб: вікно від кута з вентшахтою до простінка 560; Нпд=720 Нвк=2000; верх — до стелі, замовник 2026-11-04
       - { id: hall_opening_4, wall: w7, type: opening, offset: 241, width: 800, height: 2050 }  # двері санвузла Д-02 з боку передпокою
       - { id: hall_door_1, wall: w8, type: door, offset: 170, width: 1010, height: 2150, hinge: end, swing: out }  # Д-01 існуючі вхідні 1010×2150, ліворуч назовні; А-16: 115 | 1010 | 190
   - id: bath
