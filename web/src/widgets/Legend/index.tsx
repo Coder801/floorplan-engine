@@ -2,6 +2,7 @@
 // sheets, page key legend): the icon is the same primitives as on the sheet (SVG from paths in
 // sheet mm), and what it means. Point counts are in "Points", group colours in "Groups".
 // Collapsed or expanded is remembered in the browser; on a narrow screen it is collapsed by default.
+// The legend is part of the drawing: its title is in the project language, like its rows.
 
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -16,18 +17,19 @@ import css from "./Legend.module.scss";
 const KEY = "legend";  // localStorage: open | closed
 const STROKE_PX = 1.3;
 
-export function Legend({ entries }: { entries: LegendEntry[] }) {
+export function Legend({ entries, language }: { entries: LegendEntry[]; language?: string }) {
   const { t } = useTranslation();
+  const title = t("legend.title", { lng: language });
   const [open, setOpen] = useState(() => (remembered(KEY) ?? (window.innerWidth > NARROW_PX ? "open" : "closed")) === "open");
   useView((s) => s.themeTick);  // the theme changed: recolour the icons
   if (!entries.length) return null;
   refreshPalette();
   const toggle = () => { setOpen(!open); remember(KEY, open ? "closed" : "open"); };
   return (
-    <div className={cx(css.legend, open && css.open)} role="group" aria-label={t("legend.title")}>
+    <div className={cx(css.legend, open && css.open)} role="group" aria-label={title}>
       <button className={css.head} aria-expanded={open} onClick={toggle}>
         <span className={css.chevron} aria-hidden="true">{open ? "▾" : "▸"}</span>
-        {t("legend.title")}
+        {title}
       </button>
       {open && (
         <ul className={css.rows}>

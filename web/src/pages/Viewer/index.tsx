@@ -424,7 +424,7 @@ export function Viewer({ account = null }: { account?: Account | null }) {
   } else if (page && project && wall?.data && elevSheets.includes(loaded ?? -1)) {
     main = <ElevationStage ref={stage} elevation={wall.data} withMap={!!scene} />;
   } else if (page && project && drawing) {
-    main = <SheetStage ref={stage} page={wallPage ?? page} drawing={drawing} project={project.name}
+    main = <SheetStage ref={stage} page={wallPage ?? page} drawing={drawing} project={project.name} language={overview?.language}
                        editable={project.can?.edit_wiring ?? true}
                        onSaved={saved} onBusy={setSaving} onBanner={(b) => setBanners([b])} />;
   }

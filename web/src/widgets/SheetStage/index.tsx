@@ -33,6 +33,7 @@ interface Props {
   page: Page;
   drawing: Drawing;
   project: string;
+  language?: string;             // project language (manifest), for the legend title
   editable?: boolean;            // routes may be edited (no for a studio client: no button)
   onSaved: (notes: string[]) => void;
   onBusy?: (busy: boolean) => void;  // saving and rebuilding in progress: the page blocks the interface
@@ -40,7 +41,7 @@ interface Props {
 }
 
 
-export const SheetStage = forwardRef<StageHandle, Props>(function SheetStage({ page, drawing, project, editable = true, onSaved, onBusy, onBanner }, ref) {
+export const SheetStage = forwardRef<StageHandle, Props>(function SheetStage({ page, drawing, project, language, editable = true, onSaved, onBusy, onBanner }, ref) {
   const { t } = useTranslation();
   const wrap = useRef<HTMLElement | null>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -143,7 +144,7 @@ export const SheetStage = forwardRef<StageHandle, Props>(function SheetStage({ p
         </Suspense>
       )}
       <Tip index={index} />
-      {!in3d && page.legend && <Legend entries={page.legend} />}
+      {!in3d && page.legend && <Legend entries={page.legend} language={language} />}
       <ZoomRail zoom={in3d ? zoom3d : zoom} onFit={fit} fitLabel={t("sheet.fit")}
                 onStep={(s) => (in3d ? scene.current?.zoomTo(s) : sv?.zoomTo(s))} />
       <div className={ui.toolbar}>
