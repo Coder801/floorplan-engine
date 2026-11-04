@@ -151,20 +151,14 @@ def _file_response(store: ObjectStore, key: str, name: str) -> Response:
     return Response(store.get(key), media_type=media)
 
 
-def install_db_routes(app: FastAPI, auth: Auth, store: ObjectStore, market_root: Path) -> None:
-    """The viewer's project and price routes on the database; market.yaml (the shared market
-    sample) stays a file in market_root."""
-
-    def project_of(db: Session, request: Request, key: str) -> Project:
-        """The project of the address, found as auth.check found it: by id, or by name among the
-        projects the caller sees."""
-        project = acc.project_by_key(db, key, auth.principal(db, request))
-        if project is None:
-            raise HTTPException(404, f"проекта {key} нет")
-        return project
-
-    def allowed(request: Request, action: acc.Action) -> bool:
-        return acc.can(getattr(request.state, "role", None), action)
+def _read_routes(
+    app: FastAPI,
+    auth: Auth,
+    store: ObjectStore,
+    project_of: Callable[[Session, Request, str], Project],
+    allowed: Callable[[Request, acc.Action], bool],
+) -> None:
+    """What the viewer shows, from the database and file storage."""
 
     @app.get("/api/projects")
     def projects(request: Request) -> list[dict[str, Any]]:
@@ -269,6 +263,15 @@ def install_db_routes(app: FastAPI, auth: Auth, store: ObjectStore, market_root:
                 raise HTTPException(404, f"файла {filename} нет")
             return PlainTextResponse(files[filename], media_type="text/yaml")
 
+
+def _edit_routes(
+    app: FastAPI,
+    auth: Auth,
+    store: ObjectStore,
+    project_of: Callable[[Session, Request, str], Project],
+) -> None:
+    """What the viewer writes: a new model version and a rebuild."""
+
     def rewrite(
         request: Request,
         key: str,
@@ -336,6 +339,10 @@ def install_db_routes(app: FastAPI, auth: Auth, store: ObjectStore, market_root:
         result = rewrite(request, key, lambda folder: save_variant(folder, data))
         return {"built": result["built"], "notes": []}
 
+
+def _price_routes(app: FastAPI, auth: Auth, market_root: Path) -> None:
+    """The studio price page: the studio's price_list row."""
+
     def studio_prices(db: Session, request: Request) -> str | None:
         studio_id = getattr(request.state, "studio_id", None)
         if studio_id is None:
@@ -376,3 +383,23 @@ def install_db_routes(app: FastAPI, auth: Auth, store: ObjectStore, market_root:
                 text = (Path(tmp) / PRICES_FILE).read_text("utf-8")
             sync.put_price_list(db, {"studio_id": studio_id}, text)
             return page(text, True)
+
+
+def install_db_routes(app: FastAPI, auth: Auth, store: ObjectStore, market_root: Path) -> None:
+    """The viewer's project and price routes on the database; market.yaml (the shared market
+    sample) stays a file in market_root."""
+
+    def project_of(db: Session, request: Request, key: str) -> Project:
+        """The project of the address, found as auth.check found it: by id, or by name among the
+        projects the caller sees."""
+        project = acc.project_by_key(db, key, auth.principal(db, request))
+        if project is None:
+            raise HTTPException(404, f"проекта {key} нет")
+        return project
+
+    def allowed(request: Request, action: acc.Action) -> bool:
+        return acc.can(getattr(request.state, "role", None), action)
+
+    _read_routes(app, auth, store, project_of, allowed)
+    _edit_routes(app, auth, store, project_of)
+    _price_routes(app, auth, market_root)

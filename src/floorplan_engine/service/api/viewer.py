@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import json
 import zipfile
+from collections.abc import Callable
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -162,49 +163,10 @@ def _summary(project: Path) -> dict[str, Any]:
     }
 
 
-def create_viewer(
-    root: Path, auth: Auth | None = None, store: ObjectStore | None = None
-) -> FastAPI:
-    """Viewer API for folder root; auth is login and access (None means everything is open,
-    locally). With store, projects come from the database and file storage (viewer_db.py; login
-    is required), root keeps only the shared market sample (market.yaml)."""
-    app = FastAPI(title=f"{BRAND} · просмотр", version=__version__)
-    if store is not None:
-        if auth is None:
-            raise ValueError("проекты из базы — только со входом (SHTROBA_AUTH=on)")
-        auth.install(app)
-
-        @app.get("/")
-        def about_db() -> dict[str, str]:
-            return {"service": f"{BRAND} · API просмотра", "front": FRONT_HINT, "docs": "/docs"}
-
-        install_db_routes(app, auth, store, root)
-        return app
-    if auth is not None:
-        auth.folders = lambda: [p.name for p in project_folders(root)]
-        auth.install(app)
-    else:
-
-        @app.get("/api/auth/me")
-        def me() -> dict[str, bool]:
-            return {"auth": False}
-
-    def studio_dir(request: Request) -> Path:
-        """Folder of the caller's studio (auth.check: request.state.folder); login off — root."""
-        return root / getattr(request.state, "folder", "")
-
-    def project_dir(request: Request, name: str) -> Path:
-        path = studio_dir(request) / name
-        # Only direct subfolders of the studio folder: a name without separators or a leading dot
-        if "/" in name or "\\" in name or name.startswith(".") or not path.is_dir():
-            raise HTTPException(404, f"проекта {name} нет")
-        return path
-
-    def inside(base: Path, rel: str) -> Path:
-        path = (base / rel).resolve()
-        if not path.is_relative_to(base.resolve()) or not path.is_file():
-            raise HTTPException(404, f"файла {rel} нет")
-        return path
+def _read_routes(
+    app: FastAPI, root: Path, auth: Auth | None, project_dir: Callable[[Request, str], Path]
+) -> None:
+    """What the viewer shows: the service, projects, sheets."""
 
     @app.get("/")
     def about() -> dict[str, str]:
@@ -285,6 +247,12 @@ def create_viewer(
             # The page is already JSON: return it as is, without parsing or rebuilding
             return Response(zf.read(page["file"]), media_type="application/json")
 
+
+def _edit_routes(
+    app: FastAPI, auth: Auth | None, project_dir: Callable[[Request, str], Path]
+) -> None:
+    """What the viewer writes to a project: wiring edits, answers, the variant."""
+
     @app.post("/api/projects/{name}/wiring")
     def save_wiring(
         request: Request, name: str, changes: Annotated[dict[str, Any], Body()]
@@ -341,6 +309,12 @@ def create_viewer(
             raise HTTPException(500, str(exc)) from exc
         return {"built": result.built, "notes": []}
 
+
+def _price_routes(
+    app: FastAPI, root: Path, auth: Auth | None, studio_dir: Callable[[Request], Path]
+) -> None:
+    """The studio price page."""
+
     def edit_prices(request: Request) -> bool:
         """The studio price list is edited by the studio: login off — anyone; else auth.check."""
         return auth is None or getattr(request.state, "edit_prices", False)
@@ -365,6 +339,12 @@ def create_viewer(
             raise HTTPException(422, "; ".join(f"{i.path}: {i.message}" for i in issues))
         return {**price_page(studio_dir(request), root), "editable": True}
 
+
+def _file_routes(
+    app: FastAPI, project_dir: Callable[[Request, str], Path], inside: Callable[[Path, str], Path]
+) -> None:
+    """Project files: out/, sources, model YAML."""
+
     @app.get("/api/projects/{name}/out/{rel:path}")
     def out_file(request: Request, name: str, rel: str) -> FileResponse:
         return FileResponse(inside(project_dir(request, name) / OUT_DIR, rel))
@@ -380,4 +360,53 @@ def create_viewer(
         path = inside(project_dir(request, name), filename)
         return PlainTextResponse(path.read_text("utf-8"), media_type="text/yaml")
 
+
+def create_viewer(
+    root: Path, auth: Auth | None = None, store: ObjectStore | None = None
+) -> FastAPI:
+    """Viewer API for folder root; auth is login and access (None means everything is open,
+    locally). With store, projects come from the database and file storage (viewer_db.py; login
+    is required), root keeps only the shared market sample (market.yaml)."""
+    app = FastAPI(title=f"{BRAND} · просмотр", version=__version__)
+    if store is not None:
+        if auth is None:
+            raise ValueError("проекты из базы — только со входом (SHTROBA_AUTH=on)")
+        auth.install(app)
+
+        @app.get("/")
+        def about_db() -> dict[str, str]:
+            return {"service": f"{BRAND} · API просмотра", "front": FRONT_HINT, "docs": "/docs"}
+
+        install_db_routes(app, auth, store, root)
+        return app
+    if auth is not None:
+        auth.folders = lambda: [p.name for p in project_folders(root)]
+        auth.install(app)
+    else:
+
+        @app.get("/api/auth/me")
+        def me() -> dict[str, bool]:
+            return {"auth": False}
+
+    def studio_dir(request: Request) -> Path:
+        """Folder of the caller's studio (auth.check: request.state.folder); login off — root."""
+        return root / getattr(request.state, "folder", "")
+
+    def project_dir(request: Request, name: str) -> Path:
+        path = studio_dir(request) / name
+        # Only direct subfolders of the studio folder: a name without separators or a leading dot
+        if "/" in name or "\\" in name or name.startswith(".") or not path.is_dir():
+            raise HTTPException(404, f"проекта {name} нет")
+        return path
+
+    def inside(base: Path, rel: str) -> Path:
+        path = (base / rel).resolve()
+        if not path.is_relative_to(base.resolve()) or not path.is_file():
+            raise HTTPException(404, f"файла {rel} нет")
+        return path
+
+    _read_routes(app, root, auth, project_dir)
+    _edit_routes(app, auth, project_dir)
+    _price_routes(app, root, auth, studio_dir)
+    _file_routes(app, project_dir, inside)
     return app

@@ -463,6 +463,16 @@ class Auth:
 
     def router(self) -> APIRouter:
         r = APIRouter()
+        self._session_routes(r)
+        self._email_routes(r)
+        self._telegram_routes(r)
+        self._code_routes(r)
+        self._account_routes(r)
+        self._invite_routes(r)
+        return r
+
+    def _session_routes(self, r: APIRouter) -> None:
+        """Who is logged in."""
         cfg = self.config
 
         @r.get("/api/auth/me")
@@ -509,6 +519,9 @@ class Auth:
             response = RedirectResponse(target)
             self._set_cookie(response, session_token)
             return response
+
+    def _email_routes(self, r: APIRouter) -> None:
+        """Login with a code by e-mail."""
 
         @r.post("/api/auth/email/start")
         def email_start(
@@ -559,6 +572,9 @@ class Auth:
             self._set_cookie(response, token)
             return response
 
+    def _telegram_routes(self, r: APIRouter) -> None:
+        """Login with Telegram."""
+
         @r.post("/api/auth/telegram/start")
         def telegram_start(lang: str = Body("ru", embed=True)) -> dict[str, Any]:
             """Login ticket and the bot link; the page opens it and polls status."""
@@ -608,6 +624,10 @@ class Auth:
             await run_in_threadpool(self.handle_update, update)
             return {"ok": True}
 
+    def _code_routes(self, r: APIRouter) -> None:
+        """Login with an access code, development logins, logout."""
+        cfg = self.config
+
         @r.post("/api/auth/code")
         def code_login(request: Request, code: str = Body(..., embed=True)) -> dict[str, Any]:
             """Login by project access code: if the code is valid, its id goes into a signed cookie,
@@ -656,6 +676,9 @@ class Auth:
             response.delete_cookie(COOKIE, path="/")
             return response
 
+    def _account_routes(self, r: APIRouter) -> None:
+        """Account type and firm registration."""
+
         @r.post("/api/auth/account-type")
         def account_type(
             request: Request, kind: Literal["client"] = Body(..., embed=True, alias="type")
@@ -692,6 +715,9 @@ class Auth:
                 self._adopt(db, who.user)
                 return _user_json(db, who.user)
 
+    def _invite_routes(self, r: APIRouter) -> None:
+        """Invites."""
+
         @r.get("/api/invites/{token}")
         def invite_info(token: str) -> dict[str, Any]:
             with self.db() as db:
@@ -714,8 +740,6 @@ class Auth:
                     raise HTTPException(409, str(exc)) from exc
                 project = acc.project_of(db, invite)
                 return {"role": invite.role, "project": project.slug if project else None}
-
-        return r
 
     def _finish_login(
         self, info: dict[str, Any], invite: str | None, user_agent: str, provider: str = "google"

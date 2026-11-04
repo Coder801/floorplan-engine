@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
-from typing import TYPE_CHECKING, Any, TypeVar
+from typing import TYPE_CHECKING, Any, Protocol, TypeVar
 
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
@@ -58,34 +58,14 @@ class ActiveIn(BaseModel):
     active: bool
 
 
-def admin_router(auth: Auth) -> APIRouter:
-    r = APIRouter(prefix=PREFIX)
+class _Call(Protocol):
+    """A function in the admin's transaction (admin_router.call)."""
 
-    @contextmanager
-    def admin_db(request: Request) -> Iterator[tuple[Session, AppUser]]:
-        """A session and the admin (Auth.check already let only a superuser in); rule errors
-        become HTTP answers, and nothing is written then."""
-        with auth.sessions() as db:
-            admin = db.get(AppUser, request.state.admin)
-            if admin is None:
-                raise HTTPException(403, "только для владельца платформы")
-            try:
-                yield db, admin
-            except acc.AccessError as exc:
-                db.rollback()
-                raise HTTPException(409, str(exc)) from exc
-            except LookupError as exc:
-                db.rollback()
-                raise HTTPException(404, str(exc)) from exc
-            db.commit()
+    def __call__(self, request: Request, fn: Callable[[Session, AppUser], T]) -> T: ...
 
-    def call(request: Request, fn: Callable[[Session, AppUser], T]) -> T:
-        """fn in the admin's transaction: committed if it succeeds."""
-        with admin_db(request) as (db, admin):
-            return fn(db, admin)
 
-    def invite_url(token: str) -> str:
-        return f"{auth.config.public_url}/?invite={token}"
+def _view_routes(r: APIRouter, call: _Call) -> None:
+    """Read-only views."""
 
     # --- views ---------------------------------------------------------------------------
 
@@ -131,6 +111,10 @@ def admin_router(auth: Auth) -> APIRouter:
             ),
         )
 
+
+def _user_routes(r: APIRouter, call: _Call) -> None:
+    """Users."""
+
     # --- users ---------------------------------------------------------------------------
 
     @r.post("/users/{user_id}/active")
@@ -150,6 +134,10 @@ def admin_router(auth: Auth) -> APIRouter:
             return adm.user_detail(db, target)
 
         return call(request, run)
+
+
+def _studio_routes(r: APIRouter, call: _Call, invite_url: Callable[[str], str]) -> None:
+    """Studio members and invites."""
 
     # --- studio members and invites --------------------------------------------------------
 
@@ -192,6 +180,10 @@ def admin_router(auth: Auth) -> APIRouter:
             return {"url": invite_url(token)}
 
         return call(request, run)
+
+
+def _project_routes(r: APIRouter, call: _Call, invite_url: Callable[[str], str]) -> None:
+    """Project members, invites, access codes and support access."""
 
     # --- project members, invites, codes, support -----------------------------------------
 
@@ -276,4 +268,38 @@ def admin_router(auth: Auth) -> APIRouter:
 
         return call(request, run)
 
+
+def admin_router(auth: Auth) -> APIRouter:
+    r = APIRouter(prefix=PREFIX)
+
+    @contextmanager
+    def admin_db(request: Request) -> Iterator[tuple[Session, AppUser]]:
+        """A session and the admin (Auth.check already let only a superuser in); rule errors
+        become HTTP answers, and nothing is written then."""
+        with auth.sessions() as db:
+            admin = db.get(AppUser, request.state.admin)
+            if admin is None:
+                raise HTTPException(403, "только для владельца платформы")
+            try:
+                yield db, admin
+            except acc.AccessError as exc:
+                db.rollback()
+                raise HTTPException(409, str(exc)) from exc
+            except LookupError as exc:
+                db.rollback()
+                raise HTTPException(404, str(exc)) from exc
+            db.commit()
+
+    def call(request: Request, fn: Callable[[Session, AppUser], T]) -> T:
+        """fn in the admin's transaction: committed if it succeeds."""
+        with admin_db(request) as (db, admin):
+            return fn(db, admin)
+
+    def invite_url(token: str) -> str:
+        return f"{auth.config.public_url}/?invite={token}"
+
+    _view_routes(r, call)
+    _user_routes(r, call)
+    _studio_routes(r, call, invite_url)
+    _project_routes(r, call, invite_url)
     return r
