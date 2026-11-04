@@ -6,14 +6,15 @@ allowed-tools: Read, Write, Edit, Glob, Bash(uv run floorplan-engine:*), Bash(mk
 
 Create a room plan from the input: $ARGUMENTS
 
-Follow the rules in CLAUDE.md. Above all: only sizes from the photo or the text, no estimating by
+Read `src/floorplan_engine/service/analysis/analyzer_prompt.md` first: the translation rules live
+there; the work order is in CLAUDE.md. Above all: only sizes from the photo or the text, no estimating by
 eye and no adjusting to fit.
 
 ## 1. Input and project folder
 - If the arguments contain a path to an existing image (jpg/png/heic/webp), it is a photo:
   `source: photo`.
 - If the image is a hand drawing (a sketch, a plan on paper or drawn over a photo), do not parse it
-  (rule 6 in CLAUDE.md): do not write `room.yaml`, only `intake.yaml` with the source marked
+  (rule 7 in `analyzer_prompt.md`): do not write `room.yaml`, only `intake.yaml` with the source marked
   `note: "рисунок от руки — не разбирается"` and a critical question "please send a drawing (PDF,
   DWG) or a measured plan". Tell the user.
   Otherwise it is a text description: `source: text`. If the user says they measured it
@@ -31,7 +32,7 @@ eye and no adjusting to fit.
 - Openings: wall, type (door / window / opening), `offset` from the wall start along the walk,
   `width`, and `sill` for windows if it is written.
 - Anything not visible or ambiguous becomes a question in `intake.yaml` (with `target`,
-  `assumption`, `also` per CLAUDE.md), never an invented number. With no geometry at all, write only
+  `assumption`, `also` per `analyzer_prompt.md`), never an invented number. With no geometry at all, write only
   `intake.yaml`.
 - Check the closure yourself: add up the wall projections on X and Y.
 

@@ -7,7 +7,8 @@ allowed-tools: Read, Write, Edit, Glob, Bash(uv run floorplan-engine:*), Bash(ls
 Add electrical to a project. Arguments: $ARGUMENTS
 The first word is the project name (`projects/<name>/`); the rest describes the electrical work.
 
-Follow the rules in CLAUDE.md.
+Read `src/floorplan_engine/service/analysis/analyzer_prompt.md` first: the translation rules live
+there; the work order is in CLAUDE.md.
 
 ## 1. Context
 - Read `projects/<name>/room.yaml`. If the file is missing or `check` fails on the plan, stop and
