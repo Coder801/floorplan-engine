@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any
 
@@ -16,6 +17,7 @@ from floorplan_engine.electrical.panel import (
     panel_rows,
 )
 from floorplan_engine.electrical.panel_questions import panel_questions
+from floorplan_engine.electrical.panel_text import TEXT
 from floorplan_engine.epd.panel_data import panel_data
 from floorplan_engine.model.intake import Stage
 from floorplan_engine.model.panel_catalog import ENCLOSURES, DeviceKind
@@ -140,7 +142,7 @@ def test_overloaded_group_is_split_into_lines_and_asked() -> None:
     assert {ld.point for ld in lines["QF1"].loads} == {"s2", "s3"}  # 2.2 + 0.1 kW
     assert [ld.point for ld in lines["QF1.2"].loads] == ["s1"]
     assert all(g.current <= g.breaker.rating and g.split_of == "QF1" for g in lines.values())
-    qs = {q.id: q for q in panel_questions(elec, panel)}
+    qs = {q.id: q for q in panel_questions(elec, panel, "ru")}
     split = qs["panel_split_QF1"]
     assert split.severity == "major" and "дифавтомат" in split.text and "QF1.2" in split.text
     assert "panel_backup" not in qs  # backup is set
@@ -156,7 +158,7 @@ def test_single_heavy_load_over_breaker_asks_for_cable() -> None:
     assert panel is not None
     g = next(x for x in panel.groups if x.group == "QF1")
     assert g.power == 7200 and g.split_of is None  # a single appliance is not split
-    q = next(q for q in panel_questions(elec, panel) if q.id == "panel_cable_QF1")
+    q = next(q for q in panel_questions(elec, panel, "ru") if q.id == "panel_cable_QF1")
     assert "3x6" in q.text and "32 А" in q.text
     texts = [w.text["ru"] for w in panel.warnings]
     assert any("больше вводного автомата 25 А" in t for t in texts)
@@ -211,10 +213,28 @@ def test_mode_maps_to_scheme_and_backup_defaults_to_inverter_with_question() -> 
     assert not panel.input.assumed or panel.input.rating == 63
     reserved = {g.group for g in panel.groups if g.reserved}
     assert reserved == {"QF1", "QF3"}  # kitchen: sockets and fridge; lighting; bathroom: no
-    qs = {q.id: q for q in panel_questions(elec, panel)}
+    qs = {q.id: q for q in panel_questions(elec, panel, "ru")}
     assert qs["panel_backup"].target == "panel.backup" and qs["panel_backup"].options
     assert qs["panel_input"].assumption == 63
     assert "panel_reserve" in qs
+
+
+def test_panel_questions_follow_project_language() -> None:
+    elec = _elec([_pt("s1", "socket", "QF1")], {"QF1": "3x2.5"}, mode="proper")
+    panel = build_panel(_plan(), elec)
+    assert panel is not None and panel.dc is not None
+    ru = {q.id: q for q in panel_questions(elec, panel, "ru")}
+    uk = {q.id: q for q in panel_questions(elec, panel, "uk")}
+    assert ru.keys() == uk.keys() and {"panel_backup", "panel_npe", "panel_pv"} <= uk.keys()
+    assert uk["panel_backup"].text != ru["panel_backup"].text
+    assert uk["panel_backup"].option_labels["none"] == "Без резерву"
+    for q in uk.values():
+        shown = [q.text, *(q.option_labels or {}).values()]
+        assert not re.search("[ыэъё]", " ".join(shown), re.IGNORECASE), q.id
+
+
+def test_panel_texts_have_both_languages() -> None:
+    assert all(set(by_language) == {"ru", "uk"} for by_language in TEXT.values())
 
 
 def test_backup_plug_reserve_bus_and_warning() -> None:
@@ -372,7 +392,7 @@ def test_inverter_gets_battery_box_with_assumptions_and_questions() -> None:
     assert dc.enclosure.article == "VS112PD"
     assert any("АКБ 48 В" in w.text["ru"] for w in panel.warnings)
     assert [d.id for d in panel.all_devices][-1] == "QB1"
-    ids = {q.id for q in panel_questions(elec, panel)}
+    ids = {q.id for q in panel_questions(elec, panel, "ru")}
     assert {"panel_battery", "panel_pv", "panel_dc_place"} <= ids
 
 
@@ -385,7 +405,7 @@ def test_battery_box_from_source_with_pv_strings() -> None:
     assert dc.rating == 200 and dc.cable == 70  # 8 kW / 48 V ≈ 167 A
     assert [d.id for d in dc.devices] == ["QB1", "QP1", "FP1", "QP2", "FP2"]
     assert dc.enclosure.per_row == 18  # 13 modules
-    ids = {q.id for q in panel_questions(elec, panel)}
+    ids = {q.id for q in panel_questions(elec, panel, "ru")}
     assert "panel_battery" not in ids and "panel_pv" not in ids
     data = panel_data(panel, {}, "ЩР", "ru")
     block = data["dc"]
@@ -416,14 +436,14 @@ def test_inverter_output_breaker_and_npe_question() -> None:
     ids = [d.id for d in panel.devices]
     assert ids.index("QS3") == ids.index("SA1") + 1  # inverter output next to the switch
     assert any("N з PE" in w.text["uk"] and w.severity == "major" for w in panel.warnings)
-    qs = {q.id: q for q in panel_questions(elec, panel)}
+    qs = {q.id: q for q in panel_questions(elec, panel, "ru")}
     assert severity(qs["panel_npe"]).value == "major"
     assert qs["panel_inverter"].options == ["hybrid", "basic"]
     answered = _elec([_pt("s1", "socket", "QF1")], {"QF1": "3x2.5"}, panel={"npe_relay": "no"})
     panel = build_panel(_plan(), answered)
     assert panel is not None
     assert any("контактор N–PE" in w.text["ru"] for w in panel.warnings)
-    assert "panel_npe" not in {q.id for q in panel_questions(answered, panel)}
+    assert "panel_npe" not in {q.id for q in panel_questions(answered, panel, "ru")}
 
 
 def test_three_phase_not_yet() -> None:

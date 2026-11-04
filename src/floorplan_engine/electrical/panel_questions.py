@@ -13,9 +13,10 @@ from floorplan_engine.electrical.loads import (
 from floorplan_engine.electrical.panel import (
     BoardPanel,
 )
-from floorplan_engine.electrical.panel_text import amps, kw
+from floorplan_engine.electrical.panel_text import amps, kw, text
 from floorplan_engine.model.intake import QSeverity, Question, Stage
 from floorplan_engine.model.schema import Electrical
+from floorplan_engine.model.texts import Language
 
 AUTO_PREFIX = "panel_"  # ids of questions built by code; they are never written in intake.yaml
 BACKUP_OPTIONS = ["none", "inverter", "plug"]
@@ -27,9 +28,9 @@ def cable_for(amps_: float) -> str | None:
     return f"3x{s:g}" if s is not None else None
 
 
-def panel_questions(elec: Electrical, panel: BoardPanel) -> list[Question]:
-    """Panel questions from the calculation: backup and supply if unset; split groups; an appliance
-    larger than its group breaker; default backup bus contents."""
+def panel_questions(elec: Electrical, panel: BoardPanel, language: Language) -> list[Question]:
+    """Panel questions from the calculation, in the project language: backup and supply if unset;
+    split groups; an appliance larger than its group breaker; default backup bus contents."""
     out: list[Question] = []
     setup = elec.panel
     if setup.backup is None:
@@ -41,13 +42,12 @@ def panel_questions(elec: Electrical, panel: BoardPanel) -> list[Question]:
                 answer="choice",
                 options=BACKUP_OPTIONS,
                 option_labels={
-                    "none": "Без резерва",
-                    "inverter": "Инвертор с АКБ",
-                    "plug": "Генератор через силовую вилку",
+                    "none": text("q_backup_none", language),
+                    "inverter": text("inverter", language),
+                    "plug": text("q_backup_plug", language),
                 },
                 assumption="inverter",
-                text="Нужен ли резерв питания? Сейчас — гибридный инвертор с АКБ (допущение): "
-                "none — без резерва, inverter — инвертор, plug — генератор через силовую вилку",
+                text=text("q_backup", language),
             )
         )
     if setup.input is None:
@@ -59,8 +59,12 @@ def panel_questions(elec: Electrical, panel: BoardPanel) -> list[Question]:
                 answer="value",
                 unit="А",
                 assumption=float(panel.input.rating),
-                text=f"Вводной автомат по техусловиям? Сейчас {panel.input.rating} А "
-                f"(допущение); расчётный ток квартиры {amps(current(panel.calculated))} А",
+                text=text(
+                    "q_input",
+                    language,
+                    r=panel.input.rating,
+                    i=amps(current(panel.calculated)),
+                ),
             )
         )
     if panel.backup is not None and not setup.reserve:
@@ -70,49 +74,66 @@ def panel_questions(elec: Electrical, panel: BoardPanel) -> list[Question]:
                 id=f"{AUTO_PREFIX}reserve",
                 stage=Stage.PANEL,
                 severity=QSeverity.MINOR,
-                text=f"Что держать на резерве? Сейчас: {names} — свет, холодильник, роутер, "
-                "котёл, насос, ворота, розетки кухни (допущение). Список групп — panel.reserve",
+                text=text("q_reserve", language, names=names),
             )
         )
     if panel.dc is not None:
-        out += _dc_questions(elec, panel)
+        out += _dc_questions(elec, panel, language)
     for g in panel.groups:
         if g.split_of == g.group:
             lines = [x for x in panel.groups if x.split_of == g.group]
             parts = "; ".join(
-                f"{x.group} — {', '.join(ld.title for ld in x.loads)} ({kw(x.power)} кВт)"
+                text(
+                    "q_split_line",
+                    language,
+                    g=x.group,
+                    what=", ".join(ld.title for ld in x.loads),
+                    p=kw(x.power),
+                )
                 for x in lines
             )
-            total = current(sum(x.power for x in lines))
-            protect = " Мокрая зона — каждая линия через дифавтомат 30 мА." if g.wet else ""
             out.append(
                 Question(
                     id=f"{AUTO_PREFIX}split_{g.group}",
                     stage=Stage.PANEL,
                     severity=QSeverity.MAJOR,
-                    text=f"{g.group}: {amps(total)} А на автомате {g.breaker.rating} А — на щите "
-                    f"разделена на {len(lines)} линии: {parts}.{protect} Подтвердите — "
-                    "второй кабель от щита перенесём в electrical.yaml",
+                    text=text(
+                        "q_split",
+                        language,
+                        g=g.group,
+                        i=amps(current(sum(x.power for x in lines))),
+                        r=g.breaker.rating,
+                        n=len(lines),
+                        parts=parts,
+                        wet=text("q_split_wet", language) if g.wet else "",
+                    ),
                 )
             )
         if g.current > g.breaker.rating and len(g.loads) == 1:
             ld = g.loads[0]
-            need = rating_for(g.current)
-            cable = cable_for(g.current) or "больше"
             out.append(
                 Question(
                     id=f"{AUTO_PREFIX}cable_{g.group}",
                     stage=Stage.PANEL,
                     severity=QSeverity.MAJOR,
-                    text=f"{g.group}: {ld.title} {kw(ld.power)} кВт — {amps(g.current)} А, "
-                    f"а кабель {g.cable or '—'} и автомат {g.breaker.rating} А. Нужен кабель "
-                    f"{cable} и автомат {need} А — или укажите мощность прибора (power у точки)",
+                    text=text(
+                        "q_cable",
+                        language,
+                        g=g.group,
+                        what=ld.title,
+                        p=kw(ld.power),
+                        i=amps(g.current),
+                        c=g.cable or "—",
+                        r=g.breaker.rating,
+                        cable=cable_for(g.current) or text("q_cable_more", language),
+                        need=rating_for(g.current),
+                    ),
                 )
             )
     return out
 
 
-def _dc_questions(elec: Electrical, panel: BoardPanel) -> list[Question]:
+def _dc_questions(elec: Electrical, panel: BoardPanel, language: Language) -> list[Question]:
     """Battery box: battery voltage and solar strings if unset; inverter and battery location
     always, until answered (it is not on the plan)."""
     assert panel.dc is not None
@@ -125,15 +146,16 @@ def _dc_questions(elec: Electrical, panel: BoardPanel) -> list[Question]:
                 target="panel.npe_relay",
                 answer="choice",
                 options=["yes", "no"],
-                option_labels={"yes": "Да, связывает", "no": "Нет, поставить контактор N–PE"},
+                option_labels={
+                    "yes": text("q_npe_yes", language),
+                    "no": text("q_npe_no", language),
+                },
                 assumption="yes",
-                text="Связывает ли инвертор N с PE в резервном режиме (встроенное реле N–PE, "
-                "включается в настройках)? Без этой связи УЗО и дифавтоматы на резерве не "
-                "сработают: no — поставим контактор N–PE",
+                text=text("q_npe", language),
             )
         )
     if setup.inverter is None:
-        switch = "АВР KM1" if any(d.id == "KM1" for d in panel.devices) else "обходной SA1"
+        ats = any(d.id == "KM1" for d in panel.devices)
         out.append(
             Question(
                 id=f"{AUTO_PREFIX}inverter",
@@ -141,10 +163,16 @@ def _dc_questions(elec: Electrical, panel: BoardPanel) -> list[Question]:
                 target="panel.inverter",
                 answer="choice",
                 options=["hybrid", "basic"],
-                option_labels={"hybrid": "Гибридный", "basic": "Без своего переключения"},
+                option_labels={
+                    "hybrid": text("q_inverter_hybrid", language),
+                    "basic": text("q_inverter_basic", language),
+                },
                 assumption="hybrid",
-                text=f"Какой инвертор? Сейчас гибридный (допущение) — сам переключает сеть и АКБ, "
-                f"в щите {switch}. basic — без своего переключения: резерв через АВР",
+                text=text(
+                    "q_inverter",
+                    language,
+                    switch=text("q_inverter_ats" if ats else "q_inverter_bypass", language),
+                ),
             )
         )
     if setup.battery_voltage is None:
@@ -156,9 +184,15 @@ def _dc_questions(elec: Electrical, panel: BoardPanel) -> list[Question]:
                 answer="value",
                 unit="В",
                 assumption=float(dc.voltage),
-                text=f"Напряжение АКБ инвертора? Сейчас {dc.voltage} В (допущение): ток разряда "
-                f"{amps(dc.current)} А при {kw(dc.power * 1000)} кВт — автомат АКБ {dc.rating} А, "
-                f"кабель 2×{dc.cable:g} мм²",
+                text=text(
+                    "q_battery",
+                    language,
+                    v=dc.voltage,
+                    a=amps(dc.current),
+                    p=kw(dc.power * 1000),
+                    r=dc.rating,
+                    c=f"{dc.cable:g}",
+                ),
             )
         )
     if setup.pv_strings is None:
@@ -169,8 +203,7 @@ def _dc_questions(elec: Electrical, panel: BoardPanel) -> list[Question]:
                 target="panel.pv_strings",
                 answer="value",
                 assumption=0.0,
-                text="Есть ли солнечные панели? Сейчас нет (допущение). Число строк панелей "
-                "на инвертор (0–2): у каждой — DC-автомат и УЗИП в щите АКБ",
+                text=text("q_pv", language),
             )
         )
     out.append(
@@ -178,8 +211,7 @@ def _dc_questions(elec: Electrical, panel: BoardPanel) -> list[Question]:
             id=f"{AUTO_PREFIX}dc_place",
             stage=Stage.PANEL,
             severity=QSeverity.MINOR,
-            text="Где стоят инвертор, щит АКБ и АКБ? Сейчас — рядом с основным щитом "
-            "(допущение): от этого — длина кабелей GRID, LOAD и АКБ",
+            text=text("q_dc_place", language),
         )
     )
     return out

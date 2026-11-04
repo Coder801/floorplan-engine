@@ -155,7 +155,7 @@ def auto_questions(raw: dict[Stage, Any]) -> list[Question]:
     if not any(i.severity is Severity.ERROR for i in issues):
         elec = split_by_lines(plan, contours, elec)
     panel = build_panel(plan, elec)
-    return panel_questions(elec, panel) if panel is not None else []
+    return panel_questions(elec, panel, plan.language) if panel is not None else []
 
 
 def apply_auto_answers(
