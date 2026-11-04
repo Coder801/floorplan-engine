@@ -1,3 +1,23 @@
+## v0.4.1 (2026-11-04)
+
+### Feat
+
+- **deploy**: add flow.py ship, release --increment and scripts/server.py
+- **drawing,viewer**: add cable layers by purpose, protection and route
+- **viewer**: show a question's object on the drawing
+
+### Fix
+
+- **deploy**: make cz bump tags annotated so --follow-tags pushes them
+- **viewer**: show the legend title in the project language
+- **electrical**: ask panel questions in the project language
+
+### Refactor
+
+- **service**: split long API route functions by topic
+- **plumbing**: split network.py into focused modules
+- **core**: split pipeline.py into the pipeline package
+
 ## v0.4.0 (2026-11-04)
 
 ### Feat
