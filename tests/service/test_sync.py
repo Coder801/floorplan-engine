@@ -8,19 +8,21 @@ import shutil
 from pathlib import Path
 
 import pytest
-from sqlalchemy import Engine
+from sqlalchemy import Engine, select
 from sqlalchemy.orm import Session
 from typer.testing import CliRunner
 
 from floorplan_engine.cli import app
 from floorplan_engine.service import sync
 from floorplan_engine.service.db import access as acc
+from floorplan_engine.service.db import access_codes
 from floorplan_engine.service.db import repositories as repo
-from floorplan_engine.service.db.models import AppUser, Studio
+from floorplan_engine.service.db.models import AppUser, Build, Project, Studio
 from floorplan_engine.service.objects import LocalObjectStore
 from tests.electrical.test_variants import _project
 from tests.service import conftest
 
+CODE = "ABCD-2345"
 STUDIO_PRICES = "# студия\ncurrency: грн\nitems:\n  work.chase: 321\n"
 
 
@@ -193,3 +195,123 @@ def _owner(db: Session) -> AppUser:
     user = db.scalar(select(AppUser).where(AppUser.email == "boss@example.com"))
     assert user is not None
     return user
+
+
+def _import_args(root: Path, *more: str) -> list[str]:
+    return ["project", "import", str(root), "--owner", "boss@example.com", "--create-owner",
+            "--only-new", *more]  # fmt: skip
+
+
+def _seed(root: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("DATABASE_URL", conftest.test_database_url())
+    monkeypatch.setenv("SHTROBA_OBJECTS", str(tmp_path / "store"))
+    root.mkdir()
+    _project(root)
+
+
+def test_import_only_new_fills_a_blank_row_of_the_studio(
+    pg: Engine, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A row with only a name (a folder adopted on login, before projects moved to the database)
+    is not "already in the database": the image fills it, the project keeps its id."""
+    from floorplan_engine.service.db.session import make_sessions
+
+    root = tmp_path / "seed"
+    _seed(root, tmp_path, monkeypatch)
+    with make_sessions(pg)() as db:
+        project = Project(
+            studio_id=sync.ensure_owner(db, "boss@example.com").id, name="kv", slug="kv"
+        )
+        db.add(project)
+        db.commit()
+        pid = project.id
+    result = CliRunner().invoke(app, _import_args(root))
+    assert result.exit_code == 0, result.output
+    assert "kv: версия 1" in result.output and "сборка: built" in result.output
+    with make_sessions(pg)() as db:
+        rows = db.scalars(select(Project).where(Project.slug == "kv")).all()
+        assert [p.id for p in rows] == [pid]
+        assert repo.latest_model(db, pid) is not None
+
+
+def test_import_only_new_moves_a_blank_unowned_row_to_the_owner(
+    pg: Engine, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A row "no owner" made for an access code goes to the owner's studio; the code still works."""
+    from floorplan_engine.service.db.session import make_sessions
+
+    root = tmp_path / "seed"
+    _seed(root, tmp_path, monkeypatch)
+    with make_sessions(pg)() as db:
+        blank = acc.create_project_unowned(db, "kv", "kv")
+        access_codes.ensure_code(db, blank, CODE)
+        db.commit()
+        pid = blank.id
+    result = CliRunner().invoke(app, _import_args(root))
+    assert result.exit_code == 0, result.output
+    with make_sessions(pg)() as db:
+        project = db.get(Project, pid)
+        assert project is not None and project.studio_id == acc.own_studio(db, _owner(db)).id  # type: ignore[union-attr]
+        assert repo.latest_model(db, pid) is not None
+        assert access_codes.use_code(db, CODE).project_id == pid
+
+
+def test_import_only_new_merges_a_blank_duplicate_into_the_real_project(
+    pg: Engine, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An earlier import made the project next to the blank "no owner" row: the blank row goes
+    away and its code now opens the real project."""
+    from floorplan_engine.service.db.session import make_sessions
+
+    root = tmp_path / "seed"
+    _seed(root, tmp_path, monkeypatch)
+    runner = CliRunner()
+    assert runner.invoke(app, _import_args(root, "--no-build")).exit_code == 0
+    with make_sessions(pg)() as db:
+        real = acc.project_by_slug(db, "kv")
+        assert real is not None
+        pid = real.id
+        blank = acc.create_project_unowned(db, "kv", "kv")
+        access_codes.ensure_code(db, blank, CODE)
+        db.commit()
+    result = runner.invoke(app, _import_args(root, "--no-build"))
+    assert result.exit_code == 0, result.output
+    assert "kv: уже в базе — пропущен" in result.output
+    with make_sessions(pg)() as db:
+        rows = db.scalars(select(Project).where(Project.slug == "kv")).all()
+        assert [p.id for p in rows] == [pid]
+        assert access_codes.use_code(db, CODE).project_id == pid
+        latest = repo.latest_model(db, pid)
+        assert latest is not None and latest.version == 1
+
+
+def test_project_build_rebuilds_the_studio_projects(
+    pg: Engine, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`project build`: the latest model version of each project of the studio, or of the named
+    one; the model stays as it is, projects without a model are reported."""
+    from floorplan_engine.service.db.session import make_sessions
+
+    root = tmp_path / "seed"
+    _seed(root, tmp_path, monkeypatch)
+    runner = CliRunner()
+    assert runner.invoke(app, _import_args(root)).exit_code == 0
+    with make_sessions(pg)() as db:
+        studio = sync.ensure_owner(db, "boss@example.com")
+        db.add(Project(studio_id=studio.id, name="empty", slug="empty"))
+        db.commit()
+    args = ["project", "build", "--owner", "boss@example.com"]
+    every = runner.invoke(app, args)
+    assert every.exit_code == 0, every.output
+    assert "kv: версия 1, сборка: built" in every.output and "empty: модели нет" in every.output
+    one = runner.invoke(app, [*args, "kv"])
+    assert "kv: версия 1" in one.output and "empty" not in one.output
+    with make_sessions(pg)() as db:
+        project = acc.project_by_slug(db, "kv")
+        assert project is not None
+        latest = repo.latest_model(db, project.id)
+        assert latest is not None and latest.version == 1
+        builds = db.scalars(select(Build).where(Build.model_version_id == latest.id)).all()
+        assert len(builds) == 3
+    missing = runner.invoke(app, [*args, "nope"])
+    assert missing.exit_code == 1 and "Проекта nope" in missing.output

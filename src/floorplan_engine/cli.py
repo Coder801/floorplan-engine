@@ -779,6 +779,56 @@ def project_pull(
     typer.echo(f"{to / slug}: версия {version}")
 
 
+@project_app.command("build")
+def project_build(
+    slugs: Annotated[
+        list[str] | None, typer.Argument(help="Имена проектов; без них — все проекты студии")
+    ] = None,
+    owner: OwnerOpt = None,
+) -> None:
+    """Пересобрать проекты из базы текущим кодом: последняя версия модели, новая сборка в
+    хранилище. Модель не меняется. Без имён нужен --owner."""
+    from sqlalchemy import select
+
+    from floorplan_engine.service import project_store as ps
+    from floorplan_engine.service.db.models import ModelVersion, Project
+    from floorplan_engine.service.db.session import make_engine, make_sessions
+    from floorplan_engine.service.objects import store_from_env
+
+    failed = False
+    with make_sessions(make_engine())() as db:
+        studio = _owner_studio(db, owner)
+        if slugs:
+            targets = [_find_project(db, slug, studio) for slug in slugs]
+            for slug, target in zip(slugs, targets, strict=True):
+                if target is None:
+                    typer.secho(f"Проекта {slug} в базе нет", fg=typer.colors.RED)
+                    raise typer.Exit(1)
+        elif studio is not None:
+            query = select(Project).where(Project.studio_id == studio.id).order_by(Project.slug)
+            targets = list(db.scalars(query))
+        else:
+            typer.secho("Укажите имена проектов или --owner", fg=typer.colors.RED)
+            raise typer.Exit(1)
+        store = store_from_env()
+        for target in targets:
+            assert target is not None
+            name = target.slug or str(target.id)
+            try:
+                build = ps.build(db, store, target)
+            except ps.NoModelError:
+                db.rollback()
+                typer.echo(f"{name}: модели нет — пропущен")
+                continue
+            version = db.get(ModelVersion, build.model_version_id)
+            assert version is not None
+            db.commit()
+            failed = failed or build.status == "failed"
+            typer.echo(f"{name}: версия {version.version}, сборка: {build.status}")
+    if failed:
+        raise typer.Exit(1)
+
+
 @project_app.command("import")
 def project_import(
     root: Annotated[Path, typer.Argument(help="Папка проектов, например projects")],
@@ -797,7 +847,7 @@ def project_import(
 ) -> None:
     """Перенести папку проектов в базу: прайс и профиль студии (prices.yaml, studio.yaml), затем
     каждый проект — как project push. Повторный запуск заливает только изменения; с --only-new
-    уже перенесённое не трогает вовсе."""
+    уже перенесённое не трогает вовсе (кроме строк без модели: они заполняются из папки)."""
     from floorplan_engine.service import sync
     from floorplan_engine.service.api.viewer import project_folders
     from floorplan_engine.service.db import access as acc
@@ -813,9 +863,11 @@ def project_import(
         db.commit()
         typer.echo(f"Студия «{studio.name}»: {', '.join(taken) or 'файлов студии нет'}")
         for folder in project_folders(root):
-            if only_new and acc.project_by_slug(db, folder.name, studio) is not None:
-                typer.echo(f"{folder.name}: уже в базе — пропущен")
-                continue
+            if only_new and sync.take_blank(db, folder.name, studio) is None:
+                db.commit()
+                if acc.project_by_slug(db, folder.name, studio) is not None:
+                    typer.echo(f"{folder.name}: уже в базе — пропущен")
+                    continue
             _push_one(db, folder, studio, build)
 
 

@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from floorplan_engine.electrical.estimate import PRICES_FILE
@@ -31,11 +31,14 @@ from floorplan_engine.service.db import access as acc
 from floorplan_engine.service.db import repositories as repo
 from floorplan_engine.service.db import telegram_login as tg
 from floorplan_engine.service.db.models import (
+    AccessCode,
     AppUser,
     Build,
+    Invite,
     ModelVersion,
     PriceList,
     Project,
+    ProjectMember,
     Source,
     Studio,
     StudioProfile,
@@ -133,6 +136,52 @@ def _project_name(files: dict[str, str], fallback: str) -> str:
     return str(name) if name else fallback
 
 
+def _blank(session: Session, project: Project) -> bool:
+    """Only a name: the row was made before the model reached the database (`access link`, an
+    access code, a folder adopted on login)."""
+    return (
+        repo.latest_model(session, project.id) is None
+        and session.scalar(select(Source.id).where(Source.project_id == project.id).limit(1))
+        is None
+    )
+
+
+def _merge_blank(session: Session, blank: Project, target: Project) -> None:
+    """Who could reach the blank row now reaches `target`; the blank row goes away."""
+    moved = {"project_id": target.id}
+    session.execute(update(AccessCode).where(AccessCode.project_id == blank.id).values(moved))
+    session.execute(update(Invite).where(Invite.project_id == blank.id).values(moved))
+    members = select(ProjectMember.user_id).where(ProjectMember.project_id == target.id)
+    session.execute(
+        update(ProjectMember)
+        .where(ProjectMember.project_id == blank.id, ProjectMember.user_id.not_in(members))
+        .values(moved)
+    )
+    acc.audit(session, "project_merge", project=target, payload={"blank": str(blank.id)})
+    session.delete(blank)
+    session.flush()
+
+
+def take_blank(session: Session, slug: str, studio: Studio) -> Project | None:
+    """The blank row a folder `slug` fills in `studio`, None if there is none. A blank "no owner"
+    row moves to the studio or, if the studio has this project already, merges into it."""
+    own = acc.project_by_slug(session, slug, studio)
+    unowned = session.scalar(
+        select(Project)
+        .join(Studio, Studio.id == Project.studio_id)
+        .where(Studio.kind == acc.UNOWNED_KIND, Project.slug == slug)
+    )
+    if unowned is not None and _blank(session, unowned):
+        if own is not None:
+            _merge_blank(session, unowned, own)
+        else:
+            unowned.studio_id = studio.id
+            session.flush()
+            acc.audit(session, "project_adopt", project=unowned)
+            return unowned
+    return own if own is not None and _blank(session, own) else None
+
+
 def push(
     session: Session,
     store: ObjectStore,
@@ -142,7 +191,8 @@ def push(
     build: bool = True,
 ) -> PushResult:
     """Folder → database. A folder without the marker is a new project in `studio` (slug — the
-    folder name); a folder with it continues its project, unless the database moved on."""
+    folder name; a blank row of that name is filled, take_blank); a folder with it continues its
+    project, unless the database moved on."""
     files = model_files(folder)
     if not files:
         raise SyncError(f"в {folder} нет файлов модели (room.yaml, intake.yaml…)")
@@ -160,16 +210,21 @@ def push(
     else:
         if studio is None:
             raise SyncError("новый проект: укажите студию (--owner)")
-        if acc.project_by_slug(session, folder.name, studio) is not None:
+        blank = take_blank(session, folder.name, studio)
+        if blank is not None:
+            project = blank
+            project.name = _project_name(files, folder.name)
+        elif acc.project_by_slug(session, folder.name, studio) is not None:
             raise SyncError(
                 f"проект {folder.name} уже в студии — выгрузите его: project pull {folder.name}"
             )
-        project = Project(
-            studio_id=studio.id, name=_project_name(files, folder.name), slug=folder.name
-        )
-        session.add(project)
-        session.flush()
-        acc.audit(session, "project_create", project=project, payload={"push": True})
+        else:
+            project = Project(
+                studio_id=studio.id, name=_project_name(files, folder.name), slug=folder.name
+            )
+            session.add(project)
+            session.flush()
+            acc.audit(session, "project_create", project=project, payload={"push": True})
         latest = None
 
     new = latest is None or repo.model_files(latest) != files

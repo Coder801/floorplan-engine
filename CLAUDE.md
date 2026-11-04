@@ -28,6 +28,7 @@ uv run floorplan-engine access invite projects/<имя> --role client  # ссы�
 uv run floorplan-engine access code projects/<имя> --label "Иван"   # код доступа: просмотр проекта без учётки (codes, revoke-code)
 uv run floorplan-engine project push projects/<имя> [--owner <email>]   # папку — в базу: новая версия модели, исходники, сборка (правда — база)
 uv run floorplan-engine project pull <имя> [--to projects] [--force]    # из базы — в папку: модель, исходники, out/ последней сборки
+uv run floorplan-engine project build [<имя>…] [--owner <email>]         # пересобрать из базы текущим кодом: модель не меняется, без имён — все проекты студии
 uv run floorplan-engine project import projects --owner <email>         # перенести папку проектов и прайс/профиль студии в базу (studio push|pull — только студия)
 cd web && npm install && npm run dev                    # только страница просмотра (API — view)
 cd web && npm run build                                 # сборка фронта в web/dist (выкладка — README в web/)
