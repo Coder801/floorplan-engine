@@ -24,8 +24,21 @@ describe("format", () => {
     expect(ago("2026-11-03T11:30:00", now)).toBe("30 мин");
     expect(ago("2026-11-01T12:00:00", now)).toBe("2 дн");
   });
+  it("does not break on a bad date and keeps old dates as dates", () => {
+    expect(date("вчера")).toBe("—");
+    expect(ago("вчера")).toBe("—");
+    expect(ago(null)).toBe("—");
+    const now = new Date("2026-11-03T12:00:00").getTime();
+    expect(ago("2026-11-03T11:59:30", now)).toBe("сейчас");
+    expect(ago("2026-11-03T09:00:00", now)).toBe("3 ч");
+    expect(ago("2026-09-01T12:00:00", now)).toBe("01.09.2026");
+  });
   it("names a person by what is known", () => {
     expect(who({ name: "", email: null, phone: "+380" })).toBe("+380");
+    expect(who(null)).toBe("—");
+    expect(who({ name: "", email: null, phone: null })).toBe("без имени");
     expect(contact({ email: "a@b.c", phone: null })).toBe("a@b.c");
+    expect(contact({ email: "a@b.c", phone: "+380" })).toBe("a@b.c · +380");
+    expect(contact({ email: null, phone: null })).toBe("—");
   });
 });
