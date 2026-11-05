@@ -58,6 +58,7 @@ from floorplan_engine.pipeline.files import (
     PROJECT_FILE,
     SEWER_ROUTES_FILE,
     SHEETS_DIR,
+    STICKERS_FILE,
     WIRING_JOURNAL_FILE,
 )
 from floorplan_engine.pipeline.prices import find_prices, sheet_inputs
@@ -67,6 +68,7 @@ from floorplan_engine.plumbing.network import Network, build_network, routes_jso
 from floorplan_engine.plumbing.rows import water_views
 from floorplan_engine.sheets.document import build_project_document, document_scale, sheet_png_name
 from floorplan_engine.sheets.preview import render_png, sheet_layouts
+from floorplan_engine.sheets.stickers import write_stickers
 from floorplan_engine.validation.issues import (
     ELECTRICAL_FILE,
     WIRING_FILE,
@@ -85,6 +87,7 @@ class BuildResult:
     journal: Path | None = None  # cable log of wiring through boxes (CSV)
     chases: Path | None = None  # chase schedule (CSV)
     loads: Path | None = None  # panel load list (CSV)
+    stickers: Path | None = None  # panel stickers (PDF)
     estimate: list[Path] = field(default_factory=list)  # estimate: md, csv, xlsx, as on the sheet
     plumbing_estimate: list[Path] = field(default_factory=list)  # plumbing estimate
     sewer_routes: Path | None = None  # sewer routes (JSON, routing spec format)
@@ -175,13 +178,18 @@ def _wiring_step(run: _Build, saved: Drawing) -> _Wiring:
 
 
 def _panel_step(run: _Build) -> BoardPanel | None:
-    """The panel and its load list."""
+    """The panel, its load list and stickers."""
     panel = build_panel(run.plan, run.elec) if run.elec is not None else None
     loads = run.out / LOADS_FILE
+    stickers = run.out / STICKERS_FILE
     if panel is None:
         loads.unlink(missing_ok=True)
+        stickers.unlink(missing_ok=True)
         return None
     run.result.loads = write_loads(panel, loads)
+    assert run.elec is not None
+    board = run.elec.board.name if run.elec.board is not None else "ЩР"
+    run.result.stickers = write_stickers(panel, board, run.plan.language, stickers)
     if panel.warnings:
         run.warn(
             [

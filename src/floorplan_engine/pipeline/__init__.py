@@ -33,6 +33,7 @@ from floorplan_engine.pipeline.files import (
     PROJECT_FILE,
     SEWER_ROUTES_FILE,
     SHEETS_DIR,
+    STICKERS_FILE,
     WIRING_JOURNAL_FILE,
 )
 from floorplan_engine.pipeline.prices import (
@@ -64,6 +65,7 @@ __all__ = [
     "PROJECT_FILE",
     "SEWER_ROUTES_FILE",
     "SHEETS_DIR",
+    "STICKERS_FILE",
     "WIRING_JOURNAL_FILE",
     "WORK_PREFIX",
     "AnswerSaved",

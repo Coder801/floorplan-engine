@@ -17,6 +17,7 @@ from floorplan_engine.electrical.panel import (
 )
 from floorplan_engine.electrical.panel_text import text
 from floorplan_engine.model.texts import Language
+from floorplan_engine.sheets.stickers import stickers_data
 
 EXTERNAL = {"inverter": "U1", "plug": "XP1"}  # backup device outside the panel
 
@@ -70,6 +71,7 @@ def panel_data(
             "grid": text("grid", language),
             "reserve": text("reserve_bus", language),
         },
+        "stickers": stickers_data(panel),
     }
     if panel.dc is not None:
         out["dc"] = dc_data(panel.dc, language)

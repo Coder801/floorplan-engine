@@ -45,3 +45,6 @@ export type WallMode = (typeof WALL_MODES)[number];
 
 export const REDUCED_MOTION = typeof window !== "undefined"
   && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+// Panel stickers of a build (out/, sheets/stickers.py)
+export const STICKERS_PDF = "panel-stickers.pdf";

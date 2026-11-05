@@ -285,6 +285,25 @@ export interface PanelGroup {
   split_of: string | null;  // a line of an overloaded group split on the panel (QF8.2)
 }
 
+// Device stickers (key panel.stickers, sheets/stickers.py): sizes in mm, text as curves
+export interface PanelSticker {
+  id: string;           // QF12
+  row: number;          // rail
+  title: string;        // full purpose
+  icon: string;         // key in icons
+  text: string;         // number and name as one SVG path, in sticker mm
+}
+
+export interface PanelStickers {
+  width: number;
+  height: number;
+  pad: number;
+  rule_y: number;
+  icon: { x: number; y: number; size: number; stroke: number };
+  items: PanelSticker[];
+  icons: Record<string, string[]>;  // SVG paths in a 24-unit box
+}
+
 // Battery box at a hybrid inverter (key panel.dc): battery breaker, solar strings
 export interface PanelDc {
   enclosure: PanelEnclosure;
@@ -305,6 +324,7 @@ export interface PanelData {
   groups: Record<string, PanelGroup>;
   totals: { installed: number; demand: number; calculated: number; current: number; modules: number };
   warnings: { severity: string; text: string; group: string | null }[];
+  stickers?: PanelStickers;  // an older .epd has none
   texts: { title: string; grid: string; reserve: string };
   // to is where LOAD arrives (the QS3 output breaker or the switch directly), switch is the ATS
   // KM1 or the switch SA1: from QS3 into its input II

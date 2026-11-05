@@ -9,6 +9,7 @@ ALBUM_FILE = "album.pdf"  # PDF album of the sheets (print command)
 WIRING_JOURNAL_FILE = "wiring-boxes.csv"  # cable log of wiring through boxes
 CHASES_FILE = "wiring-chases.csv"  # wall chase schedule
 LOADS_FILE = "panel-loads.csv"  # load list by panel group
+STICKERS_FILE = "panel-stickers.pdf"  # panel stickers for printing
 SHEETS_DIR = "sheets"
 
 

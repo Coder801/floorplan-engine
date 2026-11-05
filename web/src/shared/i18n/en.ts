@@ -221,6 +221,9 @@ export const en: Messages = {
     all: "All", none: "None", only: "only", onlyGroup: "Only {{group}}",
   },
   panel: {
+    mode: "Panel view", front: "Panel", stickers: "Stickers",
+    stickersNote: "{{n}} stickers · {{width}} × {{height}} mm · print at 100% scale",
+    stickersPdf: "Download PDF", rail: "Rail {{n}}",
     hint: "wheel — zoom by steps, drag — pan, double click — zoom in at that point (at the last step — whole panel); click a device or table row — card",
     canvas: "Panel front view", fit: "Whole panel",
     totals: "{{installed}} kW installed · {{calculated}} kW / {{current}} A calculated · supply {{input}}",

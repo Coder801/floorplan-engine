@@ -259,6 +259,12 @@ pages/02.json
   `power_assumed`, `current` — ток разряда, А, `rating` — автомат АКБ, А, `cable` — сечение
   кабеля АКБ, мм²), `pv_strings` (строк панелей, 0–2), `texts` (`title`, `battery`, `pv`,
   `kwh` — единица ёмкости на языке проекта). Без инвертора ключа нет.
+- `stickers` — наклейки аппаратов (`sheets/stickers.stickers_data`), размеры в мм: `width`,
+  `height`, `pad`, `rule_y`, `icon` (`x`, `y`, `size`, `stroke`), `items` — по рейкам, слева
+  направо, щит АКБ последним: `id`, `row`, `title` (полное назначение), `icon` (ключ `icons`),
+  `text` (номер и название одним путём SVG, кривыми: у сжатого шрифта нет веб-версии с
+  кириллицей); `icons` — пути использованных иконок, поле 24 × 24. В старых `.epd` ключа нет —
+  просмотр не показывает переключатель, поэтому `FORMAT_VERSION` не менялся.
 
 ```json
 "panel": {"name": "ЩР", "scheme": "proper", "input": {"label": "C40", "assumed": true},

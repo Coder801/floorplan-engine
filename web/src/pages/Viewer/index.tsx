@@ -9,7 +9,7 @@ import { wallPages, wallSheet } from "@/engine/sheet/walls";
 import { STUDIO_SECTIONS, Studio, type StudioSection } from "@/pages/Studio";
 import { Welcome } from "@/pages/Welcome";
 import { base, enc, getManifest, getPage, getProject, isProject, listProjects, saveAnswer, saveVariant } from "@/shared/api";
-import { DRAWER_TABS, NARROW_PX, SIDE_TABS, type DrawerTab, type SideTab, type Theme } from "@/shared/consts";
+import { DRAWER_TABS, NARROW_PX, SIDE_TABS, STICKERS_PDF, type DrawerTab, type SideTab, type Theme } from "@/shared/consts";
 import { cx } from "@/shared/cx";
 import { label } from "@/shared/i18n";
 import { applyTheme, remember, remembered, savedTheme } from "@/shared/palette";
@@ -418,7 +418,8 @@ export function Viewer({ account = null }: { account?: Account | null }) {
     main = items.length ? <EstimateStage items={items} /> : <div className={ui.empty}>{t("estimate.none")}</div>;
   }
   else if (page && project && page.panel) {
-    main = <PanelStage ref={stage} page={page} panel={page.panel} language={overview?.language} />;
+    main = <PanelStage ref={stage} page={page} panel={page.panel} language={overview?.language}
+                       stickersPdf={project.files.includes(STICKERS_PDF) ? `${base(current)}/out/${STICKERS_PDF}` : null} />;
   } else if (page && project && !page.items?.length) {
     main = <div className={ui.error}>{t("app.nothingToDraw", { name: page.name })}</div>;
   } else if (page && project && wall?.data && elevSheets.includes(loaded ?? -1)) {
