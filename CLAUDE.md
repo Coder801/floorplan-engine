@@ -32,7 +32,7 @@ uv run floorplan-engine project build [<имя>…] [--owner <email>]         # 
 uv run floorplan-engine project import projects --owner <email>         # перенести папку проектов и прайс/профиль студии в базу (studio push|pull — только студия)
 cd web && npm install && npm run dev                    # только страница просмотра (API — view)
 cd web && npm run build                                 # сборка фронта в web/dist (выкладка — README в web/)
-cd web && npm run check && npm test                     # типы TypeScript и тесты фронта (vitest)
+cd web && npm run check && npm test                     # типы TypeScript и тесты фронта (vitest); покрытие — npm run coverage
 cd admin && npm install && npm run dev                  # админка платформы http://127.0.0.1:5174/admin/ (API — view, вход — в просмотре)
 uv run floorplan-engine analyze projects/<имя>               # LLM-анализ source/ → YAML (подписка)
 uv run floorplan-engine pdf-facts projects/<имя>/source/x.pdf # выжимка из векторного PDF без LLM (--json)
@@ -40,7 +40,7 @@ uv run floorplan-engine facts projects/<имя>/source/x.jpg   # выжимка 
 uv run floorplan-engine facts-bench projects/<имя>/source/x.pdf # точность растра против вектора
 uv run floorplan-engine preview projects/<имя>               # PNG листов из DXF (отладка ezdxf)
 docker compose up -d db && uv run alembic upgrade head  # база сервиса (docs/database.md), только Postgres
-TEST_REQUIRE_DB=1 uv run pytest && uv run mypy && uv run ruff check . && uv run ruff format --check . && uv run lint-imports
+TEST_REQUIRE_DB=1 uv run pytest --cov && uv run mypy && uv run ruff check . && uv run ruff format --check . && uv run lint-imports
 uv run python scripts/flow.py feature <имя> | integrate | release [--dry-run]  # ветки и релиз: develop → feature → develop → main (docs/development.md)
 uv run python scripts/flow.py ship [--increment patch] [--rebuild]  # всё после /commit: вливание, проверки, релиз, пуш, пересборка
 uv run python scripts/server.py check | rebuild [имена] [--wait] | send <проект> room.yaml  # боевой сервер через railway ssh
@@ -149,12 +149,12 @@ group, at }`), по вариантам проводки (`variants.<режим-�
   (один файл на модуль), общие заготовки — `tests/conftest.py`.
 - Пакеты `src/floorplan_engine/` — слоями, сверху вниз; выше может импортировать ниже, не
   наоборот (контракты import-linter в `pyproject.toml`, проверка — `uv run lint-imports`):
-  `cli.py` → `service/` (API `api/`, анализ `analysis/`, `facts/`, `db/`) → `pipeline/` →
+  `cli/` → `service/` (API `api/`, анализ `analysis/`, `facts/`, `db/`) → `pipeline/` →
   `epd/` (артефакт для просмотра) → `sheets/` (документ, печать, PNG) → `validation/` →
   `drawing/` (DXF) → `plumbing/` (сантехника) → `electrical/` (расчёты) → `model/` (схема,
   intake, надписи, контур). Сантехника выше электрики: берёт её трассировку
   (`electrical/routing.py`), цены и развёртки; электрика сантехнику не знает.
-  Ядро (всё, кроме `service/` и `cli.py`) не импортирует `service/`, LLM, сеть, базу и веб;
+  Ядро (всё, кроме `service/` и `cli/`) не импортирует `service/`, LLM, сеть, базу и веб;
   `model/`, `validation/`, `electrical/`, `plumbing/` не импортируют ezdxf. Исключений из слоёв нет и не
   добавляй (`ignore_imports`) — общее для слоёв выноси вниз. Правила раскладки — агент `backend-developer`.
 - Модули в `src/floorplan_engine/`:
@@ -230,6 +230,11 @@ group, at }`), по вариантам проводки (`variants.<режим-�
     брендов (ширина в модулях, высота, вид), бренд аппаратов — `panel.brand`; новые щиты и
     бренды — только по данным производителя; щит АКБ у инвертора — `panel.build_dc`
     (`DcBox`: автомат АКБ по току разряда, кабель, строки панелей — автомат и УЗИП DC);
+    `electrical/stickers.py` — наклейки аппаратов щита (решение 2026-11-05): короткое название и
+    иконка из назначения группы, по рейкам; `sheets/stickers.py` — раскладка наклейки 10 × 25 мм,
+    ключ `panel.stickers` и `out/panel-stickers.pdf` (A4, текст кривыми); иконки Tabler (MIT) —
+    `sheets/stickers_assets/icons.json`, новые — `scripts/sticker_icons.py`, шрифт — IBM Plex Sans
+    Condensed из `drawing/fonts/`;
     `drawing/panel.py` — лист «Щит» для печати (DXF): щит в лицо прямо на листе (без видового
     экрана, по месту секции плана — `SheetSpec.body`), таблица аппаратов. В просмотре щит
     рисует свой компонент из ключа `panel` страницы (`epd/panel_data.py`), не из примитивов;
@@ -282,7 +287,8 @@ group, at }`), по вариантам проводки (`variants.<режим-�
     развёртки (`water_views`); `plumbing/estimate.py` — смета (те же `Estimate`/`Line`, имитация
     цен — `MOCK_PRICES` через `MockPriceService.extra`; вода — REHAU RAUTITAN: водорозетки,
     угольники, тройники, переходники, монтажные гильзы — `water_fittings`); `drawing/plumbing.py` — лист
-    «Сантехника» (слои `P-*`), таблицы «Сантехприборы», «Трубы», легенда;
+    «Сантехника» (слои `P-*`), таблицы «Сантехприборы», «Трубы»; `drawing/pipe_paths.py` — полосы
+    труб на листе и участки по стене над полом (без DXF); `drawing/plumbing_legend.py` — легенда;
     `drawing/fixture_symbols.py` — приборы на плане контуром типового размера (ванна, душ,
     унитаз…; ванна и поддон-препятствие — в своём контуре); `epd/plumbing.py` —
     карточки, таблицы и смета для просмотра, трубы в 3D-сцене;
@@ -317,12 +323,15 @@ group, at }`), по вариантам проводки (`variants.<режим-�
   - `epd/artifact.py` — артефакт `.epd` для кабинета и эталонный рендер его страниц
     (формат — `docs/epd-format.md`; меняешь смысл ключей — повышай `FORMAT_VERSION`);
   - `pipeline/` — конвейер без вывода (его вызывают и CLI, и сервис; логику сборки держи здесь,
-    а не в cli.py; импорт — из пакета, `floorplan_engine.pipeline`): `assessment.py` — оценка и
+    а не в `cli/`; импорт — из пакета, `floorplan_engine.pipeline`): `assessment.py` — оценка и
     отчёт, `build.py` — сборка DXF и `.epd` по шагам, `estimates.py` — файлы смет, `prices.py` —
     прайсы и страница цен, `variants.py`, `answers.py`, `wiring_edits.py` — записи из просмотра,
     `printing.py` — альбом, `files.py` — имена файлов в `out/`;
-  - `cli.py` — команды: печать и коды выхода поверх `pipeline/`;
-  - `service/` — API (FastAPI): `app.py` маршруты, `viewer.py` — API просмотра собранных `projects/` (страница — фронт `web/`, см. ниже) (команда `view`; листы рисуются в canvas из `.epd`, PNG листа для альбома — из canvas, не больше A3 150 dpi; печать — DXF; запись — правка трасс на листе проводки → `wiring.yaml` и пересборка, вариант проводки → `variant.yaml`, ответ из карточки вопроса → `answers.yaml` (`pipeline.save_answer`), цены работ из настроек студии → `prices.yaml` папки студии), `workflow.py` цикл и состояния,
+  - `cli/` — команды: печать и коды выхода поверх `pipeline/`. `__init__.py` — корень `app` и порядок
+    команд, `.env`, команды с сервером (`serve`, `view`, `dev`, `dev_viewer`, `_viewer_auth`);
+    `documents.py` — папка проекта (ядро), `sources.py` — источники, `access.py` и `projects.py` —
+    группы `access`, `project`, `studio` (база), `common.py` — общее для них;
+  - `service/` — API (FastAPI): `app.py` маршруты, `viewer.py` — API просмотра собранных `projects/` (страница — фронт `web/`, см. ниже) (команда `view`; листы рисуются в canvas из `.epd`, PNG листа для альбома — из canvas, не больше A3 150 dpi; печать — DXF; запись — правка трасс на листе проводки → `wiring.yaml` и пересборка, вариант проводки → `variant.yaml`, ответ из карточки вопроса → `answers.yaml` (`pipeline.save_answer`), цены работ из настроек студии → `prices.yaml` папки студии), `workflow.py` цикл и состояния, `tasks.py` очередь задач (что делать — в `service.json` проекта, после рестарта `Workflow.recover`), `api/project_guard.py` доступ к API сервиса (те же `project_role` и `CAN`, закрыт по умолчанию),
     `storage.py` хранение на диске, `analyzer.py` интерфейс анализатора и ручной анализатор,
     `llm_analyzer.py` LLM-анализатор (бэкенды claude-code и api, расход в usage.jsonl),
     `analyzer_prompt.md` его системный промпт, `pdf_facts.py` выжимка из PDF без LLM
@@ -360,14 +369,14 @@ group, at }`), по вариантам проводки (`variants.<режим-�
     `SHTROBA_VISITOR` (не в production), «Зайти для разработки» — `SHTROBA_DEV_LOGIN` (только локально). Паролей нет; разработчик чужих проектов не видит —
     только по доступу поддержки от владельца студии; всё видит только суперпользователь.
     Ядро не импортирует `service/`; зависимости сервиса — группа `service` в pyproject.
-- Фронт просмотра — самостоятельный проект `web/` (решение 2026-10-27): React 18 + TypeScript
+- Фронт просмотра — самостоятельный проект `web/` (решение 2026-10-27): React 19 + TypeScript
   + Vite, 3D — react-three-fiber; своя сборка (`web/dist`) и свои серверы разработки (5173)
   и предпросмотра (4173). Бэк — только API `service/api/viewer.py` (`view`, 8000): ни HTML, ни
   статики в Python-пакете нет; страница ходит в `/api` через прокси Vite. Устройство — по
   группам в `web/src/` (карта — раздел «Устройство» в `web/README.md`, правила — агент
   `frontend-developer`, раскладку проверяет `src/structure.test.ts`): `pages/` — экраны
   (`Viewer` — проект, листы, шапка; `Welcome`; `Gate` — вход), `widgets/` — блоки экрана
-  (`SheetStage` — чертёж, кнопки, 3D; `PanelStage` — щит в лицо; `ElevationStage`,
+  (`SheetStage` — чертёж, кнопки, 3D; `PanelStage` — щит в лицо; `StickersStage` — наклейки щита; `ElevationStage`,
   `WallItems`, `WallPager` — развёртки; `Legend` — условные обозначения плашкой на чертеже;
   `OverviewStage` — вкладка «Общие сведения» с выбором варианта проводки (`VariantPicker`);
   `SidePanel`, `Drawer`, `Questions` — вопросы с ответом в карточке, логика — `shared/questions.ts`, `Settings`, `ProjectsMenu`,

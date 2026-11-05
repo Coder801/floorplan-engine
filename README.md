@@ -70,6 +70,11 @@ uv run python scripts/flow.py feature <имя> | integrate | release      # ве
 
 ## Печать: PDF-альбом
 
+`build` пишет и `out/panel-stickers.pdf` — наклейки на аппараты щита 10 × 25 мм на листе A4: номер
+линии, короткое название, иконка; порядок — по рейкам. Печатать в масштабе 100 %, линейка 50 мм на
+листе проверяет масштаб. В просмотре — переключатель «Наклейки» на вкладке «Щит». Иконки —
+[Tabler Icons](https://tabler.io/icons) (MIT).
+
 `floorplan-engine print projects/<имя>` — все листы собранного `out/project.dxf` одним PDF
 `out/album.pdf`: страница — ровно формат листа, линии — своей толщины, текст — кривыми; печать
 «в размер» (100 %) даёт масштаб чертежа. `--paper A3` (A4…A0) — комплект под заданный формат:
@@ -583,7 +588,7 @@ uv run ruff check . && uv run ruff format --check .
 | `drawing/symbols.py` | Блоки УГО |
 | `sheets/preview.py` | PNG из DXF (отладка) |
 | `sheets/printing.py` | PDF-альбом листов и проверка перед печатью (кегль, рамка, пустой лист) |
-| `cli.py` | Команды |
+| `cli/` | Команды |
 
 ## Ограничения
 
