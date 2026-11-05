@@ -198,6 +198,34 @@ def identity(value: str) -> str:
     return tg.normalize_phone(value) if tg.is_phone(value) else value.lower()
 
 
+def denied(status: int, detail: str) -> JSONResponse:
+    return JSONResponse({"detail": detail}, status_code=status)
+
+
+def project_access(
+    db: Session,
+    who: acc.Principal,
+    request: Request,
+    key: str,
+    project: Project | None,
+    action: acc.Action,
+) -> Response | None:
+    """Access to a project, the same in the viewer (Auth.check) and the service API
+    (project_guard): a project the caller cannot see gives 404 (other people's projects are not
+    revealed), no permission gives 403, support access goes to the journal. None means let it
+    through, with the role in request.state.role."""
+    role = acc.project_role(db, who, project)
+    if not acc.can(role, "view"):
+        return denied(404, f"проекта {key} нет")
+    if not acc.can(role, action):
+        return denied(403, "нет права на это действие")
+    if role == "support" and project is not None:
+        payload = {"path": request.url.path}
+        acc.audit(db, "support_access", user=who.user, project=project, payload=payload)
+    request.state.role = role
+    return None
+
+
 def _user_json(db: Session, user: AppUser) -> dict[str, Any]:
     """The user and their workspace: a firm (kind studio, type and city) or personal."""
     space = acc.user_space(db, user)
@@ -351,12 +379,10 @@ class Auth:
         with self.db() as db:
             who = self.principal(db, request)
             if who is None:
-                return JSONResponse({"detail": "нужен вход"}, status_code=401)
+                return denied(401, "нужен вход")
             if path.startswith(ADMIN_PREFIX):  # platform admin (api/admin.py): superuser only
                 if who.user is None or not who.user.is_superuser or not who.user.is_active:
-                    return JSONResponse(
-                        {"detail": "только для владельца платформы"}, status_code=403
-                    )
+                    return denied(403, "только для владельца платформы")
                 request.state.admin = who.user.id
                 return None
             parts = path.split("/")  # ["", "api", "projects", name, …]
@@ -365,9 +391,6 @@ class Auth:
             if len(parts) < 4 or parts[2] != "projects" or not parts[3]:
                 return None
             project = acc.project_by_key(db, parts[3], who)
-            role = acc.project_role(db, who, project)
-            if not acc.can(role, "view"):
-                return JSONResponse({"detail": f"проекта {parts[3]} нет"}, status_code=404)
             action: acc.Action = "view"
             if request.method == "POST" and parts[-1] == "wiring":
                 action = "edit_wiring"
@@ -375,12 +398,9 @@ class Auth:
                 action = "choose_variant"
             elif request.method == "POST" and parts[-1] == "answers":
                 action = "answer"
-            if not acc.can(role, action):
-                return JSONResponse({"detail": "нет права на это действие"}, status_code=403)
-            if role == "support" and project is not None:
-                payload = {"path": path}
-                acc.audit(db, "support_access", user=who.user, project=project, payload=payload)
-            request.state.role = role
+            refused = project_access(db, who, request, parts[3], project, action)
+            if refused is not None:
+                return refused
             # Where the project folder is: its studio folder; a folder without a row — the root
             request.state.folder = (
                 acc.studio_folder(project.studio) if project is not None else acc.ROOT_FOLDER
@@ -400,7 +420,7 @@ class Auth:
         elif who.visitor and request.method == "GET":
             edit = False
         else:
-            return JSONResponse({"detail": "прайс — только для студии"}, status_code=403)
+            return denied(403, "прайс — только для студии")
         request.state.edit_prices = edit
         request.state.folder = acc.studio_folder(space) if space is not None else acc.ROOT_FOLDER
         request.state.studio_id = space.id if space is not None else None  # viewer_db

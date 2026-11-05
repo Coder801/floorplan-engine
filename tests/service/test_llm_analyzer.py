@@ -224,7 +224,7 @@ def test_service_accumulates_llm_cost(tmp_path: Path) -> None:
     from floorplan_engine.service.api.app import create_app
 
     backend = FakeBackend([_envelope(ROOM)])
-    client = TestClient(create_app(tmp_path / "data", LlmAnalyzer(lambda: backend)))
+    client = TestClient(create_app(tmp_path / "data", LlmAnalyzer(lambda: backend), workers=0))
     pid = client.post(
         "/projects",
         data={"name": "x"},
@@ -243,7 +243,7 @@ def test_unusable_sources_rejected_before_llm(tmp_path: Path) -> None:
     from floorplan_engine.service.api.app import create_app
 
     backend = FakeBackend([_envelope(ROOM)])
-    client = TestClient(create_app(tmp_path / "data", LlmAnalyzer(lambda: backend)))
+    client = TestClient(create_app(tmp_path / "data", LlmAnalyzer(lambda: backend), workers=0))
     pid = client.post(
         "/projects",
         data={"name": "x"},

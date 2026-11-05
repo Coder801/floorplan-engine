@@ -201,7 +201,8 @@ class Project(Base):
     id: Mapped[uuid.UUID] = _id()
     studio_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("studio.id", ondelete="CASCADE"))
     name: Mapped[str] = mapped_column(String(200))
-    # Project folder in the viewer (projects/<slug>), while projects live in folders
+    # Project folder in the viewer (projects/<slug>), while projects live in folders; for a
+    # project of the service API (api/app.py) — its id in Storage
     slug: Mapped[str | None] = mapped_column(String(100))
     # State: values of service.models.ProjectState
     state: Mapped[str] = mapped_column(String(20), default="created")
@@ -313,8 +314,9 @@ class AuditEvent(Base):
     __tablename__ = "audit_event"
     __table_args__ = (Index("ix_audit_event_project", "project_id", "created_at"),)
     id: Mapped[uuid.UUID] = _id()
+    # SET NULL: the journal outlives the project (project_guard.forget keeps its id in payload)
     project_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("project.id", ondelete="CASCADE")
+        ForeignKey("project.id", ondelete="SET NULL")
     )
     user_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("app_user.id", ondelete="SET NULL")

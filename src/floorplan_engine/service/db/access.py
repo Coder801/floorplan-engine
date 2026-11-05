@@ -39,7 +39,7 @@ AccountType = Literal["client", "pro"]
 Role = Literal[
     "owner", "designer", "installer", "client", "support", "superuser", "visitor", "viewer"
 ]
-Action = Literal["view", "answer", "edit_wiring", "choose_variant", "invite"]
+Action = Literal["view", "answer", "edit_wiring", "choose_variant", "invite", "manage"]
 
 CAN: dict[Action, frozenset[str]] = {
     "view": frozenset(
@@ -51,6 +51,9 @@ CAN: dict[Action, frozenset[str]] = {
     # owner of "Мой ремонт" (owner of their own workspace); a studio client only views
     "choose_variant": frozenset({"owner", "designer", "installer", "support", "superuser"}),
     "invite": frozenset({"owner", "designer", "client", "superuser"}),
+    # Service API (api/app.py): model upload, starting analysis, project deletion. Not a limit on
+    # tokens: anyone can own a studio (docs/status.md, "Техдолг")
+    "manage": frozenset({"owner", "designer", "superuser"}),
 }
 STUDIO_ROLES = frozenset({"owner", "designer", "installer"})
 PROJECT_ROLES = frozenset({"client", "installer"})

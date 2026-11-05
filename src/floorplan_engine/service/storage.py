@@ -12,6 +12,7 @@ Later a database and object storage will take this place behind the same interfa
 from __future__ import annotations
 
 import json
+import logging
 import shutil
 import threading
 import uuid
@@ -25,6 +26,7 @@ from floorplan_engine.service.models import ProjectInfo, ProjectState
 STATE_FILE = "service.json"
 SOURCE_DIR = "source"
 ROUNDS_DIR = "rounds"
+log = logging.getLogger(__name__)
 
 
 class NotFoundError(LookupError):
@@ -89,11 +91,15 @@ class Storage:
         tmp.replace(path)  # atomic: a reader never sees half a file
 
     def list(self) -> list[ProjectInfo]:
-        infos = [
-            ProjectInfo.model_validate_json((p / STATE_FILE).read_text(encoding="utf-8"))
-            for p in self.root.iterdir()
-            if (p / STATE_FILE).exists()
-        ]
+        infos = []
+        for path in self.root.iterdir():
+            state = path / STATE_FILE
+            if not state.exists():
+                continue
+            try:  # one broken file must not close the list, or the start of the service
+                infos.append(ProjectInfo.model_validate_json(state.read_text(encoding="utf-8")))
+            except (OSError, ValueError) as exc:
+                log.warning("проект %s пропущен: %s", path.name, exc)
         return sorted(infos, key=lambda i: i.created, reverse=True)
 
     def delete(self, project_id: str) -> None:

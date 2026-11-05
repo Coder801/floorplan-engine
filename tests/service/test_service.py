@@ -9,6 +9,8 @@ import yaml
 from fastapi.testclient import TestClient
 
 from floorplan_engine.service.api.app import create_app
+from floorplan_engine.service.models import PendingTask, ProjectState
+from floorplan_engine.service.storage import Storage
 
 ROOM: dict[str, Any] = {
     "name": "Тест",
@@ -35,8 +37,8 @@ def _q(qid: str, **fields: Any) -> dict[str, Any]:
 
 @pytest.fixture
 def client(tmp_path: Path) -> TestClient:
-    # TestClient runs background tasks right after the response, so the next GET sees the state
-    return TestClient(create_app(tmp_path / "data"))
+    # workers=0: the work is done inside the request, so the next GET sees the state
+    return TestClient(create_app(tmp_path / "data", workers=0))
 
 
 def _create(client: TestClient) -> str:
@@ -227,3 +229,16 @@ def test_delete_project(client: TestClient, tmp_path: Path) -> None:
     assert client.get(f"/projects/{pid}").status_code == 404
     assert client.delete(f"/projects/{pid}").status_code == 404
     assert client.get("/projects").json() == []
+
+
+def test_restart_resumes_cut_off_work(tmp_path: Path) -> None:
+    storage = Storage(tmp_path / "data")
+    info = storage.create("Кухня", [("plan.pdf", b"%PDF-1.4 test")])
+    info.state, info.task = ProjectState.ANALYZING, PendingTask(kind="analysis")
+    storage.save(info)
+    app = create_app(tmp_path / "data", workers=1)
+    with TestClient(app):
+        app.state.tasks.join()
+    resumed = storage.load(info.id)
+    assert resumed.state is ProjectState.NEEDS_MODEL  # the manual analyzer has no model to give
+    assert resumed.task is None

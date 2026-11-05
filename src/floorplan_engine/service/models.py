@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -34,6 +34,14 @@ class StageInfo(BaseModel):
     open_questions: int = 0
 
 
+class PendingTask(BaseModel):
+    """The work behind a busy state, saved with it: a restart does not lose it (tasks.py)."""
+
+    kind: Literal["analysis", "answers"]
+    has_text: bool = False  # answers: the analyzer reads text answers first
+    attempts: int = 0  # starts so far; counted before the work, so a crash counts too
+
+
 class ProjectInfo(BaseModel):
     id: str
     name: str
@@ -47,6 +55,7 @@ class ProjectInfo(BaseModel):
     files: list[str] = Field(default_factory=list)  # ready files: /projects/{id}/files/{path}
     llm_calls: int = 0  # LLM analyzer calls over the project's lifetime
     llm_cost_usd: float = 0.0  # their cost (estimate; details in the project's usage.jsonl)
+    task: PendingTask | None = None  # set while state is analyzing or building
 
 
 class AnswersIn(BaseModel):

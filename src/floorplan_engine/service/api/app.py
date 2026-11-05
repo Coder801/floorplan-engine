@@ -12,33 +12,71 @@ GET  /projects/{id}/report            report.json
 GET  /projects/{id}/files/{path}      project.dxf, project.epd, report.md, …
 GET  /projects/{id}/model/{file}      model YAML
 GET  /projects/{id}/sources/{name}    an uploaded source
+
+With `auth` every /projects request goes through project_guard.check; without it the API is open,
+and `floorplan-engine serve` then listens only on the local address.
 """
 
 from __future__ import annotations
 
 import json
+from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Annotated, Any
 
-from fastapi import BackgroundTasks, Body, FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import Body, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, PlainTextResponse
+from starlette.concurrency import run_in_threadpool
+from starlette.responses import Response
 
 from floorplan_engine import BRAND, __version__
-from floorplan_engine.model.intake import TextAnswer
 from floorplan_engine.pipeline import OUT_DIR
 from floorplan_engine.service.analysis.analyzer import OPERATOR_FILES, Analyzer, ManualAnalyzer
+from floorplan_engine.service.api import project_guard
+from floorplan_engine.service.api.auth import Auth
+from floorplan_engine.service.db.access import AccessError
 from floorplan_engine.service.models import AnswersIn, ProjectInfo, QuestionsOut
 from floorplan_engine.service.storage import SOURCE_DIR, NotFoundError, Storage
+from floorplan_engine.service.tasks import WORKERS, TaskQueue
 from floorplan_engine.service.workflow import ConflictError, Workflow
 from floorplan_engine.validation.report import REPORT_JSON
 
 MAX_UPLOAD_BYTES = 50 * 1024 * 1024
 
 
-def create_app(data_dir: Path, analyzer: Analyzer | None = None) -> FastAPI:
+def create_app(
+    data_dir: Path,
+    analyzer: Analyzer | None = None,
+    auth: Auth | None = None,
+    workers: int = WORKERS,
+) -> FastAPI:
+    """Service API for folder data_dir; auth is login and access (None means everything is open,
+    locally); workers=0 runs analysis and builds inside the request (tasks.TaskQueue)."""
     storage = Storage(data_dir)
     flow = Workflow(storage, analyzer or ManualAnalyzer())
+    tasks = TaskQueue(flow.run_task, workers)
     app = FastAPI(title=BRAND, version=__version__)
+    app.state.tasks = tasks
+
+    def resume() -> None:
+        tasks.start()
+        for project_id in flow.recover():
+            tasks.submit(project_id)
+
+    app.router.on_startup.append(resume)
+    app.router.on_shutdown.append(tasks.stop)
+    if auth is not None:
+        guard = auth
+
+        @app.middleware("http")
+        async def project_access(
+            request: Request, call_next: Callable[[Request], Awaitable[Response]]
+        ) -> Response:
+            denied = await run_in_threadpool(project_guard.check, guard, request)
+            return denied if denied is not None else await call_next(request)
+
+        # After this middleware: added later, it runs first and gives it request.session
+        auth.install(app)
 
     def load(project_id: str) -> ProjectInfo:
         try:
@@ -46,10 +84,26 @@ def create_app(data_dir: Path, analyzer: Analyzer | None = None) -> FastAPI:
         except NotFoundError as exc:
             raise HTTPException(404, f"проекта {project_id} нет") from exc
 
-    def report_json(project_id: str) -> dict[str, Any]:
-        info = load(project_id)
-        if info.state.busy:  # the report is being rewritten now
+    def refuse_busy(info: ProjectInfo) -> None:
+        if info.state.busy:
             raise HTTPException(409, f"проект занят: {info.state.value}, повторите позже")
+
+    def refuse_foreign_file(filename: str) -> None:
+        if filename not in OPERATOR_FILES:
+            raise HTTPException(400, f"файл модели — один из: {', '.join(OPERATOR_FILES)}")
+
+    def start_task(project_id: str, begin: Callable[[], ProjectInfo]) -> ProjectInfo:
+        """Mark the project busy with `begin` and queue its background part."""
+        load(project_id)
+        try:
+            info = begin()
+        except ConflictError as exc:
+            raise HTTPException(409, str(exc)) from exc
+        tasks.submit(project_id)
+        return info
+
+    def report_json(project_id: str) -> dict[str, Any]:
+        refuse_busy(load(project_id))  # the report is being rewritten now
         path = storage.path(project_id) / OUT_DIR / REPORT_JSON
         if not path.exists():
             raise HTTPException(409, "отчёта ещё нет — сначала анализ")
@@ -58,7 +112,8 @@ def create_app(data_dir: Path, analyzer: Analyzer | None = None) -> FastAPI:
 
     @app.post("/projects", status_code=201)
     async def create_project(
-        name: Annotated[str, Form(min_length=1)],
+        request: Request,
+        name: Annotated[str, Form(min_length=1, max_length=200)],
         files: Annotated[list[UploadFile], File(description="PDF, JPEG, эскизы")],
     ) -> ProjectInfo:
         sources = []
@@ -67,28 +122,40 @@ def create_app(data_dir: Path, analyzer: Analyzer | None = None) -> FastAPI:
             if len(content) > MAX_UPLOAD_BYTES:
                 raise HTTPException(413, f"{f.filename}: больше {MAX_UPLOAD_BYTES // 2**20} МБ")
             sources.append((f.filename or "file", content))
-        return storage.create(name, sources)
+        info = storage.create(name, sources)
+        if auth is not None:
+            try:
+                await run_in_threadpool(project_guard.register, auth, request, info)
+            except Exception as exc:  # a folder without a row would be nobody's
+                storage.delete(info.id)
+                if isinstance(exc, AccessError):
+                    raise HTTPException(403, str(exc)) from exc
+                raise
+        return info
 
     @app.get("/projects")
-    def list_projects() -> list[ProjectInfo]:
-        return storage.list()
+    def list_projects(request: Request) -> list[ProjectInfo]:
+        projects = storage.list()
+        if auth is None:
+            return projects
+        shown = project_guard.visible(auth, request, [p.id for p in projects])
+        return [p for p in projects if p.id in shown]
 
     @app.get("/projects/{project_id}")
     def get_project(project_id: str) -> ProjectInfo:
         return load(project_id)
 
     @app.delete("/projects/{project_id}", status_code=204)
-    def delete_project(project_id: str) -> None:
-        info = load(project_id)
-        if info.state.busy:
-            raise HTTPException(409, f"проект занят: {info.state.value}, повторите позже")
+    def delete_project(request: Request, project_id: str) -> None:
+        refuse_busy(load(project_id))
         storage.delete(project_id)
+        if auth is not None:
+            project_guard.forget(auth, request, project_id)
 
     @app.get("/projects/{project_id}/model/{filename}")
     def get_model(project_id: str, filename: str) -> PlainTextResponse:
         load(project_id)
-        if filename not in OPERATOR_FILES:
-            raise HTTPException(400, f"файл модели — один из: {', '.join(OPERATOR_FILES)}")
+        refuse_foreign_file(filename)
         path = storage.path(project_id) / filename
         if not path.exists():
             raise HTTPException(404, f"{filename} ещё нет")
@@ -99,21 +166,14 @@ def create_app(data_dir: Path, analyzer: Analyzer | None = None) -> FastAPI:
         project_id: str, filename: str, text: Annotated[str, Body(media_type="text/yaml")]
     ) -> None:
         info = load(project_id)
-        if filename not in OPERATOR_FILES:
-            raise HTTPException(400, f"файл модели — один из: {', '.join(OPERATOR_FILES)}")
+        refuse_foreign_file(filename)
         if info.state.busy:
             raise HTTPException(409, f"проект занят: {info.state.value}")
         storage.write_model(project_id, filename, text)
 
     @app.post("/projects/{project_id}/analyze", status_code=202)
-    def analyze(project_id: str, tasks: BackgroundTasks) -> ProjectInfo:
-        load(project_id)
-        try:
-            info = flow.start_analysis(project_id)
-        except ConflictError as exc:
-            raise HTTPException(409, str(exc)) from exc
-        tasks.add_task(flow.run_analysis, project_id)
-        return info
+    def analyze(project_id: str) -> ProjectInfo:
+        return start_task(project_id, lambda: flow.start_analysis(project_id))
 
     @app.get("/projects/{project_id}/questions")
     def questions(project_id: str) -> QuestionsOut:
@@ -125,15 +185,8 @@ def create_app(data_dir: Path, analyzer: Analyzer | None = None) -> FastAPI:
         )
 
     @app.post("/projects/{project_id}/answers", status_code=202)
-    def answers(project_id: str, body: AnswersIn, tasks: BackgroundTasks) -> ProjectInfo:
-        load(project_id)
-        try:
-            info = flow.submit_answers(project_id, body)
-        except ConflictError as exc:
-            raise HTTPException(409, str(exc)) from exc
-        has_text = any(isinstance(v, TextAnswer) for v in body.answers.values())
-        tasks.add_task(flow.run_answers, project_id, has_text)
-        return info
+    def answers(project_id: str, body: AnswersIn) -> ProjectInfo:
+        return start_task(project_id, lambda: flow.submit_answers(project_id, body))
 
     @app.get("/projects/{project_id}/report")
     def report(project_id: str) -> dict[str, Any]:

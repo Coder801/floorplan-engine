@@ -129,7 +129,7 @@ erDiagram
     uuid id PK
     uuid studio_id FK
     string name
-    string slug UK "новое: папка projects/<slug> в просмотре"
+    string slug UK "папка projects/<slug> в просмотре; у проекта API сервиса — его id"
     string state "created … built"
     text message
     int round
@@ -442,7 +442,7 @@ erDiagram
 | Б3 | `project push` / `pull`: папка ↔ база (новая версия, источники, сборка); импорт текущих проектов |
 | Б4 | Просмотр из базы: проекты и листы — по id проекта из хранилища; правка трасс и вариант — новой версией модели и пересборкой; прайс и профиль — из базы; адреса `web/` — по id, `slug` уникален внутри студии |
 | Б5 | Деплой: `start.sh` проекты не копирует; перенос проектов с volume в базу и сверка |
-| Б6 | API сервиса (`app.py`, `Workflow`) на базе, проверка доступа в нём (техдолг); кэш выжимок, расход LLM — в базе |
+| Б6 | API сервиса (`app.py`, `Workflow`) на базе (проверка доступа уже есть: `project_guard.py`, связь по `project.slug` = id сервиса); кэш выжимок, расход LLM — в базе |
 | Б7 | Папки проектов на сервере удаляются после сверки; `FileStorage` остаётся для тестов |
 
 Команды (Б3, `service/sync.py`): `floorplan-engine project push <папка> [--owner]`, `project pull
