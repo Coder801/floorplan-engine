@@ -44,12 +44,8 @@ from floorplan_engine.drawing.layers import (
 from floorplan_engine.drawing.lighting import draw_lighting, lighting_model, switch_table
 from floorplan_engine.drawing.panel import devices_table, draw_panel_front, fit_panel, panel_notes
 from floorplan_engine.drawing.plan import RoomArea, add_text, draw_plan
-from floorplan_engine.drawing.plumbing import (
-    draw_plumbing,
-    fixtures_table,
-    legend_variants,
-    pipes_table,
-)
+from floorplan_engine.drawing.plumbing import draw_plumbing, fixtures_table, pipes_table
+from floorplan_engine.drawing.plumbing_legend import legend_variants
 from floorplan_engine.drawing.schedules import (
     estimate_table,
     groups_table,
