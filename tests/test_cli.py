@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import importlib
 import os
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
 from typer.testing import CliRunner
 
+import floorplan_engine
 from floorplan_engine.cli import app
 from floorplan_engine.drawing.symbols import SYMBOLS
 
@@ -61,3 +64,32 @@ def test_dev_viewer_factory_reads_projects_from_env(
     monkeypatch.delenv("SHTROBA_AUTH", raising=False)
     names = [p["name"] for p in TestClient(dev_viewer()).get("/api/projects").json()]
     assert names == ["kv1"]
+
+
+def test_dev_watches_the_whole_package(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """After code changes uvicorn restarts the API by the factory path: nothing here starts."""
+    from floorplan_engine.cli import DEV_PROJECTS_ENV
+
+    runs: list[tuple[tuple[object, ...], dict[str, object]]] = []
+    monkeypatch.setattr("uvicorn.run", lambda *a, **k: runs.append((a, k)))
+    monkeypatch.setattr("subprocess.Popen", MagicMock())
+    monkeypatch.setattr("shutil.which", lambda name: "npm")
+    monkeypatch.setattr("floorplan_engine.cli.load_env", lambda path: None)
+    monkeypatch.setenv(DEV_PROJECTS_ENV, "")  # the command sets it: restored after the test
+    (tmp_path / "web" / "node_modules").mkdir(parents=True)
+    (tmp_path / "web" / "package.json").write_text("{}", "utf-8")
+    args = ["dev", "--projects", str(tmp_path), "--web", str(tmp_path / "web")]
+    assert runner.invoke(app, args).exit_code == 0
+    ((target,), options) = runs[0]
+    assert options["reload_dirs"] == [str(Path(floorplan_engine.__file__).resolve().parent)]
+    module, factory = str(target).split(":")
+    assert callable(getattr(importlib.import_module(module), factory))
+
+
+def test_serve_refuses_a_public_address_without_login(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Not the environment: the command reads .env itself, and a developer's has login on
+    monkeypatch.setattr("floorplan_engine.cli._viewer_auth", lambda: None)
+    monkeypatch.setattr("uvicorn.run", lambda *a, **k: pytest.fail("сервер запущен"))
+    result = runner.invoke(app, ["serve", "--host", "0.0.0.0"])
+    assert result.exit_code == 2
+    assert "SHTROBA_AUTH" in result.output
