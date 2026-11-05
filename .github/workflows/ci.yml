@@ -44,7 +44,7 @@ jobs:
       - run: uv run --frozen ruff format --check .
       - run: uv run --frozen mypy
       - run: uv run --frozen lint-imports
-      - run: uv run --frozen pytest -q
+      - run: uv run --frozen pytest -q --cov --cov-report=term
         env:
           TEST_REQUIRE_DB: "1" # a database test must fail here, not skip
 
@@ -65,7 +65,7 @@ jobs:
           cache-dependency-path: web/package-lock.json
       - run: npm ci
       - run: npm run check
-      - run: npm test
+      - run: npm run coverage
       - run: npm run build
 
   admin:
@@ -83,5 +83,5 @@ jobs:
           cache-dependency-path: admin/package-lock.json
       - run: npm ci
       - run: npm run check
-      - run: npm test
+      - run: npm run coverage
       - run: npm run build

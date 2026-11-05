@@ -14,7 +14,8 @@
 ## CI
 
 `.github/workflows/ci.yml` на каждый push в ветку: `ruff`, `mypy`, `lint-imports`, `pytest` с
-Postgres (`TEST_REQUIRE_DB=1`), типы, тесты и сборка `web/` и `admin/`. Это те же проверки, что
+Postgres (`TEST_REQUIRE_DB=1`) и покрытием (`--cov`, ниже 90 % — ошибка), типы, тесты с покрытием
+и сборка `web/` и `admin/`. Это те же проверки, что
 скилл `verify`, кроме выжимки PDF и раскладки листов. Деплой ждёт CI, только если на Railway
 включён Wait for CI (настройка сервиса, в репозитории её нет).
 

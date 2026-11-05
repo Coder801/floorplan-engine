@@ -46,12 +46,11 @@ export default defineConfig({
   // Styles are SCSS modules next to components: .row-btns in the file → styles.rowBtns in code
   css: {
     modules: { localsConvention: "camelCaseOnly" },
-    preprocessorOptions: { scss: { api: "modern-compiler" } },
   },
   build: {
     chunkSizeWarningLimit: 1500,
     // A component is a folder with index.tsx: the chunk is named after the folder (Scene3D-…js), not "index-…js"
-    rollupOptions: {
+    rolldownOptions: {
       output: {
         chunkFileNames: (c) => `assets/${c.name === "index" && c.facadeModuleId
           ? basename(dirname(c.facadeModuleId)) : "[name]"}-[hash].js`,

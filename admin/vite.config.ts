@@ -14,7 +14,6 @@ export default defineConfig({
   resolve: { alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) } },
   css: {
     modules: { localsConvention: "camelCaseOnly" },
-    preprocessorOptions: { scss: { api: "modern-compiler" } },
   },
   server: { host: "127.0.0.1", port: 5174, proxy: api },
   preview: { host: "127.0.0.1", port: 4174, proxy: api },

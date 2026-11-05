@@ -32,6 +32,7 @@ dev = [
     "import-linter>=2.1",
     "mypy>=1.10",
     "pytest>=8.0",
+    "pytest-cov>=7.1.0",
     "ruff>=0.5",
     "types-openpyxl>=3.1.5.20261017",
     "types-PyYAML>=6.0",
@@ -58,13 +59,23 @@ testpaths = ["tests"]
 # NumPy 2.5 warns about code inside ezdxf, not ours
 filterwarnings = ["ignore::DeprecationWarning:ezdxf.*"]
 
+[tool.coverage.run]
+source = ["floorplan_engine"]
+branch = true
+
+[tool.coverage.report]
+skip_covered = true
+sort = "cover"
+fail_under = 90
+exclude_also = ["if TYPE_CHECKING:"]
+
 [tool.mypy]
 strict = true
 plugins = ["pydantic.mypy"]
 files = ["src", "tests", "scripts"]
 
 [[tool.mypy.overrides]]
-module = ["authlib.*", "ezdxf.*", "matplotlib.*", "pypdfium2.*", "rapidocr_onnxruntime.*"]
+module = ["authlib.*", "ezdxf.*", "matplotlib.*", "pypdfium2.*", "rapidocr_onnxruntime.*", "svgelements.*"]
 ignore_missing_imports = true
 
 [tool.pydantic-mypy]

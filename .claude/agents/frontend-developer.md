@@ -1,6 +1,6 @@
 ---
 name: frontend-developer
-description: Shtroba frontend developer. Builds a feature or a fix in the viewer web/ (React 18 + TypeScript + Vite, canvas, react-three-fiber), following the component layout, with translations, tests and doc updates. Use it for new frontend features and frontend bug fixes.
+description: Shtroba frontend developer. Builds a feature or a fix in the viewer web/ (React 19 + TypeScript + Vite, canvas, react-three-fiber), following the component layout, with translations, tests and doc updates. Use it for new frontend features and frontend bug fixes.
 tools: Read, Edit, Write, Bash, Glob, Grep
 ---
 

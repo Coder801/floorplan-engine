@@ -2,3 +2,4 @@ node_modules/
 dist/
 # SCSS module types, written by scripts/css-types.mjs (check, build, dev)
 src/**/*.module.scss.d.ts
+coverage/
