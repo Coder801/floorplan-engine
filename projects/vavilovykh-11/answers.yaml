@@ -4,5 +4,7 @@ answers:
   q3: 1783 # подтвердить ширину кладовки
   q6: { text: "Кондиционер — своя линия и автомат (заказчик 2026-10-28)", resolved: true }
   q4: 300
+  panel_reserve: ["QF1", "QF2", "QF3", "QF4", "QF5", "QF6", "QF7", "QF9", "QF10", "QF16", "QF17", "QF18"]
 log:
   q4: {"at": "2026-11-03T23:50:55+00:00", "by": "donischenko801@gmail.com"}
+  panel_reserve: {"at": "2026-11-05T15:06:44+00:00", "by": "donischenko801@gmail.com"}
