@@ -227,6 +227,16 @@ def test_led_strip_must_fit_wall() -> None:
     assert [i.path for i in issues] == ["led_strips[0].end"]
 
 
+def test_cable_channel_is_checked_like_a_wall_object() -> None:
+    plan = make_plan([{"length": 3000}, {"length": 4000}, {"length": 3000}, {"length": 4000}])
+    channel = {"id": "tv", "room": "r", "wall": "w1", "offset": 3500, "entry": 400, "exit": 9000}
+    elec, _ = _rect_plan_elec({"cable_channels": [channel]})
+    issues = validate_electrical(elec, plan, {})
+    assert {i.path for i in issues} == {"cable_channels[0].offset", "cable_channels[0].exit"}
+    same = {**channel, "exit": 400}
+    assert parse_model(Electrical, {"cable_channels": [same]}, "e.yaml")[0] is None
+
+
 def test_sheets_show_own_layers_at_common_scale(tmp_path: Path) -> None:
     plan = make_plan(
         [{"length": 3000}, {"length": 4000}, {"length": 3000}, {"length": 4000}],

@@ -22,7 +22,8 @@ from floorplan_engine.model.schema import OpeningType, Plan
 PREVIEW_FILE = "preview.svg"
 PAD_MM = 300  # margin around the plan
 
-# Room kind by name (ru / uk), only for the preview colour: not used in calculations.
+# Room kind by name (ru / uk), only for the preview colour and the viewer icon: not used in
+# calculations.
 # Wet rooms by the wet flag, not by name: a bathroom without wet shows up as a data gap
 ROOM_WORDS: dict[str, tuple[str, ...]] = {
     "outdoor": ("балкон", "лоджи", "лоджі", "терас"),
@@ -39,9 +40,9 @@ ROOM_WORDS: dict[str, tuple[str, ...]] = {
 
 
 def room_kind(name: str, wet: bool) -> str:
-    """Room kind for the preview: wet by the flag; otherwise by the word that comes first in the
-    name ("Кухня-вітальня, коридор" is a kitchen, "Зал + коридор" is living); unknown means
-    living."""
+    """Room kind for the preview and the viewer icon: wet by the flag; otherwise by the word that
+    comes first in the name ("Кухня-вітальня, коридор" is a kitchen, "Зал + коридор" is living);
+    unknown means living."""
     if wet:
         return "wet"
     low = name.lower()

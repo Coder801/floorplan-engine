@@ -60,6 +60,22 @@ def _project(tmp_path: Path) -> tuple[Drawing, Plan]:
     return readfile(path), plan
 
 
+def test_artifact_appears_whole(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    doc, plan = _project(tmp_path)
+    epd = export_artifact(doc, plan, tmp_path / "project.epd")
+    old = epd.read_bytes()
+    assert not epd.with_name("project.epd.tmp").exists()
+
+    def broken(*_: object) -> None:
+        raise RuntimeError("сборка упала")
+
+    monkeypatch.setattr("floorplan_engine.epd.artifact.record_page", broken)
+    with pytest.raises(RuntimeError):
+        export_artifact(doc, plan, epd)
+    assert epd.read_bytes() == old  # the viewer keeps reading the previous build
+    assert not epd.with_name("project.epd.tmp").exists()
+
+
 def test_artifact_round_trip(tmp_path: Path) -> None:
     doc, plan = _project(tmp_path)
     epd = export_artifact(doc, plan, tmp_path / "project.epd")

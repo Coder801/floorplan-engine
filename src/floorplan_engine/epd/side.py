@@ -69,8 +69,9 @@ class SideRow:
     keys: tuple[str, ...] = ()  # drawing objects of this row
     section: bool = False  # section heading (estimate): one non-empty cell
     color: str | None = None  # group colour "#rrggbb": a dot at the first cell
-    hint: str | None = None  # row note (estimate): an "i" icon next to the name
+    hint: str | None = None  # row note: an "i" icon in the estimate, a tooltip in the panel
     marker: str | None = None  # icon of an uncoloured first cell: square = off-line device
+    group: str | None = None  # QF group of a "Groups" row: its eye in the viewer
 
     def as_dict(self) -> dict[str, object]:
         out: dict[str, object] = {"cells": list(self.cells)}
@@ -80,6 +81,8 @@ class SideRow:
             out["color"] = self.color
         if self.marker:
             out["marker"] = self.marker
+        if self.group:
+            out["group"] = self.group
         if self.keys:
             out["keys"] = list(self.keys)
         if self.section:
@@ -237,7 +240,8 @@ def group_side_table(
     extra: Sequence[str] = (),
 ) -> SideTable | None:
     """The "Groups": row → points, cables, lines and boxes of the group. In the narrow panel the
-    "Points" column is dropped (it is on the sheet): otherwise the power does not fit."""
+    "Points" column is dropped (it is on the sheet), otherwise the power does not fit, and the
+    purpose becomes the row hint: the viewer shows it when the pointer stays on the row."""
     built = groups_table(plan, elec, wiring, panel)
     if built is None:
         return None
@@ -254,8 +258,10 @@ def group_side_table(
         for r in group_rows(plan, elec)
     ]
     side = from_table(table, keys, [*notes, *extra])
+    purpose = side.columns.index(groups_text("purpose", plan.language))
+    rows = tuple(replace(r, hint=r.cells[purpose], group=r.cells[0]) for r in side.rows)
     points = side.columns.index(groups_text("points", plan.language))
-    return drop_column(side, points)
+    return drop_column(drop_column(replace(side, rows=rows), points), purpose)
 
 
 def estimate_side_table(

@@ -92,6 +92,12 @@ def rating_for(amps: float, floor: int = SOCKETS_A) -> int:
     return next((r for r in RATINGS if r >= max(amps, floor)), RATINGS[-1])
 
 
+def cable_for(amps_: float) -> str | None:
+    """Smallest cross-section whose recommended breaker carries the current: "3x6"."""
+    s = next((s for s, (rec, _) in sorted(CABLE_LIMITS.items()) if rec >= amps_), None)
+    return f"3x{s:g}" if s is not None else None
+
+
 _SECTION = re.compile(r"(\d+)\s*[xх×*]\s*(\d+(?:[.,]\d+)?)", re.IGNORECASE)
 
 
@@ -191,6 +197,15 @@ def point_load(p: ElectricalPoint, rooms: dict[str, str], language: Language) ->
         title = text("outlet_generic", language) if not p.note else title
         return Load(p.id, room, title, p.count, OUTLET_W, True)
     return None
+
+
+def heavy_cable(points: Sequence[ElectricalPoint]) -> str | None:
+    """Cable for a group with a heavy load and no type in the model, to match the breaker the
+    code picks for it (assumption); None without a heavy load."""
+    loads = [ld for p in points if (ld := point_load(p, {}, "ru")) is not None]
+    if not any(ld.heavy for ld in loads):
+        return None
+    return cable_for(rating_for(current(sum(ld.power for ld in loads))))
 
 
 def _kind(points: Sequence[ElectricalPoint], loads: Sequence[Load], section: float | None) -> Kind:

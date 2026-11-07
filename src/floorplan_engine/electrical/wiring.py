@@ -2,7 +2,10 @@
 
 Variant rules:
 - cable runs only from the panel to a box, from the panel to a load or from a box to a load;
-  never from a load to a box or from box to box;
+  never from a load to a box or from box to box. With the loop distribution wall sockets are
+  the exception: in a room, two or more sockets of a group go in a daisy chain through their
+  flush boxes, nearest to the panel first, with no junction box and at most BOX_BRANCHES on a
+  chain, each chain on its own panel line. Light, switches and direct lines stay as they are;
 - a room is its own zone: a box sits in the room and feeds only its points, its cables do not
   leave the walls; cable reaches another room from the panel through door openings
   (routing.py). The exception is a switch: it is tapped into the box of its light, and if a
@@ -58,7 +61,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Sequence
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 
 from shapely.geometry import LineString
 from shapely.geometry.base import BaseGeometry
@@ -76,11 +79,14 @@ from floorplan_engine.electrical.boxes import (
     split_points,
 )
 from floorplan_engine.electrical.chases import (
+    before_plaster,
+    channel_chases,
     passages,
     wall_chases,
     wall_holes,
 )
 from floorplan_engine.electrical.groups import group_key
+from floorplan_engine.electrical.loads import heavy_cable
 from floorplan_engine.electrical.routing import (
     Router,
     fit_path,
@@ -141,7 +147,8 @@ def _mark(cable: Cable | None, points: Sequence[ElectricalPoint]) -> tuple[str, 
         kind = "tv" if all(p.type is PointType.TV for p in points) else "data"
     else:
         kind = "power" if any(p.type in POWER_TYPES for p in points) else "light"
-    return DEFAULT_MARK[kind], True
+    heavy = heavy_cable(points) if kind == "power" else None
+    return heavy or DEFAULT_MARK[kind], True
 
 
 def section(mark: str) -> float:
@@ -197,7 +204,8 @@ class _Context:
     board: Board
     from_board: Router
     free: BaseGeometry  # the whole flat with openings, for branches to switches behind a door
-    any_angle: bool = False  # economy: ceiling and floor routes at any angle (routing.py)
+    any_angle: bool = False  # ceiling and floor routes at any angle (routing.py)
+    rooms: dict[str, str] = field(default_factory=dict)  # room of each point
 
     @property
     def ceiling(self) -> float:
@@ -233,8 +241,8 @@ def box_wiring(
     geoms = {g.room.id: g for g in room_geometries(plan, contours)}
     shifts = stack_shifts(elec.points)
     free = free_area(list(geoms.values()))
-    # Economy saves cable: on ceiling and floor along the shortest path (docs/wiring-variants.md)
-    any_angle = elec.mode == "economy"
+    # On ceiling and floor along the shortest path, economy by default (docs/wiring-variants.md)
+    any_angle = elec.shortest_path
     ctx = _Context(
         plan,
         geoms,
@@ -243,6 +251,7 @@ def box_wiring(
         Router(free, anchor_end(board_anchor(elec.board, geoms)), any_angle),
         free,
         any_angle,
+        {p.id: p.room for p in elec.points},
     )
     boxes: list[JunctionBox] = []
     links: list[_Link] = []
@@ -260,6 +269,9 @@ def box_wiring(
     height_assumed = "ceiling_height" not in plan.model_fields_set
     skipped = tuple(p.id for p in elec.points if not p.group)
     chases = wall_chases(runs, elec.points, elec.board, boxes)
+    chases += channel_chases(elec.cable_channels)
+    if elec.plaster == "before":
+        chases = before_plaster(chases, elec.ceiling_conduit)
     holes = wall_holes(runs, passages(list(geoms.values())))
     return Wiring(
         ctx.ceiling,
@@ -272,6 +284,7 @@ def box_wiring(
         free,
         frozenset(edited),
         tuple(notes),
+        elec.plaster == "before",
     )
 
 
@@ -318,7 +331,7 @@ def _manual_runs(
     any_angle: bool = False,
 ) -> list[Run]:
     """Lines with a manual route from wiring.yaml; ends at the source and target nodes. Slanted
-    pieces only in economy (any_angle); in standard and premium such an edit is not applied."""
+    pieces only on the shortest path (any_angle); at right angles such an edit is not applied."""
     by_id = {r.id: r for r in runs}
     manual: dict[str, Run] = {}
     inside = free.buffer(1.0)
@@ -331,7 +344,9 @@ def _manual_runs(
             continue
         given = [Vec(*p) for p in e.path]
         if not any_angle and not is_ortho(given):
-            notes.append((where, "участок не по оси: под углом — только в экономе — автотрасса"))
+            notes.append(
+                (where, "участок не по оси: под углом — только при кратчайшем пути — автотрасса")
+            )
             continue
         path = tuple(fit_path(given, r.path[0], r.path[-1]))
         if not inside.covers(LineString([v.as_tuple() for v in path])):
@@ -394,12 +409,31 @@ def _group_links(
     def direct(p: ElectricalPoint) -> None:
         to_point("board", height, board_rise, p)
 
+    def chain(part: Sequence[ElectricalPoint]) -> None:
+        """Daisy chain: the point nearest to the panel from it, then from point to point."""
+        left = sorted(part, key=lambda p: (ctx.from_board.cost(ctx.anchors[p.id].node), p.id))
+        prev = left.pop(0)
+        direct(prev)
+        while left:
+            at = ctx.anchors[prev.id].node
+            p = min(left, key=lambda q: ((ctx.anchors[q.id].node - at).length(), q.id))
+            left.remove(p)
+            assert prev.height is not None  # only wall points go in a chain
+            to_point(prev.id, prev.height, _rise(prev, ctx.ceiling, route), p)
+            prev = p
+
     # A switch is tapped into the box of its light: in a room where the group has only
     # switches (by the door outside) they get no box or panel line of their own
     lit = {p.room for p in pts if p.type not in SWITCH_TYPES}
     outside = [] if no_boxes else [p for p in pts if p.type in SWITCH_TYPES and p.room not in lit]
     for room in ctx.plan.rooms:
         here = [p for p in pts if p.room == room.id and p not in outside]
+        looped = _looped(here) if elec.distribution == "loop" and not no_boxes else []
+        if looped:
+            nodes = [ctx.anchors[p.id].node for p in looped]
+            for zone in split_points(nodes, BOX_BRANCHES):
+                chain([looped[i] for i in zone])
+            here = [p for p in here if p not in looped]
         if not here:
             continue
         has_light = any(p.type in LIGHT_TYPES for p in here)
@@ -431,6 +465,12 @@ def _group_links(
             continue
         to_point(near.id, _box_height(near, ctx.ceiling), near.rise_mm, p, cross=True)
     return links
+
+
+def _looped(points: Sequence[ElectricalPoint]) -> list[ElectricalPoint]:
+    """Wall sockets of a room that go in a daisy chain; a single one stays where it was."""
+    sockets = [p for p in points if p.type in POWER_TYPES and p.ceiling is None]
+    return sockets if len(sockets) >= 2 else []
 
 
 def _box_height(box: JunctionBox, ceiling: float) -> float:
@@ -474,7 +514,8 @@ def _box_spot(
 
 
 def _route_runs(ctx: _Context, links: Sequence[_Link], boxes: Sequence[JunctionBox]) -> list[Run]:
-    """Line routes: from the panel through the whole flat, from a box only inside its room."""
+    """Line routes: from the panel through the whole flat, from a box or a socket of a daisy chain
+    only inside its room."""
     routers = {
         b.id: Router(room_area(ctx.geoms[b.room]), anchor_end(b.anchor), ctx.any_angle)
         for b in boxes
@@ -485,6 +526,9 @@ def _route_runs(ctx: _Context, links: Sequence[_Link], boxes: Sequence[JunctionB
         for b in boxes
         if any(ln.cross and ln.source == b.id for ln in links)
     }
+    for src in {ln.source for ln in links} - set(routers) - {"board"}:  # a daisy chain
+        area = room_area(ctx.geoms[ctx.rooms[src]])
+        routers[src] = Router(area, anchor_end(ctx.anchors[src]), ctx.any_angle)
     board_tail = ctx.board.height  # tail inside the panel down to the floor
     runs: list[Run] = []
     for k, ln in enumerate(links):

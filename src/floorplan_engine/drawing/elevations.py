@@ -40,6 +40,9 @@ WATER = {"cold": 0x1F77B4, "hot": 0xD62728, "sewer": 0x8C564B}  # as on the "Plu
 
 LW_FLOOR = 50
 LW_WALL = 25
+GLASS = 0xA9D3F2  # window glass
+HANDLE_MM = 1000.0  # door handle above the floor: a mark on the drawing, not a size
+HANDLE_INSET_MM, HANDLE_END_MM = 60.0, 180.0  # handle from the free edge of the leaf
 LW_THIN = 13
 
 TITLE_H = TEXT_DIM_MM
@@ -204,13 +207,17 @@ def _draw(
     for o in e.openings:
         a, b = at(o.x0, o.y0), at(o.x1, o.y1)
         color = GREY if o.assumed else DARK
-        rect((a.x, a.y, b.x, b.y), LW_WALL, color, 0xFFFFFF)
+        rect((a.x, a.y, b.x, b.y), LW_WALL, color, GLASS if o.kind == "window" else 0xFFFFFF)
         if o.kind == "window":  # window frame
             mid = (a.x + b.x) / 2
             line(Vec(mid, a.y), Vec(mid, b.y), LW_THIN, color)
         elif o.kind == "door":  # swing: a triangle pointing to the hinges
             line(Vec(a.x, a.y), Vec((a.x + b.x) / 2, b.y), LW_THIN, LIGHT)
             line(Vec(b.x, a.y), Vec((a.x + b.x) / 2, b.y), LW_THIN, LIGHT)
+            if o.hinge is not None:
+                free, back = (o.x1, -1.0) if o.hinge == "start" else (o.x0, 1.0)
+                gap, grip = free + back * HANDLE_INSET_MM, free + back * HANDLE_END_MM
+                line(at(gap, HANDLE_MM), at(grip, HANDLE_MM), LW_WALL, DARK)
         if o.assumed:
             text("*", Vec(b.x - 0.4, b.y - ORD_TEXT), align=TextEntityAlignment.MIDDLE_RIGHT)
 

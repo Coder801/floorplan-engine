@@ -28,9 +28,9 @@ def parse_answers(text: str) -> Answers | None:
 
 
 def _plain(answer: Answer) -> object:
-    return (
-        answer.model_dump(exclude_defaults=True) if not isinstance(answer, float | str) else answer
-    )
+    if isinstance(answer, float | str | list):
+        return answer
+    return answer.model_dump(exclude_defaults=True)
 
 
 def dump_answers(answers: Answers) -> str:

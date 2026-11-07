@@ -26,7 +26,7 @@ from matplotlib.transforms import Affine2D
 
 from floorplan_engine import BRAND
 from floorplan_engine.drawing.layers import FONT_DIR
-from floorplan_engine.electrical.panel import BoardPanel
+from floorplan_engine.electrical.panel import BoardPanel, color_of
 from floorplan_engine.electrical.panel_text import text
 from floorplan_engine.electrical.stickers import Sticker, build_stickers
 from floorplan_engine.model.texts import Language
@@ -35,11 +35,11 @@ from floorplan_engine.sheets.printing import MM_PER_INCH, PT_PER_MM
 WIDTH, HEIGHT = 10.0, 25.0  # mm: upright, ratio 2.5
 PAD = 0.7  # mm: number and rule from the edge
 NAME_PAD = 0.45  # mm: the name may go wider, words are long and the sticker is narrow
-NUMBER_EM = 3.6  # mm, shrinks to fit the width
-NUMBER_BASELINE = 3.7
-RULE_Y = 4.7
+NUMBER_EM = 3.0  # mm, shrinks to fit the width
+NUMBER_BASELINE = 3.15
+RULE_Y = 4.2
 ICON_SIZE = 6.4
-ICON_Y = HEIGHT - PAD - ICON_SIZE
+ICON_Y = HEIGHT - 2.7 - ICON_SIZE
 ICON_STROKE = 1.6  # in icon units, 24 per icon
 NAME_TOP, NAME_BOTTOM = RULE_Y + 0.6, ICON_Y - 0.5
 NAME_EMS = (2.3, 2.1, 1.9, 1.7)  # mm, the largest that fits
@@ -52,6 +52,12 @@ GAP = 2.0
 HEADER, FOOTER = 8.0, 12.0
 HAIRLINE = 0.1  # mm, cut outline
 CORNER = 0.8
+NEUTRAL = "#3a3a3a"  # colour stickers: a device without a group (main switch, relay)
+# Colour stickers: the number on a band across the top, with rounded corners of the sticker
+BAND = (
+    f"M0 {RULE_Y}L0 {CORNER}Q0 0 {CORNER} 0L{WIDTH - CORNER} 0Q{WIDTH} 0 {WIDTH} {CORNER}"
+    f"L{WIDTH} {RULE_Y}Z"
+)
 
 ASSETS = Path(__file__).resolve().parent / "stickers_assets"
 NAME_FONT = FontProperties(fname=FONT_DIR / "IBMPlexSansCondensed-Medium.ttf")
@@ -70,8 +76,15 @@ def _width(line: str, em: float, font: FontProperties) -> float:
 
 
 def _tokens(block: str) -> list[str]:
-    """Pieces a line may break between: words, and after a hyphen ("Кухня-", "вітальня")."""
-    return [p for word in block.split() for p in re.findall(r"[^-]+-?|-", word)]
+    """Pieces a line may break between: words, and after a hyphen ("Кухня-", "вітальня"); a
+    number stays with its word ("зона 1", "Коридор +1")."""
+    tokens: list[str] = []
+    for piece in (p for word in block.split() for p in re.findall(r"[^-]+-?|-", word)):
+        if tokens and re.fullmatch(r"\+?\d+", piece):
+            tokens[-1] = f"{tokens[-1]} {piece}"
+        else:
+            tokens.append(piece)
+    return tokens
 
 
 def _can_cut(word: str, at: int) -> bool:
@@ -144,20 +157,23 @@ class Layout:
     """A sticker ready to draw, mm from its top left corner: text is centred on the width."""
 
     sticker: Sticker
-    number_em: float
     lines: tuple[tuple[str, float], ...]  # line and its baseline
     name_em: float
 
 
+def number_em(number: str) -> float:
+    """The number shrinks to fit the width; rounded down, so it stays inside."""
+    width = _width(number, NUMBER_EM, NUMBER_FONT)
+    em = NUMBER_EM * min(1.0, (WIDTH - 2 * PAD) / width) if width else NUMBER_EM
+    return floor(em * 100) / 100
+
+
 def lay_out(sticker: Sticker) -> Layout:
-    room = WIDTH - 2 * PAD
-    width = _width(sticker.id, NUMBER_EM, NUMBER_FONT)
-    number_em = NUMBER_EM * min(1.0, room / width) if width else NUMBER_EM
     lines, em = _fit_name(sticker.lines)
     step = em * LEADING
     top = NAME_TOP + (NAME_BOTTOM - NAME_TOP - step * len(lines)) / 2
     placed = tuple((ln, round(top + step * n + em * 0.86, 2)) for n, ln in enumerate(lines))
-    return Layout(sticker, floor(number_em * 100) / 100, placed, em)
+    return Layout(sticker, placed, em)
 
 
 def _line_path(
@@ -170,19 +186,31 @@ def _line_path(
     return Affine2D().translate(shift, 0).scale(1, -1).translate(x, y).transform_path(path)
 
 
-def _sticker_lines(laid: Layout) -> list[MplPath]:
-    """Number and name in sticker mm."""
-    mid = WIDTH / 2
-    paths = [_line_path(laid.sticker.id, mid, NUMBER_BASELINE, laid.number_em, NUMBER_FONT)]
-    paths += [_line_path(ln, mid, y, laid.name_em, NAME_FONT) for ln, y in laid.lines if ln]
-    return paths
+def _number_path(number: str) -> MplPath:
+    return _line_path(number, WIDTH / 2, NUMBER_BASELINE, number_em(number), NUMBER_FONT)
 
 
-def _svg_path(laid: Layout) -> str:
-    """Text of a sticker as one SVG path, to 0.001 mm: the glyphs are under 2 mm high."""
+def _name_paths(laid: Layout) -> list[MplPath]:
+    return [_line_path(ln, WIDTH / 2, y, laid.name_em, NAME_FONT) for ln, y in laid.lines if ln]
+
+
+def sticker_color(sticker: Sticker, colors: dict[str, int]) -> str:
+    """Colour of the group, the same as its lines on the drawing."""
+    color = color_of(sticker.group, colors)
+    return f"#{color:06x}" if color is not None else NEUTRAL
+
+
+def on_color(color: str) -> str:
+    """Number on the band: white on a dark colour, black on a light one (YIQ brightness)."""
+    r, g, b = (int(color[i : i + 2], 16) for i in (1, 3, 5))
+    return "#000000" if (299 * r + 587 * g + 114 * b) / 1000 > 150 else "#ffffff"
+
+
+def _svg_path(paths: list[MplPath]) -> str:
+    """Curves as one SVG path, to 0.001 mm: the glyphs are under 2 mm high."""
     letters = {MplPath.MOVETO: "M", MplPath.LINETO: "L", MplPath.CURVE3: "Q", MplPath.CURVE4: "C"}
     out: list[str] = []
-    for path in _sticker_lines(laid):
+    for path in paths:
         for points, code in path.iter_segments(simplify=False, curves=True):
             if code == MplPath.CLOSEPOLY:
                 out.append("Z")
@@ -193,8 +221,9 @@ def _svg_path(laid: Layout) -> str:
     return "".join(out)
 
 
-def stickers_data(panel: BoardPanel) -> dict[str, object]:
-    """Stickers for the viewer (key `stickers` of `panel`): sizes, geometry of each, used icons."""
+def stickers_data(panel: BoardPanel, colors: dict[str, int]) -> dict[str, object]:
+    """Stickers for the viewer (key `stickers` of `panel`): sizes, geometry of each, used icons;
+    black or colour and the full or short number are the viewer's choice, so each carries both."""
     laid = [lay_out(s) for s in build_stickers(panel)]
     used = sorted({x.sticker.icon for x in laid})
     return {
@@ -202,6 +231,7 @@ def stickers_data(panel: BoardPanel) -> dict[str, object]:
         "height": HEIGHT,
         "rule_y": RULE_Y,
         "pad": PAD,
+        "band": BAND,
         "icon": {
             "x": (WIDTH - ICON_SIZE) / 2,
             "y": ICON_Y,
@@ -214,7 +244,12 @@ def stickers_data(panel: BoardPanel) -> dict[str, object]:
                 "row": x.sticker.row,
                 "title": x.sticker.title,
                 "icon": x.sticker.icon,
-                "text": _svg_path(x),
+                "number": _svg_path([_number_path(x.sticker.id)]),
+                "short_id": x.sticker.short_id,
+                "short_number": _svg_path([_number_path(x.sticker.short_id)]),
+                "name": _svg_path(_name_paths(x)),
+                "color": (color := sticker_color(x.sticker, colors)),
+                "on_color": on_color(color),
             }
             for x in laid
         ],
@@ -223,10 +258,10 @@ def stickers_data(panel: BoardPanel) -> dict[str, object]:
 
 
 def _icon_path(d: str) -> MplPath:
-    """SVG path of M/L/C/Z as a matplotlib path."""
+    """SVG path of M/L/Q/C/Z as a matplotlib path."""
     verts: list[tuple[float, float]] = []
     codes: list[Any] = []
-    for op, args in re.findall(r"([MLCZ])([^MLCZ]*)", d):
+    for op, args in re.findall(r"([MLQCZ])([^MLQCZ]*)", d):
         n = [float(v) for v in args.split()]
         points = list(zip(n[::2], n[1::2], strict=True))
         if op == "Z":
@@ -235,14 +270,21 @@ def _icon_path(d: str) -> MplPath:
         elif op == "C":
             verts.extend(points)
             codes.extend([MplPath.CURVE4] * 3)
+        elif op == "Q":
+            verts.extend(points)
+            codes.extend([MplPath.CURVE3] * 2)
         else:
             verts.extend(points)
             codes.append(MplPath.MOVETO if op == "M" else MplPath.LINETO)
     return MplPath(verts, codes)
 
 
-def _draw(fig: Figure, laid: Layout, x: float, y: float) -> None:
+def _draw(fig: Figure, laid: Layout, x: float, y: float, color: str | None, short: bool) -> None:
+    """One sticker; color None is the black one, otherwise a band and a coloured icon."""
     ax = fig.axes[0]
+    here = Affine2D().translate(x, y)
+    if color is not None:
+        ax.add_patch(PathPatch(here.transform_path(_icon_path(BAND)), fc=color, lw=0))
     ax.add_patch(
         FancyBboxPatch(
             (x + CORNER, y + CORNER),
@@ -254,25 +296,27 @@ def _draw(fig: Figure, laid: Layout, x: float, y: float) -> None:
             lw=HAIRLINE * PT_PER_MM,
         )
     )
-    mid = x + WIDTH / 2
-    for path in _sticker_lines(laid):
-        place = Affine2D().translate(x, y)
-        ax.add_patch(PathPatch(place.transform_path(path), fc="black", lw=0))
-    ax.plot(
-        [x + PAD, x + WIDTH - PAD],
-        [y + RULE_Y, y + RULE_Y],
-        color="black",
-        lw=0.15 * PT_PER_MM,
-        solid_capstyle="butt",
-    )
+    number = _number_path(laid.sticker.short_id if short else laid.sticker.id)
+    tone = on_color(color) if color is not None else "black"
+    ax.add_patch(PathPatch(here.transform_path(number), fc=tone, lw=0))
+    for path in _name_paths(laid):
+        ax.add_patch(PathPatch(here.transform_path(path), fc="black", lw=0))
+    if color is None:
+        ax.plot(
+            [x + PAD, x + WIDTH - PAD],
+            [y + RULE_Y, y + RULE_Y],
+            color="black",
+            lw=0.15 * PT_PER_MM,
+            solid_capstyle="butt",
+        )
     scale = ICON_SIZE / 24
-    place = Affine2D().scale(scale).translate(mid - ICON_SIZE / 2, y + ICON_Y)
+    place = Affine2D().scale(scale).translate(x + (WIDTH - ICON_SIZE) / 2, y + ICON_Y)
     for d in icons()[laid.sticker.icon]:
         ax.add_patch(
             PathPatch(
                 place.transform_path(_icon_path(d)),
                 fc="none",
-                ec="black",
+                ec=color or "black",
                 lw=ICON_STROKE * scale * PT_PER_MM,
                 capstyle="round",
                 joinstyle="round",
@@ -307,8 +351,16 @@ def _pages(laid: list[Layout]) -> list[list[tuple[Layout, float, float]]]:
     return pages
 
 
-def write_stickers(panel: BoardPanel, name: str, language: Language, path: Path) -> Path:
-    """A4 PDF of the panel stickers at actual size, to print at 100 %."""
+def write_stickers(
+    panel: BoardPanel,
+    name: str,
+    language: Language,
+    path: Path,
+    colors: dict[str, int] | None = None,
+    short: bool = False,
+) -> Path:
+    """A4 PDF of the panel stickers at actual size, to print at 100 %: black, or in group
+    colours when `colors` are given; `short` prints the line number without its letters."""
     laid = [lay_out(s) for s in build_stickers(panel)]
     title = text("stickers_title", language, name=name)
     size = f"{WIDTH:g} × {HEIGHT:g}"
@@ -319,7 +371,8 @@ def write_stickers(panel: BoardPanel, name: str, language: Language, path: Path)
             fig = _page()
             ax = fig.axes[0]
             for item, x, y in placed:
-                _draw(fig, item, x, y)
+                tint = sticker_color(item.sticker, colors) if colors is not None else None
+                _draw(fig, item, x, y, tint, short)
             head = _line_path(title, MARGIN, MARGIN + 3, 3.6, NUMBER_FONT, centred=False)
             ax.add_patch(PathPatch(head, fc="black", lw=0))
             y = PAGE_H - MARGIN

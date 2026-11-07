@@ -1,5 +1,6 @@
 """Chases and holes: cable drops and rises along walls to points and boxes (shared ones in one
-chase, a wider one above CHASE_NARROW cables), cable passes through door openings."""
+chase, a wider one above CHASE_NARROW cables), cable channels, cable passes through door
+openings."""
 
 from __future__ import annotations
 
@@ -24,6 +25,7 @@ from floorplan_engine.electrical.wiring_model import (
 from floorplan_engine.model.geometry import RoomGeometry
 from floorplan_engine.model.schema import (
     Board,
+    CableChannel,
     ElectricalPoint,
     OpeningType,
 )
@@ -43,10 +45,12 @@ def wall_chases(
     by_id = {p.id: p for p in points}
     drops: dict[ChaseKey, list[tuple[float, float, str]]] = defaultdict(list)
     for r in runs:
-        p = by_id.get(r.target)
-        if r.rise_end_mm <= 0 or p is None or p.wall is None or p.offset is None:
-            continue
-        drops[(p.room, p.wall, r.route, r.circuit)].append((p.offset, r.rise_end_mm, p.id))
+        # In a daisy chain the line also leaves a point: a second cable in its chase
+        for end, rise in ((r.target, r.rise_end_mm), (r.source, r.rise_start_mm)):
+            p = by_id.get(end)
+            if rise <= 0 or p is None or p.wall is None or p.offset is None:
+                continue
+            drops[(p.room, p.wall, r.route, r.circuit)].append((p.offset, rise, p.id))
     out: list[Chase] = []
     for key, items in sorted(drops.items()):
         group: list[tuple[float, float, str]] = []
@@ -81,6 +85,34 @@ def wall_chases(
     return tuple(out)
 
 
+def channel_chases(channels: Sequence[CableChannel]) -> tuple[Chase, ...]:
+    """Cable channels: a wide chase from entry to exit; cables go in later, so no run and no
+    power circuit."""
+    return tuple(
+        Chase(
+            "channel",
+            c.room,
+            c.wall,
+            c.offset,
+            abs(c.exit - c.entry),
+            CHASE_CABLES,
+            (c.id,),
+            circuit="low",
+            span=(min(c.entry, c.exit), max(c.entry, c.exit)),
+        )
+        for c in channels
+    )
+
+
+def before_plaster(chases: Sequence[Chase], ceiling_conduit: bool) -> tuple[Chase, ...]:
+    """Cable laid before the plaster needs no chases: it fits in the plaster layer. Conduit does
+    not, so chases stay with it: ceiling routes with ceiling conduit, floor routes always. A cable
+    channel stays too: it is cut for cables that come later."""
+    if ceiling_conduit:
+        return tuple(chases)
+    return tuple(c for c in chases if c.kind == "channel" or c.route == "floor")
+
+
 def _shared(key: ChaseKey, group: Sequence[tuple[float, float, str]]) -> Chase:
     """Shared chase for a group of drops: middle along the wall, length to the farthest point."""
     room, wall, route, circuit = key
@@ -92,7 +124,7 @@ def _shared(key: ChaseKey, group: Sequence[tuple[float, float, str]]) -> Chase:
         (min(offsets) + max(offsets)) / 2,
         max(g[1] for g in group),
         len(group),
-        tuple(g[2] for g in group),
+        tuple(dict.fromkeys(g[2] for g in group)),  # a chain passes a point twice
         route,
         circuit,
     )

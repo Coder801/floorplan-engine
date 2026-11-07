@@ -358,7 +358,7 @@ def _draw_external(
     language: Language,
 ) -> None:
     """Inverter or power plug right of the panel, and the wire to the backup switch."""
-    key = "inverter" if panel.backup == "inverter" else "plug"
+    key = panel.backup or "plug"
     ext_id = "U1" if key == "inverter" else "XP1"
     bx0, bx1 = box_right + 1.5 * m, box_right + (SIDE - 0.3) * m
     by1 = box_top - PAD * m

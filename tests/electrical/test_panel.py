@@ -4,18 +4,23 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import Any
+from types import SimpleNamespace
+from typing import Any, cast
 
+import pytest
 import yaml
+from pydantic import ValidationError
 
 from floorplan_engine.electrical.loads import Kind, cable_section, parse_breaker, rating_for
 from floorplan_engine.electrical.panel import (
+    BoardPanel,
     Device,
     build_panel,
     choose_enclosure,
     din_rows,
     line_classes,
     panel_rows,
+    reserve_groups,
 )
 from floorplan_engine.electrical.panel_questions import panel_questions
 from floorplan_engine.electrical.panel_text import TEXT
@@ -283,6 +288,19 @@ def test_backup_plug_reserve_bus_and_warning() -> None:
     assert ats is not None and any(d.kind is DeviceKind.ATS for d in ats.devices)
 
 
+def test_charging_station_comes_in_through_a_plug() -> None:
+    elec = _elec([_pt("s1", "socket", "QF1")], {"QF1": "3x2.5"}, panel={"backup": "station"})
+    panel = build_panel(_plan(), elec)
+    assert panel is not None and panel.dc is None
+    assert any(d.id == "SA1" for d in panel.devices)
+    assert any("Зарядная станция" in w.text["ru"] for w in panel.warnings)
+    assert "panel_battery" not in {q.id for q in panel_questions(elec, panel, "ru")}
+    external = cast(dict[str, str], panel_data(panel, {}, "ЩР", "ru")["external"])
+    assert external["id"] == "XP1" and "зарядной станции" in external["title"]
+    with pytest.raises(ValidationError):
+        _elec([_pt("s1", "socket", "QF1")], {}, panel={"backup": "station", "pv_strings": 1})
+
+
 def test_panel_data_carries_catalog_models_and_texts() -> None:
     elec = _elec([_pt("s1", "socket", "QF1", room="b")], {"QF1": "3x2.5"})
     panel = build_panel(_plan(), elec)
@@ -478,3 +496,18 @@ def test_three_phase_not_yet() -> None:
 
     with pytest.raises(ValidationError, match="трёхфазный"):
         Electrical.model_validate({"panel": {"phases": 3}})
+
+
+def test_reserve_groups_gather_the_lines_of_a_model_group() -> None:
+    def group(name: str) -> SimpleNamespace:
+        return SimpleNamespace(group=name)
+
+    lines = [group(n) for n in ("QF1", "QF1.2", "QF1.3", "QF2", "QF8.2", "QF8.2.2")]
+    panel = cast(BoardPanel, SimpleNamespace(groups=lines))
+    points = [group(n) for n in ("QF1", "QF2", "QF8.2")]
+    model = cast(Electrical, SimpleNamespace(points=points, cables=[]))
+    assert {k: [g.group for g in v] for k, v in reserve_groups(panel, model).items()} == {
+        "QF1": ["QF1", "QF1.2", "QF1.3"],
+        "QF2": ["QF2"],
+        "QF8.2": ["QF8.2", "QF8.2.2"],  # a dot in the model's own group name stays
+    }

@@ -8,12 +8,14 @@ import zipfile
 from pathlib import Path
 
 from floorplan_engine.drawing.tables import Column, Table
+from floorplan_engine.electrical.panel import build_panel
 from floorplan_engine.epd.artifact import export_artifact
 from floorplan_engine.epd.objects import describe_objects
 from floorplan_engine.epd.side import (
     STAGE_OBJECTS,
     drop_column,
     from_table,
+    group_side_table,
     legend_entries,
     side_legends,
     side_tables,
@@ -154,3 +156,14 @@ def test_epd_page_has_view_stage_tables_and_theme_objects(tmp_path: Path) -> Non
     assert "panel" not in pages[3]  # no panel data: sheet primitives only
     assert pages[2]["estimate"]["rows"]  # estimate on the wiring page
     assert "estimate" not in pages[1]
+
+
+def test_group_table_moves_purpose_to_the_row_hint() -> None:
+    plan, _, elec, wiring = _model()
+    table = group_side_table(plan, elec, wiring, build_panel(plan, elec))
+    assert table is not None
+    assert "Назначение" not in table.columns and len(table.columns) == len(table.align)
+    assert all(r.hint and r.group == r.cells[0] for r in table.rows)
+    row = table.rows[0].as_dict()
+    assert row["group"] == table.rows[0].cells[0] and row["hint"] == table.rows[0].hint
+    assert table.total is not None and len(table.total) == len(table.columns)

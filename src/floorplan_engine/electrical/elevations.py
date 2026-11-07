@@ -20,11 +20,14 @@ from __future__ import annotations
 
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
+
+from shapely.geometry import Polygon
 
 from floorplan_engine.electrical.boxes import box_wall
 from floorplan_engine.electrical.point_numbers import number_points, point_name
+from floorplan_engine.electrical.routing import opening_strip
 from floorplan_engine.electrical.wiring_model import Wiring
 from floorplan_engine.model.geometry import (
     DOOR_TOP_MM,
@@ -32,6 +35,7 @@ from floorplan_engine.model.geometry import (
     WINDOW_SILL_MM,
     Contour,
     RoomGeometry,
+    Vec,
     WallSegment,
     point_in_polygon,
     room_geometries,
@@ -62,6 +66,7 @@ class OpeningView:
     y0: float  # bottom: 0 for a door, sill for a window
     y1: float  # top
     assumed: bool  # height not in room.yaml, typical value
+    hinge: str | None = None  # door: start | end, the side of the hinges on the elevation
 
 
 @dataclass(frozen=True)
@@ -201,6 +206,7 @@ def wall_elevations(
     assumed = wiring.height_assumed if wiring is not None else True
     numbers = number_points(plan, elec)
     geoms = {g.room.id: g for g in room_geometries(plan, contours)}
+    doors = _doors(geoms)
     walls: dict[tuple[str, str], _Wall] = defaultdict(_Wall)
 
     for p in elec.points:
@@ -216,6 +222,7 @@ def wall_elevations(
         )
 
     if wiring is not None:
+        box_chases = {(c.room, c.route) for c in wiring.chases if c.kind == "box"}
         for box in wiring.boxes:
             g = geoms.get(box.room)
             seg = box_wall(g, box.anchor) if g is not None else None
@@ -225,13 +232,19 @@ def wall_elevations(
             y = box.rise_mm if box.route == "floor" else ceiling - box.rise_mm
             side = _box_side(box.size)
             walls[(box.room, seg.id)].boxes.append(BoxView(box.id, box.label, x, y, side))
-            # Chase from the box to the route plane
-            y0, y1 = (0.0, y) if box.route == "floor" else (y, ceiling)
-            walls[(box.room, seg.id)].chases.append(ChaseView(x, y0, y1, 1, False, False))
+            # Chase from the box to the route plane: none if cable goes in before the plaster
+            if (box.room, box.route) in box_chases:
+                y0, y1 = (0.0, y) if box.route == "floor" else (y, ceiling)
+                walls[(box.room, seg.id)].chases.append(ChaseView(x, y0, y1, 1, False, False))
         for c in wiring.chases:
             if not c.wall:
                 continue  # at a box: drawn higher up
-            y0, y1 = (0.0, c.length_mm) if c.route == "floor" else (ceiling - c.length_mm, ceiling)
+            if c.span is not None:
+                y0, y1 = c.span
+            elif c.route == "floor":
+                y0, y1 = 0.0, c.length_mm
+            else:
+                y0, y1 = ceiling - c.length_mm, ceiling
             walls[(c.room, c.wall)].chases.append(
                 ChaseView(c.offset, y0, y1, c.cables, c.wide, c.circuit != "power")
             )
@@ -245,7 +258,7 @@ def wall_elevations(
                 continue
             w = w or _Wall()
             seg = geoms[room.id].contour.segments[k - 1]
-            openings = _openings(room, wall.id, ceiling)
+            openings = _openings(geoms[room.id], wall.id, ceiling, doors)
             out.append(
                 WallElevation(
                     room.id,
@@ -292,7 +305,9 @@ def elevation_data(
         src = feeds.get(target)
         if src is None:
             return None
-        return board if src == "board" else boxes[src].label if src in boxes else src
+        if src == "board":
+            return board
+        return boxes[src].label if src in boxes else point_name(points[src], lang)
 
     def color(group: str | None) -> str | None:
         c = colors.get(group or "")
@@ -326,6 +341,7 @@ def elevation_data(
             "openings": [
                 {
                     "kind": o.kind,
+                    **({"hinge": o.hinge} if o.hinge else {}),
                     "x0": r(o.x0),
                     "x1": r(o.x1),
                     "y0": r(o.y0),
@@ -395,6 +411,7 @@ def elevation_data(
     ceiling = elevations[0].height if elevations else 2700.0
     done = {(e.room, e.wall): content(e) for e in elevations}
     geoms = {g.room.id: g for g in room_geometries(plan, contours)}
+    doors = _doors(geoms)
 
     def neighbour(room: Room, k: int, turn: float) -> dict[str, Any]:
         """Neighbouring wall at a corner (k is its walk index, from 0): the angle and what is on it.
@@ -411,7 +428,7 @@ def elevation_data(
                     wall.length,
                     ceiling,
                     True,
-                    _openings(room, wall.id, ceiling),
+                    _openings(geoms[room.id], wall.id, ceiling, doors),
                 )
             )
         side = {key: v for key, v in side.items() if key != "back"}
@@ -525,12 +542,37 @@ def _facing(seg: WallSegment, other: RoomGeometry) -> int | None:
     return found[0].index + 1 if found else None
 
 
-def _openings(room: Room, wall: str, ceiling: float) -> tuple[OpeningView, ...]:
-    return tuple(
-        _opening(o.type, o.offset, o.width, o.sill, o.height, ceiling)
-        for o in room.openings
-        if o.wall == wall
-    )
+def _doors(geoms: Mapping[str, RoomGeometry]) -> list[tuple[Polygon, Vec]]:
+    """Doors of the flat: place on the plan and the hinge point."""
+    out: list[tuple[Polygon, Vec]] = []
+    for g in geoms.values():
+        for op in g.room.openings:
+            if op.type is OpeningType.DOOR:
+                seg = g.contour.segment(op.wall)
+                at = op.offset if op.hinge == "start" else op.offset + op.width
+                out.append((opening_strip(g, op), seg.point_at(at)))
+    return out
+
+
+def _openings(
+    g: RoomGeometry, wall: str, ceiling: float, doors: Sequence[tuple[Polygon, Vec]]
+) -> tuple[OpeningView, ...]:
+    """Openings of a wall. The opening on the other side of a door is that door, seen from here."""
+    seg = g.contour.segment(wall)
+    out: list[OpeningView] = []
+    for op in sorted((o for o in g.room.openings if o.wall == wall), key=lambda o: o.offset):
+        view = _opening(op.type, op.offset, op.width, op.sill, op.height, ceiling)
+        if op.type is OpeningType.DOOR:
+            view = replace(view, hinge=op.hinge)
+        elif op.type is OpeningType.OPENING:
+            strip = opening_strip(g, op)
+            for place, hinge in doors:
+                if place.intersection(strip).area > 0.5 * min(place.area, strip.area):
+                    near = (hinge - seg.start).dot(seg.direction) < op.offset + op.width / 2
+                    view = replace(view, kind="door", hinge="start" if near else "end")
+                    break
+        out.append(view)
+    return tuple(out)
 
 
 def _box_side(size: str) -> float:

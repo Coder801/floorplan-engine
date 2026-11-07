@@ -12,12 +12,14 @@ from ezdxf.filemanagement import readfile
 from shapely.geometry.base import BaseGeometry
 
 from floorplan_engine.drawing.ids import object_id
+from floorplan_engine.drawing.layers import A_TEXT, new_document
 from floorplan_engine.drawing.plan import (
     HATCH_SCALE_BEARING,
     HATCH_SCALE_PARTITION,
     _fits,
     _place_rows,
     _text_box,
+    draw_openings,
     readable_angle,
     wall_pieces,
 )
@@ -25,6 +27,13 @@ from floorplan_engine.model.geometry import Vec, WallSegment, room_geometries
 from floorplan_engine.model.scale import drawing_scale
 from floorplan_engine.model.schema import Plan
 from floorplan_engine.sheets.document import build_project_document
+from floorplan_engine.sheets.stages import (
+    ELECTRICAL_SHEET_LAYERS,
+    LIGHTING_SHEET_LAYERS,
+    PLAN_SHEET_LAYERS,
+    PLUMBING_SHEET_LAYERS,
+    WIRING_SHEET_LAYERS,
+)
 from floorplan_engine.validation.plan import validate_plan
 from tests.conftest import make_plan
 
@@ -181,3 +190,20 @@ def test_narrow_part_text_is_moved_off_its_part() -> None:
         narrow = _text_box(seg, 1900.0, 2000.0, level, move)
         for a, b in (parts[0], parts[2]):
             assert narrow.intersection(_text_box(seg, a, b, level, Vec(0.0, 0.0))).area == 0
+
+
+def test_sill_label_only_on_the_plan_sheet() -> None:
+    plan = make_plan(
+        [{"length": 3000}, {"length": 4000}, {"length": 3000}, {"length": 4000}],
+        [{"wall": "w2", "type": "window", "offset": 1000, "width": 1000, "sill": 900}],
+    )
+    _, contours = validate_plan(plan)
+    (g,) = room_geometries(plan, contours)
+    doc = new_document()
+    msp = doc.modelspace()
+    draw_openings(msp, g)
+    labels = [t for t in msp.query("TEXT") if "900" in t.dxf.text]
+    assert [t.dxf.layer for t in labels] == [A_TEXT.name]
+    assert A_TEXT in PLAN_SHEET_LAYERS
+    others = (ELECTRICAL_SHEET_LAYERS, LIGHTING_SHEET_LAYERS, WIRING_SHEET_LAYERS)
+    assert all(A_TEXT not in layers for layers in (*others, PLUMBING_SHEET_LAYERS))

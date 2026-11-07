@@ -41,6 +41,7 @@ from floorplan_engine.pipeline import (
     save_prices,
     save_variant,
     save_wiring_edits,
+    save_wizard,
 )
 from floorplan_engine.service import project_store as ps
 from floorplan_engine.service import sync
@@ -100,6 +101,23 @@ def answer_body(data: dict[str, Any]) -> tuple[str, Any]:
     if not isinstance(qid, str) or not qid:
         raise HTTPException(422, "id: нужен id вопроса")
     return qid, data.get("answer")
+
+
+def wizard_body(
+    data: dict[str, Any], allowed: Callable[[acc.Action], bool]
+) -> tuple[dict[str, Any] | None, dict[str, Any]]:
+    """{variant?, answers?} of POST /wizard. One call writes both, so each part needs its own
+    right: a studio client answers, but does not choose the variant."""
+    variant, answers = data.get("variant"), data.get("answers", {})
+    if variant is not None and not isinstance(variant, dict):
+        raise HTTPException(422, "variant: нужен объект")
+    if not isinstance(answers, dict):
+        raise HTTPException(422, "answers: нужен объект { id: ответ }")
+    if (variant is not None and not allowed("choose_variant")) or (
+        answers and not allowed("answer")
+    ):
+        raise HTTPException(403, "нет права на это действие")
+    return variant, answers
 
 
 def _version_of(session: Session, build: Build | None) -> ModelVersion | None:
@@ -277,6 +295,7 @@ def _edit_routes(
     auth: Auth,
     store: ObjectStore,
     project_of: Callable[[Session, Request, str], Project],
+    allowed: Callable[[Request, acc.Action], bool],
 ) -> None:
     """What the viewer writes: a new model version and a rebuild."""
 
@@ -331,6 +350,28 @@ def _edit_routes(
         def apply(folder: Path) -> list[Issue]:
             nonlocal saved
             saved = save_answer(folder, qid, raw, note)
+            if saved.issues:
+                raise refused_answer(saved)
+            return []
+
+        result = rewrite(request, key, apply, lambda: saved.rebuild)
+        return {"built": result["built"], "rebuilt": saved.rebuild}
+
+    @app.post("/api/projects/{key}/wizard")
+    def wizard(
+        request: Request, key: str, data: Annotated[dict[str, Any], Body()]
+    ) -> dict[str, Any]:
+        """The setup wizard: {variant?, answers?} → one new model version, one rebuild."""
+        variant, items = wizard_body(data, lambda action: allowed(request, action))
+        if variant is None and not items:  # no new version for an empty call
+            return {"built": False, "rebuilt": False}
+        with auth.db() as db:
+            note = answer_note(auth.principal(db, request))
+        saved = AnswerSaved()
+
+        def apply(folder: Path) -> list[Issue]:
+            nonlocal saved
+            saved = save_wizard(folder, variant, items, note)
             if saved.issues:
                 raise refused_answer(saved)
             return []
@@ -409,5 +450,5 @@ def install_db_routes(app: FastAPI, auth: Auth, store: ObjectStore, market_root:
         return acc.can(getattr(request.state, "role", None), action)
 
     _read_routes(app, auth, store, project_of, allowed)
-    _edit_routes(app, auth, store, project_of)
+    _edit_routes(app, auth, store, project_of, allowed)
     _price_routes(app, auth, market_root)

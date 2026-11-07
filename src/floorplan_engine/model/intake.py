@@ -83,7 +83,10 @@ class Question(StrictModel):
     also: list[str] = Field(
         default_factory=list, description="Другие поля, куда подставляется тот же ответ"
     )
-    answer: Literal["value", "choice", "text"] = "text"
+    answer: Literal["value", "choice", "text", "groups"] = Field(
+        default="text",
+        description="groups — список групп щита из options; такой вопрос строит только код",
+    )
     unit: str | None = None
     options: list[str] = Field(default_factory=list)
     option_labels: dict[str, str] = Field(
@@ -99,10 +102,10 @@ class Question(StrictModel):
 
     @model_validator(mode="after")
     def _consistent(self) -> Question:
-        if self.answer == "choice" and not self.options:
-            raise ValueError("для answer: choice нужен список options")
-        if self.answer != "choice" and self.options:
-            raise ValueError("options бывают только у answer: choice")
+        if self.answer in ("choice", "groups") and not self.options:
+            raise ValueError(f"для answer: {self.answer} нужен список options")
+        if self.answer not in ("choice", "groups") and self.options:
+            raise ValueError("options бывают только у answer: choice и groups")
         if set(self.option_labels) - set(self.options):
             raise ValueError("option_labels — только для значений из options")
         if self.target is None and self.severity is None:
@@ -132,7 +135,7 @@ class TextAnswer(StrictModel):
     resolved: bool = False
 
 
-Answer = float | str | Accept | TextAnswer
+Answer = float | str | list[str] | Accept | TextAnswer
 
 
 class AnswerNote(StrictModel):

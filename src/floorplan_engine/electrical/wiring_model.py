@@ -5,6 +5,7 @@ the wiring sheet, estimate, elevations and 3D."""
 from __future__ import annotations
 
 from collections import defaultdict
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Literal
 
@@ -52,17 +53,18 @@ class JunctionBox:
 
 @dataclass(frozen=True)
 class Run:
-    """One cable line: panel → box, panel → point or box → point."""
+    """One cable line: panel → box, panel → point, box → point, or point → point in a daisy
+    chain."""
 
     id: str
     group: str
     mark: str
     mark_assumed: bool  # cable type not in the model, taken from the point types
-    source: str  # board or a box id
+    source: str  # board, a box id or, in a daisy chain, a point id
     target: str  # box or point id
     path: tuple[Vec, ...]
     plan_mm: float
-    rise_start_mm: float  # from the line start (panel or box) to the ceiling or floor
+    rise_start_mm: float  # from the line start (panel, box, point) to the ceiling or floor
     rise_end_mm: float  # along the wall from ceiling (floor) to line end; 0 for ceiling
     ends_mm: float
     route: Route = "ceiling"
@@ -77,10 +79,23 @@ class Run:
         return self.plan_mm + self.vertical_mm + self.ends_mm
 
 
+def line_starts(runs: Sequence[Run]) -> dict[str, str]:
+    """For each line end, what the panel feeds it through: a box, the head of a daisy chain, or
+    the end itself."""
+    source = {r.target: r.source for r in runs}
+
+    def start(target: str) -> str:
+        while source.get(target, "board") != "board":
+            target = source[target]
+        return target
+
+    return {r.target: start(r.target) for r in runs}
+
+
 @dataclass(frozen=True)
 class Chase:
     """Wall chase from the ceiling down (route floor: from the floor up): kind is point (to points),
-    board (at the panel), box (at a box)."""
+    board (at the panel), box (at a box), channel (a cable channel between two heights, span)."""
 
     kind: str
     room: str
@@ -91,6 +106,7 @@ class Chase:
     targets: tuple[str, ...] = ()  # ids of points the chase cables go to
     route: Route = "ceiling"
     circuit: Circuit = "power"
+    span: tuple[float, float] | None = None  # heights from the floor, low to high: only a channel
 
     @property
     def wide(self) -> bool:
@@ -121,6 +137,7 @@ class Wiring:
     # Manual edits: applied "wire:id" and "box:id"; remarks are (path in wiring.yaml, text)
     edited: frozenset[str] = field(default=frozenset())
     edit_notes: tuple[tuple[str, str], ...] = field(default=())
+    before_plaster: bool = False  # cable laid before the plaster: chases only with conduit
 
     @property
     def chase_mm(self) -> float:

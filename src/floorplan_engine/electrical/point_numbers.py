@@ -44,17 +44,25 @@ NAMES: dict[str, dict[str, str]] = {
 }
 
 
+BLOCK_TYPES = (PointType.SOCKET, PointType.DATA, PointType.TV)  # may stand as a block of posts
+
+
 def text(key: str, language: Language, **kw: object) -> str:
     return TEXT[key][language].format(**kw)
 
 
-def point_name(p: ElectricalPoint, language: Language) -> str:
-    """Point kind label such as "Розетка", "Вимикач 2-клавішний: коридор"; a block gets its number
-    of posts."""
+def block_name(p: ElectricalPoint, language: Language) -> str:
+    """Point kind without its note; a block gets its number of posts: "Розетка 3-постовая"."""
     key = "switch2" if p.type is PointType.SWITCH and p.keys == 2 else p.type.value
     name = NAMES[key][language]
-    if p.count > 1 and p.type in (PointType.SOCKET, PointType.DATA, PointType.TV):
+    if p.count > 1 and p.type in BLOCK_TYPES:
         name = f"{name} {text('posts', language, n=p.count)}"
+    return name
+
+
+def point_name(p: ElectricalPoint, language: Language) -> str:
+    """Point kind label such as "Розетка", "Вимикач 2-клавішний: коридор"."""
+    name = block_name(p, language)
     return f"{name}: {p.note}" if p.note else name
 
 

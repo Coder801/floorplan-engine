@@ -8,21 +8,42 @@ A wiring line is named by meaning, "QF4: К3 → Розетка, Кухня", no
 
 from __future__ import annotations
 
-from collections.abc import Callable
-from dataclasses import dataclass
+from collections.abc import Callable, Sequence
+from dataclasses import dataclass, replace
 from typing import Any
 
+import shapely
+from shapely.geometry import Polygon
+from shapely.geometry.base import BaseGeometry
+
+from floorplan_engine.drawing.plan import mirrored_wall, wall_areas, wall_pieces
 from floorplan_engine.drawing.wiring import lay_out
 from floorplan_engine.electrical.anchors import symbol_key
 from floorplan_engine.electrical.boxes import BOX_CLEARANCE, BOX_TITLES, box_wall
 from floorplan_engine.electrical.elevations import WaterMap, behind_text, wall_elevations
 from floorplan_engine.electrical.panel import BoardPanel, build_panel
 from floorplan_engine.electrical.panel_text import amps, kw
+from floorplan_engine.electrical.point_numbers import BLOCK_TYPES, block_name
+from floorplan_engine.electrical.routing import opening_strip
 from floorplan_engine.electrical.wiring import RESERVE
-from floorplan_engine.electrical.wiring_model import BOX_ABOVE_FLOOR, BOX_BELOW_CEILING, Run, Wiring
-from floorplan_engine.model.geometry import Contour, Vec, room_geometries
-from floorplan_engine.model.schema import Electrical, ElectricalPoint, OpeningType, Plan
+from floorplan_engine.electrical.wiring_model import (
+    BOX_ABOVE_FLOOR,
+    BOX_BELOW_CEILING,
+    Run,
+    Wiring,
+    line_starts,
+)
+from floorplan_engine.model.geometry import Contour, RoomGeometry, Vec, room_geometries
+from floorplan_engine.model.schema import (
+    Electrical,
+    ElectricalPoint,
+    Opening,
+    OpeningType,
+    Plan,
+)
 from floorplan_engine.model.texts import Language, tr
+
+Point = tuple[float, float]
 
 TEXT: dict[str, dict[str, str]] = {
     "group": {"ru": "Автомат (группа)", "uk": "Автомат (група)"},
@@ -112,9 +133,13 @@ def text(key: str, language: Language, **values: object) -> str:
 class ObjectInfo:
     title: str
     rows: tuple[tuple[str, str], ...]
+    block: dict[str, object] | None = None  # socket block: its scheme and wall in a pinned hint
 
     def as_dict(self) -> dict[str, object]:
-        return {"title": self.title, "rows": [list(r) for r in self.rows]}
+        out: dict[str, object] = {"title": self.title, "rows": [list(r) for r in self.rows]}
+        if self.block is not None:
+            out["block"] = self.block
+        return out
 
 
 def _mm(value: float) -> str:
@@ -194,6 +219,15 @@ def describe_objects(
             out[f"elevation:{e.key}"] = ObjectInfo(
                 tr("elev_card", lang, room=e.room_name, n=e.index), tuple(rows)
             )
+            for pv in e.points:
+                if pv.type in BLOCK_TYPES:
+                    block = {
+                        "posts": pv.posts,
+                        "x": round(pv.x),
+                        "y": round(pv.y),
+                        "wall": f"elevation:{e.key}",
+                    }
+                    out[f"point:{pv.id}"] = replace(out[f"point:{pv.id}"], block=block)
         panel = build_panel(plan, elec)
         if panel is not None:
             out.update(device_cards(panel, lang))
@@ -284,7 +318,7 @@ def _electrical(plan: Plan, elec: Electrical, wiring: Wiring | None) -> dict[str
                 (text("feed", lang), src),
                 (text("length", lang), f"{_m(run.length_mm)} м"),
             ]
-        out[f"point:{pt.id}"] = ObjectInfo(f"{_point_name(pt, lang)} · {pt.id}", tuple(rows))
+        out[f"point:{pt.id}"] = ObjectInfo(f"{block_name(pt, lang)} · {pt.id}", tuple(rows))
 
     if wiring is not None:
         for run in wiring.runs:
@@ -368,10 +402,92 @@ def wire_titles(plan: Plan, elec: Electrical, wiring: Wiring) -> dict[str, str]:
     return {r.id: infos[f"wire:{r.id}"].title for r in wiring.runs}
 
 
+def plan_areas(plan: Plan, contours: dict[str, Contour]) -> dict[str, list[list[Point]]]:
+    """Wall areas for clicks on the plan sheet: wall key → outer rings and holes, mm of the model.
+    Hatching is thin strokes, a click must land anywhere on the wall."""
+    out: dict[str, list[list[Point]]] = {}
+    for tag, area in wall_areas(room_geometries(plan, contours)).items():
+        polys = [p for p in shapely.get_parts(area) if isinstance(p, Polygon)]
+        rings = [ring for p in polys for ring in (p.exterior, *p.interiors)]
+        out[f"wall:{tag}"] = [[(x, y) for x, y in ring.coords] for ring in rings]
+    return out
+
+
+def _covering_wall(geoms: Sequence[RoomGeometry]) -> dict[str, str]:
+    """Walls without their own area on the plan → the wall that covers them: the top of a pylon
+    is drawn as part of the thick wall next to it."""
+    areas = wall_areas(geoms)
+    bodies: dict[str, list[BaseGeometry]] = {}
+    for g in geoms:
+        for piece in wall_pieces(g):
+            bodies.setdefault(piece.tag, []).append(piece.body)
+    out: dict[str, str] = {}
+    for tag, parts in bodies.items():
+        if tag in areas:
+            continue
+        body = shapely.unary_union(parts)
+        shares = {t: a.intersection(body).area for t, a in areas.items()}
+        best = max(sorted(shares), key=lambda t: shares[t], default=None)
+        if best is not None and shares[best] > 0:
+            out[tag] = best
+    return out
+
+
+def plan_chains(plan: Plan, contours: dict[str, Contour]) -> dict[str, list[str]]:
+    """What to highlight on click on the plan sheet: a wall or its dimensions — the wall, its
+    openings, the dimensions with them and the other side of the partition, with the walls it
+    covers; an opening — both of its sides (a door in one room, an opening in the neighbour) and
+    their dimensions, which are drawn on one side only; a room — all of that for its walls."""
+    geoms = room_geometries(plan, contours)
+    strips = [(g.room.id, op, opening_strip(g, op)) for g in geoms for op in g.room.openings]
+
+    def opening_keys(room: str, opening: Opening, strip: Polygon) -> list[str]:
+        sides = [
+            (r, op)
+            for r, op, s in strips
+            if op is opening or s.intersection(strip).area > 0.5 * min(s.area, strip.area)
+        ]
+        return [
+            *(f"opening:{op.id}" for _, op in sides),
+            *(f"dimension:{r}.{op.wall}" for r, op in sides),
+        ]
+
+    walls: dict[str, list[str]] = {}
+    for g in geoms:
+        for seg in g.contour.segments:
+            tag = f"{g.room.id}.{seg.id}"
+            chain = [f"wall:{tag}", f"dimension:{tag}"]
+            for other in geoms:
+                mirror = mirrored_wall(g, seg, other) if other is not g else None
+                if mirror is not None:
+                    chain += [f"wall:{other.room.id}.{mirror.id}"]
+                    chain += [f"dimension:{other.room.id}.{mirror.id}"]
+            for r, op, strip in strips:
+                if r == g.room.id and op.wall == seg.id:
+                    chain += opening_keys(r, op, strip)
+            walls[tag] = chain
+    covered = _covering_wall(geoms)
+    for tag, owner in covered.items():
+        walls[owner] = walls[owner] + walls[tag]
+    for tag, owner in covered.items():
+        walls[tag] = walls[owner]
+    out: dict[str, list[str]] = {}
+    for tag, chain in walls.items():
+        out[f"wall:{tag}"] = out[f"dimension:{tag}"] = list(dict.fromkeys(chain))
+    for g in geoms:
+        tags = [f"{g.room.id}.{seg.id}" for seg in g.contour.segments]
+        room = [f"room:{g.room.id}", *(k for tag in tags for k in walls[tag])]
+        out[f"room:{g.room.id}"] = list(dict.fromkeys(room))
+    for r, op, strip in strips:
+        out[f"opening:{op.id}"] = list(dict.fromkeys(opening_keys(r, op, strip)))
+    return out
+
+
 def line_chains(wiring: Wiring) -> dict[str, list[str]]:
     """What to highlight on click on the wiring sheet: object → its whole line.
     A panel → box line and the box itself: the box and all its lines to the points;
-    a box → point line and the point: this branch, the box and the panel → box line."""
+    a box → point line and the point: this branch, the box and the panel → box line;
+    a daisy chain: all its lines and points."""
     feed = {r.target: r for r in wiring.runs if r.source == "board"}
     children: dict[str, list[str]] = {}
     for r in wiring.runs:
@@ -397,6 +513,17 @@ def line_chains(wiring: Wiring) -> dict[str, list[str]]:
             chain.append(f"point:{r.target}")
             out[f"point:{r.target}"] = chain
         out[f"wire:{r.id}"] = chain
+    boxes = {b.id for b in wiring.boxes}
+    starts = line_starts(wiring.runs)
+    chained = {starts[r.source] for r in wiring.runs if r.source in starts} - boxes
+    loops: dict[str, list[Run]] = {}
+    for r in wiring.runs:
+        if starts[r.target] in chained:
+            loops.setdefault(starts[r.target], []).append(r)
+    for runs in loops.values():
+        chain = [key for r in runs for key in (f"wire:{r.id}", f"point:{r.target}")]
+        for key in chain:
+            out[key] = chain
     return out
 
 

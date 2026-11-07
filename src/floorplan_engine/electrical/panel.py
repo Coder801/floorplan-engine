@@ -123,7 +123,7 @@ class BoardPanel:
     """The whole panel: groups, devices in order, totals and weak spots."""
 
     scheme: PanelScheme
-    backup: str | None  # inverter | plug; None means no backup
+    backup: str | None  # inverter | plug | station; None means no backup
     backup_assumed: bool  # backup not set: an inverter is assumed
     groups: tuple[PanelGroup, ...]
     devices: tuple[Device, ...]
@@ -502,13 +502,27 @@ def weak_spots(panel: BoardPanel, relay: bool, npe: bool | None = True) -> list[
             out.append(
                 Warning("major", _both("w_backup", p=kw(res), lim=f"{panel.backup_power:g}"))
             )
-        if panel.backup == "plug":
-            out.append(Warning("minor", _both("w_plug")))
+        if panel.backup in ("plug", "station"):
+            out.append(Warning("minor", _both(f"w_{panel.backup}")))
     if panel.backup == "inverter" and not npe:
         out.append(Warning("major", _both("w_npe_unknown" if npe is None else "w_npe_no")))
     if panel.dc is not None and panel.dc.voltage_assumed:
         dc = panel.dc
         out.append(Warning("minor", _both("w_battery", v=dc.voltage, a=amps(dc.current))))
+    return out
+
+
+def reserve_groups(panel: BoardPanel, model: Electrical) -> dict[str, list[PanelGroup]]:
+    """Groups of the model with their panel lines (QF1 → QF1, QF1.2; QF8 → QF8, QF8.2), in panel
+    order: panel.reserve holds model groups, which do not change with the wiring variant, and a
+    group goes on the backup bus with all its lines (lines.split_by_lines)."""
+    names = {p.group for p in model.points if p.group} | {c.group for c in model.cables if c.group}
+    out: dict[str, list[PanelGroup]] = {}
+    for g in panel.groups:
+        name = g.group
+        while name not in names and "." in name:
+            name = name.rsplit(".", 1)[0]
+        out.setdefault(name, []).append(g)
     return out
 
 

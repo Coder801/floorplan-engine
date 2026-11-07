@@ -12,6 +12,7 @@ from typing import Any
 from floorplan_engine.electrical.anchors import symbol_key
 from floorplan_engine.electrical.estimate import Estimate
 from floorplan_engine.electrical.panel import BoardPanel
+from floorplan_engine.epd.panel_data import reserve_data
 from floorplan_engine.epd.side import legend_entries
 from floorplan_engine.model.geometry import Contour
 from floorplan_engine.model.plumbing import FixtureType, Plumbing
@@ -29,10 +30,12 @@ def overview_data(
     plumbing: Plumbing | None = None,
     net: Network | None = None,
     plumbing_estimate: Estimate | None = None,
+    model: Electrical | None = None,
 ) -> dict[str, Any]:
     """Object, rooms, ceiling, points by kind (as in the legend), panel and plumbing;
     plumbing_estimate is the plumbing estimate (the same as out/plumbing-estimate.*): its total
-    goes into the project total together with the electrical estimate of the chosen variant."""
+    goes into the project total together with the electrical estimate of the chosen variant.
+    model is the electrical before the variant and lines: the backup bus is chosen by its groups."""
     sheet = plan.sheet
     areas = {r.id: round(contours[r.id].area_m2, 2) for r in plan.rooms if r.id in contours}
     rooms = [
@@ -83,6 +86,10 @@ def overview_data(
             "installed_w": round(panel.installed),
             "calculated_w": round(panel.calculated),
         }
+        source = model or elec
+        reserve = reserve_data(panel, source) if source is not None else None
+        if reserve is not None:
+            out["panel"]["reserve"] = reserve
     if plumbing is not None and net is not None:
         out["plumbing"] = plumbing_overview(plumbing, net, plan.language)
         if plumbing_estimate is not None and plumbing_estimate.lines:

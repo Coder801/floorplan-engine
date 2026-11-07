@@ -66,7 +66,7 @@ def build(
     if result.loads is not None:
         typer.echo(f"  {result.loads} — роспись потребителей щита")
     if result.stickers is not None:
-        typer.echo(f"  {result.stickers} — наклейки щита для печати")
+        typer.echo(f"  {result.stickers} — маркировка щита для печати (рядом цветная, без букв)")
     if result.estimate:
         typer.echo(f"  {result.estimate[-1]} — смета (и .md, .csv рядом)")
     if result.plumbing_estimate:

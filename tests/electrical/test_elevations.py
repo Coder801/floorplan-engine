@@ -6,7 +6,7 @@ from floorplan_engine.drawing.elevations import elevation_panel, spread
 from floorplan_engine.electrical.elevations import elevation_data, wall_elevations
 from floorplan_engine.electrical.wiring import box_wiring
 from floorplan_engine.model.geometry import DOOR_TOP_MM
-from floorplan_engine.model.schema import Electrical
+from floorplan_engine.model.schema import CableChannel, Electrical, Plan
 from floorplan_engine.validation.electrical import validate_electrical
 from floorplan_engine.validation.issues import Severity, parse_model
 from floorplan_engine.validation.plan import validate_plan
@@ -27,6 +27,35 @@ def _elec(points: list[dict[str, object]]) -> Electrical:
 
 
 SOCKETS = {"room": "r", "wall": "w2", "type": "socket", "group": "QF1"}
+
+
+def test_cable_channel_stands_between_its_heights() -> None:
+    plan = make_plan(WALLS, [DOOR])
+    _, contours = validate_plan(plan)
+    elec = _elec([{"id": "s1", "offset": 1000, "height": 300, **SOCKETS}]).model_copy(
+        update={
+            "cable_channels": [
+                CableChannel(id="tv", room="r", wall="w2", offset=1500, entry=400, exit=1100)
+            ]
+        }
+    )
+    wiring = box_wiring(plan, contours, elec)
+    w2 = next(e for e in wall_elevations(plan, contours, elec, wiring) if e.wall == "w2")
+    channel = next(c for c in w2.chases if c.x == 1500)
+    assert (channel.y0, channel.y1, channel.wide) == (400, 1100, True)
+
+
+def test_before_plaster_draws_no_chases() -> None:
+    plan = make_plan(WALLS, [DOOR])
+    _, contours = validate_plan(plan)
+    elec = _elec(
+        [
+            {"id": "s1", "offset": 1000, "height": 300, **SOCKETS},
+            {"id": "s2", "offset": 2500, "height": 300, **SOCKETS},
+        ]
+    ).model_copy(update={"plaster": "before"})
+    wiring = box_wiring(plan, contours, elec)
+    assert all(not e.chases for e in wall_elevations(plan, contours, elec, wiring))
 
 
 def test_walls_with_electrics_only_and_their_content() -> None:
@@ -218,3 +247,54 @@ def test_elevation_data_face_and_neighbours() -> None:
     assert w1["left"]["key"] == "elevation:r.w4"
     assert "back" not in w1["right"]
     assert walls["elevation:r.w2"]["left"]["board"]["key"] == "board:board"
+
+
+def test_door_shows_on_both_sides_with_its_hinge() -> None:
+    def room(rid: str, x: float, inner: str, opening: dict[str, object]) -> dict[str, object]:
+        walls = [
+            {"id": f"w{k}", "length": 3000, **({"thickness": 100} if f"w{k}" == inner else {})}
+            for k in range(1, 5)
+        ]
+        return {"id": rid, "name": rid, "origin": [x, 0], "walls": walls, "openings": [opening]}
+
+    door = {"id": "a_door", "wall": "w3", "type": "door", "offset": 1000, "width": 800,
+            "hinge": "start", "height": 2050}  # fmt: skip
+    gap = {"id": "b_gap", "wall": "w1", "type": "opening", "offset": 1200, "width": 800}
+    plan = Plan.model_validate(
+        {
+            "name": "тест",
+            "default_wall_thickness": 200,
+            "source": "text",
+            "rooms": [room("a", 0, "w3", door), room("b", 3100, "w1", gap)],
+        }
+    )
+    _, contours = validate_plan(plan)
+    elec = _elec(
+        [
+            {
+                "id": "s1",
+                "room": "a",
+                "wall": "w3",
+                "offset": 200,
+                "height": 300,
+                "type": "socket",
+                "group": "QF1",
+            },
+            {
+                "id": "s2",
+                "room": "b",
+                "wall": "w1",
+                "offset": 200,
+                "height": 300,
+                "type": "socket",
+                "group": "QF1",
+            },
+        ]
+    ).model_copy(update={"board": None})
+    wiring = box_wiring(plan, contours, elec)
+    views = {(e.room, e.wall): e for e in wall_elevations(plan, contours, elec, wiring)}
+    (near,) = views[("a", "w3")].openings
+    (far,) = views[("b", "w1")].openings
+    assert (near.kind, near.hinge) == ("door", "start")
+    # From the other room the door is the same one, its hinges on the opposite side
+    assert (far.kind, far.hinge) == ("door", "end")

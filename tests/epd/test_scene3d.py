@@ -12,9 +12,10 @@ from shapely.ops import unary_union
 from floorplan_engine.electrical.wiring import box_wiring
 from floorplan_engine.epd.scene3d import FLOOR_Z_MM, build_scene
 from floorplan_engine.model.geometry import DOOR_TOP_MM, WINDOW_SILL_MM
+from floorplan_engine.model.schema import Electrical
 from floorplan_engine.validation.plan import validate_plan
 from tests.conftest import make_plan
-from tests.electrical.test_wiring import DOOR, RECT, _elec
+from tests.electrical.test_wiring import DOOR, RECT, _elec, _two_rooms_with_door
 
 WINDOW = {"wall": "w3", "type": "window", "offset": 1000, "width": 1200}
 
@@ -26,6 +27,12 @@ def _scene(cables: list[dict[str, Any]] | None = None) -> tuple[dict[str, Any], 
     wiring = box_wiring(plan, contours, elec)
     assert wiring is not None
     return build_scene(plan, contours, elec, wiring), wiring
+
+
+def test_floors_carry_the_room_kind() -> None:
+    scene, _ = _scene()
+    assert scene["floors"]
+    assert all(f["kind"] == "living" for f in scene["floors"])  # unknown names count as living
 
 
 def test_wires_are_orthogonal_and_end_at_point_heights() -> None:
@@ -178,3 +185,25 @@ def test_corner_does_not_give_wall_a_foreign_normal() -> None:
     _, contours = validate_plan(plan)
     walls = _walls(room_geometries(plan, contours), 2700)
     assert all(len(w["normals"]) == 1 for w in walls)
+
+
+def test_slab_covers_rooms_walls_and_openings_without_holes() -> None:
+    plan = _two_rooms_with_door()
+    _, contours = validate_plan(plan)
+    elec = Electrical.model_validate(
+        {
+            "points": [
+                {"id": "s1", "room": "a", "type": "socket", "wall": "w1", "offset": 500,
+                 "height": 300, "group": "QF1"},
+            ],
+            "board": {"room": "a", "wall": "w1", "offset": 1500, "height": 1500},
+        }
+    )  # fmt: skip
+    wiring = box_wiring(plan, contours, elec)
+    assert wiring is not None
+    scene = build_scene(plan, contours, elec, wiring)
+    assert len(scene["slab"]) == 1
+    slab = Polygon(scene["slab"][0]).buffer(1)
+    assert all(slab.covers(Polygon(f["rings"][0])) for f in scene["floors"])
+    for wall in scene["walls"]:
+        assert all(slab.covers(Polygon(p[0], p[1:])) for p in wall["polys"])

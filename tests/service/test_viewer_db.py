@@ -212,6 +212,36 @@ def test_answers_are_new_versions(
         assert latest.data["answers.yaml"]["log"]["q2"]["by"] == "client"
 
 
+def test_wizard_is_one_new_version_and_needs_each_right(
+    setup: tuple[TestClient, LocalObjectStore, dict[str, str]], auth: Auth
+) -> None:
+    client, _, tokens = setup
+    pid = tokens["id"]
+    url = f"/api/projects/{pid}/wizard"
+    variant = {"mode": "economy", "route": "ceiling", "distribution": "boxes"}
+    answers = {"panel_input": 40}
+
+    def version() -> int:
+        with auth.db() as db:
+            latest = repo.latest_model(db, uuid.UUID(pid))
+            assert latest is not None
+            return latest.version
+
+    start = version()
+    client.cookies.set(COOKIE, tokens["client"])  # a studio client answers, but does not choose
+    assert client.post(url, json={"variant": variant, "answers": answers}).status_code == 403
+    assert client.post(url, json={"variant": variant}).status_code == 403
+    assert version() == start
+    client.cookies.set(COOKIE, tokens["a"])
+    assert client.post(url, json={}).json() == {"built": False, "rebuilt": False}
+    assert version() == start
+    saved = client.post(url, json={"variant": variant, "answers": answers})
+    assert saved.json() == {"built": True, "rebuilt": True}
+    assert version() == start + 1
+    refused = client.post(url, json={"answers": {"panel_input": -1}})
+    assert refused.status_code == 422 and version() == start + 1
+
+
 def test_answers_need_the_right(
     setup: tuple[TestClient, LocalObjectStore, dict[str, str]],
 ) -> None:

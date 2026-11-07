@@ -68,6 +68,9 @@ MOCK_PRICES: dict[str, float] = {
     "led_output": 150,
     "outlet": 150,
     "led_strip": 250,
+    "rough_holder": 60,
+    "rough_lamp": 50,
+    "rough_switch": 80,
     "work.cable": 30,
     "work.conduit": 10,
     "work.chase": 200,
@@ -78,6 +81,8 @@ MOCK_PRICES: dict[str, float] = {
     "work.board_install": 2500,
     "work.board_module": 120,
     "work.mechanism": 120,
+    "work.rough_light": 100,
+    "work.rough_switch": 100,
     "work.marking": 10,
     "work.insulation_test": 150,
 }

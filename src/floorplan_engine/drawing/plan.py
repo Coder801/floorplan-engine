@@ -172,19 +172,40 @@ def wall_pieces(g: RoomGeometry) -> list[WallPiece]:
     return out
 
 
-def draw_walls(msp: Modelspace, geoms: Sequence[RoomGeometry]) -> None:
-    """Walls of all rooms: hatching by material and the shared silhouette boundary."""
+def _owned(
+    geoms: Sequence[RoomGeometry],
+) -> tuple[list[WallPiece], BaseGeometry, BaseGeometry, list[BaseGeometry]]:
+    """Wall pieces, the silhouette, the load-bearing part and what each piece owns on the plan."""
     # Load-bearing walls first: at a joint with a partition the spot goes to the load-bearing wall
     pieces = sorted((p for g in geoms for p in wall_pieces(g)), key=lambda p: not p.bearing)
     total = shapely.unary_union([p.polygon for p in pieces])
     bearing = shapely.unary_union([p.body for p in pieces if p.bearing]).intersection(total)
     covered: BaseGeometry = Polygon()
+    owned: list[BaseGeometry] = []
     for p in pieces:
         # The wall body, not the mitred piece: the joint with the next wall is at 90°
         body = p.body.intersection(total)
         area = body.intersection(bearing) if p.bearing else body.difference(bearing)
-        own = area.difference(covered)
+        owned.append(area.difference(covered))
         covered = covered.union(area)
+    return pieces, total, bearing, owned
+
+
+def wall_areas(geoms: Sequence[RoomGeometry]) -> dict[str, BaseGeometry]:
+    """Plan area of each wall, tag → area, as hatched; a wall covered by its neighbour (the top
+    of a pylon inside a thick wall) has none."""
+    pieces, _, _, owned = _owned(geoms)
+    by_tag: dict[str, list[BaseGeometry]] = {}
+    for p, own in zip(pieces, owned, strict=True):
+        by_tag.setdefault(p.tag, []).append(own)
+    areas = {tag: shapely.unary_union(parts) for tag, parts in by_tag.items()}
+    return {tag: area for tag, area in areas.items() if area.area > 0}
+
+
+def draw_walls(msp: Modelspace, geoms: Sequence[RoomGeometry]) -> None:
+    """Walls of all rooms: hatching by material and the shared silhouette boundary."""
+    pieces, total, bearing, owned = _owned(geoms)
+    for p, own in zip(pieces, owned, strict=True):
         base = HATCH_SCALE_BEARING if p.bearing else HATCH_SCALE_PARTITION
         scale = base * sheet_scale() / DEFAULT_SCALE
         with tagged(msp, "wall", p.tag):
@@ -278,7 +299,8 @@ def _draw_window(
     if op.sill is not None:
         mid = seg.point_at((a + b) / 2) + seg.inward * sheet(TEXT_SMALL_MM * 1.2)
         text = tr("sill", language, sill=f"{op.sill:g}")
-        add_text(msp, text, mid, TEXT_SMALL_MM, A_WIND.name, seg.angle_deg)
+        # On the plan labels layer: the other sheets take windows, but a sill is not for them
+        add_text(msp, text, mid, TEXT_SMALL_MM, A_TEXT.name, seg.angle_deg)
 
 
 # --- Dimensions --------------------------------------------------------------
@@ -430,7 +452,7 @@ def _outside_is_free(g: RoomGeometry, seg: WallSegment, others: Sequence[RoomGeo
     return not any(point_in_polygon(mid, o.contour.vertices) for o in others if o is not g)
 
 
-def _mirrored_wall(g: RoomGeometry, seg: WallSegment, other: RoomGeometry) -> WallSegment | None:
+def mirrored_wall(g: RoomGeometry, seg: WallSegment, other: RoomGeometry) -> WallSegment | None:
     """The wall of another room that is the other side of this same partition."""
     far_start = seg.start + seg.outward * seg.thickness
     far_end = seg.end + seg.outward * seg.thickness
@@ -474,7 +496,7 @@ def draw_dimensions(
                 reach = max(c.dot(seg.outward) for r in all_rooms for c in r.corners)
                 sign, base = 1.0, reach - seg.start.dot(seg.outward) + sheet(DIM_LEVEL_1_MM)
             else:
-                if any(_mirrored_wall(g, seg, o) is not None for o in done):
+                if any(mirrored_wall(g, seg, o) is not None for o in done):
                     continue
                 sign, base = -1.0, sheet(DIM_LEVEL_1_MM)
             parts = [(0.0, seg.length)]

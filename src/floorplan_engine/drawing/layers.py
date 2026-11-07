@@ -66,7 +66,7 @@ A_WALL = LayerSpec("A-WALL", 7, "Стены; штриховка — несущи
 A_DOOR = LayerSpec("A-DOOR", 3, "Двери с дугой открывания")
 A_WIND = LayerSpec("A-WIND", 4, "Окна")
 A_DIMS = LayerSpec("A-DIMS", 2, "Размеры")
-A_TEXT = LayerSpec("A-TEXT", 7, "Названия и площади помещений")
+A_TEXT = LayerSpec("A-TEXT", 7, "Названия и площади помещений, подоконники")
 # Room outline for area fields: not printed and not visible on sheets; delete it and the
 # area fields show "####"
 A_AREA = LayerSpec("A-AREA", 8, "Контуры площади помещений (не печатается)", plot=False)

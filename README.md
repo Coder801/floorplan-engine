@@ -70,9 +70,11 @@ uv run python scripts/flow.py feature <имя> | integrate | release      # ве
 
 ## Печать: PDF-альбом
 
-`build` пишет и `out/panel-stickers.pdf` — наклейки на аппараты щита 10 × 25 мм на листе A4: номер
-линии, короткое название, иконка; порядок — по рейкам. Печатать в масштабе 100 %, линейка 50 мм на
-листе проверяет масштаб. В просмотре — переключатель «Наклейки» на вкладке «Щит». Иконки —
+`build` пишет и `out/panel-stickers.pdf` — маркировка аппаратов щита, наклейки 10 × 25 мм на листе A4: номер
+линии, короткое название, иконка; порядок — по рейкам. Рядом `out/panel-stickers-color.pdf` — те же
+наклейки в цветах групп, а `panel-stickers-short.pdf` и `panel-stickers-color-short.pdf` — с номером
+линии без букв: 12 вместо QF12 (общие аппараты остаются QS1, KV1). Печатать в масштабе 100 %, линейка 50 мм на
+листе проверяет масштаб. В просмотре — переключатель «Маркировка» на вкладке «Щит». Иконки —
 [Tabler Icons](https://tabler.io/icons) (MIT).
 
 `floorplan-engine print projects/<имя>` — все листы собранного `out/project.dxf` одним PDF
@@ -125,7 +127,7 @@ uv run python scripts/flow.py feature <имя> | integrate | release      # ве
 читается, смета напоминает перенести цены на ключи). Позиция без цены остаётся в смете с пометкой
 «нет цены» и в итог не входит; неизвестный ключ — ошибка с путём `items.<ключ>`. Светильники, выводы
 и LED-лента (м) — в смете (`light`, `downlight`, `pendant`, `sconce`, `led_output`, `outlet`,
-`led_strip`); профиля и блоков питания LED в модели нет. Гофротруба — `conduit.<Ø>` и работа `work.conduit`: по полу всегда, по потолку в премиуме (`docs/wiring-variants.md`).
+`led_strip`); профиля и блоков питания LED в модели нет. Гофротруба — `conduit.<Ø>` и работа `work.conduit`: по полу всегда, по потолку в премиуме (`docs/wiring-variants.md`). Черновой свет — `rough_holder`, `rough_lamp`, `rough_switch` и работы `work.rough_light`, `work.rough_switch`: по одному на помещение со светом, если выбран в мастере.
 
 ```yaml
 currency: грн

@@ -13,13 +13,16 @@ from floorplan_engine.electrical.panel import (
     DcBox,
     Device,
     color_of,
+    reserve_groups,
     scheme_title,
 )
 from floorplan_engine.electrical.panel_text import text
+from floorplan_engine.model.schema import Electrical
 from floorplan_engine.model.texts import Language
 from floorplan_engine.sheets.stickers import stickers_data
 
-EXTERNAL = {"inverter": "U1", "plug": "XP1"}  # backup device outside the panel
+# Backup device outside the panel; a charging station comes in through a plug, like a generator
+EXTERNAL = {"inverter": "U1", "plug": "XP1", "station": "XP1"}
 
 
 def panel_data(
@@ -71,7 +74,7 @@ def panel_data(
             "grid": text("grid", language),
             "reserve": text("reserve_bus", language),
         },
-        "stickers": stickers_data(panel),
+        "stickers": stickers_data(panel, colors),
     }
     if panel.dc is not None:
         out["dc"] = dc_data(panel.dc, language)
@@ -141,4 +144,29 @@ def dc_data(dc: DcBox, language: Language) -> dict[str, object]:
             "kwh": text("kwh", language),
             "pv": text("pv_in", language),
         },
+    }
+
+
+def reserve_data(panel: BoardPanel, model: Electrical) -> dict[str, object] | None:
+    """What can go on the backup bus (key `overview.panel.reserve`): groups of the model with
+    their power and purpose, and the power of the source. None without a backup: there is no bus.
+    A plug-in generator of unknown power gives limit_kw None."""
+    if panel.backup is None:
+        return None
+    limit = panel.backup_power
+    assumed = limit is None and panel.dc is not None
+    if limit is None and panel.dc is not None:
+        limit = panel.dc.power
+    return {
+        "limit_kw": limit,
+        "limit_assumed": assumed,
+        "items": [
+            {
+                "id": name,
+                "purpose": "; ".join(dict.fromkeys(g.purpose for g in lines)),
+                "power": round(sum(g.power for g in lines)),
+                "on": any(g.reserved for g in lines),
+            }
+            for name, lines in reserve_groups(panel, model).items()
+        ],
     }

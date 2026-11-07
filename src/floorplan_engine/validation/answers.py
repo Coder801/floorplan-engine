@@ -115,6 +115,9 @@ def apply_answers(
         if question.answer == "text":
             issues.append(Issue(ANSWERS_FILE, path, "на этот вопрос нужен ответ { text: ... }"))
             continue
+        if question.answer == "groups":
+            issues.append(Issue(ANSWERS_FILE, path, "ответ списком групп — только у вопросов щита"))
+            continue
         if question.answer == "value" and not isinstance(answer, float):
             issues.append(Issue(ANSWERS_FILE, path, f"ожидается число{format_value(answer)}"))
             continue
@@ -148,14 +151,23 @@ def auto_questions(raw: dict[Stage, Any]) -> list[Question]:
         return []
     try:
         plan = Plan.model_validate(plan_data)
-        elec = Electrical.model_validate(elec_data)
+        model = Electrical.model_validate(elec_data)
     except ValidationError:
         return []
+    elec = model
     issues, contours = validate_plan(plan)
     if not any(i.severity is Severity.ERROR for i in issues):
-        elec = split_by_lines(plan, contours, elec)
+        elec = split_by_lines(plan, contours, model)
     panel = build_panel(plan, elec)
-    return panel_questions(elec, panel, plan.language) if panel is not None else []
+    return panel_questions(elec, panel, plan.language, model) if panel is not None else []
+
+
+def _panel_of(raw: dict[Stage, Any]) -> dict[str, Any] | None:
+    """The `panel` section of the raw electrical stage; None if it is not a mapping."""
+    elec = raw.get(Stage.ELECTRICAL)
+    assert isinstance(elec, dict)
+    panel = elec.setdefault("panel", {})
+    return panel if isinstance(panel, dict) else None
 
 
 def apply_auto_answers(
@@ -179,6 +191,15 @@ def apply_auto_answers(
                 states[q.id] = "answered" if answer.resolved else "text"
             elif q.answer == "text":
                 issues.append(Issue(ANSWERS_FILE, path, "на этот вопрос нужен ответ { text: ... }"))
+            elif q.answer == "groups":
+                if isinstance(answer, list) and set(answer) <= set(q.options):
+                    panel = _panel_of(raw)
+                    if panel is not None:
+                        panel["reserve"] = answer
+                        states[q.id] = "answered"
+                else:
+                    message = f"ожидается список групп из: {', '.join(q.options)}"
+                    issues.append(Issue(ANSWERS_FILE, path, message))
             elif q.answer == "choice" and answer not in q.options:
                 issues.append(
                     Issue(ANSWERS_FILE, path, f"допустимые ответы: {', '.join(q.options)}")
@@ -186,11 +207,10 @@ def apply_auto_answers(
             elif q.answer == "value" and not isinstance(answer, float):
                 issues.append(Issue(ANSWERS_FILE, path, f"ожидается число{format_value(answer)}"))
             else:
-                elec = raw.get(Stage.ELECTRICAL)
-                assert q.target is not None and isinstance(elec, dict)
-                panel = elec.setdefault("panel", {})
-                if isinstance(panel, dict):
-                    value = int(answer) if q.answer == "value" else answer
+                assert q.target is not None
+                panel = _panel_of(raw)
+                if panel is not None:
+                    value = int(answer) if isinstance(answer, float) else answer
                     panel[q.target.removeprefix("panel.")] = value
                     states[q.id] = "answered"
 

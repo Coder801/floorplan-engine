@@ -533,6 +533,8 @@ def wiring_notes(wiring: Wiring, language: Language) -> list[str]:
     ]
     if any(r.route == "floor" for r in wiring.runs):
         notes += [tr("wiring_floor_note", language), tr("wiring_floor_arrows", language)]
+    if wiring.before_plaster:
+        notes.append(tr("wiring_before_plaster", language))
     if wiring.chases:
         notes.append(
             tr(

@@ -17,6 +17,7 @@ from __future__ import annotations
 from floorplan_engine.electrical.groups import LOW
 from floorplan_engine.electrical.panel import scheme_of
 from floorplan_engine.electrical.wiring import box_wiring
+from floorplan_engine.electrical.wiring_model import line_starts
 from floorplan_engine.model.geometry import Contour
 from floorplan_engine.model.schema import Electrical, Group, Plan
 
@@ -61,12 +62,8 @@ def _split(plan: Plan, contours: dict[str, Contour], elec: Electrical) -> Electr
     if wiring is None:
         return elec
     points = {p.id for p in elec.points}
-    # A point's line is what is fed from the panel: a box or the point itself
-    line_of = {
-        r.target: r.source if r.source != "board" else r.target
-        for r in wiring.runs
-        if r.target in points
-    }
+    # A point's line is what is fed from the panel: a box, the point itself or its daisy chain
+    line_of = {t: s for t, s in line_starts(wiring.runs).items() if t in points}
     lines: dict[str, list[str]] = {}
     for r in wiring.runs:
         if r.source == "board":

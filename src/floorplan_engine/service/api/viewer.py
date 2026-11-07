@@ -18,6 +18,7 @@ GET /api/projects/{name}/sheets/{n}     sheet n (1, 2…): vector primitives for
 POST /api/projects/{name}/wiring        wiring edits → wiring.yaml and rebuild
 POST /api/projects/{name}/variant       wiring variant → variant.yaml and rebuild
 POST /api/projects/{name}/answers       one answer → answers.yaml and rebuild (not for text)
+POST /api/projects/{name}/wizard        variant and answers together, one rebuild
 GET /api/prices                         studio price page: works, own price, market spread
 POST /api/prices                        studio price edits → prices.yaml next to the projects
 GET /api/auth/me                        who is logged in ({"auth": false} means login is off)
@@ -58,6 +59,7 @@ from floorplan_engine.pipeline import (
     save_prices,
     save_variant,
     save_wiring_edits,
+    save_wizard,
 )
 from floorplan_engine.service.api.auth import Auth
 from floorplan_engine.service.api.viewer_db import (
@@ -66,6 +68,7 @@ from floorplan_engine.service.api.viewer_db import (
     check_manifest,
     install_db_routes,
     refused_answer,
+    wizard_body,
 )
 from floorplan_engine.service.db import access as acc
 from floorplan_engine.service.objects import ObjectStore
@@ -163,6 +166,11 @@ def _summary(project: Path) -> dict[str, Any]:
     }
 
 
+def _allowed(auth: Auth | None, request: Request, action: acc.Action) -> bool:
+    """Project permission: with login off everything is allowed; otherwise by role (auth.check)."""
+    return auth is None or acc.can(getattr(request.state, "role", None), action)
+
+
 def _read_routes(
     app: FastAPI, root: Path, auth: Auth | None, project_dir: Callable[[Request, str], Path]
 ) -> None:
@@ -184,10 +192,7 @@ def _read_routes(
         return [_summary(p) for p in folders]
 
     def allowed(request: Request, action: acc.Action) -> bool:
-        """Project permission: with login off everything is allowed; otherwise by role
-        (auth.check).
-        """
-        return auth is None or acc.can(getattr(request.state, "role", None), action)
+        return _allowed(auth, request, action)
 
     @app.get("/api/projects/{name}")
     def project(name: str, request: Request) -> dict[str, Any]:
@@ -283,6 +288,28 @@ def _edit_routes(
             with auth.db() as db:
                 who = auth.principal(db, request)
         saved = save_answer(path, qid, raw, answer_note(who))
+        if saved.issues:
+            raise refused_answer(saved)
+        if not saved.rebuild:
+            return {"built": False, "rebuilt": False}
+        try:
+            result = build_project(path)
+        except AuditError as exc:
+            raise HTTPException(500, str(exc)) from exc
+        return {"built": result.built, "rebuilt": True}
+
+    @app.post("/api/projects/{name}/wizard")
+    def wizard(
+        request: Request, name: str, data: Annotated[dict[str, Any], Body()]
+    ) -> dict[str, Any]:
+        """The setup wizard: {variant?, answers?} → variant.yaml and answers.yaml, one rebuild."""
+        path = project_dir(request, name)
+        variant, items = wizard_body(data, lambda action: _allowed(auth, request, action))
+        who = None
+        if auth is not None:
+            with auth.db() as db:
+                who = auth.principal(db, request)
+        saved = save_wizard(path, variant, items, answer_note(who))
         if saved.issues:
             raise refused_answer(saved)
         if not saved.rebuild:

@@ -10,6 +10,8 @@ estimate (wiring.py), here they are only unfolded by height. Model mm, Z axis up
   lintel, sill, the neighbour's pieces behind it) share the same normals. The corner where a
   partition meets an exterior wall belongs to the exterior wall: a cut-down partition leaves
   no notch in it, the perimeter stays solid.
+- The floor slab runs under the walls and across door openings, up to the outer outline with
+  no holes: otherwise the background shows between rooms and in pockets between walls.
 - Route: a rise from the source (panel, box) to the route plane, ceiling or floor (route
   floor), the plan path in that plane, a drop to the point. Matching routes form a bundle,
   cables PITCH_MM apart (lanes on the sheet are wider, that is a drawing device, not real
@@ -39,6 +41,7 @@ from floorplan_engine.electrical.anchors import Anchor, board_anchor, point_anch
 from floorplan_engine.electrical.groups import group_colors
 from floorplan_engine.electrical.routing import fit_path
 from floorplan_engine.electrical.wiring_model import JunctionBox, Wiring
+from floorplan_engine.epd.thumbnail import room_kind
 from floorplan_engine.model.geometry import (
     DOOR_TOP_MM,
     WINDOW_SILL_MM,
@@ -160,6 +163,16 @@ def _wall_quad(g: RoomGeometry, seg: WallSegment) -> BaseGeometry:
     self-intersect, so it is made valid)."""
     corners = (seg.start, seg.end, g.outer_end(seg), g.outer_start(seg))
     return shapely.make_valid(Polygon([p.as_tuple() for p in corners]))
+
+
+def _slab(geoms: Sequence[RoomGeometry]) -> list[list[list[float]]]:
+    """Floor slab: the outer ring of each separate part of the flat."""
+    rooms = [shapely.make_valid(Polygon([v.as_tuple() for v in g.contour.vertices])) for g in geoms]
+    quads = [_wall_quad(g, seg) for g in geoms for seg in g.contour.segments]
+    parts = shapely.get_parts(unary_union([*rooms, *quads]))
+    return [
+        [_xy(Vec(x, y)) for x, y in p.exterior.coords[:-1]] for p in parts if isinstance(p, Polygon)
+    ]
 
 
 def _wall_body(g: RoomGeometry, seg: WallSegment, outline: BaseGeometry) -> BaseGeometry:
@@ -318,9 +331,14 @@ def build_scene(
             "openings": sorted(o.id for r in plan.rooms for o in r.openings if _assumed_opening(o)),
         },
         "floors": [
-            {"key": f"room:{g.room.id}", "rings": [[_xy(v) for v in g.contour.vertices]]}
+            {
+                "key": f"room:{g.room.id}",
+                "kind": room_kind(g.room.name, g.room.wet),
+                "rings": [[_xy(v) for v in g.contour.vertices]],
+            }
             for g in geoms
         ],
+        "slab": _slab(geoms),
         "walls": _walls(geoms, ceiling),
         "wires": _wires(
             wiring,

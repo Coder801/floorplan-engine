@@ -170,11 +170,14 @@ def _estimate_notes(
         notes = [estimate_text("note_no_prices", lang, f=PRICES_FILE)]
     notes += [
         estimate_text("note_cable", lang, pct=round(RESERVE * 100)),
-        estimate_text("note_chases", lang, d=f"{CHASE_SHARE:g}", k=CHASE_CABLES, n=CHASE_NARROW),
         estimate_text("note_holes", lang, k=HOLE_CABLES),
         estimate_text("note_fixing", lang, step=f"{FIXING_STEP:g}"),
         estimate_text("note_crimp", lang),
     ]
+    if any(ln.key.startswith("work.chase") for ln in est.lines):
+        notes.append(
+            estimate_text("note_chases", lang, d=f"{CHASE_SHARE:g}", k=CHASE_CABLES, n=CHASE_NARROW)
+        )
     if any(ln.key.startswith("conduit.") for ln in est.lines):
         notes.append(estimate_text("note_conduit", lang))
     if elec.board is not None:

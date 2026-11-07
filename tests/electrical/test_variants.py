@@ -46,6 +46,49 @@ def test_all_variants_and_keys() -> None:
     assert "economy-floor-boxes" in keys and "proper-ceiling-boxes" in keys
 
 
+def test_option_changes_the_key_only_when_it_differs_from_the_mode() -> None:
+    assert Variant(mode="economy", path="shortest").key == "economy-ceiling-boxes"
+    assert Variant(mode="proper", conduit=True).key == "proper-ceiling-boxes"
+    assert Variant(path="shortest").key == "standard-ceiling-boxes-shortest"
+    assert Variant(mode="economy", path="right").key == "economy-ceiling-boxes-right"
+    assert Variant(conduit=True).key == "standard-ceiling-boxes-conduit"
+    assert Variant(mode="proper", conduit=False).key == "proper-ceiling-boxes-bare"
+    assert Variant(distribution="loop").key == "standard-ceiling-loop"
+
+
+def test_apply_variant_sets_the_options() -> None:
+    chosen = Variant(distribution="loop", path="shortest", conduit=True)
+    elec = apply_variant(_elec(), chosen)
+    assert (elec.distribution, elec.path, elec.conduit) == ("loop", "shortest", True)
+    assert default_variant(elec).key == chosen.key
+    assert apply_variant(_elec(), Variant(path="right", conduit=False)) == _elec()  # as in project
+
+
+def test_job_options_apply_to_any_variant_and_stay_out_of_the_key() -> None:
+    job = Variant(plaster="before", rough_light=True)
+    assert job.key == Variant().key  # route edits stay
+    elec = apply_variant(_elec(), job)  # "as in project" by the key
+    assert (elec.plaster, elec.rough_light) == ("before", True)
+    other = apply_variant(_elec(), Variant(mode="proper", plaster="before"))
+    assert (other.plaster, other.rough_light) == ("before", False)
+    kept = apply_variant(_elec(plaster="before", rough_light=True), Variant(mode="proper"))
+    assert (kept.plaster, kept.rough_light) == ("before", True)  # no choice: as in electrical.yaml
+    assert default_variant(elec).plaster == "before" and default_variant(elec).rough_light
+
+
+def test_job_options_show_in_the_summary() -> None:
+    plan = make_plan(RECT, [DOOR])
+    _, contours = validate_plan(plan)
+    prices = Prices(None, MockPriceService("грн"))
+    base = variant_summary(plan, contours, _elec(), Variant(), None, prices)
+    job = Variant(plaster="before", rough_light=True)
+    summary = variant_summary(plan, contours, _elec(), job, None, prices)
+    assert base is not None and summary is not None
+    assert summary.chases_m == 0 < base.chases_m
+    assert summary.as_dict()["plaster"] == "before" and summary.as_dict()["rough_light"] is True
+    assert summary.total != base.total
+
+
 def test_project_routes_limit_variants() -> None:
     assert project_variants(_elec()) == all_variants()
     ceiling_only = project_variants(_elec(routes=["ceiling"]))
@@ -68,7 +111,8 @@ def test_routes_must_agree_with_route_and_cables() -> None:
 def test_default_variant_keeps_project_as_is() -> None:
     elec = _elec(mode="economy")
     default = default_variant(elec)
-    assert default == Variant(mode="economy", route="ceiling")
+    expected = Variant(mode="economy", route="ceiling", plaster="after", rough_light=False)
+    assert default == expected
     assert apply_variant(elec, default) is elec  # "as in project": no changes
     floor = apply_variant(elec, Variant(mode="proper", route="floor"))
     assert floor.mode == "proper" and floor.points == elec.points  # points come from the project
@@ -142,7 +186,8 @@ def _project(tmp_path: Path) -> Path:
 
 def test_variant_choice_and_edits_kept_per_variant(tmp_path: Path) -> None:
     project = _project(tmp_path)
-    assert assess_project(project).report.variant == Variant()  # "as in project"
+    chosen = assess_project(project).report.variant
+    assert chosen is not None and chosen.key == Variant().key  # "as in project"
     assert not save_wiring_edits(project, {"wires": {"wire_1": EDIT}})
     assert save_variant(project, {"mode": "cheap"})[0].path == "mode"  # error with a path
     assert not save_variant(project, {"mode": "economy", "route": "floor"})
@@ -177,6 +222,16 @@ def test_ceiling_height_from_viewer_overrides_plan_and_survives_variant_change(
     assert plan is not None and plan.ceiling_height == 3100
 
 
+def test_job_options_survive_a_variant_change(tmp_path: Path) -> None:
+    project = _project(tmp_path)
+    assert not save_variant(project, {"mode": "standard", "plaster": "before", "rough_light": True})
+    assert not save_variant(project, {"mode": "economy"})  # "Overview" sends only the mode
+    saved = yaml.safe_load((project / "variant.yaml").read_text("utf-8"))
+    assert saved["plaster"] == "before" and saved["rough_light"] is True
+    assert not save_variant(project, {"mode": "economy", "rough_light": False})
+    assert yaml.safe_load((project / "variant.yaml").read_text("utf-8"))["rough_light"] is False
+
+
 def test_build_writes_variant_summaries_to_manifest(tmp_path: Path) -> None:
     project = _project(tmp_path)
     save_variant(project, {"mode": "proper"})
@@ -189,6 +244,22 @@ def test_build_writes_variant_summaries_to_manifest(tmp_path: Path) -> None:
     assert block["default"] == "standard-ceiling-boxes"
     assert {i["key"] for i in block["items"]} == {v.key for v in all_variants()}
     assert all(i["total"] > 0 and i["devices"] > 0 for i in block["items"])
+
+
+def test_chosen_set_of_options_joins_the_summary(tmp_path: Path) -> None:
+    """A set from the wizard is summed up with the presets; a preset drops the options."""
+    project = _project(tmp_path)
+    assert not save_variant(project, {"mode": "standard", "path": "shortest", "conduit": True})
+    result = build_project(project)
+    assert result.artifact is not None
+    with zipfile.ZipFile(result.artifact) as zf:
+        block = json.loads(zf.read("manifest.json"))["variants"]
+    assert block["active"] == "standard-ceiling-boxes-shortest-conduit"
+    active = next(i for i in block["items"] if i["key"] == block["active"])
+    assert active["path"] == "shortest" and active["conduit"] is True
+    assert len(block["items"]) == len(all_variants()) + 1
+    assert not save_variant(project, {"mode": "standard"})
+    assert assess_project(project).report.variant.key == "standard-ceiling-boxes"  # type: ignore[union-attr]
 
 
 def test_project_without_floor_builds_only_ceiling_variants(tmp_path: Path) -> None:

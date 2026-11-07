@@ -19,7 +19,9 @@ separate product specification: the estimate without prices is the bill of quant
   key refinement (breaker.C16);
 - lights, lighting outputs and appliance outputs by point, LED strip in metres;
 - labelling: a tag at each end of each line; insulation resistance test with a report for each
-  power group.
+  power group;
+- rough light, if chosen (Electrical.rough_light): a lamp holder, a bulb and a rough switch per
+  room with lights.
 
 Work comes in two sections with their own totals (decision 2026-11-03): rough (`rough`),
 before plaster and screed: chases, passes, laying cable and conduit, flush boxes, boxes with
@@ -51,7 +53,7 @@ from floorplan_engine.electrical.panel import BoardPanel, device_name
 from floorplan_engine.electrical.wiring import RESERVE
 from floorplan_engine.electrical.wiring_model import Run, Wiring
 from floorplan_engine.model.panel_catalog import DeviceKind
-from floorplan_engine.model.schema import Electrical, PointType, StrictModel
+from floorplan_engine.model.schema import LIGHT_TYPES, Electrical, PointType, StrictModel
 from floorplan_engine.model.texts import Language, tr
 
 PRICES_FILE = "prices.yaml"  # the project price list lives in the project folder, next to room.yaml
@@ -124,6 +126,9 @@ LINES: dict[str, tuple[Section, str, str, str]] = {
     "led_output": ("material", "шт", "", ""),
     "outlet": ("material", "шт", "", ""),
     "led_strip": ("material", "м", "", ""),
+    "rough_holder": ("material", "шт", "Патрон E27 черновой", "Патрон E27 чорновий"),
+    "rough_lamp": ("material", "шт", "Лампа E27 черновая", "Лампа E27 чорнова"),
+    "rough_switch": ("material", "шт", "Выключатель черновой", "Вимикач чорновий"),
     "work.cable": ("rough", "м", "Прокладка кабеля", "Прокладання кабелю"),
     "work.conduit": ("rough", "м", "Укладка кабеля в гофротрубу", "Укладання кабелю в гофротрубу"),
     "work.chase": (
@@ -159,6 +164,18 @@ LINES: dict[str, tuple[Section, str, str, str]] = {
     "work.board_install": ("rough", "шт", "Установка щита", "Встановлення щита"),
     "work.board_module": ("finish", "мод.", "Сборка щита", "Збирання щита"),
     "work.mechanism": ("finish", "шт", "Установка механизмов", "Встановлення механізмів"),
+    "work.rough_light": (
+        "rough",
+        "шт",
+        "Монтаж чернового света: патрон и лампа",
+        "Монтаж чорнового світла: патрон і лампа",
+    ),
+    "work.rough_switch": (
+        "rough",
+        "шт",
+        "Установка чернового выключателя",
+        "Встановлення чорнового вимикача",
+    ),
     "work.marking": (
         "rough",
         "шт",
@@ -372,6 +389,19 @@ class PriceSource(Protocol):
     def lookup(self, key: str) -> Quote: ...
 
 
+BARE_CABLE = re.compile(r"(\d+)\s*[xх×]\s*(\d+(?:[.,]\d+)?)")
+DEFAULT_CABLE = "ВВГнг"  # power cable without a brand in the model
+
+
+def cable_title(mark: str) -> str:
+    """Cable in the estimate: a bare section gets the default brand ("3x6" → "ВВГнг 3×6"), as in
+    the studio price list; a mark with its own brand ("ВВГнг-LS 3x2.5", "UTP cat.6") stays."""
+    bare = BARE_CABLE.fullmatch(mark.strip())
+    if bare is None:
+        return mark
+    return f"{DEFAULT_CABLE} {bare[1]}×{bare[2].replace('.', ',')}"
+
+
 def split_key(key: str) -> tuple[str, str]:
     """Split "cable.3x1.5" → ("cable", "3x1.5"); a key without a parameter → (key, "")."""
     base, _, param = key.partition(".")
@@ -483,13 +513,13 @@ def conduit_diameter(mark: str) -> int:
     return next((d for limit, d in CONDUIT_SIZES if section <= limit), CONDUIT_SIZES[-1][1])
 
 
-def conduit_mm(run: Run, mode: str) -> float:
+def conduit_mm(run: Run, ceiling: bool) -> float:
     """How much of a line goes in conduit (decision 2026-11-01, docs/wiring-variants.md): on the
-    floor always, the whole line including the rise to the point; on the ceiling only in premium
-    (proper), the ceiling part; drops in chases go without conduit."""
+    floor always, the whole line including the rise to the point; on the ceiling only if chosen
+    (Electrical.ceiling_conduit), the ceiling part; drops in chases go without conduit."""
     if run.route == "floor":
         return run.length_mm
-    return run.plan_mm if mode == "proper" else 0.0
+    return run.plan_mm if ceiling else 0.0
 
 
 def quantities(wiring: Wiring, elec: Electrical) -> dict[str, float]:
@@ -500,7 +530,7 @@ def quantities(wiring: Wiring, elec: Electrical) -> dict[str, float]:
     conduit: dict[int, float] = {}
     for r in wiring.runs:
         d = conduit_diameter(r.mark)
-        conduit[d] = conduit.get(d, 0.0) + conduit_mm(r, elec.mode)
+        conduit[d] = conduit.get(d, 0.0) + conduit_mm(r, elec.ceiling_conduit)
     for d in sorted(conduit):
         if conduit[d] > 0:
             q[f"conduit.{d}"] = round(conduit[d] / 1000 * (1 + RESERVE), 1)
@@ -542,8 +572,11 @@ def quantities(wiring: Wiring, elec: Electrical) -> dict[str, float]:
     led_m = sum(s.end - s.start for s in elec.led_strips) / 1000
     if led_m:
         q["led_strip"] = round(led_m, 2)
+    rough_rooms = len({p.room for p in elec.points if p.type in LIGHT_TYPES})
+    if elec.rough_light and rough_rooms:
+        q["rough_holder"] = q["rough_lamp"] = q["rough_switch"] = rough_rooms
     q["work.cable"] = round(sum(r.length_mm for r in wiring.runs) / 1000, 1)
-    in_conduit = sum(conduit_mm(r, elec.mode) for r in wiring.runs)
+    in_conduit = sum(conduit_mm(r, elec.ceiling_conduit) for r in wiring.runs)
     if in_conduit > 0:
         q["work.conduit"] = round(in_conduit / 1000, 1)
     q["work.chase"] = round(wiring.chase_length(wide=False) / 1000, 1)
@@ -554,6 +587,8 @@ def quantities(wiring: Wiring, elec: Electrical) -> dict[str, float]:
     if elec.board is not None:
         q["work.board_install"] = 1
     q["work.mechanism"] = sum(pieces.values())
+    if elec.rough_light and rough_rooms:
+        q["work.rough_light"] = q["work.rough_switch"] = rough_rooms
     q["work.marking"] = 2 * len(wiring.runs)
     q["work.insulation_test"] = len({r.group for r in wiring.runs if r.circuit == "power"})
     return {k: v for k, v in q.items() if v}
@@ -591,9 +626,8 @@ def build_estimate(
         elif name is None and base in FIXTURES:
             name = tr(FIXTURES[base], language)
         elif name is None:
-            name = (ru if language == "ru" else uk).format(
-                mark=BOX_TITLES.get(param, param), n=param
-            )
+            mark = cable_title(param) if base == "cable" else BOX_TITLES.get(param, param)
+            name = (ru if language == "ru" else uk).format(mark=mark, n=param)
         hint = HINTS.get(base, {}).get(language)
         if hint and p is None:
             hint = f"{hint}. {PRICE_TBD[language]}"

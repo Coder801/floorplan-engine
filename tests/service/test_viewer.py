@@ -275,6 +275,28 @@ def test_changed_answers_make_the_build_stale(tmp_path: Path) -> None:
     assert TestClient(create_viewer(tmp_path)).get("/api/projects/kv").json()["stale"] is True
 
 
+def test_wizard_saves_everything_with_one_rebuild(tmp_path: Path) -> None:
+    project = _answers_project(tmp_path)
+    client = TestClient(create_viewer(tmp_path))
+    body = {
+        "variant": {"mode": "economy", "route": "floor", "distribution": "boxes"},
+        "answers": {"q2": {"accept": True}, "panel_backup": "plug", "panel_input": 40},
+    }
+    saved = client.post("/api/projects/kv/wizard", json=body)
+    assert saved.json() == {"built": True, "rebuilt": True}
+    assert "economy" in (project / "variant.yaml").read_text("utf-8")
+    p = client.get("/api/projects/kv").json()
+    assert p["answers"]["panel_backup"] == "plug" and p["answers"]["panel_input"] == 40
+    assert p["stale"] is False
+    assert not any(q["id"] == "panel_battery" for q in p["report"]["questions"])
+
+    refused = client.post("/api/projects/kv/wizard", json={"answers": {"panel_input": -1}})
+    assert refused.status_code == 422 and refused.json()["detail"]["issues"]
+    assert client.post("/api/projects/kv/wizard", json={"answers": []}).status_code == 422
+    assert client.post("/api/projects/kv/wizard", json={"variant": 1}).status_code == 422
+    assert client.post("/api/projects/kv/wizard", json={}).json()["rebuilt"] is False
+
+
 def test_answer_refused_with_field_and_blocker(tmp_path: Path) -> None:
     _answers_project(tmp_path)
     client = TestClient(create_viewer(tmp_path))

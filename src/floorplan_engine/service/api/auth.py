@@ -398,6 +398,7 @@ class Auth:
                 action = "choose_variant"
             elif request.method == "POST" and parts[-1] == "answers":
                 action = "answer"
+            # POST /wizard writes both: viewer_db.wizard_body checks each part by the body
             refused = project_access(db, who, request, parts[3], project, action)
             if refused is not None:
                 return refused

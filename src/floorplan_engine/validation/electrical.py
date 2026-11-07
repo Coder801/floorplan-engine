@@ -187,6 +187,7 @@ def validate_electrical(
             *((f"points[{k}].id", pt.id) for k, pt in enumerate(elec.points)),
             *((f"cables[{k}].id", c.id) for k, c in enumerate(elec.cables)),
             *((f"led_strips[{k}].id", st.id) for k, st in enumerate(elec.led_strips)),
+            *((f"cable_channels[{k}].id", ch.id) for k, ch in enumerate(elec.cable_channels)),
         ],
         file,
         "id",
@@ -210,6 +211,11 @@ def validate_electrical(
             )
             if i.severity is Severity.ERROR
         ]
+    for k, ch in enumerate(elec.cable_channels):
+        path = f"cable_channels[{k}]"
+        issues += check_wall_anchor(plan, ch.room, ch.wall, ch.offset, path, file)
+        issues += _check_height(ch.entry, f"{path}.entry", file)
+        issues += _check_height(ch.exit, f"{path}.exit", file)
     issues += _check_room_groups(elec, plan, file)
     used = {p.group for p in elec.points if p.group} | {c.group for c in elec.cables if c.group}
     for name in elec.groups:

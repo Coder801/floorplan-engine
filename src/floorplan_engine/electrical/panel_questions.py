@@ -6,12 +6,13 @@ answers.apply_auto_answers."""
 from __future__ import annotations
 
 from floorplan_engine.electrical.loads import (
-    CABLE_LIMITS,
+    cable_for,
     current,
     rating_for,
 )
 from floorplan_engine.electrical.panel import (
     BoardPanel,
+    reserve_groups,
 )
 from floorplan_engine.electrical.panel_text import amps, kw, text
 from floorplan_engine.model.intake import QSeverity, Question, Stage
@@ -19,18 +20,15 @@ from floorplan_engine.model.schema import Electrical
 from floorplan_engine.model.texts import Language
 
 AUTO_PREFIX = "panel_"  # ids of questions built by code; they are never written in intake.yaml
-BACKUP_OPTIONS = ["none", "inverter", "plug"]
+BACKUP_OPTIONS = ["none", "inverter", "plug", "station"]
 
 
-def cable_for(amps_: float) -> str | None:
-    """Smallest cross-section whose recommended breaker carries the current: "3x6"."""
-    s = next((s for s, (rec, _) in sorted(CABLE_LIMITS.items()) if rec >= amps_), None)
-    return f"3x{s:g}" if s is not None else None
-
-
-def panel_questions(elec: Electrical, panel: BoardPanel, language: Language) -> list[Question]:
+def panel_questions(
+    elec: Electrical, panel: BoardPanel, language: Language, model: Electrical | None = None
+) -> list[Question]:
     """Panel questions from the calculation, in the project language: backup and supply if unset;
-    split groups; an appliance larger than its group breaker; default backup bus contents."""
+    split groups; an appliance larger than its group breaker; default backup bus contents.
+    model is the electrical before lines are split: the backup bus is answered by its groups."""
     out: list[Question] = []
     setup = elec.panel
     if setup.backup is None:
@@ -45,6 +43,7 @@ def panel_questions(elec: Electrical, panel: BoardPanel, language: Language) -> 
                     "none": text("q_backup_none", language),
                     "inverter": text("inverter", language),
                     "plug": text("q_backup_plug", language),
+                    "station": text("q_backup_station", language),
                 },
                 assumption="inverter",
                 text=text("q_backup", language),
@@ -74,6 +73,8 @@ def panel_questions(elec: Electrical, panel: BoardPanel, language: Language) -> 
                 id=f"{AUTO_PREFIX}reserve",
                 stage=Stage.PANEL,
                 severity=QSeverity.MINOR,
+                answer="groups",
+                options=list(reserve_groups(panel, model or elec)),
                 text=text("q_reserve", language, names=names),
             )
         )

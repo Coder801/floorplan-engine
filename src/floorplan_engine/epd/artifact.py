@@ -28,7 +28,8 @@ from __future__ import annotations
 import json
 import re
 import zipfile
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Iterator, Sequence
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -290,6 +291,19 @@ def _write(zf: zipfile.ZipFile, name: str, data: Any) -> None:
     zf.writestr(info, text.encode("utf-8"), compresslevel=9)
 
 
+@contextmanager
+def _replacing(path: Path) -> Iterator[zipfile.ZipFile]:
+    """The archive appears whole: the viewer reads it while the project is being rebuilt, and a
+    half-written .epd is not a zip file. If writing fails, the previous file stays."""
+    temp = path.with_name(f"{path.name}.tmp")
+    try:
+        with zipfile.ZipFile(temp, "w") as zf:
+            yield zf
+        temp.replace(path)
+    finally:
+        temp.unlink(missing_ok=True)
+
+
 def export_artifact(
     doc: Drawing,
     plan: Plan,
@@ -305,6 +319,8 @@ def export_artifact(
     legends: dict[str, list[LegendEntry]] | None = None,
     variants: dict[str, Any] | None = None,
     overview: dict[str, Any] | None = None,
+    plan_chains: dict[str, list[str]] | None = None,
+    plan_areas: dict[str, list[list[tuple[float, float]]]] | None = None,
 ) -> Path:
     """Write the .epd: the manifest and one page per document sheet. objects are object cards for
     hints (objects.describe_objects): a page gets only its own objects and only those of the sheet
@@ -319,10 +335,12 @@ def export_artifact(
     the viewer badge: captions from here, icons are the legend:<key> primitives from the sheet
     itself; variants are the wiring variants (pipeline.variant_block): the chosen one and a
     summary of all go into the manifest; overview is the project overview
-    (overview.overview_data) for the first viewer tab, also in the manifest."""
+    (overview.overview_data) for the first viewer tab, also in the manifest; plan_chains is what
+    to highlight on click on the plan sheet (objects.plan_chains); plan_areas is where a click
+    lands on a wall of that sheet (objects.plan_areas), mm of the model."""
     pages = []
     path.parent.mkdir(parents=True, exist_ok=True)
-    with zipfile.ZipFile(path, "w") as zf:
+    with _replacing(path) as zf:
         for no, layout in enumerate(sheet_layouts(doc), 1):
             page = record_page(doc, layout)
             stage = page.get("stage")
@@ -339,12 +357,23 @@ def export_artifact(
                 page["estimate"] = tables["estimate"][0].as_dict()  # "Estimate" tab
             if tables and stage == "plumbing" and tables.get("plumbing_estimate"):
                 page["estimate"] = tables["plumbing_estimate"][0].as_dict()
-            if chains and stage == "wiring":
+            sheet_chains = {"wiring": chains, "plan": plan_chains}.get(stage or "")
+            if sheet_chains:
                 drawn = {item["o"] for item in page["items"] if "o" in item}
                 page["chains"] = {
                     k: [x for x in chain if x in drawn]
-                    for k, chain in sorted(chains.items())
+                    for k, chain in sorted(sheet_chains.items())
                     if k in drawn
+                }
+            if plan_areas and stage == "plan" and "model" in page:
+                drawn = {item["o"] for item in page["items"] if "o" in item}
+                k, tx, ty = page["model"]
+                page["areas"] = {
+                    key: [
+                        [[round(k * x + tx, 2), round(ty - k * y, 2)] for x, y in r] for r in rings
+                    ]
+                    for key, rings in sorted(plan_areas.items())
+                    if key in drawn
                 }
             if groups and stage == "wiring":
                 drawn = {item["o"] for item in page["items"] if "o" in item}

@@ -25,6 +25,13 @@ class Sticker:
     lines: tuple[str, ...]  # short name
     icon: str  # key in sheets/stickers_assets/icons.json
     title: str  # full purpose, as in the "Groups" table
+    group: str | None = None  # panel group: its colour on colour stickers
+
+    @property
+    def short_id(self) -> str:
+        """The line number alone, for the owner of the flat: QF12 → 12, QF8.2 → 8.2. A device
+        that is no line of its own (QS1, KV1) keeps its designation: it has no number to show."""
+        return (re.sub(r"^[^\W\d]+", "", self.id) or self.id) if self.group else self.id
 
 
 # Words of the purpose, ru and uk stems, first match wins: appliances before generic kinds, so
@@ -106,7 +113,7 @@ def _device_sticker(d: Device, row: int, groups: dict[str, PanelGroup]) -> Stick
     if group is not None:
         rooms = list(dict.fromkeys(ld.room for ld in group.loads))
         lines = short_name(group.purpose, rooms)
-        return Sticker(d.id, row, lines, group_icon(group), group.purpose)
+        return Sticker(d.id, row, lines, group_icon(group), group.purpose, group.group)
     name = re.split(r"[:(]", d.title)[0].strip()
     return Sticker(d.id, row, (name,), DEVICE_ICONS.get(d.kind, FALLBACK_ICON), d.title)
 

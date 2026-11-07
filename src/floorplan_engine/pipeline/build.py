@@ -28,6 +28,8 @@ from floorplan_engine.epd.objects import (
     describe_objects,
     line_chains,
     line_groups,
+    plan_areas,
+    plan_chains,
     wire_titles,
     wiring_handles,
 )
@@ -58,7 +60,11 @@ from floorplan_engine.pipeline.files import (
     PROJECT_FILE,
     SEWER_ROUTES_FILE,
     SHEETS_DIR,
+    STICKERS_COLOR_FILE,
+    STICKERS_COLOR_SHORT_FILE,
     STICKERS_FILE,
+    STICKERS_FILES,
+    STICKERS_SHORT_FILE,
     WIRING_JOURNAL_FILE,
 )
 from floorplan_engine.pipeline.prices import find_prices, sheet_inputs
@@ -181,15 +187,19 @@ def _panel_step(run: _Build) -> BoardPanel | None:
     """The panel, its load list and stickers."""
     panel = build_panel(run.plan, run.elec) if run.elec is not None else None
     loads = run.out / LOADS_FILE
-    stickers = run.out / STICKERS_FILE
     if panel is None:
         loads.unlink(missing_ok=True)
-        stickers.unlink(missing_ok=True)
+        for file in STICKERS_FILES:
+            (run.out / file).unlink(missing_ok=True)
         return None
     run.result.loads = write_loads(panel, loads)
     assert run.elec is not None
     board = run.elec.board.name if run.elec.board is not None else "ЩР"
-    run.result.stickers = write_stickers(panel, board, run.plan.language, stickers)
+    lang, colors = run.plan.language, group_colors(run.elec)
+    run.result.stickers = write_stickers(panel, board, lang, run.out / STICKERS_FILE)
+    write_stickers(panel, board, lang, run.out / STICKERS_COLOR_FILE, colors)
+    write_stickers(panel, board, lang, run.out / STICKERS_SHORT_FILE, short=True)
+    write_stickers(panel, board, lang, run.out / STICKERS_COLOR_SHORT_FILE, colors, short=True)
     if panel.warnings:
         run.warn(
             [
@@ -317,7 +327,10 @@ def _export(
             build_plumbing_estimate(pipes[1], pipes[0], prices or Prices(), plan.language)
             if pipes is not None
             else None,
+            run.report.source_electrical,
         ),
+        plan_chains=plan_chains(plan, contours),
+        plan_areas=plan_areas(plan, contours),
     )
 
 

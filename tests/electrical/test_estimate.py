@@ -19,6 +19,7 @@ from floorplan_engine.electrical.estimate import (
     PriceList,
     Section,
     build_estimate,
+    cable_title,
     edit_price_items,
     format_number,
     quantities,
@@ -508,6 +509,31 @@ def test_mechanism_hint_says_price_tbd_only_without_price() -> None:
     assert all(ln.hint is None for ln in priced.lines if ln.key != "work.mechanism")
 
 
+def test_rough_light_per_room_with_lights() -> None:
+    wiring, elec = _wiring()
+    keys = ("rough_holder", "rough_lamp", "rough_switch", "work.rough_light", "work.rough_switch")
+    assert not set(keys) & set(quantities(wiring, elec))
+    q = quantities(wiring, elec.model_copy(update={"rough_light": True}))
+    assert [q[k] for k in keys] == [1] * 5  # one room
+
+
+def test_rough_light_without_lights_is_not_in_the_estimate() -> None:
+    wiring, elec = _wiring()
+    sockets = [p for p in elec.points if p.type.value == "socket"]
+    q = quantities(wiring, elec.model_copy(update={"rough_light": True, "points": sockets}))
+    assert "rough_holder" not in q and "work.rough_switch" not in q
+
+
+def test_before_plaster_leaves_no_chase_work() -> None:
+    plan = make_plan(RECT, [DOOR])
+    _, contours = validate_plan(plan)
+    elec = Electrical.model_validate({**ELEC, "plaster": "before"})
+    wiring = box_wiring(plan, contours, elec)
+    assert wiring is not None
+    q = quantities(wiring, elec)
+    assert "work.chase" not in q and "work.chase_wide" not in q and q["work.cable"] > 0
+
+
 def test_conduit_floor_always_ceiling_only_premium() -> None:
     """Conduit (docs/wiring-variants.md): on the floor always, the whole line; on the ceiling in
     premium, only the ceiling part; the diameter follows the cable cross-section."""
@@ -522,8 +548,8 @@ def test_conduit_floor_always_ceiling_only_premium() -> None:
     ]
     wiring, elec = _wiring()
     run = wiring.runs[0]
-    assert conduit_mm(run, "standard") == 0  # ceiling in standard: no conduit
-    assert conduit_mm(run, "proper") == run.plan_mm  # premium: the ceiling part
+    assert conduit_mm(run, False) == 0  # ceiling: no conduit unless chosen
+    assert conduit_mm(run, True) == run.plan_mm  # the ceiling part
     assert not any(k.startswith("conduit.") for k in quantities(wiring, elec))
     proper = quantities(wiring, elec.model_copy(update={"mode": "proper"}))
     assert any(k.startswith("conduit.") for k in proper) and proper["work.conduit"] > 0
@@ -574,3 +600,18 @@ def test_edit_price_items_without_items_section() -> None:
     assert edit_price_items("currency: грн\n", {"work.chase": 100}) == (
         "currency: грн\nitems:\n  work.chase: 100\n"
     )
+
+
+@pytest.mark.parametrize(
+    ("mark", "title"),
+    [
+        ("3x6", "ВВГнг 3×6"),
+        ("3x2.5", "ВВГнг 3×2,5"),
+        ("5х2,5", "ВВГнг 5×2,5"),
+        ("ВВГнг-LS 3x2.5", "ВВГнг-LS 3x2.5"),
+        ("UTP cat.6", "UTP cat.6"),
+        ("RG-6", "RG-6"),
+    ],
+)
+def test_cable_title_adds_the_brand_to_a_bare_section(mark: str, title: str) -> None:
+    assert cable_title(mark) == title

@@ -273,6 +273,25 @@ class LedStrip(StrictModel):
         return self
 
 
+class CableChannel(StrictModel):
+    """Cable channel in a wall (decision 2026-11-06): a vertical wide chase from the entry point to
+    the exit point, for cables laid later (HDMI behind the TV). Not a load, no group, no line."""
+
+    id: str = Field(pattern=ID_PATTERN)
+    room: str
+    wall: str = Field(description="id стены комнаты")
+    offset: float = Field(ge=0, description="От начала стены до середины канала, мм")
+    entry: float = Field(gt=0, description="Высота входа от пола, мм")
+    exit: float = Field(gt=0, description="Высота выхода от пола, мм")
+    note: str | None = None
+
+    @model_validator(mode="after")
+    def _span(self) -> CableChannel:
+        if self.entry == self.exit:
+            raise ValueError(f"entry и exit совпадают ({self.entry:g} мм): канал нулевой длины")
+        return self
+
+
 class Group(StrictModel):
     """Panel group: purpose and device only from the source (never invented)."""
 
@@ -307,10 +326,11 @@ class PanelSetup(StrictModel):
         default=None, description="Реле напряжения; по умолчанию — во всех схемах"
     )
     spd: bool | None = Field(default=None, description="УЗИП; по умолчанию — только premium")
-    backup: Literal["none", "inverter", "plug"] | None = Field(
+    backup: Literal["none", "inverter", "plug", "station"] | None = Field(
         default=None,
         description="Резерв: none — нет, inverter — гибридный инвертор с АКБ, plug — генератор "
-        "через силовую вилку; не задан — вопрос, допущение inverter",
+        "через силовую вилку, station — зарядная станция через силовую вилку; не задан — вопрос, "
+        "допущение inverter",
     )
     ats: bool | None = Field(
         default=None,
@@ -367,7 +387,7 @@ class PanelSetup(StrictModel):
             raise ValueError("reserve — только с резервом (backup: inverter | plug)")
         dc: tuple[object, ...] = (self.battery_voltage, self.battery_capacity, self.pv_strings)
         dc += (self.inverter, self.npe_relay)
-        if self.backup in ("none", "plug") and any(v is not None for v in dc):
+        if self.backup in ("none", "plug", "station") and any(v is not None for v in dc):
             raise ValueError(
                 "battery_voltage, battery_capacity, pv_strings, inverter, npe_relay — только "
                 "с инвертором "
@@ -384,6 +404,21 @@ class PanelSetup(StrictModel):
 # Electrical layout (decision 2026-10-25): economy has fewer breakers, low budget;
 # standard gives lights and sockets of each room their own group; proper is "done right"
 ElectricalMode = Literal["economy", "standard", "proper"]
+WireRoute = Literal["ceiling", "floor"]
+# boxes: through junction boxes; loop: sockets daisy chained through their flush boxes
+Distribution = Literal["boxes", "loop"]
+WirePath = Literal["right", "shortest"]  # right angles or the shortest path, on ceiling and floor
+Plaster = Literal["after", "before"]  # cable laid after the plaster, in chases, or before it
+
+
+def mode_path(mode: ElectricalMode) -> WirePath:
+    """Path of a mode without its own choice: only economy saves cable."""
+    return "shortest" if mode == "economy" else "right"
+
+
+def mode_conduit(mode: ElectricalMode) -> bool:
+    """Ceiling conduit of a mode without its own choice: only premium (proper)."""
+    return mode == "proper"
 
 
 class Electrical(StrictModel):
@@ -404,6 +439,31 @@ class Electrical(StrictModel):
         description="Трассы, допустимые в проекте (варианты проводки): [ceiling] — по полу "
         "проводки не будет. Нет — обе; только со слов заказчика или из источника",
     )
+    distribution: Distribution = Field(
+        default="boxes",
+        description="Разводка: boxes — через распаечные коробки; loop — розетки шлейфом через "
+        "подрозетники. Ставит вариант проводки (variant.yaml)",
+    )
+    path: WirePath | None = Field(
+        default=None,
+        description="Трассы по потолку и полу: right — под прямыми углами; shortest — кратчайшим "
+        "путём. Нет — по mode (economy → shortest). Ставит вариант проводки",
+    )
+    conduit: bool | None = Field(
+        default=None,
+        description="Гофра на потолке (по полу она обязательна всегда). Нет — по mode "
+        "(proper → да). Ставит вариант проводки",
+    )
+    plaster: Plaster = Field(
+        default="after",
+        description="Монтаж кабеля: after — после штукатурки, в штробах; before — до неё, штроб "
+        "нет, кроме линий в гофре. Ставит вариант проводки",
+    )
+    rough_light: bool = Field(
+        default=False,
+        description="Черновой свет на время ремонта: в смете патрон, лампа и черновой выключатель "
+        "на помещение. Ставит вариант проводки",
+    )
     groups: dict[str, Group] = Field(
         default_factory=dict, description="Группы щита по имени (QF4): назначение, автомат"
     )
@@ -411,7 +471,17 @@ class Electrical(StrictModel):
     board: Board | None = None
     cables: list[Cable] = Field(default_factory=list)
     led_strips: list[LedStrip] = Field(default_factory=list)
+    cable_channels: list[CableChannel] = Field(default_factory=list)
     panel: PanelSetup = Field(default_factory=PanelSetup, description="Щит в лицо: схема, ввод")
+
+    @property
+    def shortest_path(self) -> bool:
+        """Ceiling and floor routes at any angle, along the shortest path."""
+        return (self.path or mode_path(self.mode)) == "shortest"
+
+    @property
+    def ceiling_conduit(self) -> bool:
+        return mode_conduit(self.mode) if self.conduit is None else self.conduit
 
     @model_validator(mode="after")
     def _routes(self) -> Electrical:
@@ -457,26 +527,44 @@ class WiringEdits(StrictModel):
     boxes: dict[str, BoxEdit] = Field(default_factory=dict)
 
 
-WireRoute = Literal["ceiling", "floor"]
-Distribution = Literal["boxes"]  # loop: daisy chain, later (docs/wiring-variants.md)
-
-
 class Variant(StrictModel):
     """variant.yaml: the wiring variant chosen in the viewer (docs/wiring-variants.md): mode, route
-    and distribution. Points come from the project and do not change between variants. Ceiling
-    height (mm) is an edit from the "Overview" page: it is applied on top of room.yaml, the
-    original is not changed."""
+    and distribution, and from the setup wizard the path and the ceiling conduit, on top of what
+    the mode gives (None: as in the mode). Points come from the project and do not change between
+    variants. Ceiling height (mm) is an edit from the "Overview" page: it is applied on top of
+    room.yaml, the original is not changed. plaster and rough_light are how the job is done, not
+    how the cable runs: they apply to every variant and are not in the key, so route edits stay
+    (None: as in electrical.yaml)."""
 
     mode: ElectricalMode = "standard"
     route: WireRoute = "ceiling"
     distribution: Distribution = "boxes"
+    path: WirePath | None = None
+    conduit: bool | None = None
+    plaster: Plaster | None = None
+    rough_light: bool | None = None
     ceiling_height: float | None = Field(default=None, ge=CEILING_MIN, le=CEILING_MAX)
+
+    @property
+    def wire_path(self) -> WirePath:
+        return self.path or mode_path(self.mode)
+
+    @property
+    def in_conduit(self) -> bool:
+        return mode_conduit(self.mode) if self.conduit is None else self.conduit
 
     @property
     def key(self) -> str:
         """Key such as "economy-floor-boxes": the key for this variant's route edits in
-        wiring.yaml."""
-        return f"{self.mode}-{self.route}-{self.distribution}"
+        wiring.yaml. An option differing from its mode is added ("standard-floor-boxes-shortest",
+        "economy-ceiling-loop-conduit", "proper-ceiling-boxes-bare"); one equal to the mode is
+        not, so a mode keeps its key however it was chosen."""
+        key = f"{self.mode}-{self.route}-{self.distribution}"
+        if self.wire_path != mode_path(self.mode):
+            key += f"-{self.wire_path}"
+        if self.in_conduit != mode_conduit(self.mode):
+            key += "-conduit" if self.in_conduit else "-bare"
+        return key
 
 
 class WiringFile(StrictModel):
