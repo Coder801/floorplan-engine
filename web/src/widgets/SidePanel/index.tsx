@@ -1,4 +1,4 @@
-// Sheet side panel: tables (row ↔ objects link) and layers, for sheets drawn from primitives
+// Sheet side panel: tables (row ↔ objects link, group rows with an eye and a held tooltip) and layers, for sheets drawn from primitives
 // (the panel has no layers: it is drawn by its own component). Layers are the sheet's own layers
 // and layers from other sheets of the shared drawing (sheet/drawing.ts). Questions, sources and
 // the project are in the header (widgets/Drawer). The "Electrical" tab has a view on top:
@@ -9,17 +9,20 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { CABLE_ROWS, drawingLayers, layerRows, type Drawing } from "@/engine/sheet/drawing";
+import { CABLE_ROWS, drawingLayers, layerRows, objectLayers, type Drawing } from "@/engine/sheet/drawing";
+import { ownLayers, viewTables } from "@/engine/sheet/views";
 import { SHEET_ONLY, SIDE_TABS, type SideTab } from "@/shared/consts";
 import { cx } from "@/shared/cx";
 import { label } from "@/shared/i18n";
 import { rowKind, totals } from "@/shared/estimate";
-import { expand } from "@/shared/page";
+import { expand, rowSelection } from "@/shared/page";
 import { refreshPalette, screenColor } from "@/shared/palette";
-import { useView, view } from "@/shared/store";
+import { toggledGroups, useView, view } from "@/shared/store";
 import ui from "@/shared/styles/ui.module.scss";
+import type { TabView } from "@/shared/tabs";
 import type { Elevation, Page, SideTable } from "@/shared/types";
 import { EyeToggle } from "@/ui/EyeToggle";
+import { useHoldTip } from "@/ui/HoldTip";
 import { WallItems } from "@/widgets/WallItems";
 import css from "./SidePanel.module.scss";
 
@@ -28,9 +31,9 @@ interface Props {
   onTab: (tab: SideTab) => void;
   page: Page | null;
   drawing: Drawing | null;     // the drawing the sheet belongs to
-  views?: { index: number; label: string }[] | null;  // tab views (tabs.ts)
-  view?: number | null;
-  onView?: (index: number) => void;
+  views?: TabView[] | null;     // tab views (tabs.ts)
+  view?: string | null;
+  onView?: (view: TabView) => void;
   wall?: Elevation | null;      // elevation: what is on the wall, instead of tables and layers
   estimate?: SideTable | null;  // "Estimate" tab: totals and notes instead of tables and layers
   onWiring?: (key: string) => void;  // from an elevation to the wiring sheet, to the object's line
@@ -60,8 +63,8 @@ export function SidePanel({ tab, onTab, page, drawing, views, view: current, onV
         {hasViews ? (
           <div className={ui.segmented} role="radiogroup" aria-label={t("side.view")}>
             {views!.map((v) => (
-              <button key={v.index} role="radio" aria-checked={v.index === current}
-                      className={cx(v.index === current && ui.on)} onClick={() => onView?.(v.index)}>{v.label}</button>
+              <button key={v.key} role="radio" aria-checked={v.key === current}
+                      className={cx(v.key === current && ui.on)} onClick={() => onView?.(v)}>{v.label}</button>
             ))}
           </div>
         ) : <span className={css.title}>{wall ? t("side.onWall") : summary ? t("overview.side") : estimate ? t("estimate.totals") : tabs.length > 1 ? t("side.tablesAndLayers") : t(`side.${shown}`)}</span>}
@@ -86,7 +89,7 @@ export function SidePanel({ tab, onTab, page, drawing, views, view: current, onV
         {summary ? summary
           : wall ? <WallItems wall={wall} onWiring={onWiring} />
           : estimate ? <EstimateTotals table={estimate} />
-          : shown === "layers" ? <Layers page={page} drawing={drawing} /> : <Tables page={page} />}
+          : shown === "layers" ? <Layers page={page} drawing={drawing} /> : <Tables page={page} drawing={drawing} />}
       </div>
       {children}
     </aside>
@@ -95,9 +98,12 @@ export function SidePanel({ tab, onTab, page, drawing, views, view: current, onV
 
 // Sheet tables: a row linked to objects lights up when an object is hovered and highlights
 // them on the drawing itself
-function Tables({ page }: { page: Page | null }) {
+function Tables({ page, drawing }: { page: Page | null; drawing: Drawing | null }) {
   const { t } = useTranslation();
+  const electricalView = useView((s) => s.electricalView);
   const hover = useView((s) => s.hover);
+  const filter = useView((s) => s.filter3d);
+  const selected = useView((s) => s.selected);
   const [rowHover, setRowHover] = useState<string | null>(null);
   const hoverKeys = useMemo(() => new Set(hover ? expand(hover) : []), [hover]);
 
@@ -107,25 +113,40 @@ function Tables({ page }: { page: Page | null }) {
   }, [hover]);
 
   if (!page) return <div className="muted">{t("side.noSheet")}</div>;
-  const tables = page.tables || [];
+  const tables = page.stage === "electrical" && drawing
+    ? viewTables(page.tables || [], ownLayers(drawing, page, electricalView), objectLayers(drawing))
+    : page.tables || [];
   if (!tables.length) return <div className="muted">{t("side.noTables")}</div>;
+  // The eye of a group: every group of the sheet counts, also one with no table row
+  const groups = [...new Set([...Object.keys(page.groups ?? {}), ...tables.flatMap((x) => x.rows.flatMap((r) => r.group ?? []))])];
+  const toggle = (g: string) => view.set({
+    filter3d: { ...filter, groups: toggledGroups(filter.groups, groups, g) },
+    selected: null, neighbors: null, pinned: null, tip: null,
+  });
   return (
     <>
       {tables.map((t, ti) => (
         <TableView key={ti} t={t} id={`${ti}`} rowHover={rowHover} hoverKeys={hoverKeys}
+                   shown={filter.groups} onGroup={toggle} selected={selected}
                    onRow={(rid, keys) => { setRowHover(rid); view.set({ lit: keys }); }}
-                   onPick={page.panel ? (keys) => view.set({ pinned: keys[0] }) : undefined} />
+                   onPick={page.panel ? (keys) => view.set({ pinned: keys[0] })
+                     : (keys) => view.set({ selected: rowSelection(selected, keys, page.chains), neighbors: null, pinned: null, tip: null })} />
       ))}
     </>
   );
 }
 
-// onPick is a row click ("Panel" sheet: the device card)
-function TableView({ t, id, rowHover, hoverKeys, onRow, onPick }: {
+// onPick is a row click (its line on the drawing; "Panel" sheet: the device card); a row with a group has an eye, a row with
+// a hint shows it when the pointer stays on the row (HoldTip)
+function TableView({ t, id, rowHover, hoverKeys, shown, onGroup, selected, onRow, onPick }: {
   t: SideTable; id: string; rowHover: string | null; hoverKeys: Set<string>;
+  shown: Set<string> | null;
+  onGroup: (group: string) => void;
+  selected: Set<string> | null;
   onRow: (rid: string | null, keys: Set<string> | null) => void;
   onPick?: (keys: string[]) => void;
 }) {
+  const hold = useHoldTip();
   const al = (i: number) => (t.align[i] === "left" ? undefined : css.c);
   return (
     <>
@@ -135,14 +156,19 @@ function TableView({ t, id, rowHover, hoverKeys, onRow, onPick }: {
         <tbody>
           {t.rows.map((r, ri) => {
             const rid = `${id}/${ri}`;
-            const lit = rid === rowHover || (!!r.keys && r.keys.some((k) => hoverKeys.has(k)));
+            const picked = !!selected && !!r.keys?.length && r.keys.every((k) => selected.has(k));
+            const lit = picked || rid === rowHover || (!!r.keys && r.keys.some((k) => hoverKeys.has(k)));
+            const on = !r.group || !shown || shown.has(r.group);
             return (
-              <tr key={ri} className={cx(r.section && css.section, r.keys && css.linked, lit && css.lit)}
-                  onPointerEnter={r.keys ? () => onRow(rid, new Set(r.keys)) : undefined}
-                  onPointerLeave={r.keys ? () => onRow(null, null) : undefined}
+              <tr key={ri} className={cx(r.section && css.section, r.keys && css.linked, lit && css.lit, !on && css.off)}
+                  aria-description={r.hint}
+                  onPointerEnter={(e) => { if (r.keys) onRow(rid, new Set(r.keys)); if (r.hint) hold.start(r.hint, e); }}
+                  onPointerMove={r.hint ? hold.move : undefined}
+                  onPointerLeave={() => { if (r.keys) onRow(null, null); hold.stop(); }}
                   onClick={onPick && r.keys?.length ? () => onPick(r.keys!) : undefined}>
                 {r.cells.map((c, i) => (
                   <td key={i} className={i === 0 && (r.color || r.marker) ? css.mark : al(i)}>
+                    {i === 0 && r.group && <EyeToggle on={on} what={r.group} onToggle={() => onGroup(r.group!)} className={css.rowEye} />}
                     {/* A panel group gets a dot in its colour, like the lines on the drawing; a device not on a
                         line (main switch, relay, backup, battery box) gets a square */}
                     {i === 0 && r.color && <span className={ui.dot} style={{ background: r.color }} aria-hidden="true" />}
@@ -157,6 +183,7 @@ function TableView({ t, id, rowHover, hoverKeys, onRow, onPick }: {
         </tbody>
       </table>
       {t.notes && <ul className={css.notes}>{t.notes.map((n, i) => <li key={i}>{n}</li>)}</ul>}
+      {hold.tip}
     </>
   );
 }
@@ -180,21 +207,21 @@ function EstimateTotals({ table }: { table: SideTable }) {
 
 function Layers({ page, drawing }: { page: Page | null; drawing: Drawing | null }) {
   const { t } = useTranslation();
-  const { hidden, extra } = useView((s) => s);
+  const { hidden, extra, electricalView } = useView((s) => s);
   useView((s) => s.themeTick);
   if (!page || !drawing) return <div className="muted">{t("side.noSheet")}</div>;
   refreshPalette();
   const colors = drawingLayers(drawing);
-  const ownLayers = drawing.own.get(page) ?? new Set(colors.keys());
+  const ownOfView = ownLayers(drawing, page, electricalView) ?? new Set(colors.keys());
   // A row and its colour: cable layers give several rows (layerRows); from another sheet — only
   // the purpose, protection and route are chosen on the wiring sheet
   const rows = new Map<string, string>();
   const own = new Set<string>();
   for (const [l, color] of colors) {
-    if (!ownLayers.has(l)) continue;
+    if (!ownOfView.has(l)) continue;
     for (const r of layerRows(l)) { own.add(r); if (!rows.has(r)) rows.set(r, color); }
   }
-  for (const [l, color] of colors) if (!ownLayers.has(l) && !rows.has(layerRows(l)[0])) rows.set(layerRows(l)[0], color);
+  for (const [l, color] of colors) if (!ownOfView.has(l) && !rows.has(layerRows(l)[0])) rows.set(layerRows(l)[0], color);
   // Own layer: switch it off on all sheets; from another sheet: add it to the drawing
   const toggle = (l: string, on: boolean) => {
     const set = new Set(own.has(l) ? hidden : extra);

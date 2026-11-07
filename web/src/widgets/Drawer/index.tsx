@@ -10,6 +10,7 @@ import { kindOf } from "@/shared/files";
 import i18n, { label, locale } from "@/shared/i18n";
 import type { Answer, QuestionsMemory } from "@/shared/questions";
 import ui from "@/shared/styles/ui.module.scss";
+import { sourceRows } from "@/shared/sources";
 import type { Project } from "@/shared/types";
 import { Questions } from "@/widgets/Questions";
 import css from "./Drawer.module.scss";
@@ -58,12 +59,8 @@ export function Drawer({ tab, project, shownSource, onSource, busy, onAnswer, st
 
 function Sources({ project: p, shown, onSource }: { project: Project; shown: string | null; onSource: (f: string) => void }) {
   const { t } = useTranslation();
-  const parsed = new Map((p.parsed || []).map((s) => [s.file, s.note]));
-  const files = [...new Set([...p.sources, ...parsed.keys()])];
-  if (!files.length) return <div className="muted">{t("drawer.noSources")}</div>;
-  // An old server without parsed: parsing status is unknown, not "unused"
-  const list = files.map((f) => ({ file: f, used: p.parsed ? parsed.has(f) : null, note: parsed.get(f) || "",
-                                   exists: p.sources.includes(f) }));
+  const list = sourceRows(p.sources, p.parsed);
+  if (!list.length) return <div className="muted">{t("drawer.noSources")}</div>;
   const used = list.filter((s) => s.used).length;
   return (
     <>

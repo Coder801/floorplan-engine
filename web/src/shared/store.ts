@@ -11,17 +11,28 @@ export interface Tip {
   y: number;
 }
 
-// What to show in 3D: null means everything
+// What to show: null means everything. Groups count in 3D and on the wiring sheet, the room in 3D
 export interface Filter3D {
   groups: Set<string> | null;
   room: string | null;
 }
 
 export const shown3d = (f: Filter3D, group: string | null | undefined, room: string | null | undefined) =>
-  (!f.groups || (!!group && f.groups.has(group))) && (!f.room || room === f.room);
+  (!f.groups || !group || f.groups.has(group)) && (!f.room || room === f.room);
+
+// The groups shown after the eye of group g is pressed; all shown again means no filter. all is
+// every group of the page, also those with no table row
+export function toggledGroups(shown: Set<string> | null, all: string[], g: string): Set<string> | null {
+  const on = new Set(shown ?? all);
+  if (on.has(g)) on.delete(g); else on.add(g);
+  return all.every((k) => on.has(k)) ? null : on;
+}
 
 // Elevation layers: electrical (points, boxes, panel, chases, neighbour outlets) and water
 export interface WallLayers { electrical: boolean; water: boolean }
+
+// What the electrical sheet shows: sockets with their lines or low voltage (engine/sheet/views.ts)
+export type ElectricalView = "sockets" | "low";
 
 export interface ViewState {
   hover: string | null;             // object under the cursor (sheet or 3D)
@@ -35,10 +46,11 @@ export interface ViewState {
   editMode: boolean;                // "Edit routes"
   show3d: boolean;                  // the wiring sheet in 3D
   wallMode: WallMode;
-  filter3d: Filter3D;               // 3D: only these QF groups and the room
+  filter3d: Filter3D;               // only these QF groups (3D, wiring sheet) and the room (3D)
   themeTick: number;                // the theme changed: recolour
   // Open this sheet right at the object (from an elevation, from a question); around: SheetView.reveal
   goto: { key: string; stage: string; around?: number } | null;
+  electricalView: ElectricalView;   // what the electrical sheet shows (engine/sheet/views.ts)
   wallLayers: WallLayers;           // what is visible on the elevation (the eye in the "On the wall" table)
 }
 
@@ -47,7 +59,7 @@ type Listener = () => void;
 let state: ViewState = {
   hover: null, lit: null, selected: null, neighbors: null, tip: null, pinned: null,
   hidden: new Set(), extra: new Set(), editMode: false, show3d: false, wallMode: "cut",
-  filter3d: { groups: null, room: null }, themeTick: 0, goto: null,
+  filter3d: { groups: null, room: null }, themeTick: 0, goto: null, electricalView: "sockets",
   wallLayers: { electrical: true, water: true },
 };
 const listeners = new Set<Listener>();

@@ -27,6 +27,10 @@ import type { PipeKind, Scene, ScenePipe, SceneWire, XY } from "@/shared/types";
 import {
   clampStep, Glide, PinchSteps, stepBelow, WheelSteps, ZOOM_STEPS, zoomLabel, type Zoom,
 } from "@/shared/zoom";
+import { flat, pointGeometry, puck } from "./solids";
+
+const HOME_DIRECTION = new THREE.Vector3(-1, -1, 1.15);  // isometry: from the south-west, above
+const HOME_TOLERANCE = 0.005;  // the controls settle with inertia: the view is home within this share
 
 export interface Scene3DApi {
   iso(): void;
@@ -41,6 +45,7 @@ interface Props {
   layerOf: Map<string, string>;     // object → its layer on the drawing
   apiRef: MutableRefObject<Scene3DApi | null>;
   onZoom: (zoom: Zoom) => void;
+  onHome: (home: boolean) => void;  // the camera came to the isometry or left it
 }
 
 // Transparent draw order: points and lines before walls (a wall lies over what is behind it),
@@ -85,7 +90,7 @@ export function Scene3D(props: Props) {
   );
 }
 
-function World({ scene, index, own, layerOf, apiRef, onZoom }: Props) {
+function World({ scene, index, own, layerOf, apiRef, onZoom, onHome }: Props) {
   const { camera, size, invalidate } = useThree();
   const controls = useRef<OrbitControlsImpl>(null);
   const s = useView((st) => st);
@@ -127,8 +132,7 @@ function World({ scene, index, own, layerOf, apiRef, onZoom }: Props) {
   const direction = () => camera.position.clone().sub(controls.current?.target ?? bounds.center);
 
   apiRef.current = {
-    // Isometry: from the south-west, above
-    iso: () => look(bounds.center, new THREE.Vector3(-1, -1, 1.15), 0),
+    iso: () => look(bounds.center, HOME_DIRECTION, 0),
     // Whole drawing: the same angle, the whole flat
     fit: () => look(bounds.center, direction(), 0),
     zoomTo,
@@ -195,8 +199,10 @@ function World({ scene, index, own, layerOf, apiRef, onZoom }: Props) {
       return { geo, edges: lines, z0: w.z[0], h: w.z[1] - w.z[0], normals: w.normals };
     });
   }, [scene]);
-  const floors = useMemo(() => scene.floors.map((f) => new THREE.ShapeGeometry(shape(f.rings))), [scene]);
-  // Points, boxes, panel: flat against a wall, a disc on the ceiling
+  // The slab goes under the room floors: door openings and pockets between walls are floor too
+  const floors = useMemo(() => [...(scene.slab ?? []).map((ring) => [ring]), ...scene.floors.map((f) => f.rings)]
+    .map((rings) => new THREE.ShapeGeometry(shape(rings))), [scene]);
+  // Points, boxes, panel: on a wall or on the ceiling (shapes — solids.ts)
   const solids = useMemo(() => {
     const out: { key: string; pos: [number, number, number]; color: string; geo: THREE.BufferGeometry;
                  edges: THREE.EdgesGeometry; group?: string | null; room?: string }[] = [];
@@ -204,7 +210,7 @@ function World({ scene, index, own, layerOf, apiRef, onZoom }: Props) {
                  group?: string | null, room?: string) =>
       out.push({ key, pos, color, geo, edges: new THREE.EdgesGeometry(geo), group, room });
     for (const [id, p] of Object.entries(scene.points)) {
-      add(`point:${id}`, p.pos, p.color, p.inward ? flat(p.inward, 80, 25, 80) : disc(), p.group, p.room);
+      add(`point:${id}`, p.pos, p.color, pointGeometry(p.type, p.inward), p.group, p.room);
     }
     for (const [id, b] of Object.entries(scene.boxes)) {
       add(`box:${id}`, b.pos, "#9a948a", b.inward ? flat(b.inward, 100, 60, 100) : new THREE.BoxGeometry(100, 100, 60),
@@ -214,8 +220,7 @@ function World({ scene, index, own, layerOf, apiRef, onZoom }: Props) {
     // Plumbing: a water outlet or drain is a puck on the wall, a riser a cylinder from floor to ceiling
     for (const f of Object.values(scene.fixtures ?? {})) {
       const [ix, iy] = f.inward;
-      const geo = new THREE.CylinderGeometry(f.kind === "sewer" ? 40 : 22, f.kind === "sewer" ? 40 : 22, 30, 20)
-        .rotateZ(Math.abs(ix) > Math.abs(iy) ? Math.PI / 2 : 0);
+      const geo = puck(f.inward, f.kind === "sewer" ? 40 : 22, 30, 20);
       const pos: [number, number, number] = [f.pos[0] + ix * 15, f.pos[1] + iy * 15, f.pos[2]];
       add(f.key, pos, f.color, geo, null, f.room);
     }
@@ -247,8 +252,13 @@ function World({ scene, index, own, layerOf, apiRef, onZoom }: Props) {
   // one scale from the floor, and the lintel above an opening of a cut wall is not drawn: the
   // opening shows as a gap in the rim. The selected line's dashes run from source to target
   // (dash length in screen px)
+  const atHome = useRef<boolean | null>(null);
   useFrame((state) => {
     const t = controls.current?.target ?? bounds.center, p = camera.position;
+    const home = t.distanceTo(bounds.center) < bounds.ext * HOME_TOLERANCE
+      && p.clone().sub(t).normalize().distanceTo(HOME_DIRECTION.clone().normalize()) < HOME_TOLERANCE
+      && Math.abs(camera.zoom / fitZoom - 1) < HOME_TOLERANCE;
+    if (home !== atHome.current) { atHome.current = home; onHome(home); }
     const dx = t.x - p.x, dy = t.y - p.y, len = Math.hypot(dx, dy) || 1;
     const mode = view.get().wallMode;
     const low = Math.min(1, CUT_HEIGHT_MM / scene.ceiling);
@@ -320,11 +330,6 @@ function World({ scene, index, own, layerOf, apiRef, onZoom }: Props) {
     </>
   );
 }
-
-// Flat against a wall, a disc on the ceiling
-const flat = (inward: XY, w: number, d: number, h: number) =>
-  (Math.abs(inward[0]) > Math.abs(inward[1]) ? new THREE.BoxGeometry(d, w, h) : new THREE.BoxGeometry(w, d, h));
-const disc = () => new THREE.CylinderGeometry(60, 60, 20, 24).rotateX(Math.PI / 2);
 
 // Hover shows a hint and highlight; click selects the line; double click focuses on it
 function objectEvents(key: string, index: PageIndex, focus: (keys: Set<string>) => void) {

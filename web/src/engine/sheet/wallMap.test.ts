@@ -25,6 +25,14 @@ describe("wallMap", () => {
     expect(faces.filter((f) => f.kind === "lit").length).toBeGreaterThan(0);
   });
 
+  it("плита — под полами помещений, чтобы в проёмах не было фона", () => {
+    const slab = [rect(-100, 0, 6000, 4100)];
+    const faces = wallMap({ ...scene(), slab }, null, null);
+    expect(faces[0].kind).toBe("slab");
+    expect(faces.filter((f) => f.kind === "slab")).toHaveLength(1);
+    expect(wallMap(scene(), null, null).some((f) => f.kind === "slab")).toBe(false);  // old build
+  });
+
   it("полы — первыми, перемычки выше среза — не рисуются", () => {
     const faces = wallMap(scene(), null, null);
     expect(faces.slice(0, 2).every((f) => f.kind === "floor")).toBe(true);

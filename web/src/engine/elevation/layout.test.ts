@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { badgePlaces, spread, type Rect } from "./layout";
+import { badgePlaces, spread, type Rect, handleSpan } from "./layout";
 
 describe("spread", () => {
   it("близкие подписи разводятся на шаг", () => {
@@ -21,5 +21,12 @@ describe("badgePlaces", () => {
     // A second badge on the same symbol: right is taken, so left
     const [b] = badgePlaces([{ w: 20, anchor: sym }], 16, taken);
     expect(b).toEqual([-23, -3, -3, 13]);
+  });
+});
+
+describe("handleSpan", () => {
+  it("puts the handle on the edge away from the hinges", () => {
+    expect(handleSpan(1000, 1800, "start")).toEqual([1740, 1620]);
+    expect(handleSpan(1000, 1800, "end")).toEqual([1060, 1180]);
   });
 });

@@ -18,7 +18,7 @@ import { view } from "@/shared/store";
 import type { ElevWall, Elevation, PipeKind, XY } from "@/shared/types";
 import { clampStep, Glide, LAST_STEP, PinchSteps, RAIL_PX, WheelSteps, type Zoom, ZOOM_STEPS, zoomLabel } from "@/shared/zoom";
 import { apply, flatToIso, invert, isoBounds, isoScene, wallOutline, type Affine, type IsoScene, type Mat } from "./iso";
-import { badgePlaces, spread, type Rect } from "./layout";
+import { badgePlaces, handleSpan, HANDLE, spread, type Rect } from "./layout";
 
 const PAD = 20;            // px around the elevation
 const RULER_X = 64;        // px below the floor: offsets
@@ -37,6 +37,7 @@ const SWITCHES = new Set(["switch", "pass_switch"]);
 const LOW = new Set(["data", "tv"]);
 
 const INK = "#29251f", GREY = "#9a9288", LIGHT = "#d9d3c8", BACK = "#b0a99d";
+const GLASS = "#a9d3f2";
 const CHASE = "#e4ded3", CHASE_LOW = "#cfe3f3", BOX = "#b3261e", LOW_INK = "#1f6fb2";
 // Plumbing: network colours, as on the "Plumbing" sheet (drawing/plumbing.COLORS)
 export const WATER: Record<PipeKind, string> = { cold: "#1f77b4", hot: "#d62728", sewer: "#8c564b" };
@@ -305,7 +306,7 @@ export class ElevationView {
     for (const op of e.openings) {
       const a = this.sx(op.x0), b = this.sx(op.x1), y0 = this.sy(op.y0), y1 = this.sy(op.y1);
       const color = op.assumed ? GREY : INK;
-      ctx.fillStyle = palette.paper || "#ffffff";
+      ctx.fillStyle = op.kind === "window" ? GLASS : palette.paper || "#ffffff";
       ctx.fillRect(a, y1, b - a, y0 - y1);
       ctx.strokeStyle = screenColor(color); ctx.lineWidth = 1.4;
       ctx.strokeRect(a, y1, b - a, y0 - y1);
@@ -313,6 +314,12 @@ export class ElevationView {
       if (op.kind === "door") {
         this.line(a, y0, (a + b) / 2, y1, LIGHT);
         this.line(b, y0, (a + b) / 2, y1, LIGHT);
+        if (op.hinge) {
+          const [from, to] = handleSpan(op.x0, op.x1, op.hinge), y = this.sy(HANDLE.height);
+          this.line(this.sx(from), y, this.sx(to), y, INK, 3);
+          ctx.fillStyle = screenColor(INK);
+          ctx.beginPath(); ctx.arc(this.sx(from), y, 3, 0, 2 * Math.PI); ctx.fill();
+        }
       }
       if (op.assumed) this.text("*", b - 3, y1 + 8, LABEL_PX, color, "right");
     }

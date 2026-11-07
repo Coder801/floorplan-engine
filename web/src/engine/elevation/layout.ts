@@ -38,3 +38,10 @@ export function badgePlaces(labels: readonly Label[], h: number, taken: Rect[]):
     return at;
   });
 }
+
+// Door handle on an elevation: a mark, not a size; on the free edge of the leaf, away from the hinges
+export const HANDLE = { height: 1000, inset: 60, end: 180 };
+
+export function handleSpan(x0: number, x1: number, hinge: "start" | "end"): [number, number] {
+  return hinge === "start" ? [x1 - HANDLE.inset, x1 - HANDLE.end] : [x0 + HANDLE.inset, x0 + HANDLE.end];
+}

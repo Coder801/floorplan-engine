@@ -5,7 +5,7 @@ import type { Question } from "./types";
 
 export type Status = "open" | "pending" | "answered" | "accepted" | "resolved";
 export type Group = "open" | "pending" | "closed";
-export type Answer = number | string | { accept: true } | { text: string };
+export type Answer = number | string | string[] | { accept: true } | { text: string };
 
 const SEVERITY: Record<string, number> = { critical: 0, major: 1, minor: 2 };
 
@@ -81,9 +81,12 @@ export function objectOf(target: string | undefined): string | null {
 }
 
 // Where "show" leads: an object on the sheet of its stage; panel questions — the "Panel" tab,
-// they have no object on it. null: nothing to show (no such sheet, or no object)
+// they have no object on it; a list of groups is chosen in its "Backup" mode. null: nothing to
+// show (no such sheet, or no object)
+export const RESERVE_KEY = "reserve";
 export function shownOn(q: Question, stages: string[]): { stage: string; key: string | null } | null {
   if (!stages.includes(q.stage)) return null;
+  if (q.answer === "groups") return { stage: q.stage, key: RESERVE_KEY };
   const key = objectOf(q.target);
   return key || q.stage === "panel" ? { stage: q.stage, key } : null;
 }

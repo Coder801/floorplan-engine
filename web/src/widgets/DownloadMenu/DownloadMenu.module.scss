@@ -1,9 +1,9 @@
-// "Download" above the drawing at the top right, like the buttons under it
+// "Download" at the end of the first drawing options row (ui.optionsRow)
 
 @use "@/shared/styles/mixins" as *;
 
 // It is the frame for the menu itself (absolute), menu.wrap is not needed
-.download { position: absolute; top: 12px; right: 12px; z-index: 5; }
+.download { position: relative; }
 .download [role="menu"] { min-width: 300px; }  // item label on one line
 .button {
   display: inline-flex; align-items: center; gap: 8px;
@@ -21,7 +21,6 @@
 
 // Narrow screen: icon only, the elevation pager takes the space at the top
 @media (max-width: $narrow) {
-  .download { top: 8px; right: 8px; }
   .button { padding: 0 10px; gap: 4px; }
   .label { display: none; }
 }

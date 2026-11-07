@@ -1,0 +1,34 @@
+// Groups of the backup bus as rows: tick, group, purpose, power on the right
+
+// The sum stays in view while a long list scrolls: it is what the choice is judged by. It covers
+// the whole width of the block it scrolls in (--reserve-bleed is that block's side padding), so
+// rows do not show beside it; --reserve-top cancels the block's top padding. Doubled class: the
+// `p { margin: 0 }` of those blocks is stronger than one
+.sum.sum {
+  position: sticky; top: var(--reserve-top, 0); z-index: 1;
+  display: flex; align-items: center; gap: 8px;
+  margin: 0 calc(-1 * var(--reserve-bleed, 0px)); padding: 8px var(--reserve-bleed, 0px);
+  border-bottom: 1px solid var(--line);
+  background: var(--panel); font-size: 14px; font-weight: 500; font-variant-numeric: tabular-nums;
+}
+.sign { flex: none; width: 20px; height: 20px; }
+.triangle { stroke-width: 2; stroke-linejoin: round; }
+.near {
+  color: var(--major);
+  .triangle { fill: var(--warn); stroke: var(--warn); }
+  .mark { fill: #29251f; }  // dark on yellow in both themes
+}
+.over {
+  color: var(--critical);
+  .triangle { fill: var(--badge); stroke: var(--badge); }
+  .mark { fill: #fff; }
+}
+.list { margin: 0; padding: 0; list-style: none; }
+.row {
+  display: grid; grid-template-columns: auto 56px minmax(0, 1fr) auto; align-items: center; gap: 10px;
+  min-height: 40px; padding: 4px 0; border-top: 1px solid var(--line); cursor: pointer;
+  input { width: 16px; height: 16px; margin: 0; accent-color: var(--hl); }
+}
+li:first-child .row { border-top: 0; }  // the line under the sum is enough
+.purpose { min-width: 0; }
+.power { font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--muted); }

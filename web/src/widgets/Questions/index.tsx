@@ -214,7 +214,7 @@ function Card(props: RowProps) {
           {shows && (
             <div className={css.actions}>
               <button className={css.quiet} onClick={() => onShow(shows)}>
-                {t(shows.key ? "questions.show" : "questions.showPanel")}
+                {t(q.answer === "groups" ? "questions.pickGroups" : shows.key ? "questions.show" : "questions.showPanel")}
               </button>
             </div>
           )}
@@ -234,6 +234,7 @@ function shown(q: Question, value: unknown): string {
 }
 
 function answerValue(q: Question, answer: unknown): string {
+  if (Array.isArray(answer)) return answer.join(", ");
   const o = answer as { text?: string };
   return o && typeof o === "object" ? `«${o.text}»` : shown(q, answer);
 }
@@ -260,6 +261,7 @@ function Answered({ q, answer, status, empty }: { q: Question; answer: unknown; 
 
 function Controls(props: CardProps) {
   const { q, answer, status, working, editing, asking, onEdit, onAsk, onSave } = props;
+  if (q.answer === "groups") return <Answered q={q} answer={answer} status={status} />;
   const { t } = useTranslation();
   if (working) {
     return (

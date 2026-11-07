@@ -1,74 +1,35 @@
-// Wiring 3D filter: QF groups (checkboxes in the group colour) and the room. Filtered lines,
-// points and boxes are not drawn; the panel is always visible. Reset when the sheet changes.
+// Wiring 3D filter: the room. Filtered lines, points and boxes are not drawn; the panel is always
+// visible. Reset when the sheet changes. QF groups are switched by the eyes of the "Groups" table
+// in the side panel.
 
-import { useMemo, useState } from "react";
-import { createPortal } from "react-dom";
+import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { cx } from "@/shared/cx";
 import type { PageIndex } from "@/shared/page";
-import { screenColor } from "@/shared/palette";
 import { useView, view } from "@/shared/store";
 import ui from "@/shared/styles/ui.module.scss";
-import type { Scene } from "@/shared/types";
-import { EyeToggle } from "@/ui/EyeToggle";
-import css from "./Filter3D.module.scss";
+import type { RoomKind, Scene } from "@/shared/types";
+import { Icon, type IconName } from "@/ui/Icon";
+import { Select } from "@/ui/Select";
 
-// QF2 < QF10, QF8 < QF8.2
-const byNumber = (a: string, b: string) => a.localeCompare(b, undefined, { numeric: true });
+const ROOM_ICONS: Record<RoomKind, IconName> = { living: "sofa", kitchen: "kitchen", wet: "bath", service: "door", outdoor: "sun" };
 
 export function Filter3D({ scene, index }: { scene: Scene; index: PageIndex }) {
   const filter = useView((s) => s.filter3d);
-  const [open, setOpen] = useState(false);
-  const groups = useMemo(() => {
-    const color = new Map<string, string>();
-    for (const w of Object.values(scene.wires)) if (!color.has(w.group)) color.set(w.group, w.color);
-    return [...color].sort(([a], [b]) => byNumber(a, b));
-  }, [scene]);
   const rooms = useMemo(() => scene.floors.map((f) => ({
-    id: f.key.slice(f.key.indexOf(":") + 1), name: index.card(f.key).title,
+    id: f.key.slice(f.key.indexOf(":") + 1), name: index.card(f.key).title, icon: ROOM_ICONS[f.kind ?? "living"],
   })), [scene, index]);
 
-  const set = (patch: Partial<typeof filter>) =>
-    view.set({ filter3d: { ...filter, ...patch }, selected: null, neighbors: null, pinned: null, tip: null });
-  const toggle = (g: string) => {
-    const on = new Set(filter.groups ?? groups.map(([k]) => k));
-    if (on.has(g)) on.delete(g); else on.add(g);
-    set({ groups: on.size === groups.length ? null : on });
-  };
-  const only = (g: string) => set({ groups: new Set([g]) });
-  const n = filter.groups ? filter.groups.size : groups.length;
+  const set = (room: string | null) =>
+    view.set({ filter3d: { ...filter, room }, selected: null, neighbors: null, pinned: null, tip: null });
   const { t } = useTranslation();
 
   return (
-    <div className={cx(ui.group, css.filter)}>
-      <select aria-label={t("filter3d.room")} value={filter.room ?? ""}
-              onChange={(e) => set({ room: e.target.value || null })}>
-        <option value="">{t("filter3d.allRooms")}</option>
-        {rooms.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
-      </select>
-      <button aria-expanded={open} aria-pressed={!!filter.groups} onClick={() => setOpen(!open)}
-              title={t("filter3d.groupsTitle")}>
-        {filter.groups ? t("filter3d.groupsN", { n, total: groups.length }) : t("filter3d.allGroups")}
-      </button>
-      {/* The popup lives in the drawing area, not in the button group: that one clips everything past its edge */}
-      {open && createPortal(
-        <div className={css.pop} role="dialog" aria-label={t("filter3d.groups")}>
-          <div className={css.head}>
-            <button onClick={() => set({ groups: null })}>{t("filter3d.all")}</button>
-            <button onClick={() => set({ groups: new Set() })}>{t("filter3d.none")}</button>
-          </div>
-          {groups.map(([g, c]) => (
-            <div key={g} className={cx(css.row, filter.groups && !filter.groups.has(g) && css.hidden)}
-                 onClick={() => toggle(g)}>
-              <EyeToggle on={!filter.groups || filter.groups.has(g)} what={g} onToggle={() => toggle(g)} />
-              <span className={css.swatch} style={{ background: screenColor(c) }} />
-              <span className="mono">{g}</span>
-              <button className={css.only} title={t("filter3d.onlyGroup", { group: g })} onClick={(e) => { e.stopPropagation(); only(g); }}>{t("filter3d.only")}</button>
-            </div>
-          ))}
-        </div>,
-        document.getElementById("stage")!,
-      )}
+    <div className={ui.group}>
+      <Select flat label={t("filter3d.room")} value={filter.room ?? ""} onChange={(v) => set(v || null)}
+              options={[
+                { value: "", label: t("filter3d.allRooms"), icon: <Icon name="grid" /> },
+                ...rooms.map((r) => ({ value: r.id, label: r.name, icon: <Icon name={r.icon} /> })),
+              ]} />
     </div>
   );
 }

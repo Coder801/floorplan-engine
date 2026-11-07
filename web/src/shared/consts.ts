@@ -39,7 +39,7 @@ export const CUT_HEIGHT_MM = 300;   // near walls in a cut view become a rim of 
 export const CUT_DOT = 0.2;
 export const WIRE_PX = 3, WIRE_SEL_PX = 4.5, WIRE_LIT_PX = 5;
 export const GHOST_ALPHA = 0.3;     // the part of a line hidden by a wall: faint but visible
-export const WALL_ALPHA = 0.55, WALL_GHOST_ALPHA = 0.15;
+export const WALL_ALPHA = 1, WALL_GHOST_ALPHA = 0.15;  // solid walls do not blend with the floor
 export const WALL_MODES = ["cut", "ghost", "none"] as const;
 export type WallMode = (typeof WALL_MODES)[number];
 
@@ -47,4 +47,8 @@ export const REDUCED_MOTION = typeof window !== "undefined"
   && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 // Panel stickers of a build (out/, sheets/stickers.py)
-export const STICKERS_PDF = "panel-stickers.pdf";
+export const stickersPdf = (colored: boolean, short: boolean) =>
+  `panel-stickers${colored ? "-color" : ""}${short ? "-short" : ""}.pdf`;
+
+// What the "Panel" page shows: the panel, the stickers, the groups of the backup bus
+export type PanelMode = "front" | "stickers" | "reserve";

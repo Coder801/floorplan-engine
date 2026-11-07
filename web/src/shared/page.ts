@@ -1,22 +1,58 @@
 // Links between page objects: the whole line (chains), group (groups), cards (objects)
 
 import { label } from "@/shared/i18n";
-import type { ObjectCard, Page } from "./types";
+import type { ObjectCard, Page, XY } from "./types";
 
 // Object keys for matching with tables: a shared label of points means its points
 export const expand = (o: string): string[] =>
   (o.startsWith("label:") ? o.slice(6).split(",").map((id) => `point:${id}`) : [o]);
 
+// Point inside rings (outer and holes) by the even-odd rule
+export function inRings(rings: XY[][], x: number, y: number): boolean {
+  let inside = false;
+  for (const ring of rings) {
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const [ax, ay] = ring[i], [bx, by] = ring[j];
+      if (ay > y !== by > y && x < ax + ((y - ay) * (bx - ax)) / (by - ay)) inside = !inside;
+    }
+  }
+  return inside;
+}
+
+// On the electrics sheets the building is a backdrop: walls, doors, rooms and dimensions are not
+// selected there, even on a layer switched on from the plan
+const ELECTRIC_STAGES = new Set(["electrical", "lighting", "wiring"]);
+const BUILDING = new Set(["room", "wall", "opening", "dimension"]);
+const kindOf = (o: string) => o.slice(0, o.indexOf(":"));
+
 // other holds cards of other sheets of the shared drawing, for objects on a layer switched on
-// from another sheet (dimensions on wiring); the sheet's own cards and lines win
+// from another sheet (wires on electrical); the sheet's own cards and lines win
+// What a click on a table row selects: its objects with their whole lines; a row already selected
+// clears the selection
+export function rowSelection(selected: Set<string> | null, keys: string[], chains?: Record<string, string[]>): Set<string> | null {
+  if (selected && keys.every((k) => selected.has(k))) return null;
+  return new Set(keys.flatMap((k) => [k, ...(chains?.[k] ?? [])]));
+}
+
+// Objects of the groups not shown (wiring sheet): null filter means none
+export function filteredKeys(groups: Record<string, string[]> | undefined, shown: Set<string> | null): Set<string> {
+  if (!groups || !shown) return new Set();
+  return new Set(Object.entries(groups).filter(([g]) => !shown.has(g)).flatMap(([, keys]) => keys));
+}
+
 export class PageIndex {
   readonly objects: Record<string, ObjectCard> | null;
   readonly chains: Record<string, string[]>;
+  readonly areas: Record<string, XY[][]>;
   readonly groupOf = new Map<string, Set<string>>();
+  private readonly electric: boolean;
 
-  constructor(page: Page, private readonly other: Record<string, ObjectCard> = {}) {
+  // lines are chains of another sheet, for a sheet that shows its lines (sockets view)
+  constructor(page: Page, private readonly other: Record<string, ObjectCard> = {}, lines: Record<string, string[]> = {}) {
+    this.electric = ELECTRIC_STAGES.has(page.stage || "");
     this.objects = page.objects || null;
-    this.chains = page.chains || {};
+    this.chains = page.chains || lines;
+    this.areas = page.areas || {};
     for (const keys of Object.values(page.groups || {})) {
       const all = new Set(keys);
       for (const k of keys) this.groupOf.set(k, all);
@@ -39,7 +75,14 @@ export class PageIndex {
   }
 
   interactive(o: string | null | undefined): o is string {
-    return !!o && (!this.objects || o in this.objects || expand(o).some((k) => k in this.chains) || o in this.other);
+    if (!o || (this.electric && BUILDING.has(kindOf(o)))) return false;
+    return !this.objects || o in this.objects || expand(o).some((k) => k in this.chains) || o in this.other;
+  }
+
+  // Object by its area on the sheet (walls of the plan): hatching alone is hard to hit
+  areaAt(x: number, y: number): string | null {
+    const found = Object.entries(this.areas).find(([, rings]) => inRings(rings, x, y));
+    return found ? found[0] : null;
   }
 
   // Object card; a point on the wiring sheet gets the card of the line to it; otherwise type and id

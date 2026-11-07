@@ -1,0 +1,11 @@
+// Scheme of a socket block: lines take the theme colours, the text is the size of the hint
+
+.block {
+  display: block; width: 100%; margin-top: 10px;
+  fill: none;
+  text { fill: var(--muted); font-size: 11px; text-anchor: middle; }
+}
+.wall { stroke: var(--text); stroke-width: 1.5; }
+.frame { stroke: var(--text); stroke-width: 1.2; }
+.post { stroke: var(--text); stroke-width: 1.2; }
+.dim { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 3 3; }

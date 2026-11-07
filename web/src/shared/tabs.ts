@@ -5,6 +5,10 @@
 
 import type { ManifestPage } from "./types";
 
+// A view of the "Electrical" tab: key is its label in i18n views.*; low voltage is a view of the
+// electrical sheet, it has no sheet of its own
+export interface TabView { key: string; index: number; label: string }
+
 // Views of the "Electrical" tab are sheet topics (labels in i18n views.*)
 export const VIEWS = new Set(["electrical", "lighting", "wiring"]);
 

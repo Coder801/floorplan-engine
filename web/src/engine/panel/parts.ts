@@ -136,7 +136,7 @@ export function inverterBody(pen: Pen, e: Rect, x: NonNullable<PanelData["extern
   ctx.fillStyle = "#9fd6c8";
   ctx.beginPath(); ctx.roundRect(dx, dy, dw, dh, 2); ctx.fill();
   const fs = dh * 0.28;
-  text(pen, inverter ? "230V  50Hz" : "GEN 230V", dx + dw / 2, dy + dh * 0.32, fs, "#173b33");
+  text(pen, inverter ? "230V  50Hz" : (x.kind === "station" ? "STATION 230V" : "GEN 230V"), dx + dw / 2, dy + dh * 0.32, fs, "#173b33");
   text(pen, inverter ? "5.0 kW  ▮▮▮▯ 76%" : "STANDBY", dx + dw / 2, dy + dh * 0.7, fs * 0.9, "#173b33");
   // Indicators: DC, AC, normal, fault
   const leds = ["#3ecf5a", "#3ecf5a", "#3ecf5a", "#5a2a2a"];

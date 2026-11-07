@@ -8,7 +8,7 @@ import type { Scene, XY } from "@/shared/types";
 
 type V3 = [number, number, number];
 
-export type FaceKind = "floor" | "room" | "top" | "left" | "right" | "lit" | "litTop" | "view";
+export type FaceKind = "slab" | "floor" | "room" | "top" | "left" | "right" | "lit" | "litTop" | "view";
 
 export interface Face {
   kind: FaceKind;
@@ -36,6 +36,10 @@ const area = (r: XY[]) => r.reduce((s, [x, y], i) => { const [u, v] = r[(i + 1) 
 export function wallMap(scene: Scene, wall: string | null, room: string | null, face?: readonly [XY, XY]): Face[] {
   const cut = scene.ceiling * CUT_SHARE;
   const faces: { depth: number; face: Face }[] = [];
+  // The slab first: door openings and pockets between walls are floor too
+  for (const ring of scene.slab ?? []) {
+    faces.push({ depth: -Infinity, face: { kind: "slab", pts: ring.map(([x, y]) => screen([x, y, 0])) } });
+  }
   for (const f of scene.floors) {
     const id = f.key.slice(f.key.indexOf(":") + 1);
     faces.push({ depth: -Infinity, face: { kind: id === room ? "room" : "floor", pts: f.rings[0].map(([x, y]) => screen([x, y, 0])) } });

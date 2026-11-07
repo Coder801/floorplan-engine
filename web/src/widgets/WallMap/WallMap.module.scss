@@ -13,8 +13,8 @@
   figcaption { font-size: 12px; color: var(--muted); text-align: center; }
 }
 
-// Faces: floor, the elevation room floor, the wall cut on top, sides lighter and darker
-.floor { fill: var(--soft); stroke: var(--line); }
+// Faces: slab and floor of one colour, the elevation room floor, the wall cut on top, sides lighter and darker
+.slab, .floor { fill: var(--soft); stroke: none; }  // no outline: a door opening has no seam
 .room { fill: var(--hl-row); stroke: var(--line); }
 .top { fill: var(--raise); stroke: var(--muted); }
 .left { fill: color-mix(in srgb, var(--muted) 35%, var(--raise)); stroke: var(--muted); }

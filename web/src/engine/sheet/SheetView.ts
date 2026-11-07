@@ -9,12 +9,13 @@ import {
   CABLE_MIN_PX, DIM_ALPHA, EDIT_HIT_PX, EDIT_MOVE_PX, FOCUS_MS, NEIGHBOR_ALPHA,
   FIT_SHRINK, REDUCED_MOTION, TIP_GAP, VIEW_PAD,
 } from "@/shared/consts";
-import { expand, PageIndex } from "@/shared/page";
+import { expand, filteredKeys, PageIndex } from "@/shared/page";
 import { palette, refreshPalette, screenColor } from "@/shared/palette";
 import { view } from "@/shared/store";
 import type { Page } from "@/shared/types";
 import { clampStep, Glide, LAST_STEP, PinchSteps, RAIL_PX, stepBelow, WheelSteps, ZOOM_STEPS, zoomLabel, type Zoom } from "@/shared/zoom";
-import { layerShown, sceneOf, type Drawing, type DrawingItem } from "./drawing";
+import { layerShown, objectLayers, sceneOf, type Drawing, type DrawingItem } from "./drawing";
+import { followsObject, objectVisible, ownLayers, repeatsNumbers, scoped, wiringChains } from "./views";
 import { inBox, paint, type DrawItem } from "./paint";
 import { Pinch } from "./pinch";
 
@@ -57,6 +58,8 @@ export class SheetView {
   private frame = 0; private flowFrame = 0;
   private drag: Drag | null = null;
   private readonly pinch = new Pinch();
+  private readonly layerOf: Map<string, string>;
+  private readonly lines: Record<string, string[]>;
   private fitted = true;  // the view is "whole drawing": refit on resize, otherwise keep it
   private readonly cleanup: (() => void)[] = [];
 
@@ -64,6 +67,8 @@ export class SheetView {
               readonly drawing: Drawing, page: Page, index: PageIndex) {
     this.items = drawing.items.map((i) => ({ ...i, w: i.w && i.w * i.shift.f, path: pathOf(i) }));
     this.has3d = !!sceneOf(drawing);
+    this.layerOf = objectLayers(drawing);
+    this.lines = wiringChains(drawing);
     this.setPage(page, index, false);
     this.ctx = canvas.getContext("2d")!;
     // New size (window, phone rotation, bottom panel): a fitted drawing is fitted again, a
@@ -75,8 +80,8 @@ export class SheetView {
     let seen: unknown[] = [];
     this.cleanup.push(view.subscribe(() => {
       const s = view.get();
-      const now = [s.hover, s.lit, s.selected, s.neighbors, s.hidden, s.extra, s.editMode, s.show3d, s.themeTick];
-      if (now.some((v, i) => v !== seen[i])) { seen = now; this.draw(); }
+      const now = [s.hover, s.lit, s.selected, s.neighbors, s.hidden, s.extra, s.editMode, s.show3d, s.themeTick, s.filter3d, s.electricalView];
+      if (now.some((v, i) => v !== seen[i])) { seen = now; this.applyView(); this.draw(); }
     }));
     this.bind();
   }
@@ -86,11 +91,25 @@ export class SheetView {
   setPage(page: Page, index: PageIndex, redraw = true) {
     this.page = page;
     this.index = index;
-    this.own = this.drawing.own.get(page) ?? new Set(this.items.map((i) => i.l));
+    this.applyView();
     const model = this.drawing.base.model;
     this.ed = page.edit && model ? new WiringEdit(page, this.items, this.shown, model) : null;
     this.saved = false;
     if (redraw) this.draw();
+  }
+
+  // Layers of this tab in the chosen view (views.ts)
+  private applyView() {
+    this.own = ownLayers(this.drawing, this.page, view.get().electricalView) ?? new Set(this.items.map((i) => i.l));
+  }
+
+  // A label or a box on the electrics views: only with its object
+  private readonly inView = (it: { o?: string; l: string }) => !repeatsNumbers(this.page, it)
+    && (!scoped(this.page) || !it.o || !followsObject(it.l) || objectVisible(it.o, this.shown, this.layerOf, this.lines));
+
+  // Objects of the groups switched off in the side panel
+  private filtered() {
+    return filteredKeys(this.page.groups, view.get().filter3d.groups);
   }
 
   // A layer is visible on this tab: its own until switched off, one from another sheet if switched on
@@ -237,9 +256,10 @@ export class SheetView {
     const [x0, y0, x1, y1] = this.drawing.view;
     ctx.save();
     ctx.beginPath(); ctx.rect(x0, y0, x1 - x0, y1 - y0); ctx.clip();
-    // Changed lines and boxes are drawn from the edit, not from sheet primitives
-    const skip = this.ed ? this.ed.hiddenKeys() : null;
-    const items = skip && skip.size ? this.items.filter((it) => !it.o || !skip.has(it.o)) : this.items;
+    // Changed lines and boxes are drawn from the edit, not from sheet primitives; while editing
+    // the whole wiring is shown, so the group filter is off
+    const skip = this.ed && this.editing() ? this.ed.hiddenKeys() : this.filtered();
+    const items = this.items.filter((it) => this.inView(it) && (!it.o || !skip.has(it.o)));
     paint(ctx, items, k, (it) => this.look(it), this.shown, CABLE_MIN_PX * this.dpr);
     if (this.ed) this.ed.paint(ctx, k, performance.now(), this.dpr);
     ctx.restore();
@@ -391,8 +411,10 @@ export class SheetView {
     const k = this.dpr * this.scale;
     ctx.setTransform(k, 0, 0, k, this.dpr * this.ox, this.dpr * this.oy);
     let best: { o: string; area: number } | null = null;
+    const off = this.editing() ? null : this.filtered();
     for (const it of this.items) {
-      if (!this.shown(it.l) || !this.index.interactive(it.o) || !inBox(it.box, mx, my, tol)) continue;
+      if (it.o && off?.has(it.o)) continue;
+      if (!this.shown(it.l) || !this.inView(it) || !this.index.interactive(it.o) || !inBox(it.box, mx, my, tol)) continue;
       const area = (it.box[2] - it.box[0] + tol) * (it.box[3] - it.box[1] + tol);
       if (best && area >= best.area) continue;
       ctx.lineWidth = 2 * tol;
@@ -402,7 +424,9 @@ export class SheetView {
         : ctx.isPointInStroke(it.path, px, py));
       if (hit) best = { o: it.o!, area };
     }
-    return best ? best.o : null;
+    if (best) return best.o;
+    const area = this.shown("A-WALL") ? this.index.areaAt(mx, my) : null;
+    return this.index.interactive(area) ? area : null;
   }
 
   private pick(ev: MouseEvent) {

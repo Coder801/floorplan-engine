@@ -10,8 +10,10 @@
   b { display: block; margin-bottom: 6px; font-size: 13px; }
   dl { @include pairs(3px 12px); }
 }
-.docked { top: 60px; right: 12px; left: auto; max-width: 320px; pointer-events: auto; padding-right: 32px; }
-@media (max-width: $phone) { .docked { left: 8px; right: 8px; top: 56px; max-width: none; } }
+// Below both rows of drawing options: the second one appears with 3D or Edit
+.docked { top: 108px; right: 12px; left: auto; max-width: 320px; pointer-events: auto; padding-right: 32px; }
+@media (max-width: $phone) { .docked { left: 8px; right: 8px; top: 104px; max-width: none; } }
+.wall { display: block; width: 100%; margin-top: 8px; min-height: 32px; font-size: 12px; }
 .close {
   @include bare-button;
   position: absolute; top: 4px; right: 4px; width: 24px; height: 24px; min-height: 0; padding: 0;

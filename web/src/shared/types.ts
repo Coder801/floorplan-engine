@@ -1,5 +1,6 @@
 // Types of the viewer API responses (service/viewer.py) and the .epd page (docs/epd-format.md)
 
+export type RoomKind = "living" | "kitchen" | "wet" | "service" | "outdoor";
 export type XY = [number, number];
 export type XYZ = [number, number, number];
 export type Box = [number, number, number, number];
@@ -16,7 +17,7 @@ export interface Question {
   severity: string;
   state: string;
   text: string;
-  answer: "value" | "choice" | "text";
+  answer: "value" | "choice" | "text" | "groups";
   options?: string[];
   option_labels?: Record<string, string>;  // how an option reads for a person, in the project language
   also?: string[];
@@ -79,6 +80,14 @@ export interface Manifest {
   overview?: Overview;  // project overview for the "Overview" tab (overview.py)
 }
 
+// What can go on the backup bus (overview.panel.reserve, panel_data.reserve_data): groups of the
+// model, they stay the same in every wiring variant; no key: no backup, or an older build
+export interface OverviewReserve {
+  limit_kw: number | null;  // power of the source; null: a generator of unknown power
+  limit_assumed: boolean;
+  items: { id: string; purpose: string; power: number; on: boolean }[];
+}
+
 export interface Overview {
   object: { name: string; object: string; building: string; code: string; stage: string; organization: string };
   language: string;
@@ -89,6 +98,7 @@ export interface Overview {
   panel?: {
     scheme: "economy" | "standard" | "premium"; input: string; input_assumed: boolean;
     devices: number; groups: number; modules: number; installed_w: number; calculated_w: number;
+    reserve?: OverviewReserve;
   };
   plumbing?: OverviewPlumbing;  // plumbing: fixtures, water, sewer (absent without plumbing.yaml)
 }
@@ -105,16 +115,23 @@ export interface OverviewPlumbing {
   estimate?: { total: number; currency: string; unpriced: number };
 }
 
-// Wiring variants (docs/wiring-variants.md): mode, route, distribution
+// Wiring variants (docs/wiring-variants.md): mode, route, distribution, path, ceiling conduit;
+// when the cable goes in and rough light are alike in every variant
 export type VariantMode = "economy" | "standard" | "proper";
 export type VariantRoute = "ceiling" | "floor";
-export type VariantDistribution = "boxes";
+export type VariantDistribution = "boxes" | "loop";
+export type VariantPath = "right" | "shortest";
+export type VariantPlaster = "after" | "before";
 
 export interface VariantSummary {
   key: string;            // «economy-floor-boxes»
   mode: VariantMode;
   route: VariantRoute;
   distribution: VariantDistribution;
+  path?: VariantPath;     // no key: an older build, by the mode (optionsOf)
+  conduit?: boolean;      // on the ceiling; on the floor there always is one
+  plaster?: VariantPlaster;  // no key: an older build, after the plaster (optionsOf)
+  rough_light?: boolean;  // lamp holders, bulbs and rough switches in the estimate
   total: number;          // estimate total
   currency: string;
   unpriced: number;
@@ -128,7 +145,7 @@ export interface VariantSummary {
 export interface Variants {
   active: string;         // key of the chosen one
   default: string;        // "as in project"
-  items: VariantSummary[];
+  items: VariantSummary[];  // the modes and the chosen one, also if it is a set from the wizard
 }
 
 // --- .epd page ---
@@ -150,9 +167,18 @@ export interface LegendEntry {
   items: Item[];
 }
 
+// Socket block on a wall: posts, mm from the wall start and the floor, key of the wall elevation
+export interface PointBlock {
+  posts: number;
+  x: number;
+  y: number;
+  wall: string;
+}
+
 export interface ObjectCard {
   title: string;
   rows: [string, string][];
+  block?: PointBlock;  // absent in builds made before it appeared
 }
 
 export interface TableRow {
@@ -160,7 +186,8 @@ export interface TableRow {
   keys?: string[];
   color?: string;
   section?: boolean;
-  hint?: string;          // row note (estimate): an "i" icon next to the name
+  hint?: string;          // row note: an "i" icon in the estimate, a tooltip on a held side table row
+  group?: string;         // QF group of a row of "Groups": the row has an eye (filter3d)
   marker?: "square";      // icon without colour: a panel device not on a group line
 }
 
@@ -205,7 +232,8 @@ export interface SceneWire {
 export interface Scene {
   ceiling: number;
   assumed: { ceiling: boolean; openings: string[] };
-  floors: { key: string; rings: XY[][] }[];
+  floors: { key: string; rings: XY[][]; kind?: RoomKind }[];  // no kind: built before it appeared
+  slab?: XY[][];  // outer rings of the floor slab; none: built before it appeared
   walls: { key: string; polys: XY[][][]; z: [number, number]; normals: XY[] }[];
   wires: Record<string, SceneWire>;
   points: Record<string, { pos: XYZ; inward: XY | null; type: string; room?: string; group: string | null; color: string }>;
@@ -291,7 +319,12 @@ export interface PanelSticker {
   row: number;          // rail
   title: string;        // full purpose
   icon: string;         // key in icons
-  text: string;         // number and name as one SVG path, in sticker mm
+  number: string;       // SVG paths of the text, in sticker mm
+  name: string;
+  short_id: string;     // the line number alone: 12; QS1 stays QS1
+  short_number: string;  // its SVG path
+  color: string;        // group colour; a device without a group is neutral
+  on_color: string;     // number on that colour
 }
 
 export interface PanelStickers {
@@ -299,6 +332,7 @@ export interface PanelStickers {
   height: number;
   pad: number;
   rule_y: number;
+  band: string;         // SVG path of the band under the number, colour stickers
   icon: { x: number; y: number; size: number; stroke: number };
   items: PanelSticker[];
   icons: Record<string, string[]>;  // SVG paths in a 24-unit box
@@ -344,6 +378,7 @@ export interface Page {
   tables?: SideTable[];
   objects?: Record<string, ObjectCard>;
   chains?: Record<string, string[]>;
+  areas?: Record<string, XY[][]>;
   groups?: Record<string, string[]>;
   edit?: { wires: Record<string, EditWire>; boxes: Record<string, EditBox> };
   scene?: Scene;
@@ -391,7 +426,7 @@ export interface ElevWater {
 export interface ElevWall {
   key: string;            // elevation:<room>.<wall>
   length: number;
-  openings: { kind: string; x0: number; x1: number; y0: number; y1: number; assumed: boolean }[];
+  openings: { kind: string; x0: number; x1: number; y0: number; y1: number; assumed: boolean; hinge?: "start" | "end" }[];
   chases: { x: number; y0: number; y1: number; wide: boolean; low: boolean }[];
   boxes: ElevBox[];
   points: ElevPoint[];

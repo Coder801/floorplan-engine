@@ -1,4 +1,4 @@
-// "Download" in the top-right corner of the drawing: sheet PNG for the album or the DXF of the whole project
+// "Download" at the end of the drawing options: sheet PNG for the album or the DXF of the whole project
 
 import { useTranslation } from "react-i18next";
 import { usePopover } from "@/shared/popover";

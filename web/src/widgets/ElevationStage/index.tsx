@@ -5,7 +5,7 @@
 // wall" (store.wallLayers).
 // The album PNG comes from "Download" (Viewer): the whole printed sheet from page primitives.
 
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { forwardRef, type ReactNode, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ElevationView, type ElevMode } from "@/engine/elevation/ElevationView";
 import { remember, remembered } from "@/shared/palette";
@@ -19,10 +19,11 @@ import type { StageHandle } from "@/widgets/SheetStage";
 interface Props {
   elevation: Elevation;
   withMap: boolean;  // mini map at the bottom left (WallMap): the elevation avoids it
+  download?: ReactNode;  // the Download menu, last in the first options row
 }
 
 
-export const ElevationStage = forwardRef<StageHandle, Props>(function ElevationStage({ elevation, withMap }, ref) {
+export const ElevationStage = forwardRef<StageHandle, Props>(function ElevationStage({ elevation, withMap, download }, ref) {
   const { t } = useTranslation();
   const canvas = useRef<HTMLCanvasElement>(null);
   const ev = useRef<ElevationView | null>(null);
@@ -54,10 +55,15 @@ export const ElevationStage = forwardRef<StageHandle, Props>(function ElevationS
     <>
       <canvas ref={canvas} tabIndex={0} aria-label={t("elevation.canvas", { title: elevation.title })} />
       <ZoomRail zoom={zoom} onStep={(s) => ev.current?.zoomTo(s)} onFit={() => ev.current?.fit()} fitLabel={t("elevation.fit")} />
-      <div className={ui.toolbar}>
-        <div className={ui.group}>
-          <button aria-pressed={mode === "iso"} title={t("elevation.isoTitle")} onClick={toggleIso}>{t("elevation.iso")}</button>
+      <div className={ui.options}>
+        <div className={ui.optionsRow}>
+          <div className={ui.group}>
+            <button aria-pressed={mode === "iso"} title={t("elevation.isoTitle")} onClick={toggleIso}>{t("elevation.iso")}</button>
+          </div>
+          {download}
         </div>
+      </div>
+      <div className={ui.toolbar}>
         <span className={ui.hint}>
           {elevation.height_assumed ? t("elevation.ceiling", { h: elevation.height }) : ""}
           {mode === "iso" ? t("elevation.isoHint") : t("elevation.hint")}

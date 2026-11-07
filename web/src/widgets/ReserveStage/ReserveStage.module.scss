@@ -1,0 +1,20 @@
+// The backup bus as a document in the drawing area, like the stickers; saving ends the block
+
+@use "@/shared/styles/mixins" as *;
+
+.stage {
+  position: absolute; inset: 0; display: grid; grid-template-rows: minmax(0, 1fr); justify-items: center;
+  padding: 64px 16px 16px; background: var(--bg);
+}
+// The block scrolls itself: rows end at its edge, under the sum
+.sheet {
+  @include raised(10px);
+  --reserve-bleed: 28px;
+  background: var(--panel);
+  align-self: start; display: grid; gap: 12px; width: 100%; max-width: 720px; max-height: 100%;
+  overflow: auto; padding: 0 28px 24px;
+  h1 { margin: 24px 0 0; font-size: 20px; font-weight: 500; }
+  p { margin: 0; }
+}
+.error { color: var(--major); }
+.primary { justify-self: end; min-width: 168px; border: 0; background: var(--accent); color: var(--accent-text); }

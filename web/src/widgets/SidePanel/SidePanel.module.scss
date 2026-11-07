@@ -36,15 +36,18 @@
 
 // Sheet table: a row linked to objects is highlighted together with them
 .table {
-  border-collapse: collapse; width: 100%; font-size: 12px;
-  th, td { padding: 4px 6px; border-top: 1px solid var(--line); vertical-align: top; text-align: left; }
+  border-collapse: collapse; width: 100%;
+  th, td { padding: 3px 6px; border-top: 1px solid var(--line); vertical-align: top; text-align: left; }
   th { color: var(--muted); font-weight: 500; border-top: 0; }
   .c { text-align: center; }
   .mark { white-space: nowrap; }
+  tr.linked { cursor: pointer; }
   tr.linked:hover td { background: var(--soft); }
   tr.lit td, tr.lit:hover td { background: var(--hl-row); }
   tr.lit td:first-child { box-shadow: inset 3px 0 var(--hl); }
   tr.section td { font-weight: 600; padding-top: 10px; }
+  tr.off td > :not(button), tr.off td:not(:first-child) { opacity: .45; }
+  tr:has(.rowEye) td { vertical-align: middle; }
   tr.total td { border-top: 2px solid var(--text); font-weight: 600; }
 }
 // Estimate totals: name, sum
@@ -92,3 +95,10 @@
 }
 .change { @include bare-button; margin-left: auto; padding: 0; min-height: 0; color: var(--muted); text-decoration: underline; font-size: 12px; }
 .change:hover { color: var(--text); }
+
+// The eye fits the text line; without hover (touch) it stays big enough for a finger
+.table .rowEye {
+  width: 20px; height: 20px; min-height: 0; margin-right: 4px; vertical-align: middle;
+  svg { width: 16px; height: 16px; }
+  @media (hover: none) { width: 28px; height: 28px; svg { width: 18px; height: 18px; } }
+}

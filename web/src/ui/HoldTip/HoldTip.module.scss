@@ -1,0 +1,8 @@
+// Tooltip of a held element: fixed to the screen, so it is not clipped by a scrolled panel
+
+.tip {
+  position: fixed; z-index: 20; max-width: 280px; pointer-events: none;
+  padding: 8px 10px; border-radius: 8px; font-size: 13px; line-height: 1.4;
+  color: var(--text); background: var(--raise); border: 1px solid var(--line);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .12);
+}

@@ -25,4 +25,5 @@
 }
 .icon { display: block; width: 32px; height: 20px; overflow: visible; }
 
-@media (max-width: $phone) { .legend { top: 8px; left: 8px; max-width: calc(100% - 64px); } }
+// Phone: under the drawing options, they take the whole top strip
+@media (max-width: $phone) { .legend { top: 56px; left: 8px; max-width: calc(100% - 64px); max-height: calc(100% - 132px); } }

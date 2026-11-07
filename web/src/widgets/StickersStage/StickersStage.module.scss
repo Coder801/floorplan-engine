@@ -14,6 +14,7 @@
   h1 { margin: 0; font-size: 20px; font-weight: 500; }
   p { margin: 2px 0 0; font-size: 12px; color: var(--muted); }
 }
+.actions { display: flex; align-items: center; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
 .pdf {
   display: inline-flex; align-items: center; flex: none; min-height: 36px; padding: 0 14px; border-radius: 6px;
   background: var(--accent); color: var(--accent-text); text-decoration: none; font-size: 14px;
@@ -21,9 +22,8 @@
 .rail { display: flex; flex-wrap: wrap; gap: 8px; }
 .sticker { width: 76px; height: 190px; flex: none; }
 .card { fill: #fff; stroke: #b0b0b0; stroke-width: .1; }
-.text { fill: #000; }
 .rule { stroke: #000; stroke-width: .15; }
-.icon { fill: none; stroke: #000; stroke-linecap: round; stroke-linejoin: round; }
+.icon { fill: none; stroke-linecap: round; stroke-linejoin: round; }
 
 @media (max-width: $phone) {
   .stage { padding: 60px 8px 32px; }
