@@ -41,17 +41,6 @@ export async function getText(path: string): Promise<string> {
 
 export interface SaveAnswer { built: boolean; notes: string[] }
 
-// Wiring variant and ceiling height (mm) → variant.yaml and a project rebuild
-export async function saveVariant(
-  name: string, variant: { mode: string; route: string; distribution: string; ceiling_height?: number },
-): Promise<SaveAnswer> {
-  const r = await fetch(`${base(name)}/variant`, {
-    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(variant),
-  });
-  if (!r.ok) throw new Error(`${r.status}: ${await detail(r)}`);
-  return (await r.json()) as SaveAnswer;
-}
-
 // Wiring edits → wiring.yaml and a project rebuild
 export async function saveWiring(name: string, body: unknown): Promise<SaveAnswer> {
   const r = await fetch(`${base(name)}/wiring`, {
@@ -76,6 +65,23 @@ export async function saveAnswer(name: string, id: string, answer: Answer | null
   const r = await fetch(`${base(name)}/answers`, {
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, answer }),
   });
+  return answerResult(r);
+}
+
+// What the setup wizard writes: everything or nothing, with one rebuild
+export interface WizardBody {
+  variant?: { mode: string; route: string; distribution: string; path: string; conduit: boolean; plaster: string; rough_light: boolean; ceiling_height?: number };
+  answers?: Record<string, Answer | null>;
+}
+
+export async function saveWizard(name: string, body: WizardBody): Promise<AnswerResult> {
+  const r = await fetch(`${base(name)}/wizard`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+  });
+  return answerResult(r);
+}
+
+async function answerResult(r: Response): Promise<AnswerResult> {
   if (r.status === 422) {
     const found = (await r.json()).detail as string | { issues: RefusedIssue[]; blocked_by: { id: string; text: string }[] };
     if (typeof found === "string") throw new Error(`422: ${found}`);

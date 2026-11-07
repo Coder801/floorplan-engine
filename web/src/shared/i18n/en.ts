@@ -23,7 +23,7 @@ export const en: Messages = {
     furniture: "Furniture", lighting: "Lighting", panel: "Panel", elevations: "Elevations",
     points: "Points",
   },
-  views: { electrical: "Points", lighting: "Lighting", wiring: "Wiring" },
+  views: { electrical: "Sockets", low: "Low voltage", lighting: "Lighting", wiring: "Wiring" },
   severity: { critical: "critical", major: "important", minor: "clarification" },
   layer: {
     "A-WALL": "walls", "A-DOOR": "doors", "A-WIND": "windows", "A-DIMS": "dimensions",
@@ -64,7 +64,7 @@ export const en: Messages = {
     rebuilding: "Rebuilding the project…", rebuilt: "Done, sheets updated.",
     fewer: "{{n}} fewer questions: this answer made them unnecessary.", more: "New questions: {{n}}.",
     locked: "You can save after the build. Your text stays here.", notSaved: "Not saved. The project is unchanged.",
-    show: "Show on the drawing", showPanel: "Open the panel", notNumber: "Enter a number", blockedBy: "Blocked by the answer to:", also: "same answer in {{n}} more fields",
+    show: "Show on the drawing", showPanel: "Open the panel", pickGroups: "Choose groups", notNumber: "Enter a number", blockedBy: "Blocked by the answer to:", also: "same answer in {{n}} more fields",
     status: { answered: "answer applied", accepted: "kept as is", pending: "answer received, awaiting review", resolved: "answer reviewed", rebuilding: "rebuilding" },
   },
   drawer: {
@@ -216,13 +216,13 @@ export const en: Messages = {
   },
   legend: { title: "Legend" },
   filter3d: {
-    room: "Room", allRooms: "All rooms", groupsTitle: "Which panel circuits to show",
-    groupsN: "Circuits: {{n}} of {{total}}", allGroups: "All circuits", groups: "Panel circuits",
-    all: "All", none: "None", only: "only", onlyGroup: "Only {{group}}",
+    room: "Room", allRooms: "All rooms",
   },
   panel: {
-    mode: "Panel view", front: "Panel", stickers: "Stickers",
-    stickersNote: "{{n}} stickers · {{width}} × {{height}} mm · print at 100% scale",
+    mode: "Panel view", front: "Panel", stickers: "Labels", reserve: "Backup",
+    stickersStyle: "Label colour", stickersBlack: "Monochrome", stickersColor: "Colour",
+    stickersNumber: "Line number", stickersFull: "As on the diagram", stickersShort: "Digits only",
+    stickersNote: "{{n}} labels · {{width}} × {{height}} mm · print at 100% scale",
     stickersPdf: "Download PDF", rail: "Rail {{n}}",
     hint: "wheel — zoom by steps, drag — pan, double click — zoom in at that point (at the last step — whole panel); click a device or table row — card",
     canvas: "Panel front view", fit: "Whole panel",
@@ -256,7 +256,7 @@ export const en: Messages = {
     walls: "Wall elevations", prev: "Previous wall", next: "Next wall",
     all: "All walls", list: "Walls",
   },
-  tip: { close: "Close tooltip" },
+  tip: { close: "Close tooltip", openWall: "Wall elevation", mm: "{{v}} mm", blockAria: "Block: {{n}} posts, {{x}} mm from the wall start, {{y}} mm from the floor" },
   overview: {
     tab: "Overview", side: "In brief", title: "Overview",
     object: "Object", building: "Building, premises", code: "Document code", stage: "Stage",
@@ -268,10 +268,9 @@ export const en: Messages = {
     load: "load: installed {{installed}} kW, calculated {{calculated}} kW",
     variant: "Wiring option", compare: "Options compared",
     col: { mode: "Mode", route: "Route", total: "Electrical estimate", cable: "Cable, m", conduit: "Conduit, m", devices: "Devices", chases: "Chases, m" },
-    choose: "Click a row to choose the option.",
     sources: "Source data", sourcesLine: "Files: {{n}}, parsed: {{parsed}}.",
     questions: "Open questions: {{n}}", openQuestions: "Questions", openSources: "Sources",
-    recalc: "Recalculate", stale: "The total is outdated: data changed but not recalculated.", ceilingRange: "from {{min}} to {{max}} mm",
+    customRow: "Your set", ceilingRange: "from {{min}} to {{max}} mm",
     total: "Project total", openEstimate: "Open the estimate",
     totalParts: "electrical (chosen option) {{electrical}} · plumbing {{plumbing}}",
     plumbingEstimate: "Plumbing estimate", unpriced: "unpriced: {{n}} items",
@@ -286,14 +285,7 @@ export const en: Messages = {
   },
   rebuild: { title: "Recalculating the estimate…", note: "The project is being rebuilt, this takes a few seconds." },
   variant: {
-    currentTag: "current", pickedTag: "will be selected", pendingNote: "The option is marked but not calculated — press “Recalculate”.",
-    title: "Wiring option", mode: "Mode", route: "Route", distribution: "Distribution",
     modes: { economy: "Economy", standard: "Standard", proper: "Premium" },
-    modeNotes: {
-      economy: "Shortest runs, basic panel",
-      standard: "Right-angle runs, panel with relay and ATS",
-      proper: "A breaker per line, full protection",
-    },
     differences: "How the modes differ",
     modeDetails: {
       economy: {
@@ -316,14 +308,147 @@ export const en: Messages = {
       },
     },
     common: "In every mode the points, their places and heights come from the design, and the codes are met. Under the floor the cable is always in conduit; to ceiling lights it runs along the ceiling.",
-    routes: { ceiling: "Along the ceiling", floor: "Under the floor" }, routeOnly: "the only route in this design",
+    routes: { ceiling: "Along the ceiling", floor: "Under the floor" },
     distributions: { boxes: "Junction boxes", loop: "Through socket boxes" },
-    soon: "soon", asProject: "as in the design", edited: "has your route edits",
+    custom: "A custom set from the project setup.",
+    asProject: "as in the design", edited: "has your route edits",
     stats: "{{devices}} devices · {{cable}} m cable · {{chases}} m chases",
     readOnly: "The studio chooses the option: view only here.",
-    saving: "Rebuilding the project…", failed: "Option not saved — {{message}}",
-    current: "Option:", change: "change",
+    current: "Option:", change: "change", edit: "Change",
     edits: "Each option keeps its own route edits.",
+  },
+  reserve: {
+    title: "What stays on backup", why: "These groups stay live when the grid is down. The rest switch off.",
+    sum: "On backup: {{power}} kW of {{limit}} kW", sumNoLimit: "On backup: {{power}} kW, source power not set",
+    assumed: "assumed power", near: "close to the source limit", over: "above the source power: it cannot carry everything at once",
+    empty: "Tick at least one group.", save: "Save and recalculate",
+    readOnly: "View only: the list is set in the project, or only the studio can change it.",
+    failed: "Not saved — {{message}}",
+  },
+  wizard: {
+    unknown: "I don't know", unknownNote: "We will use a typical value, you can change it later.", unknownValue: "We will use a typical {{value}}. You can change it later.",
+    unknownGroups: "We will keep the typical set of groups, you can change it later.",
+    restored: "Restored the choice you had not applied.", reset: "Reset",
+    notice: { title: "Setup is not finished.", body: "The estimate and the panel rest on assumptions. Undecided, {{n}} of {{total}}: {{list}}", more: "and {{n}} more" },
+    open: "Set up the project", title: "Project setup", stepsLabel: "Setup steps",
+    stepOf: "Step {{n}} of {{total}}", back: "Back", next: "Next", skip: "Skip",
+    groups: { wiring: "Wiring", panel: "Panel", reserve: "Backup", done: "Summary" },
+    noPrices: "We'll show the price of this choice after the recalculation: only the modes and the current option are calculated in advance.",
+    current: "in the project now", inProject: "As calculated for this project:",
+    chasesKept: {
+      all: "You chose ceiling conduit, so all chases stay. To remove them, choose plain cable at the \"Ceiling conduit\" step.",
+      floor: "The floor route runs in conduit, so chases of the floor lines stay. Only chases of the ceiling lines go.",
+    },
+    routeFacts: "{{cable}} m of cable · {{chases}} m of chases",
+    badInput: "Enter a whole number of amperes above zero", failed: "Not saved — {{message}}",
+    done: {
+      title: "Review and apply", note: "Nothing is saved yet: the project is rebuilt once, with all the answers.",
+      empty: "Nothing changed.", unset: "not chosen — the question stays open", changed: "will change",
+      apply: "Apply and recalculate", total: "Electrical estimate for the chosen option: {{total}}",
+      totalNote: "before the recalculation, without new panel decisions", others: "Other open questions: {{n}}.",
+      totalLater: "The estimate is recalculated once you apply.",
+      wrong: "Check the “{{step}}” step: the value does not fit.",
+    },
+    steps: {
+      route: {
+        short: "Cable route", title: "How should the cable run?", why: "One route for all groups. Points and their places stay the same whatever you choose.",
+        options: {
+          ceiling: { note: "From the panel along the ceiling, drops to points in wall chases." },
+          floor: { note: "In the screed, the whole line in conduit. Ceiling lights are still fed along the ceiling." },
+        },
+      },
+      distribution: {
+        short: "Socket wiring", title: "How should the sockets be connected?", why: "Lights, switches and heavy appliances connect as usual: this is only about sockets.",
+        options: {
+          boxes: { name: "Through boxes", note: "A junction box in the room, with a cable to each socket." },
+          loop: { name: "Daisy chain", note: "Cable runs from socket to socket, joined in the flush boxes. Up to 7 sockets on a chain." },
+        },
+      },
+      path: {
+        short: "Route shape", title: "How should routes be laid?", why: "On the ceiling and the floor. On walls cable always runs vertically.",
+        options: {
+          right: { name: "At right angles", note: "A tidy layout along the walls, the cable is easier to find later." },
+          shortest: { name: "Shortest path", note: "Less cable: the route runs at any angle, at least 150 mm from walls." },
+        },
+      },
+      conduit: {
+        short: "Ceiling conduit", title: "Conduit for cable on the ceiling?", why: "On the floor conduit is always required; drops in chases go without it.",
+        options: {
+          plain: { name: "Plain cable", note: "Cheaper: the cable lies on the ceiling without conduit." },
+          tube: { name: "In conduit", note: "Protects the cable and makes replacing it easier. Conduit and laying are in the estimate." },
+        },
+      },
+      plaster: {
+        short: "Cable installation", title: "When is the cable installed?", why: "This decides whether the walls need chases.",
+        options: {
+          after: { name: "After plastering", note: "The cable runs in chases: chases are in the estimate." },
+          before: { name: "Before plastering", note: "The cable goes under the plaster, no chases. Except lines in conduit: it is thicker than the plaster and always needs a chase." },
+        },
+      },
+      rough: {
+        short: "Temporary light", title: "Do you need temporary light?", why: "Light for the renovation, until the fixtures are in.",
+        options: {
+          no: { name: "No", note: "Only the project fixtures." },
+          yes: { name: "Yes, add it", note: "In the estimate for each room with lights: a lamp holder, a bulb, a temporary switch and fitting them." },
+        },
+      },
+      ceiling: { short: "Ceiling height", title: "What is the ceiling height?", why: "It sets the drops to points and the cable length.", field: "Height from the finished floor" },
+      input: { short: "Main breaker", title: "Which main breaker?", why: "The rating comes from the grid connection terms. The whole panel is calculated from it.", field: "Rating" },
+      breakers: {
+        short: "Breakers", title: "How should breakers be split?", why: "It decides how many devices go in the panel.",
+        options: {
+          simple: { name: "Simple panel", note: "As in Economy: one breaker per group, wet zones under a shared RCD, no voltage relay, backup by a manual switch." },
+          groups: { name: "By project groups", note: "One breaker per group: several lines from the panel can share one. A voltage relay, RCBOs on wet zones, backup through an ATS." },
+          lines: { name: "As correct as possible", note: "As in Premium: a breaker for every line, RCBOs on all groups, curve B, a surge protector." },
+        },
+      },
+      standby: {
+        short: "Backup provision", title: "Provide for an ATS or inverter in the panel?", why: "If yes, you'll choose the backup source next. If no, the panel runs from the grid only.",
+        options: {
+          no: { name: "No", note: "Grid only, no backup steps." },
+          yes: { name: "Yes, provide", note: "The panel gets a backup bus and a changeover to it." },
+        },
+      },
+      backup: {
+        short: "Backup source", title: "What will the backup be?", why: "It decides what goes in the panel. The inverter steps appear only if you need one.",
+        options: {
+          inverter: { name: "Inverter with batteries", note: "When the grid is down, the backup bus runs on batteries." },
+          plug: { name: "Generator via a plug", note: "The generator connects to the panel with a power plug." },
+          station: { name: "Charging station", note: "The station connects to the panel with a power plug, like a generator." },
+        },
+      },
+      inverter: {
+        short: "Inverter type", title: "Which inverter?", why: "It decides what switches the backup in the panel.",
+        options: {
+          hybrid: { name: "Hybrid", note: "Switches grid and batteries itself." },
+          basic: { name: "No switching of its own", note: "An ATS in the panel switches the backup." },
+        },
+      },
+      battery: {
+        short: "Battery voltage", title: "What battery voltage?", why: "Higher voltage means lower discharge current, which sets the battery breaker and cable.",
+        options: {
+          "12": { name: "12 V", note: "The highest discharge current." },
+          "24": { name: "24 V", note: "Half the current of 12 V." },
+          "48": { name: "48 V", note: "The lowest current and the thinnest cable." },
+        },
+      },
+      pv: {
+        short: "Solar panels", title: "Will there be solar panels?", why: "Each string has its own DC breaker and surge protector in the battery box.",
+        options: {
+          "0": { name: "No panels", note: "The inverter runs on grid and batteries." },
+          "1": { name: "One string", note: "One DC breaker and surge protector." },
+          "2": { name: "Two strings", note: "Two DC breakers and surge protectors." },
+        },
+      },
+      npe: {
+        short: "N–PE link", title: "Does the inverter link N to PE on backup?", why: "Without the link, RCDs and RCBOs will not trip on backup. The built-in N–PE relay is enabled in the inverter settings.",
+        options: {
+          yes: { name: "Yes, it does", note: "No contactor needed in the panel." },
+          no: { name: "No", note: "An N–PE contactor is added to the panel." },
+        },
+      },
+      reserve: { short: "Backup groups", title: "What should stay on backup?", why: "These groups stay live when the grid is down. What the project has now is ticked. You can change it later under Panel → Backup." },
+    },
   },
   zoom: { label: "Zoom", in: "Zoom in", out: "Zoom out", ruler: "Scale bar: {{length}}" },
   api: { format: "Sheets are in format version {{version}}, this page supports {{supported}} — refresh the page" },

@@ -8,16 +8,16 @@ import { downloadSheetPng } from "@/engine/sheet/paint";
 import { wallPages, wallSheet } from "@/engine/sheet/walls";
 import { STUDIO_SECTIONS, Studio, type StudioSection } from "@/pages/Studio";
 import { Welcome } from "@/pages/Welcome";
-import { base, enc, getManifest, getPage, getProject, isProject, listProjects, saveAnswer, saveVariant } from "@/shared/api";
-import { DRAWER_TABS, NARROW_PX, SIDE_TABS, STICKERS_PDF, type DrawerTab, type SideTab, type Theme } from "@/shared/consts";
+import { base, enc, getManifest, getPage, getProject, isProject, listProjects, saveAnswer, saveWizard, type WizardBody } from "@/shared/api";
+import { DRAWER_TABS, NARROW_PX, SIDE_TABS, stickersPdf, type DrawerTab, type PanelMode, type SideTab, type Theme } from "@/shared/consts";
 import { cx } from "@/shared/cx";
 import { label } from "@/shared/i18n";
 import { applyTheme, remember, remembered, savedTheme } from "@/shared/palette";
-import { resetSelection, view } from "@/shared/store";
+import { resetSelection, useView, view } from "@/shared/store";
 import ui from "@/shared/styles/ui.module.scss";
-import { sheetTabs, tabOf, VIEWS } from "@/shared/tabs";
+import { sheetTabs, tabOf, VIEWS, type TabView } from "@/shared/tabs";
 import type { ManifestPage, Overview, Page, Project, ProjectSummary, Scene, Variants } from "@/shared/types";
-import type { Answer, QuestionsMemory } from "@/shared/questions";
+import { RESERVE_KEY, type Answer, type QuestionsMemory } from "@/shared/questions";
 import { watchRebuild } from "@/shared/rebuild";
 import { BRAND, watchBuild } from "@/shared/version";
 import { Boundary } from "@/ui/Boundary";
@@ -28,7 +28,7 @@ import { ElevationStage } from "@/widgets/ElevationStage";
 import { EstimateStage, type EstimateItem } from "@/widgets/EstimateStage";
 import { OverviewStage, OverviewSummary } from "@/widgets/OverviewStage";
 import { RebuildModal } from "@/widgets/RebuildModal";
-import { parseKey } from "@/widgets/VariantPicker/variants";
+import { activeSummary, parseKey } from "@/widgets/VariantInfo/variants";
 import { PanelStage } from "@/widgets/PanelStage";
 import { ProjectsMenu } from "@/widgets/ProjectsMenu";
 import { type Account, Settings } from "@/widgets/Settings";
@@ -37,6 +37,8 @@ import { SidePanel } from "@/widgets/SidePanel";
 import { SourceView } from "@/widgets/SourceView";
 import { WallMap } from "@/widgets/WallMap";
 import { WallPager } from "@/widgets/WallPager";
+import { Wizard } from "@/widgets/Wizard";
+import { setupOf, setupProgress } from "@/widgets/Wizard/steps";
 import css from "./Viewer.module.scss";
 
 // #<project> — a project; #@studio[/<section>] — the studio settings (project names never start
@@ -100,6 +102,8 @@ export function Viewer({ account = null }: { account?: Account | null }) {
   const prevProject = useRef<string | null>(null);
   const [variants, setVariants] = useState<Variants | null>(null);  // wiring variants (manifest)
   const [choosing, setChoosing] = useState(false);  // the variant is being saved and the project rebuilt
+  const [wizard, setWizard] = useState(false);  // the setup wizard is open
+  const [panelMode, setPanelMode] = useState<PanelMode>("front");  // what the "Panel" page shows
   const questionsMemory = useRef<QuestionsMemory>({ drafts: {} });
   const [answering, setAnswering] = useState(false);  // an answer from a question card is being saved
   const [saving, setSaving] = useState(false);  // route edits are being saved and the project rebuilt
@@ -167,11 +171,12 @@ export function Viewer({ account = null }: { account?: Account | null }) {
     prevProject.current = current;
     if (again) {
       setRefreshing(true);  // the same project: reset nothing so blocks do not disappear
+      setError(null);       // only an old failure, for example sheets read in the middle of a rebuild
     } else {
       placed.current = null;
       setProject(null); setPages([]); setPage(null); setLoaded(null); setDrawn([]); setElevs([]); setScene(null);
       setError(null); setSource(null); setEstimate(false); setInfo(false); setOverview(null);
-      setRefreshing(false); setShown(reloadsRef.current);
+      setRefreshing(false); setShown(reloadsRef.current); setWizard(false); setPanelMode("front");
       questionsMemory.current = { drafts: {} };
     }
     cache.current = new Map();
@@ -279,10 +284,16 @@ export function Viewer({ account = null }: { account?: Account | null }) {
   };
   // From a question to its object, or to the "Panel" tab; on a narrow screen the panel covers
   // the drawing, so it closes (what was typed stays in questionsMemory)
+  // An object of the electrical sheet that lives on another view now (SheetStage, goto)
+  const openStage = (stage: string) => {
+    const index = pages.find((pg) => pg.stage === stage)?.index;
+    if (index !== undefined) openSheet(index);
+  };
   const showQuestion = ({ stage, key }: { stage: string; key: string | null }) => {
     const index = pages.find((pg) => pg.stage === stage)?.index;
     if (index === undefined || !openSheet(index)) return;
-    if (key) view.set({ goto: { key, stage, around: QUESTION_AROUND } });
+    if (key === RESERVE_KEY) setPanelMode("reserve");
+    else if (key) view.set({ goto: { key, stage, around: QUESTION_AROUND } });
     if (window.innerWidth <= NARROW_PX) closeDrawer();
   };
   // "Estimate" is not a sheet: it is the wiring page (which has the estimate key) without the
@@ -315,16 +326,6 @@ export function Viewer({ account = null }: { account?: Account | null }) {
     setSaving(false);
   };
 
-  // Another wiring variant: only after confirmation if there are unsaved route edits
-  const chooseVariant = (v: { mode: string; route: string; distribution: string }, ceiling?: number) => {
-    if (!current || !confirmLeave()) return;
-    setChoosing(true);
-    saveVariant(current, ceiling === undefined ? v : { ...v, ceiling_height: ceiling })
-      .then(() => saved([]))
-      .catch((e: Error) => setBanners([t("variant.failed", { message: e.message })]))
-      .finally(() => setChoosing(false));
-  };
-
   // An answer from the question card: no modal, the panel stays usable during the rebuild.
   // A text answer changes no sheet, so only the project is read again
   const answerQuestion = async (id: string, answer: Answer | null) => {
@@ -340,12 +341,42 @@ export function Viewer({ account = null }: { account?: Account | null }) {
     }
   };
 
+  // The setup wizard: all choices at once, one rebuild; a refusal stays in the wizard
+  const applyWizard = async (body: WizardBody) => {
+    if (!current || !confirmLeave()) return false;
+    setChoosing(true);
+    try {
+      const result = await saveWizard(current, body);
+      if (result.rebuilt) saved([]);
+      else setProject(await getProject(current));
+      setWizard(false);
+      return true;
+    } finally {
+      setChoosing(false);
+    }
+  };
+  const setup = useMemo(() => {
+    if (!project) return null;
+    return setupProgress(setupOf(project, variants, overview?.ceiling.height ?? null, overview?.panel?.reserve ?? null));
+  }, [project, variants, overview]);
+
   // Continuations (elevations) are one tab with pages inside the drawing; electrical, lighting
   // and wiring are one tab, the view is picked with the switch on the right (SidePanel)
   const tabs = sheetTabs(pages);
+  const electricalView = useView((s) => s.electricalView);
   const tab = source || estimate || info ? null : tabOf(tabs, sheet);
   const stageOf = (i: number) => pages.find((pg) => pg.index === i)?.stage ?? "";
-  const views = tab?.views ? tab.pages.map((i) => ({ index: i, label: label("views", stageOf(i)) })) : null;
+  // The electrical sheet gives two views: sockets and, if the project has it, low voltage
+  const hasLow = !!sheetDrawing?.items.some((it) => it.l === "E-DATA" || it.l.startsWith("W-CABLE-LOW"));
+  const views: TabView[] | null = tab?.views ? tab.pages.flatMap((i) => {
+    const key = stageOf(i), one = { key, index: i, label: label("views", key) };
+    return key === "electrical" && hasLow ? [one, { key: "low", index: i, label: label("views", "low") }] : [one];
+  }) : null;
+  const pickView = (v: TabView) => {
+    view.set({ electricalView: v.key === "low" ? "low" : "sockets", selected: null, neighbors: null, pinned: null, tip: null });
+    openSheet(v.index);
+  };
+  const shownView = stageOf(sheet ?? -1) === "electrical" && electricalView === "low" ? "low" : stageOf(sheet ?? -1);
   // A tab with views opens on the last chosen view
   const [lastView, setLastView] = useState(() => remembered("view") || "electrical");
   useEffect(() => {
@@ -364,6 +395,13 @@ export function Viewer({ account = null }: { account?: Account | null }) {
     if (next.sheet !== sheet) openSheet(next.sheet);
     else resetSelection();
   };
+  // From a hint to a wall elevation. Elevation pages load on the way, so the wall's own sheet is
+  // known only then: the effect below moves there
+  const toWall = elevSheets.length ? (key: string) => { if (openSheet(elevSheets[0])) setWallKey(key); } : undefined;
+  useEffect(() => {
+    const target = walls.find((w) => w.key === wallKey);
+    if (target && elevSheets.includes(sheet ?? -1) && target.sheet !== sheet) setSheet(target.sheet);
+  }, [walls, wallKey, sheet, elevSheets]);
   const turn = (step: number) => {
     if (wallAt >= 0) { openWall(wallAt + step); return; }
     if (tab && at >= 0) {
@@ -389,7 +427,7 @@ export function Viewer({ account = null }: { account?: Account | null }) {
   // Wiring variant as a line in the sheet side panel: "Стандарт · По потолку · Через коробки"
   const activeVariant = variants ? parseKey(variants.active) : null;
   const variantLabel = activeVariant
-    ? [t(`variant.modes.${activeVariant.mode}`), t(`variant.routes.${activeVariant.route}`), t("variant.distributions.boxes")].join(" · ")
+    ? [t(`variant.modes.${activeVariant.mode}`), t(`variant.routes.${activeVariant.route}`), t(`variant.distributions.${activeSummary(variants!)?.distribution ?? "boxes"}`)].join(" · ")
     : null;
   const warn = project?.stale
     ? t("app.stale", { name: project.name })
@@ -398,6 +436,14 @@ export function Viewer({ account = null }: { account?: Account | null }) {
   // While a project or sheet is loading: a preloader over the drawing (the previous sheet shows under it)
   const loading = !!current && !error && !source && (!project || (!!project.artifact && loaded !== sheet));
 
+  // Download: sheet PNG (the whole sheet, at most A3 150 dpi) and the project DXF. A drawing with
+  // options puts it in their first row, any other screen gets a row of its own
+  const download = project && current && !estimate && !info && (
+    <DownloadMenu
+      onPng={page && !source && !loading ? () => downloadSheetPng(page, `${project.name}-${page.name}.png`) : null}
+      dxf={project.dxf ? { href: `${base(current)}/out/${enc(project.dxf)}`, name: project.dxf } : null} />
+  );
+  let downloadInStage = false;
   let main: React.ReactNode;
   if (!current) main = <div className={ui.empty}>{t("app.chooseProject")}</div>;
   else if (error) main = <div className={ui.error}>{error}</div>;
@@ -405,8 +451,9 @@ export function Viewer({ account = null }: { account?: Account | null }) {
   else if (project && !project.artifact) main = <div className={ui.empty}>{t("app.noArtifact")}</div>;
   else if (info && project) {
     main = <OverviewStage overview={overview} variants={variants} project={project} openQuestions={openQs}
-                          canChoose={project.can?.choose_variant ?? true} busy={choosing} refreshing={refreshing || choosing} onChoose={chooseVariant}
-                          onEstimate={openEstimate} onDrawer={(k) => { setDrawer(k); setClosing(false); }} />;
+                          canChoose={project.can?.choose_variant ?? true} refreshing={refreshing || choosing}
+                          onEstimate={openEstimate} onDrawer={(k) => { setDrawer(k); setClosing(false); }}
+                          onWizard={setup?.total ? () => setWizard(true) : undefined} setup={setup ?? undefined} />;
   }
   else if (estimate && page && project) {
     const xlsx = (f: string) => (project.files.includes(f) ? `${base(current)}/out/${f}` : null);
@@ -418,16 +465,23 @@ export function Viewer({ account = null }: { account?: Account | null }) {
     main = items.length ? <EstimateStage items={items} /> : <div className={ui.empty}>{t("estimate.none")}</div>;
   }
   else if (page && project && page.panel) {
+    const built = (f: string) => (project.files.includes(f) ? `${base(current)}/out/${f}` : null);
     main = <PanelStage ref={stage} page={page} panel={page.panel} language={overview?.language}
-                       stickersPdf={project.files.includes(STICKERS_PDF) ? `${base(current)}/out/${STICKERS_PDF}` : null} />;
+                       stickersPdf={(colored, short) => built(stickersPdf(colored, short))}
+                       mode={panelMode} onMode={setPanelMode} reserve={overview?.panel?.reserve}
+                       reserveEditable={project.can?.answer === true && !!project.report?.questions.some((q) => q.id === "panel_reserve")}
+                       busy={answering || refreshing}
+                       onReserve={async (groups) => { await answerQuestion("panel_reserve", groups); }} />;
   } else if (page && project && !page.items?.length) {
     main = <div className={ui.error}>{t("app.nothingToDraw", { name: page.name })}</div>;
   } else if (page && project && wall?.data && elevSheets.includes(loaded ?? -1)) {
-    main = <ElevationStage ref={stage} elevation={wall.data} withMap={!!scene} />;
+    main = <ElevationStage ref={stage} elevation={wall.data} withMap={!!scene} download={download} />;
+    downloadInStage = true;
   } else if (page && project && drawing) {
-    main = <SheetStage ref={stage} page={wallPage ?? page} drawing={drawing} project={project.name} language={overview?.language}
-                       editable={project.can?.edit_wiring ?? true}
+    main = <SheetStage ref={stage} onStage={openStage} page={wallPage ?? page} drawing={drawing} project={project.name} language={overview?.language}
+                       editable={project.can?.edit_wiring ?? true} download={download} onWall={toWall}
                        onSaved={saved} onBusy={setSaving} onBanner={(b) => setBanners([b])} />;
+    downloadInStage = true;
   }
   if (page && project && main) main = <Boundary key={`${current}/${drawn.length > 1 ? "drawing" : loaded}/${shown}`}>{main}</Boundary>;
 
@@ -440,6 +494,11 @@ export function Viewer({ account = null }: { account?: Account | null }) {
   return (
     <div className={css.app}>
       {(choosing || saving) && <RebuildModal />}
+      {wizard && project && (
+        <Wizard key={current} project={project} variants={variants} ceiling={overview?.ceiling ?? null}
+                reserve={overview?.panel?.reserve ?? null} onApply={applyWizard} onClose={() => setWizard(false)}
+                onQuestions={() => { setWizard(false); setDrawer("questions"); setClosing(false); }} />
+      )}
       {studio && (
         <Studio account={account} section={studio} onSection={(s) => { location.hash = studioHash(s); }}
                 onBack={() => { location.hash = outside.current; }} />
@@ -505,12 +564,7 @@ export function Viewer({ account = null }: { account?: Account | null }) {
       </div>
       <main id="stage" className={css.stage}>
         {main}
-        {/* Download: sheet PNG (the whole sheet, at most A3 150 dpi) and the project DXF */}
-        {project && current && !estimate && !info && (
-          <DownloadMenu
-            onPng={page && !source && !estimate && !loading ? () => downloadSheetPng(page, `${project.name}-${page.name}.png`) : null}
-            dxf={project.dxf ? { href: `${base(current)}/out/${enc(project.dxf)}`, name: project.dxf } : null} />
-        )}
+        {download && !downloadInStage && <div className={ui.options}><div className={ui.optionsRow}>{download}</div></div>}
         {loading && !info && (
           <div className={css.loader} role="status" aria-live="polite">
             <span className={css.spinner} aria-hidden="true" />
@@ -534,7 +588,7 @@ export function Viewer({ account = null }: { account?: Account | null }) {
       </main>
       <SidePanel tab={side} onTab={showSide} page={source ? null : page} drawing={source ? null : drawing}
                  estimate={estimate && !source ? page?.estimate ?? null : null}
-                 views={views} view={sheet} onView={openSheet}
+                 views={views} view={shownView} onView={pickView}
                  wall={!source && !loading ? wall?.data ?? null : null} onWiring={toWiring}
                  variant={variantLabel ? { label: variantLabel, onOpen: openInfo } : null}
                  summary={info && !source ? <OverviewSummary variants={variants} plumbing={overview?.plumbing?.estimate} openQuestions={openQs} refreshing={refreshing || choosing} /> : undefined}>

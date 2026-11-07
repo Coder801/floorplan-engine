@@ -1,0 +1,9 @@
+// Line drawings: muted in the text colour, what the choice is about in the highlight colour
+
+.art {
+  display: block; width: 100%; height: auto; max-height: 112px;
+  fill: none; stroke: var(--muted); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round;
+  text { fill: var(--muted); stroke: none; font-size: 12px; }
+}
+.hot { stroke: var(--hl); stroke-width: 2.25; }
+.hatch { stroke-width: .75; }

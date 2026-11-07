@@ -1,0 +1,18 @@
+// Wiring variant on the "Overview" tab: the chosen options, read only
+
+@use "@/shared/styles/mixins" as *;
+
+.info {
+  display: grid; gap: 10px; margin-bottom: 14px;
+  p { margin: 0; }
+}
+.pairs { @include pairs(6px 16px); font-size: 14px; }
+.differences {
+  font-size: 12px; line-height: 1.35;
+  summary { cursor: pointer; color: var(--muted); }
+  &[open] { display: grid; gap: 8px; }
+  &[open] summary { margin-bottom: 2px; }
+  ul { margin: 2px 0 0; padding-left: 16px; }
+}
+.detail { padding-left: 8px; border-left: 2px solid transparent; }
+.current { border-left-color: var(--text); }

@@ -1,0 +1,100 @@
+// Setup wizard: a popup in the middle of the screen, the steps on the left, the question in the
+// middle; the rebuild modal (z-index 100) covers it while saving
+
+@use "@/shared/styles/mixins" as *;
+
+.veil {
+  position: fixed; inset: 0; z-index: 90;
+  display: grid; place-items: center; padding: 16px;
+  background: color-mix(in srgb, var(--paper) 60%, transparent);
+}
+.dialog {
+  display: grid; width: min(1000px, 100%); height: min(660px, 100%); min-height: 0;
+  grid-template: "steps head" auto "steps body" minmax(0, 1fr) "steps foot" auto / 240px minmax(0, 1fr);
+  background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+  box-shadow: 0 8px 32px rgb(0 0 0 / .2); overflow: hidden; outline: none;
+}
+
+.steps {
+  grid-area: steps; overflow: auto; padding: 16px 12px; display: grid; align-content: start; gap: 12px;
+  background: var(--soft); border-right: 1px solid var(--line);
+  h2 { margin: 4px 8px; font-size: 15px; font-weight: 600; }
+  h3 {
+    margin: 0 8px 4px; font-size: 11px; font-weight: 600; letter-spacing: .06em;
+    text-transform: uppercase; color: var(--muted);
+  }
+  ol { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px; }
+}
+.step {
+  @include bare-button;
+  display: flex; align-items: center; gap: 8px; width: 100%; min-height: 36px; padding: 0 8px;
+  text-align: left; color: var(--muted);
+  &:hover { color: var(--text); }
+  &.on { background: var(--raise); color: var(--text); font-weight: 500; box-shadow: 0 1px 2px rgba(0, 0, 0, .12); }
+}
+.mark {
+  display: inline-grid; place-items: center; flex: none; width: 18px; height: 18px;
+  border: 1px solid var(--line); border-radius: 50%; font-size: 11px; background: var(--raise);
+  &.picked { color: var(--ok); border-color: currentColor; }
+}
+
+.head { grid-area: head; display: flex; align-items: center; justify-content: space-between; padding: 8px 8px 0 24px; }
+.close { @include bare-button; min-width: 36px; font-size: 20px; line-height: 1; padding: 0; }
+.body {
+  --reserve-bleed: 24px; --reserve-top: -4px;  // ReserveList: side and top padding of this block
+  grid-area: body; overflow: auto; padding: 4px 24px 16px; display: grid; align-content: start; gap: 12px;
+  h1 { margin: 0; font-size: 20px; font-weight: 500; }
+  p { margin: 0; }
+}
+.foot {
+  grid-area: foot; display: flex; justify-content: space-between; gap: 8px; padding: 12px 24px;
+  border-top: 1px solid var(--line);
+}
+.primary { min-width: 168px; border: 0; background: var(--accent); color: var(--accent-text); }
+
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }
+.card {
+  @include raised(10px);
+  display: grid; align-content: start; justify-items: start; gap: 6px; height: auto; padding: 12px;
+  text-align: left;
+  &:hover { border-color: var(--muted); }
+}
+.chosen, .card.chosen { border-color: var(--hl); box-shadow: inset 0 0 0 1px var(--hl); }
+.price { font-weight: 600; font-variant-numeric: tabular-nums; }
+.tag {
+  padding: 1px 6px; border-radius: 10px; font-size: 10px; font-weight: 400;
+  color: var(--muted); border: 1px solid var(--line); white-space: nowrap;
+}
+.current { color: var(--accent-text); background: var(--accent); border-color: var(--accent); }
+dd .tag { margin-left: 6px; }
+
+.number { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; align-items: center; }
+.picture { @include raised(10px); padding: 16px; }
+.field { display: grid; gap: 10px; label { display: grid; gap: 4px; } }
+.input {
+  display: flex; align-items: center; gap: 6px;
+  input {
+    width: 112px; min-height: 36px; padding: 0 8px; font: inherit; text-align: right; border-radius: 6px;
+    border: 1px solid var(--line); background: var(--paper); color: var(--text);
+    &.bad { border-color: var(--major); }
+  }
+}
+.presets { display: flex; flex-wrap: wrap; gap: 6px; }
+.error { color: var(--major); }
+.fact { padding: 8px 12px; border-left: 2px solid var(--line); font-size: 13px; }
+.result { @include pairs(6px 16px); font-size: 14px; }
+.link { @include bare-button; display: inline; min-height: 0; padding: 0; color: inherit; text-decoration: underline; }
+
+@media (max-width: $phone) {
+  .veil { padding: 0; }
+  .dialog {
+    width: 100%; height: 100%; border: 0; border-radius: 0;
+    grid-template: "head" auto "body" minmax(0, 1fr) "foot" auto / minmax(0, 1fr);
+  }
+  .steps { display: none; }  // on a phone the place in the wizard is "Step 2 of 8"
+  .body, .foot { padding-inline: 16px; }
+  .body { --reserve-bleed: 16px; }
+  .head { padding-left: 16px; }
+  .number { grid-template-columns: minmax(0, 1fr); }
+  .primary { min-width: 0; flex: 1; }
+}
