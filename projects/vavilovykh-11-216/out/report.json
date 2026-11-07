@@ -1,17 +1,16 @@
 {
   "project": "Квартира, вул. Вавілових, 11, кв. 216",
-  "answers_digest": "44136fa355b3678a",
+  "answers_digest": "3ba3c0f248e390e2",
   "stages": [
     {
       "stage": "plan",
       "status": "questions",
       "builds": true,
       "reason": "",
-      "weight": 10,
+      "weight": 7,
       "questions": [
         "q1",
         "q2",
-        "q3",
         "q4"
       ]
     },
@@ -20,12 +19,13 @@
       "status": "questions",
       "builds": true,
       "reason": "",
-      "weight": 4,
+      "weight": 7,
       "questions": [
         "q5",
         "q6",
         "q7",
-        "q8"
+        "q10",
+        "q11"
       ]
     },
     {
@@ -43,15 +43,8 @@
       "status": "questions",
       "builds": true,
       "reason": "",
-      "weight": 10,
+      "weight": 1,
       "questions": [
-        "panel_backup",
-        "panel_input",
-        "panel_reserve",
-        "panel_npe",
-        "panel_inverter",
-        "panel_battery",
-        "panel_pv",
         "panel_dc_place"
       ]
     }
@@ -71,7 +64,7 @@
     {
       "id": "q2",
       "stage": "plan",
-      "text": "Двері санвузла: на плані монтажу А-19 проріз підписано 700 (Нпр=2050), у специфікації А-25 Д-02 — полотно 700, проріз 800. Узято 800 за специфікацією (плінтус на А-28 теж дає 800).",
+      "text": "Двері санвузла: на плані монтажу А-22 проріз усе ще підписано 700, на А-27 і в специфікації А-28 Д-02 — полотно 700, проріз 800. Узято 800.",
       "target": "rooms.bath.openings.bath_door_1.width",
       "also": [
         "rooms.hall.openings.hall_opening_4.width"
@@ -85,20 +78,9 @@
       "state": "open"
     },
     {
-      "id": "q3",
-      "stage": "plan",
-      "text": "Зняті за масштабом PDF (не підписані): вікно кухні — 1990 від кута з вентшахтою до простінка 560; вікно спальні на верхній стіні — впритул до кута з гардеробною; висота лоджії 2940 (обміри 2980 − оздоблення). Підтвердьте або пришліть обміри.",
-      "also": [],
-      "answer": "text",
-      "options": [],
-      "option_labels": {},
-      "severity": "major",
-      "state": "open"
-    },
-    {
       "id": "q4",
       "stage": "plan",
-      "text": "Санвузол: нижня стіна за інсталяцією унітаза і нішею (ГКЛ 300, А-19: 495 | 495 | 730) і короб каналізаційної труби біля пілона в контур не внесені — контур узято по конструктиву (пілон 430 — у контурі). Залишити так (інсталяція — перешкода на етапі сантехніки)?",
+      "text": "Санвузол: нижня стіна за інсталяцією унітаза і нішею (ГКЛ 300, нова ред. А-22: 495 | 445 | 780) і короб каналізаційної труби біля пілона в контур не внесені — контур узято по конструктиву (пілон 430 — у контурі). Залишити так (інсталяція — перешкода на етапі сантехніки)?",
       "also": [],
       "answer": "text",
       "options": [],
@@ -123,7 +105,7 @@
     {
       "id": "q6",
       "stage": "electrical",
-      "text": "Розеток на листі А-34 порахувано 55 (+4 INT), у специфікації А-35 — 57. Терморегулятори (4 шт. у специфікації) на листах електрики не показані — вони на плані опалення А-26 (не розбирався)? Пришліть, де стоять, або підтвердьте, що тепла підлога — окремим етапом.",
+      "text": "Розеток на листах порахувано 56 (+4 INT), у легенді А-37 і специфікації А-38 — 57. Якої розетки бракує? Дизайнеру: у А-38 також лишилось 10 одноклавішних і 2 двоклавішних вимикачі проти 9 і 3 на А-35, А-36.",
       "also": [],
       "answer": "text",
       "options": [],
@@ -146,17 +128,6 @@
       "state": "open"
     },
     {
-      "id": "q8",
-      "stage": "electrical",
-      "text": "Вимикачі: три перехресні «10» у спальні (біля дверей і біля ліжка з двох боків) вмикають бра праворуч (гр.10), три перехресні «5» (лоджія, кімната, передпокій) — стелю кімнати (гр.5) — так прочитано з номерів груп на А-33. Вимикачі 13+В і 16+В узято 2-клавішними (стеля + вентилятор); у специфікації 2-клавішних — 2, 1-клавішних — 10. Підтвердьте.",
-      "also": [],
-      "answer": "text",
-      "options": [],
-      "option_labels": {},
-      "severity": "minor",
-      "state": "open"
-    },
-    {
       "id": "q9",
       "stage": "plumbing",
       "text": "Сантехніка (лист А-27, стор. 14) у перелік сторінок не входила — plumbing.yaml не писався. Розбирати?",
@@ -168,50 +139,49 @@
       "state": "open"
     },
     {
-      "id": "panel_backup",
-      "stage": "panel",
-      "text": "Чи потрібен резерв живлення? Зараз — гібридний інвертор з АКБ (припущення): none — без резерву, inverter — інвертор, plug — генератор через силову вилку",
-      "target": "panel.backup",
+      "id": "q10",
+      "stage": "electrical",
+      "text": "Тепла підлога (А-29): 4 зони — кухня 6,35, передпокій 5,28, лоджія 2,53, санвузол 1,69 м², усього 15,85 м². Потужності на листах немає: поки типова 1,5 кВт на кожен терморегулятор, це завищено для малих зон. Яка потужність кожної зони або яка питома, Вт/м²? На резерві тепла підлога не тримається (замовник).",
       "also": [],
-      "answer": "choice",
-      "options": [
-        "none",
-        "inverter",
-        "plug"
-      ],
-      "option_labels": {
-        "none": "Без резерву",
-        "inverter": "Інвертор з АКБ",
-        "plug": "Генератор через силову вилку"
-      },
-      "assumption": "inverter",
-      "severity": "minor",
-      "state": "open"
-    },
-    {
-      "id": "panel_input",
-      "stage": "panel",
-      "text": "Вступний автомат за техумовами? Зараз 63 А (припущення); розрахунковий струм квартири 73,2 А",
-      "target": "panel.input",
-      "also": [],
-      "answer": "value",
-      "unit": "А",
+      "answer": "text",
       "options": [],
       "option_labels": {},
-      "assumption": 63.0,
-      "severity": "minor",
+      "severity": "major",
       "state": "open"
     },
     {
-      "id": "panel_reserve",
-      "stage": "panel",
-      "text": "Що тримати на резерві? Зараз: QF1, QF3, QF5, QF7, QF11, QF12, QF13, QF19, QF20 — світло, холодильник, роутер, котел, насос, ворота, розетки кухні (припущення). Список груп — panel.reserve",
+      "id": "q11",
+      "stage": "electrical",
+      "text": "Кабель-канал ТВ у кімнаті: значки на А-37 стоять на 990 (H=400) і 960 (H=1100) за масштабом; у моделі — один вертикальний канал на 975, широка штроба 700 мм. Підтвердьте місце.",
       "also": [],
       "answer": "text",
       "options": [],
       "option_labels": {},
       "severity": "minor",
       "state": "open"
+    },
+    {
+      "id": "panel_backup",
+      "stage": "panel",
+      "text": "Чи потрібен резерв живлення? Зараз — гібридний інвертор з АКБ (припущення): none — без резерву, inverter — інвертор, plug — генератор через силову вилку, station — зарядна станція",
+      "target": "panel.backup",
+      "also": [],
+      "answer": "choice",
+      "options": [
+        "none",
+        "inverter",
+        "plug",
+        "station"
+      ],
+      "option_labels": {
+        "none": "Без резерву",
+        "inverter": "Інвертор з АКБ",
+        "plug": "Генератор через силову вилку",
+        "station": "Зарядна станція"
+      },
+      "assumption": "inverter",
+      "severity": "minor",
+      "state": "accepted"
     },
     {
       "id": "panel_npe",
@@ -230,7 +200,7 @@
       },
       "assumption": "yes",
       "severity": "major",
-      "state": "open"
+      "state": "accepted"
     },
     {
       "id": "panel_inverter",
@@ -249,7 +219,7 @@
       },
       "assumption": "hybrid",
       "severity": "minor",
-      "state": "open"
+      "state": "accepted"
     },
     {
       "id": "panel_battery",
@@ -263,7 +233,71 @@
       "option_labels": {},
       "assumption": 48.0,
       "severity": "minor",
+      "state": "accepted"
+    },
+    {
+      "id": "panel_dc_place",
+      "stage": "panel",
+      "text": "Де стоять інвертор, щит АКБ і АКБ? Зараз — поруч з основним щитом (припущення): від цього — довжина кабелів GRID, LOAD і АКБ",
+      "also": [],
+      "answer": "text",
+      "options": [],
+      "option_labels": {},
+      "severity": "minor",
       "state": "open"
+    },
+    {
+      "id": "panel_input",
+      "stage": "panel",
+      "text": "Вступний автомат за техумовами? Зараз 63 А (припущення); розрахунковий струм квартири 86,5 А",
+      "target": "panel.input",
+      "also": [],
+      "answer": "value",
+      "unit": "А",
+      "options": [],
+      "option_labels": {},
+      "assumption": 63.0,
+      "severity": "minor",
+      "state": "answered"
+    },
+    {
+      "id": "panel_reserve",
+      "stage": "panel",
+      "text": "Що тримати на резерві? Зараз: QF1, QF3, QF5, QF7, QF11, QF12, QF13, QF19, QF20, QF25, QF26, QF27 — світло, холодильник, роутер, котел, насос, ворота, розетки кухні (припущення)",
+      "also": [],
+      "answer": "groups",
+      "options": [
+        "QF1",
+        "QF2",
+        "QF3",
+        "QF4",
+        "QF5",
+        "QF6",
+        "QF7",
+        "QF8",
+        "QF9",
+        "QF10",
+        "QF11",
+        "QF12",
+        "QF13",
+        "QF14",
+        "QF15",
+        "QF16",
+        "QF17",
+        "QF18",
+        "QF19",
+        "QF20",
+        "QF21",
+        "QF22",
+        "QF23",
+        "QF24",
+        "QF25",
+        "QF26",
+        "QF27"
+      ],
+      "option_labels": {},
+      "severity": "minor",
+      "state": "answered"
     },
     {
       "id": "panel_pv",
@@ -276,18 +310,7 @@
       "option_labels": {},
       "assumption": 0.0,
       "severity": "minor",
-      "state": "open"
-    },
-    {
-      "id": "panel_dc_place",
-      "stage": "panel",
-      "text": "Де стоять інвертор, щит АКБ і АКБ? Зараз — поруч з основним щитом (припущення): від цього — довжина кабелів GRID, LOAD і АКБ",
-      "also": [],
-      "answer": "text",
-      "options": [],
-      "option_labels": {},
-      "severity": "minor",
-      "state": "open"
+      "state": "answered"
     }
   ],
   "issues": [
@@ -299,13 +322,13 @@
     },
     {
       "file": "electrical.yaml",
-      "path": "points[36].offset",
+      "path": "points[37].offset",
       "severity": "warning",
       "message": "точка попадает в окно (429–2734 мм на стене w1)"
     },
     {
       "file": "electrical.yaml",
-      "path": "points[37].offset",
+      "path": "points[38].offset",
       "severity": "warning",
       "message": "точка попадает в окно (429–2734 мм на стене w1)"
     },
@@ -449,21 +472,39 @@
     },
     {
       "file": "electrical.yaml",
-      "path": "panel",
+      "path": "groups.QF24",
       "severity": "warning",
-      "message": "Расчётный ток квартиры 73,2 А больше вводного автомата 63 А"
+      "message": "QF24: нет марки кабеля — автомат подобран без проверки по сечению"
+    },
+    {
+      "file": "electrical.yaml",
+      "path": "groups.QF25",
+      "severity": "warning",
+      "message": "QF25: нет марки кабеля — автомат подобран без проверки по сечению"
+    },
+    {
+      "file": "electrical.yaml",
+      "path": "groups.QF26",
+      "severity": "warning",
+      "message": "QF26: нет марки кабеля — автомат подобран без проверки по сечению"
+    },
+    {
+      "file": "electrical.yaml",
+      "path": "groups.QF27",
+      "severity": "warning",
+      "message": "QF27: нет марки кабеля — автомат подобран без проверки по сечению"
     },
     {
       "file": "electrical.yaml",
       "path": "panel",
       "severity": "warning",
-      "message": "Вводной автомат 63 А — допущение: уточните по техусловиям (panel.input)"
+      "message": "Расчётный ток квартиры 86,5 А больше вводного автомата 63 А"
     },
     {
       "file": "electrical.yaml",
       "path": "panel",
       "severity": "warning",
-      "message": "Мощность инвертора или генератора не задана (panel.backup_power) — резервная шина 7,88 кВт не проверена"
+      "message": "Мощность инвертора или генератора не задана (panel.backup_power) — резервная шина 2,54 кВт не проверена"
     },
     {
       "file": "electrical.yaml",

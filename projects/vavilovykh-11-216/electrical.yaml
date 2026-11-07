@@ -1,5 +1,7 @@
 # Електрика: вул. Вавілових 11, кв. 216. Джерело: source/ЖК_Будинок_на_Вавілових.pdf — А-32 світильники (стор. 19),
 # А-33 групи світла й вимикачі (20), А-34 розетки та виводи (21), А-35 специфікації (22), А-30 кондиціонери (17).
+# Нова редакція — source/Дизайн_проєкт_інтер'єру_ЖК_Будинок_на_Вавілових.pdf: А-35 світильники, А-36 групи, А-37 розетки, А-38 специфікації,
+# А-33 кондиціонери, А-29 тепла підлога (стор. = лист + 2); значення з неї позначені «нова ред.», решта — без змін.
 # Підкладка — room.yaml (чистові розміри). Прив'язки — з розмірів на листах; без розміру — за векторами PDF («PDF, масштаб»).
 # Висоти — з листів; примітка листів: вимикачі H=900, розетки H=300, якщо не підписано інше.
 # «гр.N» — групи світла з листа А-33; вимикач з номером N вмикає гр.N (controls). Груп щита в джерелі немає:
@@ -13,9 +15,9 @@ points:
   # --- Спальня
   - { id: bedroom_socket_1, room: bedroom, wall: w2, offset: 1499, type: socket, height: 300, count: 3, group: QF2 }  # А-34: 1500 від лівого кута до середини блоку; ТВ на тумбі
   - { id: bedroom_data_1, room: bedroom, wall: w2, offset: 1499, type: data, height: 300 }  # у тому ж блоці (розетка INT)
-  - { id: bedroom_socket_2, room: bedroom, wall: w3, offset: 475, type: socket, height: 900, count: 2, group: QF2 }  # в рамці з вимикачем 12, H=900; А-34: 1450 від розетки H=300 — PDF, масштаб
-  - { id: bedroom_switch_1, room: bedroom, wall: w3, offset: 475, type: switch, height: 900, note: "12: підсвітка дзеркала", controls: [bedroom_led_output_1], group: QF1 }  # А-33: вимикач 12 (гр.12)
-  - { id: bedroom_outlet_1, room: bedroom, wall: w3, offset: 800, type: outlet, height: 2350, note: "кондиціонер", group: QF17 }  # А-34: 800 від верхнього кута, H=2350
+  - { id: bedroom_socket_2, room: bedroom, wall: w3, offset: 475, type: socket, height: 950, count: 2, group: QF2 }  # в рамці з вимикачем 12, H=900; А-34: 1450 від розетки H=300 — PDF, масштаб  # нова ред. А-36, А-37: H=950
+  - { id: bedroom_switch_1, room: bedroom, wall: w3, offset: 475, type: switch, height: 950, note: "12: підсвітка дзеркала", controls: [bedroom_led_output_1], group: QF1 }  # А-33: вимикач 12 (гр.12)  # нова ред. А-36, А-37: H=950
+  - { id: bedroom_outlet_1, room: bedroom, wall: w3, offset: 800, type: outlet, height: 2300, note: "кондиціонер", group: QF17 }  # А-34: 800 від верхнього кута, H=2350  # нова ред.: А-37 2300, блок А-33 2280
   - { id: bedroom_led_output_1, room: bedroom, wall: w3, offset: 825, type: led_output, height: 1400, note: "підсвітка дзеркала, 12 В", group: QF1 }  # А-32: вивід 12V H=1400 — PDF, масштаб
   - { id: bedroom_socket_3, room: bedroom, wall: w3, offset: 1924, type: socket, height: 300, group: QF2 }  # А-34: 200 від нижнього кута виступу
   - { id: bedroom_switch_2, room: bedroom, wall: w4, offset: 352, type: switch, height: 900, note: "9: стеля", controls: [bedroom_downlight_1, bedroom_downlight_2, bedroom_downlight_3, bedroom_downlight_4, bedroom_downlight_5], group: QF1 }  # А-33: EQ | EQ — по центру стіни біля дверей; вимикач 9 (гр.9)
@@ -36,19 +38,20 @@ points:
   - { id: cabinet_socket_1, room: cabinet, wall: w2, offset: 1148, type: socket, height: 400, count: 2, note: "ТВ", group: QF4 }  # А-34: 1150 від лівого кута, H=400
   - { id: cabinet_socket_2, room: cabinet, wall: w2, offset: 1148, type: socket, height: 1100, count: 2, group: QF4 }  # А-34: той же блок, H=1100
   - { id: cabinet_data_1, room: cabinet, wall: w2, offset: 1148, type: data, height: 1100 }  # розетка INT у блоці H=1100
-  - { id: cabinet_outlet_1, room: cabinet, wall: w3, offset: 580, type: outlet, height: 2350, note: "кондиціонер", group: QF18 }  # А-34: EQ | EQ — над дверима, по центру прорізу; H=2350
+  - { id: cabinet_outlet_1, room: cabinet, wall: w3, offset: 580, type: outlet, height: 2300, note: "кондиціонер", group: QF18 }  # А-34: EQ | EQ — над дверима, по центру прорізу; H=2350  # нова ред.: А-37 2350, у решти 2300 — 2300 за відповіддю замовника 2026-11-06
   - { id: cabinet_socket_3, room: cabinet, wall: w4, offset: 999, type: socket, height: 600, count: 2, group: QF4 }  # в рамці з вимикачами, H=600; А-34: 1000 від правого кута
   - { id: cabinet_switch_1, room: cabinet, wall: w4, offset: 999, type: switch, height: 600, note: "6: бра", controls: [cabinet_sconce_1], group: QF3 }  # А-33: вимикач 6 (гр.6)
   - { id: cabinet_pass_switch_1, room: cabinet, wall: w4, offset: 999, type: pass_switch, height: 600, note: "5: стеля (перехресний)", controls: [cabinet_downlight_1, cabinet_downlight_2, cabinet_downlight_3, cabinet_downlight_4], group: QF3 }  # А-33: перехресний 5
   - { id: cabinet_sconce_1, room: cabinet, wall: w4, offset: 2796, type: sconce, height: 1200, note: "бра (С-02), гр.6", group: QF3 }  # А-32: 500 від лівого кута, H=1200
-  - { id: cabinet_downlight_1, room: cabinet, ceiling: [599, 2330], type: downlight, note: "гр.5", group: QF3 }  # А-32: 600 | 1300 | 1395; 730 від верху і низу
-  - { id: cabinet_downlight_2, room: cabinet, ceiling: [1899, 2330], type: downlight, note: "гр.5", group: QF3 }  # А-32: 600 | 1300 | 1395; 730 від верху і низу
-  - { id: cabinet_downlight_3, room: cabinet, ceiling: [599, 729], type: downlight, note: "гр.5", group: QF3 }  # А-32: 600 | 1300 | 1395; 730 від верху і низу
-  - { id: cabinet_downlight_4, room: cabinet, ceiling: [1899, 729], type: downlight, note: "гр.5", group: QF3 }  # А-32: 600 | 1300 | 1395; 730 від верху і низу
+  - { id: cabinet_downlight_1, room: cabinet, ceiling: [649, 2330], type: downlight, note: "гр.5", group: QF3 }  # А-32: 600 | 1300 | 1395; 730 від верху і низу  # нова ред. А-35: 650 | 1300 | 1345
+  - { id: cabinet_downlight_2, room: cabinet, ceiling: [1949, 2330], type: downlight, note: "гр.5", group: QF3 }  # А-32: 600 | 1300 | 1395; 730 від верху і низу  # нова ред. А-35: 650 | 1300 | 1345
+  - { id: cabinet_downlight_3, room: cabinet, ceiling: [649, 729], type: downlight, note: "гр.5", group: QF3 }  # А-32: 600 | 1300 | 1395; 730 від верху і низу  # нова ред. А-35: 650 | 1300 | 1345
+  - { id: cabinet_downlight_4, room: cabinet, ceiling: [1949, 729], type: downlight, note: "гр.5", group: QF3 }  # А-32: 600 | 1300 | 1395; 730 від верху і низу  # нова ред. А-35: 650 | 1300 | 1345
   # --- Лоджія
-  - { id: loggia_socket_1, room: loggia, wall: w1, offset: 249, type: socket, height: 900, count: 2, note: "в торці шафи", group: QF6 }  # А-34: 250 від нижнього кута, H=900, в рамці з вимикачем
-  - { id: loggia_switch_1, room: loggia, wall: w1, offset: 249, type: switch, height: 900, note: "8: підсвітка полиць", controls: [loggia_led_output_1], group: QF5 }  # А-33: вимикач 8 (гр.8)
-  - { id: loggia_pass_switch_1, room: loggia, wall: w1, offset: 249, type: pass_switch, height: 900, note: "5: стеля кімнати (перехресний)", controls: [cabinet_downlight_1, cabinet_downlight_2, cabinet_downlight_3, cabinet_downlight_4], group: QF3 }  # А-33: перехресний 5
+  - { id: loggia_outlet_1, room: loggia, wall: w2, offset: 1195, type: outlet, height: 1500, note: "терморегулятор, тепла підлога, зона 2,53 м²", group: QF24 }  # А-29: H=1500; там же вимикач 7; потужність — типова, q10
+  - { id: loggia_socket_1, room: loggia, wall: w1, offset: 249, type: socket, height: 880, count: 2, note: "в торці шафи", group: QF6 }  # А-34: 250 від нижнього кута, H=900, в рамці з вимикачем  # нова ред. А-36, А-37: H=880
+  - { id: loggia_switch_1, room: loggia, wall: w1, offset: 249, type: switch, height: 880, note: "8: підсвітка полиць", controls: [loggia_led_output_1], group: QF5 }  # А-33: вимикач 8 (гр.8)  # нова ред. А-36, А-37: H=880
+  - { id: loggia_pass_switch_1, room: loggia, wall: w1, offset: 249, type: pass_switch, height: 880, note: "5: стеля кімнати (перехресний)", controls: [cabinet_downlight_1, cabinet_downlight_2, cabinet_downlight_3, cabinet_downlight_4], group: QF3 }  # А-33: перехресний 5  # нова ред. А-36, А-37: H=880
   - { id: loggia_socket_2, room: loggia, wall: w1, offset: 949, type: socket, height: 300, count: 4, note: "робоче місце", group: QF6 }  # А-34: 250 + 700 від нижнього кута, H=300
   - { id: loggia_data_1, room: loggia, wall: w1, offset: 949, type: data, height: 300 }  # розетка INT у блоці
   - { id: loggia_socket_3, room: loggia, wall: w2, offset: 1195, type: socket, height: 300, group: QF6 }  # А-34: 100 від правого кута
@@ -72,10 +75,10 @@ points:
   - { id: hall_pass_switch_1, room: hall, wall: w1, offset: 3130, type: pass_switch, height: 900, note: "5: стеля кімнати (перехресний)", controls: [cabinet_downlight_1, cabinet_downlight_2, cabinet_downlight_3, cabinet_downlight_4], group: QF3 }  # А-33: EQ | EQ | EQ між дверима кімнати і спальні
   - { id: hall_socket_3, room: hall, wall: w2, offset: 1185, type: socket, height: 300, group: QF12 }  # А-34: 150 від правого відкосу дверей гардеробної
   - { id: hall_switch_1, room: hall, wall: w2, offset: 1185, type: switch, height: 900, keys: 2, note: "13+В: гардеробна + вентилятор", controls: [wardrobe_downlight_1, wardrobe_downlight_2, wardrobe_downlight_3], group: QF7 }  # А-33: вимикач 13+В, 150 від відкосу
-  - { id: hall_outlet_1, room: hall, wall: w2, offset: 1606, type: outlet, height: 1500, note: "домофон (розташування уточнити)", group: QF12 }  # А-34: 200 від кута з кухонною стіною, H=1500
+  - { id: hall_outlet_1, room: hall, wall: w2, offset: 1570, type: outlet, height: 1500, note: "домофон (розташування уточнити)", group: QF12 }  # А-34: 200 від кута з кухонною стіною, H=1500  # нова ред. А-37: 235 від кута (було 200)
   - { id: hall_socket_4, room: hall, wall: w3, offset: 877, type: socket, height: 900, count: 2, group: QF13 }  # в рамці з вимикачем; А-34: 1250 від верхнього кута, H=900
-  - { id: hall_switch_2, room: hall, wall: w3, offset: 877, type: switch, height: 900, note: "3: люстра над столом", controls: [hall_pendant_1], group: QF11 }  # А-33: вимикач 3 (гр.3)
-  - { id: hall_outlet_2, room: hall, wall: w5, offset: 600, type: outlet, height: 2350, note: "кондиціонер", group: QF19 }  # А-34: 600 від верхнього кута; H=2350 — А-30 (внутрішній блок H=2350)
+  - { id: hall_switch_2, room: hall, wall: w3, offset: 877, type: switch, height: 900, note: "3: підвіси над столом", controls: [hall_pendant_1, hall_pendant_2], group: QF11 }  # А-33: вимикач 3 (гр.3)
+  - { id: hall_outlet_2, room: hall, wall: w5, offset: 600, type: outlet, height: 2300, note: "кондиціонер", group: QF19 }  # А-34: 600 від верхнього кута; H=2350 — А-30 (внутрішній блок H=2350)  # нова ред.: А-37 2300, блок А-33 2280
   - { id: hall_socket_5, room: hall, wall: w5, offset: 849, type: socket, height: 300, count: 2, group: QF13 }  # А-34: 850 від верхнього кута, H=300
   - { id: hall_socket_6, room: hall, wall: w5, offset: 1299, type: socket, height: 1700, note: "холодильник", group: QF13 }  # А-34: 850 + 450, H=1700
   - { id: hall_socket_7, room: hall, wall: w5, offset: 1299, type: socket, height: 1700, note: "духова шафа", group: QF14 }  # у тому ж блоці
@@ -83,8 +86,8 @@ points:
   - { id: hall_led_output_1, room: hall, wall: w5, offset: 2260, type: led_output, height: 1550, note: "підсвітка верхніх шаф, 12 В", group: QF11 }  # А-32: 1900 від нижньої стіни кухні, H=1550
   - { id: hall_socket_9, room: hall, wall: w5, offset: 2500, type: socket, height: 1050, count: 2, group: QF13 }  # в рамці з вимикачем; А-34: 1200 нижче блоку H=1700, H=1050
   - { id: hall_switch_3, room: hall, wall: w5, offset: 2500, type: switch, height: 1050, note: "4: підсвітка кухні", controls: [hall_led_output_1, hall_led_strip_1, hall_led_strip_2], group: QF11 }  # А-33: вимикач 4 (гр.4)
-  - { id: hall_socket_10, room: hall, wall: w5, offset: 3000, type: socket, height: 700, note: "посудомийна машина", group: QF16 }  # А-34: 500 нижче рамки H=1050, H=700
-  - { id: hall_socket_11, room: hall, wall: w5, offset: 3000, type: socket, height: 700, note: "осмос", group: QF13 }  # у тому ж блоці
+  - { id: hall_socket_10, room: hall, wall: w5, offset: 2960, type: socket, height: 700, note: "посудомийна машина", group: QF16 }  # А-34: 500 нижче рамки H=1050, H=700  # нова ред. А-37: 460 нижче рамки (було 500)
+  - { id: hall_socket_11, room: hall, wall: w5, offset: 2960, type: socket, height: 700, note: "осмос", group: QF13 }  # у тому ж блоці  # нова ред. А-37: 460 нижче рамки (було 500)
   - { id: hall_socket_12, room: hall, wall: w6, offset: 499, type: socket, height: 1050, count: 2, group: QF13 }  # А-34: 500 від правого кута, H=1050
   - { id: hall_outlet_3, room: hall, wall: w6, offset: 1399, type: outlet, height: 1800, note: "витяжка", group: QF13 }  # А-34: 270 + 900 + 900 від стіни санвузла, H=1800
   - { id: hall_outlet_4, room: hall, wall: w6, offset: 1399, type: outlet, height: 750, note: "варильна поверхня", group: QF15 }  # там же, H=750
@@ -95,17 +98,21 @@ points:
   - { id: hall_socket_14, room: hall, wall: w7, offset: 2123, type: socket, height: 300, group: QF12 }  # А-34: 200 від нижнього кута біля входу
   - { id: hall_switch_6, room: hall, wall: w7, offset: 2123, type: switch, height: 1500, note: "майстер-вимикач", group: QF11 }  # А-33: H=1500 майстер-вимикач біля входу
   - { id: hall_pass_switch_3, room: hall, wall: w7, offset: 2123, type: pass_switch, height: 1500, note: "1: передпокій (прохідний)", controls: [hall_downlight_1, hall_downlight_2, hall_downlight_3, hall_downlight_4], group: QF11 }  # А-33: прохідний 1 біля входу, в рамці з майстер-вимикачем
-  - { id: hall_downlight_1, room: hall, ceiling: [1180, 3550], type: downlight, note: "гр.1, передпокій", group: QF11 }  # А-32: 1180 від лівої стіни; 805 | 1000 | 1000 | 1000 | 550
-  - { id: hall_downlight_2, room: hall, ceiling: [1180, 2550], type: downlight, note: "гр.1, передпокій", group: QF11 }  # А-32: 1180 від лівої стіни; 805 | 1000 | 1000 | 1000 | 550
-  - { id: hall_downlight_3, room: hall, ceiling: [1180, 1550], type: downlight, note: "гр.1, передпокій", group: QF11 }  # А-32: 1180 від лівої стіни; 805 | 1000 | 1000 | 1000 | 550
-  - { id: hall_downlight_4, room: hall, ceiling: [1180, 550], type: downlight, note: "гр.1, передпокій", group: QF11 }  # А-32: 1180 від лівої стіни; 805 | 1000 | 1000 | 1000 | 550
-  - { id: hall_downlight_5, room: hall, ceiling: [3581, 5520], type: downlight, note: "гр.2, кухня", group: QF11 }  # А-32: 750 від правої стіни; 960 | 800 | 800 | 800 | 800; ряд 800 | 800
-  - { id: hall_downlight_6, room: hall, ceiling: [3581, 4720], type: downlight, note: "гр.2, кухня", group: QF11 }  # А-32: 750 від правої стіни; 960 | 800 | 800 | 800 | 800; ряд 800 | 800
-  - { id: hall_downlight_7, room: hall, ceiling: [3581, 3920], type: downlight, note: "гр.2, кухня", group: QF11 }  # А-32: 750 від правої стіни; 960 | 800 | 800 | 800 | 800; ряд 800 | 800
-  - { id: hall_downlight_8, room: hall, ceiling: [3581, 3120], type: downlight, note: "гр.2, кухня", group: QF11 }  # А-32: 750 від правої стіни; 960 | 800 | 800 | 800 | 800; ряд 800 | 800
-  - { id: hall_downlight_9, room: hall, ceiling: [2781, 3120], type: downlight, note: "гр.2, кухня", group: QF11 }  # А-32: 750 від правої стіни; 960 | 800 | 800 | 800 | 800; ряд 800 | 800
-  - { id: hall_downlight_10, room: hall, ceiling: [1981, 3120], type: downlight, note: "гр.2, кухня", group: QF11 }  # А-32: 750 від правої стіни; 960 | 800 | 800 | 800 | 800; ряд 800 | 800
-  - { id: hall_pendant_1, room: hall, ceiling: [2425, 5282], type: pendant, note: "люстра над столом (С-04), гр.3", group: QF11 }  # А-32: 620 від стіни гардеробної до середини, 1200 від верхньої стіни
+  - { id: hall_downlight_1, room: hall, ceiling: [1180, 3500], type: downlight, note: "гр.1, передпокій", group: QF11 }  # А-32: 1180 від лівої стіни; 805 | 1000 | 1000 | 1000 | 550  # нова ред. А-35: 855 | 1000 | 1000 | 1000 | 500
+  - { id: hall_downlight_2, room: hall, ceiling: [1180, 2500], type: downlight, note: "гр.1, передпокій", group: QF11 }  # А-32: 1180 від лівої стіни; 805 | 1000 | 1000 | 1000 | 550  # нова ред. А-35: 855 | 1000 | 1000 | 1000 | 500
+  - { id: hall_downlight_3, room: hall, ceiling: [1180, 1500], type: downlight, note: "гр.1, передпокій", group: QF11 }  # А-32: 1180 від лівої стіни; 805 | 1000 | 1000 | 1000 | 550  # нова ред. А-35: 855 | 1000 | 1000 | 1000 | 500
+  - { id: hall_downlight_4, room: hall, ceiling: [1180, 500], type: downlight, note: "гр.1, передпокій", group: QF11 }  # А-32: 1180 від лівої стіни; 805 | 1000 | 1000 | 1000 | 550  # нова ред. А-35: 855 | 1000 | 1000 | 1000 | 500
+  - { id: hall_downlight_5, room: hall, ceiling: [3581, 5470], type: downlight, note: "гр.2, кухня", group: QF11 }  # А-32: 750 від правої стіни; 960 | 800 | 800 | 800 | 800; ряд 800 | 800  # нова ред. А-35: 1010 | 800 | 800 | 800 | 750
+  - { id: hall_downlight_6, room: hall, ceiling: [3581, 4670], type: downlight, note: "гр.2, кухня", group: QF11 }  # А-32: 750 від правої стіни; 960 | 800 | 800 | 800 | 800; ряд 800 | 800  # нова ред. А-35: 1010 | 800 | 800 | 800 | 750
+  - { id: hall_downlight_7, room: hall, ceiling: [3581, 3870], type: downlight, note: "гр.2, кухня", group: QF11 }  # А-32: 750 від правої стіни; 960 | 800 | 800 | 800 | 800; ряд 800 | 800  # нова ред. А-35: 1010 | 800 | 800 | 800 | 750
+  - { id: hall_downlight_8, room: hall, ceiling: [3581, 3070], type: downlight, note: "гр.2, кухня", group: QF11 }  # А-32: 750 від правої стіни; 960 | 800 | 800 | 800 | 800; ряд 800 | 800  # нова ред. А-35: 1010 | 800 | 800 | 800 | 750
+  - { id: hall_downlight_9, room: hall, ceiling: [2781, 3070], type: downlight, note: "гр.2, кухня", group: QF11 }  # А-32: 750 від правої стіни; 960 | 800 | 800 | 800 | 800; ряд 800 | 800  # нова ред. А-35: 1010 | 800 | 800 | 800 | 750
+  - { id: hall_downlight_10, room: hall, ceiling: [1981, 3070], type: downlight, note: "гр.2, кухня", group: QF11 }  # А-32: 750 від правої стіни; 960 | 800 | 800 | 800 | 800; ряд 800 | 800  # нова ред. А-35: 1010 | 800 | 800 | 800 | 750
+  - { id: hall_pendant_1, room: hall, ceiling: [2255, 5230], type: pendant, note: "підвіс над столом (С-06), гр.3", group: QF11 }  # нова ред. А-35: 450 від стіни кухні, 1250 від вікна
+  - { id: hall_pendant_2, room: hall, ceiling: [2605, 5230], type: pendant, note: "підвіс над столом (С-05), гр.3", group: QF11 }  # нова ред. А-35: ще 350
+  - { id: hall_outlet_5, room: hall, wall: w3, offset: 150, type: outlet, height: 1500, note: "терморегулятор, тепла підлога, кухня, зона 6,35 м²", group: QF25 }  # А-29: 150 від нижнього кута стіни, H=1500
+  - { id: hall_outlet_6, room: hall, wall: w1, offset: 3130, type: outlet, height: 1500, note: "терморегулятор, тепла підлога, передпокій, зона 5,28 м²", group: QF26 }  # А-29: EQ | EQ між дверима Д-03 і Д-04, H=1500; там же вимикач 5
+  - { id: hall_outlet_7, room: hall, wall: w7, offset: 121, type: outlet, height: 1500, note: "терморегулятор, тепла підлога, санвузол, зона 1,69 м²", group: QF27 }  # А-29: біля дверей санвузла, EQ | EQ, H=1500; там же вимикачі 1, 2, 14+15
   # --- Санвузол
   - { id: bath_outlet_1, room: bath, wall: w2, offset: 215, type: outlet, height: 2400, note: "ел. вентилятор", group: QF20 }  # А-34: EQ | EQ по центру верху пілона, H=2400
   - { id: bath_socket_1, room: bath, wall: w4, offset: 409, type: socket, height: 650, note: "рушникосушка", group: QF22 }  # А-34: 400 від лівої стіни, в рамці з вимикачем, H=650
@@ -114,9 +121,9 @@ points:
   - { id: bath_switch_1, room: bath, wall: w4, offset: 409, type: switch, height: 650, keys: 2, note: "16+В: дзеркало + вентилятор", controls: [bath_led_output_1], group: QF20 }  # А-33: вимикач 16+В у рамці з розетками
   - { id: bath_led_output_1, room: bath, wall: w4, offset: 950, type: led_output, height: 1500, note: "підсвітка дзеркала, 12 В", group: QF20 }  # А-32: 1150 від правої стіни, H=1500
   - { id: bath_led_output_2, room: bath, wall: w4, offset: 1461, type: led_output, height: 100, note: "підсвітка ніші вздовж ванни, 12 В", group: QF20 }  # А-32: 640 від правої стіни, H=100
-  - { id: bath_socket_4, room: bath, wall: w6, offset: 1520, type: socket, height: 1400, note: "бойлер", group: QF23 }  # А-34: 150 від пілона, H=1400
-  - { id: bath_socket_5, room: bath, wall: w6, offset: 1520, type: socket, height: 1400, note: "фільтри очистки води", group: QF21 }  # у тому ж блоці
-  - { id: bath_socket_6, room: bath, wall: w6, offset: 1520, type: socket, height: 1400, note: "система контролю протікання води", group: QF21 }  # у тому ж блоці
+  - { id: bath_socket_4, room: bath, wall: w6, offset: 1545, type: socket, height: 1400, note: "бойлер", group: QF23 }  # А-34: 150 від пілона, H=1400  # нова ред. А-37: 125 від пілона (було 150), зсув +25
+  - { id: bath_socket_5, room: bath, wall: w6, offset: 1545, type: socket, height: 1400, note: "фільтри очистки води", group: QF21 }  # у тому ж блоці  # нова ред. А-37: 125 від пілона (було 150), зсув +25
+  - { id: bath_socket_6, room: bath, wall: w6, offset: 1545, type: socket, height: 1400, note: "система контролю протікання води", group: QF21 }  # у тому ж блоці  # нова ред. А-37: 125 від пілона (було 150), зсув +25
   - { id: bath_downlight_1, room: bath, ceiling: [420, 1650], type: downlight, note: "гр.14", group: QF20 }  # А-32: 410 | 900 | 350; 445 | 900 | 770
   - { id: bath_downlight_2, room: bath, ceiling: [1320, 1650], type: downlight, note: "гр.14", group: QF20 }  # А-32: 410 | 900 | 350; 445 | 900 | 770
   - { id: bath_downlight_3, room: bath, ceiling: [420, 749], type: downlight, note: "гр.14", group: QF20 }  # А-32: 410 | 900 | 350; 445 | 900 | 770
@@ -124,3 +131,5 @@ points:
 led_strips:
   - { id: hall_led_strip_1, room: hall, wall: w5, start: 2260, end: 4159, note: "підсвітка верхніх шаф" }  # А-32: від виводу H=1550 до кута
   - { id: hall_led_strip_2, room: hall, wall: w6, start: 0, end: 2525, note: "підсвітка верхніх шаф" }  # А-32: вздовж кухонної лінії до стіни гардеробної
+cable_channels:
+  - { id: cabinet_channel_1, room: cabinet, wall: w2, offset: 975, entry: 400, exit: 1100, note: "ТВ" }  # нова ред. А-37: два значки «Кабель-канал», H=400 і H=1100; місце — PDF, масштаб (990 і 960)
