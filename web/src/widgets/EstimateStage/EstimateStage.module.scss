@@ -17,6 +17,7 @@
   display: inline-flex; align-items: center; min-height: 36px; padding: 0 14px; border-radius: 6px;
   background: var(--accent); color: var(--accent-text); text-decoration: none; font-size: 14px;
 }
+.lead { margin: -8px 0 12px; color: var(--muted); font-size: 12px; }
 .table {
   width: 100%; border-collapse: collapse; font-size: 13px;
   th, td { padding: 6px 8px; border-top: 1px solid var(--line); text-align: left; vertical-align: top; }
@@ -31,10 +32,39 @@
 .line td:first-child { color: var(--muted); }
 // A name with an "i" icon on one line
 .named { display: inline-flex; align-items: center; gap: 6px; }
+// A work name is a button: it unfolds the scope row under it. No button height or padding
+// (global.scss gives buttons 36px): the row stays as tall as a row without a scope
+.more {
+  @include bare-button;
+  display: inline-flex; align-items: baseline; gap: 6px; min-height: 0; padding: 0; border-radius: 0;
+  color: inherit; font: inherit; text-align: left; cursor: pointer;
+  &:hover { color: var(--accent); }
+}
+.chevron {
+  flex: none; width: 6px; height: 6px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor;
+  transform: translateY(-2px) rotate(-45deg); transition: transform 0.15s;
+  @media (prefers-reduced-motion: reduce) { transition: none; }
+  .more[aria-expanded="true"] & { transform: translateY(-3px) rotate(45deg); }
+}
+.opened td { border-bottom: 0; }
+// The scope sits right under its row: 8px from the name (with the row's own padding), 12px to the next row
+.table .scope td { border-top: 0; padding-top: 2px; padding-bottom: 12px; }
+// contain: the long text of the scope must not take part in the column widths, or the whole
+// table re-divides its columns (jumps) every time a row unfolds
+.scopeBody {
+  contain: inline-size;
+  display: grid; grid-template-columns: 1fr 1fr; gap: 10px 24px; padding: 10px 12px; border-radius: 6px;
+  background: var(--soft); font-size: 12px; line-height: 1.5;
+  h3 { margin: 0 0 4px; font-size: 12px; font-weight: 600; }
+  ul { margin: 0; padding-left: 16px; }
+  .out { color: var(--muted); h3 { color: var(--text); } }
+  .result { grid-column: 1 / -1; margin: 0; }
+}
 .notes { margin: 16px 0 0; padding-left: 18px; color: var(--muted); font-size: 12px; line-height: 1.6; }
 
 @media (max-width: $phone) {
   .stage { padding: 12px 8px 32px; }
   .sheet { padding: 16px 12px; }
   .table { font-size: 12px; th, td { padding: 5px 4px; } }
+  .scopeBody { grid-template-columns: 1fr; }
 }

@@ -23,6 +23,7 @@ from floorplan_engine.electrical.panel import BoardPanel, build_panel, write_loa
 from floorplan_engine.electrical.pricing import Prices
 from floorplan_engine.electrical.wiring import box_wiring, estimate_wiring
 from floorplan_engine.electrical.wiring_model import Wiring
+from floorplan_engine.electrical.work_scope import WORK_SCOPE_MD
 from floorplan_engine.epd.artifact import export_artifact
 from floorplan_engine.epd.objects import (
     describe_objects,
@@ -257,7 +258,7 @@ def _estimate_step(run: _Build, quantities: Wiring | None, panel: BoardPanel | N
     if the price list has errors, no estimate is written (errors go to price_issues) and the old
     one is removed."""
     if quantities is None or run.elec is None or run.result.price_issues:
-        for name in (ESTIMATE_MD, ESTIMATE_CSV, ESTIMATE_XLSX):
+        for name in (ESTIMATE_MD, ESTIMATE_CSV, ESTIMATE_XLSX, WORK_SCOPE_MD):
             (run.out / name).unlink(missing_ok=True)
         return
     _, run.result.estimate = write_estimate(

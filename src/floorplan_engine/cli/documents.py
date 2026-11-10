@@ -9,6 +9,7 @@ import typer
 
 from floorplan_engine.cli.common import ProjectArg, exit_on, fail, print_report, print_stages
 from floorplan_engine.drawing.symbols import export_symbols
+from floorplan_engine.electrical.work_scope import WORK_SCOPE_MD
 from floorplan_engine.epd.artifact import read_artifact, render_page_png
 from floorplan_engine.model.schema import SheetFormat
 from floorplan_engine.pipeline import (
@@ -67,8 +68,11 @@ def build(
         typer.echo(f"  {result.loads} — роспись потребителей щита")
     if result.stickers is not None:
         typer.echo(f"  {result.stickers} — маркировка щита для печати (рядом цветная, без букв)")
-    if result.estimate:
-        typer.echo(f"  {result.estimate[-1]} — смета (и .md, .csv рядом)")
+    for path in result.estimate:
+        if path.suffix == ".xlsx":
+            typer.echo(f"  {path} — смета (и .md, .csv рядом)")
+        elif path.name == WORK_SCOPE_MD:
+            typer.echo(f"  {path} — состав работ: что входит в позиции сметы и что нет")
     if result.plumbing_estimate:
         typer.echo(f"  {result.plumbing_estimate[-1]} — смета сантехники (и .md, .csv рядом)")
     if result.sewer_routes is not None:

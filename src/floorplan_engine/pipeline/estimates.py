@@ -26,6 +26,13 @@ from floorplan_engine.electrical.panel import BoardPanel, build_panel
 from floorplan_engine.electrical.pricing import Prices, price_notes
 from floorplan_engine.electrical.wiring import END_ALLOWANCE, RESERVE, estimate_wiring
 from floorplan_engine.electrical.wiring_model import CHASE_NARROW, Wiring
+from floorplan_engine.electrical.work_scope import (
+    WORK_SCOPE_MD,
+    scope_entries,
+    scope_sheet,
+    write_scope_markdown,
+)
+from floorplan_engine.electrical.work_scope import text as scope_text
 from floorplan_engine.model.intake import (
     Stage,
 )
@@ -135,18 +142,27 @@ def write_estimate(
     panel: BoardPanel | None,
 ) -> tuple[Estimate, list[Path]]:
     """Estimate in out/: estimate.md, .csv and .xlsx (formulas), from the same quantities as the
-    wiring sheet; the panel follows the "Panel" sheet set (panel). Written by both estimate
-    and build."""
+    wiring sheet; the panel follows the "Panel" sheet set (panel). Next to it the work scope of
+    the estimate's work items (electrical/work_scope.py): work-scope.md and a sheet in the
+    workbook. Written by both estimate and build."""
     assert assessment.report.plan is not None
     plan = assessment.report.plan
-    est = build_estimate(wiring, elec, prices, plan.language, panel)
+    lang = plan.language
+    est = build_estimate(wiring, elec, prices, lang, panel)
     notes = _estimate_notes(assessment, est, wiring, elec, prices, source)
-    title = estimate_text("title", plan.language, name=plan.name)
+    title = estimate_text("title", lang, name=plan.name)
+    scope = scope_entries(est, lang)
+    left_out = [estimate_text("note_excluded", lang)]
     out = project / OUT_DIR
     files = [
-        write_markdown(est, out / ESTIMATE_MD, title, notes, plan.language),
+        write_markdown(est, out / ESTIMATE_MD, title, notes, lang),
         write_csv(est, out / ESTIMATE_CSV),
-        write_xlsx(est, out / ESTIMATE_XLSX, title, notes, plan.language),
+        write_xlsx(
+            est, out / ESTIMATE_XLSX, title, notes, lang, scope_sheet(scope, left_out, lang)
+        ),
+        write_scope_markdown(
+            scope, out / WORK_SCOPE_MD, scope_text("title", lang, name=plan.name), left_out, lang
+        ),
     ]
     return est, files
 
@@ -198,6 +214,7 @@ def _estimate_notes(
     if wet:
         notes.append(estimate_text("note_wet", lang, n=wet))
     notes.append(estimate_text("note_excluded", lang))
+    notes.append(scope_text("note_scope", lang, f=WORK_SCOPE_MD, s=scope_text("sheet", lang)))
     if wiring.height_assumed:
         notes.append(estimate_text("note_height", lang))
     status = assessment.status(Stage.ELECTRICAL)
