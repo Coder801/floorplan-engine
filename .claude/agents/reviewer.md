@@ -18,7 +18,7 @@ Check in this order:
    are in Russian; a validation error has a path to the field; YAML `id`s go into XDATA (`tagged`).
 4. **Determinism.** The same project gives the same DXF and `.epd` (no timestamps, no randomness, no
    dict order coming from sets).
-5. **Docs.** CLAUDE.md, `docs/architecture.md`, `docs/status.md` and
+5. **Docs.** CLAUDE.md, `docs/modules.md` (module map), `docs/architecture.md`, `docs/status.md` and
    `service/analysis/analyzer_prompt.md` match the code; translation rules live only in the prompt,
    CLAUDE.md holds the work order.
 6. **Tests.** New behaviour is covered; tests do not rely on data in `projects/`.

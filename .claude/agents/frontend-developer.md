@@ -55,5 +55,5 @@ How to work:
 5. Checks: `cd web && npm run check && npm test && npm run build`; if you change the API, also
    `uv run pytest tests/service/test_viewer.py`. Check behaviour in the browser on a built project;
    use sheet screenshots only when code cannot check it.
-6. Docs: `web/README.md` (structure), `CLAUDE.md` (if a module or rule changes),
+6. Docs: `web/README.md` (structure), `docs/modules.md` (if a module changes), `CLAUDE.md` (if a rule changes),
    `docs/epd-format.md` (if what the page reads changes).
