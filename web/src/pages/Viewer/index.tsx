@@ -357,7 +357,8 @@ export function Viewer({ account = null }: { account?: Account | null }) {
   };
   const setup = useMemo(() => {
     if (!project) return null;
-    return setupProgress(setupOf(project, variants, overview?.ceiling.height ?? null, overview?.panel?.reserve ?? null));
+    return setupProgress(setupOf(project, variants, overview?.ceiling.height ?? null, overview?.panel?.reserve ?? null,
+                                 overview?.panel?.master ?? null));
   }, [project, variants, overview]);
 
   // Continuations (elevations) are one tab with pages inside the drawing; electrical, lighting
@@ -496,7 +497,7 @@ export function Viewer({ account = null }: { account?: Account | null }) {
       {(choosing || saving) && <RebuildModal />}
       {wizard && project && (
         <Wizard key={current} project={project} variants={variants} ceiling={overview?.ceiling ?? null}
-                reserve={overview?.panel?.reserve ?? null} onApply={applyWizard} onClose={() => setWizard(false)}
+                reserve={overview?.panel?.reserve ?? null} master={overview?.panel?.master ?? null} onApply={applyWizard} onClose={() => setWizard(false)}
                 onQuestions={() => { setWizard(false); setDrawer("questions"); setClosing(false); }} />
       )}
       {studio && (

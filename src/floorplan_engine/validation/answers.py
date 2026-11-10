@@ -10,7 +10,7 @@ from pydantic import ValidationError
 
 from floorplan_engine.electrical.lines import split_by_lines
 from floorplan_engine.electrical.panel import build_panel
-from floorplan_engine.electrical.panel_questions import AUTO_PREFIX, panel_questions
+from floorplan_engine.electrical.panel_questions import AUTO_PREFIX, GROUPS_FIELD, panel_questions
 from floorplan_engine.model.intake import (
     ANSWERS_FILE,
     INTAKE_FILE,
@@ -195,7 +195,7 @@ def apply_auto_answers(
                 if isinstance(answer, list) and set(answer) <= set(q.options):
                     panel = _panel_of(raw)
                     if panel is not None:
-                        panel["reserve"] = answer
+                        panel[GROUPS_FIELD[q.id]] = answer
                         states[q.id] = "answered"
                 else:
                     message = f"ожидается список групп из: {', '.join(q.options)}"

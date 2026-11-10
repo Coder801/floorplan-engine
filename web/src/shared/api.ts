@@ -70,7 +70,7 @@ export async function saveAnswer(name: string, id: string, answer: Answer | null
 
 // What the setup wizard writes: everything or nothing, with one rebuild
 export interface WizardBody {
-  variant?: { mode: string; route: string; distribution: string; path: string; conduit: boolean; plaster: string; rough_light: boolean; ceiling_height?: number };
+  variant?: { mode: string; route: string; distribution: string; path: string; conduit: string | null; plaster: string; rough_light: boolean; ceiling_height?: number };
   answers?: Record<string, Answer | null>;
 }
 

@@ -9,10 +9,12 @@ import { useTranslation } from "react-i18next";
 import type { WizardBody } from "@/shared/api";
 import { cx } from "@/shared/cx";
 import { plainNumber } from "@/shared/questions";
-import type { OverviewReserve, Project, Variants, VariantSummary } from "@/shared/types";
+import type { OverviewMaster, OverviewReserve, Project, Variants, VariantSummary } from "@/shared/types";
 import { CEILING_MAX, CEILING_MIN } from "./ceiling";
 import { ReserveList } from "@/widgets/ReserveList";
 import { reserveOn } from "@/widgets/ReserveList/reserve";
+import { MasterList } from "@/widgets/MasterList";
+import { masterOn } from "@/widgets/MasterList/master";
 import { findChoice } from "@/widgets/VariantInfo/variants";
 import { WizardArt } from "@/widgets/WizardArt";
 import { clearDraft, loadDraft, samePicks, saveDraft } from "./draft";
@@ -29,16 +31,17 @@ interface Props {
   variants: Variants | null;
   ceiling: { height: number; assumed: boolean } | null;
   reserve: OverviewReserve | null;
+  master?: OverviewMaster | null;
   onApply: (body: WizardBody) => Promise<boolean>;  // false: the person stayed, nothing was saved
   onClose: () => void;
   onQuestions: () => void;
 }
 
-export function Wizard({ project, variants, ceiling, reserve, onApply, onClose, onQuestions }: Props) {
+export function Wizard({ project, variants, ceiling, reserve, master = null, onApply, onClose, onQuestions }: Props) {
   const { t, i18n } = useTranslation();
   // Keys built from a step and its values: the same cast as i18n label()
   const say = t as unknown as (key: string) => string;
-  const setup = useMemo(() => setupOf(project, variants, ceiling?.height ?? null, reserve), [project, variants, ceiling, reserve]);
+  const setup = useMemo(() => setupOf(project, variants, ceiling?.height ?? null, reserve, master), [project, variants, ceiling, reserve, master]);
   const before = useMemo(() => initialPicks(setup), [setup]);
   const [draft] = useState(() => loadDraft(project.id, project.built));
   const [picks, setPicks] = useState<Picks>(() => ({ ...before, ...draft?.picks }));
@@ -79,7 +82,7 @@ export function Wizard({ project, variants, ceiling, reserve, onApply, onClose, 
   };
   // What "don't know" leaves in the project, as a person reads it
   const unknownNote = (s: Step) => {
-    const assumed = s.question?.assumption;
+    const assumed = s.question?.assumption ?? s.assumed;
     if (s.kind === "groups") return t("wizard.unknownGroups");
     return assumed === undefined || assumed === null ? t("wizard.unknownNote")
       : t("wizard.unknownValue", { value: optionName(s, plainNumber(assumed)) });
@@ -88,7 +91,7 @@ export function Wizard({ project, variants, ceiling, reserve, onApply, onClose, 
     (value === UNKNOWN ? unknownNote(s) : say(`wizard.steps.${s.id}.options.${value}.note`));
   // The value the model holds now: marked on the card, not chosen for the person
   const inModel = (s: Step, value: string) => {
-    const assumed = s.question?.assumption;
+    const assumed = s.question?.assumption ?? s.assumed;
     if (value === UNKNOWN) return false;
     return ((before[s.id] === UNKNOWN ? undefined : before[s.id]) ?? (assumed === undefined || assumed === null ? undefined : plainNumber(assumed))) === value;
   };
@@ -181,6 +184,16 @@ export function Wizard({ project, variants, ceiling, reserve, onApply, onClose, 
                     );
                   })}
                 </div>
+              ) : step.id === "masterOff" ? (
+                <>
+                  <MasterList master={master!} value={picks.masterOff && picks.masterOff !== UNKNOWN ? picks.masterOff.split(",") : masterOn(master!)}
+                              onChange={(groups) => pick("masterOff", groups.join())} />
+                  <div className={css.presets}>
+                    <button aria-pressed={picks.masterOff === UNKNOWN} className={cx(picks.masterOff === UNKNOWN && css.chosen)}
+                            onClick={() => pick("masterOff", UNKNOWN)}>{t("wizard.unknown")}</button>
+                  </div>
+                  {picks.masterOff === UNKNOWN && <p className="small muted">{unknownNote(step)}</p>}
+                </>
               ) : step.kind === "groups" ? (
                 <>
                   <ReserveList reserve={reserve!} value={picks.reserve && picks.reserve !== UNKNOWN ? picks.reserve.split(",") : reserveOn(reserve!)}

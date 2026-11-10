@@ -5,19 +5,24 @@ draws it with its own component (web/src/engine/panel)."""
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+
+from floorplan_engine.electrical.groups import LIGHT
 from floorplan_engine.electrical.loads import (
-    current,
+    Kind,
+    PanelGroup,
 )
 from floorplan_engine.electrical.panel import (
     BoardPanel,
     DcBox,
     Device,
     color_of,
+    grid_text,
+    panel_title,
     reserve_groups,
-    scheme_title,
 )
 from floorplan_engine.electrical.panel_text import text
-from floorplan_engine.model.schema import Electrical
+from floorplan_engine.model.schema import Electrical, PointType
 from floorplan_engine.model.texts import Language
 from floorplan_engine.sheets.stickers import stickers_data
 
@@ -43,12 +48,18 @@ def panel_data(
             "loads": len(g.loads),
             "color": f"#{c:06x}" if (c := color_of(g.group, colors)) is not None else None,
             "split_of": g.split_of,
+            **({"phase": g.phase} if g.phase else {}),
         }
     devices = _devices(panel.devices, panel.rows)
     calc = panel.calculated
     out: dict[str, object] = {
         "name": name,
-        "phases": 1,
+        "phases": panel.phases,
+        **(
+            {"phase_loads": {p: round(w) for p, w in panel.phase_loads.items()}}
+            if panel.phases == 3
+            else {}
+        ),
         "scheme": panel.scheme,
         "input": {"label": panel.input.label, "assumed": panel.input.assumed},
         "enclosure": panel.enclosure.as_dict() if panel.enclosure is not None else None,
@@ -58,7 +69,7 @@ def panel_data(
             "installed": round(panel.installed),
             "demand": panel.demand,
             "calculated": round(calc),
-            "current": round(current(calc), 1),
+            "current": round(panel.design_current, 1),
             "modules": panel.modules,
         },
         "warnings": [
@@ -70,9 +81,10 @@ def panel_data(
             for w in panel.warnings
         ],
         "texts": {
-            "title": text("title", language, name=name, scheme=scheme_title(panel, language)),
-            "grid": text("grid", language),
+            "title": panel_title(panel, name, language),
+            "grid": grid_text(panel, language),
             "reserve": text("reserve_bus", language),
+            "master": text("master_bus", language),
         },
         "stickers": stickers_data(panel, colors),
     }
@@ -118,6 +130,10 @@ def _devices(
             item["assumed"] = True
         if d.reserve:
             item["reserve"] = True
+        if d.master:
+            item["master"] = True
+        if d.phase:
+            item["phase"] = d.phase
         out.append(item)
     return out
 
@@ -147,6 +163,54 @@ def dc_data(dc: DcBox, language: Language) -> dict[str, object]:
     }
 
 
+HEAVY_OUTLETS_W = 1000.0  # an appliance outlet from this power is heavy for the backup bus
+
+
+def _reserve_kind(lines: Sequence[PanelGroup], model: Electrical) -> str:
+    """What a model group is for the quick picks of the backup bus: light (any lamp: the
+    bathroom light with its fan is lighting), heavy (a heavy line, or appliance outlets only of
+    HEAVY_OUTLETS_W and more: air conditioner, floor heating) or sockets."""
+    by_id = {p.id: p for p in model.points}
+    loads = [ld for g in lines for ld in g.loads]
+    points = [by_id[ld.point] for ld in loads if ld.point in by_id]
+    if any(p.type in LIGHT for p in points):
+        return "light"
+    outlets = bool(points) and all(p.type is PointType.OUTLET for p in points)
+    if any(g.kind is Kind.HEAVY for g in lines) or (
+        outlets and sum(ld.power for ld in loads) >= HEAVY_OUTLETS_W
+    ):
+        return Kind.HEAVY.value
+    return Kind.SOCKETS.value
+
+
+def master_data(panel: BoardPanel, model: Electrical) -> dict[str, object]:
+    """What the master switch can cut (key `overview.panel.master`): groups of the model with
+    their power and purpose; "on" — cut now, or by the rule while there is no master switch yet
+    (the wizard shows the choice before the rebuild); "keep" — a load that stays on by the rule
+    (loads.KEEP_ON). active — the panel has the master switch now."""
+    active = panel.master
+
+    def on(lines: Sequence[PanelGroup]) -> bool:
+        if active:
+            return any(g.master for g in lines)
+        return not any(ld.keep_on for g in lines for ld in g.loads)
+
+    return {
+        "active": active,
+        "items": [
+            {
+                "id": name,
+                "purpose": "; ".join(dict.fromkeys(g.purpose for g in lines)),
+                "power": round(sum(g.power for g in lines)),
+                "kind": _reserve_kind(lines, model),
+                "on": on(lines),
+                "keep": any(ld.keep_on for g in lines for ld in g.loads),
+            }
+            for name, lines in reserve_groups(panel, model).items()
+        ],
+    }
+
+
 def reserve_data(panel: BoardPanel, model: Electrical) -> dict[str, object] | None:
     """What can go on the backup bus (key `overview.panel.reserve`): groups of the model with
     their power and purpose, and the power of the source. None without a backup: there is no bus.
@@ -165,6 +229,7 @@ def reserve_data(panel: BoardPanel, model: Electrical) -> dict[str, object] | No
                 "id": name,
                 "purpose": "; ".join(dict.fromkeys(g.purpose for g in lines)),
                 "power": round(sum(g.power for g in lines)),
+                "kind": _reserve_kind(lines, model),
                 "on": any(g.reserved for g in lines),
             }
             for name, lines in reserve_groups(panel, model).items()

@@ -9,13 +9,15 @@ assumption; a breaker is never made up.
 from __future__ import annotations
 
 import re
+from collections import Counter
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from floorplan_engine.model.schema import Electrical, ElectricalPoint, Plan, PointType
 from floorplan_engine.model.texts import Language
 
 ASSUMED = "*"
+DISTINCT_NOTES = 2  # notes that tell apart groups with the same purpose built from points
 
 TEXT: dict[str, dict[str, str]] = {
     "title": {"ru": "Группы", "uk": "Групи"},
@@ -24,6 +26,7 @@ TEXT: dict[str, dict[str, str]] = {
     "cable": {"ru": "Кабель", "uk": "Кабель"},
     "points": {"ru": "Точек", "uk": "Точок"},
     "breaker": {"ru": "Автомат", "uk": "Автомат"},
+    "phase": {"ru": "Фаза", "uk": "Фаза"},
     "length": {"ru": "Длина, м", "uk": "Довжина, м"},
     "power": {"ru": "P, кВт", "uk": "P, кВт"},
     "total": {"ru": "Итого", "uk": "Разом"},
@@ -77,9 +80,12 @@ def composed_purpose(
     points: Sequence[ElectricalPoint], rooms: dict[str, str], language: Language
 ) -> str:
     """Purpose from the group's points: point kinds (switches count as lighting) and rooms.
-    A single socket or output with a note uses the note: "Розетка: духовка"."""
+    A single socket or output with a note uses the note: "Розетка: духовка". The place is where
+    the consumers are: a switch by the door of another room does not add it (the bathroom
+    light switched from the hall is "Освітлення — Санвузол")."""
     types = {p.type for p in points}
-    where = ", ".join(dict.fromkeys(rooms.get(p.room, p.room) for p in points))
+    fed = [p for p in points if p.type not in SWITCHES] or points
+    where = ", ".join(dict.fromkeys(rooms.get(p.room, p.room) for p in fed))
     single = {PointType.SOCKET: "socket", PointType.OUTLET: "outlet"}
     if len(points) == 1 and points[0].note and points[0].type in single:
         what = f"{text(single[points[0].type], language)}: {points[0].note}"
@@ -98,6 +104,23 @@ def composed_purpose(
         kinds.append(text("switches", language))
     what = ", ".join(k if n == 0 else k[0].lower() + k[1:] for n, k in enumerate(kinds))
     return f"{what} — {where}" if where else what
+
+
+def tell_apart(items: Sequence[tuple[str, bool, Sequence[ElectricalPoint]]]) -> list[str]:
+    """Purposes (purpose, built from points, points) where groups built from points read the
+    same: two socket groups in one kitchen-living room with a hall. Those get the notes of their
+    points at the end, "Розетки — Кухня (холодильник, мікрохвильова…)"; purposes from the model
+    stay as they are."""
+    same = Counter(purpose for purpose, built, _ in items if built)
+    out = []
+    for purpose, built, points in items:
+        notes = list(dict.fromkeys(re.split(r"[,;(]", p.note)[0].strip() for p in points if p.note))
+        if not built or same[purpose] < 2 or not notes:
+            out.append(purpose)
+            continue
+        more = "…" if len(notes) > DISTINCT_NOTES else ""
+        out.append(f"{purpose} ({', '.join(notes[:DISTINCT_NOTES])}{more})")
+    return out
 
 
 def group_rows(plan: Plan, elec: Electrical) -> list[GroupRow]:
@@ -124,7 +147,9 @@ def group_rows(plan: Plan, elec: Electrical) -> list[GroupRow]:
                 tuple(c.id for c in cables),
             )
         )
-    return out
+    by_id = {p.id: p for p in elec.points}
+    told = tell_apart([(r.purpose, r.assumed, [by_id[i] for i in r.point_ids]) for r in out])
+    return [replace(r, purpose=t) for r, t in zip(out, told, strict=True)]
 
 
 # Group colours: soft RGB (true color in DXF), distinct from each other and readable as a

@@ -32,15 +32,19 @@ describe("варианты проводки", () => {
 
   it("сводка точного набора; чего нет — не подставляем похожее", () => {
     const v: Variants = { active: "standard-ceiling-boxes", default: "standard-ceiling-boxes", items: [item("standard", "ceiling", 100)] };
-    const base = { mode: "standard", route: "ceiling", distribution: "boxes", path: "right", conduit: false, plaster: "after", rough_light: false } as const;
+    const base = { mode: "standard", route: "ceiling", distribution: "boxes", path: "right", conduit: "none", plaster: "after", rough_light: false } as const;
     expect(findChoice(v, base)?.total).toBe(100);
     expect(findChoice(v, { ...base, path: "shortest" })).toBeUndefined();
     expect(findChoice(v, { ...base, distribution: "loop" })).toBeUndefined();
+    expect(findChoice(v, { ...base, conduit: null })?.total).toBe(100);  // "don't know": as the mode
+    expect(findChoice(v, { ...base, conduit: "walls" })).toBeUndefined();
   });
 
   it("опции старой сборки — по режиму", () => {
-    expect(optionsOf(undefined, "economy")).toEqual({ path: "shortest", conduit: false, plaster: "after", rough_light: false });
-    expect(optionsOf(undefined, "proper")).toEqual({ path: "right", conduit: true, plaster: "after", rough_light: false });
+    expect(optionsOf(undefined, "economy")).toEqual({ path: "shortest", conduit: "none", plaster: "after", rough_light: false });
+    expect(optionsOf(undefined, "proper")).toEqual({ path: "right", conduit: "ceiling", plaster: "after", rough_light: false });
+    expect(optionsOf({ ...item("standard", "ceiling", 1), conduit: true }, "standard").conduit).toBe("ceiling");  // an older build
+    expect(optionsOf({ ...item("standard", "ceiling", 1), conduit: "walls" }, "standard").conduit).toBe("walls");
   });
 
   it("показывает только трассы, которые есть в проекте", () => {

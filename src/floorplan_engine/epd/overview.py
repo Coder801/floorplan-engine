@@ -12,7 +12,7 @@ from typing import Any
 from floorplan_engine.electrical.anchors import symbol_key
 from floorplan_engine.electrical.estimate import Estimate
 from floorplan_engine.electrical.panel import BoardPanel
-from floorplan_engine.epd.panel_data import reserve_data
+from floorplan_engine.epd.panel_data import master_data, reserve_data
 from floorplan_engine.epd.side import legend_entries
 from floorplan_engine.model.geometry import Contour
 from floorplan_engine.model.plumbing import FixtureType, Plumbing
@@ -78,6 +78,7 @@ def overview_data(
     if panel is not None:
         out["panel"] = {
             "scheme": panel.scheme,
+            "phases": panel.phases,
             "input": panel.input.label,
             "input_assumed": panel.input.assumed,
             "devices": len(panel.devices),
@@ -90,6 +91,8 @@ def overview_data(
         reserve = reserve_data(panel, source) if source is not None else None
         if reserve is not None:
             out["panel"]["reserve"] = reserve
+        if source is not None:
+            out["panel"]["master"] = master_data(panel, source)
     if plumbing is not None and net is not None:
         out["plumbing"] = plumbing_overview(plumbing, net, plan.language)
         if plumbing_estimate is not None and plumbing_estimate.lines:

@@ -248,7 +248,7 @@ def _draw(
     pitch = max(POST_PITCH_MM / scale, 2 * r)
     for p in e.back:
         c = at(p.x, p.y)
-        first = c.x - pitch * (p.posts - 1) / 2
+        first = c.x + p.slot * pitch - pitch * (p.posts - 1) / 2
         for k in range(p.posts):
             cx = first + k * pitch
             if p.type in SWITCHES:
@@ -265,11 +265,11 @@ def _draw(
     labels: dict[tuple[float, float], tuple[list[int], float]] = {}
     for p in e.points:
         c = at(p.x, p.y)
-        half_block = r + pitch * (p.posts - 1) / 2
+        half_block = r + pitch * (p.frame - 1) / 2
         dashed(Vec(c.x, c.y - r), Vec(c.x, floor))
         dashed(Vec(c.x + half_block, c.y), Vec(x0 + w, c.y))
         color = LOW if p.type in LOW_TYPES else DARK
-        first = c.x - pitch * (p.posts - 1) / 2
+        first = c.x + p.slot * pitch - pitch * (p.posts - 1) / 2
         for k in range(p.posts):
             cx = first + k * pitch
             if p.type in SWITCHES:
@@ -283,7 +283,7 @@ def _draw(
             taken.append((cx - r, c.y - r, cx + r, c.y + r))
         key = (round(c.x, 1), round(c.y, 1))
         nums, half = labels.get(key, ([], 0.0))
-        labels[key] = ([*nums, p.number], max(half, r + pitch * (p.posts - 1) / 2))
+        labels[key] = ([*nums, p.number], max(half, half_block))
     for (cx, cy), (nums, half) in labels.items():
         _label(ranges(nums), Vec(cx, cy), half, taken, text, DARK)
     # Plumbing: pipe rise from the floor in the network colour, a water outlet is a filled circle,
@@ -317,7 +317,7 @@ def _draw(
     # first
     for p in e.back:
         c = at(p.x, p.y)
-        _label(str(p.number), c, r + pitch * (p.posts - 1) / 2, taken, text, BACK)
+        _label(str(p.number), c, r + pitch * (p.frame - 1) / 2, taken, text, BACK)
 
     _ordinates_x(e, scale, x0, floor, w, line, text)
     _ordinates_y(e, scale, x0 + w, floor, top, line, text)

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Question, Variants, VariantSummary } from "@/shared/types";
+import type { OverviewMaster, Question, Variants, VariantSummary } from "@/shared/types";
 import { ART } from "@/widgets/WizardArt";
 import { UNKNOWN, applyPick, chasesKept, initialPicks, invalid, otherQuestions, setupProgress, variantOf, wizardBody, wizardSteps, type Picks, type Setup, type Step } from "./steps";
 
@@ -17,7 +17,7 @@ const dc = [q("panel_inverter", "hybrid"), q("panel_battery", 48), q("panel_pv",
 function setup(over: Partial<Setup> = {}): Setup {
   return {
     questions: [q("panel_input", 63), q("panel_backup", "inverter"), ...dc],
-    answers: {}, variants, ceiling: 2700, reserve: null, canChoose: true, canAnswer: true, ...over,
+    answers: {}, variants, ceiling: 2700, reserve: null, master: null, canChoose: true, canAnswer: true, ...over,
   };
 }
 const ids = (s: Setup, picks = initialPicks(s)) => wizardSteps(s, picks).map((x) => x.id);
@@ -38,7 +38,17 @@ describe("шаги мастера", () => {
     const steps = wizardSteps(setup(), yes({}));
     const of = (group: Step["group"]) => steps.filter((x) => x.group === group).map((x) => x.id);
     expect(of("panel")).toEqual(["input", "breakers"]);
+    // a home supply is 40 A and more; another rating goes in the field
+    expect(wizardSteps(setup(), {}).find((x) => x.id === "input")?.options).toEqual(["40", "50", "63", "80"]);
     expect(of("reserve")).toEqual(["standby", "backup", "inverter", "battery", "pv", "npe"]);
+  });
+  it("фазы на вводе — первым шагом щита, ответ — число", () => {
+    const s = setup({ questions: [q("panel_phases", 1), q("panel_input", 63)] });
+    expect(ids(s, {}).slice(WIRING.length, WIRING.length + 2)).toEqual(["phases", "input"]);
+    const step = wizardSteps(s, {}).find((x) => x.id === "phases");
+    expect(step?.group).toBe("panel");
+    expect(step?.options).toEqual(["1", "3", UNKNOWN]);
+    expect(wizardBody(s, { ...initialPicks(s), phases: "3" }).answers).toEqual({ panel_phases: 3 });
   });
   it("без инвертора его шагов нет, с инвертором — появляются", () => {
     const s = setup();
@@ -120,18 +130,22 @@ describe("начальный выбор", () => {
   it("вариант, потолок и ответы; открытый вопрос не выбран за человека", () => {
     const s = setup({ answers: { panel_input: 40, panel_battery: { accept: true } } });
     expect(initialPicks(s)).toEqual({
-      route: "ceiling", distribution: "boxes", path: "right", conduit: "plain", plaster: "after", rough: "no", breakers: "groups",
+      route: "ceiling", distribution: "boxes", path: "right", conduit: "none", plaster: "after", rough: "no", breakers: "groups",
       ceiling: "2700", input: "40", battery: UNKNOWN,
     });
   });
   it("набор из активного варианта; старая сборка без опций — по режиму", () => {
-    const own = { ...item("standard", "floor"), key: "standard-floor-loop-shortest-conduit", distribution: "loop", path: "shortest", conduit: true } as VariantSummary;
+    const own = { ...item("standard", "floor"), key: "standard-floor-loop-shortest-conduit", distribution: "loop", path: "shortest", conduit: "ceiling" } as VariantSummary;
     const s = setup({ variants: { ...variants, active: own.key, items: [...variants.items, own] } });
-    expect(initialPicks(s)).toMatchObject({ route: "floor", distribution: "loop", path: "shortest", conduit: "tube", breakers: "groups" });
+    expect(initialPicks(s)).toMatchObject({ route: "floor", distribution: "loop", path: "shortest", conduit: "ceiling", breakers: "groups" });
     const old = setup({ variants: { ...variants, active: "economy-ceiling-boxes" } });
-    expect(initialPicks(old)).toMatchObject({ path: "shortest", conduit: "plain", breakers: "simple" });
+    expect(initialPicks(old)).toMatchObject({ path: "shortest", conduit: "none", breakers: "simple" });
     const premium = setup({ variants: { ...variants, active: "proper-ceiling-boxes" } });
-    expect(initialPicks(premium)).toMatchObject({ path: "right", conduit: "tube", breakers: "lines" });
+    expect(initialPicks(premium)).toMatchObject({ path: "right", conduit: "ceiling", breakers: "lines" });
+    // conduit not chosen: "don't know", and the mode decides what it leaves
+    const unknown = setup({ variants: { ...variants, active: "proper-ceiling-boxes", conduit: null } });
+    expect(initialPicks(unknown).conduit).toBe(UNKNOWN);
+    expect(wizardSteps(unknown, initialPicks(unknown)).find((x) => x.id === "conduit")?.assumed).toBe("ceiling");
   });
   it("закладка — из ответа про резерв, открытый вопрос без ответа", () => {
     expect(initialPicks(setup()).standby).toBeUndefined();
@@ -149,16 +163,17 @@ describe("что уходит на сервер", () => {
   it("вариант целиком, высота — только если менялась", () => {
     const s = setup();
     expect(wizardBody(s, { ...initialPicks(s), route: "floor" }).variant)
-      .toEqual({ mode: "standard", route: "floor", distribution: "boxes", path: "right", conduit: false, plaster: "after", rough_light: false });
+      .toEqual({ mode: "standard", route: "floor", distribution: "boxes", path: "right", conduit: "none", plaster: "after", rough_light: false });
     expect(wizardBody(s, { ...initialPicks(s), ceiling: "3000" }).variant)
-      .toEqual({ mode: "standard", route: "ceiling", distribution: "boxes", path: "right", conduit: false, plaster: "after", rough_light: false, ceiling_height: 3000 });
+      .toEqual({ mode: "standard", route: "ceiling", distribution: "boxes", path: "right", conduit: "none", plaster: "after", rough_light: false, ceiling_height: 3000 });
   });
   it("каждый пункт меняет вариант", () => {
     const s = setup();
     const with_ = (id: "distribution" | "path" | "conduit", value: string) => wizardBody(s, { ...initialPicks(s), [id]: value }).variant;
     expect(with_("distribution", "loop")?.distribution).toBe("loop");
     expect(with_("path", "shortest")?.path).toBe("shortest");
-    expect(with_("conduit", "tube")?.conduit).toBe(true);
+    expect(with_("conduit", "walls")?.conduit).toBe("walls");
+    expect(with_("conduit", UNKNOWN)?.conduit).toBeNull();
     const job = (id: "plaster" | "rough", value: string) => wizardBody(s, { ...initialPicks(s), [id]: value }).variant;
     expect(job("plaster", "before")?.plaster).toBe("before");
     expect(job("rough", "yes")?.rough_light).toBe(true);
@@ -240,11 +255,12 @@ describe("не знаю", () => {
 
 describe("штробы при монтаже до штукатурки", () => {
   it("с гофрой на потолке — все, по полу — линии пола, без гофры и после штукатурки — ничего", () => {
-    expect(chasesKept({ plaster: "before", conduit: "tube", route: "ceiling" })).toBe("all");
-    expect(chasesKept({ plaster: "before", conduit: "tube", route: "floor" })).toBe("all");
-    expect(chasesKept({ plaster: "before", conduit: "plain", route: "floor" })).toBe("floor");
-    expect(chasesKept({ plaster: "before", conduit: "plain", route: "ceiling" })).toBeNull();
-    expect(chasesKept({ plaster: "after", conduit: "tube", route: "floor" })).toBeNull();
+    expect(chasesKept({ plaster: "before", conduit: "walls", route: "ceiling" })).toBe("all");
+    expect(chasesKept({ plaster: "before", conduit: "walls", route: "floor" })).toBe("all");
+    expect(chasesKept({ plaster: "before", conduit: "ceiling", route: "ceiling" })).toBeNull();  // the drops go under the plaster
+    expect(chasesKept({ plaster: "before", conduit: "none", route: "floor" })).toBe("floor");
+    expect(chasesKept({ plaster: "before", conduit: UNKNOWN, route: "ceiling" })).toBeNull();
+    expect(chasesKept({ plaster: "after", conduit: "walls", route: "floor" })).toBeNull();
   });
 });
 
@@ -278,5 +294,46 @@ describe("проверки", () => {
     const s = setup();
     expect(otherQuestions(s, wizardSteps(s, { standby: "no", backup: "none" }))).toBe(0);
     expect(otherQuestions(s, wizardSteps(s, yes({})))).toBe(0);
+  });
+});
+
+describe("мастер-выключатель", () => {
+  const master: OverviewMaster = {
+    active: false,
+    items: [
+      { id: "QF1", purpose: "Освещение", power: 300, kind: "light", on: true, keep: false },
+      { id: "QF2", purpose: "Розетки кухни", power: 2000, kind: "sockets", on: false, keep: true },
+    ],
+  };
+  const withMaster = (over: Partial<Setup> = {}) =>
+    setup({ questions: [q("panel_input", 63), q("panel_master", "no")], master, ...over });
+
+  it("шаг — в разделе «Щит» после автоматов; что отключает — только после «да»", () => {
+    const s = withMaster();
+    expect(ids(s)).toEqual([...WIRING, "input", "breakers", "master"]);
+    expect(ids(s, { master: "yes" })).toEqual([...WIRING, "input", "breakers", "master", "masterOff"]);
+    expect(wizardSteps(s, { master: "yes" }).find((x) => x.id === "masterOff")?.options).toEqual(["QF1", "QF2"]);
+    expect(wizardSteps(s, { master: "yes" }).filter((x) => x.group === "panel").map((x) => x.id))
+      .toEqual(["input", "breakers", "master", "masterOff"]);
+  });
+  it("«не знаю» оставляет допущение: «да» из источника открывает выбор групп", () => {
+    expect(ids(withMaster(), { master: UNKNOWN })).not.toContain("masterOff");
+    const fromSource = withMaster({ questions: [q("panel_master", "yes"), q("panel_master_off", null)] });
+    expect(ids(fromSource, { master: UNKNOWN })).toContain("masterOff");
+  });
+  it("без сборки с группами выбора групп нет", () => {
+    expect(ids(withMaster({ master: null }), { master: "yes" })).not.toContain("masterOff");
+  });
+  it("ответы: мастер и группы вместе; «нет» снимает сохранённые группы", () => {
+    const s = withMaster();
+    expect(wizardBody(s, { ...initialPicks(s), master: "yes", masterOff: "QF1" }).answers)
+      .toEqual({ panel_master: "yes", panel_master_off: ["QF1"] });
+    const on = withMaster({
+      questions: [q("panel_master", "no", "answered"), q("panel_master_off", null)],
+      answers: { panel_master: "yes", panel_master_off: ["QF1"] },
+      master: { ...master, active: true },
+    });
+    expect(wizardBody(on, { ...initialPicks(on), master: "no" }).answers)
+      .toEqual({ panel_master: "no", panel_master_off: null });
   });
 });

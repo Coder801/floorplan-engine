@@ -219,6 +219,8 @@ def test_backup_bus_is_answered_by_model_groups(project: Path) -> None:
     block = _reserve_block(project)
     names = [g["id"] for g in block["items"]]
     assert len(names) >= 2 and block["limit_kw"] > 0 and block["limit_assumed"] is True
+    assert {g["kind"] for g in block["items"]} <= {"light", "sockets", "heavy"}
+    assert any(g["kind"] == "light" for g in block["items"])  # the "lighting only" quick pick
     keep = [names[-1]]
 
     assert (

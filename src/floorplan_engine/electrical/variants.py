@@ -19,6 +19,7 @@ from typing import get_args
 
 from floorplan_engine.electrical.estimate import PriceSource, build_estimate, conduit_mm
 from floorplan_engine.electrical.lines import split_by_lines
+from floorplan_engine.electrical.master import with_master_switch
 from floorplan_engine.electrical.panel import build_panel
 from floorplan_engine.electrical.wiring import estimate_wiring
 from floorplan_engine.model.geometry import Contour
@@ -97,8 +98,9 @@ def variant_electrical(
     plan: Plan, contours: dict[str, Contour], source: Electrical, variant: Variant
 ) -> Electrical:
     """Variant electrical model for calculations: the variant is applied, and in premium and proper
-    groups are split into lines from the panel (lines.split_by_lines), as on project load."""
-    return split_by_lines(plan, contours, apply_variant(source, variant))
+    groups are split into lines from the panel (lines.split_by_lines) and the master switch point
+    is put in (master.with_master_switch), as on project load."""
+    return split_by_lines(plan, contours, with_master_switch(plan, apply_variant(source, variant)))
 
 
 @dataclass(frozen=True)
@@ -121,7 +123,7 @@ class VariantSummary:
         v = self.variant
         return {
             "key": v.key, "mode": v.mode, "route": v.route, "distribution": v.distribution,
-            "path": v.wire_path, "conduit": v.in_conduit,
+            "path": v.wire_path, "conduit": v.conduit_level,
             "plaster": self.plaster, "rough_light": self.rough_light,
             "total": round(self.total, 2), "currency": self.currency, "unpriced": self.unpriced,
             "cable_m": round(self.cable_m, 1), "devices": self.devices,
@@ -155,7 +157,7 @@ def variant_summary(
         cable_m=sum(r.length_mm for r in wiring.runs) / 1000,
         devices=len(panel.devices) if panel is not None else 0,
         chases_m=(wiring.chase_length(wide=False) + wiring.chase_length(wide=True)) / 1000,
-        conduit_m=sum(conduit_mm(r, elec.ceiling_conduit) for r in wiring.runs) / 1000,
+        conduit_m=sum(conduit_mm(r, elec.conduit_level) for r in wiring.runs) / 1000,
         edited=edits is not None,
         plaster=elec.plaster,
         rough_light=elec.rough_light,

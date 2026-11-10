@@ -31,6 +31,7 @@ from floorplan_engine.drawing.ids import tagged
 from floorplan_engine.drawing.layers import E_LINK, L_TEXT, LW_LINK
 from floorplan_engine.drawing.tables import Column, Table, name_width
 from floorplan_engine.electrical.anchors import Anchor, point_anchor, stack_shifts
+from floorplan_engine.electrical.master import is_master, master_on
 from floorplan_engine.electrical.point_numbers import number_points, point_name, ranges
 from floorplan_engine.model.geometry import Contour, Vec, room_geometries
 from floorplan_engine.model.schema import (
@@ -115,7 +116,8 @@ def switch_links(elec: Electrical) -> list[SwitchLink]:
     group in its room; if the switch label hints at a kind or a shared word ("бра", "стеля",
     "підсвітка кухні"), only those lights; switches without a hint take whatever the hinted ones
     did not take (and if everything is taken, all lights of the group).
-    No controls and no group: nothing. A link is never invented."""
+    No controls and no group: nothing; the master switch (master.py) drives the panel, not a light.
+    A link is never invented."""
     out: list[SwitchLink] = []
     pending: list[tuple[ElectricalPoint, list[ElectricalPoint]]] = []
     claimed: dict[tuple[str, str], set[str]] = {}
@@ -125,8 +127,8 @@ def switch_links(elec: Electrical) -> list[SwitchLink]:
         if s.controls:
             out.append(SwitchLink(s.id, tuple(s.controls), False))
             continue
-        if s.group is None:
-            continue
+        if s.group is None or (is_master(s) and master_on(elec)):
+            continue  # the master switch drives the panel contactor, not a light
         candidates = [
             p
             for p in elec.points

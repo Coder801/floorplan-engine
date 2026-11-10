@@ -339,12 +339,13 @@ export class ElevationView {
     }
 
     // Outlets on the far side: faint, without dimensions
-    if (o.back && elec) for (const p of d.back) this.symbol(p.type, p.posts, this.sx(p.x), this.sy(p.y), r, pitch, BACK, 1, false);
+    if (o.back && elec) for (const p of d.back) this.symbol(p.type, p.posts, this.sx(p.x) + (p.slot ?? 0) * pitch, this.sy(p.y), r, pitch, BACK, 1, false);
 
     // Dashes from points to the scales, under the symbols
     if (o.rulers) {
       for (const p of last(points)) {
-        const cx = this.sx(p.x), cy = this.sy(p.y), half = r + (pitch * (p.posts - 1)) / 2;
+        // From the middle of the block: the offset in the model is to it
+        const cx = this.sx(p.x), cy = this.sy(p.y), half = r + (pitch * ((p.block ?? p.posts) - 1)) / 2;
         const on = lit.has(p.key);
         const color = on ? palette.hl : GREY;
         this.line(cx, cy + r, cx, floor, color, on ? 1.2 : 0.8, [3, 3]);
@@ -366,10 +367,11 @@ export class ElevationView {
       this.hit(b.key, box);
     }
 
-    // Points: each frame post gets its own symbol; the outline is the group colour, thicker when highlighted
+    // Points: each frame post gets its own symbol; the outline is the group colour, thicker when highlighted.
+    // Points at one spot are side by side in one frame (slot: shift from the block centre in posts)
     const blocks = new Map<string, Rect>();
     for (const p of last(points)) {
-      const cx = this.sx(p.x), cy = this.sy(p.y), half = r + (pitch * (p.posts - 1)) / 2;
+      const cx = this.sx(p.x) + (p.slot ?? 0) * pitch, cy = this.sy(p.y), half = r + (pitch * (p.posts - 1)) / 2;
       const on = lit.has(p.key);
       if (on) {
         ctx.fillStyle = palette.hl; ctx.globalAlpha = 0.18 * o.alpha;
@@ -430,7 +432,7 @@ export class ElevationView {
     // Numbers of the far side's outlets: faint, after our own
     if (o.back && elec) {
       for (const p of d.back) {
-        const cx = this.sx(p.x) + r + (pitch * (p.posts - 1)) / 2 + 3;
+        const cx = this.sx(p.x) + r + (pitch * ((p.block ?? p.posts) - 1)) / 2 + 3;
         this.text(String(p.n), cx, this.sy(p.y), LABEL_PX, BACK);
       }
     }

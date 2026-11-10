@@ -85,7 +85,16 @@ export interface Manifest {
 export interface OverviewReserve {
   limit_kw: number | null;  // power of the source; null: a generator of unknown power
   limit_assumed: boolean;
-  items: { id: string; purpose: string; power: number; on: boolean }[];
+  // kind: light | sockets | heavy (older builds have none: no "lighting only" pick)
+  items: { id: string; purpose: string; power: number; kind?: "light" | "sockets" | "heavy"; on: boolean }[];
+}
+
+// What the master switch can cut (overview.panel.master, panel_data.master_data): groups of the
+// model; on — cut now, or by the rule while there is no master switch yet; keep — a load that
+// stays on by the rule (fridge, boiler, router…); active — the panel has the switch now
+export interface OverviewMaster {
+  active: boolean;
+  items: { id: string; purpose: string; power: number; kind?: "light" | "sockets" | "heavy"; on: boolean; keep: boolean }[];
 }
 
 export interface Overview {
@@ -96,9 +105,10 @@ export interface Overview {
   ceiling: { height: number; assumed: boolean };  // mm
   points?: { key: string; text: string; count: number; unit: string }[];
   panel?: {
-    scheme: "economy" | "standard" | "premium"; input: string; input_assumed: boolean;
+    scheme: "economy" | "standard" | "premium"; phases?: number; input: string; input_assumed: boolean;
     devices: number; groups: number; modules: number; installed_w: number; calculated_w: number;
     reserve?: OverviewReserve;
+    master?: OverviewMaster;
   };
   plumbing?: OverviewPlumbing;  // plumbing: fixtures, water, sewer (absent without plumbing.yaml)
 }
@@ -115,13 +125,15 @@ export interface OverviewPlumbing {
   estimate?: { total: number; currency: string; unpriced: number };
 }
 
-// Wiring variants (docs/wiring-variants.md): mode, route, distribution, path, ceiling conduit;
+// Wiring variants (docs/wiring-variants.md): mode, route, distribution, path, conduit;
 // when the cable goes in and rough light are alike in every variant
 export type VariantMode = "economy" | "standard" | "proper";
 export type VariantRoute = "ceiling" | "floor";
 export type VariantDistribution = "boxes" | "loop";
 export type VariantPath = "right" | "shortest";
 export type VariantPlaster = "after" | "before";
+// Besides the floor, where it always is: none, on the ceiling, on the ceiling and in the walls
+export type VariantConduit = "none" | "ceiling" | "walls";
 
 export interface VariantSummary {
   key: string;            // «economy-floor-boxes»
@@ -129,7 +141,7 @@ export interface VariantSummary {
   route: VariantRoute;
   distribution: VariantDistribution;
   path?: VariantPath;     // no key: an older build, by the mode (optionsOf)
-  conduit?: boolean;      // on the ceiling; on the floor there always is one
+  conduit?: VariantConduit | boolean;  // boolean: an older build, yes or no on the ceiling
   plaster?: VariantPlaster;  // no key: an older build, after the plaster (optionsOf)
   rough_light?: boolean;  // lamp holders, bulbs and rough switches in the estimate
   total: number;          // estimate total
@@ -145,6 +157,7 @@ export interface VariantSummary {
 export interface Variants {
   active: string;         // key of the chosen one
   default: string;        // "as in project"
+  conduit?: VariantConduit | null;  // what was chosen; null: "don't know", by the mode; none: an older build
   items: VariantSummary[];  // the modes and the chosen one, also if it is a set from the wizard
 }
 
@@ -189,6 +202,15 @@ export interface TableRow {
   hint?: string;          // row note: an "i" icon in the estimate, a tooltip on a held side table row
   group?: string;         // QF group of a row of "Groups": the row has an eye (filter3d)
   marker?: "square";      // icon without colour: a panel device not on a group line
+  scope?: WorkScope;      // estimate work row: what its price covers (the row unfolds)
+}
+
+// Work scope of an estimate row, in the project language (electrical/work_scope.py): operations
+// inside the price, what is not inside (each with the place it is paid) and the handover result
+export interface WorkScope {
+  includes: string[];
+  excludes: string[];
+  result: string;
 }
 
 export interface SideTable {
@@ -298,7 +320,9 @@ export interface PanelDevice {
   feeds?: string[];
   assumed?: boolean;
   reserve?: boolean;
+  master?: boolean;     // behind the master switch contactor (a contactor itself: master and its bus)
   row?: number;         // enclosure rail from the top, from 0
+  phase?: string;       // three phases: L1, L2, L3 or 3P (all three)
 }
 
 export interface PanelGroup {
@@ -311,6 +335,7 @@ export interface PanelGroup {
   loads: number;
   color: string | null;
   split_of: string | null;  // a line of an overloaded group split on the panel (QF8.2)
+  phase?: string;       // three phases: L1, L2, L3 or 3P
 }
 
 // Device stickers (key panel.stickers, sheets/stickers.py): sizes in mm, text as curves
@@ -351,6 +376,7 @@ export interface PanelDc {
 export interface PanelData {
   name: string;
   phases: number;
+  phase_loads?: Record<string, number>;  // three phases: installed power by phase, W
   scheme: "economy" | "standard" | "premium";
   input: { label: string; assumed: boolean };
   enclosure?: PanelEnclosure | null;  // missing means an on-site enclosure (old .epd)
@@ -359,7 +385,7 @@ export interface PanelData {
   totals: { installed: number; demand: number; calculated: number; current: number; modules: number };
   warnings: { severity: string; text: string; group: string | null }[];
   stickers?: PanelStickers;  // an older .epd has none
-  texts: { title: string; grid: string; reserve: string };
+  texts: { title: string; grid: string; reserve: string; master?: string };
   // to is where LOAD arrives (the QS3 output breaker or the switch directly), switch is the ATS
   // KM1 or the switch SA1: from QS3 into its input II
   external?: { id: string; kind: string; title: string; to: string; switch?: string; feed: string | null };
@@ -399,6 +425,8 @@ export interface ElevPoint {
   x: number;
   y: number;
   posts: number;
+  slot?: number;          // points at one spot share a frame: centre shift from the block centre, in posts
+  block?: number;         // posts in that frame in all
   group: string | null;
   color: string | null;   // group colour, like the wiring lines
   from: string | null;    // where the wiring line comes from: box "К3" or the panel
@@ -446,7 +474,7 @@ export interface Elevation extends ElevWall {
   height: number;
   height_assumed: boolean;
   top: number;
-  back: { id: string; n: number; type: string; x: number; y: number; posts: number }[];
+  back: { id: string; n: number; type: string; x: number; y: number; posts: number; slot?: number; block?: number }[];
   face?: [XY, XY];        // inner face on the plan (model mm): starts at the left corner
   left?: ElevSide;        // neighbour at the left corner (previous in the walk)
   right?: ElevSide;       // neighbour at the right corner (next)

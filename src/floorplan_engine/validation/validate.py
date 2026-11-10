@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from floorplan_engine.electrical.lines import split_by_lines
+from floorplan_engine.electrical.master import with_master_switch
 from floorplan_engine.electrical.panel_questions import AUTO_PREFIX
 from floorplan_engine.electrical.variants import (
     apply_variant,
@@ -238,7 +239,8 @@ def _validate_electrical(
         )
         chosen = None
     report.variant = chosen or report.default_variant
-    elec = apply_variant(elec, report.variant)
+    # The master switch point: from the model, or next to the panel (an assumption, master.py)
+    elec = with_master_switch(plan, apply_variant(elec, report.variant))
     report.electrical = elec
     elec_issues = validate_electrical(elec, plan, report.contours)
     report.issues += elec_issues

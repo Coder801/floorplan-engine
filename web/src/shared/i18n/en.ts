@@ -145,6 +145,8 @@ export const en: Messages = {
   },
   estimate: {
     about: "What it includes: {{name}}",
+    includes: "Included in the price", excludes: "Not included", result: "Result",
+    scopeNote: "Click a work item to see what its price includes.",
     tab: "Estimate",
     totals: "Estimate totals",
     items: "Items",
@@ -264,7 +266,7 @@ export const en: Messages = {
     assumed: "assumption: not given in the plan", rooms: "Rooms", room: "Room", wet: "wet",
     planned: "What is planned", points: "Points", qty: "Qty", panel: "Panel",
     schemes: { economy: "economy", standard: "standard", premium: "premium" },
-    panelLine: "scheme — {{scheme}}, input {{input}}, {{devices}} devices, {{groups}} circuits",
+    supply1: "single phase", supply3: "three phases", panelLine: "scheme — {{scheme}}, {{supply}}, input {{input}}, {{devices}} devices, {{groups}} circuits",
     load: "load: installed {{installed}} kW, calculated {{calculated}} kW",
     variant: "Wiring option", compare: "Options compared",
     col: { mode: "Mode", route: "Route", total: "Electrical estimate", cable: "Cable, m", conduit: "Conduit, m", devices: "Devices", chases: "Chases, m" },
@@ -310,12 +312,21 @@ export const en: Messages = {
     common: "In every mode the points, their places and heights come from the design, and the codes are met. Under the floor the cable is always in conduit; to ceiling lights it runs along the ceiling.",
     routes: { ceiling: "Along the ceiling", floor: "Under the floor" },
     distributions: { boxes: "Junction boxes", loop: "Through socket boxes" },
-    custom: "A custom set from the project setup.",
+    typical: "typical", custom: "A custom set from the project setup.",
     asProject: "as in the design", edited: "has your route edits",
     stats: "{{devices}} devices · {{cable}} m cable · {{chases}} m chases",
     readOnly: "The studio chooses the option: view only here.",
     current: "Option:", change: "change", edit: "Change",
     edits: "Each option keeps its own route edits.",
+  },
+  master: {
+    keep: "works with nobody home",
+    presets: {
+      label: "Quick pick", rule: "All but always-on", light: "Lighting only", manual: "By hand",
+      ruleNote: "The fridge, boiler, router, pump, gates and alarm stay on.",
+      lightNote: "Only the lights go off; sockets stay live.",
+      manualNote: "Tick the groups to cut.",
+    },
   },
   reserve: {
     title: "What stays on backup", why: "These groups stay live when the grid is down. The rest switch off.",
@@ -324,6 +335,13 @@ export const en: Messages = {
     empty: "Tick at least one group.", save: "Save and recalculate",
     readOnly: "View only: the list is set in the project, or only the studio can change it.",
     failed: "Not saved — {{message}}",
+    presets: {
+      label: "Quick pick", light: "Lighting only", max: "Most by power", manual: "By hand",
+      lightNote: "The minimum: only lighting stays on backup.",
+      maxNote: "As many groups as the source holds: lighting first, then sockets, then heavy appliances, smaller ones first.",
+      maxNoLimitNote: "Source power not set: everything except heavy appliances (hob, oven, boiler, floor heating, air conditioners).",
+      manualNote: "Tick the groups in the list yourself.",
+    },
   },
   wizard: {
     unknown: "I don't know", unknownNote: "We will use a typical value, you can change it later.", unknownValue: "We will use a typical {{value}}. You can change it later.",
@@ -336,7 +354,7 @@ export const en: Messages = {
     noPrices: "We'll show the price of this choice after the recalculation: only the modes and the current option are calculated in advance.",
     current: "in the project now", inProject: "As calculated for this project:",
     chasesKept: {
-      all: "You chose ceiling conduit, so all chases stay. To remove them, choose plain cable at the \"Ceiling conduit\" step.",
+      all: "Conduit in the walls is thicker than the plaster, so all chases stay. To remove them, choose no conduit or only the ceiling at the \"Conduit\" step.",
       floor: "The floor route runs in conduit, so chases of the floor lines stay. Only chases of the ceiling lines go.",
     },
     routeFacts: "{{cable}} m of cable · {{chases}} m of chases",
@@ -372,10 +390,11 @@ export const en: Messages = {
         },
       },
       conduit: {
-        short: "Ceiling conduit", title: "Conduit for cable on the ceiling?", why: "On the floor conduit is always required; drops in chases go without it.",
+        short: "Conduit", title: "Where should the cable run in conduit?", why: "On the floor conduit is always required. Conduit protects the cable and makes replacing it easier; conduit and laying are in the estimate.",
         options: {
-          plain: { name: "Plain cable", note: "Cheaper: the cable lies on the ceiling without conduit." },
-          tube: { name: "In conduit", note: "Protects the cable and makes replacing it easier. Conduit and laying are in the estimate." },
+          none: { name: "No conduit", note: "Cheaper: plain cable on the ceiling and in the walls." },
+          ceiling: { name: "On the ceiling", note: "Cable on the ceiling runs in conduit, the drops to points in the walls without it." },
+          walls: { name: "Ceiling and walls", note: "Conduit to every point. There will be chases anyway, even when cabling before plastering: conduit is thicker than the plaster." },
         },
       },
       plaster: {
@@ -393,7 +412,14 @@ export const en: Messages = {
         },
       },
       ceiling: { short: "Ceiling height", title: "What is the ceiling height?", why: "It sets the drops to points and the cable length.", field: "Height from the finished floor" },
-      input: { short: "Main breaker", title: "Which main breaker?", why: "The rating comes from the grid connection terms. The whole panel is calculated from it.", field: "Rating" },
+      phases: {
+        short: "Supply phases", title: "How many supply phases?", why: "From the grid connection terms. It decides the main breaker, the relays and how circuits are laid out.",
+        options: {
+          "1": { name: "Single phase, 230 V", note: "A typical flat: all circuits on one phase." },
+          "3": { name: "Three phases, 400 V", note: "Circuits are spread evenly over the phases, the cooktop and an electric boiler take all three. A voltage relay per phase." },
+        },
+      },
+      input: { short: "Main breaker", title: "Which main breaker?", why: "The rating comes from the grid connection terms; on three phases, per phase. The whole panel is calculated from it.", field: "Rating" },
       breakers: {
         short: "Breakers", title: "How should breakers be split?", why: "It decides how many devices go in the panel.",
         options: {
@@ -447,6 +473,14 @@ export const en: Messages = {
           no: { name: "No", note: "An N–PE contactor is added to the panel." },
         },
       },
+      master: {
+        short: "Master switch", title: "Do you want a master switch by the entrance?", why: "One key by the door cuts lights and sockets when you leave. A contactor goes into the panel. The fridge, boiler, router and alarm stay on.",
+        options: {
+          yes: { name: "Yes, by the door", note: "A contactor in the panel and a switch by the door, cabled from the panel." },
+          no: { name: "Not needed", note: "Everything is switched off only by the panel breakers." },
+        },
+      },
+      masterOff: { short: "What it cuts", title: "What should the master switch cut?", why: "The ticked groups go dark with one key by the door. What the project has now is ticked." },
       reserve: { short: "Backup groups", title: "What should stay on backup?", why: "These groups stay live when the grid is down. What the project has now is ticked. You can change it later under Panel → Backup." },
     },
   },

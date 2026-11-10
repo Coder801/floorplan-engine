@@ -41,6 +41,9 @@ def test_mock_knows_every_line_and_is_deterministic() -> None:
         ("breaker.C16", 140),
         ("breaker.C50", 220),
         ("diff.C16 30 мА", 950),
+        ("breaker.C16 3P", 420),  # three-phase: more poles
+        ("diff.C16 30 мА 4P", 2375),
+        ("input.C40 4P", 1300),
         ("ats.АВР", 4500),  # no rating: price for the kind
         ("work.chase", 200),
     ],

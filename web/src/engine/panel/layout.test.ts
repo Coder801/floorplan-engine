@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { PanelDc, PanelData, PanelDevice, PanelEnclosure } from "@/shared/types";
-import { busSegments, fan, groupPath, LABEL_STEP, layout, MODULE, splitRows, termX } from "./layout";
+import { busSegments, fan, FEED_LANE, FEED_LANE_3, groupPath, LABEL_STEP, layout, MODULE, splitRows, termX } from "./layout";
 
 const dev = (id: string, modules: number, extra: Partial<PanelDevice> = {}): PanelDevice => ({
   id, key: `device:${id}`, kind: "breaker", label: "C16", title: id,
@@ -103,6 +103,15 @@ describe("раскладка щита", () => {
     expect(segs[1][2]).toBe(true);
   });
 
+  it("мастер-выключатель делит шину: за контактором — своя секция, контактор — общий аппарат", () => {
+    const km = dev("KM2", 2, { kind: "contactor", master: true });
+    const l = layout(data(rowed([[km], [dev("a", 1), dev("m", 1, { master: true }), dev("r", 1, { reserve: true, master: true })]])));
+    expect(l.rows[0].kind).toBe("common");
+    const segs = busSegments(l.placed.filter((p) => p.row === 1));
+    expect(segs.map((s) => [s[2], s[3]])).toEqual([[false, false], [false, true], [true, true]]);
+    expect(l.rows[0].gutterBottom - l.rows[0].gutterTop).toBeGreaterThanOrEqual(FEED_LANE + 6);
+  });
+
   it("провода групп — тонким пучком под рейкой, у левого ниже; подписи — по порядку проводов", () => {
     const l = layout(data(rowed([[dev("QS1", 2, { kind: "input" })], groups(12)])));
     expect(busSegments(l.placed.filter((p) => p.row === 0))).toHaveLength(0);
@@ -177,5 +186,14 @@ describe("раскладка щита", () => {
     expect(l.height).toBeGreaterThan(x.battery.y + x.battery.h);
     // Group labels sit below the battery box lanes
     for (const p of l.placed.filter((q) => q.label !== null)) expect(p.label!).toBeGreaterThan(Math.max(...x.lanes));
+  });
+});
+
+describe("три фазы", () => {
+  it("под общими аппаратами — место под перемычку и ствол каждой фазы", () => {
+    const devs = rowed([[dev("QS1", 4, { kind: "input" }), dev("KV1", 3, { kind: "relay", phase: "L1" })], groups(3)]);
+    const one = layout(data(devs)), three = layout({ ...data(devs), phases: 3 });
+    const lane = (l: ReturnType<typeof layout>) => l.rows[0].gutterBottom - l.rows[0].gutterTop;
+    expect(lane(three) - lane(one)).toBe(FEED_LANE_3 - FEED_LANE);
   });
 });

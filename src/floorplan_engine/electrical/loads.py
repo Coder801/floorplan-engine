@@ -1,7 +1,10 @@
 """Loads and panel groups: point power (`power`, or a typical value by kind and note, marked
 "*" as an assumption), group load and current, group breaker (from the model or by kind:
 lighting 10 A, sockets 16 A, heavy loads by current, no more than the cable can carry), an
-overloaded group is split into lines on the panel (QF8 → QF8, QF8.2). Single-phase 230 V supply."""
+overloaded group is split into lines on the panel (QF8 → QF8, QF8.2). Supply 230 V, single or
+three phases (`panel.phases`); on three phases one appliance from THREE_PHASE_W (a cooktop, an
+electric boiler) goes on all three, its current is per phase, its cable five cores; which phase
+the other groups take is electrical/phases.py."""
 
 from __future__ import annotations
 
@@ -10,7 +13,14 @@ from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from enum import StrEnum
 
-from floorplan_engine.electrical.groups import LIGHT, LOW, composed_purpose, group_key
+from floorplan_engine.electrical.groups import (
+    LIGHT,
+    LOW,
+    composed_purpose,
+    group_key,
+    tell_apart,
+)
+from floorplan_engine.electrical.master import master_on
 from floorplan_engine.electrical.panel_text import text
 from floorplan_engine.model.schema import Electrical, ElectricalPoint, PanelScheme, Plan, PointType
 from floorplan_engine.model.texts import Language, tr
@@ -21,6 +31,7 @@ RATINGS = (6, 10, 16, 20, 25, 32, 40, 50, 63)  # breaker rating series, A
 LIGHT_A = 10
 SOCKETS_A = 16
 HEAVY_W = 2000.0  # from this power a load is heavy and gets its own line
+THREE_PHASE_W = 5000.0  # from this power one appliance goes on three phases, if the flat has them
 SOCKET_POST_W = 100.0  # design power of a socket post without a note (assumption)
 OUTLET_W = 1000.0  # appliance output without a note (assumption)
 # Cross-section, mm² → (recommended, maximum) breaker, A: copper, concealed wiring
@@ -47,6 +58,7 @@ NOTE_W: tuple[tuple[re.Pattern[str], float], ...] = tuple(
         (r"варильн|варочн|індукц|индукц|плит", 7200.0),
         (r"духов", 3500.0),
         (r"бойлер|водонагр", 2000.0),
+        (r"електрокот|электрокот", 9000.0),  # before "котел": a gas boiler needs only 200 W
         (r"пральн|стирал", 2200.0),
         (r"сушил|сушиль", 2500.0),
         (r"посудом", 2200.0),
@@ -66,6 +78,13 @@ NOTE_W: tuple[tuple[re.Pattern[str], float], ...] = tuple(
 # What the backup bus carries by default: lighting, kitchen sockets and these loads (by note)
 RESERVE_NOTE = re.compile(r"холодил|котел|котёл|котл|роутер|насос|ворот|домофон", re.IGNORECASE)
 KITCHEN = re.compile(r"кух", re.IGNORECASE)
+# What the master switch never cuts by default (by note): food, heating, water, gates, security
+# and the network; a group with any of them stays on as a whole (panel.master_off)
+KEEP_ON = re.compile(
+    r"холодил|морозил|котел|котёл|котл|роутер|насос|ворот|домофон|сигнализ|охран|"
+    r"видеонаб|відеоспост|сервер|акваріум|аквариум|рекуперат",
+    re.IGNORECASE,
+)
 # Wet zone by name when room.yaml has no wet: true (assumption)
 WET_NAME = re.compile(r"санв|сануз|ванн|душ|пральн|прачеч|постироч", re.IGNORECASE)
 # Inrush current: such a group gets curve C even in premium
@@ -92,10 +111,16 @@ def rating_for(amps: float, floor: int = SOCKETS_A) -> int:
     return next((r for r in RATINGS if r >= max(amps, floor)), RATINGS[-1])
 
 
-def cable_for(amps_: float) -> str | None:
-    """Smallest cross-section whose recommended breaker carries the current: "3x6"."""
+def cable_for(amps_: float, cores: int = 3) -> str | None:
+    """Smallest cross-section whose recommended breaker carries the current: "3x6"; three phases
+    are five cores, "5x2.5"."""
     s = next((s for s, (rec, _) in sorted(CABLE_LIMITS.items()) if rec >= amps_), None)
-    return f"3x{s:g}" if s is not None else None
+    return f"{cores}x{s:g}" if s is not None else None
+
+
+def phases_of(elec: Electrical) -> int:
+    """Phases of the supply: unset is one (an assumption, panel_questions asks)."""
+    return elec.panel.phases or 1
 
 
 _SECTION = re.compile(r"(\d+)\s*[xх×*]\s*(\d+(?:[.,]\d+)?)", re.IGNORECASE)
@@ -139,6 +164,11 @@ class Load:
     def heavy(self) -> bool:
         return self.power >= HEAVY_W
 
+    @property
+    def keep_on(self) -> bool:
+        """The master switch leaves it on: fridge, boiler, router… (KEEP_ON, by the note)."""
+        return bool(KEEP_ON.search(self.title))
+
 
 @dataclass(frozen=True)
 class Breaker:
@@ -165,6 +195,12 @@ class PanelGroup:
     wet: bool
     reserved: bool
     split_of: str | None = None  # line of an overloaded group split on the panel
+    phase: str | None = None  # L1, L2, L3 or 3P on a three-phase panel (phases.py); None on one
+    master: bool = False  # cut by the master switch (behind its contactor)
+
+    @property
+    def three_phase(self) -> bool:
+        return self.phase == "3P"
 
     @property
     def power(self) -> float:
@@ -172,7 +208,8 @@ class PanelGroup:
 
     @property
     def current(self) -> float:
-        return current(self.power)
+        """Design current; on three phases per phase."""
+        return current(self.power) / (3 if self.three_phase else 1)
 
     @property
     def assumed(self) -> bool:
@@ -199,13 +236,28 @@ def point_load(p: ElectricalPoint, rooms: dict[str, str], language: Language) ->
     return None
 
 
-def heavy_cable(points: Sequence[ElectricalPoint]) -> str | None:
+def is_three_phase(elec: Electrical, group: str, loads: Sequence[Load]) -> bool:
+    """A group on all three phases: only with a three-phase supply; the phase of the group in the
+    model (3P), or one appliance of THREE_PHASE_W and more."""
+    if phases_of(elec) != 3:
+        return False
+    info = elec.groups.get(group.split(".")[0])
+    if info is not None and info.phase is not None:
+        return info.phase == "3P"
+    return len(loads) == 1 and loads[0].power >= THREE_PHASE_W
+
+
+def heavy_cable(elec: Electrical, group: str, points: Sequence[ElectricalPoint]) -> str | None:
     """Cable for a group with a heavy load and no type in the model, to match the breaker the
-    code picks for it (assumption); None without a heavy load."""
+    code picks for it (assumption): on three phases five cores and the current per phase; None
+    without a heavy load."""
     loads = [ld for p in points if (ld := point_load(p, {}, "ru")) is not None]
     if not any(ld.heavy for ld in loads):
         return None
-    return cable_for(rating_for(current(sum(ld.power for ld in loads))))
+    amps_ = current(sum(ld.power for ld in loads))
+    if is_three_phase(elec, group, loads):
+        return cable_for(rating_for(amps_ / 3), cores=5)
+    return cable_for(rating_for(amps_))
 
 
 def _kind(points: Sequence[ElectricalPoint], loads: Sequence[Load], section: float | None) -> Kind:
@@ -254,6 +306,7 @@ def panel_groups(
     wet_rooms = {r.id for r in plan.rooms if r.wet or WET_NAME.search(r.name)}
     names = {p.group for p in elec.points if p.group} | {c.group for c in elec.cables if c.group}
     reserve = set(elec.panel.reserve)
+    master, master_off = master_on(elec), set(elec.panel.master_off)
     out: list[PanelGroup] = []
     for g in sorted(names, key=group_key):
         points = [p for p in elec.points if p.group == g]
@@ -264,6 +317,7 @@ def panel_groups(
         sections = [s for m in marks if (s := cable_section(m)) is not None]
         section = min(sections) if sections else None
         kind = _kind(points, loads, section)
+        three = is_three_phase(elec, g, loads)
         info = elec.groups.get(g)
         parsed = parse_breaker(info.breaker) if info is not None and info.breaker else None
         motor = any(p.note and MOTOR.search(p.note) for p in points)
@@ -271,7 +325,9 @@ def panel_groups(
         breaker = (
             Breaker(parsed[0], parsed[1], False)
             if parsed is not None
-            else _breaker(kind, current(sum(ld.power for ld in loads)), section, curve)
+            else _breaker(
+                kind, current(sum(ld.power for ld in loads)) / (3 if three else 1), section, curve
+            )
         )
         wet = _wet_group(points, wet_rooms)
         rcd = info.rcd if info is not None and info.rcd else None
@@ -281,13 +337,18 @@ def panel_groups(
         kitchen = kind is Kind.SOCKETS and any(
             KITCHEN.search(rooms.get(p.room, "")) for p in points
         )
-        reserved = backup and (
-            g in reserve
-            if reserve
-            else (
-                kind is Kind.LIGHT
-                or kitchen
-                or any(p.note and RESERVE_NOTE.search(p.note) for p in points)
+        # A three-phase appliance is never on the backup bus: the backup source has one phase
+        reserved = (
+            backup
+            and not three
+            and (
+                g in reserve
+                if reserve
+                else (
+                    kind is Kind.LIGHT
+                    or kitchen
+                    or any(p.note and RESERVE_NOTE.search(p.note) for p in points)
+                )
             )
         )
         base = PanelGroup(
@@ -302,8 +363,15 @@ def panel_groups(
             rcd,
             wet,
             reserved,
+            phase="3P" if three else None,
+            master=master
+            and (
+                g in master_off
+                if master_off
+                else not any(p.note and KEEP_ON.search(p.note) for p in points)
+            ),
         )
-        lines = split_loads(loads, breaker.rating * VOLTAGE * COS_PHI)
+        lines = split_loads(loads, breaker.rating * VOLTAGE * COS_PHI * (3 if three else 1))
         if base.current <= breaker.rating or len(lines) < 2:
             out.append(base)
             continue
@@ -325,4 +393,8 @@ def panel_groups(
                     breaker=replace(breaker, assumed=breaker.assumed or k > 1),
                 )
             )
-    return out
+    by_id = {p.id: p for p in elec.points}
+    told = tell_apart(
+        [(g.purpose, g.purpose_assumed, [by_id[ld.point] for ld in g.loads]) for g in out]
+    )
+    return [replace(g, purpose=t) for g, t in zip(out, told, strict=True)]

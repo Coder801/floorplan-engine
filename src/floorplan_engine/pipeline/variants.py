@@ -24,7 +24,7 @@ KEPT = {"ceiling_height", "plaster", "rough_light"}  # not part of the wiring va
 def variant_block(report: Report, prices: Prices) -> dict[str, Any] | None:
     """Wiring variants for the viewer (.epd manifest, key variants): the chosen one, "as in project"
     and a summary of each preset and of the chosen one (estimate, cable, devices, chases), without
-    drawings."""
+    drawings. conduit is the choice itself: null — "don't know", as the mode gives."""
     source, chosen, default = report.source_electrical, report.variant, report.default_variant
     if report.plan is None or source is None or chosen is None or default is None:
         return None
@@ -40,7 +40,12 @@ def variant_block(report: Report, prices: Prices) -> dict[str, Any] | None:
         summary = variant_summary(report.plan, report.contours, source, same_job, edits, prices)
         if summary is not None:
             items.append(summary.as_dict())
-    return {"active": chosen.key, "default": default.key, "items": items}
+    return {
+        "active": chosen.key,
+        "default": default.key,
+        "conduit": chosen.conduit,
+        "items": items,
+    }
 
 
 def save_variant(project: Path, data: dict[str, Any]) -> list[Issue]:

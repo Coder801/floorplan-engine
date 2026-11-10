@@ -48,20 +48,24 @@ def test_all_variants_and_keys() -> None:
 
 def test_option_changes_the_key_only_when_it_differs_from_the_mode() -> None:
     assert Variant(mode="economy", path="shortest").key == "economy-ceiling-boxes"
-    assert Variant(mode="proper", conduit=True).key == "proper-ceiling-boxes"
+    assert Variant(mode="proper", conduit="ceiling").key == "proper-ceiling-boxes"
+    old = Variant.model_validate({"mode": "proper", "conduit": True})  # variant.yaml before
+    assert old.conduit == "ceiling" and old.key == "proper-ceiling-boxes"
     assert Variant(path="shortest").key == "standard-ceiling-boxes-shortest"
     assert Variant(mode="economy", path="right").key == "economy-ceiling-boxes-right"
-    assert Variant(conduit=True).key == "standard-ceiling-boxes-conduit"
-    assert Variant(mode="proper", conduit=False).key == "proper-ceiling-boxes-bare"
+    assert Variant(conduit="ceiling").key == "standard-ceiling-boxes-conduit"
+    assert Variant(mode="proper", conduit="none").key == "proper-ceiling-boxes-bare"
+    assert Variant(conduit="walls").key == "standard-ceiling-boxes-walls"
+    assert Variant(mode="proper", conduit="walls").key == "proper-ceiling-boxes-walls"
     assert Variant(distribution="loop").key == "standard-ceiling-loop"
 
 
 def test_apply_variant_sets_the_options() -> None:
-    chosen = Variant(distribution="loop", path="shortest", conduit=True)
+    chosen = Variant(distribution="loop", path="shortest", conduit="walls")
     elec = apply_variant(_elec(), chosen)
-    assert (elec.distribution, elec.path, elec.conduit) == ("loop", "shortest", True)
+    assert (elec.distribution, elec.path, elec.conduit) == ("loop", "shortest", "walls")
     assert default_variant(elec).key == chosen.key
-    assert apply_variant(_elec(), Variant(path="right", conduit=False)) == _elec()  # as in project
+    assert apply_variant(_elec(), Variant(path="right", conduit="none")) == _elec()  # as in project
 
 
 def test_job_options_apply_to_any_variant_and_stay_out_of_the_key() -> None:
@@ -249,14 +253,15 @@ def test_build_writes_variant_summaries_to_manifest(tmp_path: Path) -> None:
 def test_chosen_set_of_options_joins_the_summary(tmp_path: Path) -> None:
     """A set from the wizard is summed up with the presets; a preset drops the options."""
     project = _project(tmp_path)
-    assert not save_variant(project, {"mode": "standard", "path": "shortest", "conduit": True})
+    assert not save_variant(project, {"mode": "standard", "path": "shortest", "conduit": "ceiling"})
     result = build_project(project)
     assert result.artifact is not None
     with zipfile.ZipFile(result.artifact) as zf:
         block = json.loads(zf.read("manifest.json"))["variants"]
     assert block["active"] == "standard-ceiling-boxes-shortest-conduit"
     active = next(i for i in block["items"] if i["key"] == block["active"])
-    assert active["path"] == "shortest" and active["conduit"] is True
+    assert active["path"] == "shortest" and active["conduit"] == "ceiling"
+    assert block["conduit"] == "ceiling"  # chosen, not by the mode
     assert len(block["items"]) == len(all_variants()) + 1
     assert not save_variant(project, {"mode": "standard"})
     assert assess_project(project).report.variant.key == "standard-ceiling-boxes"  # type: ignore[union-attr]

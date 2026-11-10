@@ -6,11 +6,11 @@
 
 import type { WizardBody } from "@/shared/api";
 import { parseNumber, plainNumber, type Answer } from "@/shared/questions";
-import type { OverviewReserve, Project, Question, VariantDistribution, VariantPath, VariantPlaster, VariantRoute, Variants } from "@/shared/types";
+import type { OverviewMaster, OverviewReserve, Project, Question, VariantConduit, VariantDistribution, VariantPath, VariantPlaster, VariantRoute, Variants } from "@/shared/types";
 import { parseCeiling } from "./ceiling";
-import { activeSummary, availableRoutes, breakersOf, modeOfBreakers, optionsOf, parseKey, type VariantChoice } from "@/widgets/VariantInfo/variants";
+import { activeSummary, availableRoutes, breakersOf, modeConduit, modeOfBreakers, optionsOf, parseKey, type VariantChoice } from "@/widgets/VariantInfo/variants";
 
-export type StepId = "route" | "distribution" | "path" | "conduit" | "plaster" | "ceiling" | "rough" | "input" | "breakers" | "standby" | "backup" | "inverter" | "battery" | "pv" | "npe" | "reserve";
+export type StepId = "route" | "distribution" | "path" | "conduit" | "plaster" | "ceiling" | "rough" | "phases" | "input" | "breakers" | "standby" | "backup" | "inverter" | "battery" | "pv" | "npe" | "reserve" | "master" | "masterOff";
 export type Picks = Partial<Record<StepId, string>>;
 // "I don't know": the question closes with {accept}, the model keeps its typical value, and the
 // person can come back to it later; the project is not held up by a device not chosen yet
@@ -22,6 +22,7 @@ export interface Step {
   kind: "cards" | "number" | "groups";  // cards with pictures, a field with presets, a list of panel groups
   options: string[];          // card values or field presets
   question?: Question;        // the report question behind the step; none yet if it needs another answer
+  assumed?: string;           // what "don't know" leaves when no question stands behind the step
 }
 
 export interface Setup {
@@ -30,6 +31,7 @@ export interface Setup {
   variants: Variants | null;
   ceiling: number | null;
   reserve: OverviewReserve | null;  // none while the build has no backup bus: the "Panel" page asks later
+  master: OverviewMaster | null;    // what the master switch can cut; none in an older build
   canChoose: boolean;
   canAnswer: boolean;
 }
@@ -38,25 +40,33 @@ interface PanelStep { id: StepId; qid: string; kind: Step["kind"]; options: stri
 
 // In the order of the wizard; dc: only with an inverter (panel_questions._dc_questions)
 const PANEL_STEPS: PanelStep[] = [
-  { id: "input", qid: "panel_input", kind: "number", options: ["25", "32", "40", "50", "63"], numeric: true },
+  { id: "phases", qid: "panel_phases", kind: "cards", options: ["1", "3"], numeric: true },
+  { id: "input", qid: "panel_input", kind: "number", options: ["40", "50", "63", "80"], numeric: true },
   { id: "backup", qid: "panel_backup", kind: "cards", options: ["inverter", "plug", "station"] },
   { id: "inverter", qid: "panel_inverter", kind: "cards", options: ["hybrid", "basic"], dc: true },
   { id: "battery", qid: "panel_battery", kind: "cards", options: ["12", "24", "48"], dc: true, numeric: true },
   { id: "pv", qid: "panel_pv", kind: "cards", options: ["0", "1", "2"], dc: true, numeric: true },
   { id: "npe", qid: "panel_npe", kind: "cards", options: ["yes", "no"], dc: true },
   { id: "reserve", qid: "panel_reserve", kind: "groups", options: [] },
+  { id: "master", qid: "panel_master", kind: "cards", options: ["yes", "no"] },
+  { id: "masterOff", qid: "panel_master_off", kind: "groups", options: [] },
 ];
+// The master switch: in the "Panel" group, after the breakers (master.py)
+const MASTER: ReadonlySet<StepId> = new Set(["master", "masterOff"]);
 const CEILINGS = ["2500", "2700", "3000"];
+const SUPPLY: ReadonlySet<StepId> = new Set(["phases", "input"]);  // the supply: the "Panel" group, first
 // Options of the wiring variant; each changes the calculation (docs/wiring-variants.md)
 export const VARIANT_STEPS: ReadonlySet<StepId> = new Set(["route", "distribution", "path", "conduit", "plaster", "rough", "breakers"]);
 
-export function setupOf(project: Project, variants: Variants | null, ceiling: number | null, reserve: OverviewReserve | null): Setup {
+export function setupOf(project: Project, variants: Variants | null, ceiling: number | null, reserve: OverviewReserve | null,
+                        master: OverviewMaster | null = null): Setup {
   return {
     questions: project.report?.questions ?? [],
     answers: project.answers,
     variants,
     ceiling,
     reserve,
+    master,
     canChoose: project.can?.choose_variant ?? true,
     canAnswer: project.can?.answer ?? false,  // an old server does not take answers
   };
@@ -82,7 +92,8 @@ export function initialPicks(setup: Setup): Picks {
     const { path, conduit, plaster, rough_light } = optionsOf(item, mode);
     Object.assign(picks, {
       route, distribution: item?.distribution ?? "boxes", path,
-      conduit: conduit ? "tube" : "plain", plaster, rough: rough_light ? "yes" : "no",
+      // "don't know" is the conduit not chosen: the mode gives it; an older build has no choice to show
+      conduit: setup.variants.conduit === null ? UNKNOWN : conduit, plaster, rough: rough_light ? "yes" : "no",
       breakers: breakersOf(mode),
     });
   }
@@ -113,17 +124,18 @@ export function variantOf(setup: Setup, picks: Picks): VariantChoice {
     route: picks.route as VariantRoute,
     distribution: picks.distribution as VariantDistribution,
     path: picks.path as VariantPath,
-    conduit: picks.conduit === "tube",
+    conduit: picks.conduit === UNKNOWN ? null : picks.conduit as VariantConduit,
     plaster: picks.plaster as VariantPlaster,
     rough_light: picks.rough === "yes",
   };
 }
 
 // Which chases stay with the cable before the plaster: conduit does not fit in the plaster layer
-// (chases.before_plaster). "all": ceiling conduit; "floor": the floor lines, always in conduit
+// (chases.before_plaster). "all": conduit in the walls; "floor": the floor lines, always in
+// conduit. "Don't know" is never the walls: no mode puts conduit there
 export function chasesKept(picks: Picks): "all" | "floor" | null {
   if (picks.plaster !== "before") return null;
-  if (picks.conduit === "tube") return "all";
+  if (picks.conduit === "walls") return "all";
   return picks.route === "floor" ? "floor" : null;
 }
 
@@ -141,11 +153,37 @@ function backupOf(setup: Setup, picks: Picks): string | null {
   return picks.backup ?? backupNow(setup);
 }
 
+// The master switch in the model now: an answer or the assumption; a choice fixed in YAML shows
+// in the build (no question)
+function masterNow(setup: Setup): string {
+  const q = question(setup, "panel_master");
+  if (q) return answered(setup, q) ?? plainNumber(q.assumption);
+  return setup.master?.active ? "yes" : "no";
+}
+
+// The master switch the choice leads to: "don't know" keeps the assumption
+function masterOf(setup: Setup, picks: Picks): string {
+  if (picks.master === UNKNOWN) {
+    const assumed = question(setup, "panel_master")?.assumption;
+    return assumed == null ? "no" : plainNumber(assumed);
+  }
+  return isPicked(picks.master) ? picks.master! : masterNow(setup);
+}
+
+// What it cuts is asked with the master switch: the question appears with the answer "yes", the
+// groups come from the build; with the switch already on, only while the report asks it
+function masterShown(step: PanelStep, setup: Setup, picks: Picks): boolean {
+  if (step.id === "master") return !!question(setup, step.qid);
+  if (!setup.master || masterOf(setup, picks) !== "yes") return false;
+  return !!question(setup, step.qid) || masterNow(setup) !== "yes";
+}
+
 // All of the backup waits for "a provision for backup: yes"; a backup fixed in YAML has no such
 // question. With a backup other than the inverter the report has no inverter questions: they
 // appear with the answer. With the inverter in the model the report is exact: a missing one is
 // fixed in YAML
 function shown(step: PanelStep, setup: Setup, picks: Picks): boolean {
+  if (MASTER.has(step.id)) return masterShown(step, setup, picks);
   const now = backupNow(setup);
   const open = now === null || picks.standby === "yes";
   if (step.id === "backup") return now !== null && open;
@@ -163,19 +201,25 @@ export function wizardSteps(setup: Setup, picks: Picks): Step[] {
     if (routes.length > 1) steps.push({ id: "route", group: "wiring", kind: "cards", options: routes });
     steps.push({ id: "distribution", group: "wiring", kind: "cards", options: ["boxes", "loop"] });
     steps.push({ id: "path", group: "wiring", kind: "cards", options: ["right", "shortest"] });
-    steps.push({ id: "conduit", group: "wiring", kind: "cards", options: ["plain", "tube"] });
+    const mode = modeOfBreakers(picks.breakers) ?? parseKey(setup.variants!.active).mode;
+    steps.push({ id: "conduit", group: "wiring", kind: "cards", options: ["none", "ceiling", "walls", UNKNOWN], assumed: modeConduit(mode) });
     steps.push({ id: "plaster", group: "wiring", kind: "cards", options: ["after", "before"] });
     if (setup.ceiling !== null) steps.push({ id: "ceiling", group: "wiring", kind: "number", options: CEILINGS });
     steps.push({ id: "rough", group: "wiring", kind: "cards", options: ["no", "yes"] });
   }
   const panel: Step[] = !setup.canAnswer ? [] : PANEL_STEPS.filter((s) => shown(s, setup, picks)).map((s) => {
-    const options = s.kind === "groups" ? setup.reserve?.items.map((g) => g.id) ?? []
+    const list = s.id === "masterOff" ? setup.master : setup.reserve;
+    const options = s.kind === "groups" ? list?.items.map((g) => g.id) ?? []
       : s.kind === "cards" ? [...s.options, UNKNOWN] : s.options;
-    return { id: s.id, group: s.id === "input" ? "panel" : "reserve", kind: s.kind, options, question: question(setup, s.qid) };
+    const group = SUPPLY.has(s.id) || MASTER.has(s.id) ? "panel" : "reserve";
+    return { id: s.id, group, kind: s.kind, options, question: question(setup, s.qid) };
   });
-  const [input, rest] = [panel.filter((s) => s.id === "input"), panel.filter((s) => s.id !== "input")];
+  const input = panel.filter((s) => SUPPLY.has(s.id));
+  const master = panel.filter((s) => MASTER.has(s.id));
+  const rest = panel.filter((s) => !SUPPLY.has(s.id) && !MASTER.has(s.id));
   steps.push(...input);
   if (choosing) steps.push({ id: "breakers", group: "panel", kind: "cards", options: ["simple", "groups", "lines"] });
+  steps.push(...master);
   if (setup.canAnswer && question(setup, "panel_backup")) {
     steps.push({ id: "standby", group: "reserve", kind: "cards", options: ["no", "yes"], question: question(setup, "panel_backup") });
   }
@@ -226,6 +270,8 @@ export function wizardBody(setup: Setup, picks: Picks): WizardBody {
     if (asked && isPicked(pick) && pick !== before[s.id]) answers[s.qid] = asAnswer(s, pick!);
     if (s.id === "backup" && picks.standby === "yes" && !isPicked(pick) && setup.answers[s.qid] !== undefined) answers[s.qid] = null;
     if (setup.canAnswer && goesWithBackup(s, setup, picks) && setup.answers[s.qid] !== undefined) answers[s.qid] = null;
+    // What the master switch cuts goes away with it: the model refuses it without the switch
+    if (s.id === "masterOff" && masterOf(setup, picks) === "no" && setup.answers[s.qid] !== undefined) answers[s.qid] = null;
   }
   if (Object.keys(answers).length) body.answers = answers;
   return body;
@@ -244,6 +290,6 @@ export function setupProgress(setup: Setup): { total: number; open: StepId[] } {
 export function otherQuestions(setup: Setup, steps: Step[]): number {
   const asked = new Set(steps.flatMap((s) => (s.question ? [s.question.id] : [])));
   const closed = steps.some((s) => s.id === "standby") && !steps.some((s) => s.id === "backup");
-  if (closed) PANEL_STEPS.filter((s) => s.dc || s.kind === "groups").forEach((s) => asked.add(s.qid));
+  if (closed) PANEL_STEPS.filter((s) => s.dc || s.id === "reserve").forEach((s) => asked.add(s.qid));
   return setup.questions.filter((q) => (q.state === "open" || q.state === "text") && !asked.has(q.id)).length;
 }

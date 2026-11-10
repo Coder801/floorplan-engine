@@ -27,7 +27,7 @@ export function VariantInfo({ variants, canChoose, onEdit }: Props) {
     [t("wizard.steps.route.short"), t(`variant.routes.${route}`)],
     [t("wizard.steps.distribution.short"), t(`wizard.steps.distribution.options.${current?.distribution ?? "boxes"}.name`)],
     [t("wizard.steps.path.short"), t(`wizard.steps.path.options.${path}.name`)],
-    [t("wizard.steps.conduit.short"), t(`wizard.steps.conduit.options.${conduit ? "tube" : "plain"}.name`)],
+    [t("wizard.steps.conduit.short"), t(`wizard.steps.conduit.options.${conduit}.name`) + (variants.conduit === null ? ` · ${t("variant.typical")}` : "")],
     [t("wizard.steps.plaster.short"), t(`wizard.steps.plaster.options.${plaster}.name`)],
     [t("wizard.steps.rough.short"), t(`wizard.steps.rough.options.${rough_light ? "yes" : "no"}.name`)],
     [t("wizard.steps.breakers.short"), t(`wizard.steps.breakers.options.${breakersOf(mode)}.name`)],

@@ -49,6 +49,7 @@ MOCK_PRICES: dict[str, float] = {
     "spd": 2500,
     "changeover": 900,
     "ats": 4500,
+    "contactor": 1200,
     "feed": 500,
     "output": 500,
     "dc_battery": 2600,
@@ -100,9 +101,21 @@ def _rating(param: str) -> int | None:
     return int(m.group()) if m else None
 
 
+# A three-phase device ("C16 3P", "C40 4P") against the usual one of its kind: more poles
+POLE_FACTOR = {"breaker": 3.0, "diff": 2.5, "input": 2.0, "spd": 2.0}
+_POLES = re.compile(r"\b[34]P\b")
+
+
 def mock_price(key: str) -> float | None:
     """Mock price by item key; None for an unknown key."""
     base, param = split_key(key)
+    price = _mock_price(base, param)
+    if price is not None and base in POLE_FACTOR and _POLES.search(param):
+        return round(price * POLE_FACTOR[base], 1)
+    return price
+
+
+def _mock_price(base: str, param: str) -> float | None:
     if base == "cable":
         m = re.fullmatch(r"(\d+)x([\d.,]+)", param.replace("×", "x"))
         if m is None:

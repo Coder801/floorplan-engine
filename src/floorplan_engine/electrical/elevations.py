@@ -52,6 +52,7 @@ from floorplan_engine.model.texts import Language, tr
 
 BOARD_HEIGHT_MM = 400.0  # panel height on the elevation: not in the model, an assumption
 POST_PITCH_MM = 71.0  # post step in a frame
+LOW_VOLTAGE = (PointType.DATA, PointType.TV)
 BOX_DEFAULT_MM = 100.0
 BEHIND_PROBE_MM = 50.0  # how far past the outer wall face to look for a neighbouring room
 FACE_TOLERANCE_MM = 30.0  # neighbour face no farther than this from this wall's outer face
@@ -71,7 +72,9 @@ class OpeningView:
 
 @dataclass(frozen=True)
 class PointView:
-    """Point on the wall: symbol centre (x from the wall start, y from the floor), mm."""
+    """Point on the wall: block centre (x from the wall start, y from the floor), mm. Points at
+    one spot share a frame (sockets with INT, sockets with switches): block is its posts in
+    all, slot is the shift of this point's centre from the block centre, in post pitches."""
 
     id: str
     number: int
@@ -79,6 +82,12 @@ class PointView:
     x: float
     y: float
     posts: int
+    slot: float = 0.0
+    block: int = 0  # 0: the point alone, block = posts
+
+    @property
+    def frame(self) -> int:
+        return self.block or self.posts
 
 
 @dataclass(frozen=True)
@@ -269,7 +278,7 @@ def wall_elevations(
                     ceiling,
                     assumed,
                     openings,
-                    tuple(sorted(w.points, key=lambda p: (p.x, p.y))),
+                    tuple(sorted(_blocks(w.points), key=lambda p: (p.x, p.y))),
                     tuple(sorted(w.boxes, key=lambda b: b.x)),
                     tuple(sorted(w.chases, key=lambda c: (c.x, c.y0))),
                     w.board,
@@ -330,6 +339,7 @@ def elevation_data(
                     "x": r(pv.x),
                     "y": r(pv.y),
                     "posts": pv.posts,
+                    **({"slot": pv.slot, "block": pv.block} if pv.block else {}),
                     "group": p.group,
                     "color": color(p.group),
                     "from": fed(pv.id),
@@ -391,6 +401,7 @@ def elevation_data(
                     "x": r(p.x),
                     "y": r(p.y),
                     "posts": p.posts,
+                    **({"slot": p.slot, "block": p.block} if p.block else {}),
                 }
                 for p in e.back
             ],
@@ -491,7 +502,28 @@ def _back_points(
                 x = (other.point_at(p.offset) - seg.start).dot(seg.direction)
                 if -FACE_TOLERANCE_MM <= x <= seg.length + FACE_TOLERANCE_MM:
                     out.append(PointView(p.id, numbers[p.id], p.type, x, p.height, _posts(p)))
-    return tuple(sorted(out, key=lambda p: (p.x, p.y)))
+    return tuple(sorted(_blocks(out), key=lambda p: (p.x, p.y)))
+
+
+def _blocks(points: Sequence[PointView]) -> list[PointView]:
+    """Points at one spot side by side in one frame, in model order, low-voltage last (to the
+    right): INT in a block of sockets no longer covers them. The block stays centred on the
+    spot, the offset in the model is to the middle of the block."""
+    by_spot: dict[tuple[float, float], list[PointView]] = defaultdict(list)
+    for p in points:
+        by_spot[(round(p.x), round(p.y))].append(p)
+    out: list[PointView] = []
+    for same in by_spot.values():
+        if len(same) == 1:
+            out.extend(same)
+            continue
+        same.sort(key=lambda p: p.type in LOW_VOLTAGE)
+        total = sum(p.posts for p in same)
+        k = 0
+        for p in same:
+            out.append(replace(p, slot=k + p.posts / 2 - total / 2, block=total))
+            k += p.posts
+    return out
 
 
 def _posts(p: ElectricalPoint) -> int:

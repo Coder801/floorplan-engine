@@ -8,11 +8,15 @@
 // from the top, PE terminal block at the top and N at the bottom of the enclosure. A hybrid
 // inverter gets a battery box: battery and solar string wires go up into the inverter's BAT and
 // PV inputs, the battery sits under the box.
+// Three phases (data.phases 3): L1, L2, L3 and N from the top into the 3P+N main switch, a jumper
+// per phase into its relay (KV1–KV3), from each relay a trunk of its own along the left wall;
+// above every rail three thin phase busbars, a device takes the one of its phase (a 3P device
+// all three); the backup bus keeps one phase.
 
 import { palette } from "@/shared/palette";
 import type { PanelData } from "@/shared/types";
 import { clip, plate, rendererFor, SCREW, text, type Pen } from "./catalog";
-import { BACKUP, busSegments, CHAIN, groupPath, LABELS, MODULE, termX,
+import { BACKUP, behindMaster, busSegments, CHAIN, groupPath, LABELS, MODULE, termX,
          type PanelLayout, type Placed, type Row } from "./layout";
 import { batteryCabinet, enclosureBox, inverterBody, LABEL, rail, terminalBlock } from "./parts";
 
@@ -21,12 +25,17 @@ export const TITLE = 9;
 const THICK_WIRE = WIRE * 1.6;  // battery cables
 const INPUT_WIRE = "#8b4513";
 const RESERVE = "#2e8b57";
+const MASTER = "#c77700";  // busbar behind the master switch contactor
 const PE = "#2e8b2e";
 const PE_STRIPE = "#e3c200";  // PE is yellow-green
 // The enclosure interior is light in any theme: busbars and the wire underlay inside use light
 // theme colours, not screenColor
 const INSIDE_HALO = "#ffffff", COMB = "#5a5a5a";
 const N = "#1f5fbf";
+// Phase conductors L1, L2, L3: brown, black, grey (IEC 60445)
+const PHASE: Record<string, string> = { L1: INPUT_WIRE, L2: "#1e1e1e", L3: "#8a8a8a" };
+const PHASES = ["L1", "L2", "L3"] as const;
+const PHASE_BAR = 1.6;     // a thin phase busbar: three of them above a rail
 const PE_BODY = "#3f9b4a";    // PE terminal block body
 const N_BODY = "#2f6fc4";     // N terminal block body
 const ID = 4.4;            // designation on the device plate
@@ -36,8 +45,17 @@ const approach = (row: Row) => row.devTop - (row.kind === "double" ? 15 : 11);
 // Under the shared devices, jumper lanes: input N, input → relay and the shared busbar,
 // main network trunk, backup trunk, surge protector PE (below: inverter feed, layout.FEED_LANE)
 const BELOW = { n: 2.5, chain: 5.5, main: 8.5, reserve: 11.5, spd: 14.5 } as const;
-// Trunks along the left wall (no group lanes left of the devices)
-const TRUNK = { n: 10, main: 18, reserve: 26, spd: 4 } as const;
+// Trunks along the left wall (no group lanes left of the devices); master switch contactor
+// outputs: of the main bus (KM2) and of the backup one (KM3)
+const TRUNK = { n: 10, main: 18, reserve: 26, spd: 4, master: 30, rmaster: 33 } as const;
+// Under the shared devices: master switch contactor output lanes, after the others (one phase,
+// three phases), below them the inverter feed (layout.feedLane)
+const MASTER_BELOW = { 1: [17, 20], 3: [26, 29] } as const;
+// Three phases: busbars above the devices, L1 lowest; under the shared devices a jumper (main
+// switch → relay) and a trunk lane per phase, L1 deepest; trunks along the left wall, L1 outermost
+const BUS3 = [5, 7, 9], N_COMB_3 = 12;
+const BELOW3 = { n: 2.5, chain: [9.5, 7, 4.5], main: [19, 16.5, 14], reserve: 21.5, spd: 24 } as const;
+const TRUNK3 = [14, 18, 22];
 // Inverter feed: N under L; inverter PE as a trunk along the right wall (PE_TRUNK from it)
 const CORE = 2.5;
 const PE_TRUNK = 8;
@@ -64,8 +82,9 @@ export class PanelPainter {
     for (const y of l.rails) rail(pen, b.x + 12, b.x + b.w - 12, y);  // including empty ones
     l.rows.forEach((row, r) => {
       const placed = l.placed.filter((p) => p.row === r);
-      for (const [x0, x1, reserve] of busSegments(placed)) {
-        if (reserve) this.reserveFrame(pen, x0, x1, row.top, row.gutterTop + 4);
+      for (const [x0, x1, reserve, master] of busSegments(placed)) {
+        if (master) this.frame(pen, x0, x1, row.top + (reserve ? 2 : 0), row.gutterTop + (reserve ? 2 : 4), MASTER, d.texts.master ?? "", reserve);
+        else if (reserve) this.frame(pen, x0, x1, row.top, row.gutterTop + 4, RESERVE, d.texts.reserve);
       }
       for (const p of placed) this.device(pen, p);
       if (row.kind === "common") this.commonComb(placed, row);
@@ -79,8 +98,12 @@ export class PanelPainter {
     const peX = termX(l.pe, 0);
     this.wire(PE, [[peX, 0], [peX, l.pe.y + 6]], PE_STRIPE);
     if (qs) {
-      const lx = qs.x + MODULE / 2, nx = qs.x + 1.5 * MODULE;
-      this.wire(INPUT_WIRE, [[lx, 0], [lx, qs.y + SCREW]]);
+      const nx = qs.x + qs.w - MODULE / 2;
+      const phases = this.three ? PHASES : (["L1"] as const);
+      phases.forEach((ph, k) => {
+        const lx = qs.x + (k + 0.5) * MODULE;
+        this.wire(PHASE[ph], [[lx, 0], [lx, qs.y + SCREW]]);
+      });
       this.wire(N, [[nx, 0], [nx, qs.y + SCREW]]);
       text(pen, d.texts.grid, nx + 6, 12, LABEL, pen.ink, "left");
     }
@@ -102,7 +125,8 @@ export class PanelPainter {
     if (dev.kind === "spd") {  // surge protector to the PE block
       // Up along the left wall and through the gap under the terminal block: never crosses the group lanes
       const pe = this.lay.pe, cx = p.x + p.w / 2, x = termX(pe, 1);
-      const y = this.lay.rows[p.row].gutterTop + BELOW.spd, band = pe.y + pe.h + 6, side = TRUNK.spd;
+      const y = this.lay.rows[p.row].gutterTop + (this.three ? BELOW3.spd : BELOW.spd);
+      const band = pe.y + pe.h + 6, side = TRUNK.spd;
       this.wire(PE, [[cx, p.y + p.h - SCREW], [cx, y], [side, y], [side, band], [x, band], [x, pe.y + pe.h - 6]],
                 PE_STRIPE);
     }
@@ -127,9 +151,10 @@ export class PanelPainter {
     const { ctx } = pen, [ex, ey] = pts[pts.length - 1];
     ctx.fillStyle = color;
     ctx.beginPath(); ctx.arc(ex, ey, 1.4, 0, 2 * Math.PI); ctx.fill();
-    // "QF6 Освітлення — Санвузол · 3x1.5 · 0,50 кВт*": the purpose in ink, cable and power in
-    // the group colour
-    const tail = ` · ${g.cable || "—"} · ${(g.power / 1000).toFixed(2).replace(".", ",")} кВт${g.assumed ? "*" : ""}`;
+    // "QF6 Освітлення — Санвузол · 3x1.5 · 0,50 кВт* · L2": the purpose in ink, cable, power and
+    // the phase (three phases) in the group colour
+    const phase = g.phase ? ` · ${g.phase}` : "";
+    const tail = ` · ${g.cable || "—"} · ${(g.power / 1000).toFixed(2).replace(".", ",")} кВт${g.assumed ? "*" : ""}${phase}`;
     ctx.font = `${LABEL}px ${pen.font}`;
     const room = LABELS - 8 - ctx.measureText(tail).width;
     const lead = clip(pen, `${p.dev.id}  ${g.purpose}`, room, LABEL);
@@ -143,35 +168,61 @@ export class PanelPainter {
   // the top terminal of the first module; RCBOs also get a neutral one, one per row, teeth into
   // the second module (N)
   private combs(placed: Placed[], row: Row) {
-    const lY = row.devTop - L_COMB, nY = row.devTop - N_COMB;
+    const lY = row.devTop - L_COMB, nY = row.devTop - (this.three ? N_COMB_3 : N_COMB);
     if (row.kind === "double" && placed.length) {
-      for (const p of placed) this.tooth(N, p.x + 1.5 * MODULE, nY, p.y + SCREW);
+      for (const p of placed) this.tooth(N, p.x + p.w - MODULE / 2, nY, p.y + SCREW);
       const last = placed[placed.length - 1];
       this.bar(N, placed[0].x + 3, last.x + last.w - 3, nY);
     }
-    for (const [x0, x1, reserve] of busSegments(placed)) {
-      const color = reserve ? RESERVE : COMB;
+    for (const [x0, x1, reserve, master] of busSegments(placed)) {
+      const mine = (p: Placed) => !!p.dev.reserve === reserve && behindMaster(p.dev) === master;
+      if (this.three && !reserve) {  // three phase busbars, a device takes its own
+        PHASES.forEach((ph, k) => this.bar(PHASE[ph], x0 + 3, x1 - 3, row.devTop - BUS3[k], PHASE_BAR));
+        for (const p of placed) if (mine(p)) this.phaseTeeth(p, row);
+        continue;
+      }
+      const color = master ? MASTER : reserve ? RESERVE : COMB;
       this.bar(color, x0 + 3, x1 - 3, lY);
       for (const p of placed) {
-        if (!!p.dev.reserve === reserve) this.tooth(color, p.x + MODULE / 2, lY, p.y + SCREW);
+        if (mine(p)) this.tooth(color, p.x + MODULE / 2, lY, p.y + SCREW);
       }
     }
   }
 
   // Busbar of the shared devices after the main switch and relay (surge protector, ATS input I,
-  // inverter feed); the inverter output is not fed from the grid
+  // inverter feed, master switch contactor of the main bus); the inverter output is not fed
+  // from the grid, nor is the backup bus contactor
   private commonComb(placed: Placed[], row: Row) {
-    const xs = placed.filter((p) => !CHAIN.has(p.dev.kind) && p.dev.kind !== "output");
+    const xs = placed.filter((p) => !CHAIN.has(p.dev.kind) && p.dev.kind !== "output"
+      && !(p.dev.kind === "contactor" && p.dev.reserve));
     if (!xs.length) return;
     const lY = row.devTop - L_COMB, color = COMB;
     const last = xs[xs.length - 1];
+    if (this.three) {
+      PHASES.forEach((ph, k) => this.bar(PHASE[ph], xs[0].x - 2 * k, last.x + MODULE / 2 + 2, row.devTop - BUS3[k], PHASE_BAR));
+      for (const p of xs) this.phaseTeeth(p, row);
+      return;
+    }
     this.bar(color, xs[0].x + 3, last.x + MODULE / 2 + 2, lY);
     for (const p of xs) this.tooth(color, p.x + MODULE / 2, lY, p.y + SCREW);
   }
 
-  private bar(color: string, x0: number, x1: number, y: number) {
+  // Teeth from the phase busbars into the top terminals: a 3P device (or a 3P+N surge protector)
+  // takes all three into its first modules, any other the one of its phase
+  private phaseTeeth(p: Placed, row: Row) {
+    const all = p.dev.phase === "3P" || (!p.dev.phase && p.dev.kind === "spd");
+    const phases = all ? [0, 1, 2] : [Math.max(0, PHASES.indexOf((p.dev.phase ?? "L1") as typeof PHASES[number]))];
+    phases.forEach((k, m) => {
+      const x = p.x + ((all ? m : 0) + 0.5) * MODULE;
+      this.tooth(PHASE[PHASES[k]], x, row.devTop - BUS3[k], p.y + SCREW);
+    });
+  }
+
+  private get three() { return this.data.phases === 3; }
+
+  private bar(color: string, x0: number, x1: number, y: number, width = 3) {
     const { ctx } = this;
-    ctx.strokeStyle = color; ctx.lineWidth = 3; ctx.lineCap = "butt";
+    ctx.strokeStyle = color; ctx.lineWidth = width; ctx.lineCap = "butt";
     ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x1, y); ctx.stroke();
   }
 
@@ -213,6 +264,7 @@ export class PanelPainter {
   // backup sections (entering above the busbar); input N along the wall to the N terminal block,
   // with branches to the RCBO neutral busbars
   private feeds() {
+    if (this.three) { this.feeds3(); return; }
     const l = this.lay, rows = l.rows;
     const common = l.placed.filter((p) => rows[p.row].kind === "common");
     const below = (p: Placed, k: keyof typeof BELOW) => rows[p.row].gutterTop + BELOW[k];
@@ -223,7 +275,7 @@ export class PanelPainter {
       this.wire(INPUT_WIRE, [bottom(p, out), [out, below(p, "chain")], [into, below(p, "chain")], bottom(q, into)]);
     });
     const comb = (reserve: boolean) => rows.flatMap((row, r) => row.kind === "common" ? [] :
-      busSegments(l.placed.filter((p) => p.row === r)).filter((s) => s[2] === reserve)
+      busSegments(l.placed.filter((p) => p.row === r)).filter((s) => s[2] === reserve && !s[3])
         .map((s) => ({ row, x: s[0] + 3 })));
     const src = chain[chain.length - 1];
     if (src) {
@@ -247,27 +299,117 @@ export class PanelPainter {
         this.wire(RESERVE, [bottom(backup, out), [out, y], [TRUNK.reserve, y], [TRUNK.reserve, a], [t.x, a], [t.x, top]]);
       }
     }
-    const qs = chain.find((p) => p.dev.kind === "input");
-    if (qs) {
-      const nx = qs.x + 1.5 * MODULE, y = below(qs, "n"), nIn = termX(l.n, 0), over = l.n.y - 6;
-      this.wire(N, [bottom(qs, nx), [nx, y], [TRUNK.n, y], [TRUNK.n, over], [nIn, over], [nIn, l.n.y + 6]]);
+    this.masterFeeds(backup ? bottom(backup, backup.x + MODULE / 2) : null, below(backup ?? common[0], "reserve"));
+    this.neutral(chain.find((p) => p.dev.kind === "input"), BELOW.n, N_COMB);
+  }
+
+  // Input N along the wall to the N terminal block, branches to the RCBO neutral busbars
+  private neutral(qs: Placed | undefined, lane: number, comb: number) {
+    if (!qs) return;
+    const l = this.lay;
+    const nx = qs.x + qs.w - MODULE / 2, y = l.rows[qs.row].gutterTop + lane, nIn = termX(l.n, 0), over = l.n.y - 6;
+    this.wire(N, [[nx, qs.y + qs.h - SCREW], [nx, y], [TRUNK.n, y], [TRUNK.n, over], [nIn, over], [nIn, l.n.y + 6]]);
+    l.rows.forEach((row, r) => {
+      const first = l.placed.find((p) => p.row === r);
+      if (row.kind !== "double" || !first) return;
+      const nY = row.devTop - comb;
+      this.wire(N, [[TRUNK.n, nY], [first.x + 3, nY]]);
+    });
+  }
+
+  // Three phases: main switch pole k → relay KV(k+1) through the bottom terminals; from each
+  // relay output a lane of its own to the shared busbar of its phase (right) and to the trunk
+  // of its phase along the left wall, from there into that busbar above every group rail; the
+  // backup trunk from the ATS as on one phase. Without relays the poles of the main switch feed
+  // the lanes directly
+  private feeds3() {
+    const l = this.lay, rows = l.rows;
+    const common = l.placed.filter((p) => rows[p.row].kind === "common");
+    const below = (p: Placed, y: number) => rows[p.row].gutterTop + y;
+    const bottom = (p: Placed, x: number): [number, number] => [x, p.y + p.h - SCREW];
+    const qs = common.find((p) => p.dev.kind === "input");
+    const relays = common.filter((p) => p.dev.kind === "relay");
+    const first = common.find((p) => !CHAIN.has(p.dev.kind) && p.dev.kind !== "output");
+    PHASES.forEach((ph, k) => {
+      const color = PHASE[ph];
+      const relay = relays.find((p) => p.dev.phase === ph);
+      let src: [number, number] | null = qs ? bottom(qs, qs.x + (k + 0.5) * MODULE) : null;
+      if (qs && relay && src) {
+        const into = relay.x + MODULE / 2, y = below(qs, BELOW3.chain[k]);
+        this.wire(color, [src, [src[0], y], [into, y], bottom(relay, into)]);
+        src = bottom(relay, relay.x + relay.w - MODULE / 2);
+      }
+      if (!src || !qs) return;
+      const y = below(qs, BELOW3.main[k]);
+      if (first) {
+        const x = first.x - 2 * k, top = rows[first.row].devTop - BUS3[k];
+        this.wire(color, [src, [src[0], y], [x, y], [x, top]]);
+      }
+      for (const row of rows) {
+        if (row.kind === "common") continue;
+        const r = rows.indexOf(row);
+        const seg = busSegments(l.placed.filter((p) => p.row === r)).find((s) => !s[2]);
+        if (!seg) continue;
+        const top = row.devTop - BUS3[k];
+        this.wire(color, [src, [src[0], y], [TRUNK3[k], y], [TRUNK3[k], top], [seg[0] + 3, top]]);
+      }
+    });
+    const backup = common.find((p) => BACKUP.has(p.dev.kind));
+    if (backup) {
+      const out = backup.x + MODULE / 2, y = below(backup, BELOW3.reserve);
       rows.forEach((row, r) => {
-        const first = l.placed.find((p) => p.row === r);
-        if (row.kind !== "double" || !first) return;
-        const nY = row.devTop - N_COMB;
-        this.wire(N, [[TRUNK.n, nY], [first.x + 3, nY]]);
+        if (row.kind === "common") return;
+        const seg = busSegments(l.placed.filter((p) => p.row === r)).find((s) => s[2]);
+        if (!seg) return;
+        const a = approach(row), top = row.devTop - L_COMB;
+        this.wire(RESERVE, [bottom(backup, out), [out, y], [TRUNK.reserve, y], [TRUNK.reserve, a], [seg[0] + 3, a], [seg[0] + 3, top]]);
+      });
+    }
+    if (common.length) {
+      this.masterFeeds(backup ? bottom(backup, backup.x + MODULE / 2) : null, below(backup ?? common[0], BELOW3.reserve));
+    }
+    this.neutral(qs, BELOW3.n, N_COMB_3);
+  }
+
+  // Master switch contactors: KM2 takes the grid from the shared busbar (commonComb); KM3 takes
+  // the backup bus from the ATS (or switch) output, from below (a contactor may be fed either
+  // way), along the backup lane. From the output of each (its last module), a lane of its own
+  // and a trunk along the left wall into its busbar sections; one trunk on three phases too
+  // (a schematic: the phase busbars of the section show the phases)
+  private masterFeeds(backupOut: [number, number] | null, backupLane: number) {
+    const l = this.lay, rows = l.rows;
+    const lanes = MASTER_BELOW[this.three ? 3 : 1];
+    const bottom = (p: Placed, x: number): [number, number] => [x, p.y + p.h - SCREW];
+    for (const reserve of [false, true]) {
+      const km = l.placed.find((p) => p.dev.kind === "contactor" && !!p.dev.reserve === reserve);
+      if (!km) continue;
+      if (reserve && backupOut) {
+        const into = km.x + MODULE / 2;
+        this.wire(RESERVE, [backupOut, [backupOut[0], backupLane], [into, backupLane], bottom(km, into)]);
+      }
+      const out = km.x + km.w - MODULE / 2, y = rows[km.row].gutterTop + lanes[reserve ? 1 : 0];
+      const trunk = reserve ? TRUNK.rmaster : TRUNK.master;
+      rows.forEach((row, r) => {
+        if (row.kind === "common") return;
+        const seg = busSegments(l.placed.filter((p) => p.row === r)).find((s) => s[2] === reserve && s[3]);
+        if (!seg) return;
+        const a = approach(row) + (reserve ? 2 : 0), top = row.devTop - L_COMB;
+        this.wire(MASTER, [bottom(km, out), [out, y], [trunk, y], [trunk, a], [seg[0] + 3, a], [seg[0] + 3, top]]);
       });
     }
   }
 
-  private reserveFrame(pen: Pen, x0: number, x1: number, y0: number, y1: number) {
+  // Dashed frame around a bus section with its name above: the backup bus, or the groups behind
+  // the master switch (inside a backup frame, its name on the right)
+  private frame(pen: Pen, x0: number, x1: number, y0: number, y1: number, color: string, label: string, right = false) {
     const { ctx } = pen;
     ctx.save();
     ctx.setLineDash([6, 4]);
-    ctx.strokeStyle = RESERVE; ctx.lineWidth = 1.2;
+    ctx.strokeStyle = color; ctx.lineWidth = 1.2;
     ctx.strokeRect(x0 - 4, y0, x1 - x0 + 8, y1 - y0);
     ctx.restore();
-    text(pen, this.data.texts.reserve, x0 - 2, y0 - 2.8, 4.5, RESERVE, "left");
+    if (right) text(pen, label, x1 + 2, y0 - 2.8, 4.5, color, "right");
+    else text(pen, label, x0 - 2, y0 - 2.8, 4.5, color, "left");
   }
 
   // Inverter or generator plug right of the labels; five wires from the bottom, no crossings:

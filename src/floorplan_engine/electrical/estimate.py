@@ -39,6 +39,7 @@ import csv
 import math
 import re
 from collections import Counter
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal, Protocol
@@ -53,7 +54,13 @@ from floorplan_engine.electrical.panel import BoardPanel, device_name
 from floorplan_engine.electrical.wiring import RESERVE
 from floorplan_engine.electrical.wiring_model import Run, Wiring
 from floorplan_engine.model.panel_catalog import DeviceKind
-from floorplan_engine.model.schema import LIGHT_TYPES, Electrical, PointType, StrictModel
+from floorplan_engine.model.schema import (
+    LIGHT_TYPES,
+    Conduit,
+    Electrical,
+    PointType,
+    StrictModel,
+)
 from floorplan_engine.model.texts import Language, tr
 
 PRICES_FILE = "prices.yaml"  # the project price list lives in the project folder, next to room.yaml
@@ -73,6 +80,7 @@ MOUNTED = frozenset(
 
 Section = Literal["material", "rough", "finish"]
 SECTIONS: tuple[Section, ...] = ("material", "rough", "finish")  # order in the estimate
+WORK_PREFIX = "work."  # work items (services); the rest of LINES are materials
 
 # Estimate items: key → section, unit, name (ru, uk). Keys with a parameter:
 # cable.<type>, frame.<posts>, junction_box.<size>, junction_box_ip.<size>, panel devices
@@ -105,6 +113,7 @@ LINES: dict[str, tuple[Section, str, str, str]] = {
     "spd": ("material", "шт", "УЗИП", "ПЗІП"),
     "changeover": ("material", "шт", "Переключатель резерва", "Перемикач резерву"),
     "ats": ("material", "шт", "АВР", "АВР"),
+    "contactor": ("material", "шт", "Контактор модульный", "Контактор модульний"),
     "feed": ("material", "шт", "Автомат питания инвертора", "Автомат живлення інвертора"),
     "output": ("material", "шт", "Автомат выхода инвертора", "Автомат виходу інвертора"),
     "dc_battery": ("material", "шт", "Автомат АКБ DC", "Автомат АКБ DC"),
@@ -289,10 +298,10 @@ TEXT: dict[str, dict[str, str]] = {
         "uk": "Коробки у вологих приміщеннях — IP44: {n} шт",
     },
     "note_conduit": {
-        "ru": "Гофротруба: по полу — всегда, вся линия до точки; по потолку — в премиуме, "
-        "участок по потолку (спуски в штробах — без гофры); диаметр — по сечению кабеля",
-        "uk": "Гофротруба: по підлозі — завжди, уся лінія до точки; по стелі — у преміумі, "
-        "ділянка по стелі (спуски в штробах — без гофри); діаметр — за перерізом кабелю",
+        "ru": "Гофротруба: по полу — всегда, вся линия до точки; по потолку — если выбрана, "
+        "участок по потолку, а с гофрой в стенах — и спуски в штробах; диаметр — по сечению кабеля",
+        "uk": "Гофротруба: по підлозі — завжди, уся лінія до точки; по стелі — якщо обрана, "
+        "ділянка по стелі, а з гофрою в стінах — і спуски в штробах; діаметр — за перерізом кабелю",
     },
     "note_fixing": {
         "ru": "Крепления кабеля — шаг {step} мм",
@@ -513,13 +522,14 @@ def conduit_diameter(mark: str) -> int:
     return next((d for limit, d in CONDUIT_SIZES if section <= limit), CONDUIT_SIZES[-1][1])
 
 
-def conduit_mm(run: Run, ceiling: bool) -> float:
-    """How much of a line goes in conduit (decision 2026-11-01, docs/wiring-variants.md): on the
-    floor always, the whole line including the rise to the point; on the ceiling only if chosen
-    (Electrical.ceiling_conduit), the ceiling part; drops in chases go without conduit."""
-    if run.route == "floor":
+def conduit_mm(run: Run, conduit: Conduit) -> float:
+    """How much of a line goes in conduit (decisions 2026-11-01, 2026-11-08,
+    docs/wiring-variants.md): on the floor always, the whole line including the rise to the
+    point; on the ceiling as chosen (Electrical.conduit_level): the ceiling part, and with walls
+    the drops in the chases too."""
+    if run.route == "floor" or conduit == "walls":
         return run.length_mm
-    return run.plan_mm if ceiling else 0.0
+    return run.plan_mm if conduit == "ceiling" else 0.0
 
 
 def quantities(wiring: Wiring, elec: Electrical) -> dict[str, float]:
@@ -530,7 +540,7 @@ def quantities(wiring: Wiring, elec: Electrical) -> dict[str, float]:
     conduit: dict[int, float] = {}
     for r in wiring.runs:
         d = conduit_diameter(r.mark)
-        conduit[d] = conduit.get(d, 0.0) + conduit_mm(r, elec.ceiling_conduit)
+        conduit[d] = conduit.get(d, 0.0) + conduit_mm(r, elec.conduit_level)
     for d in sorted(conduit):
         if conduit[d] > 0:
             q[f"conduit.{d}"] = round(conduit[d] / 1000 * (1 + RESERVE), 1)
@@ -576,7 +586,7 @@ def quantities(wiring: Wiring, elec: Electrical) -> dict[str, float]:
     if elec.rough_light and rough_rooms:
         q["rough_holder"] = q["rough_lamp"] = q["rough_switch"] = rough_rooms
     q["work.cable"] = round(sum(r.length_mm for r in wiring.runs) / 1000, 1)
-    in_conduit = sum(conduit_mm(r, elec.ceiling_conduit) for r in wiring.runs)
+    in_conduit = sum(conduit_mm(r, elec.conduit_level) for r in wiring.runs)
     if in_conduit > 0:
         q["work.conduit"] = round(in_conduit / 1000, 1)
     q["work.chase"] = round(wiring.chase_length(wide=False) / 1000, 1)
@@ -713,10 +723,18 @@ def write_csv(est: Estimate, path: Path) -> Path:
     return path
 
 
-def write_xlsx(est: Estimate, path: Path, title: str, notes: list[str], language: Language) -> Path:
+def write_xlsx(
+    est: Estimate,
+    path: Path,
+    title: str,
+    notes: list[str],
+    language: Language,
+    extra: Callable[[Workbook], None] | None = None,
+) -> Path:
     """Estimate in Excel: sections, row sum as a formula "qty × price", section totals and "Total"
     as formulas, prices and quantities highlighted (they get edited). An item without a price has
-    an empty price with a note; once a price is entered it counts in the totals."""
+    an empty price with a note; once a price is entered it counts in the totals. extra adds its
+    own sheets after the estimate (the work scope, work_scope.scope_sheet)."""
 
     def t(key: str, **values: object) -> str:
         return text(key, language, **values)
@@ -795,6 +813,8 @@ def write_xlsx(est: Estimate, path: Path, title: str, notes: list[str], language
     for letter, width in zip("ABCDEFG", (5, 48, 7, 10, 12, 14, 18), strict=True):
         ws.column_dimensions[letter].width = width
     ws.freeze_panes = f"A{head_row + 1}"
+    if extra is not None:
+        extra(wb)
     path.parent.mkdir(parents=True, exist_ok=True)
     wb.save(path)
     return path

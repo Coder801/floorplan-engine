@@ -12,6 +12,7 @@ from floorplan_engine.electrical.estimate import (
     HINTS,
     LINES,
     PRICES_FILE,
+    WORK_PREFIX,
     PriceList,
     PriceSource,
     edit_price_items,
@@ -77,7 +78,6 @@ def load_prices(path: Path) -> tuple[PriceList | None, list[Issue]]:
     return (None, bad) if bad else (prices, [])
 
 
-WORK_PREFIX = "work."  # the studio price page shows works (services); materials stay in prices.yaml
 NEW_PRICES = (
     "# Общий прайс студии для сметы: берётся, если у проекта нет своего prices.yaml.\n"
     "# Цены — за единицу позиции; ключи — LINES в electrical/estimate.py.\n"

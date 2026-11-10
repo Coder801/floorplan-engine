@@ -5,8 +5,9 @@ An enclosure (`Enclosure`) is a real manufacturer panel: rows, modules per row a
 panel front view is drawn inside it (viewer, "Panel" sheet), devices are chosen so they do
 not stick out of it (`electrical/panel.choose_enclosure`).
 
-A panel device (panel.Device) gets a model by panel brand (`panel.brand` in electrical.yaml)
-and device kind; if the brand has no such model, the typical one (`generic`) is used. The
+A panel device (panel.Device) gets a model by panel brand (`panel.brand` in electrical.yaml),
+device kind and poles (a three-phase panel: main switch and surge protector 3P+N, group breaker
+3P, RCBO 3P+N); if the brand has no such model, the typical one (`generic`) is used. The
 model goes into the .epd page (key `panel`): the viewer draws the device by its kind
 (`style`) and colours.
 
@@ -31,6 +32,7 @@ class DeviceKind(StrEnum):
     OUTPUT = "output"  # inverter output 2P (AC OUT → ATS or switch)
     BREAKER = "breaker"  # group breaker 1P
     DIFF = "diff"  # group RCBO 1P+N
+    CONTACTOR = "contactor"  # modular contactor of the master switch, 2P (4P on three phases)
     DC_BATTERY = "dc_battery"  # battery breaker, DC 2P (battery box at the inverter)
     DC_BREAKER = "dc_breaker"  # solar string breaker, DC 2P
     DC_SPD = "dc_spd"  # solar string surge protector, DC (+, −, PE)
@@ -47,7 +49,9 @@ class CatalogModel:
     kind: DeviceKind
     modules: int
     height: float  # mm, on the front face
-    style: str  # how to draw: breaker, diff, rcd, relay, spd, changeover, ats, input, feed
+    style: (
+        str  # how to draw: breaker, diff, rcd, relay, spd, changeover, ats, input, feed, contactor
+    )
     body: str = "#f4f4f2"  # body colour
     lever: str = "#2b2b2b"  # lever colour
     accent: str | None = None  # insert colour (the "Test" button on an RCBO)
@@ -69,10 +73,11 @@ class CatalogModel:
         return out
 
 
-def _generic(kind: DeviceKind, modules: int, height: float = 85.0, **kw: str) -> CatalogModel:
-    return CatalogModel(
-        f"generic.{kind.value}", "generic", "", kind, modules, height, kind.value, **kw
-    )
+def _generic(
+    kind: DeviceKind, modules: int, height: float = 85.0, poles: int = 0, **kw: str
+) -> CatalogModel:
+    name = f"generic.{kind.value}" + (f".{poles}p" if poles else "")
+    return CatalogModel(name, "generic", "", kind, modules, height, kind.value, **kw)
 
 
 GENERIC: dict[DeviceKind, CatalogModel] = {
@@ -88,10 +93,22 @@ GENERIC: dict[DeviceKind, CatalogModel] = {
         _generic(DeviceKind.OUTPUT, 2),
         _generic(DeviceKind.BREAKER, 1),
         _generic(DeviceKind.DIFF, 2, accent="#3a6ea5"),
+        _generic(DeviceKind.CONTACTOR, 2, 90.0),
         # A 80–250 A DC battery breaker is wider than modular: one and a half modules per pole
         _generic(DeviceKind.DC_BATTERY, 3, 90.0, accent="#c62828"),
         _generic(DeviceKind.DC_BREAKER, 2, accent="#c62828"),
         _generic(DeviceKind.DC_SPD, 3, 90.0),
+    )
+}
+# Three-phase panel: a module per pole, N too (a typical modular device)
+GENERIC_POLES: dict[tuple[DeviceKind, int], CatalogModel] = {
+    (m.kind, poles): m
+    for m, poles in (
+        (_generic(DeviceKind.INPUT, 4, poles=4), 4),
+        (_generic(DeviceKind.SPD, 4, 90.0, poles=4), 4),
+        (_generic(DeviceKind.BREAKER, 3, poles=3), 3),
+        (_generic(DeviceKind.DIFF, 4, poles=4, accent="#3a6ea5"), 4),
+        (_generic(DeviceKind.CONTACTOR, 3, 90.0, poles=4), 4),
     )
 }
 
@@ -176,6 +193,9 @@ def fitted_enclosure(rows: int, per_row: int) -> Enclosure:
 BRANDS: dict[str, dict[DeviceKind, CatalogModel]] = {"generic": GENERIC}
 
 
-def model_for(kind: DeviceKind, brand: str = "generic") -> CatalogModel:
-    """Brand device model; the typical one if the brand has none."""
+def model_for(kind: DeviceKind, brand: str = "generic", poles: int = 0) -> CatalogModel:
+    """Brand device model; the typical one if the brand has none. poles: the three-phase
+    variant (4 — 3P+N, 3 — 3P), 0 — the usual one of the kind."""
+    if poles:
+        return GENERIC_POLES[(kind, poles)]
     return BRANDS.get(brand, {}).get(kind) or GENERIC[kind]

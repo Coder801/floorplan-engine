@@ -7,10 +7,10 @@ from typing import Any
 
 from floorplan_engine.drawing.schedules import groups_table
 from floorplan_engine.drawing.tables import Mark
-from floorplan_engine.electrical.groups import ASSUMED, group_rows
+from floorplan_engine.electrical.groups import ASSUMED, composed_purpose, group_rows
 from floorplan_engine.electrical.panel import build_panel
 from floorplan_engine.electrical.wiring import box_wiring
-from floorplan_engine.model.schema import Electrical
+from floorplan_engine.model.schema import Electrical, ElectricalPoint
 from floorplan_engine.validation.electrical import validate_electrical
 from floorplan_engine.validation.plan import validate_plan
 from tests.conftest import make_plan
@@ -48,6 +48,41 @@ def test_composed_purpose_by_points_and_rooms() -> None:
     assert rows["QF2"].purpose.startswith("Розетки — ") and rows["QF2"].points == 2
     assert rows["QF2"].cable == "3x2.5" and rows["QF2"].cable_ids == ("cable_1",)
     assert rows["QF10"].purpose.startswith("Розетка: духовка")
+
+
+def test_switch_in_another_room_does_not_add_it() -> None:
+    def pt(pid: str, kind: str, room: str) -> ElectricalPoint:
+        return ElectricalPoint.model_validate(
+            {"id": pid, "room": room, "type": kind, "ceiling": [500, 500], "group": "QF1"}
+            if kind == "light"
+            else _pt(pid, kind, "QF1", room=room)
+        )
+
+    rooms = {"bath": "Санузел", "hall": "Прихожая"}
+    light = [pt("l1", "light", "bath"), pt("k1", "switch", "hall")]
+    assert composed_purpose(light, rooms, "ru") == "Освещение — Санузел"
+    assert composed_purpose([pt("k1", "switch", "hall")], rooms, "ru") == "Выключатели — Прихожая"
+
+
+def test_same_built_purposes_are_told_apart_by_notes() -> None:
+    plan = make_plan(RECT, [])
+    elec = Electrical.model_validate(
+        {
+            "points": [
+                _pt("a", "socket", "QF1", note="инвертор, батареи"),
+                _pt("b", "socket", "QF1", note="wi-fi; уточнить"),
+                _pt("c", "socket", "QF1", note="домофон"),
+                _pt("d", "socket", "QF2", note="холодильник"),
+                _pt("f", "socket", "QF2"),
+                _pt("e", "socket", "QF3"),
+            ],
+            "groups": {"QF3": {"name": "Розетки — Комната"}},
+        }
+    )
+    rows = {r.group: r.purpose for r in group_rows(plan, elec)}
+    assert rows["QF1"] == "Розетки — Комната (инвертор, wi-fi…)"
+    assert rows["QF2"] == "Розетки — Комната (холодильник)"
+    assert rows["QF3"] == "Розетки — Комната"  # from the model: as it is
 
 
 def test_purpose_and_device_from_model() -> None:
@@ -113,3 +148,19 @@ def test_groups_with_wiring_and_panel() -> None:
     points = sum(int(str(r[5])) for r in table.rows)
     assert table.total is not None and table.total[5] == str(points)
     assert any("лист «Щит»" in n for n in notes)  # breaker chosen by code
+
+
+def test_groups_show_the_phase_on_three_phases() -> None:
+    """A three-phase panel adds the "Phase" column after the breaker, from the panel."""
+    plan = make_plan(RECT, [])
+    elec = _elec(panel={"phases": 3})
+    panel = build_panel(plan, elec)
+    assert panel is not None
+    built = groups_table(plan, elec, None, panel)
+    assert built is not None
+    table, _ = built
+    heads = [c.title for c in table.columns]
+    assert heads[2:4] == ["Автомат", "Фаза"]
+    phases = {g.group: g.phase for g in panel.groups}
+    row = next(r for r in table.rows if isinstance(r[0], Mark) and r[0].text == "QF2")
+    assert row[3] == phases["QF2"] and table.total is not None and table.total[3] == ""

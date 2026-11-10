@@ -22,8 +22,15 @@ from floorplan_engine.drawing.layers import E_PANEL, E_PANEL_WIRE, MIN_TEXT_MM, 
 from floorplan_engine.drawing.plan import add_text
 from floorplan_engine.drawing.tables import Column, Mark, Table, name_width
 from floorplan_engine.electrical.loads import PanelGroup, current
-from floorplan_engine.electrical.panel import BoardPanel, Device, color_of, din_rows, scheme_title
-from floorplan_engine.electrical.panel_text import KIND_NAME, amps, kw
+from floorplan_engine.electrical.panel import (
+    BoardPanel,
+    Device,
+    color_of,
+    device_name,
+    din_rows,
+    panel_title,
+)
+from floorplan_engine.electrical.panel_text import amps, kw
 from floorplan_engine.electrical.panel_text import text as panel_text
 from floorplan_engine.model.geometry import Vec
 from floorplan_engine.model.panel_catalog import DeviceKind
@@ -46,6 +53,7 @@ GREY = 0x8C8C8C
 BUS = 0x5A5A5A
 INPUT_WIRE = 0x8B4513  # brown: supply phase
 RESERVE = 0x2E8B57
+MASTER = 0xC77700  # busbar behind the master switch contactor
 LW_BOX = 50
 LW_DEV = 25
 LW_WIRE = 35
@@ -54,8 +62,9 @@ LEFT = TextEntityAlignment.MIDDLE_LEFT
 CENTER = TextEntityAlignment.MIDDLE_CENTER
 
 TEXT: dict[str, dict[str, str]] = {
-    "grid": {"ru": "Ввод 230 В", "uk": "Введення 230 В"},
+    "grid": {"ru": "Ввод {v} В", "uk": "Введення {v} В"},
     "reserve": {"ru": "резервная шина", "uk": "резервна шина"},
+    "master": {"ru": "мастер-выключатель", "uk": "майстер-вимикач"},
     "pe": {"ru": "PE", "uk": "PE"},
     "table": {"ru": "Аппараты щита", "uk": "Апарати щита"},
     "id": {"ru": "Поз.", "uk": "Поз."},
@@ -205,6 +214,9 @@ def draw_device(layout: BaseLayout, d: Device, x: float, top: float, m: float, c
         )
         _line(layout, [Vec(cx, mid), Vec(cx, mid + 0.8 * m)], DARK, LW_WIRE)
         _text(layout, "I    0    II", Vec(cx, mid + 1.35 * m), th)
+    elif d.kind is DeviceKind.CONTACTOR:  # coil A1–A2 and the contacts
+        _rect(layout, x + 0.3 * m, mid - 0.6 * m, x1 - 0.3 * m, mid + 0.6 * m, true_color=GREY)
+        _text(layout, "KM", Vec((x + x1) / 2, mid), th)
     else:  # ATS
         _rect(layout, x + 0.3 * m, mid - 0.6 * m, x1 - 0.3 * m, mid + 0.6 * m, true_color=GREY)
         _text(layout, "ATS", Vec((x + x1) / 2, mid), th)
@@ -251,7 +263,7 @@ def draw_panel_front(
     box_bottom = top_left.y - fit.height
     x1 = x0 + fit.box_w
     th = min(TEXT_MAX, 0.35 * m)
-    title = panel_text("title", language, name=name, scheme=scheme_title(panel, language))
+    title = panel_title(panel, name, language)
     _text(layout, title, Vec(x0, top_left.y + 0.9 * m), th * 1.2, align=LEFT)
     with tagged(layout, "board", "board"):
         _rect(layout, x0, box_bottom, x1, box_top, lineweight=LW_BOX, true_color=DARK)
@@ -279,7 +291,7 @@ def draw_panel_front(
             0xC8C8C8,
         )
         x = x0 + PAD * m
-        segments: list[tuple[float, float, bool]] = []
+        segments: list[tuple[float, float, bool, bool]] = []
         for d in row:
             w = d.modules * m
             with tagged(layout, "device", d.key.partition(":")[2]):
@@ -299,36 +311,43 @@ def draw_panel_front(
                     )
                     _text(layout, text("pe", language), Vec(x + w / 2, pe - 0.5 * m), th)
             places[d.id] = (x + w / 2, dev_top)
-            segments.append((x, x + w, d.reserve))
+            # A contactor itself hangs on its bus; the groups behind it on a busbar of their own
+            segments.append((x, x + w, d.reserve, d.master and d.kind is not DeviceKind.CONTACTOR))
             x += w
-        # Busbar above the devices: main and backup as separate pieces
+        # Busbar above the devices: main and backup as separate pieces, each split again by the
+        # master switch contactor
         bus_y = dev_top + 0.25 * m
-        for reserve in (False, True):
-            xs = [(a, b) for a, b, rv in segments if rv is reserve]
+        for reserve, master in ((False, False), (False, True), (True, False), (True, True)):
+            xs = [(a, b) for a, b, rv, ms in segments if rv is reserve and ms is master]
             if not xs:
                 continue
             a, b = xs[0][0] + 0.3 * m, xs[-1][1] - 0.3 * m
-            _line(layout, [Vec(a, bus_y), Vec(b, bus_y)], RESERVE if reserve else BUS, LW_DEV)
-            if reserve:
-                y0 = dev_top - BODY * m - 0.3 * m
-                layout.add_lwpolyline(
-                    [
-                        (a - 0.5 * m, y0),
-                        (b + 0.5 * m, y0),
-                        (b + 0.5 * m, top + 0.1 * m),
-                        (a - 0.5 * m, top + 0.1 * m),
-                    ],
-                    close=True,
-                    dxfattribs={"layer": E_PANEL.name, "true_color": RESERVE},
-                )
-                _text(
-                    layout,
-                    text("reserve", language),
-                    Vec(b, y0 - 0.5 * m),
-                    th * 0.9,
-                    color=RESERVE,
-                    align=TextEntityAlignment.MIDDLE_RIGHT,
-                )
+            color = MASTER if master else RESERVE if reserve else BUS
+            _line(layout, [Vec(a, bus_y), Vec(b, bus_y)], color, LW_DEV)
+            if not (reserve or master):
+                continue
+            y0 = dev_top - BODY * m - 0.3 * m
+            pad = 0.25 * m if master and reserve else 0.5 * m  # inside the backup frame
+            layout.add_lwpolyline(
+                [
+                    (a - pad, y0),
+                    (b + pad, y0),
+                    (b + pad, top + 0.1 * m),
+                    (a - pad, top + 0.1 * m),
+                ],
+                close=True,
+                dxfattribs={"layer": E_PANEL.name, "true_color": color},
+            )
+            label = text("master" if master else "reserve", language)
+            align = TextEntityAlignment.MIDDLE_LEFT if master else TextEntityAlignment.MIDDLE_RIGHT
+            _text(
+                layout,
+                label,
+                Vec(a if master else b, y0 - 0.5 * m),
+                th * 0.9,
+                color=color,
+                align=align,
+            )
     # Supply from above into the main breaker
     if "QS1" in places:
         cx, top = places["QS1"]
@@ -338,7 +357,7 @@ def draw_panel_front(
             )
             _text(
                 layout,
-                text("grid", language),
+                text("grid", language, v=400 if panel.phases == 3 else 230),
                 Vec(cx + 0.5 * m, top_left.y - 0.6 * m),
                 th,
                 align=LEFT,
@@ -421,10 +440,10 @@ def device_rows(panel: BoardPanel, language: Language) -> list[tuple[Device, tup
         g = groups.get(d.group or "")
         star = ASSUMED if d.assumed else ""
         if g is not None:
-            kind = KIND_NAME.get(d.kind, KIND_NAME[DeviceKind.BREAKER])[language]
             purpose = g.purpose + (ASSUMED if g.purpose_assumed else "")
             p = kw(g.power) + (ASSUMED if g.assumed else "")
-            out.append((d, (d.id, purpose, f"{kind} {d.label}{star}", g.cable, p, amps(g.current))))
+            name = device_name(d, language) + star  # "Автомат 3P C16": as in the estimate
+            out.append((d, (d.id, purpose, name, g.cable, p, amps(g.current))))
         elif dc is not None and d.kind is DeviceKind.DC_BATTERY:  # battery cable and current
             v = f"{dc.voltage} В" + (ASSUMED if dc.voltage_assumed else "")
             cable = f"2×{dc.cable:g} мм²"

@@ -8,7 +8,8 @@ economy and standard the group stays one: several lines from the panel on one br
 
 The first line keeps the group name and its `groups` entry; the others get the group's
 breaker and RCD, and the code builds their purpose from the points. The group's cables and
-its place on the panel backup bus (`panel.reserve`) carry over to all its lines.
+its place on the panel backup bus (`panel.reserve`) and under the master switch
+(`panel.master_off`) carry over to all its lines.
 Low-voltage does not go into the panel and is not split.
 """
 
@@ -103,7 +104,10 @@ def _split(plan: Plan, contours: dict[str, Contour], elec: Electrical) -> Electr
         for name in list(by_line.values())[1:]:
             groups[name] = Group(breaker=info.breaker, rcd=info.rcd)
     reserve = [n for g in elec.panel.reserve for n in (rename[g].values() if g in rename else [g])]
-    panel = elec.panel.model_copy(update={"reserve": reserve})
+    master_off = [
+        n for g in elec.panel.master_off for n in (rename[g].values() if g in rename else [g])
+    ]
+    panel = elec.panel.model_copy(update={"reserve": reserve, "master_off": master_off})
     return elec.model_copy(
         update={"points": new_points, "cables": cables, "groups": groups, "panel": panel}
     )

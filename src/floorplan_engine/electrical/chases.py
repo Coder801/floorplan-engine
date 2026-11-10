@@ -26,6 +26,7 @@ from floorplan_engine.model.geometry import RoomGeometry
 from floorplan_engine.model.schema import (
     Board,
     CableChannel,
+    Conduit,
     ElectricalPoint,
     OpeningType,
 )
@@ -104,11 +105,12 @@ def channel_chases(channels: Sequence[CableChannel]) -> tuple[Chase, ...]:
     )
 
 
-def before_plaster(chases: Sequence[Chase], ceiling_conduit: bool) -> tuple[Chase, ...]:
+def before_plaster(chases: Sequence[Chase], conduit: Conduit) -> tuple[Chase, ...]:
     """Cable laid before the plaster needs no chases: it fits in the plaster layer. Conduit does
-    not, so chases stay with it: ceiling routes with ceiling conduit, floor routes always. A cable
-    channel stays too: it is cut for cables that come later."""
-    if ceiling_conduit:
+    not, so chases stay where it goes down the wall: ceiling routes with conduit in the walls,
+    floor routes always (conduit only on the ceiling ends there). A cable channel stays too: it
+    is cut for cables that come later."""
+    if conduit == "walls":
         return tuple(chases)
     return tuple(c for c in chases if c.kind == "channel" or c.route == "floor")
 

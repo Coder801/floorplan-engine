@@ -53,9 +53,10 @@ def groups_table(
     wiring: Wiring | None = None,
     panel: BoardPanel | None = None,
 ) -> tuple[Table, list[str]] | None:
-    """The "Groups": one row per group: purpose, breaker and power (from the "Panel" sheet), cable
-    and length without margin (from wiring), points; totals are length, points, power. Without
-    wiring or panel those columns are absent. None if there are no groups."""
+    """The "Groups": one row per group: purpose, breaker, phase on a three-phase panel and power
+    (from the "Panel" sheet), cable and length without margin (from wiring), points; totals are
+    length, points, power. Without wiring or panel those columns are absent. None if there are
+    no groups."""
     lang = plan.language
     rows = group_rows(plan, elec)
     if not rows:
@@ -76,6 +77,11 @@ def groups_table(
     def breaker(r: GroupRow) -> str:
         return devices.get(r.group) or r.breaker
 
+    def phase(r: GroupRow) -> str:
+        """Phase of the group; the lines of a split group may sit on different ones."""
+        lines = (g for g in panel.groups if r.group in (g.group, g.split_of)) if panel else ()
+        return ", ".join(dict.fromkeys(g.phase for g in lines if g.phase))
+
     def power(r: GroupRow) -> str:
         g = powers.get(r.group)
         if g is None:
@@ -89,6 +95,9 @@ def groups_table(
     ]
     if with_breaker:
         columns.append(Column(groups_text("breaker", lang), 24.0))
+    with_phase = panel is not None and panel.phases == 3
+    if with_phase:
+        columns.append(Column(groups_text("phase", lang), 14.0))
     columns.append(Column(groups_text("cable", lang), 18.0))
     if wiring is not None:
         columns.append(Column(groups_text("length", lang), 20.0))
@@ -101,6 +110,7 @@ def groups_table(
             Mark(r.group, colors[r.group]),
             p,
             *((breaker(r),) if with_breaker else ()),
+            *((phase(r),) if with_phase else ()),
             marks.get(r.group) or r.cable,
             *((format_number(lengths.get(r.group, 0.0) / 1000, 1),) if wiring is not None else ()),
             str(r.points),
@@ -112,6 +122,7 @@ def groups_table(
         groups_text("total", lang),
         "",
         *(("",) if with_breaker else ()),
+        *(("",) if with_phase else ()),
         "",
         *(
             (format_number(sum(r.length_mm for r in wiring.runs) / 1000, 1),)

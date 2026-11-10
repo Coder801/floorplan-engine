@@ -64,6 +64,7 @@ DEVICE_ICONS = {
     DeviceKind.ATS: "arrows-exchange",
     DeviceKind.FEED: "plug-connected",
     DeviceKind.OUTPUT: "plug-connected",
+    DeviceKind.CONTACTOR: "toggle-left",
     DeviceKind.DC_BATTERY: "battery-charging",
     DeviceKind.DC_BREAKER: "solar-panel",
     DeviceKind.DC_SPD: "shield-bolt",

@@ -11,20 +11,28 @@ import pytest
 import yaml
 from pydantic import ValidationError
 
-from floorplan_engine.electrical.loads import Kind, cable_section, parse_breaker, rating_for
+from floorplan_engine.electrical.loads import (
+    Kind,
+    cable_section,
+    heavy_cable,
+    parse_breaker,
+    rating_for,
+)
 from floorplan_engine.electrical.panel import (
     BoardPanel,
     Device,
     build_panel,
     choose_enclosure,
+    device_name,
     din_rows,
     line_classes,
     panel_rows,
+    panel_title,
     reserve_groups,
 )
 from floorplan_engine.electrical.panel_questions import panel_questions
 from floorplan_engine.electrical.panel_text import TEXT
-from floorplan_engine.epd.panel_data import panel_data
+from floorplan_engine.epd.panel_data import panel_data, reserve_data
 from floorplan_engine.model.intake import Stage
 from floorplan_engine.model.panel_catalog import ENCLOSURES, DeviceKind
 from floorplan_engine.model.schema import Electrical, Plan
@@ -288,6 +296,24 @@ def test_backup_plug_reserve_bus_and_warning() -> None:
     assert ats is not None and any(d.kind is DeviceKind.ATS for d in ats.devices)
 
 
+def test_reserve_kinds_for_quick_picks() -> None:
+    points = [
+        _pt("s1", "socket", "QF1", note="холодильник"),
+        {"id": "l1", "room": "k", "type": "light", "ceiling": [500, 500], "group": "QF2"},
+        _pt("f1", "outlet", "QF2", note="вентилятор", power=40),  # bathroom light with its fan
+        _pt("ac", "outlet", "QF3", note="кондиционер", power=1500),
+        _pt("ov", "socket", "QF4", note="духовка", power=3500),
+    ]
+    cables = {"QF1": "3x2.5", "QF2": "3x1.5", "QF3": "3x2.5", "QF4": "3x2.5"}
+    elec = _elec(points, cables, panel={"backup": "plug", "backup_power": 3})
+    panel = build_panel(_plan(), elec)
+    assert panel is not None
+    block = reserve_data(panel, elec)
+    assert block is not None
+    kinds = {g["id"]: g["kind"] for g in cast(list[dict[str, Any]], block["items"])}
+    assert kinds == {"QF1": "sockets", "QF2": "light", "QF3": "heavy", "QF4": "heavy"}
+
+
 def test_charging_station_comes_in_through_a_plug() -> None:
     elec = _elec([_pt("s1", "socket", "QF1")], {"QF1": "3x2.5"}, panel={"backup": "station"})
     panel = build_panel(_plan(), elec)
@@ -490,12 +516,68 @@ def test_inverter_output_breaker_and_npe_question() -> None:
     assert "panel_npe" not in {q.id for q in panel_questions(answered, panel, "ru")}
 
 
-def test_three_phase_not_yet() -> None:
-    import pytest
-    from pydantic import ValidationError
+def _three_phase(**panel: Any) -> tuple[BoardPanel, Electrical]:
+    points = [
+        _pt("cook", "outlet", "QF1", note="варочная панель"),
+        _pt("oven", "outlet", "QF2", note="духовка"),
+        _pt("wash", "outlet", "QF3", room="b", note="стиральная машина"),
+        _pt("s1", "socket", "QF4", count=4),
+        _pt("l1", "light", "QF5"),
+        _pt("l2", "light", "QF6", room="b"),
+    ]
+    elec = Electrical.model_validate(
+        {"panel": {"phases": 3, "backup": "none", **panel}, "points": points}
+    )
+    built = build_panel(_plan(), elec)
+    assert built is not None
+    return built, elec
 
-    with pytest.raises(ValidationError, match="трёхфазный"):
-        Electrical.model_validate({"panel": {"phases": 3}})
+
+def test_three_phase_panel() -> None:
+    """Three phases: main switch and surge protector 3P+N, a relay per phase, the cooktop on its
+    3P breaker with a five-core cable, the other groups spread over the phases."""
+    panel, elec = _three_phase(scheme="premium")
+    by_id = {d.id: d for d in panel.devices}
+    assert by_id["QS1"].label.endswith("4P") and by_id["QS1"].modules == 4
+    assert [by_id[k].phase for k in ("KV1", "KV2", "KV3")] == ["L1", "L2", "L3"]
+    assert by_id["FV1"].modules == 4
+    cook = by_id["QF1"]
+    assert cook.phase == "3P" and cook.label == "B16 30 мА 4P" and cook.modules == 4
+    assert device_name(cook, "ru") == "Дифавтомат 3P+N B16 30 мА"
+    groups = {g.group: g for g in panel.groups}
+    assert groups["QF1"].current == pytest.approx(7200 / 230 / 3)
+    assert {groups[g].phase for g in ("QF2", "QF3", "QF4", "QF5", "QF6")} <= {"L1", "L2", "L3"}
+    assert groups["QF5"].phase != groups["QF6"].phase  # lighting on two phases
+    assert len({groups[g].phase for g in ("QF2", "QF3", "QF4")}) == 3  # appliances spread out
+    assert heavy_cable(elec, "QF1", [p for p in elec.points if p.group == "QF1"]) == "5x2.5"
+    assert sum(panel.phase_loads.values()) == pytest.approx(panel.installed)
+    assert "3 фазы, 400 В" in panel_title(panel, "ЩР", "ru")
+    data = panel_data(panel, {}, "ЩР", "ru")
+    assert data["phases"] == 3 and set(cast(dict[str, float], data["phase_loads"])) == {
+        "L1",
+        "L2",
+        "L3",
+    }
+
+
+def test_three_phase_weak_spots_and_questions() -> None:
+    """The input question is per phase; a phase above the main breaker; a three-phase appliance
+    listed for the backup bus; unset phases ask a question with one phase as the assumption."""
+    panel, elec = _three_phase(input=16)
+    texts = [w.text["ru"] for w in panel.warnings]
+    assert any(t.startswith("Расчётный ток фазы") for t in texts)
+    asked = {q.id: q for q in panel_questions(elec, panel, "ru")}
+    assert "panel_phases" not in asked
+    backup, _ = _three_phase(backup="plug", reserve=["QF1", "QF5"])
+    assert any("трёхфазный прибор" in w.text["ru"] for w in backup.warnings)
+    assert not next(g for g in backup.groups if g.group == "QF1").reserved
+    reserve = {d.phase for d in backup.devices if d.reserve or d.id == "SA1"}
+    assert len(reserve) == 1  # the backup source has one phase
+    single = Electrical.model_validate({"points": [_pt("s1", "socket", "QF1")]})
+    one = build_panel(_plan(), single)
+    assert one is not None and one.phases == 1 and one.phase_loads == {}
+    q = next(q for q in panel_questions(single, one, "ru") if q.id == "panel_phases")
+    assert q.target == "panel.phases" and q.assumption == 1
 
 
 def test_reserve_groups_gather_the_lines_of_a_model_group() -> None:

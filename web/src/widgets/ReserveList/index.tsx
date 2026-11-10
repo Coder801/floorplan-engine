@@ -3,10 +3,12 @@
 // sum near or over the limit only warns, with a sign and a word: not everything runs at once,
 // and the source may be larger.
 
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { cx } from "@/shared/cx";
+import ui from "@/shared/styles/ui.module.scss";
 import type { OverviewReserve } from "@/shared/types";
-import { reserveLevel, reservePower, toggleGroup } from "./reserve";
+import { lightOnly, mostByPower, presetOf, type ReservePreset, reserveLevel, reservePower, toggleGroup } from "./reserve";
 import css from "./ReserveList.module.scss";
 
 interface Props {
@@ -22,8 +24,31 @@ export function ReserveList({ reserve, value, disabled = false, onChange }: Prop
   const power = reservePower(reserve, value);
   const limit = reserve.limit_kw;
   const level = reserveLevel(power, limit);
+  // "By hand" stays chosen once pressed, even while the set happens to match a quick pick
+  const [hand, setHand] = useState(false);
+  const preset: ReservePreset = hand ? "manual" : presetOf(reserve, value);
+  const light = lightOnly(reserve);
+  const picks: { id: ReservePreset; groups: string[] | null }[] = [
+    { id: "light", groups: light.length ? light : null },
+    { id: "max", groups: mostByPower(reserve) },
+    { id: "manual", groups: null },
+  ];
+  const choose = (id: ReservePreset, groups: string[] | null) => {
+    setHand(id === "manual");
+    if (groups) onChange(groups);
+  };
+  const note = preset === "max" && limit === null ? "maxNoLimit" : preset;
   return (
     <>
+      <div className={cx(ui.segmented, css.presets)} role="radiogroup" aria-label={t("reserve.presets.label")}>
+        {picks.map(({ id, groups }) => (
+          <button key={id} role="radio" aria-checked={preset === id} className={cx(preset === id && ui.on)}
+                  disabled={disabled || (id !== "manual" && !groups?.length)} onClick={() => choose(id, groups)}>
+            {t(`reserve.presets.${id}`)}
+          </button>
+        ))}
+      </div>
+      <p className={cx("small muted", css.presetNote)}>{t(`reserve.presets.${note}Note`)}</p>
       <p className={cx(css.sum, level !== "ok" && css[level])} aria-live="polite">
         {level !== "ok" && <Sign level={level} />}
         <span>
@@ -39,7 +64,7 @@ export function ReserveList({ reserve, value, disabled = false, onChange }: Prop
           <li key={g.id}>
             <label className={css.row}>
               <input type="checkbox" checked={value.includes(g.id)} disabled={disabled}
-                     onChange={() => onChange(toggleGroup(reserve, value, g.id))} />
+                     onChange={() => { setHand(true); onChange(toggleGroup(reserve, value, g.id)); }} />
               <span className="mono">{g.id}</span>
               <span className={css.purpose}>{g.purpose}</span>
               <span className={css.power}>{kw(g.power)} {t("units.kw")}</span>

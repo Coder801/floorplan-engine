@@ -73,6 +73,22 @@ const link = (closed: boolean) => (
   </>
 );
 
+// The entrance door on the right, the panel on the left; with the master switch a key by the door
+// and its control line to the panel contactor
+const master = (on: boolean) => (
+  <>
+    <rect x="12" y="22" width="20" height="36" rx="1" />
+    <path d="M110 80V12H144V80M8 80H152" />
+    <circle cx="137" cy="48" r="2" />
+    {on && (
+      <>
+        <rect x="88" y="40" width="12" height="16" rx="2" />
+        <path className={css.hot} d="M94 40V30H22V22" />
+      </>
+    )}
+  </>
+);
+
 // The panel on the left and three sockets along the wall
 const SOCKETS = (
   <>
@@ -82,9 +98,6 @@ const SOCKETS = (
     <rect x="136" y="66" width="12" height="12" rx="1" />
   </>
 );
-
-// Ribs of a tube: across it, where its wavy walls cross their middle lines
-const TUBE_RIBS = Array.from({ length: 13 }, (_, i) => `M${22 + i * 10} 34V56`).join("");
 
 // One breaker per group or per line: breakers in a row, lines going out of them
 const breaker = (y: number) => <rect x="16" y={y} width="20" height="16" rx="2" />;
@@ -117,15 +130,9 @@ export const ART: Record<string, ReactNode> = {
     </>
   ),
   "distribution-loop": <>{SOCKETS}<path className={css.hot} d="M20 30V18H74V66M80 72H102M114 72H136" /></>,
-  "conduit-plain": <path className={css.hot} d="M12 45H148" />,
-  "conduit-tube": (
-    <>
-      <path d="M12 34q5-4 10 0t10 0 10 0 10 0 10 0 10 0 10 0 10 0 10 0 10 0 10 0 10 0 10 0 8 0" />
-      <path d="M12 56q5 4 10 0t10 0 10 0 10 0 10 0 10 0 10 0 10 0 10 0 10 0 10 0 10 0 10 0 8 0" />
-      <path d={TUBE_RIBS} />
-      <path className={css.hot} d="M12 45H148" />
-    </>
-  ),
+  "conduit-none": <>{ROOM}<path className={css.hot} d="M29 36V18H117V52" /></>,
+  "conduit-ceiling": <>{ROOM}<path className={css.tube} d="M29 18H117" /><path className={css.hot} d="M29 36V18H117V52" /></>,
+  "conduit-walls": <>{ROOM}<path className={css.tube} d="M29 36V18H117V52" /><path className={css.hot} d="M29 36V18H117V52" /></>,
   "plaster-after": <Plaster wall="M38 70H14V8H122V20" outline="M38 20H84V62H100V20H146V82H38Z"><path d="M84 8V20M100 8V20" /></Plaster>,
   "plaster-before": <Plaster wall="M104 70H14V8H122V20" outline="M146 20H106q6 7.75 0 15.5t0 15.5 0 15.5 0 15.5H146Z" />,
   "rough-no": <><path d="M16 12H148" /><path className={css.hot} d="M80 12V36" /><path d="M72 36H88" /></>,
@@ -155,6 +162,9 @@ export const ART: Record<string, ReactNode> = {
       <path className={css.hot} d="M80 2V14M80 76V88" />
     </>
   ),
+  // Supply wires into the main breaker: one phase and N, or three phases and N
+  "phases-1": <><rect x="56" y="30" width="48" height="46" rx="3" /><path className={css.hot} d="M72 4V30" /><path d="M88 4V30" /></>,
+  "phases-3": <><rect x="44" y="30" width="72" height="46" rx="3" /><path className={css.hot} d="M54 4V30M68 4V30M82 4V30" /><path d="M104 4V30" /></>,
   "backup-inverter": <>{HOUSE}{BATTERY}{FEED}</>,
   "backup-plug": (
     <>
@@ -206,6 +216,8 @@ export const ART: Record<string, ReactNode> = {
   "pv-2": roof(2),
   "npe-yes": link(true),
   "npe-no": link(false),
+  "master-yes": master(true),
+  "master-no": master(false),
 };
 
 export function WizardArt({ name }: { name: string }) {

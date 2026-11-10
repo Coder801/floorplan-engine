@@ -946,9 +946,13 @@ def test_before_plaster_drops_chases_of_bare_cable() -> None:
 
 
 def test_before_plaster_keeps_chases_with_conduit() -> None:
+    """Conduit in the walls is thicker than the plaster: its chases stay. Conduit only on the
+    ceiling ends there, the drops go under the plaster."""
     plan = make_plan(walls=RECT)
-    ceiling = _wiring(plan, _sockets(route="ceiling", plaster="before", conduit=True))
-    assert ceiling.chases == _wiring(plan, _sockets(route="ceiling", conduit=True)).chases
+    walls = _wiring(plan, _sockets(route="ceiling", plaster="before", conduit="walls"))
+    assert walls.chases == _wiring(plan, _sockets(route="ceiling", conduit="walls")).chases
+    ceiling = _wiring(plan, _sockets(route="ceiling", plaster="before", conduit="ceiling"))
+    assert not ceiling.chases
     floor = _wiring(plan, _sockets(route="floor", plaster="before"))  # the floor is always in it
     assert floor.chases == _wiring(plan, _sockets(route="floor")).chases
 
@@ -1008,9 +1012,11 @@ def test_any_angle_and_conduit_follow_their_own_option() -> None:
     assert _sockets(mode="economy").shortest_path
     assert not _sockets(mode="economy", path="right").shortest_path
     assert _sockets(path="shortest").shortest_path
-    assert _sockets(mode="proper").ceiling_conduit
-    assert not _sockets(mode="proper", conduit=False).ceiling_conduit
-    assert _sockets(conduit=True).ceiling_conduit
+    assert _sockets(mode="proper").conduit_level == "ceiling"
+    assert _sockets(mode="proper", conduit="none").conduit_level == "none"
+    assert _sockets(conduit="walls").conduit_level == "walls"
+    assert _sockets(conduit=True).conduit_level == "ceiling"  # electrical.yaml before 2026-11-08
+    assert _sockets(conduit=False).conduit_level == "none"
     right = _wiring(plan, _sockets())
     short = _wiring(plan, _sockets(path="shortest"))
     assert sum(r.plan_mm for r in short.runs) <= sum(r.plan_mm for r in right.runs)

@@ -21,6 +21,8 @@ export const LANE_MIN = 0.9;    // and at least, otherwise the bundle spills ont
 export const LANE_PAD = 2;      // from the device bottom to the bundle and from the bundle to the next rail
 export const RESERVE_TAG = 5;   // above the backup bus: its label
 export const FEED_LANE = 17;    // under the shared devices: the inverter feed is below the jumpers
+export const FEED_LANE_3 = 26;  // three phases: a jumper and a trunk per phase above it
+export const MASTER_LANES = 6;  // master switch contactors: two more lanes above the inverter feed
 // Above the devices: busbars (phase, neutral for RCBOs) and the backup entry
 export const HEAD = { common: 16, single: 13, double: 17 } as const;
 export const FAN = 46;          // from the enclosure to the labels: wires fan out at an angle
@@ -43,7 +45,7 @@ export const DC = { gap: 24, lane: 4.5, top: 14, pv: 14, battery: { w: 150, h: 1
 
 // Shared devices in rail order; main power goes main switch → relay, backup power comes from
 // the ATS (or switch)
-const COMMON = ["input", "relay", "spd", "changeover", "ats", "output", "feed"];
+const COMMON = ["input", "relay", "spd", "changeover", "ats", "output", "feed", "contactor"];
 export const CHAIN = new Set(["input", "relay"]);
 export const BACKUP = new Set(["ats", "changeover"]);
 
@@ -184,9 +186,9 @@ export function layout(data: PanelData): PanelLayout {
     const gutterTop = devTop + devH[r];
     // The bundle goes down to the next rail's busbars (or to the top of an empty rail, the N terminal block)
     const after = split[r + 1];
-    const next = after ? rails[r + 1] - devH[r + 1] / 2 - HEAD[after[0]] - (after[1].some((d) => d.reserve) ? RESERVE_TAG : 0)
+    const next = after ? rails[r + 1] - devH[r + 1] / 2 - HEAD[after[0]] - (after[1].some((d) => d.reserve || d.master) ? RESERVE_TAG : 0)
       : Math.min(n.y, r + 1 < rails.length ? rails[r + 1] - 45 : Infinity);
-    const lanesTop = gutterTop + (kind === "common" ? FEED_LANE : LANE_PAD);
+    const lanesTop = gutterTop + (kind === "common" ? feedLane(data) : LANE_PAD);
     const lanes = devs.filter(out).length;
     const pitch = Math.max(LANE_MIN, Math.min(LANE_MAX, (next - LANE_PAD - lanesTop) / Math.max(1, lanes)));
     rows.push({ kind, top: devTop - HEAD[kind], devTop, devH: devH[r], gutterTop,
@@ -200,7 +202,7 @@ export function layout(data: PanelData): PanelLayout {
     }
   });
   const common = rows.find((r) => r.kind === "common");
-  const commonLanes = common ? common.gutterTop + FEED_LANE : box.y + 120;
+  const commonLanes = common ? common.gutterTop + feedLane(data) : box.y + 120;
   const eh = Math.max(120, commonLanes - INVERTER.gap - INVERTER.top);
   // Above the label column: the inverter bottom is above all group wires
   const external = data.external
@@ -224,6 +226,13 @@ export function layout(data: PanelData): PanelLayout {
 }
 
 const DC_LABEL = 80;  // right of the battery box: solar string labels
+
+// Under the shared devices, from the device bottom to the inverter feed lane
+export const feedLane = (data: PanelData) => (data.phases === 3 ? FEED_LANE_3 : FEED_LANE)
+  + (data.devices.some((d) => d.kind === "contactor") ? MASTER_LANES : 0);
+
+// A group device behind a master switch contactor (the contactor itself hangs on its bus)
+export const behindMaster = (d: PanelDevice) => !!d.master && d.kind !== "contactor";
 
 // Battery box: lanes to the inverter under it, the enclosure below, devices on rails (row from
 // the backend), solar string wires under the enclosure (lower for the left string), the battery
@@ -273,13 +282,17 @@ export function groupPath(l: PanelLayout, p: Placed): [number, number][] {
   return pts;
 }
 
-// Phase busbar sections above a group rail: main and backup separately, [x0, x1, backup];
-// from the first device of a section to the end of the last
-export function busSegments(row: Placed[]): [number, number, boolean][] {
-  const out: [number, number, boolean][] = [];
+// Phase busbar sections above a group rail: main and backup separately, each split again by the
+// master switch contactor, [x0, x1, backup, master]; from the first device of a section to the
+// end of the last
+export function busSegments(row: Placed[]): [number, number, boolean, boolean][] {
+  const out: [number, number, boolean, boolean][] = [];
   for (const reserve of [false, true]) {
-    const xs = row.filter((p) => !!p.dev.reserve === reserve && rowKind(p.dev) !== "common");
-    if (xs.length) out.push([xs[0].x, xs[xs.length - 1].x + xs[xs.length - 1].w, reserve]);
+    for (const master of [false, true]) {
+      const xs = row.filter((p) => !!p.dev.reserve === reserve && behindMaster(p.dev) === master
+        && rowKind(p.dev) !== "common");
+      if (xs.length) out.push([xs[0].x, xs[xs.length - 1].x + xs[xs.length - 1].w, reserve, master]);
+    }
   }
   return out;
 }

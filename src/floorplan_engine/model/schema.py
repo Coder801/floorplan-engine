@@ -17,7 +17,7 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from floorplan_engine.model.panel_catalog import BRANDS, ENCLOSURE_BY_ARTICLE
 from floorplan_engine.model.texts import Language
@@ -292,12 +292,22 @@ class CableChannel(StrictModel):
         return self
 
 
+# Phase of a group on a three-phase panel: one of the three, or all three (3P: a cooktop, an
+# electric boiler)
+Phase = Literal["L1", "L2", "L3", "3P"]
+
+
 class Group(StrictModel):
     """Panel group: purpose and device only from the source (never invented)."""
 
     name: str | None = Field(default=None, description="Назначение: «Розетки кухні»")
     breaker: str | None = Field(default=None, description="Автомат: «C16», «B10»")
     rcd: str | None = Field(default=None, description="УЗО / диф: «30 мА»")
+    phase: Phase | None = Field(
+        default=None,
+        description="Фаза группы на трёхфазном вводе: L1 | L2 | L3, 3P — на три фазы; не задана "
+        "— раскладывает код (electrical/phases.py)",
+    )
 
 
 # Panel scheme (decision 2026-10-27): economy has the fewest devices, wet zones under one RCD,
@@ -312,7 +322,11 @@ class PanelSetup(StrictModel):
     from the source (grid connection terms, contract); otherwise an assumption and a question on
     the sheet."""
 
-    phases: Literal[1, 3] = Field(default=1, description="Фаз на вводе: пока только 1")
+    phases: Literal[1, 3] | None = Field(
+        default=None,
+        description="Фаз на вводе: 1 — 230 В, 3 — 400 В; только из техусловий, не задано — "
+        "1 (допущение) и вопрос",
+    )
     earthing: Earthing = Field(
         default="TN-C-S", description="Система заземления: TN-C-S | TN-S; TT — позже"
     )
@@ -376,15 +390,26 @@ class PanelSetup(StrictModel):
         description="Группы на резервной шине; пусто — свет, холодильник, роутер, котёл, "
         "насос, ворота, розетки кухни (допущение)",
     )
+    master: bool | None = Field(
+        default=None,
+        description="Мастер-выключатель у входа: одной клавишей снять напряжение с групп "
+        "master_off (контактор в щите); не задан — вопрос, допущение — да, если в точках есть "
+        "выключатель с пометкой «мастер», иначе нет",
+    )
+    master_off: list[str] = Field(
+        default_factory=list,
+        description="Группы, которые снимает мастер-выключатель; пусто — все, кроме постоянных: "
+        "холодильник, котёл, роутер, насос, ворота, сигнализация (допущение)",
+    )
 
     @model_validator(mode="after")
     def _setup(self) -> PanelSetup:
-        if self.phases != 1:
-            raise ValueError("трёхфазный щит пока не поддерживается: phases: 1")
         if self.earthing == "TT":
             raise ValueError("система TT пока не поддерживается: earthing: TN-C-S или TN-S")
         if self.reserve and self.backup == "none":
             raise ValueError("reserve — только с резервом (backup: inverter | plug)")
+        if self.master_off and self.master is False:
+            raise ValueError("master_off — только с мастер-выключателем (master: false)")
         dc: tuple[object, ...] = (self.battery_voltage, self.battery_capacity, self.pv_strings)
         dc += (self.inverter, self.npe_relay)
         if self.backup in ("none", "plug", "station") and any(v is not None for v in dc):
@@ -409,6 +434,9 @@ WireRoute = Literal["ceiling", "floor"]
 Distribution = Literal["boxes", "loop"]
 WirePath = Literal["right", "shortest"]  # right angles or the shortest path, on ceiling and floor
 Plaster = Literal["after", "before"]  # cable laid after the plaster, in chases, or before it
+# Conduit besides the floor, where it is always (decision 2026-11-08): none — bare cable on the
+# ceiling; ceiling — the ceiling part; walls — the ceiling part and the drops in the walls
+Conduit = Literal["none", "ceiling", "walls"]
 
 
 def mode_path(mode: ElectricalMode) -> WirePath:
@@ -416,9 +444,19 @@ def mode_path(mode: ElectricalMode) -> WirePath:
     return "shortest" if mode == "economy" else "right"
 
 
-def mode_conduit(mode: ElectricalMode) -> bool:
-    """Ceiling conduit of a mode without its own choice: only premium (proper)."""
-    return mode == "proper"
+def mode_conduit(mode: ElectricalMode) -> Conduit:
+    """Conduit of a mode without its own choice: only premium (proper), on the ceiling."""
+    return "ceiling" if mode == "proper" else "none"
+
+
+CONDUIT_KEY: dict[Conduit, str] = {"none": "-bare", "ceiling": "-conduit", "walls": "-walls"}
+
+
+def old_conduit(value: object) -> object:
+    """conduit before 2026-11-08 was yes or no for the ceiling: true is ceiling, false none."""
+    if isinstance(value, bool):
+        return "ceiling" if value else "none"
+    return value
 
 
 class Electrical(StrictModel):
@@ -449,10 +487,10 @@ class Electrical(StrictModel):
         description="Трассы по потолку и полу: right — под прямыми углами; shortest — кратчайшим "
         "путём. Нет — по mode (economy → shortest). Ставит вариант проводки",
     )
-    conduit: bool | None = Field(
+    conduit: Conduit | None = Field(
         default=None,
-        description="Гофра на потолке (по полу она обязательна всегда). Нет — по mode "
-        "(proper → да). Ставит вариант проводки",
+        description="Гофра (по полу она обязательна всегда): none — нет; ceiling — на потолке; "
+        "walls — на потолке и в стенах. Нет — по mode (proper → ceiling). Ставит вариант проводки",
     )
     plaster: Plaster = Field(
         default="after",
@@ -480,8 +518,10 @@ class Electrical(StrictModel):
         return (self.path or mode_path(self.mode)) == "shortest"
 
     @property
-    def ceiling_conduit(self) -> bool:
+    def conduit_level(self) -> Conduit:
         return mode_conduit(self.mode) if self.conduit is None else self.conduit
+
+    _conduit = field_validator("conduit", mode="before")(old_conduit)
 
     @model_validator(mode="after")
     def _routes(self) -> Electrical:
@@ -529,7 +569,7 @@ class WiringEdits(StrictModel):
 
 class Variant(StrictModel):
     """variant.yaml: the wiring variant chosen in the viewer (docs/wiring-variants.md): mode, route
-    and distribution, and from the setup wizard the path and the ceiling conduit, on top of what
+    and distribution, and from the setup wizard the path and the conduit, on top of what
     the mode gives (None: as in the mode). Points come from the project and do not change between
     variants. Ceiling height (mm) is an edit from the "Overview" page: it is applied on top of
     room.yaml, the original is not changed. plaster and rough_light are how the job is done, not
@@ -540,7 +580,7 @@ class Variant(StrictModel):
     route: WireRoute = "ceiling"
     distribution: Distribution = "boxes"
     path: WirePath | None = None
-    conduit: bool | None = None
+    conduit: Conduit | None = None
     plaster: Plaster | None = None
     rough_light: bool | None = None
     ceiling_height: float | None = Field(default=None, ge=CEILING_MIN, le=CEILING_MAX)
@@ -550,20 +590,23 @@ class Variant(StrictModel):
         return self.path or mode_path(self.mode)
 
     @property
-    def in_conduit(self) -> bool:
+    def conduit_level(self) -> Conduit:
         return mode_conduit(self.mode) if self.conduit is None else self.conduit
+
+    _conduit = field_validator("conduit", mode="before")(old_conduit)
 
     @property
     def key(self) -> str:
         """Key such as "economy-floor-boxes": the key for this variant's route edits in
         wiring.yaml. An option differing from its mode is added ("standard-floor-boxes-shortest",
-        "economy-ceiling-loop-conduit", "proper-ceiling-boxes-bare"); one equal to the mode is
-        not, so a mode keeps its key however it was chosen."""
+        "economy-ceiling-loop-conduit", "proper-ceiling-boxes-bare",
+        "standard-ceiling-boxes-walls"); one equal to the mode is not, so a mode keeps its key
+        however it was chosen."""
         key = f"{self.mode}-{self.route}-{self.distribution}"
         if self.wire_path != mode_path(self.mode):
             key += f"-{self.wire_path}"
-        if self.in_conduit != mode_conduit(self.mode):
-            key += "-conduit" if self.in_conduit else "-bare"
+        if self.conduit_level != mode_conduit(self.mode):
+            key += CONDUIT_KEY[self.conduit_level]
         return key
 
 

@@ -22,6 +22,16 @@ electrical/panel_questions.py, labels in electrical/panel_text.py.
   breaker by discharge current, breakers and DC surge protectors for solar strings
   (`panel.pv_strings`); without data, battery voltage is 48 V and inverter power 5 kW, as
   assumptions. Backup groups stay in the main panel, behind the ATS or switch.
+- Three-phase supply (`panel.phases: 3`, decision 2026-11-08): main switch 3P+N, a voltage
+  relay per phase (KV1–KV3: a lost phase cuts only its own groups), surge protector 3P+N;
+  groups by phase (electrical/phases.py), a three-phase appliance on its 3P breaker (RCBO
+  3P+N). The backup source has one phase: the backup bus, the inverter feed and output, the ATS
+  or switch are on the phase of the backup bus. Weak spots by phase: a phase above the main
+  breaker, a spread of the phases, a three-phase appliance listed for the backup bus.
+- Master switch (`panel.master`, decision 2026-11-09; electrical/master.py): a contactor per
+  bus (KM2 on the main one, KM3 behind the ATS or switch) with the groups it cuts after the
+  ones it does not, a control breaker SF1 (on the backup bus if there is one, so the switch
+  works on backup); contactor rating by the design current of its groups.
 - Enclosure is a real catalogue panel (`panel.enclosure`, or the smallest that fits the
   devices): rails by device kind (`panel_rows`), a device is never split between rails and
   never sticks out of the enclosure; if nothing fits, an on-site enclosure and a remark.
@@ -44,9 +54,18 @@ from floorplan_engine.electrical.loads import (
     current,
     demand_factor,
     panel_groups,
+    phases_of,
     rating_for,
 )
+from floorplan_engine.electrical.master import CONTACTOR_A, CONTROL_A, CONTROL_ID
 from floorplan_engine.electrical.panel_text import KIND_NAME, amps, kw, text
+from floorplan_engine.electrical.phases import (
+    PHASES,
+    UNBALANCE,
+    assign_phases,
+    phase_loads,
+    unbalance,
+)
 from floorplan_engine.model.panel_catalog import (
     ENCLOSURE_BY_ARTICLE,
     ENCLOSURES,
@@ -82,10 +101,13 @@ class Device:
     assumed: bool = False
     reserve: bool = False  # on the backup bus
     brand: str = "generic"  # panel brand: the model comes from the catalogue (panel_catalog)
+    poles: int = 0  # three-phase variant: 4 — 3P+N, 3 — 3P; 0 — the usual one of the kind
+    phase: str | None = None  # L1, L2, L3 or 3P on a three-phase panel
+    master: bool = False  # a group cut by the master switch (behind its contactor)
 
     @property
     def model(self) -> CatalogModel:
-        return model_for(self.kind, self.brand)
+        return model_for(self.kind, self.brand, self.poles)
 
     @property
     def modules(self) -> int:
@@ -136,10 +158,25 @@ class BoardPanel:
     enclosure: Enclosure | None = None  # panel enclosure; None until chosen
     rows: tuple[tuple[Device, ...], ...] = ()  # devices by enclosure rail, top to bottom
     dc: DcBox | None = None  # battery box for the inverter; None without an inverter
+    phases: int = 1  # 1 — 230 V, 3 — 400 V
+    phases_assumed: bool = True  # not set in the model
 
     @property
     def calculated(self) -> float:
         return self.installed * self.demand
+
+    @property
+    def phase_loads(self) -> dict[str, float]:
+        """Installed power by phase, W; empty on a single-phase panel."""
+        return phase_loads(self.groups) if self.phases == 3 else {}
+
+    @property
+    def design_current(self) -> float:
+        """Design current against the main breaker: of the flat, on three phases of the most
+        loaded phase."""
+        loads = self.phase_loads
+        top = max(loads.values()) if loads else self.installed
+        return current(top * self.demand)
 
     @property
     def modules(self) -> int:
@@ -148,6 +185,11 @@ class BoardPanel:
     @property
     def reserve_power(self) -> float:
         return sum(g.power for g in self.groups if g.reserved)
+
+    @property
+    def master(self) -> bool:
+        """The panel has a master switch: a group behind its contactor."""
+        return any(g.master for g in self.groups)
 
     @property
     def all_devices(self) -> tuple[Device, ...]:
@@ -242,23 +284,42 @@ def _group_devices(
     groups: Sequence[PanelGroup], scheme: PanelScheme, reserve: bool, lang: Language, rcds: int
 ) -> list[Device]:
     """Group devices of one bus: in economy wet groups go under a shared RCD at the end; in proper
-    lighting gets breakers and everything else RCBOs."""
+    lighting gets breakers and everything else RCBOs. A three-phase group gets a 3P breaker or a
+    3P+N RCBO, never under the shared RCD."""
     out: list[Device] = []
     under_rcd: list[PanelGroup] = []
     for g in groups:
-        if scheme == "economy" and g.rcd is not None:
+        if scheme == "economy" and g.rcd is not None and not g.three_phase:
             under_rcd.append(g)
             continue
         kind = DeviceKind.DIFF if g.rcd is not None else DeviceKind.BREAKER
         label = g.breaker.label + (f" {g.rcd}" if g.rcd else "")
-        out.append(Device(g.group, kind, label, g.purpose, g.group, (), g.breaker.assumed, reserve))
+        poles = (4 if g.rcd is not None else 3) if g.three_phase else 0
+        label += f" {poles}P" if poles else ""
+        out.append(
+            Device(
+                g.group,
+                kind,
+                label,
+                g.purpose,
+                g.group,
+                (),
+                g.breaker.assumed,
+                reserve,
+                poles=poles,
+                phase=g.phase,
+            )
+        )
     if under_rcd:
         name = f"QD{rcds + 1}"
         rating = max(RCD_A, max(g.breaker.rating for g in under_rcd))
         rcd_label = f"{rating_for(rating, RCD_A)} А 30 мА"
         title = text("rcd_wet", lang)
         feeds = tuple(g.group for g in under_rcd)
-        out.append(Device(name, DeviceKind.RCD, rcd_label, title, None, feeds, True, reserve))
+        phase = under_rcd[0].phase  # one unit on a three-phase panel (phases.py)
+        out.append(
+            Device(name, DeviceKind.RCD, rcd_label, title, None, feeds, True, reserve, phase=phase)
+        )
         for g in under_rcd:
             out.append(
                 Device(
@@ -270,8 +331,66 @@ def _group_devices(
                     (),
                     g.breaker.assumed,
                     reserve,
+                    phase=g.phase,
                 )
             )
+    return out
+
+
+def _bus_devices(
+    groups: Sequence[PanelGroup], scheme: PanelScheme, reserve: bool, lang: Language, rcds: int
+) -> list[Device]:
+    """Group devices of one bus: the groups the master switch leaves on, then those behind its
+    contactor (each part with its own shared RCD in economy: an RCD is never split by a
+    contactor)."""
+    kept = _group_devices([g for g in groups if not g.master], scheme, reserve, lang, rcds)
+    rcds += sum(1 for d in kept if d.kind is DeviceKind.RCD)
+    cut = _group_devices([g for g in groups if g.master], scheme, reserve, lang, rcds)
+    return kept + [replace(d, master=True) for d in cut]
+
+
+def contactor_current(
+    groups: Sequence[PanelGroup], demand: float, three: bool, limit: float
+) -> float:
+    """Design current through a master switch contactor: of its groups with the demand factor
+    of the flat; on three phases, of the most loaded phase; at most limit, the main breaker."""
+    loads = phase_loads(groups) if three else {}
+    top = max(loads.values()) if loads else sum(g.power for g in groups)
+    return min(current(top * demand), limit)
+
+
+def _master_devices(
+    groups: Sequence[PanelGroup],
+    demand: float,
+    three: bool,
+    backup: bool,
+    limit: float,
+    lang: Language,
+) -> list[Device]:
+    """Contactors of the master switch: KM2 on the main bus, KM3 on the backup bus, each only if
+    it has groups to cut; a three-phase main one is 4P."""
+    out: list[Device] = []
+    for reserve, name in ((False, "KM2"), (True, "KM3")):
+        cut = [g for g in groups if g.master and g.reserved is reserve]
+        if not cut:
+            continue
+        amps_ = contactor_current(cut, demand, three and not reserve, limit)
+        rating = next((r for r in CONTACTOR_A if r >= amps_), CONTACTOR_A[-1])
+        poles = 4 if three and not reserve else 0
+        key = "master_contactor_reserve" if reserve and backup else "master_contactor"
+        out.append(
+            Device(
+                name,
+                DeviceKind.CONTACTOR,
+                f"{rating} А {poles or 2}P",
+                text(key, lang),
+                feeds=tuple(g.group for g in cut),
+                reserve=reserve,
+                poles=poles,
+                phase="3P" if poles else None,
+                master=True,
+            )
+        )
     return out
 
 
@@ -281,9 +400,12 @@ def build_panel(plan: Plan, elec: Electrical) -> BoardPanel | None:
     setup = elec.panel
     scheme = scheme_of(elec)
     backup, backup_assumed = backup_of(elec)
+    phases = phases_of(elec)
     groups = panel_groups(plan, elec, scheme, backup is not None)
     if not groups:
         return None
+    if phases == 3:
+        groups = assign_phases(groups, elec, scheme)
     installed = sum(g.power for g in groups)
     demand = demand_factor(installed / 1000)
     inp = Breaker("C", setup.input or INPUT_A, setup.input is None)
@@ -296,15 +418,36 @@ def build_panel(plan: Plan, elec: Electrical) -> BoardPanel | None:
     # changeover switch
     ats = setup.ats if setup.ats is not None else backup == "inverter" and setup.inverter == "basic"
 
-    devices = [Device("QS1", DeviceKind.INPUT, f"{inp.label} 2P", text("input", lang))]
-    if relay:
+    three = phases == 3
+    poles = 4 if three else 0
+    title = text("input", lang)
+    devices = [Device("QS1", DeviceKind.INPUT, f"{inp.label} {poles or 2}P", title, poles=poles)]
+    if relay:  # on three phases a relay per phase: a lost phase cuts only its own groups
         label = f"{inp.rating} А"
-        devices.append(Device("KV1", DeviceKind.RELAY, label, text("relay", lang)))
+        for k, ph in enumerate(PHASES if three else (None,), 1):
+            title = text("relay", lang) + (f" {ph}" if ph else "")
+            devices.append(Device(f"KV{k}", DeviceKind.RELAY, label, title, phase=ph))
     if spd:
-        devices.append(Device("FV1", DeviceKind.SPD, "T2 20 кА", text("spd", lang)))
+        label = "T2 20 кА" + (" 4P" if three else "")
+        devices.append(Device("FV1", DeviceKind.SPD, label, text("spd", lang), poles=poles))
     main = [g for g in groups if not g.reserved]
     reserved = [g for g in groups if g.reserved]
-    devices += _group_devices(main, scheme, False, lang, 0)
+    master = any(g.master for g in groups)
+    demand = demand_factor(sum(g.power for g in groups) / 1000)
+    contactors = _master_devices(groups, demand, three, backup is not None, inp.rating, lang)
+    # The main bus contactor after the shared devices; the backup one heads the backup bus
+    devices += [d for d in contactors if not d.reserve]
+    # The control circuit is on the backup bus if there is one: the switch works on backup too
+    control = Device(
+        CONTROL_ID,
+        DeviceKind.BREAKER,
+        f"B{CONTROL_A}",
+        text("master_control", lang),
+        reserve=backup is not None,
+    )
+    if master and backup is None:
+        devices.append(control)
+    devices += _bus_devices(main, scheme, False, lang, 0)
     if backup is not None:
         if backup == "inverter":
             devices.append(
@@ -322,7 +465,14 @@ def build_panel(plan: Plan, elec: Electrical) -> BoardPanel | None:
                 Device("QS3", DeviceKind.OUTPUT, f"C{SOCKETS_A * 2} 2P", text("inverter_out", lang))
             )
         rcds = sum(1 for d in devices if d.kind is DeviceKind.RCD)
-        devices += _group_devices(reserved, scheme, True, lang, rcds)
+        if master:
+            devices.append(control)
+        devices += [d for d in contactors if d.reserve]
+        devices += _bus_devices(reserved, scheme, True, lang, rcds)
+        if three:  # the backup source has one phase: its devices are on the backup bus phase
+            phase = next((g.phase for g in reserved), PHASES[0])
+            backup_ids = {"QS2", "KM1", "SA1", "QS3", "KM3", CONTROL_ID}
+            devices = [replace(d, phase=phase) if d.id in backup_ids else d for d in devices]
 
     devices = [replace(d, brand=setup.brand) for d in devices]
     panel = BoardPanel(
@@ -337,14 +487,45 @@ def build_panel(plan: Plan, elec: Electrical) -> BoardPanel | None:
         (),
         setup.power,
         setup.backup_power,
+        phases=phases,
+        phases_assumed=setup.phases is None,
     )
     enclosure, rows, fit_note = choose_enclosure(panel.devices, setup.enclosure)
     dc = build_dc(elec, lang) if backup == "inverter" else None
     panel = replace(panel, enclosure=enclosure, rows=tuple(tuple(r) for r in rows), dc=dc)
     warnings = weak_spots(panel, relay, setup.npe_relay)
+    if three:
+        # A three-phase appliance listed for the backup bus: the backup source has one phase
+        for g in groups:
+            if g.three_phase and (g.split_of or g.group) in setup.reserve:
+                warnings.append(Warning("major", _both("w_reserve_3p", g=g.group), g.group))
+    warnings += _master_spots(panel, elec)
     if fit_note is not None:
         warnings.append(fit_note)
     return replace(panel, warnings=tuple(warnings))
+
+
+def _master_spots(panel: BoardPanel, elec: Electrical) -> list[Warning]:
+    """Master switch weak spots: a contactor below the design current of its groups; by the rule
+    (no master_off), a group the switch leaves on for one load while it feeds others too."""
+    out: list[Warning] = []
+    if not panel.master:
+        return out
+    for d in panel.devices:
+        if d.kind is DeviceKind.CONTACTOR:
+            cut = [g for g in panel.groups if g.group in d.feeds]
+            amps_ = contactor_current(cut, panel.demand, d.poles == 4, panel.input.rating)
+            if amps_ > CONTACTOR_A[-1]:
+                r = CONTACTOR_A[-1]
+                out.append(Warning("major", _both("w_master_overload", i=amps(amps_), r=r)))
+    if elec.panel.master_off:
+        return out
+    for g in panel.groups:
+        keep = [ld for ld in g.loads if ld.keep_on]
+        if not g.master and keep and len(g.loads) > len(keep):
+            what = ", ".join(dict.fromkeys(ld.title for ld in keep))
+            out.append(Warning("minor", _both("w_master_mixed", g=g.group, what=what), g.group))
+    return out
 
 
 # Shared devices go in this order on their rail; then the breaker rails (and RCDs), below
@@ -357,6 +538,7 @@ COMMON_KINDS = (
     DeviceKind.ATS,
     DeviceKind.OUTPUT,
     DeviceKind.FEED,
+    DeviceKind.CONTACTOR,
 )
 
 
@@ -483,9 +665,18 @@ def weak_spots(panel: BoardPanel, relay: bool, npe: bool | None = True) -> list[
                     "major", _both("w_select", g=g.group, r=b.rating, i=panel.input.rating), g.group
                 )
             )
-    calc_a = current(panel.calculated)
-    if calc_a > panel.input.rating:
+    calc_a = panel.design_current
+    loads = panel.phase_loads
+    if loads and calc_a > panel.input.rating:
+        worst = max(PHASES, key=lambda p: (loads[p], p))
+        msg = _both("w_total_phase", p=worst, i=amps(calc_a), r=panel.input.rating)
+        out.append(Warning("major", msg))
+    elif calc_a > panel.input.rating:
         out.append(Warning("major", _both("w_total", i=amps(calc_a), r=panel.input.rating)))
+    if loads and unbalance(loads) > UNBALANCE:
+        spread = " · ".join(f"{p} {kw(loads[p])}" for p in PHASES)
+        msg = _both("w_unbalance", s=spread, k=round(unbalance(loads) * 100))
+        out.append(Warning("minor", msg))
     if panel.power_limit is not None and panel.calculated / 1000 > panel.power_limit:
         out.append(
             Warning("major", _both("w_power", p=kw(panel.calculated), lim=f"{panel.power_limit:g}"))
@@ -529,8 +720,10 @@ def reserve_groups(panel: BoardPanel, model: Electrical) -> dict[str, list[Panel
 def device_name(d: Device, language: Language) -> str:
     """Device for purchase: "Автомат 1P C16", "Вводной автомат, C63 2P"; the same in the estimate
     and in the purchase device table."""
-    kind = KIND_NAME.get(d.kind)
-    return f"{kind[language]} {d.label}" if kind is not None else f"{d.title}, {d.label}"
+    kind = KIND_NAME.get((d.kind, d.poles)) or KIND_NAME.get(d.kind)
+    if kind is None:
+        return f"{d.title}, {d.label}"
+    return f"{kind[language]} {d.label.removesuffix(f' {d.poles}P')}"
 
 
 def ceil_div(a: int, b: int) -> int:
@@ -608,6 +801,17 @@ def scheme_title(panel: BoardPanel, language: Language) -> str:
     if panel.backup is not None:
         out += ", " + text(f"with_{panel.backup}", language) + ("*" if panel.backup_assumed else "")
     return out
+
+
+def panel_title(panel: BoardPanel, name: str, language: Language) -> str:
+    """Panel title such as "Щит ЩР: 3 фазы, 400 В — премиум": supply and scheme."""
+    supply = text(f"supply_{panel.phases}", language)
+    return text("title", language, name=name, supply=supply, scheme=scheme_title(panel, language))
+
+
+def grid_text(panel: BoardPanel, language: Language) -> str:
+    """The supply label at the input: "Ввод от сети 400 В"."""
+    return text("grid", language, v=400 if panel.phases == 3 else 230)
 
 
 def color_of(group: str | None, colors: dict[str, int]) -> int | None:

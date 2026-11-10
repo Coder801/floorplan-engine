@@ -89,6 +89,30 @@ def test_walls_with_electrics_only_and_their_content() -> None:
     assert all(b.y == w2.height - 200 for b in w2.boxes)
 
 
+def test_points_at_one_spot_share_a_frame_with_low_voltage_last() -> None:
+    plan = make_plan(WALLS, [DOOR])
+    _, contours = validate_plan(plan)
+    elec = _elec(
+        [
+            {"id": "int", "room": "r", "wall": "w2", "offset": 1000, "height": 300, "type": "data"},
+            {"id": "s1", "offset": 1000, "height": 300, "count": 3, **SOCKETS},
+            {"id": "s2", "offset": 2500, "height": 300, **SOCKETS},
+        ]
+    )
+    wiring = box_wiring(plan, contours, elec)
+    w2 = next(e for e in wall_elevations(plan, contours, elec, wiring) if e.wall == "w2")
+    by_id = {p.id: p for p in w2.points}
+    # One block of 4 posts centred on the offset: sockets on the left, INT on the right
+    assert (by_id["s1"].slot, by_id["s1"].frame) == (-0.5, 4)
+    assert (by_id["int"].slot, by_id["int"].frame) == (1.5, 4)
+    assert (by_id["s2"].slot, by_id["s2"].frame) == (0.0, 1)
+    assert by_id["int"].x == by_id["s1"].x == 1000
+    data = {e["key"]: e for e in elevation_data(plan, contours, elec, wiring, {})}
+    points = {p["id"]: p for p in data["elevation:r.w2"]["points"]}
+    assert (points["int"]["slot"], points["int"]["block"]) == (1.5, 4)
+    assert "slot" not in points["s2"]
+
+
 def test_spread_keeps_order_gap_and_bounds() -> None:
     assert spread([0, 1, 2], 2.0, 0, 100) == [0, 2, 4]
     assert spread([10, 30], 2.0, 0, 100) == [10, 30]  # far apart: in their own places

@@ -140,6 +140,7 @@ export function OverviewStage({ overview, variants, project, openQuestions, canC
                 <b>{t("overview.panel")}:</b>{" "}
                 {t("overview.panelLine", {
                   scheme: t(`overview.schemes.${overview.panel.scheme}`), input: overview.panel.input,
+                  supply: t(overview.panel.phases === 3 ? "overview.supply3" : "overview.supply1"),
                   devices: overview.panel.devices, groups: overview.panel.groups,
                 })}
                 <br />

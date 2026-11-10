@@ -52,6 +52,10 @@ without a manual route are routed again from the new spot; a line with a manual 
 follows it, its ends snapped to the source and target nodes at right angles. An edit whose
 id now means another line or box is not applied (edit_notes).
 
+Master switch (master.py): its control cable (CONTROL_MARK) runs from the panel to the switch as
+a line of its own, the "group" of the control breaker (SF1), whatever group the source gave the
+switch: it drives the contactor coil, not a light.
+
 Wall passes (wall_holes): a ceiling route passes into a neighbouring room above a door or
 opening, so the wall above it is drilled; up to HOLE_CABLES cables per hole, power and
 low-voltage in separate holes. A floor route passes under the opening with no drilling.
@@ -87,6 +91,7 @@ from floorplan_engine.electrical.chases import (
 )
 from floorplan_engine.electrical.groups import group_key
 from floorplan_engine.electrical.loads import heavy_cable
+from floorplan_engine.electrical.master import CONTROL_ID, CONTROL_MARK, master_point
 from floorplan_engine.electrical.routing import (
     Router,
     fit_path,
@@ -140,14 +145,16 @@ def _cable(elec: Electrical, group: str) -> Cable | None:
     return next((c for c in elec.cables if c.group == group), None)
 
 
-def _mark(cable: Cable | None, points: Sequence[ElectricalPoint]) -> tuple[str, bool]:
+def _mark(
+    elec: Electrical, group: str, cable: Cable | None, points: Sequence[ElectricalPoint]
+) -> tuple[str, bool]:
     if cable is not None:
         return cable.cable, False
     if all(p.type in LOW_TYPES for p in points):
         kind = "tv" if all(p.type is PointType.TV for p in points) else "data"
     else:
         kind = "power" if any(p.type in POWER_TYPES for p in points) else "light"
-    heavy = heavy_cable(points) if kind == "power" else None
+    heavy = heavy_cable(elec, group, points) if kind == "power" else None
     return heavy or DEFAULT_MARK[kind], True
 
 
@@ -235,7 +242,8 @@ def box_wiring(
     wiring.yaml: box spots and line routes."""
     if elec.board is None:
         return None
-    grouped = [p for p in elec.points if p.group]
+    master = master_point(elec)
+    grouped = [p for p in elec.points if p.group and p is not master]
     if not grouped:
         return None
     geoms = {g.room.id: g for g in room_geometries(plan, contours)}
@@ -258,6 +266,8 @@ def box_wiring(
     for group in sorted({p.group for p in grouped if p.group}, key=group_key):
         pts = [p for p in grouped if p.group == group]
         links += _group_links(ctx, elec, group, pts, boxes)
+    if master is not None:
+        links.append(_control_link(ctx, elec, master))
     boxes = _sized(boxes, links)
     edited: set[str] = set()
     notes: list[tuple[str, str]] = []
@@ -267,11 +277,11 @@ def box_wiring(
     if edits is not None:
         runs = _manual_runs(runs, edits.wires, free, edited, notes, any_angle)
     height_assumed = "ceiling_height" not in plan.model_fields_set
-    skipped = tuple(p.id for p in elec.points if not p.group)
+    skipped = tuple(p.id for p in elec.points if not p.group and p is not master)
     chases = wall_chases(runs, elec.points, elec.board, boxes)
     chases += channel_chases(elec.cable_channels)
     if elec.plaster == "before":
-        chases = before_plaster(chases, elec.ceiling_conduit)
+        chases = before_plaster(chases, elec.conduit_level)
     holes = wall_holes(runs, passages(list(geoms.values())))
     return Wiring(
         ctx.ceiling,
@@ -366,7 +376,7 @@ def _group_links(
     """Lines of one group by room: through a box, or each point from the panel.
     New boxes are appended to boxes."""
     cable = _cable(elec, group)
-    mark, assumed = _mark(cable, pts)
+    mark, assumed = _mark(elec, group, cable, pts)
     # Route: the group's cable route if it has one; without a cable, the shared electrical route
     # (wiring variant)
     floor = cable.route == "floor" if cable is not None else elec.route == "floor"
@@ -465,6 +475,16 @@ def _group_links(
             continue
         to_point(near.id, _box_height(near, ctx.ceiling), near.rise_mm, p, cross=True)
     return links
+
+
+def _control_link(ctx: _Context, elec: Electrical, p: ElectricalPoint) -> _Link:
+    """Control cable of the master switch: straight from the panel along the electrical route."""
+    route: Route = "floor" if elec.route == "floor" else "ceiling"
+    height = ctx.board.height
+    up = height if route == "floor" else max(ctx.ceiling - height, 0.0)
+    down = _rise(p, ctx.ceiling, route)
+    anchor = ctx.anchors[p.id]
+    return _Link(CONTROL_ID, CONTROL_MARK, False, "board", p.id, anchor, up, down, route, "power")
 
 
 def _looped(points: Sequence[ElectricalPoint]) -> list[ElectricalPoint]:

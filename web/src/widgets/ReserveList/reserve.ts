@@ -23,3 +23,35 @@ export function reserveLevel(watts: number, limitKw: number | null): ReserveLeve
 
 export const reservePower = (r: OverviewReserve, value: string[]) =>
   r.items.reduce((sum, g) => sum + (value.includes(g.id) ? g.power : 0), 0);
+
+// Quick picks: "lighting only" — the least that keeps the flat usable; "most by power" — as many
+// groups as the source holds: lighting first, then sockets, then heavy, smaller ones first, while
+// the sum stays within the source power. Without a known power heavy loads are left out: there is
+// nothing to check them against. "manual": a set that is neither of them.
+export type ReservePreset = "light" | "max" | "manual";
+
+export const lightOnly = (r: OverviewReserve) => r.items.filter((g) => g.kind === "light").map((g) => g.id);
+
+const ORDER = { light: 0, sockets: 1, heavy: 2 } as const;
+
+export function mostByPower(r: OverviewReserve): string[] {
+  const budget = r.limit_kw === null ? Infinity : r.limit_kw * 1000;
+  const items = r.items
+    .filter((g) => r.limit_kw !== null || g.kind !== "heavy")
+    .map((g, k) => ({ g, k }))
+    .sort((a, b) => ORDER[a.g.kind ?? "sockets"] - ORDER[b.g.kind ?? "sockets"] || a.g.power - b.g.power || a.k - b.k);
+  let sum = 0;
+  const on = new Set<string>();
+  for (const { g } of items) {
+    if (sum + g.power > budget) continue;
+    sum += g.power;
+    on.add(g.id);
+  }
+  return r.items.map((g) => g.id).filter((id) => on.has(id));
+}
+
+export function presetOf(r: OverviewReserve, value: string[]): ReservePreset {
+  const same = (ids: string[]) => ids.length > 0 && ids.join() === value.join();
+  if (same(lightOnly(r))) return "light";
+  return same(mostByPower(r)) ? "max" : "manual";
+}

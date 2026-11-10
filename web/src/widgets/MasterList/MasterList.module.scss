@@ -1,0 +1,14 @@
+// Groups the master switch cuts as rows: tick, group, purpose, power on the right
+
+.presets { margin-bottom: 4px; }
+.note.note { margin: 0 0 8px; }
+.list { margin: 0; padding: 0; list-style: none; }
+.row {
+  display: grid; grid-template-columns: auto 56px minmax(0, 1fr) auto; align-items: center; gap: 10px;
+  min-height: 40px; padding: 4px 0; border-top: 1px solid var(--line); cursor: pointer;
+  input { width: 16px; height: 16px; margin: 0; accent-color: var(--hl); }
+}
+li:first-child .row { border-top: 0; }
+.purpose { min-width: 0; }
+.keep { color: var(--major); }
+.power { font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--muted); }

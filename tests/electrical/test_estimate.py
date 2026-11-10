@@ -155,7 +155,8 @@ def test_estimate_project_writes_tables(tmp_path: Path) -> None:
     result = estimate_project(project)
     assert result.estimate is not None and result.estimate.total > 0
     assert result.estimate.from_service == len(result.estimate.lines) - 2  # own price list on top
-    md, csv_path, xlsx = result.files
+    md, csv_path, xlsx, scope = result.files
+    assert scope.name == "work-scope.md" and "work-scope.md" in md.read_text("utf-8")
     assert xlsx.suffix == ".xlsx" and xlsx.stat().st_size > 0
     text = md.read_text("utf-8")
     assert "Смета электрики: Кв" in text and "из сервиса цен (пока имитация" in text
@@ -172,11 +173,17 @@ def test_estimate_project_writes_tables(tmp_path: Path) -> None:
     # with errors gives no estimate (errors go to price_issues)
     (project / "prices.yaml").write_text("items:\n  socket_box: 20\n", "utf-8")
     built = build_project(project)
-    assert [f.name for f in built.estimate] == ["estimate.md", "estimate.csv", "estimate.xlsx"]
+    assert [f.name for f in built.estimate] == [
+        "estimate.md",
+        "estimate.csv",
+        "estimate.xlsx",
+        "work-scope.md",
+    ]
     (project / "prices.yaml").write_text("items:\n  sockt_box: 20\n", "utf-8")
     broken = build_project(project)
     assert broken.price_issues and not broken.estimate
     assert not (project / "out" / "estimate.xlsx").exists()
+    assert not (project / "out" / "work-scope.md").exists()
 
 
 def test_wet_boxes_and_wall_holes_in_estimate() -> None:
@@ -548,8 +555,9 @@ def test_conduit_floor_always_ceiling_only_premium() -> None:
     ]
     wiring, elec = _wiring()
     run = wiring.runs[0]
-    assert conduit_mm(run, False) == 0  # ceiling: no conduit unless chosen
-    assert conduit_mm(run, True) == run.plan_mm  # the ceiling part
+    assert conduit_mm(run, "none") == 0  # ceiling: no conduit unless chosen
+    assert conduit_mm(run, "ceiling") == run.plan_mm  # the ceiling part
+    assert conduit_mm(run, "walls") == run.length_mm  # and the drops in the walls
     assert not any(k.startswith("conduit.") for k in quantities(wiring, elec))
     proper = quantities(wiring, elec.model_copy(update={"mode": "proper"}))
     assert any(k.startswith("conduit.") for k in proper) and proper["work.conduit"] > 0

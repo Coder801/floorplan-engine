@@ -1,7 +1,8 @@
-"""The "Panel" stage questions (panel_*): backup, supply, backup bus contents, a group split on the
-panel, the cable of a heavy appliance; with an inverter also the battery, solar panels and
-the battery box location. Built by code; answers go to answers.yaml and are applied by
-answers.apply_auto_answers."""
+"""The "Panel" stage questions (panel_*): backup, supply (phases and main breaker), backup bus
+contents, a group split on the panel, the cable of a heavy appliance, the master switch (whether,
+what it cuts, where); with an inverter also the battery, solar panels and the battery box
+location. Built by code; answers go to answers.yaml and
+are applied by answers.apply_auto_answers."""
 
 from __future__ import annotations
 
@@ -10,6 +11,7 @@ from floorplan_engine.electrical.loads import (
     current,
     rating_for,
 )
+from floorplan_engine.electrical.master import is_master, master_on
 from floorplan_engine.electrical.panel import (
     BoardPanel,
     reserve_groups,
@@ -21,6 +23,8 @@ from floorplan_engine.model.texts import Language
 
 AUTO_PREFIX = "panel_"  # ids of questions built by code; they are never written in intake.yaml
 BACKUP_OPTIONS = ["none", "inverter", "plug", "station"]
+# A "groups" answer goes into this panel field (validation/answers.apply_auto_answers)
+GROUPS_FIELD = {f"{AUTO_PREFIX}reserve": "reserve", f"{AUTO_PREFIX}master_off": "master_off"}
 
 
 def panel_questions(
@@ -49,6 +53,17 @@ def panel_questions(
                 text=text("q_backup", language),
             )
         )
+    if setup.phases is None:
+        out.append(
+            Question(
+                id=f"{AUTO_PREFIX}phases",
+                stage=Stage.PANEL,
+                target="panel.phases",
+                answer="value",
+                assumption=1.0,
+                text=text("q_phases", language),
+            )
+        )
     if setup.input is None:
         out.append(
             Question(
@@ -59,10 +74,10 @@ def panel_questions(
                 unit="А",
                 assumption=float(panel.input.rating),
                 text=text(
-                    "q_input",
+                    "q_input_3" if panel.phases == 3 else "q_input",
                     language,
                     r=panel.input.rating,
-                    i=amps(current(panel.calculated)),
+                    i=amps(panel.design_current),
                 ),
             )
         )
@@ -80,6 +95,7 @@ def panel_questions(
         )
     if panel.dc is not None:
         out += _dc_questions(elec, panel, language)
+    out += _master_questions(elec, panel, language, model)
     for g in panel.groups:
         if g.split_of == g.group:
             lines = [x for x in panel.groups if x.split_of == g.group]
@@ -131,6 +147,55 @@ def panel_questions(
                     ),
                 )
             )
+    return out
+
+
+def _master_questions(
+    elec: Electrical, panel: BoardPanel, language: Language, model: Electrical | None
+) -> list[Question]:
+    """Master switch: whether it is wanted if unset; with it, what it cuts (default contents) and
+    its place, while the model has no master switch point."""
+    setup = elec.panel
+    if setup.master is None:
+        return [
+            Question(
+                id=f"{AUTO_PREFIX}master",
+                stage=Stage.PANEL,
+                target="panel.master",
+                answer="choice",
+                options=["yes", "no"],
+                option_labels={
+                    "yes": text("q_master_yes", language),
+                    "no": text("q_master_no", language),
+                },
+                assumption="yes" if master_on(elec) else "no",
+                text=text("q_master", language),
+            )
+        ]
+    if not master_on(elec):
+        return []
+    out: list[Question] = []
+    if not setup.master_off:
+        names = ", ".join(g.group for g in panel.groups if g.master) or "—"
+        out.append(
+            Question(
+                id=f"{AUTO_PREFIX}master_off",
+                stage=Stage.PANEL,
+                severity=QSeverity.MINOR,
+                answer="groups",
+                options=list(reserve_groups(panel, model or elec)),
+                text=text("q_master_off", language, names=names),
+            )
+        )
+    if not any(is_master(p) for p in elec.points):
+        out.append(
+            Question(
+                id=f"{AUTO_PREFIX}master_place",
+                stage=Stage.PANEL,
+                severity=QSeverity.MINOR,
+                text=text("q_master_place", language),
+            )
+        )
     return out
 
 

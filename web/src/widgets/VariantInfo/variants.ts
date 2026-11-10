@@ -1,6 +1,6 @@
 // Wiring variants from the manifest: the "mode-route-distribution" key and summary lookup
 
-import type { VariantDistribution, VariantMode, VariantPath, VariantPlaster, VariantRoute, Variants, VariantSummary } from "@/shared/types";
+import type { VariantConduit, VariantDistribution, VariantMode, VariantPath, VariantPlaster, VariantRoute, Variants, VariantSummary } from "@/shared/types";
 
 export const MODES: VariantMode[] = ["economy", "standard", "proper"];
 export const ROUTES: VariantRoute[] = ["ceiling", "floor"];
@@ -41,17 +41,24 @@ export interface VariantChoice {
   route: VariantRoute;
   distribution: VariantDistribution;
   path: VariantPath;
-  conduit: boolean;
+  conduit: VariantConduit | null;  // null: "don't know", as the mode gives (modeConduit)
   plaster: VariantPlaster;
   rough_light: boolean;
 }
 
-type Options = Pick<VariantChoice, "path" | "conduit" | "plaster" | "rough_light">;
+type Options = Pick<VariantChoice, "path" | "plaster" | "rough_light"> & { conduit: VariantConduit };
+
+// Conduit of a mode without its own choice (schema.mode_conduit): premium, on the ceiling
+export const modeConduit = (mode: VariantMode): VariantConduit => (mode === "proper" ? "ceiling" : "none");
+
+// An older build said yes or no for the ceiling
+const conduitOf = (c: VariantSummary["conduit"], mode: VariantMode): VariantConduit =>
+  (typeof c === "boolean" ? (c ? "ceiling" : "none") : c ?? modeConduit(mode));
 
 // Options of a summary; an older build has path and conduit by the mode (schema.mode_path)
 export const optionsOf = (s: VariantSummary | undefined, mode: VariantMode): Options => ({
   path: s?.path ?? (mode === "economy" ? "shortest" : "right"),
-  conduit: s?.conduit ?? mode === "proper",
+  conduit: conduitOf(s?.conduit, mode),
   plaster: s?.plaster ?? "after",
   rough_light: s?.rough_light ?? false,
 });
@@ -60,7 +67,8 @@ export const optionsOf = (s: VariantSummary | undefined, mode: VariantMode): Opt
 export const findChoice = (v: Variants, c: VariantChoice): VariantSummary | undefined =>
   v.items.find((s) => {
     const o = optionsOf(s, s.mode);
-    return s.mode === c.mode && s.route === c.route && s.distribution === c.distribution && o.path === c.path && o.conduit === c.conduit
+    return s.mode === c.mode && s.route === c.route && s.distribution === c.distribution && o.path === c.path
+      && o.conduit === (c.conduit ?? modeConduit(c.mode))
       && o.plaster === c.plaster && o.rough_light === c.rough_light;
   });
 

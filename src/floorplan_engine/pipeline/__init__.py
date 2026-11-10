@@ -6,6 +6,7 @@ project state.
 
 from __future__ import annotations
 
+from floorplan_engine.electrical.estimate import WORK_PREFIX
 from floorplan_engine.pipeline.answers import (
     MAX_ANSWER_TEXT,
     AnswerSaved,
@@ -48,7 +49,6 @@ from floorplan_engine.pipeline.files import (
 )
 from floorplan_engine.pipeline.prices import (
     NEW_PRICES,
-    WORK_PREFIX,
     find_prices,
     load_market,
     load_prices,

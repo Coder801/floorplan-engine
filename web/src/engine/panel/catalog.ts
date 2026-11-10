@@ -155,9 +155,12 @@ const withTest: Renderer = (pen, d, r) => {
   rating(pen, d, r, r.x + r.w - M / 2 - 1);
 };
 
+// A lever per module: 1P breaker, 2P main switch, 3P breaker, 3P+N main switch
+const poles: Renderer = (pen, d, r) => levers(Math.max(1, Math.round(r.w / M)))(pen, d, r);
+
 const RENDERERS: Record<string, Renderer> = {
-  breaker: levers(1),
-  input: levers(2),
+  breaker: poles,
+  input: poles,
   feed: levers(2),
   output: levers(2),
   diff: withTest,
@@ -213,6 +216,15 @@ const RENDERERS: Record<string, Renderer> = {
     });
     rating(pen, d, r);
   },
+};
+
+// Modular contactor of the master switch: a window with "KM" and the coil terminals A1, A2
+RENDERERS.contactor = (pen, d, r) => {
+  body(pen, d, r);
+  const y = mid(r) - FRONT / 2;
+  display(pen, r.x + 4, y + 10, r.w - 8, 10, "KM", "#ffb74d");
+  text(pen, "A1   A2", r.x + r.w / 2, y + 26, 3.6, "#333");
+  rating(pen, d, r);
 };
 
 // Battery box DC devices: a red strip along the bottom of the cover (rating "125 А DC 2P"),
