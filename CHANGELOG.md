@@ -1,3 +1,28 @@
+## v0.4.2 (2026-11-10)
+
+### Feat
+
+- **electrical,viewer**: add the work scope next to the estimate
+- **electrical,viewer**: add three-phase panel and master switch
+- **viewer**: move variant choice into the setup wizard
+- **viewer**: add system views, click selection and reserve page
+- **electrical,service**: add wiring options and the wizard API
+- **cli**: split cli.py into a package, guard serve with login
+- **service**: check access in the service API, add a task queue
+- **electrical,viewer**: add panel device stickers and a PDF to print
+- **service**: keep only the last builds of a project in storage
+
+### Fix
+
+- **deploy**: send server.py scripts as one argument, not through stdin
+- **service,deploy**: answer 404 for lost build files, warn without volume
+
+### Refactor
+
+- **service**: drop the POST /variant endpoint in favour of /wizard
+- **viewer**: split PanelView into painter and parts
+- **drawing**: split plumbing.py into pipe_paths and plumbing_legend
+
 ## v0.4.1 (2026-11-04)
 
 ### Feat
