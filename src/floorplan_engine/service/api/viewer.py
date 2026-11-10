@@ -16,7 +16,6 @@ GET /api/projects/{name}/model/{file}   model YAML
 GET /api/projects/{name}/sheets         sheet manifest from out/project.epd
 GET /api/projects/{name}/sheets/{n}     sheet n (1, 2…): vector primitives for canvas
 POST /api/projects/{name}/wiring        wiring edits → wiring.yaml and rebuild
-POST /api/projects/{name}/variant       wiring variant → variant.yaml and rebuild
 POST /api/projects/{name}/answers       one answer → answers.yaml and rebuild (not for text)
 POST /api/projects/{name}/wizard        variant and answers together, one rebuild
 GET /api/prices                         studio price page: works, own price, market spread
@@ -57,7 +56,6 @@ from floorplan_engine.pipeline import (
     price_page,
     save_answer,
     save_prices,
-    save_variant,
     save_wiring_edits,
     save_wizard,
 )
@@ -319,22 +317,6 @@ def _edit_routes(
         except AuditError as exc:
             raise HTTPException(500, str(exc)) from exc
         return {"built": result.built, "rebuilt": True}
-
-    @app.post("/api/projects/{name}/variant")
-    def choose_variant(
-        request: Request, name: str, data: Annotated[dict[str, Any], Body()]
-    ) -> dict[str, Any]:
-        """Wiring variant: {mode, route, distribution} → variant.yaml, then a rebuild.
-        Each variant has its own route edits (wiring.yaml, variants)."""
-        path = project_dir(request, name)
-        issues = save_variant(path, data)
-        if issues:
-            raise HTTPException(422, "; ".join(f"{i.path}: {i.message}" for i in issues))
-        try:
-            result = build_project(path)
-        except AuditError as exc:
-            raise HTTPException(500, str(exc)) from exc
-        return {"built": result.built, "notes": []}
 
 
 def _price_routes(

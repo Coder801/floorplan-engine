@@ -125,7 +125,7 @@ def test_roles_filter_projects_and_actions(auth: Auth, root: Path) -> None:
     assert client.post("/api/projects/kv1/wiring", json={}).status_code == 403
     assert client.get("/api/prices").status_code == 403  # the studio price list is not theirs
     # A studio client neither chooses the variant nor edits routes, and the page knows it
-    assert client.post("/api/projects/kv1/variant", json={}).status_code == 403
+    assert client.post("/api/projects/kv1/wizard", json={"variant": {}}).status_code == 403
     assert client.get("/api/projects/kv1").json()["can"] == {
         "edit_wiring": False,
         "choose_variant": False,
@@ -251,7 +251,7 @@ def test_access_code_login(auth: Auth, root: Path) -> None:
     assert client.get("/api/projects/kv1").status_code == 200
     assert client.get("/api/projects/kv2").status_code == 404
     assert client.post("/api/projects/kv1/wiring", json={}).status_code == 403
-    assert client.post("/api/projects/kv1/variant", json={}).status_code == 403
+    assert client.post("/api/projects/kv1/wizard", json={"variant": {}}).status_code == 403
 
     with auth.db() as db:
         rows = access_codes.list_codes(db, acc.project_by_slug(db, "kv1"))  # type: ignore[arg-type]

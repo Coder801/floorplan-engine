@@ -105,7 +105,7 @@ def test_project_sheets_and_files_from_storage(
     assert client.get(f"/api/projects/{pid}").status_code == 404
     client.cookies.set(COOKIE, tokens["client"])  # the client sees it, edits nothing
     assert client.get(f"/api/projects/{pid}").json()["can"]["edit_wiring"] is False
-    assert client.post(f"/api/projects/{pid}/variant", json={}).status_code == 403
+    assert client.post(f"/api/projects/{pid}/wizard", json={"variant": {}}).status_code == 403
 
 
 def test_writes_are_new_versions(
@@ -114,9 +114,11 @@ def test_writes_are_new_versions(
     client, _, tokens = setup
     pid = tokens["id"]
     client.cookies.set(COOKIE, tokens["a"])
-    bad = client.post(f"/api/projects/{pid}/variant", json={"mode": "cheap"})
-    assert bad.status_code == 422 and "mode" in bad.json()["detail"]
-    ok = client.post(f"/api/projects/{pid}/variant", json={"mode": "economy", "route": "floor"})
+    url = f"/api/projects/{pid}/wizard"
+    bad = client.post(url, json={"variant": {"mode": "cheap"}})
+    assert bad.status_code == 422
+    assert [i["path"] for i in bad.json()["detail"]["issues"]] == ["mode"]
+    ok = client.post(url, json={"variant": {"mode": "economy", "route": "floor"}})
     assert ok.status_code == 200 and ok.json()["built"] is True
     assert client.post(f"/api/projects/{pid}/wiring", json={"wires": "x"}).status_code == 422
     with auth.db() as db:

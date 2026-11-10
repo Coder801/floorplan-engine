@@ -161,19 +161,20 @@ def test_api_only(root: Path) -> None:
 
 
 def test_choose_variant_open_viewer(root: Path) -> None:
-    """Login off: everything allowed; variant → variant.yaml, an error gives 422 with a field
-    path.
-    """
+    """Login off: everything allowed; the wizard's variant → variant.yaml, an error gives 422
+    with a field path."""
     client = TestClient(create_viewer(root))
     assert client.get("/api/projects/kv1").json()["can"] == {
         "edit_wiring": True,
         "choose_variant": True,
         "answer": True,
     }
-    bad = client.post("/api/projects/kv1/variant", json={"route": "air"})
-    assert bad.status_code == 422 and "route" in bad.json()["detail"]
-    ok = client.post("/api/projects/kv1/variant", json={"mode": "economy", "route": "floor"})
-    assert ok.status_code == 200
+    bad = client.post("/api/projects/kv1/wizard", json={"variant": {"route": "air"}})
+    assert bad.status_code == 422
+    assert [i["path"] for i in bad.json()["detail"]["issues"]] == ["route"]
+    variant = {"mode": "economy", "route": "floor"}
+    assert client.post("/api/projects/kv1/wizard", json={"variant": variant}).status_code == 200
+    assert client.post("/api/projects/kv1/variant", json=variant).status_code in (404, 405)
     text = (root / "kv1" / "variant.yaml").read_text("utf-8")
     assert "mode: economy" in text and "route: floor" in text
 

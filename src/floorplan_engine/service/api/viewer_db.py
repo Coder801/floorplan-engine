@@ -4,7 +4,7 @@ addressed by its id (an old link by name still opens) — its sheets and out/ fi
 latest build in file storage, the model from the latest version.
 
 Writes keep the core as it is: a route edit or a wiring variant is applied by the same core
-function (save_wiring_edits, save_variant) in a temporary folder with the latest version, the
+function (save_wiring_edits, save_wizard) in a temporary folder with the latest version, the
 changed files become a new model version by the user, and the project is rebuilt. The studio
 price list is the caller's studio row in price_list (text with comments).
 
@@ -39,7 +39,6 @@ from floorplan_engine.pipeline import (
     price_page,
     save_answer,
     save_prices,
-    save_variant,
     save_wiring_edits,
     save_wizard,
 )
@@ -378,15 +377,6 @@ def _edit_routes(
 
         result = rewrite(request, key, apply, lambda: saved.rebuild)
         return {"built": result["built"], "rebuilt": saved.rebuild}
-
-    @app.post("/api/projects/{key}/variant")
-    def choose_variant(
-        request: Request, key: str, data: Annotated[dict[str, Any], Body()]
-    ) -> dict[str, Any]:
-        """Wiring variant → variant.yaml of a new model version, then a rebuild (notes are only
-        about route edits, as in the folder viewer: none here)."""
-        result = rewrite(request, key, lambda folder: save_variant(folder, data))
-        return {"built": result["built"], "notes": []}
 
 
 def _price_routes(app: FastAPI, auth: Auth, market_root: Path) -> None:
