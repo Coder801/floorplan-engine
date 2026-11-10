@@ -1,16 +1,8 @@
 answers:
-  panel_input: 63
-  panel_backup: {"accept": true}
-  panel_inverter: {"accept": true}
-  panel_battery: {"accept": true}
-  panel_pv: 0
-  panel_npe: {"accept": true}
-  panel_reserve: ["QF1", "QF3", "QF5", "QF7", "QF11", "QF12"]
+  panel_input: {"accept": true}
+  panel_backup: "station"
+  panel_reserve: ["QF1", "QF3", "QF5", "QF20"]
 log:
-  panel_input: {"at": "2026-11-06T15:52:47+00:00", "by": "donischenko801@gmail.com"}
-  panel_backup: {"at": "2026-11-06T15:52:47+00:00", "by": "donischenko801@gmail.com"}
-  panel_inverter: {"at": "2026-11-06T15:52:47+00:00", "by": "donischenko801@gmail.com"}
-  panel_battery: {"at": "2026-11-06T15:52:47+00:00", "by": "donischenko801@gmail.com"}
-  panel_pv: {"at": "2026-11-06T15:52:47+00:00", "by": "donischenko801@gmail.com"}
-  panel_npe: {"at": "2026-11-06T15:52:47+00:00", "by": "donischenko801@gmail.com"}
-  panel_reserve: {"at": "2026-11-06T15:52:47+00:00", "by": "donischenko801@gmail.com"}
+  panel_input: {"at": "2026-11-08T10:53:47+00:00", "by": "donischenko801@gmail.com"}
+  panel_backup: {"at": "2026-11-08T10:53:47+00:00", "by": "donischenko801@gmail.com"}
+  panel_reserve: {"at": "2026-11-08T10:53:47+00:00", "by": "donischenko801@gmail.com"}

@@ -3,6 +3,7 @@ mode: standard
 route: ceiling
 distribution: boxes
 path: right
-conduit: true
-plaster: before
+conduit: none
+plaster: after
 rough_light: false
+ceiling_height: 2700.0
