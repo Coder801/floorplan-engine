@@ -1,3 +1,9 @@
+## v0.4.3 (2026-11-10)
+
+### Fix
+
+- **deploy**: bump @types/node so npm ci resolves vite 8 peers
+
 ## v0.4.2 (2026-11-10)
 
 ### Feat

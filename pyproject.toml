@@ -1,6 +1,6 @@
 [project]
 name = "floorplan-engine"
-version = "0.4.2"
+version = "0.4.3"
 description = "DXF drawings (room plan, electrical) from a YAML description"
 readme = "README.md"
 requires-python = ">=3.11"
