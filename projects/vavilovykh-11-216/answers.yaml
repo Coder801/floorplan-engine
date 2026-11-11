@@ -1,8 +1,14 @@
 answers:
   panel_input: {"accept": true}
   panel_backup: "station"
-  panel_reserve: ["QF1", "QF3", "QF5", "QF20"]
+  panel_reserve: ["QF1", "QF3", "QF4", "QF5", "QF7", "QF8", "QF11", "QF20", "QF21", "QF22"]
+  panel_phases: 1
+  panel_backup_power: 5
+  panel_master: "yes"
 log:
   panel_input: {"at": "2026-11-08T10:53:47+00:00", "by": "donischenko801@gmail.com"}
   panel_backup: {"at": "2026-11-08T10:53:47+00:00", "by": "donischenko801@gmail.com"}
-  panel_reserve: {"at": "2026-11-08T10:53:47+00:00", "by": "donischenko801@gmail.com"}
+  panel_reserve: {"at": "2026-11-11T00:31:45+00:00", "by": "код: Arsen"}
+  panel_phases: {"at": "2026-11-11T00:30:33+00:00", "by": "код: Arsen"}
+  panel_backup_power: {"at": "2026-11-11T00:30:33+00:00", "by": "код: Arsen"}
+  panel_master: {"at": "2026-11-11T00:30:33+00:00", "by": "код: Arsen"}
