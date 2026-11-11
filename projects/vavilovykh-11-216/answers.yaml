@@ -5,6 +5,7 @@ answers:
   panel_phases: 1
   panel_backup_power: 5
   panel_master: "yes"
+  panel_master_off: ["QF1", "QF2", "QF3", "QF4", "QF5", "QF6", "QF7", "QF8", "QF9", "QF10", "QF11", "QF14", "QF15", "QF16", "QF17", "QF18", "QF19", "QF20", "QF21", "QF22", "QF23", "QF24", "QF25", "QF26", "QF27"]
 log:
   panel_input: {"at": "2026-11-08T10:53:47+00:00", "by": "donischenko801@gmail.com"}
   panel_backup: {"at": "2026-11-08T10:53:47+00:00", "by": "donischenko801@gmail.com"}
@@ -12,3 +13,4 @@ log:
   panel_phases: {"at": "2026-11-11T00:30:33+00:00", "by": "код: Arsen"}
   panel_backup_power: {"at": "2026-11-11T00:30:33+00:00", "by": "код: Arsen"}
   panel_master: {"at": "2026-11-11T00:30:33+00:00", "by": "код: Arsen"}
+  panel_master_off: {"at": "2026-11-11T08:13:09+00:00", "by": "код: Arsen"}

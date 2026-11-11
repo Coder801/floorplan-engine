@@ -1,6 +1,6 @@
 {
   "project": "Квартира, вул. Вавілових, 11, кв. 216",
-  "answers_digest": "5add3dd7bab9a2ef",
+  "answers_digest": "6e05d5528188f30f",
   "stages": [
     {
       "stage": "plan",
@@ -40,13 +40,11 @@
     },
     {
       "stage": "panel",
-      "status": "questions",
+      "status": "ready",
       "builds": true,
       "reason": "",
-      "weight": 1,
-      "questions": [
-        "panel_master_off"
-      ]
+      "weight": 0,
+      "questions": []
     }
   ],
   "questions": [
@@ -222,7 +220,7 @@
       ],
       "option_labels": {},
       "severity": "minor",
-      "state": "open"
+      "state": "answered"
     },
     {
       "id": "panel_backup",
@@ -536,18 +534,6 @@
       "path": "panel",
       "severity": "warning",
       "message": "Зарядная станция — только через силовую вилку-ввод и перекидной рубильник; кабель «вилка-вилка» в розетку запрещён: на штырях напряжение"
-    },
-    {
-      "file": "electrical.yaml",
-      "path": "groups.QF12",
-      "severity": "warning",
-      "message": "QF12: Домофон (розташування уточнити) в общей группе — мастер-выключатель её не отключает, остальные точки группы тоже останутся под напряжением"
-    },
-    {
-      "file": "electrical.yaml",
-      "path": "groups.QF13",
-      "severity": "warning",
-      "message": "QF13: Холодильник в общей группе — мастер-выключатель её не отключает, остальные точки группы тоже останутся под напряжением"
     }
   ]
 }
