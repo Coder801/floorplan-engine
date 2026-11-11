@@ -1,6 +1,6 @@
 {
   "project": "Квартира, вул. Вавілових, 11, кв. 216",
-  "answers_digest": "6e05d5528188f30f",
+  "answers_digest": "44b83c82595d0eda",
   "stages": [
     {
       "stage": "plan",
@@ -168,21 +168,6 @@
       "state": "open"
     },
     {
-      "id": "panel_input",
-      "stage": "panel",
-      "audience": "studio",
-      "text": "Вступний автомат за техумовами? Зараз 63 А (припущення); розрахунковий струм квартири 82,6 А",
-      "target": "panel.input",
-      "also": [],
-      "answer": "value",
-      "unit": "А",
-      "options": [],
-      "option_labels": {},
-      "assumption": 63.0,
-      "severity": "minor",
-      "state": "accepted"
-    },
-    {
       "id": "panel_master_off",
       "stage": "panel",
       "audience": "studio",
@@ -257,6 +242,21 @@
       "options": [],
       "option_labels": {},
       "assumption": 1.0,
+      "severity": "minor",
+      "state": "answered"
+    },
+    {
+      "id": "panel_input",
+      "stage": "panel",
+      "audience": "studio",
+      "text": "Вступний автомат за техумовами? Зараз 63 А (припущення); розрахунковий струм квартири 82,6 А",
+      "target": "panel.input",
+      "also": [],
+      "answer": "value",
+      "unit": "А",
+      "options": [],
+      "option_labels": {},
+      "assumption": 63.0,
       "severity": "minor",
       "state": "answered"
     },
@@ -522,12 +522,6 @@
       "path": "panel",
       "severity": "warning",
       "message": "Расчётный ток квартиры 82,6 А больше вводного автомата 63 А"
-    },
-    {
-      "file": "electrical.yaml",
-      "path": "panel",
-      "severity": "warning",
-      "message": "Вводной автомат 63 А — допущение: уточните по техусловиям (panel.input)"
     },
     {
       "file": "electrical.yaml",

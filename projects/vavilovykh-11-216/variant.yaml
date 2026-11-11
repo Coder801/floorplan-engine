@@ -1,9 +1,10 @@
 # Вариант проводки и настройки монтажа из просмотра (docs/wiring-variants.md).
 mode: standard
 route: ceiling
-distribution: boxes
+distribution: loop
 path: right
-conduit: none
-plaster: after
+conduit: walls
+led_supply: room
+plaster: before
 rough_light: false
 ceiling_height: 2700.0
