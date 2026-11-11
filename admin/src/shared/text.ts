@@ -9,9 +9,12 @@ export const SECTION: Record<Section, string> = {
 export const ROLE: Record<string, string> = {
   owner: "владелец", designer: "проектировщик", installer: "монтажник",
   client: "хозяин квартиры", support: "поддержка",
+  viewer: "просмотр", client_code: "заказчик",
 };
 export const STUDIO_ROLES = ["owner", "designer", "installer"];
 export const PROJECT_ROLES = ["client", "installer"];
+// Access code kinds (access_codes.issue_code): a view code, a client code (answers and the wizard)
+export const CODE_ROLES = ["viewer", "client_code"];
 
 export const STATE: Record<string, string> = {
   active: "действует", accepted: "принято", revoked: "отозван", expired: "истёк",

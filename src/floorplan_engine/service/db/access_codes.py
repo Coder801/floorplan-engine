@@ -1,6 +1,8 @@
 """Project access code (decision 2026-11-02, docs/database.md, "Login"): the studio issues a code
 (`floorplan-engine access code projects/<name>`), a person enters it on the login screen and
-sees that one project, without an account, read only (role `viewer`, access.project_role).
+opens that one project, without an account (access.project_role). The code has a role: `viewer`
+only views, `client_code` (decision 2026-11-11) also answers questions and sets the project up in
+the wizard — for a studio client who has no account.
 
 A code is CODE_LENGTH characters from CODE_ALPHABET (no 0/O and 1/I, so they are not confused
 by ear or in chat), shown as "XXXX-XXXX"; it is valid for CODE_DAYS, can be used any number of
@@ -19,7 +21,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from floorplan_engine.service.db.access import (
+    CODE_ROLES,
     AccessError,
+    CodeRole,
     Principal,
     audit,
     aware,
@@ -63,15 +67,19 @@ def issue_code(
     by: AppUser | None = None,
     label: str = "",
     days: int = CODE_DAYS,
+    role: str = "viewer",
 ) -> str:
     """New project access code; by is who issues it (None means a superuser from the command line),
-    the invite permission is required. Returns the code as "XXXX-XXXX", to be shown once."""
+    the invite permission is required; role is viewer or client_code. Returns the code as
+    "XXXX-XXXX", to be shown once."""
     if (
         by is not None
         and not by.is_superuser
         and not can(project_role(session, Principal(by), project), "invite")
     ):
         raise AccessError("нет права выдавать код доступа")
+    if role not in CODE_ROLES:
+        raise AccessError("Вид кода — просмотр (viewer) или заказчик (client_code)")
     label = label.strip()
     if len(label) > 200:
         raise AccessError("Подпись кода — не длиннее 200 символов")
@@ -83,12 +91,13 @@ def issue_code(
             project_id=project.id,
             code_hash=_hash(code),
             label=label,
+            role=role,
             created_by=by.id if by else None,
             expires_at=now() + timedelta(days=days),
         )
     )
     session.flush()
-    audit(session, "code_issue", user=by, project=project, payload={"label": label})
+    audit(session, "code_issue", user=by, project=project, payload={"label": label, "role": role})
     return format_code(code)
 
 
@@ -174,3 +183,8 @@ def revoke_code(
         session.flush()
         audit(session, "code_revoke", user=by, project=project, payload={"code": str(row.id)})
     return row
+
+
+def code_role(row: AccessCode) -> CodeRole:
+    """The code's role; anything unknown (a row written by hand) only views."""
+    return "client_code" if row.role == "client_code" else "viewer"

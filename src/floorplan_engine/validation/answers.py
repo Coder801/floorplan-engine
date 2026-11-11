@@ -10,7 +10,12 @@ from pydantic import ValidationError
 
 from floorplan_engine.electrical.lines import split_by_lines
 from floorplan_engine.electrical.panel import build_panel
-from floorplan_engine.electrical.panel_questions import AUTO_PREFIX, GROUPS_FIELD, panel_questions
+from floorplan_engine.electrical.panel_questions import (
+    AUTO_PREFIX,
+    FLOAT_FIELDS,
+    GROUPS_FIELD,
+    panel_questions,
+)
 from floorplan_engine.model.intake import (
     ANSWERS_FILE,
     INTAKE_FILE,
@@ -77,13 +82,37 @@ def apply_studio(path: Path, raw: dict[Stage, Any]) -> list[Issue]:
     return issues
 
 
+def text_state(answer: TextAnswer) -> QuestionState:
+    """A text answer: taken into account, sent back, or waiting for the developer."""
+    if answer.resolved:
+        return "answered"
+    return "returned" if answer.returned is not None else "text"
+
+
+def _client_answer(question: Question, answer: object, path: str) -> Issue | None:
+    """A client question only clarifies: the answer is { text } of any kind and is never put into
+    the model; a choice is one of the options, a value is a number."""
+    if not isinstance(answer, TextAnswer):
+        message = "вопрос заказчику только уточняет: ответ — { text: ... }, в модель он не идёт"
+        return Issue(ANSWERS_FILE, path, message)
+    if question.answer == "choice" and answer.text not in question.options:
+        return Issue(ANSWERS_FILE, path, f"допустимые ответы: {', '.join(question.options)}")
+    if question.answer == "value":
+        try:
+            float(answer.text.replace(",", "."))
+        except ValueError:
+            return Issue(ANSWERS_FILE, path, f"ожидается число{format_value(answer.text)}")
+    return None
+
+
 def apply_answers(
     intake: Intake, answers: Answers, raw: dict[Stage, Any]
 ) -> tuple[dict[str, QuestionState], list[Issue]]:
     """Apply answers to the raw stage data (raw is changed in place).
 
-    A value or a choice is put into the question target; text waits for the analyzer;
-    accept keeps the assumption. The source YAML files are not rewritten.
+    A value or a choice is put into the question target; text waits for the developer;
+    accept keeps the assumption; a client question is never put into the model. The source
+    YAML files are not rewritten.
     """
     issues: list[Issue] = []
     states: dict[str, QuestionState] = {q.id: "open" for q in intake.questions}
@@ -106,11 +135,18 @@ def apply_answers(
         if question is None:
             issues.append(Issue(ANSWERS_FILE, path, f"вопроса «{qid}» нет в {INTAKE_FILE}"))
             continue
+        if question.audience == "client":
+            issue = _client_answer(question, answer, path)
+            if issue is not None:
+                issues.append(issue)
+            elif isinstance(answer, TextAnswer):
+                states[qid] = text_state(answer)
+            continue
         if isinstance(answer, Accept):
             states[qid] = "accepted"
             continue
         if isinstance(answer, TextAnswer):
-            states[qid] = "answered" if answer.resolved else "text"
+            states[qid] = text_state(answer)
             continue
         if question.answer == "text":
             issues.append(Issue(ANSWERS_FILE, path, "на этот вопрос нужен ответ { text: ... }"))
@@ -188,7 +224,7 @@ def apply_auto_answers(
             elif isinstance(answer, Accept):
                 states[q.id] = "accepted"
             elif isinstance(answer, TextAnswer):
-                states[q.id] = "answered" if answer.resolved else "text"
+                states[q.id] = text_state(answer)
             elif q.answer == "text":
                 issues.append(Issue(ANSWERS_FILE, path, "на этот вопрос нужен ответ { text: ... }"))
             elif q.answer == "groups":
@@ -210,8 +246,14 @@ def apply_auto_answers(
                 assert q.target is not None
                 panel = _panel_of(raw)
                 if panel is not None:
-                    value = int(answer) if isinstance(answer, float) else answer
-                    panel[q.target.removeprefix("panel.")] = value
+                    field = q.target.removeprefix("panel.")
+                    # Whole fields get an int; the backup power stays as given (3.6 kW)
+                    value = (
+                        int(answer)
+                        if isinstance(answer, float) and field not in FLOAT_FIELDS
+                        else answer
+                    )
+                    panel[field] = value
                     states[q.id] = "answered"
 
     first = auto_questions(raw)

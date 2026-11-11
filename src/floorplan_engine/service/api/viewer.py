@@ -17,6 +17,8 @@ GET /api/projects/{name}/sheets         sheet manifest from out/project.epd
 GET /api/projects/{name}/sheets/{n}     sheet n (1, 2…): vector primitives for canvas
 POST /api/projects/{name}/wiring        wiring edits → wiring.yaml and rebuild
 POST /api/projects/{name}/answers       one answer → answers.yaml and rebuild (not for text)
+POST /api/projects/{name}/answers/review the developer takes a client answer into account or
+                                        sends it back with a comment
 POST /api/projects/{name}/wizard        variant and answers together, one rebuild
 GET /api/prices                         studio price page: works, own price, market spread
 POST /api/prices                        studio price edits → prices.yaml next to the projects
@@ -54,6 +56,7 @@ from floorplan_engine.pipeline import (
     AuditError,
     build_project,
     price_page,
+    review_answer,
     save_answer,
     save_prices,
     save_wiring_edits,
@@ -64,13 +67,17 @@ from floorplan_engine.service.api.viewer_db import (
     answer_body,
     answer_note,
     check_manifest,
+    client_side,
     install_db_routes,
+    question_counts,
     refused_answer,
+    review_body,
+    shown,
     wizard_body,
 )
 from floorplan_engine.service.db import access as acc
 from floorplan_engine.service.objects import ObjectStore
-from floorplan_engine.validation.answers_file import build_digest, with_pending_text
+from floorplan_engine.validation.answers_file import build_digest
 from floorplan_engine.validation.issues import (
     ELECTRICAL_FILE,
     ROOM_FILE,
@@ -143,13 +150,13 @@ def _stale(project: Path, built: float | None, report: dict[str, Any]) -> bool:
     return changed and report.get("answers_digest") != build_digest(text)
 
 
-def _summary(project: Path) -> dict[str, Any]:
+def _summary(project: Path, client: bool = False) -> dict[str, Any]:
     report_path = project / OUT_DIR / REPORT_JSON
     report: dict[str, Any] = (
         json.loads(report_path.read_text("utf-8")) if report_path.exists() else {}
     )
     built = _mtime(report_path)
-    questions = (with_pending_text(report, _answers_of(project)) or {}).get("questions", [])
+    questions = (shown(report, _answers_of(project), client)[0] or {}).get("questions", [])
     return {
         "id": project.name,  # the key in addresses; in the database viewer — the project id
         "name": project.name,
@@ -158,7 +165,7 @@ def _summary(project: Path) -> dict[str, Any]:
         # The model was edited after the build: the sheets show the old state
         "stale": _stale(project, built, report),
         "stages": report.get("stages", []),
-        "open_questions": sum(1 for q in questions if q.get("state") == "open"),
+        **question_counts(questions),
         # Plan preview for the card: GET /api/projects/{name}/out/preview.svg
         "preview": (project / OUT_DIR / PREVIEW_FILE).exists(),
     }
@@ -187,7 +194,7 @@ def _read_routes(
                 (p for name, folder in shown.items() if _is_project(p := root / folder / name)),
                 key=lambda p: p.name,
             )
-        return [_summary(p) for p in folders]
+        return [_summary(p, client_side(request)) for p in folders]
 
     def allowed(request: Request, action: acc.Action) -> bool:
         return _allowed(auth, request, action)
@@ -196,16 +203,16 @@ def _read_routes(
     def project(name: str, request: Request) -> dict[str, Any]:
         path = project_dir(request, name)
         report_path = path / OUT_DIR / REPORT_JSON
-        report = json.loads(report_path.read_text("utf-8")) if report_path.exists() else None
-        answers = _answers_of(path)
+        built = json.loads(report_path.read_text("utf-8")) if report_path.exists() else None
+        report, answers = shown(built, _answers_of(path), client_side(request))
         out = _files(path / OUT_DIR)
         intake_path = path / INTAKE_FILE
         intake = (
             (yaml.safe_load(intake_path.read_text("utf-8")) or {}) if intake_path.exists() else {}
         )
         return {
-            **_summary(path),
-            "report": with_pending_text(report, answers),
+            **_summary(path, client_side(request)),
+            "report": report,
             "answers": answers,
             "artifact": ARTIFACT_FILE in out,
             "dxf": PROJECT_FILE if PROJECT_FILE in out else None,
@@ -226,6 +233,7 @@ def _read_routes(
                 "edit_wiring": allowed(request, "edit_wiring"),
                 "choose_variant": allowed(request, "choose_variant"),
                 "answer": allowed(request, "answer"),
+                "review": allowed(request, "review"),
             },
         }
 
@@ -285,7 +293,32 @@ def _edit_routes(
         if auth is not None:
             with auth.db() as db:
                 who = auth.principal(db, request)
-        saved = save_answer(path, qid, raw, answer_note(who))
+        saved = save_answer(path, qid, raw, answer_note(who), client=client_side(request))
+        if saved.issues:
+            raise refused_answer(saved)
+        if not saved.rebuild:
+            return {"built": False, "rebuilt": False}
+        try:
+            result = build_project(path)
+        except AuditError as exc:
+            raise HTTPException(500, str(exc)) from exc
+        return {"built": result.built, "rebuilt": True}
+
+    @app.post("/api/projects/{name}/answers/review")
+    def review(
+        request: Request, name: str, data: Annotated[dict[str, Any], Body()]
+    ) -> dict[str, Any]:
+        """The developer reviews a client answer: {id, outcome: resolve | return, comment?} →
+        answers.yaml; a rebuild when it is taken into account."""
+        path = project_dir(request, name)
+        qid, outcome, comment = review_body(data)
+        if not _allowed(auth, request, "review"):
+            raise HTTPException(403, "нет права на это действие")
+        who = None
+        if auth is not None:
+            with auth.db() as db:
+                who = auth.principal(db, request)
+        saved = review_answer(path, qid, outcome, comment, answer_note(who))
         if saved.issues:
             raise refused_answer(saved)
         if not saved.rebuild:
@@ -307,7 +340,7 @@ def _edit_routes(
         if auth is not None:
             with auth.db() as db:
                 who = auth.principal(db, request)
-        saved = save_wizard(path, variant, items, answer_note(who))
+        saved = save_wizard(path, variant, items, answer_note(who), client=client_side(request))
         if saved.issues:
             raise refused_answer(saved)
         if not saved.rebuild:

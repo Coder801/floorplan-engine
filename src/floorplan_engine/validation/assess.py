@@ -120,7 +120,8 @@ def assess(report: Report) -> list[StageResult]:
         open_q = [
             q
             for q in report.questions
-            if q.stage is stage and report.question_states.get(q.id, "open") in ("open", "text")
+            if q.stage is stage
+            and report.question_states.get(q.id, "open") in ("open", "text", "returned")
         ]
         result = StageResult(stage, Status.READY, open_questions=open_q)
         results[stage] = result

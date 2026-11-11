@@ -35,27 +35,58 @@ from floorplan_engine.service.db.models import (
 AccountType = Literal["client", "pro"]
 # Project role: from the studio (owner, designer, installer), from the project (client, installer),
 # support via support_grant, superuser, debug guest (visitor), login by an access code to one
-# project (viewer, db/access_codes.py)
+# project (db/access_codes.py): a view code (viewer) or a client code (client_code) — the client
+# sets the flat up without an account: answers and the variant, nothing else
 Role = Literal[
-    "owner", "designer", "installer", "client", "support", "superuser", "visitor", "viewer"
+    "owner",
+    "designer",
+    "installer",
+    "client",
+    "support",
+    "superuser",
+    "visitor",
+    "viewer",
+    "client_code",
 ]
-Action = Literal["view", "answer", "edit_wiring", "choose_variant", "invite", "manage"]
+CodeRole = Literal["viewer", "client_code"]
+CODE_ROLES: tuple[CodeRole, ...] = ("viewer", "client_code")
+Action = Literal["view", "answer", "review", "edit_wiring", "choose_variant", "invite", "manage"]
 
 CAN: dict[Action, frozenset[str]] = {
     "view": frozenset(
-        {"owner", "designer", "installer", "client", "support", "superuser", "visitor", "viewer"}
+        {
+            "owner",
+            "designer",
+            "installer",
+            "client",
+            "support",
+            "superuser",
+            "visitor",
+            "viewer",
+            "client_code",
+        }
     ),
-    "answer": frozenset({"owner", "designer", "client", "superuser"}),
+    "answer": frozenset({"owner", "designer", "client", "client_code", "superuser"}),
+    # Take a client answer into account or send it back with a comment (decision 2026-11-11):
+    # the studio that leads the project
+    "review": frozenset({"owner", "designer", "superuser"}),
     "edit_wiring": frozenset({"owner", "designer", "installer", "support", "superuser"}),
-    # Wiring variant (docs/wiring-variants.md): chosen by whoever edits routes, the studio or the
-    # owner of "Мой ремонт" (owner of their own workspace); a studio client only views
-    "choose_variant": frozenset({"owner", "designer", "installer", "support", "superuser"}),
+    # Wiring variant and the setup wizard (docs/wiring-variants.md): the studio, the owner of
+    # "Мой ремонт" and, since 2026-11-11, a studio client — it is their flat, by invite or by a
+    # client code (client_code). Routes stay with whoever edits them (edit_wiring); a view code
+    # (viewer) only views
+    "choose_variant": frozenset(
+        {"owner", "designer", "installer", "client", "client_code", "support", "superuser"}
+    ),
     "invite": frozenset({"owner", "designer", "client", "superuser"}),
     # Service API (api/app.py): model upload, starting analysis, project deletion. Not a limit on
     # tokens: anyone can own a studio (docs/status.md, "Техдолг")
     "manage": frozenset({"owner", "designer", "superuser"}),
 }
 STUDIO_ROLES = frozenset({"owner", "designer", "installer"})
+# The client side (decision 2026-11-11): sees and answers only the questions asked of the client
+# and the panel settings (pipeline.answers.for_client), never the studio's questions
+CLIENT_SIDE = frozenset({"client", "client_code", "viewer"})
 PROJECT_ROLES = frozenset({"client", "installer"})
 
 SESSION_DAYS = 30
@@ -91,6 +122,8 @@ class Principal:
 
     user: AppUser | None
     code_project: uuid.UUID | None = None
+    code_role: CodeRole = "viewer"  # what the code allows (access_codes.issue_code)
+    code_label: str = ""  # whom the code was given to: the author of answers made with it
 
     @property
     def visitor(self) -> bool:
@@ -114,11 +147,12 @@ def can(role: str | None, action: Action) -> bool:
 def project_role(session: Session, who: Principal, project: Project | None) -> Role | None:
     """Project role, or None if the project is not visible. A debug guest sees everything (read
     only),
-    a superuser everything; someone logged in by code only the code's project (viewer, read only);
+    a superuser everything; someone logged in by code only the code's project, with the code's
+    role (viewer reads, client_code also answers and chooses the variant);
     everyone else by studio, project membership or support access. A project outside the
     database (a folder without a row) is visible only to a guest and a superuser."""
     if who.by_code:
-        return "viewer" if project is not None and project.id == who.code_project else None
+        return who.code_role if project is not None and project.id == who.code_project else None
     if who.user is None:
         return "visitor"
     user = who.user

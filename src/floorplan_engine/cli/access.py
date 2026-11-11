@@ -95,17 +95,24 @@ def access_code(
     project: ProjectArg,
     label: Annotated[str, typer.Option(help="Кому выдан (для списка кодов)")] = "",
     days: Annotated[int, typer.Option(help="Срок кода, дней")] = 30,
+    role: Annotated[
+        str,
+        typer.Option(
+            help="viewer — только просмотр; client_code — заказчик: отвечает и настраивает проект"
+        ),
+    ] = "viewer",
 ) -> None:
-    """Код доступа к проекту: человек вводит его на экране входа и смотрит этот проект
-    (только чтение, без учётки). Показывается один раз — в базе только хеш. Проекта нет в
-    базе — записывается без владельца."""
+    """Код доступа к проекту: человек вводит его на экране входа и открывает этот проект без
+    учётки. Код просмотра только смотрит, код заказчика (--role client_code) ещё отвечает на
+    вопросы и настраивает проект в мастере. Показывается один раз — в базе только хеш. Проекта
+    нет в базе — записывается без владельца."""
     from floorplan_engine.service.db import access as acc
     from floorplan_engine.service.db import access_codes
 
     with database() as db:
         target = _db_project(db, project, create=True)
         with exit_on(acc.AccessError):
-            code = access_codes.issue_code(db, target, None, label=label, days=days)
+            code = access_codes.issue_code(db, target, None, label=label, days=days, role=role)
         db.commit()
     typer.echo(code)
 
@@ -124,7 +131,8 @@ def access_codes_list(project: ProjectArg) -> None:
         for r in rows:
             state = "отозван" if r.revoked_at else f"до {r.expires_at:%Y-%m-%d}"
             who = f" {r.label}" if r.label else ""
-            typer.echo(f"{str(r.id)[:8]}{who}: {state}, входов {r.uses}")
+            kind = "заказчик" if r.role == "client_code" else "просмотр"
+            typer.echo(f"{str(r.id)[:8]}{who} ({kind}): {state}, входов {r.uses}")
 
 
 @access_app.command("revoke-code")

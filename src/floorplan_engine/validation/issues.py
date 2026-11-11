@@ -37,7 +37,8 @@ class Issue:
         return f"[{self.severity.value}] {where}: {self.message}"
 
 
-QuestionState = Literal["open", "answered", "accepted", "text"]
+# text: answered, waits for the developer; returned: the developer sent the answer back
+QuestionState = Literal["open", "answered", "accepted", "text", "returned"]
 
 
 def format_loc(loc: Iterable[int | str]) -> str:

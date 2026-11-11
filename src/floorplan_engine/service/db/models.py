@@ -271,8 +271,9 @@ class Invite(Base):
 
 class AccessCode(Base):
     """Project access code (db/access_codes.py): the studio issues a code, a person enters it on the
-    login screen and views that one project without an account (read only). Only the sha256 of
-    the code is stored; label says who it was given to, for the list."""
+    login screen and opens that one project without an account. role: viewer — read only,
+    client_code — the client also answers and sets the project up (decision 2026-11-11). Only the
+    sha256 of the code is stored; label says who it was given to, for the list."""
 
     __tablename__ = "access_code"
     __table_args__ = (Index("ix_access_code_project", "project_id", "created_at"),)
@@ -280,6 +281,7 @@ class AccessCode(Base):
     project_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("project.id", ondelete="CASCADE"))
     code_hash: Mapped[str] = mapped_column(String(64), unique=True)
     label: Mapped[str] = mapped_column(String(200), default="")
+    role: Mapped[str] = mapped_column(String(20), default="viewer", server_default="viewer")
     created_by: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("app_user.id", ondelete="SET NULL")
     )

@@ -168,6 +168,7 @@ def test_choose_variant_open_viewer(root: Path) -> None:
         "edit_wiring": True,
         "choose_variant": True,
         "answer": True,
+        "review": True,
     }
     bad = client.post("/api/projects/kv1/wizard", json={"variant": {"route": "air"}})
     assert bad.status_code == 422

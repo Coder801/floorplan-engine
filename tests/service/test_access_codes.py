@@ -49,6 +49,26 @@ def test_issue_use_and_viewer_role(db: Session) -> None:
     assert codes.use_code(db, code).uses == 2  # any number of logins
 
 
+def test_client_code_answers_and_chooses(db: Session) -> None:
+    """A client code (decision 2026-11-11): the client sets the flat up without an account —
+    answers and the variant — but neither edits routes nor invites; a code of an unknown kind
+    is refused."""
+    studio = _user(db, "studio", "pro")
+    kv1 = acc.create_project_for(db, studio, "Кв 1", "kv1")
+    row = codes.use_code(db, codes.issue_code(db, kv1, studio, label="Иван", role="client_code"))
+    assert row.role == "client_code" and codes.code_role(row) == "client_code"
+    who = acc.Principal(None, code_project=kv1.id, code_role=codes.code_role(row))
+    role = acc.project_role(db, who, kv1)
+    assert role == "client_code"
+    assert acc.can(role, "answer") and acc.can(role, "choose_variant")
+    assert not acc.can(role, "edit_wiring") and not acc.can(role, "invite")
+    assert not acc.can(role, "manage")
+    plain = codes.use_code(db, codes.issue_code(db, kv1, studio))
+    assert plain.role == "viewer" and codes.code_role(plain) == "viewer"  # the default only views
+    with pytest.raises(acc.AccessError, match="Вид кода"):
+        codes.issue_code(db, kv1, studio, role="owner")
+
+
 def test_wrong_code_same_message(db: Session) -> None:
     with pytest.raises(acc.AccessError, match=codes.BAD_CODE):
         codes.use_code(db, "ABCD-2345")

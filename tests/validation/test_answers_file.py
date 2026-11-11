@@ -81,6 +81,7 @@ def test_digest_ignores_pending_text_log_and_comments() -> None:
     )
     assert build_digest("answers:\n  q1: 800\n") != base
     assert build_digest("answers:\n  q1: 700\n  q2: { text: т, resolved: true }\n") != base
+    assert build_digest('answers:\n  q1: 700\n  q2: { text: т, returned: "где?" }\n') == base
     assert build_digest("answers:\n  q1: 700\n  q2: { accept: true }\n") != base
     assert build_digest(None) == build_digest("")
     assert build_digest("answers: [") != build_digest("answers: {")
@@ -93,10 +94,24 @@ def test_pending_text_overrides_report_state() -> None:
             {"id": "q2", "state": "text"},
             {"id": "q3", "state": "answered"},
             {"id": "q4", "state": "text"},
+            {"id": "q5", "state": "text"},
+            {"id": "q6", "state": "returned"},
         ]
     }
-    answers = {"q1": {"text": "т"}, "q3": {"text": "т", "resolved": True}, "q4": {"text": "т"}}
+    answers = {
+        "q1": {"text": "т"},
+        "q3": {"text": "т", "resolved": True},
+        "q4": {"text": "т"},
+        "q5": {"text": "т", "returned": "где?"},
+    }
     shown = with_pending_text(report, answers)
     assert shown is not None
-    assert [q["state"] for q in shown["questions"]] == ["text", "open", "answered", "text"]
+    assert [q["state"] for q in shown["questions"]] == [
+        "text",
+        "open",
+        "answered",
+        "text",
+        "returned",
+        "open",
+    ]
     assert with_pending_text(None, {}) is None

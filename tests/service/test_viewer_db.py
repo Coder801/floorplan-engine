@@ -15,6 +15,7 @@ from floorplan_engine.service import project_store as ps
 from floorplan_engine.service import sync
 from floorplan_engine.service.api.auth import COOKIE, Auth, AuthConfig
 from floorplan_engine.service.api.viewer import create_viewer
+from floorplan_engine.service.api.viewer_db import answer_note
 from floorplan_engine.service.db import access as acc
 from floorplan_engine.service.db import repositories as repo
 from floorplan_engine.service.db.models import PriceList, Project
@@ -59,6 +60,15 @@ def setup(auth: Auth, tmp_path: Path) -> tuple[TestClient, LocalObjectStore, dic
     return TestClient(create_viewer(tmp_path / "market", auth, store)), store, tokens
 
 
+def test_answer_note_names_the_code() -> None:
+    """An answer made with a client code is signed with the code's label."""
+    kv = uuid.uuid4()
+    named = acc.Principal(None, code_project=kv, code_role="client_code", code_label="Иван")
+    assert answer_note(named).by == "код: Иван"
+    assert answer_note(acc.Principal(None, code_project=kv)).by == "код доступа"
+    assert answer_note(acc.VISITOR).by is None
+
+
 def test_needs_login(auth: Auth, tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="только со входом"):
         create_viewer(tmp_path, None, LocalObjectStore(tmp_path))
@@ -90,7 +100,12 @@ def test_project_sheets_and_files_from_storage(
     p = client.get(f"/api/projects/{pid}").json()
     assert p["artifact"] and p["dxf"] == "project.dxf" and p["sources"] == ["plan.pdf"]
     assert p["model"] == ["room.yaml", "electrical.yaml"]
-    assert p["can"] == {"edit_wiring": True, "choose_variant": True, "answer": True}
+    assert p["can"] == {
+        "edit_wiring": True,
+        "choose_variant": True,
+        "answer": True,
+        "review": True,
+    }
     assert client.get("/api/projects/kv").json()["id"] == pid  # an old link by name
     manifest = client.get(f"/api/projects/{pid}/sheets").json()
     first = manifest["pages"][0]["index"]
@@ -103,9 +118,14 @@ def test_project_sheets_and_files_from_storage(
     client.cookies.set(COOKIE, tokens["b"])  # another firm: the project does not exist for it
     assert client.get("/api/projects").json() == []
     assert client.get(f"/api/projects/{pid}").status_code == 404
-    client.cookies.set(COOKIE, tokens["client"])  # the client sees it, edits nothing
-    assert client.get(f"/api/projects/{pid}").json()["can"]["edit_wiring"] is False
-    assert client.post(f"/api/projects/{pid}/wizard", json={"variant": {}}).status_code == 403
+    client.cookies.set(COOKIE, tokens["client"])  # the client sets the flat up, routes stay
+    assert client.get(f"/api/projects/{pid}").json()["can"] == {
+        "edit_wiring": False,
+        "choose_variant": True,
+        "answer": True,
+        "review": False,
+    }
+    assert client.post(f"/api/projects/{pid}/wiring", json={}).status_code == 403
 
 
 def test_writes_are_new_versions(
@@ -152,10 +172,11 @@ def test_price_list_of_own_studio(
 
 
 def _with_questions(auth: Auth, store: LocalObjectStore, pid: str) -> None:
-    """A new model version with two questions, built."""
+    """A new model version with a client question and a studio one, built."""
     intake = (
         "questions:\n"
-        '  - { id: q1, stage: plan, text: "Есть обмер?", answer: text, severity: major }\n'
+        '  - { id: q1, stage: plan, audience: client, text: "Есть обмер?", answer: text,'
+        " severity: major }\n"
         '  - { id: q2, stage: plan, text: "Потолок?", answer: value,'
         " target: rooms.r.walls.w2.thickness }\n"
     )
@@ -174,9 +195,6 @@ def test_answers_are_new_versions(
     client, store, tokens = setup
     pid = tokens["id"]
     _with_questions(auth, store, pid)
-    client.cookies.set(COOKIE, tokens["client"])
-    first = client.get(f"/api/projects/{pid}").json()
-    assert first["can"]["answer"] is True
 
     def versions() -> int:
         with auth.db() as db:
@@ -184,37 +202,75 @@ def test_answers_are_new_versions(
             assert latest is not None
             return latest.version
 
+    def state(qid: str) -> str:
+        p = client.get(f"/api/projects/{pid}").json()
+        return str(next(q for q in p["report"]["questions"] if q["id"] == qid)["state"])
+
+    client.cookies.set(COOKIE, tokens["client"])
+    first = client.get(f"/api/projects/{pid}").json()
+    assert first["can"]["answer"] is True and first["can"]["review"] is False
+    # The client sees the questions asked of them and the panel settings, not the studio's
+    ids = [q["id"] for q in first["report"]["questions"]]
+    assert "q1" in ids and "q2" not in ids
+    assert all(q == "q1" or q.startswith("panel_") for q in ids)
+    opened = first["open_questions"]
     start = versions()
-    # A text answer: a new version, no rebuild, the sheets are not stale
+    # A text answer: a new version, no rebuild, the sheets are not stale, waits for the studio
     saved = client.post(
         f"/api/projects/{pid}/answers", json={"id": "q1", "answer": {"text": "нет"}}
     )
     assert saved.json() == {"built": False, "rebuilt": False}
     assert versions() == start + 1
     p = client.get(f"/api/projects/{pid}").json()
-    assert p["stale"] is False
-    assert next(q for q in p["report"]["questions"] if q["id"] == "q1")["state"] == "text"
-    assert p["open_questions"] == first["open_questions"] - 1
-    assert p["answers"]["q1"] == {"text": "нет"}
-    # A refused value changes nothing
+    assert p["stale"] is False and state("q1") == "text"
+    assert p["open_questions"] == opened - 1 and p["waiting_answers"] == 1
+    assert p["answers"] == {"q1": {"text": "нет"}}
+    # The studio question is not the client's to answer; nothing changes
+    bad = client.post(f"/api/projects/{pid}/answers", json={"id": "q2", "answer": 2700})
+    assert bad.status_code == 422
+    assert bad.json()["detail"]["issues"][0]["message"] == "на этот вопрос отвечает студия"
+    assert (
+        client.post(
+            f"/api/projects/{pid}/answers/review", json={"id": "q1", "outcome": "resolve"}
+        ).status_code
+        == 403
+    )
+    assert versions() == start + 1
+    # The studio: a refused value changes nothing, a value is a new version and a rebuild
+    client.cookies.set(COOKIE, tokens["a"])
+    assert client.get(f"/api/projects/{pid}").json()["can"]["review"] is True
     bad = client.post(f"/api/projects/{pid}/answers", json={"id": "q2", "answer": "много"})
     assert bad.status_code == 422
     assert bad.json()["detail"]["issues"][0]["path"] == "answers.q2"
-    assert versions() == start + 1
-    # A value: a new version and a rebuild; the log names who answered
     saved = client.post(f"/api/projects/{pid}/answers", json={"id": "q2", "answer": 2700})
     assert saved.json() == {"built": True, "rebuilt": True}
+    assert state("q2") == "answered" and versions() == start + 2
+    # The studio sends the client answer back: no rebuild, the question is open for the client
+    review = f"/api/projects/{pid}/answers/review"
+    assert client.post(review, json={"id": "q1", "outcome": "return"}).status_code == 422
+    back = client.post(review, json={"id": "q1", "outcome": "return", "comment": "Какой?"})
+    assert back.json() == {"built": False, "rebuilt": False}
+    assert state("q1") == "returned"
+    client.cookies.set(COOKIE, tokens["client"])
     p = client.get(f"/api/projects/{pid}").json()
-    assert p["stale"] is False and p["open_questions"] == first["open_questions"] - 2
-    assert next(q for q in p["report"]["questions"] if q["id"] == "q2")["state"] == "answered"
+    assert p["answers"]["q1"] == {"text": "нет", "returned": "Какой?"}
+    assert p["open_questions"] == opened
+    client.post(f"/api/projects/{pid}/answers", json={"id": "q1", "answer": {"text": "есть"}})
+    # Taken into account: the question closes and the stage weight changes — a rebuild
+    client.cookies.set(COOKIE, tokens["a"])
+    done = client.post(review, json={"id": "q1", "outcome": "resolve"})
+    assert done.json() == {"built": True, "rebuilt": True}
+    assert state("q1") == "answered"
+    assert client.post(review, json={"id": "q1", "outcome": "resolve"}).status_code == 422
     with auth.db() as db:
         latest = repo.latest_model(db, uuid.UUID(pid))
-        assert latest is not None
-        assert latest.version == start + 2 and latest.user_id is not None
-        assert latest.data["answers.yaml"]["log"]["q2"]["by"] == "client"
+        assert latest is not None and latest.user_id is not None
+        log = latest.data["answers.yaml"]["log"]
+        assert log["q2"]["by"] == "a"
+        assert log["q1"]["by"] == "client" and log["q1"]["reviewed_by"] == "a"
 
 
-def test_wizard_is_one_new_version_and_needs_each_right(
+def test_wizard_is_one_new_version_by_the_studio_client(
     setup: tuple[TestClient, LocalObjectStore, dict[str, str]], auth: Auth
 ) -> None:
     client, _, tokens = setup
@@ -230,16 +286,15 @@ def test_wizard_is_one_new_version_and_needs_each_right(
             return latest.version
 
     start = version()
-    client.cookies.set(COOKIE, tokens["client"])  # a studio client answers, but does not choose
-    assert client.post(url, json={"variant": variant, "answers": answers}).status_code == 403
-    assert client.post(url, json={"variant": variant}).status_code == 403
-    assert version() == start
-    client.cookies.set(COOKIE, tokens["a"])
+    client.cookies.set(COOKIE, tokens["b"])  # another firm: the project does not exist for it
+    assert client.post(url, json={"variant": variant}).status_code == 404
+    client.cookies.set(COOKIE, tokens["client"])  # the studio client sets their flat up
     assert client.post(url, json={}).json() == {"built": False, "rebuilt": False}
     assert version() == start
     saved = client.post(url, json={"variant": variant, "answers": answers})
     assert saved.json() == {"built": True, "rebuilt": True}
     assert version() == start + 1
+    client.cookies.set(COOKIE, tokens["a"])
     refused = client.post(url, json={"answers": {"panel_input": -1}})
     assert refused.status_code == 422 and version() == start + 1
 

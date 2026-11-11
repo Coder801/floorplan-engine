@@ -2,8 +2,9 @@
 
 The answer entries are edited line by line, so the comments people left next to them stay
 (`q1: 700 # заказчик 2026-10-29; было 850`). Who answered and when goes to the `log` section.
-A text answer waiting for the analyzer changes nothing in a build: it is outside build_digest, and
-its question state is taken from the answers, not from the report (with_pending_text).
+A text answer not taken into account yet (waiting for the developer, or sent back by them) changes
+nothing in a build: it is outside build_digest, and its question state is taken from the answers,
+not from the report (with_pending_text).
 """
 
 from __future__ import annotations
@@ -42,10 +43,17 @@ def dump_answers(answers: Answers) -> str:
 
 
 def pending_text(answer: object) -> bool:
-    """A text answer the analyzer has not handled yet: plain data or a model."""
+    """A text answer not taken into account yet (waiting, or sent back): plain data or a model."""
     if isinstance(answer, TextAnswer):
         return not answer.resolved
     return isinstance(answer, dict) and "text" in answer and not answer.get("resolved")
+
+
+def returned_text(answer: object) -> bool:
+    """A text answer the developer sent back with a comment."""
+    if isinstance(answer, TextAnswer):
+        return answer.returned is not None
+    return isinstance(answer, dict) and bool(answer.get("returned"))
 
 
 def build_digest(text: str | None) -> str:
@@ -62,8 +70,8 @@ def build_digest(text: str | None) -> str:
 def with_pending_text(
     report: dict[str, Any] | None, answers: dict[str, Any]
 ) -> dict[str, Any] | None:
-    """The report with question states after text answers saved since the build: such an answer
-    does not rebuild the project, so the state in the report may be behind."""
+    """The report with question states after text answers saved or sent back since the build: such
+    a change does not rebuild the project, so the state in the report may be behind."""
     if report is None:
         return None
     questions = []
@@ -71,8 +79,8 @@ def with_pending_text(
         answer = answers.get(q.get("id"))
         state = q.get("state")
         if pending_text(answer):
-            state = "text"
-        elif answer is None and state == "text":
+            state = "returned" if returned_text(answer) else "text"
+        elif answer is None and state in ("text", "returned"):
             state = "open"
         questions.append({**q, "state": state})
     return {**report, "questions": questions}

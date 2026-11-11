@@ -73,6 +73,7 @@ export interface ProjectRow extends ProjectBrief { members: number }
 export interface CodeRow {
   id: string;
   label: string;
+  role: string;  // viewer | client_code
   state: State;
   uses: number;
   created: string | null;

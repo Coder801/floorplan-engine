@@ -37,6 +37,12 @@ STATE_TEXT = {
 }
 
 
+# An open question that has an answer: what is wrong with it
+PENDING_NOTE = {
+    "text": " (ответ получен, ждёт разбора)",
+    "returned": " (ответ возвращён на уточнение)",
+}
+
 UNIT_TEXT = {"mm": "мм"}
 
 
@@ -75,11 +81,9 @@ def render_markdown(name: str, report: Report, results: list[StageResult]) -> st
         lines += ["| id | Этап | Вопрос | Поле | Сейчас в модели | Ответ |"]
         lines += ["| --- | --- | --- | --- | --- | --- |"]
         for q in group:
-            note = (
-                " (ответ получен, ждёт разбора)"
-                if report.question_states.get(q.id) == "text"
-                else ""
-            )
+            note = PENDING_NOTE.get(report.question_states.get(q.id, "open"), "")
+            if q.audience == "client":
+                note = f" (заказчику){note}"
             lines.append(
                 f"| {q.id} | {STAGE_TEXT[q.stage.value]} | {_cell(q.text)}{note} "
                 f"| {_cell(q.target)} | {_cell(q.assumption)} | {_answer_hint(q)} |"
@@ -87,13 +91,16 @@ def render_markdown(name: str, report: Report, results: list[StageResult]) -> st
     closed = [
         q
         for q in report.questions
-        if report.question_states.get(q.id) in STATE_TEXT and report.question_states[q.id] != "text"
+        if report.question_states.get(q.id) in STATE_TEXT
+        and report.question_states[q.id] not in PENDING_NOTE
     ]
     if closed:
         lines += ["", "## Закрытые вопросы", "", "| id | Вопрос | Итог |", "| --- | --- | --- |"]
         for q in closed:
             state = report.question_states[q.id]
-            lines.append(f"| {q.id} | {_cell(q.text)} | {STATE_TEXT[state]} |")
+            # A client answer is taken into account, never put into the model
+            outcome = "учтено" if q.audience == "client" else STATE_TEXT[state]
+            lines.append(f"| {q.id} | {_cell(q.text)} | {outcome} |")
     if report.issues:
         lines += ["", "## Проверка данных", ""]
         lines += [f"- {issue}" for issue in report.issues]

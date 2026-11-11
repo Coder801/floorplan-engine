@@ -20,13 +20,28 @@ intake.yaml is written by the analyzer (currently Claude, following the CLAUDE.m
         text: "Есть ли обмерный план?"
         answer: text
         severity: major                         # only for questions without target
+      - id: q3
+        stage: electrical
+        audience: client                        # asked of the client; studio by default
+        text: "Нужен ли тёплый пол в ванной?"
+        answer: choice
+        options: ["yes", "no"]
+        severity: major
+
+Who is asked (decision 2026-11-11): a studio question is about the drawing (a size, a wall, the
+scale); its value or choice is put into the target, as the developer would edit the YAML. A client
+question only clarifies: it has no target, its answer of any kind is kept as { text } and is never
+put into the model (the drawing follows the design project alone). The developer takes it into
+account (resolved: true, editing the sources if needed) or returns it with a comment (returned).
+Code-built panel questions are the client's own settings (the setup wizard): they apply at once.
 
 answers.yaml holds answers, applied to the stage YAML on load (the sources are not rewritten):
 
     answers:
       q1: 1800                       # value / choice: put into target
-      q2: { text: "обмера нет" }      # text: waits for the analyzer; once handled, resolved: true
-      q3: { accept: true }           # keep the assumption
+      q2: { text: "обмера нет" }      # text: waits for the developer; once handled, resolved: true
+      q3: { text: "yes", returned: "В какой ванной — большой или гостевой?" }  # sent back
+      q4: { accept: true }           # keep the assumption
     log:                             # written by the viewer: who answered and when
       q1: { at: "2026-11-04T10:00:00+00:00", by: "Иван" }
 """
@@ -57,6 +72,10 @@ class Stage(StrEnum):
     PANEL = "panel"  # questions built by code (panel_questions.panel_questions)
 
 
+# Who is asked: the studio (the drawing) or the client (a clarification, never put into the model)
+Audience = Literal["studio", "client"]
+
+
 class QSeverity(StrEnum):
     CRITICAL = "critical"  # the stage is not built without an answer
     MAJOR = "major"  # built on an assumption, affects geometry
@@ -76,6 +95,7 @@ class StageNote(StrictModel):
 class Question(StrictModel):
     id: str = Field(pattern=ID_PATTERN)
     stage: Stage
+    audience: Audience = "studio"
     text: str = Field(min_length=1)
     target: str | None = Field(
         default=None, description="Путь к полю в YAML этапа по id: rooms.kitchen.walls.w3.length"
@@ -114,7 +134,15 @@ class Question(StrictModel):
             raise ValueError("у вопроса с target вес считает код — уберите severity")
         if self.also and self.target is None:
             raise ValueError("also без target не имеет смысла")
-        if self.answer in ("value", "choice") and self.target is None:
+        if self.audience == "client":
+            if self.target is not None:
+                raise ValueError(
+                    "вопрос заказчику только уточняет: target у него не бывает, чертёж меняется "
+                    "только по исходникам"
+                )
+            if self.answer == "groups":
+                raise ValueError("answer: groups — только у вопросов щита")
+        elif self.answer in ("value", "choice") and self.target is None:
             raise ValueError(f"ответ {self.answer} подставляется в поле — нужен target")
         return self
 
@@ -131,18 +159,29 @@ class Accept(StrictModel):
 
 class TextAnswer(StrictModel):
     text: str = Field(min_length=1)
-    # The analyzer moved the answer's meaning into the stage YAML: the question is closed
+    # The developer (or the analyzer) took the answer into account: the question is closed
     resolved: bool = False
+    # The developer sent the answer back with this comment: the question is open again
+    returned: str | None = Field(default=None, min_length=1)
+
+    @model_validator(mode="after")
+    def _one_outcome(self) -> TextAnswer:
+        if self.resolved and self.returned is not None:
+            raise ValueError("ответ либо учтён (resolved), либо возвращён (returned)")
+        return self
 
 
 Answer = float | str | list[str] | Accept | TextAnswer
 
 
 class AnswerNote(StrictModel):
-    """Who answered in the viewer and when; not used in a build."""
+    """Who answered in the viewer and when, and who reviewed a client answer; not used in a
+    build."""
 
     at: str
     by: str | None = None
+    reviewed_at: str | None = None
+    reviewed_by: str | None = None
 
 
 class Answers(StrictModel):

@@ -14,6 +14,7 @@ from floorplan_engine.model.intake import AnswerNote
 from floorplan_engine.pipeline import (
     assess_project,
     build_project,
+    review_answer,
     save_answer,
     save_answers,
     save_variant,
@@ -55,6 +56,14 @@ def project(tmp_path: Path) -> Path:
                 "text": "Есть ли обмер?",
                 "answer": "text",
                 "severity": "major",
+            },
+            {
+                "id": "q4",
+                "stage": "plan",
+                "audience": "client",
+                "text": "Сколько розеток у стола?",
+                "answer": "value",
+                "severity": "minor",
             },
         ]
     }
@@ -134,6 +143,42 @@ def test_resolved_answer_can_be_changed_not_removed(project: Path) -> None:
     assert "изменить" in save_answer(project, "q3", None, None).issues[0].message
     assert save_answer(project, "q3", {"text": "есть"}, NOTE).rebuild
     assert _states(project)["q3"] == "text"
+
+
+def test_client_answers_only_their_questions_and_panel_settings(project: Path) -> None:
+    saved = save_answer(project, "q1", 4000, NOTE, client=True)
+    assert saved.issues[0].message == "на этот вопрос отвечает студия"
+    assert not (project / "answers.yaml").exists()
+    assert "только уточняет" in save_answer(project, "q4", 2, NOTE, client=True).issues[0].message
+    saved = save_answer(project, "q4", {"text": "2"}, NOTE, client=True)
+    assert not saved.issues and not saved.rebuild
+    assert not save_answer(project, "panel_battery", 48, NOTE, client=True).issues
+    assert _states(project)["q4"] == "text"
+
+
+def test_review_sends_back_then_takes_into_account(project: Path) -> None:
+    reviewer = AnswerNote(at="2026-11-11T10:00:00+00:00", by="Студия")
+    assert review_answer(project, "q4", "resolve", None, reviewer).issues  # nothing to review
+    save_answer(project, "q4", {"text": "2"}, NOTE, client=True)
+    assert "комментарием" in review_answer(project, "q4", "return", " ", reviewer).issues[0].message
+    back = review_answer(project, "q4", "return", "У какого стола?", reviewer)
+    assert not back.issues and not back.rebuild
+    assert _states(project)["q4"] == "returned"
+    assert "разобран" in review_answer(project, "q4", "resolve", None, reviewer).issues[0].message
+    # The client answers again: the comment goes, the answer waits for the studio
+    assert not save_answer(project, "q4", {"text": "3"}, NOTE, client=True).issues
+    assert _states(project)["q4"] == "text"
+    done = review_answer(project, "q4", "resolve", None, reviewer)
+    assert not done.issues and done.rebuild
+    assert _states(project)["q4"] == "answered"
+    data = yaml.safe_load((project / "answers.yaml").read_text("utf-8"))
+    assert data["answers"]["q4"] == {"text": "3", "resolved": True}
+    assert data["log"]["q4"] == {
+        "at": NOTE.at,
+        "by": "Иван",
+        "reviewed_at": reviewer.at,
+        "reviewed_by": "Студия",
+    }
 
 
 def test_panel_question_and_answer_in_the_way(project: Path) -> None:

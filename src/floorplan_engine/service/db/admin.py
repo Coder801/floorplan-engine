@@ -277,6 +277,7 @@ def project_detail(session: Session, project: Project) -> dict[str, Any]:
             {
                 "id": str(c.id),
                 "label": c.label,
+                "role": c.role,
                 "state": _state(c.expires_at, c.revoked_at),
                 "uses": c.uses,
                 "created": _time(c.created_at),

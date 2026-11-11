@@ -18,7 +18,8 @@ runner = CliRunner()
 def test_symbols_export(tmp_path: Path) -> None:
     result = runner.invoke(app, ["symbols", str(tmp_path / "sym")])
     assert result.exit_code == 0, result.output
-    assert len(list((tmp_path / "sym").glob("*.dxf"))) == len(SYMBOLS)
+    # A file per block: the low-voltage cabinet shares the panel block
+    assert len(list((tmp_path / "sym").glob("*.dxf"))) == len({s.block for s in SYMBOLS.values()})
 
 
 def test_load_env_reads_dotenv_without_overriding(

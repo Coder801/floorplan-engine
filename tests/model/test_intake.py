@@ -16,6 +16,7 @@ from floorplan_engine.model.intake import (
     Question,
     Stage,
     TargetError,
+    TextAnswer,
     get_target,
     index_path,
     set_target,
@@ -91,12 +92,68 @@ def test_severity_rules(fields: dict[str, Any], expected: QSeverity) -> None:
         ({"target": "a.b", "severity": "minor"}, "вес считает код"),
         ({}, "нужен severity"),
         ({"answer": "value", "severity": "minor"}, "нужен target"),
+        ({"audience": "client", "target": "a.b"}, "только уточняет"),
+        (
+            {"audience": "client", "answer": "groups", "options": ["QF1"], "severity": "minor"},
+            "только у вопросов щита",
+        ),
+        ({"audience": "nobody", "severity": "minor"}, "'studio' or 'client'"),
     ],
 )
 def test_question_schema(fields: dict[str, Any], message: str) -> None:
     intake, issues = parse_model(Intake, {"questions": [_q(**fields)]}, "intake.yaml")
     assert intake is None
     assert message in " ".join(i.message for i in issues)
+
+
+def test_client_question_needs_no_target() -> None:
+    q = Question.model_validate(
+        _q(audience="client", answer="choice", options=["yes", "no"], severity="major")
+    )
+    assert q.audience == "client" and q.target is None
+    assert Question.model_validate(_q(severity="minor")).audience == "studio"
+
+
+@pytest.mark.parametrize(
+    ("answer", "state", "message"),
+    [
+        ('{ text: "2,5" }', "text", None),
+        ('{ text: "2", returned: "Где?" }', "returned", None),
+        ('{ text: "2", resolved: true }', "answered", None),
+        ("2", None, "только уточняет"),
+        ("{ accept: true }", None, "только уточняет"),
+        ("{ text: много }", None, "ожидается число"),
+    ],
+)
+def test_client_answer_is_never_put_into_the_model(
+    tmp_path: Path, answer: str, state: str | None, message: str | None
+) -> None:
+    q = _q(audience="client", answer="value", unit="mm", severity="major")
+    path = _project(tmp_path, {"questions": [q]})
+    (path / "answers.yaml").write_text(f"answers:\n  q: {answer}\n", "utf-8")
+    report = validate_project(path)
+    if message is not None:
+        assert message in " ".join(i.message for i in report.issues)
+        return
+    assert report.question_states == {"q": state}
+    (plan,) = [r for r in assess(report) if r.stage is Stage.PLAN]
+    # Waiting or sent back, the question stays open; taken into account, it closes
+    assert bool(plan.open_questions) is (state != "answered")
+    assert report.plan is not None and report.plan.rooms[0].walls[1].length == 4000
+
+
+def test_client_choice_is_one_of_the_options(tmp_path: Path) -> None:
+    q = _q(audience="client", answer="choice", options=["yes", "no"], severity="minor")
+    path = _project(tmp_path, {"questions": [q]})
+    (path / "answers.yaml").write_text("answers:\n  q: { text: maybe }\n", "utf-8")
+    assert "допустимые ответы: yes, no" in " ".join(
+        i.message for i in validate_project(path).issues
+    )
+
+
+def test_text_answer_is_either_resolved_or_returned() -> None:
+    with pytest.raises(ValueError, match="либо учтён"):
+        TextAnswer(text="т", resolved=True, returned="почему?")
 
 
 def test_index_path() -> None:

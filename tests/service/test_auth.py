@@ -124,12 +124,12 @@ def test_roles_filter_projects_and_actions(auth: Auth, root: Path) -> None:
     assert client.get("/api/projects/folder-only").status_code == 404
     assert client.post("/api/projects/kv1/wiring", json={}).status_code == 403
     assert client.get("/api/prices").status_code == 403  # the studio price list is not theirs
-    # A studio client neither chooses the variant nor edits routes, and the page knows it
-    assert client.post("/api/projects/kv1/wizard", json={"variant": {}}).status_code == 403
+    # A studio client chooses the variant (the wizard) but does not edit routes; the page knows it
     assert client.get("/api/projects/kv1").json()["can"] == {
         "edit_wiring": False,
-        "choose_variant": False,
+        "choose_variant": True,
         "answer": True,
+        "review": False,
     }
 
     # The studio sees its projects but not a folder outside the database; chooses the variant and
@@ -252,6 +252,12 @@ def test_access_code_login(auth: Auth, root: Path) -> None:
     assert client.get("/api/projects/kv2").status_code == 404
     assert client.post("/api/projects/kv1/wiring", json={}).status_code == 403
     assert client.post("/api/projects/kv1/wizard", json={"variant": {}}).status_code == 403
+    assert client.get("/api/projects/kv1").json()["can"] == {
+        "edit_wiring": False,
+        "choose_variant": False,
+        "review": False,
+        "answer": False,
+    }
 
     with auth.db() as db:
         rows = access_codes.list_codes(db, acc.project_by_slug(db, "kv1"))  # type: ignore[arg-type]
@@ -264,6 +270,28 @@ def test_access_code_login(auth: Auth, root: Path) -> None:
     client.post("/api/auth/code", json={"code": "ABCD-2345"})
     client.post("/api/auth/code", json={"code": "ABCD-2346"})
     assert client.post("/api/auth/code", json={"code": code}).status_code == 429
+
+
+def test_client_code_sets_the_project_up(auth: Auth, root: Path) -> None:
+    """A client code: the page knows the client may answer and choose the variant, routes stay
+    closed."""
+    studio_token, _ = _login(auth, "studio")
+    with auth.db() as db:
+        studio = acc.session_user(db, studio_token)
+        assert studio is not None
+        acc.claim_root(db, acc.set_account_type(db, studio, "pro"))
+        kv1 = acc.create_project_for(db, studio, "Кв 1", "kv1")
+        code = access_codes.issue_code(db, kv1, studio, label="Иван", role="client_code")
+
+    client = TestClient(create_viewer(root, auth))
+    assert client.post("/api/auth/code", json={"code": code}).json()["project"] == "kv1"
+    assert client.get("/api/projects/kv1").json()["can"] == {
+        "edit_wiring": False,
+        "review": False,
+        "choose_variant": True,
+        "answer": True,
+    }
+    assert client.post("/api/projects/kv1/wiring", json={}).status_code == 403
 
 
 def test_code_limiter_window() -> None:

@@ -57,8 +57,8 @@ export const removeProjectMember = (id: string, user: string) =>
 export const projectInvite = (id: string, role: string, email: string | null, days: number) =>
   call<{ url: string }>("POST", `${A}/projects/${q(id)}/invites`, { role, email, days });
 export const revokeInvite = (invite: string) => call<{ ok: boolean }>("DELETE", `${A}/invites/${q(invite)}`);
-export const issueCode = (id: string, label: string, days: number) =>
-  call<{ code: string }>("POST", `${A}/projects/${q(id)}/codes`, { label, days });
+export const issueCode = (id: string, role: string, label: string, days: number) =>
+  call<{ code: string }>("POST", `${A}/projects/${q(id)}/codes`, { role, label, days });
 export const revokeCode = (id: string, code: string) =>
   call<ProjectDetail>("DELETE", `${A}/projects/${q(id)}/codes/${q(code)}`);
 export const grantSupport = (id: string, user: string, reason: string, hours: number) =>

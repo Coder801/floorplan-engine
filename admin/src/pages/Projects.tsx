@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import * as api from "@/shared/api";
 import { ago, contact, date, who } from "@/shared/format";
 import { href } from "@/shared/route";
-import { PROJECT_ROLES, ROLE, word } from "@/shared/text";
+import { CODE_ROLES, PROJECT_ROLES, ROLE, word } from "@/shared/text";
 import type { ProjectDetail } from "@/shared/types";
 import { IssueForm, OneTime, PersonPicker } from "@/components/dialogs";
 import { Confirm, ErrorLine, Section, Status, css, cx, useAction, useLoad } from "@/components/ui";
@@ -86,11 +86,11 @@ export function ProjectView({ id, onChanged }: { id: string; onChanged: () => vo
         {p.codes.length === 0 && <div className={css.empty}>Кодов нет</div>}
         {p.codes.length > 0 && (
           <table>
-            <thead><tr><th>Кому</th><th>Статус</th><th>Входов</th><th>Выдан</th><th>До</th><th>Последний вход</th><th /></tr></thead>
+            <thead><tr><th>Кому</th><th>Вид</th><th>Статус</th><th>Входов</th><th>Выдан</th><th>До</th><th>Последний вход</th><th /></tr></thead>
             <tbody>
               {p.codes.map((c) => (
                 <tr key={c.id}>
-                  <td>{c.label || "—"}</td><td><Status state={c.state} /></td>
+                  <td>{c.label || "—"}</td><td>{word(ROLE, c.role)}</td><td><Status state={c.state} /></td>
                   <td className={css.mono}>{c.uses}</td>
                   <td className={css.mono}>{date(c.created, false)}</td>
                   <td className={css.mono}>{date(c.expires, false)}</td>
@@ -159,8 +159,8 @@ export function ProjectView({ id, onChanged }: { id: string; onChanged: () => vo
           onClose={() => setOpen(null)} />
       )}
       {open === "code" && (
-        <IssueForm title="Код доступа к проекту" textLabel="Кому (подпись в списке)" days={30}
-          onIssue={(_r, label, days) => api.issueCode(id, label, days).then((r) => r.code)}
+        <IssueForm title="Код доступа к проекту" roles={CODE_ROLES} textLabel="Кому (подпись в списке)" days={30}
+          onIssue={(role, label, days) => api.issueCode(id, role, label, days).then((r) => r.code)}
           onClose={issued("Код доступа")} />
       )}
       {open === "invite" && (

@@ -231,9 +231,9 @@ def test_adopt_folders_client_gets_one_project(db: Session) -> None:
     assert linked == ["a"] and reason is not None  # a flat owner cannot have a second project
 
 
-def test_personal_owner_chooses_variant_studio_client_does_not(db: Session) -> None:
+def test_personal_owner_and_studio_client_choose_variant(db: Session) -> None:
     """In "Мой ремонт" the owner of their own workspace chooses the variant and edits routes; a
-    studio client only views (docs/wiring-variants.md)."""
+    studio client chooses the variant but does not edit routes (docs/wiring-variants.md)."""
     home = user(db, "home", "client")
     own = acc.create_project_for(db, home, "Моя квартира", "home")
     assert acc.can(role(db, home, own), "choose_variant")
@@ -243,7 +243,7 @@ def test_personal_owner_chooses_variant_studio_client_does_not(db: Session) -> N
     guest = user(db, "guest")
     acc.accept_invite(db, guest, acc.create_invite(db, studio, "client", project=flat))
     assert role(db, guest, flat) == "client"
-    assert not acc.can("client", "choose_variant") and not acc.can("client", "edit_wiring")
+    assert acc.can("client", "choose_variant") and not acc.can("client", "edit_wiring")
 
 
 def test_studios_do_not_cross(db: Session) -> None:

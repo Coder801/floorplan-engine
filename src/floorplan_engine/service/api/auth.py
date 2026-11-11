@@ -354,7 +354,12 @@ class Auth:
         if code_id:
             code = access_codes.active_code(db, uuid.UUID(code_id))
             if code is not None:
-                return acc.Principal(None, code_project=code.project_id)
+                return acc.Principal(
+                    None,
+                    code_project=code.project_id,
+                    code_role=access_codes.code_role(code),
+                    code_label=code.label,
+                )
         if self.config.visitor and request.session.get("visitor"):
             return acc.VISITOR
         return None
@@ -398,6 +403,8 @@ class Auth:
                 action = "choose_variant"
             elif request.method == "POST" and parts[-1] == "answers":
                 action = "answer"
+            elif request.method == "POST" and parts[-2:] == ["answers", "review"]:
+                action = "review"
             # POST /wizard writes both: viewer_db.wizard_body checks each part by the body
             refused = project_access(db, who, request, parts[3], project, action)
             if refused is not None:

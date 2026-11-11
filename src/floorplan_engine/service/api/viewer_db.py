@@ -21,7 +21,7 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from io import BytesIO
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from fastapi import Body, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, PlainTextResponse, Response
@@ -31,12 +31,13 @@ from sqlalchemy.orm import Session
 from floorplan_engine.electrical.estimate import PRICES_FILE
 from floorplan_engine.epd.artifact import FORMAT_VERSION, MANIFEST
 from floorplan_engine.epd.thumbnail import PREVIEW_FILE
-from floorplan_engine.model.intake import ANSWERS_FILE, INTAKE_FILE, AnswerNote
+from floorplan_engine.model.intake import ANSWERS_FILE, INTAKE_FILE, AnswerNote, Stage
 from floorplan_engine.pipeline import (
     ARTIFACT_FILE,
     PROJECT_FILE,
     AnswerSaved,
     price_page,
+    review_answer,
     save_answer,
     save_prices,
     save_wiring_edits,
@@ -86,12 +87,64 @@ def refused_answer(saved: AnswerSaved) -> HTTPException:
 
 
 def answer_note(who: acc.Principal | None) -> AnswerNote:
-    """Who answered and when, for the log of answers.yaml; a code or a guest has no name."""
+    """Who answered and when, for the log of answers.yaml: a user by name, a client code by its
+    label ("код: Иван"); a guest has no name."""
     user = who.user if who is not None else None
-    return AnswerNote(
-        at=datetime.now(UTC).isoformat(timespec="seconds"),
-        by=(user.name or user.email) if user is not None else None,
-    )
+    by = (user.name or user.email) if user is not None else None
+    if who is not None and who.by_code:
+        by = f"код: {who.code_label}" if who.code_label else "код доступа"
+    return AnswerNote(at=datetime.now(UTC).isoformat(timespec="seconds"), by=by)
+
+
+Outcome = Literal["resolve", "return"]
+OUTCOMES: dict[str, Outcome] = {"resolve": "resolve", "return": "return"}
+
+
+def client_side(request: Request) -> bool:
+    """The caller is the client side: sees and answers only the client questions (decision
+    2026-11-11). Login off (no role) — the studio."""
+    return getattr(request.state, "role", None) in acc.CLIENT_SIDE
+
+
+def _for_client(question: dict[str, Any]) -> bool:
+    """A report question the client sees: asked of them or a panel setting (pipeline.for_client;
+    an older build has no audience — its questions are the studio's)."""
+    return question.get("audience") == "client" or question.get("stage") == Stage.PANEL.value
+
+
+def shown(
+    report: dict[str, Any] | None, answers: dict[str, Any], client: bool
+) -> tuple[dict[str, Any] | None, dict[str, Any]]:
+    """The report and the answers as the caller sees them: question states after text answers
+    saved since the build; the client side gets only its questions and their answers."""
+    report = with_pending_text(report, answers)
+    if report is None or not client:
+        return report, answers
+    questions = [q for q in report.get("questions", []) if _for_client(q)]
+    ids = {q.get("id") for q in questions}
+    return {**report, "questions": questions}, {k: v for k, v in answers.items() if k in ids}
+
+
+def question_counts(questions: list[dict[str, Any]]) -> dict[str, int]:
+    """Cards of the project list: questions without an answer (sent back ones too) and answers
+    waiting for the developer."""
+    return {
+        "open_questions": sum(1 for q in questions if q.get("state") in ("open", "returned")),
+        "waiting_answers": sum(1 for q in questions if q.get("state") == "text"),
+    }
+
+
+def review_body(data: dict[str, Any]) -> tuple[str, Outcome, str | None]:
+    """{id, outcome: resolve | return, comment?} of POST /answers/review."""
+    qid, comment = data.get("id"), data.get("comment")
+    outcome = OUTCOMES.get(str(data.get("outcome")))
+    if not isinstance(qid, str) or not qid:
+        raise HTTPException(422, "id: нужен id вопроса")
+    if outcome is None:
+        raise HTTPException(422, "outcome: resolve или return")
+    if comment is not None and not isinstance(comment, str):
+        raise HTTPException(422, "comment: нужна строка")
+    return qid, outcome, comment
 
 
 def answer_body(data: dict[str, Any]) -> tuple[str, Any]:
@@ -140,13 +193,14 @@ def _stale(built_on: ModelVersion, latest: ModelVersion, report: dict[str, Any])
     return report.get("answers_digest") != build_digest(new.get(ANSWERS_FILE))
 
 
-def summary(session: Session, project: Project) -> dict[str, Any]:
-    """The project card: as the folder viewer's _summary, from the latest build and version."""
+def summary(session: Session, project: Project, client: bool = False) -> dict[str, Any]:
+    """The project card: as the folder viewer's _summary, from the latest build and version;
+    client — the counts of the client side (only its questions)."""
     build = ps.latest_build(session, project)
     latest = repo.latest_model(session, project.id)
     built_on = _version_of(session, build)
     report = build.report if build is not None else {}
-    questions = (with_pending_text(report, _answers_of(latest)) or {}).get("questions", [])
+    questions = (shown(report, _answers_of(latest), client)[0] or {}).get("questions", [])
     return {
         "id": str(project.id),
         "name": project.slug or str(project.id),
@@ -155,7 +209,7 @@ def summary(session: Session, project: Project) -> dict[str, Any]:
         # The model was changed after the build: the sheets show the old state
         "stale": built_on is not None and latest is not None and _stale(built_on, latest, report),
         "stages": report.get("stages", []),
-        "open_questions": sum(1 for q in questions if q.get("state") == "open"),
+        **question_counts(questions),
         "preview": build is not None and ps.build_file(session, build, PREVIEW_FILE) is not None,
     }
 
@@ -192,7 +246,7 @@ def _read_routes(
             if who is None:
                 return []
             rows = db.scalars(acc.visible_projects(db, who).order_by(Project.slug)).all()
-            return [summary(db, p) for p in rows]
+            return [summary(db, p, client_side(request)) for p in rows]
 
     @app.get("/api/projects/{key}")
     def project(key: str, request: Request) -> dict[str, Any]:
@@ -202,15 +256,17 @@ def _read_routes(
             version = repo.latest_model(db, p.id)
             data = version.data if version is not None else {}
             names = [f.name for f in build.files] if build is not None else []
-            answers = _answers_of(version)
+            report, answers = shown(
+                build.report if build is not None and build.report else None,
+                _answers_of(version),
+                client_side(request),
+            )
             intake = data.get(INTAKE_FILE)
             model = repo.model_files(version) if version is not None else {}
             own_prices = db.scalar(select(PriceList.id).where(PriceList.project_id == p.id))
             return {
-                **summary(db, p),
-                "report": with_pending_text(
-                    build.report if build is not None and build.report else None, answers
-                ),
+                **summary(db, p, client_side(request)),
+                "report": report,
                 "answers": answers,
                 "artifact": ARTIFACT_FILE in names,
                 "dxf": PROJECT_FILE if PROJECT_FILE in names else None,
@@ -232,6 +288,7 @@ def _read_routes(
                     "edit_wiring": allowed(request, "edit_wiring"),
                     "choose_variant": allowed(request, "choose_variant"),
                     "answer": allowed(request, "answer"),
+                    "review": allowed(request, "review"),
                 },
             }
 
@@ -346,9 +403,32 @@ def _edit_routes(
             note = answer_note(auth.principal(db, request))
         saved = AnswerSaved()
 
+        client = client_side(request)
+
         def apply(folder: Path) -> list[Issue]:
             nonlocal saved
-            saved = save_answer(folder, qid, raw, note)
+            saved = save_answer(folder, qid, raw, note, client=client)
+            if saved.issues:
+                raise refused_answer(saved)
+            return []
+
+        result = rewrite(request, key, apply, lambda: saved.rebuild)
+        return {"built": result["built"], "rebuilt": saved.rebuild}
+
+    @app.post("/api/projects/{key}/answers/review")
+    def review(
+        request: Request, key: str, data: Annotated[dict[str, Any], Body()]
+    ) -> dict[str, Any]:
+        """The developer reviews a client answer: {id, outcome: resolve | return, comment?} →
+        answers.yaml of a new model version; a rebuild when it is taken into account."""
+        qid, outcome, comment = review_body(data)
+        with auth.db() as db:
+            note = answer_note(auth.principal(db, request))
+        saved = AnswerSaved()
+
+        def apply(folder: Path) -> list[Issue]:
+            nonlocal saved
+            saved = review_answer(folder, qid, outcome, comment, note)
             if saved.issues:
                 raise refused_answer(saved)
             return []
@@ -368,9 +448,11 @@ def _edit_routes(
             note = answer_note(auth.principal(db, request))
         saved = AnswerSaved()
 
+        client = client_side(request)
+
         def apply(folder: Path) -> list[Issue]:
             nonlocal saved
-            saved = save_wizard(folder, variant, items, note)
+            saved = save_wizard(folder, variant, items, note, client=client)
             if saved.issues:
                 raise refused_answer(saved)
             return []

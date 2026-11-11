@@ -45,6 +45,7 @@ class InviteIn(BaseModel):
 
 class CodeIn(BaseModel):
     label: str = ""
+    role: str = "viewer"  # viewer or client_code (access_codes.issue_code)
     days: int = Field(default=access_codes.CODE_DAYS, ge=1, le=365)
 
 
@@ -228,7 +229,11 @@ def _project_routes(r: APIRouter, call: _Call, invite_url: Callable[[str], str])
     def issue_code(request: Request, project_id: str, body: CodeIn) -> dict[str, str]:
         def run(db: Session, admin: AppUser) -> dict[str, str]:
             project = adm.get(db, Project, project_id)
-            return {"code": access_codes.issue_code(db, project, admin, body.label, body.days)}
+            return {
+                "code": access_codes.issue_code(
+                    db, project, admin, body.label, body.days, body.role
+                )
+            }
 
         return call(request, run)
 
