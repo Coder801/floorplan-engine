@@ -25,13 +25,14 @@ uv run floorplan-engine dev                                  # просмотр 
 uv run floorplan-engine view                                 # только API просмотра projects/ (8000); пишет только wiring.yaml
 uv run floorplan-engine access link projects/<имя> --owner <email>  # связать папку с базой (вход)
 uv run floorplan-engine access invite projects/<имя> --role client  # ссылка-приглашение
-uv run floorplan-engine access code projects/<имя> --label "Иван"   # код доступа: просмотр проекта без учётки (codes, revoke-code)
+uv run floorplan-engine access code projects/<имя> --label "Иван" [--role client_code]  # код доступа без учётки: просмотр или заказчик — настраивает проект (codes, revoke-code)
 uv run floorplan-engine project push projects/<имя> [--owner <email>]   # папку — в базу: новая версия модели, исходники, сборка (правда — база)
 uv run floorplan-engine project pull <имя> [--to projects] [--force]    # из базы — в папку: модель, исходники, out/ последней сборки
 uv run floorplan-engine project build [<имя>…] [--owner <email>]         # пересобрать из базы текущим кодом: модель не меняется, без имён — все проекты студии
 uv run floorplan-engine project import projects --owner <email>         # перенести папку проектов и прайс/профиль студии в базу (studio push|pull — только студия)
 cd web && npm install && npm run dev                    # только страница просмотра (API — view)
 cd web && npm run build                                 # сборка фронта в web/dist (выкладка — README в web/)
+cd web && npm run storybook                          # Storybook: компоненты по отдельности, http://127.0.0.1:6006
 cd web && npm run check && npm test                     # типы TypeScript и тесты фронта (vitest); покрытие — npm run coverage
 cd admin && npm install && npm run dev                  # админка платформы http://127.0.0.1:5174/admin/ (API — view, вход — в просмотре)
 uv run floorplan-engine analyze projects/<имя>               # LLM-анализ source/ → YAML (подписка)
@@ -124,6 +125,10 @@ Slash-команды: `/plan`, `/electrical`, `/check`, `/review`, `/commit`, `/
   Разобранный (`resolved: true`) ответ можно изменить, но не снять.
 - Ответ на вопрос `groups` — список групп модели, а не линий (`panel_reserve: [QF1, QF3]`): так выбор
   резервной шины переживает смену варианта. Такой вопрос строит только код (`panel_questions`).
+- Вопросы делятся на вопросы студии и вопросы заказчика (`audience`, решение 2026-11-11). Ответ
+  заказчика только уточняет: он хранится как `{ text }` и в модель не подставляется, чертёж
+  меняется только по исходникам. Студия отмечает его «учтено» (`resolved: true`) или возвращает
+  с комментарием (`returned`) — в просмотре, право `review`. Правила — в `analyzer_prompt.md`.
 - `option_labels` у вопроса `choice` — подписи вариантов для заказчика, на языке проекта
   (`{ none: "Без резерва" }`): значения остаются машинными.
 
@@ -139,8 +144,8 @@ group, at }`), по вариантам проводки (`variants.<режим-�
 `variant.yaml` — вариант проводки, выбранный в просмотре (`{ mode, route, distribution, path,
 conduit, plaster, rough_light }`, `docs/wiring-variants.md`): режим, трасса, разводка, форма трассы,
 гофра (нет, на потолке, на потолке и в стенах), монтаж кабеля до или после штукатурки, черновой свет; точки — из проекта. Его тоже пишет только
-просмотр. Нет файла — вариант «как в проекте». Выбирают студия и хозяин «Моего ремонта»,
-клиент студии только смотрит.
+просмотр. Нет файла — вариант «как в проекте». Выбирают студия, хозяин «Моего ремонта»
+и клиент студии — по приглашению или по коду заказчика (решение 2026-11-11); трассы руками правит только тот, у кого `edit_wiring`.
 
 ## Код
 
