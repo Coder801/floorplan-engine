@@ -44,6 +44,7 @@ GLASS = 0xA9D3F2  # window glass
 HANDLE_MM = 1000.0  # door handle above the floor: a mark on the drawing, not a size
 HANDLE_INSET_MM, HANDLE_END_MM = 60.0, 180.0  # handle from the free edge of the leaf
 LW_THIN = 13
+FIXING_HALF_MM = 1.6  # half the fixing stroke across a cable drop, sheet mm
 
 TITLE_H = TEXT_DIM_MM
 SIDE_H = TEXT_SMALL_MM  # line under the heading: view from inside, what is behind the wall
@@ -103,7 +104,7 @@ def elevation_panel(e: WallElevation, scale: float, language: Language) -> Eleva
 
 
 def _title(e: WallElevation, language: Language) -> str:
-    return tr("elev_title", language, room=e.room_name, n=e.index, length=f"{e.length:.0f}")
+    return tr("elev_title", language, title=e.title, length=f"{e.length:.0f}")
 
 
 def _side(e: WallElevation, language: Language) -> str:
@@ -197,6 +198,10 @@ def _draw(
         half = max((50.0 if ch.wide else 30.0) / 2 / scale, 0.3)
         a, b = at(ch.x, ch.y0), at(ch.x, ch.y1)
         rect((a.x - half, a.y, a.x + half, b.y), LW_THIN, GREY, CHASE_LOW if ch.low else CHASE)
+    # Fixings on the cable drops: a short stroke across the drop
+    for f in e.fixings:
+        spot = at(f.x, f.y)
+        line(Vec(spot.x - FIXING_HALF_MM, spot.y), Vec(spot.x + FIXING_HALF_MM, spot.y), LW_WALL)
 
     # Wall: floor and ceiling lines are thicker, the ends are room corners
     line(Vec(x0, floor), Vec(x0 + w, floor), LW_FLOOR)

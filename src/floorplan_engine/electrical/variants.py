@@ -15,10 +15,9 @@ as is; the others use one route for all cables.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from itertools import product
 from typing import get_args
 
-from floorplan_engine.electrical.estimate import PriceSource, build_estimate, conduit_mm
+from floorplan_engine.electrical.estimate import PriceSource, build_estimate, conduit_lengths
 from floorplan_engine.electrical.lines import split_by_lines
 from floorplan_engine.electrical.master import with_master_switch
 from floorplan_engine.electrical.panel import build_panel
@@ -29,8 +28,12 @@ from floorplan_engine.model.schema import (
     Distribution,
     Electrical,
     ElectricalMode,
+    LedSupply,
+    LightWiring,
+    LoopConduit,
     Plan,
     Plaster,
+    PointType,
     Variant,
     WirePath,
     WireRoute,
@@ -41,41 +44,62 @@ MODES: tuple[ElectricalMode, ...] = get_args(ElectricalMode)
 ROUTES: tuple[WireRoute, ...] = get_args(WireRoute)
 
 
-def all_variants() -> list[Variant]:
-    return [Variant(mode=m, route=r) for m, r in product(MODES, ROUTES)]
-
-
 def project_routes(elec: Electrical) -> tuple[WireRoute, ...]:
     """Routes allowed in the project: electrical.yaml routes, or all if unset."""
     return ROUTES if elec.routes is None else tuple(r for r in ROUTES if r in elec.routes)
 
 
+def has_led(elec: Electrical) -> bool:
+    """The project has LED outputs: only then the LED supply is a choice."""
+    return any(p.type is PointType.LED_OUTPUT for p in elec.points)
+
+
+def has_loop_drops(variant: Variant) -> bool:
+    """Daisy chain drops go in conduit: only then loop_conduit is a choice (chases.with_conduit:
+    floor routes always, ceiling routes with conduit in the walls)."""
+    return variant.distribution == "loop" and (
+        variant.route == "floor" or variant.conduit_level == "walls"
+    )
+
+
+def _job(elec: Electrical, variant: Variant) -> dict[str, object]:
+    """Plaster, rough light and the chain drop conduit of the variant; None: as in
+    electrical.yaml."""
+    return {
+        "plaster": variant.plaster or elec.plaster,
+        "rough_light": elec.rough_light if variant.rough_light is None else variant.rough_light,
+        "loop_conduit": variant.loop_conduit or elec.loop_conduit,
+    }
+
+
 def chosen_job(elec: Electrical, variant: Variant) -> Variant:
     """The variant with plaster and rough light spelt out (None: as in electrical.yaml) and the
     path spelt out (None: as the mode gives), as the setup wizard sends it."""
-    return variant.model_copy(
-        update={
-            "path": variant.wire_path,
-            "plaster": variant.plaster or elec.plaster,
-            "rough_light": elec.rough_light if variant.rough_light is None else variant.rough_light,
-        }
-    )
+    return variant.model_copy(update={"path": variant.wire_path, **_job(elec, variant)})
 
 
 def neighbour_variants(elec: Electrical, chosen: Variant) -> list[Variant]:
     """The chosen set with one option changed, each other value of each wizard step: route (only
-    those the project has), distribution, path, conduit, breakers (the mode), plaster and rough
-    light. conduit "don't know" (None) stays with another mode, as in the wizard: then the
-    conduit of that mode comes with it."""
+    those the project has), distribution, path, conduit, light wiring, LED supplies (only with
+    LED outputs), breakers (the mode), plaster, rough light and the chain drop conduit (only with
+    chain drops in conduit, has_loop_drops). conduit "don't know" (None) stays
+    with another mode, as in the wizard: then the conduit of that mode comes with it."""
     base = chosen_job(elec, chosen)
     others: list[tuple[str, tuple[object, ...], object]] = [
         ("route", project_routes(elec), base.route),
         ("distribution", get_args(Distribution), base.distribution),
         ("path", get_args(WirePath), base.path),
         ("conduit", get_args(Conduit), base.conduit_level),
+        ("light_wiring", get_args(LightWiring), base.light_wiring),
+        ("led_supply", get_args(LedSupply) if has_led(elec) else (), base.led_supply),
         ("mode", MODES, base.mode),
         ("plaster", get_args(Plaster), base.plaster),
         ("rough_light", (False, True), base.rough_light),
+        (
+            "loop_conduit",
+            get_args(LoopConduit) if has_loop_drops(base) else (),
+            base.loop_conduit,
+        ),
     ]
     changes = [{f: v} for f, values, now in others for v in values if v != now]
     return [base.model_copy(update=change) for change in changes]
@@ -94,21 +118,25 @@ def default_variant(elec: Electrical) -> Variant:
         distribution=elec.distribution,
         path=elec.path,
         conduit=elec.conduit,
+        light_wiring=elec.light_wiring,
+        led_supply=elec.led_supply,
         plaster=elec.plaster,
         rough_light=elec.rough_light,
+        loop_conduit=elec.loop_conduit,
     )
 
 
 def apply_variant(elec: Electrical, variant: Variant) -> Electrical:
     """Variant electrical model: same points; the variant's options; one route for all cables (the
-    "as in project" variant leaves cable routes untouched). plaster and rough_light are not in the
-    key: they apply to any variant."""
-    job = {
-        "plaster": variant.plaster or elec.plaster,
-        "rough_light": elec.rough_light if variant.rough_light is None else variant.rough_light,
-    }
+    "as in project" variant leaves cable routes untouched). plaster, rough_light and loop_conduit
+    are not in the key: they apply to any variant."""
+    job = _job(elec, variant)
     if variant.key == default_variant(elec).key:
-        same = job == {"plaster": elec.plaster, "rough_light": elec.rough_light}
+        same = job == {
+            "plaster": elec.plaster,
+            "rough_light": elec.rough_light,
+            "loop_conduit": elec.loop_conduit,
+        }
         return elec if same else elec.model_copy(update=job)
     cables = [c.model_copy(update={"route": variant.route}) for c in elec.cables]
     update = {
@@ -117,6 +145,8 @@ def apply_variant(elec: Electrical, variant: Variant) -> Electrical:
         "distribution": variant.distribution,
         "path": variant.path,
         "conduit": variant.conduit,
+        "light_wiring": variant.light_wiring,
+        "led_supply": variant.led_supply,
         "cables": cables,
         **job,
     }
@@ -147,13 +177,16 @@ class VariantSummary:
     edited: bool  # has manual route edits
     plaster: Plaster = "after"
     rough_light: bool = False
+    loop_conduit: LoopConduit = "separate"
 
     def as_dict(self) -> dict[str, object]:
         v = self.variant
         return {
             "key": v.key, "mode": v.mode, "route": v.route, "distribution": v.distribution,
             "path": v.wire_path, "conduit": v.conduit_level,
+            "light_wiring": v.light_wiring, "led_supply": v.led_supply,
             "plaster": self.plaster, "rough_light": self.rough_light,
+            "loop_conduit": self.loop_conduit,
             "total": round(self.total, 2), "currency": self.currency, "unpriced": self.unpriced,
             "cable_m": round(self.cable_m, 1), "devices": self.devices,
             "chases_m": round(self.chases_m, 1), "conduit_m": round(self.conduit_m, 1),
@@ -186,8 +219,9 @@ def variant_summary(
         cable_m=sum(r.length_mm for r in wiring.runs) / 1000,
         devices=len(panel.devices) if panel is not None else 0,
         chases_m=(wiring.chase_length(wide=False) + wiring.chase_length(wide=True)) / 1000,
-        conduit_m=sum(conduit_mm(r, elec.conduit_level) for r in wiring.runs) / 1000,
+        conduit_m=sum(conduit_lengths(wiring, elec.conduit_level).values()) / 1000,
         edited=edits is not None,
         plaster=elec.plaster,
         rough_light=elec.rough_light,
+        loop_conduit=elec.loop_conduit,
     )

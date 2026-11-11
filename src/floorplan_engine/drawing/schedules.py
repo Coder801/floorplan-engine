@@ -8,14 +8,16 @@ from collections.abc import Sequence
 
 from floorplan_engine.drawing.layers import TEXT_DIM_MM, text_width
 from floorplan_engine.drawing.tables import CELL_PAD, TEXT_GAP, Column, Mark, Table, name_width
+from floorplan_engine.electrical.colors import group_colors
 from floorplan_engine.electrical.estimate import SECTIONS, Estimate, format_number
 from floorplan_engine.electrical.estimate import text as estimate_text
-from floorplan_engine.electrical.groups import ASSUMED, GroupRow, group_colors, group_rows
+from floorplan_engine.electrical.groups import ASSUMED, GroupRow, group_rows
 from floorplan_engine.electrical.groups import text as groups_text
 from floorplan_engine.electrical.panel import BoardPanel
 from floorplan_engine.electrical.panel_text import kw
 from floorplan_engine.electrical.point_numbers import point_rows
 from floorplan_engine.electrical.point_numbers import text as points_text
+from floorplan_engine.electrical.wiring import LED_MARK
 from floorplan_engine.electrical.wiring_model import Wiring
 from floorplan_engine.model.schema import Electrical, Plan
 from floorplan_engine.model.texts import Language
@@ -66,7 +68,8 @@ def groups_table(
     marks: dict[str, str] = {}
     for run in wiring.runs if wiring is not None else ():
         lengths[run.group] = lengths.get(run.group, 0.0) + run.length_mm
-        marks[run.group] = run.mark + (ASSUMED if run.mark_assumed else "")
+        if run.mark != LED_MARK or run.group not in marks:  # 12 V LED lines: not the group's cable
+            marks[run.group] = run.mark + (ASSUMED if run.mark_assumed else "")
     devices = {
         d.group: d.label + (ASSUMED if d.assumed else "")
         for d in (panel.devices if panel is not None else ())

@@ -132,4 +132,21 @@ def test_scope_files(tmp_path: Path) -> None:
     assert wb.sheetnames == ["Смета электрики", "Состав работ"]
     cells = [str(c.value) for row in wb["Состав работ"].iter_rows() for c in row if c.value]
     assert "Прокладка кабеля" in cells and "прим." in cells
-    assert any("• фиксация кабеля креплениями" in c for c in cells)
+    assert any("• фиксация кабеля площадками" in c for c in cells)
+
+
+def test_chases_by_wall_material_share_the_chase_scope() -> None:
+    """work.chase.concrete has the scope of work.chase, and a reference to work.chase names
+    every chase line of the estimate."""
+    lines = (
+        Line("rough", "work.cable", "Прокладка кабеля", "м", 10.0, 30.0),
+        Line("rough", "work.chase.concrete", "Штроба узкая, бетон", "м", 2.0, 200.0),
+        Line("rough", "work.chase.aerated", "Штроба узкая, газоблок", "м", 1.0, 90.0),
+    )
+    entries = scope_entries(Estimate(lines, "грн"), "ru")
+    assert [e.key for e in entries] == [ln.key for ln in lines]
+    assert entries[1].includes == entries[2].includes
+    assert (
+        "штроба — отдельные позиции «Штроба узкая, бетон», «Штроба узкая, газоблок»"
+        in entries[0].excludes
+    )

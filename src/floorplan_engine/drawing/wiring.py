@@ -40,15 +40,23 @@ from floorplan_engine.drawing.layers import (
     W_BOX,
     W_CABLES,
     W_TEXT,
+    text_descender,
     text_width,
 )
 from floorplan_engine.drawing.plan import add_text
 from floorplan_engine.electrical.boxes import BOX_SIZE_MM
-from floorplan_engine.electrical.chases import CHASE_CABLES, CHASE_SHARE, HOLE_CABLES
-from floorplan_engine.electrical.groups import group_colors
+from floorplan_engine.electrical.chases import CHASE_CABLES, CHASE_SHARE
+from floorplan_engine.electrical.colors import group_colors
 from floorplan_engine.electrical.panel import OTHER_LINE, LineClass
 from floorplan_engine.electrical.routing import CLEARANCE
-from floorplan_engine.electrical.wiring_model import CHASE_NARROW, JunctionBox, Run, Wiring
+from floorplan_engine.electrical.wiring import LED_MARK
+from floorplan_engine.electrical.wiring_model import (
+    CHASE_NARROW,
+    HOLE_CABLES,
+    JunctionBox,
+    Run,
+    Wiring,
+)
 from floorplan_engine.model.geometry import Vec
 from floorplan_engine.model.scale import sheet
 from floorplan_engine.model.schema import Electrical
@@ -110,8 +118,10 @@ def lay_out(wiring: Wiring) -> tuple[list[list[Vec]], list[Bundle]]:
 
 
 def cable_layer(run: Run, classes: dict[str, LineClass]) -> str:
-    """Layer of a line: low-voltage by its circuit, the rest by what its group is."""
-    line = LineClass("low", False) if run.circuit == "low" else classes.get(run.group, OTHER_LINE)
+    """Layer of a line: low-voltage by its circuit, the rest by what its group is; a 12 V LED line
+    from the panel is low voltage, but lighting, so it goes by its group."""
+    low = run.circuit == "low" and run.mark != LED_MARK
+    line = LineClass("low", False) if low else classes.get(run.group, OTHER_LINE)
     return W_CABLES[(line.purpose, line.rcd, run.route == "floor")].name
 
 
@@ -438,18 +448,22 @@ class _Labels:
             Point(path[-1].as_tuple()).buffer(sheet(POINT_CLEAR_MM)) for path in paths if path
         ]
         self.h = sheet(LENGTH_MM)
+        self.descender = sheet(text_descender(LENGTH_MM))
         self.gap = sheet(LENGTH_OFFSET_MM)
 
     def block(self, area: BaseGeometry) -> None:
         self.taken.append(area)
 
     def _rect(self, text: str, center: Vec, along: Vec) -> BaseGeometry:
+        """The real extents of centred text: half the height above the centre, half the height
+        and the descender below it (across is the text's up direction)."""
         w = sheet(text_width(text, LENGTH_MM)) / 2
         h = self.h / 2
         across = Vec(-along.y, along.x)
         corners = [
-            center + along * sx * w + across * sy * h
-            for sx, sy in ((-1, -1), (1, -1), (1, 1), (-1, 1))
+            center + along * sx * w + across * up
+            for sx in (-1, 1)
+            for up in (-h - self.descender, h)
         ]
         return box(
             min(c.x for c in corners),
@@ -462,6 +476,10 @@ class _Labels:
         if any(rect.intersects(t) for t in self.taken):
             return False
         return not any(rect.intersects(self.lines.geometries[i]) for i in self.lines.query(rect))
+
+    def place(self, text: str, candidates: Iterable[tuple[Vec, Vec]]) -> Label | None:
+        """The first free spot of (centre, text direction); it is taken."""
+        return self._try(text, candidates)
 
     def _try(self, text: str, candidates: Iterable[tuple[Vec, Vec]]) -> Label | None:
         for center, along in candidates:
@@ -556,7 +574,8 @@ def wiring_notes(wiring: Wiring, language: Language) -> list[str]:
             )
         )
     if wiring.holes:
-        notes.append(tr("wiring_holes", language, n=len(wiring.holes), k=HOLE_CABLES))
+        large = sum(1 for h in wiring.holes if h.large)
+        notes.append(tr("wiring_holes", language, n=len(wiring.holes), m=large, k=HOLE_CABLES))
     if any(r.mark_assumed for r in wiring.runs):
         notes.append(tr("wiring_mark_note", language))
     if wiring.skipped:

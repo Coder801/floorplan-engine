@@ -20,7 +20,7 @@ chases) is marked as not planned in it.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from functools import cache
 from pathlib import Path
@@ -37,6 +37,7 @@ from floorplan_engine.electrical.estimate import (
     Estimate,
     Section,
     format_number,
+    split_key,
 )
 from floorplan_engine.electrical.estimate import text as estimate_text
 from floorplan_engine.model.schema import StrictModel
@@ -153,12 +154,12 @@ class ScopeEntry:
     result: str
 
 
-def _excluded(item: Excluded, names: dict[str, str], language: Language) -> str:
+def _excluded(item: Excluded, names: dict[str, list[str]], language: Language) -> str:
     """ "штроба — отдельные позиции «…», «…»": where the excluded operation is paid."""
     if not item.ref:
         where = text("not_in_estimate", language)
     else:
-        found = [f"«{names[ref]}»" for ref in item.ref if ref in names]
+        found = [f"«{name}»" for ref in item.ref for name in names.get(ref, [])]
         if not found:
             where = text("paid_absent", language)
         else:
@@ -173,12 +174,14 @@ def scope_entries(
     """Scope for the work items of this estimate, in estimate order; references use the names
     the items have in this estimate (a price list may rename them)."""
     catalog = catalog or load_scope()
-    names = {ln.key: ln.name for ln in est.lines}
+    names: dict[str, list[str]] = {}  # by item without a parameter: chases by wall material
+    for ln in est.lines:
+        names.setdefault(split_key(ln.key)[0], []).append(ln.name)
     out: list[ScopeEntry] = []
     for section in SECTIONS:
         rows = [ln for ln in est.lines if ln.section == section]
         for no, ln in enumerate(rows, 1):
-            scope = catalog.items.get(ln.key)
+            scope = catalog.items.get(split_key(ln.key)[0])
             if scope is None:
                 continue
             out.append(
@@ -202,10 +205,17 @@ def _qty(entry: ScopeEntry) -> str:
 
 
 def write_scope_markdown(
-    entries: tuple[ScopeEntry, ...], path: Path, title: str, notes: list[str], language: Language
+    entries: tuple[ScopeEntry, ...],
+    path: Path,
+    title: str,
+    notes: list[str],
+    language: Language,
+    terms: Sequence[str] = (),
 ) -> Path:
     """The appendix: the rule about extra work, then every work item with what it includes,
-    what it does not and its result; notes — what the whole estimate leaves out."""
+    what it does not and its result; terms — the section of items agreed with the client
+    apart from the work (terms.terms_scope_markdown); notes — what the whole estimate leaves
+    out."""
 
     def t(key: str) -> str:
         return text(key, language)
@@ -223,6 +233,7 @@ def write_scope_markdown(
                 out += ["", f"**{t('excludes')}:**", ""]
                 out += [f"- {x}" for x in e.excludes]
             out += ["", f"**{t('result')}:** {e.result}", ""]
+    out += terms
     out += [f"- {n}" for n in notes]
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("\n".join(out) + "\n", encoding="utf-8")
@@ -230,9 +241,13 @@ def write_scope_markdown(
 
 
 def scope_sheet(
-    entries: tuple[ScopeEntry, ...], notes: list[str], language: Language
+    entries: tuple[ScopeEntry, ...],
+    notes: list[str],
+    language: Language,
+    terms: Sequence[Sequence[str]] = (),
 ) -> Callable[[Workbook], None]:
-    """A sheet with the same scope for the estimate workbook (estimate.write_xlsx, extra)."""
+    """A sheet with the same scope for the estimate workbook (estimate.write_xlsx, extra);
+    terms — rows of the items agreed apart from the work (terms.terms_scope_sheet)."""
 
     def t(key: str) -> str:
         return text(key, language)
@@ -275,6 +290,12 @@ def scope_sheet(
                 )
                 for cell in ws[ws.max_row]:
                     cell.alignment = wrap
+        for k, row in enumerate(terms):
+            ws.append(list(row))
+            if k == 0:
+                ws.cell(ws.max_row, 2).font = Font(bold=True)
+            for cell in ws[ws.max_row]:
+                cell.alignment = wrap
         ws.append([])
         for note in notes:
             ws.append(["", note])

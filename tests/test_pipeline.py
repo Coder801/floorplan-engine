@@ -14,6 +14,7 @@ from floorplan_engine.model.intake import AnswerNote
 from floorplan_engine.pipeline import (
     assess_project,
     build_project,
+    estimate_project,
     review_answer,
     save_answer,
     save_answers,
@@ -309,3 +310,32 @@ def test_dont_know_closes_panel_questions_with_the_assumption(project: Path) -> 
     assert all(states[qid] == "accepted" for qid in ids)
     elec = assess_project(project).report.electrical
     assert elec is not None and elec.panel.battery_voltage is None  # the model keeps its default
+
+
+def test_terms_go_after_the_estimate_and_into_the_work_scope(project: Path) -> None:
+    prices = {
+        "items": {"work.cable": 30},
+        "terms": {
+            "delivery": {"who": "studio", "pay": "fixed", "price": 1500},
+            "debris": {"who": "client"},
+        },
+    }
+    (project / "prices.yaml").write_text(yaml.safe_dump(prices, allow_unicode=True), "utf-8")
+    result = estimate_project(project)
+    assert result.issues == []
+    md = (project / "out" / "estimate.md").read_text("utf-8")
+    assert "## Обговаривается отдельно" in md
+    assert "| 4 | Вывоз строительного мусора | Заказчик | силами заказчика | — |" in md
+    assert "**Всего со сопутствующими:" in md
+    assert "- Не обговорено с заказчиком: подъём и занос материалов," in md
+    scope = (project / "out" / "work-scope.md").read_text("utf-8")
+    assert "Договорённость: студия, фиксированная сумма — 1 500 грн" in scope
+
+
+def test_terms_errors_name_the_field(project: Path) -> None:
+    prices = {"terms": {"delivery": {"who": "studio", "pay": "percent", "percent": 5}}}
+    (project / "prices.yaml").write_text(yaml.safe_dump(prices), "utf-8")
+    issues = estimate_project(project).issues
+    assert [(i.path, i.message) for i in issues] == [
+        ("terms.delivery", "этот пункт не оплачивается процентом")
+    ]

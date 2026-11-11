@@ -69,6 +69,7 @@ SHEET_SLUGS = {
     "tab_plumbing": "plumbing",
     "tab_points": "points",
     "tab_elevations": "elevations",
+    "tab_mounting": "mounting",
 }
 
 

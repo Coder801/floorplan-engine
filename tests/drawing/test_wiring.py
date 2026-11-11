@@ -76,3 +76,26 @@ def test_readable_reads_left_to_right_or_bottom_up(direction: Vec, expected: Vec
 )
 def test_m_meters_with_comma(mm: float, text: str) -> None:
     assert _m(mm) == text
+
+
+@pytest.mark.parametrize("along", [Vec(1, 0), Vec(0, 1)])
+def test_label_box_covers_the_real_text_with_descender(along: Vec) -> None:
+    """A label's reserved box is the drawn text's extents, descender included: two labels the
+    placer puts side by side never overlap on the sheet."""
+    from ezdxf import bbox
+    from ezdxf.filemanagement import new
+
+    from floorplan_engine.drawing.plan import add_text
+    from floorplan_engine.drawing.wiring import LENGTH_MM, _Labels
+
+    labels = _Labels([])
+    center = Vec(1000, 1000)
+    text = "↑h1,0"
+    rect = labels._rect(text, center, along)
+    msp = new().modelspace()
+    add_text(msp, text, center, LENGTH_MM, "0", math.degrees(math.atan2(along.y, along.x)))
+    ext = bbox.extents(msp.query("TEXT"))
+    tol = 1e-6
+    x0, y0, x1, y1 = rect.bounds
+    assert x0 <= ext.extmin.x + tol and y0 <= ext.extmin.y + tol
+    assert x1 >= ext.extmax.x - tol and y1 >= ext.extmax.y - tol

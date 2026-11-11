@@ -12,6 +12,7 @@ from floorplan_engine.electrical.wiring_model import Wiring
 from floorplan_engine.epd.artifact import export_artifact
 from floorplan_engine.epd.objects import (
     describe_objects,
+    light_chains,
     page_objects,
     plan_areas,
     plan_chains,
@@ -66,6 +67,20 @@ def test_wire_card_has_group_cable_and_lengths() -> None:
     assert rows["Кабель"] == "3x2.5 — допущение"  # no cable type in the model
     assert rows["Откуда"] == "ЩР" and rows["Трасса"] == "по потолку"
     assert rows["Длина"].startswith(f"{run.length_mm / 1000:.1f}".replace(".", ","))
+
+
+def test_wire_and_box_brief_cards_say_only_where() -> None:
+    plan, contours, elec, wiring = _model()
+    cards = describe_objects(plan, contours, elec, wiring)
+    run = next(r for r in wiring.runs if r.target == "s3")
+    brief = cards[f"wire:{run.id}"].brief
+    assert brief is not None and brief.title == "ЩР → Розетка с заземлением, Комната"
+    assert [k for k, _ in brief.rows] == ["Откуда", "Куда", "Трасса"]  # no group, cable, length
+    box = cards["box:box_1"]
+    assert box.brief is not None and box.brief.title == box.title
+    assert [k for k, _ in box.brief.rows] == ["Помещение", "Высота"]
+    assert box.as_dict()["brief"] == box.brief.as_dict()
+    assert "brief" not in cards["point:s1"].as_dict()
 
 
 def test_socket_card_names_the_block_and_carries_its_scheme() -> None:
@@ -224,8 +239,14 @@ def test_plan_sheet_gets_only_drawn_chains(tmp_path: Path) -> None:
         pages = [json.loads(zf.read(n)) for n in zf.namelist() if n.startswith("pages/")]
     page = next(p for p in pages if p.get("stage") == "plan")
     assert page["chains"]["wall:a.w1"] == ["wall:a.w1"]
-    # The opening side of the door and the second dimension are not drawn: only what is on the page
-    assert page["chains"]["wall:a.w3"] == ["wall:a.w3", "dimension:a.w3", "opening:a_door"]
+    # The opening side of the door and the second dimension are not drawn: only what is on the page;
+    # the far side of the partition (b.w1) is, by its wall code
+    assert page["chains"]["wall:a.w3"] == [
+        "wall:a.w3",
+        "dimension:a.w3",
+        "wall:b.w1",
+        "opening:a_door",
+    ]
     assert all("chains" not in p for p in pages if p.get("stage") != "plan")
 
 
@@ -284,3 +305,29 @@ def test_line_groups_hold_group_lines_boxes_points() -> None:
         assert f"wire:{r.id}" in groups[r.group]
         assert not any(f"wire:{r.id}" in keys for g, keys in groups.items() if g != r.group)
     assert all(f"box:{b.id}" in groups[b.group] for b in wiring.boxes)
+
+
+def test_light_chains_bundle_switches_that_share_a_light() -> None:
+    def ceiling(pid: str, x: float) -> dict[str, Any]:
+        return {"id": pid, "room": "r", "type": "downlight", "ceiling": [x, 1500], "group": "QF1"}
+
+    elec = Electrical.model_validate(
+        {
+            "points": [
+                _pt("sw1", "pass_switch", 500, "QF1", height=900, controls=["d1", "d2"]),
+                _pt("sw2", "pass_switch", 2500, "QF1", height=900, controls=["d1", "d2"]),
+                _pt("sw3", "switch", 1500, "QF1", height=900, controls=["d3"]),
+                ceiling("d1", 800),
+                ceiling("d2", 1600),
+                ceiling("d3", 2400),
+            ],
+        }
+    )
+    chains = light_chains(elec)
+    both = chains["point:sw1"]
+    assert both == [
+        "point:sw1", "point:sw2", "switch_link:sw1", "switch_link:sw2",
+        "light_set:d1,d2", "point:d1", "point:d2",
+    ]  # fmt: skip
+    assert all(chains[k] == both for k in both)  # a click on any of them shows all of it
+    assert chains["switch_link:sw3"] == ["point:sw3", "switch_link:sw3", "point:d3"]

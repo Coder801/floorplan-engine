@@ -116,8 +116,9 @@ def test_legend_entries_only_symbol_and_meaning() -> None:
     assert entries[0].text == "Розетка с заземлением"
     assert not any("QF" in e.text or e.text.isdigit() for e in entries)  # no groups and no counts
     legends = side_legends(elec, plan.language)
-    assert set(legends) == {"electrical", "lighting"}
+    assert set(legends) == {"electrical", "lighting", "wiring"}
     assert legends["lighting"] == []  # no lights in the model
+    assert [e.key for e in legends["wiring"]] == ["wires_sockets"]  # colour families only
 
 
 def test_epd_page_has_view_stage_tables_and_theme_objects(tmp_path: Path) -> None:

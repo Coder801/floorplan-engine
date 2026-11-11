@@ -150,6 +150,24 @@ def test_groups_with_wiring_and_panel() -> None:
     assert any("лист «Щит»" in n for n in notes)  # breaker chosen by code
 
 
+def test_group_cable_is_not_the_12v_led_line() -> None:
+    """LED supplies in the panel: the 12 V line to the output is not the group's cable."""
+    plan = make_plan(RECT, [])
+    _, contours = validate_plan(plan)
+    led = _pt("led1", "led_output", "QF1", offset=2000, height=1500)
+    board = {"room": "r", "wall": "w1", "offset": 500, "height": 1700}
+    base = _elec(board=board)
+    elec = base.model_copy(
+        update={"led_supply": "board", "points": [*base.points, ElectricalPoint(**led)]}
+    )
+    wiring = box_wiring(plan, contours, elec)
+    assert wiring is not None
+    built = groups_table(plan, elec, wiring)
+    assert built is not None
+    row = next(r for r in built[0].rows if isinstance(r[0], Mark) and r[0].text == "QF1")
+    assert str(row[2]).rstrip(ASSUMED) == "3x1.5"
+
+
 def test_groups_show_the_phase_on_three_phases() -> None:
     """A three-phase panel adds the "Phase" column after the breaker, from the panel."""
     plan = make_plan(RECT, [])

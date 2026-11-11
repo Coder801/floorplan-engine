@@ -13,10 +13,13 @@ from shapely.geometry.base import BaseGeometry
 
 from floorplan_engine.electrical.anchors import Anchor
 from floorplan_engine.model.geometry import Vec
+from floorplan_engine.model.schema import WallMaterial
 
 BOX_BELOW_CEILING = 200.0  # mm: from the ceiling to the box
 BOX_ABOVE_FLOOR = 300.0  # mm: from the floor to the box for floor routes
 CHASE_NARROW = 2  # up to this many cables a chase is narrow, more is wide
+# One hole per entry into a room (decision 2026-11-11); more cables than this — a large hole
+HOLE_CABLES = 5
 # A conduit is wider than a flat cable: a narrow chase takes one, two side by side need a wide one
 CHASE_NARROW_CONDUIT = 1
 
@@ -110,10 +113,21 @@ class Chase:
     circuit: Circuit = "power"
     span: tuple[float, float] | None = None  # heights from the floor, low to high: only a channel
     conduit: bool = False  # the cables go down the chase in conduit (chases.with_conduit)
+    material: WallMaterial | None = None  # wall material (chases.with_material); None — unknown
+    # Daisy chain points whose cable in and cable out share one conduit (Electrical.loop_conduit
+    # "shared", chases.with_conduit): each pair is one conduit, not two
+    pairs: int = 0
+
+    @property
+    def conduits(self) -> int:
+        """Conduits down the chase: a cable each, a shared pair one."""
+        return self.cables - self.pairs
 
     @property
     def wide(self) -> bool:
-        return self.cables > (CHASE_NARROW_CONDUIT if self.conduit else CHASE_NARROW)
+        if self.conduit:
+            return self.conduits > CHASE_NARROW_CONDUIT
+        return self.cables > CHASE_NARROW
 
 
 @dataclass(frozen=True)
@@ -124,6 +138,12 @@ class Hole:
     cables: int
     circuit: Circuit = "power"
     runs: tuple[str, ...] = ()
+
+    @property
+    def large(self) -> bool:
+        """More than HOLE_CABLES cables: one hole with a core bit, not a drill (decision
+        2026-11-11)."""
+        return self.cables > HOLE_CABLES
 
 
 @dataclass(frozen=True)
@@ -141,6 +161,12 @@ class Wiring:
     edited: frozenset[str] = field(default=frozenset())
     edit_notes: tuple[tuple[str, str], ...] = field(default=())
     before_plaster: bool = False  # cable laid before the plaster: chases only with conduit
+    # Cable drops along the walls, chased or not (the chases before before_plaster, without cable
+    # channels): the elevations put the wall fixings on them
+    drops: tuple[Chase, ...] = field(default=())
+    # Lines whose rise from a chain point goes in the conduit of the cable coming in
+    # (Electrical.loop_conduit "shared", chases.shared_rises): that rise has no conduit of its own
+    shared_rises: frozenset[str] = field(default=frozenset())
 
     @property
     def chase_mm(self) -> float:

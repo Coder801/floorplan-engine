@@ -17,6 +17,7 @@ from floorplan_engine.drawing.electrical import (
     draw_legend,
     legend_rows,
     legend_size,
+    wiring_legend_rows,
 )
 from floorplan_engine.drawing.elevations import elevation_panel
 from floorplan_engine.drawing.layers import (
@@ -35,6 +36,7 @@ from floorplan_engine.drawing.layers import (
     E_SWITCH,
     ELECTRICAL_LAYERS,
     LIGHTING_LAYERS,
+    MOUNTING_LAYERS,
     PLUMBING_LAYERS,
     TEXT_SMALL_MM,
     WIRING_LAYERS,
@@ -42,6 +44,7 @@ from floorplan_engine.drawing.layers import (
     text_width,
 )
 from floorplan_engine.drawing.lighting import draw_lighting, lighting_model, switch_table
+from floorplan_engine.drawing.mounting import bends_table, draw_bends, draw_fixings, fixings_table
 from floorplan_engine.drawing.panel import devices_table, draw_panel_front, fit_panel, panel_notes
 from floorplan_engine.drawing.plan import RoomArea, add_text, draw_plan
 from floorplan_engine.drawing.plumbing import draw_plumbing, fixtures_table, pipes_table
@@ -54,9 +57,11 @@ from floorplan_engine.drawing.schedules import (
 from floorplan_engine.drawing.symbols import define_blocks
 from floorplan_engine.drawing.tables import Table, draw_table, room_schedule
 from floorplan_engine.drawing.wiring import draw_wiring, wiring_notes
+from floorplan_engine.electrical.colors import group_colors
 from floorplan_engine.electrical.elevations import WaterMap, wall_elevations
 from floorplan_engine.electrical.estimate import build_estimate
-from floorplan_engine.electrical.groups import group_colors
+from floorplan_engine.electrical.mounting import PRACTICE, mounting_notes
+from floorplan_engine.electrical.mounting import text as mounting_text
 from floorplan_engine.electrical.panel import BoardPanel, build_panel, line_classes
 from floorplan_engine.electrical.pricing import Prices, price_notes
 from floorplan_engine.electrical.wiring import box_wiring, estimate_wiring
@@ -98,6 +103,8 @@ WIRING_SHEET_LAYERS = (
     E_BOARD,
     *WIRING_LAYERS,
 )
+# Mounting: the wiring sheet plus fixing strokes on the lines
+MOUNTING_SHEET_LAYERS = (*WIRING_SHEET_LAYERS, *MOUNTING_LAYERS)
 # Plumbing: walls, openings, pipes, fixtures, risers, obstacles; no electrical
 PLUMBING_SHEET_LAYERS = (A_WALL, A_DOOR, A_WIND, *PLUMBING_LAYERS)
 NOTE_STEP = TEXT_SMALL_MM * 1.8
@@ -112,11 +119,11 @@ def schedule_panel(plan: Plan, areas: dict[str, RoomArea]) -> Panel:
 LEGEND_MIN_ROWS = 3  # rows per legend column, at least
 
 
-def legend_columns(elec: Electrical, language: Language) -> tuple[Panel, ...]:
-    """Bottom row variants: the legend split into columns of k rows. The smaller k, the wider and
-    lower the row; the lowest one that fits is used. Only the icon and what it means: counts are
-    in "Points", group colours in "Groups"."""
-    title, body = (rows := legend_rows(elec, language))[0], rows[1:]
+def legend_columns(rows: Sequence[LegendRow]) -> tuple[Panel, ...]:
+    """Bottom row variants: the legend (heading, then rows) split into columns of k rows. The
+    smaller k, the wider and lower the row; the lowest one that fits is used. Only the icon and
+    what it means: counts are in "Points", which colour is which group in "Groups"."""
+    title, body = rows[0], list(rows[1:])
     blank = replace(title, text="", step=0.0)  # continuation: no heading, rows level
 
     def panel(rows: list[LegendRow]) -> Panel:
@@ -259,7 +266,7 @@ def draw_stages(
                 "tab_electrical",
                 "electrical_image",
                 ELECTRICAL_SHEET_LAYERS,
-                legends=legend_columns(elec, plan.language),
+                legends=legend_columns(legend_rows(elec, plan.language)),
             )
         )
         lighting = lighting_spec(msp, plan, contours, elec)
@@ -282,6 +289,7 @@ def draw_stages(
                         estimate_wiring(plan, contours, elec, edits),
                         build_panel(plan, elec),
                     ),
+                    legends=legend_columns(wiring_legend_rows(elec, plan.language)),
                 )
             )
         board = panel_spec(plan, elec)
@@ -299,7 +307,36 @@ def draw_stages(
         elevations = elevations_spec(plan, contours, elec, wiring, water)
         if elevations is not None:
             specs.append(elevations)
+        # The installer's sheet closes the set: the other sheet numbers do not change
+        if wiring is not None:
+            specs.append(mounting_spec(msp, plan, wiring, elec))
     return doc, specs
+
+
+def mounting_spec(msp: Modelspace, plan: Plan, wiring: Wiring, elec: Electrical) -> SheetSpec:
+    """The "Mounting" sheet (decision 2026-11-11): the wiring with fixing strokes on the lines; on
+    the right the installer notes for this project's variant and the fixings by the drawing."""
+    lang = plan.language
+    conduit = elec.conduit_level
+    draw_fixings(msp, wiring, conduit)
+    draw_bends(msp, wiring, conduit)
+    title = mounting_text("title", lang)
+    notes = notes_panel([title, *mounting_notes(elec, lang)], width=ELEV_NOTES_W)
+    tables = [notes]
+    table = fixings_table(wiring, conduit, lang)
+    if table is not None:
+        reserve = mounting_text("reserve", lang, pct=round(PRACTICE.reserve * 100))
+        tables.append(stacked(table_panel(table), notes_panel([reserve], width=table.width)))
+    bends = bends_table(wiring, lang)
+    if bends is not None:
+        tables.append(table_panel(bends))
+    return SheetSpec(
+        "tab_mounting",
+        "mounting_image",
+        MOUNTING_SHEET_LAYERS,
+        tuple(tables),
+        legends=legend_columns(wiring_legend_rows(elec, lang)),
+    )
 
 
 def plumbing_spec(
@@ -357,7 +394,7 @@ def lighting_spec(
         "lighting_image",
         LIGHTING_SHEET_LAYERS,
         tables=tuple(tables),
-        legends=legend_columns(lighting_model(elec), lang),
+        legends=legend_columns(legend_rows(lighting_model(elec), lang)),
     )
 
 

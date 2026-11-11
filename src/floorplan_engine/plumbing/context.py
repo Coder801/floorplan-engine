@@ -16,12 +16,12 @@ from floorplan_engine.electrical.routing import (
     STEP,
     Grid,
     opening_strip,
+    wall_strips,
 )
 from floorplan_engine.model.geometry import (
     RoomGeometry,
     Vec,
     WallSegment,
-    point_in_polygon,
 )
 from floorplan_engine.model.plumbing import (
     Obstacle,
@@ -88,43 +88,12 @@ def partition_strips(
     `partition: true` (a plasterboard wall in a bathroom: the same room on both sides, pipes go on
     the floor under it, network.Network.under): a band through the whole wall thickness, without
     windows (a glass partition is not a pass) and without doors (passing them costs more,
-    door_strips)."""
-    blocked = shapely.unary_union(list(doors)).buffer(1.0) if doors else None
-    out: list[Polygon] = []
-    for g in geoms:
-        for seg in g.contour.segments:
-            if seg.bearing or (seg.thickness > PARTITION_MAX and not seg.partition):
-                continue
-            probe = seg.point_at(seg.length / 2) + seg.outward * (seg.thickness + 50.0)
-            beyond = [o for o in geoms if point_in_polygon(probe, o.contour.vertices)]
-            if not beyond:
-                continue
-            within = all(o is g for o in beyond)
-            if within != inner or (within and not seg.partition):
-                continue
-            out_v = seg.outward * seg.thickness
-            strip: BaseGeometry = Polygon(
-                [
-                    seg.start.as_tuple(),
-                    seg.end.as_tuple(),
-                    (seg.end + out_v).as_tuple(),
-                    (seg.start + out_v).as_tuple(),
-                ]
-            )
-            for op in g.room.openings:
-                if op.wall == seg.id and op.type is OpeningType.WINDOW:
-                    strip = strip.difference(opening_strip(g, op))
-            if blocked is not None:
-                strip = strip.difference(blocked)
-            parts = list(strip.geoms) if hasattr(strip, "geoms") else [strip]
-            out += [p for p in parts if isinstance(p, Polygon) and p.area > 1.0]
-    # A shared wall is described in both rooms, so the bands match: one partition, otherwise
-    # each hole in it would be counted twice (Network.holes)
-    merged = shapely.unary_union(out) if out else None
-    if merged is None:
-        return []
-    parts = list(merged.geoms) if hasattr(merged, "geoms") else [merged]
-    return [p for p in parts if isinstance(p, Polygon) and p.area > 1.0]
+    door_strips). The bands themselves: routing.wall_strips."""
+    return wall_strips(geoms, _is_partition, doors, inner)
+
+
+def _is_partition(seg: WallSegment) -> bool:
+    return not seg.bearing and (seg.thickness <= PARTITION_MAX or seg.partition)
 
 
 def riser_center(r: Riser, geoms: dict[str, RoomGeometry]) -> Vec:

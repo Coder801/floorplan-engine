@@ -333,6 +333,7 @@ def export_artifact(
     variants: dict[str, Any] | None = None,
     overview: dict[str, Any] | None = None,
     plan_chains: dict[str, list[str]] | None = None,
+    light_chains: dict[str, list[str]] | None = None,
     plan_areas: dict[str, list[list[tuple[float, float]]]] | None = None,
     plan_floors: dict[str, list[list[tuple[float, float]]]] | None = None,
 ) -> Path:
@@ -350,9 +351,11 @@ def export_artifact(
     itself; variants are the wiring variants (pipeline.variant_block): the chosen one and a
     summary of all go into the manifest; overview is the project overview
     (overview.overview_data) for the first viewer tab, also in the manifest; plan_chains is what
-    to highlight on click on the plan sheet (objects.plan_chains); plan_areas is where a click
-    lands on a wall of that sheet (objects.plan_areas), mm of the model; plan_floors are the
-    floors (a room or a zone) the viewer fills on hover on that sheet (objects.plan_floor_rings),
+    to highlight on click on the plan sheet (objects.plan_chains); light_chains is the switch
+    bundle to highlight on click on the lighting sheet (objects.light_chains); plan_areas is
+    where a click lands on a wall of the plan sheet (objects.plan_areas), mm of the model;
+    plan_floors are the floors (a room or a zone) the viewer fills on hover on that sheet
+    (objects.plan_floor_rings),
     mm of the model."""
     pages = []
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -373,7 +376,9 @@ def export_artifact(
                 page["estimate"] = tables["estimate"][0].as_dict()  # "Estimate" tab
             if tables and stage == "plumbing" and tables.get("plumbing_estimate"):
                 page["estimate"] = tables["plumbing_estimate"][0].as_dict()
-            sheet_chains = {"wiring": chains, "plan": plan_chains}.get(stage or "")
+            sheet_chains = {"wiring": chains, "plan": plan_chains, "lighting": light_chains}.get(
+                stage or ""
+            )
             if sheet_chains:
                 drawn = {item["o"] for item in page["items"] if "o" in item}
                 page["chains"] = {

@@ -215,7 +215,7 @@ def _outlet_with_letter(letter: str) -> Callable[[BlockLayout], None]:
         hatch.paths.add_polyline_path(tri, is_closed=True)
         blk.add_text(
             letter,
-            height=1.8,
+            height=3.6,
             dxfattribs={**_BYBLOCK, "style": TEXT_STYLE},
         ).set_placement((DATA_TRI * 1.4, tip - DATA_TRI), align=TextEntityAlignment.MIDDLE_LEFT)
 

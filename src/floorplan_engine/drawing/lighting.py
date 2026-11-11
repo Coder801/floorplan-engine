@@ -1,9 +1,7 @@
 """Lighting plan (decision 2026-10-28, P2): lights, switches and which switch turns on what.
 
-The "switch → light" link comes from the switch's `controls` (only from the source). Without
-it, the link is guessed by group and room: a switch belongs to the group of the lights it
-controls (CLAUDE.md rule) and turns on the lights of its group in its room. Such a link is an
-assumption marked "*": for a two-key switch the code does not know which key does what.
+The "switch → light" link is electrical/switch_links.py: from the switch's `controls`, otherwise
+an assumption by group and room marked "*".
 
 The sheet shows walls and openings, light and switch symbols (layers E-SWITCH, E-LIGHT, E-LED),
 links (E-LINK, dashed lines at right angles: switch → nearest light → next one…; a link
@@ -35,8 +33,8 @@ from floorplan_engine.drawing.ids import tagged
 from floorplan_engine.drawing.layers import E_LINK, L_TEXT, LW_LINK
 from floorplan_engine.drawing.tables import Column, Table, name_width
 from floorplan_engine.electrical.anchors import Anchor, point_anchor, stack_shifts
-from floorplan_engine.electrical.master import is_master, master_on
 from floorplan_engine.electrical.point_numbers import number_points, point_name, ranges
+from floorplan_engine.electrical.switch_links import switch_links
 from floorplan_engine.model.geometry import Contour, Vec, room_geometries
 from floorplan_engine.model.schema import (
     LIGHT_TYPES,
@@ -44,7 +42,6 @@ from floorplan_engine.model.schema import (
     Electrical,
     ElectricalPoint,
     Plan,
-    PointType,
 )
 from floorplan_engine.model.texts import Language
 
@@ -68,13 +65,6 @@ def text(key: str, language: Language, **kw: object) -> str:
     return TEXT[key][language].format(**kw)
 
 
-@dataclass(frozen=True)
-class SwitchLink:
-    switch: str
-    targets: tuple[str, ...]  # ids of lights, LED outputs and strips
-    assumed: bool  # from group and room, not from controls
-
-
 def is_lighting(p: ElectricalPoint) -> bool:
     return p.type in LIGHT_TYPES or p.type in SWITCH_TYPES
 
@@ -85,71 +75,6 @@ def lighting_model(elec: Electrical) -> Electrical:
     return elec.model_copy(
         update={"points": [p for p in elec.points if is_lighting(p)], "board": None, "media": None}
     )
-
-
-# Words in a switch label → which light it turns on (word stems, ru and uk)
-KEYWORDS: tuple[tuple[tuple[str, ...], frozenset[PointType]], ...] = (
-    (("бра",), frozenset({PointType.SCONCE})),
-    (("підвіс", "подвес"), frozenset({PointType.PENDANT})),
-    (("підсвіт", "подсвет", "led", "стрічк", "лент"), frozenset({PointType.LED_OUTPUT})),
-    (
-        ("стел", "потол", "точков", "основн"),
-        frozenset({PointType.DOWNLIGHT, PointType.LIGHT}),
-    ),
-)
-
-
-def _words(note: str | None) -> set[str]:
-    return {w for w in (note or "").lower().replace(",", " ").split() if len(w) >= 4}
-
-
-def _by_note(s: ElectricalPoint, candidates: Sequence[ElectricalPoint]) -> list[str]:
-    """Lights a switch turns on according to its label: by kind ("бра" → wall lamp) or by a word
-    shared with the light's label ("підсвітка кухні"). No hint gives []."""
-    note = (s.note or "").lower()
-    kinds: set[PointType] = set()
-    for stems, types in KEYWORDS:
-        if any(stem in note for stem in stems):
-            kinds |= types
-    words = _words(s.note)
-    return [c.id for c in candidates if c.type in kinds or (words and words & _words(c.note))]
-
-
-def switch_links(elec: Electrical) -> list[SwitchLink]:
-    """What each switch turns on. From controls, as is. Otherwise an assumption: the lights of its
-    group in its room; if the switch label hints at a kind or a shared word ("бра", "стеля",
-    "підсвітка кухні"), only those lights; switches without a hint take whatever the hinted ones
-    did not take (and if everything is taken, all lights of the group).
-    No controls and no group: nothing; the master switch (master.py) drives the panel, not a light.
-    A link is never invented."""
-    out: list[SwitchLink] = []
-    pending: list[tuple[ElectricalPoint, list[ElectricalPoint]]] = []
-    claimed: dict[tuple[str, str], set[str]] = {}
-    for s in elec.points:
-        if s.type not in SWITCH_TYPES:
-            continue
-        if s.controls:
-            out.append(SwitchLink(s.id, tuple(s.controls), False))
-            continue
-        if s.group is None or (is_master(s) and master_on(elec)):
-            continue  # the master switch drives the panel contactor, not a light
-        candidates = [
-            p
-            for p in elec.points
-            if p.type in LIGHT_TYPES and p.group == s.group and p.room == s.room
-        ]
-        hinted = _by_note(s, candidates)
-        if hinted:
-            out.append(SwitchLink(s.id, tuple(hinted), True))
-            claimed.setdefault((s.group, s.room), set()).update(hinted)
-        elif candidates:
-            pending.append((s, candidates))
-    for s, candidates in pending:
-        taken = claimed.get((s.group or "", s.room), set())
-        rest = [c.id for c in candidates if c.id not in taken] or [c.id for c in candidates]
-        out.append(SwitchLink(s.id, tuple(rest), True))
-    order = {p.id: k for k, p in enumerate(elec.points)}
-    return sorted(out, key=lambda lk: order[lk.switch])
 
 
 def line_link(msp: Modelspace, points: Sequence[Vec], attribs: dict[str, object]) -> None:

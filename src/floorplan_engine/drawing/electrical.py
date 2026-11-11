@@ -21,7 +21,14 @@ from shapely.ops import unary_union
 
 from floorplan_engine.drawing.ids import tagged
 from floorplan_engine.drawing.labels import Align, LabelPlacer, Metrics, door_swing
-from floorplan_engine.drawing.layers import E_LED, E_TEXT, TEXT_DIM_MM, TEXT_SMALL_MM, text_width
+from floorplan_engine.drawing.layers import (
+    E_LED,
+    E_TEXT,
+    TEXT_DIM_MM,
+    TEXT_SMALL_MM,
+    W_TEXT,
+    text_width,
+)
 from floorplan_engine.drawing.plan import add_text, door_leaf, wall_pieces
 from floorplan_engine.drawing.symbols import LEGEND_ORDER, SYMBOLS, SymbolSpec
 from floorplan_engine.drawing.tables import TEXT_GAP
@@ -34,6 +41,7 @@ from floorplan_engine.electrical.anchors import (
     stack_shifts,
     symbol_key,
 )
+from floorplan_engine.electrical.colors import family_colors
 from floorplan_engine.electrical.point_numbers import number_points, ranges
 from floorplan_engine.model.geometry import Contour, RoomGeometry, Vec, room_geometries
 from floorplan_engine.model.scale import sheet, sheet_scale
@@ -237,6 +245,9 @@ def draw_led_strip(msp: Modelspace, strip: LedStrip, geoms: dict[str, RoomGeomet
 LEGEND_ROW = 9.0  # sheet mm
 LEGEND_TEXT_X = 9.0  # from the legend left edge to the caption
 LEGEND_SYMBOL_X = 3.0
+LEGEND_LINE_W = 6.0  # LED and wire samples, sheet mm
+WIRE_SHADES = 3  # wire legend: up to this many shades of a family, one under another
+WIRE_SHADE_STEP = 1.2  # sheet mm between them
 
 
 @dataclass(frozen=True)
@@ -248,12 +259,16 @@ class LegendRow:
     step: float  # step from the previous row, sheet mm
     key: str | None = None
     led: bool = False
+    family: str | None = None  # wire colour family (colors.FAMILIES)
+    colors: tuple[int, ...] = ()  # its shades used in the project (true color)
 
     @property
     def tag(self) -> str | None:
         """Legend object on the sheet (legend:<tag>): the viewer takes the icon for its badge
         from it.
         """
+        if self.family is not None:
+            return f"wires_{self.family}"
         return LED_STRIP_KEY if self.led else self.key
 
 
@@ -276,6 +291,17 @@ def legend_rows(elec: Electrical, language: Language = "ru") -> list[LegendRow]:
         rows.append(
             LegendRow(tr("legend_led_strip", language), TEXT_SMALL_MM, LEGEND_ROW, led=True)
         )
+    return rows
+
+
+def wiring_legend_rows(elec: Electrical, language: Language = "ru") -> list[LegendRow]:
+    """Legend of the wiring sheet: line colour families present in the project (lighting,
+    sockets, heavy lines, low voltage), each with the shades its groups use. Which colour is
+    which group is in "Groups"."""
+    rows = [LegendRow(tr("legend_wires", language), TEXT_DIM_MM, 0.0)]
+    for family, colors in family_colors(elec).items():
+        text = tr(f"wires_{family}", language)
+        rows.append(LegendRow(text, TEXT_SMALL_MM, LEGEND_ROW, family=family, colors=colors))
     return rows
 
 
@@ -311,8 +337,24 @@ def draw_legend(psp: BaseLayout, rows: Sequence[LegendRow], top_left: Vec) -> No
         if row.led:
             with tagged(psp, "legend", LED_STRIP_KEY):
                 psp.add_line(
-                    (x0, y), (x0 + 6.0, y), dxfattribs={"layer": E_LED.name, "lineweight": LW_LED}
+                    (x0, y),
+                    (x0 + LEGEND_LINE_W, y),
+                    dxfattribs={"layer": E_LED.name, "lineweight": LW_LED},
                 )
+        if row.family is not None:
+            shades = row.colors[:WIRE_SHADES]
+            with tagged(psp, "legend", f"wires_{row.family}"):
+                for k, color in enumerate(shades):
+                    dy = ((len(shades) - 1) / 2 - k) * WIRE_SHADE_STEP
+                    psp.add_line(
+                        (x0, y + dy),
+                        (x0 + LEGEND_LINE_W, y + dy),
+                        dxfattribs={
+                            "layer": W_TEXT.name,
+                            "lineweight": LW_LED,
+                            "true_color": color,
+                        },
+                    )
         x = x0 + (LEGEND_TEXT_X if row.tag else 0.0)
         add_text(psp, row.text, Vec(x, y), row.height, E_TEXT.name, align=left, scale=1.0)
 

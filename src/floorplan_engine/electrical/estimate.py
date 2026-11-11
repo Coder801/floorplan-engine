@@ -10,14 +10,22 @@ separate product specification: the estimate without prices is the bill of quant
 - flush boxes and devices by wall device posts, frames by blocks;
 - junction boxes (IP44 in wet rooms, a separate item); crimp connections: L, N, PE in every
   box plus one per key of each switch it feeds;
-- cable fixings at FIXING_STEP along the routes;
+- fixings shot with a mounting gun (decision 2026-11-11): conduit — clips with a nail by conduit
+  diameter, cable without conduit — mounting pads with a nail and a tie; counted at the same
+  spots the "Mounting" sheet draws (mounting.py: step by surface, offset from bends and boxes),
+  with the norms' reserve for misfires;
 - chases from wall_chases (shared by nearby drops): narrow (up to CHASE_NARROW cables) and
-  wide ones are separate items; passes through walls from wall_holes;
+  wide ones are separate items, each split by wall material (`work.chase.concrete`, Kyiv
+  2026-11: concrete 200, claydite 150, brick 120, aerated 90 UAH/m; a wide one is the narrow
+  one × 1.5); a chase without a known material stays `work.chase`; passes through walls from
+  wall_holes;
 - panel: enclosure and devices from the "Panel" sheet (panel.build_panel: kind and rating, as
   in the purchase device table), assembly by the modules of that set; no panel means one
   breaker per group; device prices by kind (breaker, diff, rcd, input…), with the rating as a
   key refinement (breaker.C16);
 - lights, lighting outputs and appliance outputs by point, LED strip in metres;
+- a LED power supply per LED output and its fitting (decision 2026-11-11): at the strip, or on
+  a DIN rail in the panel (Electrical.led_supply), with its own prices;
 - labelling: a tag at each end of each line; insulation resistance test with a report for each
   power group;
 - rough light, if chosen (Electrical.rough_light): a lamp holder, a bulb and a rough switch per
@@ -29,8 +37,8 @@ crimping, panel recess and enclosure, labelling, insulation test; finishing (`fi
 the finish: filling the panel with devices, fitting the devices. An item's section is in LINES.
 
 Prices are never invented: items with no price in the list stay in the estimate marked
-"no price" and are left out of the total. LED profiles and power supplies are not described
-in the model and are not in the estimate.
+"no price" and are left out of the total. LED profiles are not described in the model and are
+not in the estimate.
 """
 
 from __future__ import annotations
@@ -39,7 +47,7 @@ import csv
 import math
 import re
 from collections import Counter
-from collections.abc import Callable
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal, Protocol
@@ -47,10 +55,19 @@ from typing import Literal, Protocol
 from openpyxl import Workbook
 from openpyxl.comments import Comment
 from openpyxl.styles import Alignment, Font, PatternFill
+from openpyxl.worksheet.worksheet import Worksheet
 from pydantic import Field
 
 from floorplan_engine.electrical.boxes import BOX_ORDER, BOX_TITLES
+from floorplan_engine.electrical.mounting import (
+    conduit_diameter,
+    fixing_spans,
+    fixings,
+    pair_diameter,
+    shared_pairs,
+)
 from floorplan_engine.electrical.panel import BoardPanel, device_name
+from floorplan_engine.electrical.terms import TermDecision
 from floorplan_engine.electrical.wiring import RESERVE
 from floorplan_engine.electrical.wiring_model import Run, Wiring
 from floorplan_engine.model.panel_catalog import DeviceKind
@@ -60,6 +77,7 @@ from floorplan_engine.model.schema import (
     Electrical,
     PointType,
     StrictModel,
+    WallMaterial,
 )
 from floorplan_engine.model.texts import Language, tr
 
@@ -70,8 +88,10 @@ ESTIMATE_XLSX = "estimate.xlsx"
 XLSX_MONEY = "#,##0.00"
 XLSX_QTY = "#,##0.0##"
 XLSX_EDIT_FILL = "FFF4D6"  # cells edited by hand: price and quantity
-FIXING_STEP = 400.0  # mm: cable fixing step along the route
-CONDUIT_SIZES = ((1.5, 16), (2.5, 20), (6.0, 25), (1e9, 32))  # cross-section, mm² → conduit Ø, mm
+# Conduit fittings (decision 2026-11-11): a joint coupling per this many mm of conduit of a
+# diameter (roll ends and offcuts; the conduit itself is counted in metres, not rolls); an
+# entry at every conduit end at a junction box or the panel, a flush box takes it without one
+CONDUIT_JOINT_EVERY = 50_000.0
 SWITCHES = frozenset({PointType.SWITCH, PointType.PASS_SWITCH})
 # Devices in flush boxes: one flush box per post, one frame per block
 MOUNTED = frozenset(
@@ -88,6 +108,18 @@ WORK_PREFIX = "work."  # work items (services); the rest of LINES are materials
 LINES: dict[str, tuple[Section, str, str, str]] = {
     "cable": ("material", "м", "Кабель {mark}", "Кабель {mark}"),
     "conduit": ("material", "м", "Гофротруба ПВХ Ø{n}", "Гофротруба ПВХ Ø{n}"),
+    "conduit_joint": (
+        "material",
+        "шт",
+        "Муфта соединительная для гофры Ø{n}",
+        "Муфта з'єднувальна для гофри Ø{n}",
+    ),
+    "conduit_entry": (
+        "material",
+        "шт",
+        "Ввод гофры в коробку Ø{n}",
+        "Введення гофри в коробку Ø{n}",
+    ),
     "socket_box": ("material", "шт", "Подрозетник", "Підрозетник"),
     "junction_box": ("material", "шт", "Коробка распаечная {mark}", "Коробка розподільча {mark}"),
     "junction_box_ip": (
@@ -102,7 +134,18 @@ LINES: dict[str, tuple[Section, str, str, str]] = {
         "Гильза и термоусадка (опрессовка)",
         "Гільза і термоусадка (опресування)",
     ),
-    "cable_fixing": ("material", "шт", "Крепление кабеля", "Кріплення кабелю"),
+    "conduit_clip": (
+        "material",
+        "шт",
+        "Клипса для гофры Ø{n} с дюбель-гвоздём под монтажный пистолет",
+        "Кліпса для гофри Ø{n} з дюбель-цвяхом під монтажний пістолет",
+    ),
+    "cable_pad": (
+        "material",
+        "шт",
+        "Площадка под монтажный пистолет с дюбель-гвоздём и стяжкой",
+        "Площадка під монтажний пістолет з дюбель-цвяхом і стяжкою",
+    ),
     "board_enclosure": ("material", "шт", "Корпус щита", "Корпус щита"),
     # Panel devices by kind (DeviceKind); the row has the name and rating from the panel set
     "breaker": ("material", "шт", "Автомат 1P (на группу)", "Автомат 1P (на групу)"),
@@ -135,8 +178,15 @@ LINES: dict[str, tuple[Section, str, str, str]] = {
     "led_output": ("material", "шт", "", ""),
     "outlet": ("material", "шт", "", ""),
     "led_strip": ("material", "м", "", ""),
+    "led_psu": ("material", "шт", "Блок питания LED 12 В", "Блок живлення LED 12 В"),
+    "led_psu_din": (
+        "material",
+        "шт",
+        "Блок питания LED 12 В на DIN-рейку",
+        "Блок живлення LED 12 В на DIN-рейку",
+    ),
     "rough_holder": ("material", "шт", "Патрон E27 черновой", "Патрон E27 чорновий"),
-    "rough_lamp": ("material", "шт", "Лампа E27 черновая", "Лампа E27 чорнова"),
+    "rough_lamp": ("material", "шт", "Лампа LED E27 черновая", "Лампа LED E27 чорнова"),
     "rough_switch": ("material", "шт", "Выключатель черновой", "Вимикач чорновий"),
     "work.cable": ("rough", "м", "Прокладка кабеля", "Прокладання кабелю"),
     "work.conduit": ("rough", "м", "Укладка кабеля в гофротрубу", "Укладання кабелю в гофротрубу"),
@@ -158,6 +208,12 @@ LINES: dict[str, tuple[Section, str, str, str]] = {
         "Сверление прохода через стену",
         "Свердління проходу крізь стіну",
     ),
+    "work.wall_hole_large": (
+        "rough",
+        "шт",
+        "Сверление большого прохода через стену (коронкой)",
+        "Свердління великого проходу крізь стіну (коронкою)",
+    ),
     "work.socket_box": (
         "rough",
         "шт",
@@ -173,23 +229,29 @@ LINES: dict[str, tuple[Section, str, str, str]] = {
     "work.board_install": ("rough", "шт", "Установка щита", "Встановлення щита"),
     "work.board_module": ("finish", "мод.", "Сборка щита", "Збирання щита"),
     "work.mechanism": ("finish", "шт", "Установка механизмов", "Встановлення механізмів"),
+    "work.led_psu": (
+        "finish",
+        "шт",
+        "Установка и подключение блока питания LED у ленты",
+        "Встановлення і підключення блока живлення LED біля стрічки",
+    ),
+    "work.led_psu_din": (
+        "finish",
+        "шт",
+        "Установка и подключение блока питания LED в щите",
+        "Встановлення і підключення блока живлення LED у щиті",
+    ),
     "work.rough_light": (
         "rough",
         "шт",
-        "Монтаж чернового света: патрон и лампа",
-        "Монтаж чорнового світла: патрон і лампа",
+        "Подключение чернового патрона с лампой к готовому выводу",
+        "Підключення чорнового патрона з лампою до готового виводу",
     ),
     "work.rough_switch": (
         "rough",
         "шт",
-        "Установка чернового выключателя",
-        "Встановлення чорнового вимикача",
-    ),
-    "work.marking": (
-        "rough",
-        "шт",
-        "Маркировка концов кабеля",
-        "Маркування кінців кабелю",
+        "Установка временного выключателя",
+        "Встановлення тимчасового вимикача",
     ),
     "work.insulation_test": (
         "rough",
@@ -205,6 +267,14 @@ HINTS: dict[str, dict[str, str]] = {
         "ru": "Установка розеток, выключателей, интернет- и ТВ-выводов",
         "uk": "Встановлення розеток, вимикачів, інтернет- і ТВ-виводів",
     },
+    "conduit_clip": {
+        "ru": "Крепление гофры к потолку, стенам и полу монтажным пистолетом",
+        "uk": "Кріплення гофри до стелі, стін і підлоги монтажним пістолетом",
+    },
+    "cable_pad": {
+        "ru": "Крепление кабеля без гофры к потолку и стенам монтажным пистолетом",
+        "uk": "Кріплення кабелю без гофри до стелі та стін монтажним пістолетом",
+    },
 }
 PRICE_TBD = {"ru": "Цена уточняется", "uk": "Ціна уточнюється"}
 PRICE_SERVICE = {
@@ -214,11 +284,28 @@ PRICE_SERVICE = {
 PARAM_KEYS = (
     "cable",
     "conduit",
+    "conduit_clip",
+    "conduit_joint",
+    "conduit_entry",
     "frame",
     "junction_box",
     "junction_box_ip",
+    "work.chase",
+    "work.chase_wide",
     *(k.value for k in DeviceKind),
 )
+CHASE_KEYS = ("work.chase", "work.chase_wide")  # parameter: wall material
+# Wall material in chase names, from the hardest one: the order of chase lines
+WALL_MATERIALS: dict[WallMaterial, dict[str, str]] = {
+    WallMaterial.CONCRETE: {"ru": "бетон", "uk": "бетон"},
+    WallMaterial.CLAYDITE: {"ru": "керамзитобетон", "uk": "керамзитобетон"},
+    WallMaterial.BRICK: {"ru": "кирпич", "uk": "цегла"},
+    WallMaterial.AERATED: {"ru": "газоблок", "uk": "газоблок"},
+}
+NO_MATERIAL = {
+    "ru": "Материал стены не указан в плане: цена — по кирпичу, уточняется",
+    "uk": "Матеріал стіни не вказано в плані: ціна — за цеглою, уточнюється",
+}
 # Lights and outputs: key → name in texts (as in the legend)
 FIXTURES = {
     "light": "symbol_light",
@@ -275,17 +362,21 @@ TEXT: dict[str, dict[str, str]] = {
     },
     "note_chases": {
         "ru": "Штробы: общая, если спуски ближе {d} мм, до {k} кабелей; до {n} кабелей — "
-        "узкая (в гофре — одна гофра), больше — широкая; силовые и слаботочка — в разных "
+        "узкая (в гофре — одна гофра), больше — широкая; силовые кабели и связь — в разных "
         "штробах",
         "uk": "Штроби: спільна, якщо спуски ближче {d} мм, до {k} кабелів; до {n} кабелів — "
-        "вузька (у гофрі — одна гофра), більше — широка; силові і слабкострумові — в різних "
+        "вузька (у гофрі — одна гофра), більше — широка; силові кабелі і зв'язок — в різних "
         "штробах",
     },
     "note_holes": {
-        "ru": "Проходы через стены — над дверями и проёмами для трасс по потолку, до {k} "
-        "кабелей в отверстии; трассы по полу идут под проёмом без сверления",
-        "uk": "Проходи крізь стіни — над дверима і прорізами для трас по стелі, до {k} "
-        "кабелів в отворі; траси по підлозі йдуть під прорізом без свердління",
+        "ru": "Проходы через стены — над дверями и проёмами для трас по потолку, сквозь "
+        "ненесущие стены, где через дверь крюк; одно отверстие на вход в помещение, больше {k} "
+        "кабелей — большое (коронкой); силовые и слаботочка — в разных отверстиях; трассы по "
+        "полу идут под проёмом без сверления",
+        "uk": "Проходи крізь стіни — над дверима і прорізами для трас по стелі, крізь ненесучі "
+        "стіни, де через двері гак; один отвір на вхід у приміщення, більше {k} кабелів — "
+        "великий (коронкою); силові і зв'язок — в різних отворах; траси по підлозі йдуть під "
+        "прорізом без свердління",
     },
     "note_board_tail": {
         "ru": "Выпуск кабеля в щите — до пола ({h} мм), на остальных подключениях — {e} мм",
@@ -305,17 +396,35 @@ TEXT: dict[str, dict[str, str]] = {
         "uk": "Гофротруба: по підлозі — завжди, уся лінія до точки; по стелі — якщо обрана, "
         "ділянка по стелі, а з гофрою в стінах — і спуски в штробах; діаметр — за перерізом кабелю",
     },
+    "note_conduit_fittings": {
+        "ru": "Муфты гофры: соединительная — одна на каждые {m} м гофры диаметра (стыки и "
+        "обрезки); ввод — на каждый конец гофры у распаечной коробки и щита, в подрозетник гофра "
+        "заходит без ввода",
+        "uk": "Муфти гофри: з'єднувальна — одна на кожні {m} м гофри діаметра (стики й обрізки); "
+        "введення — на кожен кінець гофри біля розподільчої коробки і щита, у підрозетник гофра "
+        "заходить без введення",
+    },
+    "note_loop_conduit": {
+        "ru": "Шлейф розеток: на спуске к точке приход и уход — в одной гофре (Ø25 для 3×1,5, "
+        "Ø32 для 3×2,5), штроба узкая, клипсы — один ряд: {n} точ.",
+        "uk": "Шлейф розеток: на спуску до точки прихід і вихід — в одній гофрі (Ø25 для 3×1,5, "
+        "Ø32 для 3×2,5), штроба вузька, кліпси — один ряд: {n} точ.",
+    },
     "note_fixing": {
-        "ru": "Крепления кабеля — шаг {step} мм",
-        "uk": "Кріплення кабелю — крок {step} мм",
+        "ru": "Крепление монтажным пистолетом: гофра — клипсами с дюбель-гвоздём, кабель без "
+        "гофры — площадками с дюбель-гвоздём и стяжкой; шаг по потолку {c} мм, по стенам {w} мм, "
+        "по полу {f} мм, запас {pct} %",
+        "uk": "Кріплення монтажним пістолетом: гофра — кліпсами з дюбель-цвяхом, кабель без "
+        "гофри — площадками з дюбель-цвяхом і стяжкою; крок по стелі {c} мм, по стінах {w} мм, "
+        "по підлозі {f} мм, запас {pct} %",
     },
     "note_crimp": {
         "ru": "Опрессовка: в каждой коробке L, N, PE и по соединению на клавишу выключателя",
         "uk": "Опресування: у кожній коробці L, N, PE і по з'єднанню на клавішу вимикача",
     },
     "note_excluded": {
-        "ru": "Не входит: профиль и блоки питания LED, монтаж светильников, ввод питания",
-        "uk": "Не входить: профіль і блоки живлення LED, монтаж світильників, введення живлення",
+        "ru": "Не входит: профиль LED, монтаж светильников, ввод питания",
+        "uk": "Не входить: профіль LED, монтаж світильників, введення живлення",
     },
     "note_panel": {
         "ru": "Щит — по составу листа «Щит»: аппараты по видам и номиналам",
@@ -367,6 +476,11 @@ class PriceList(StrictModel):
     board_kit: list[BoardItem] = Field(
         default_factory=list, description="Устарело — не используется"
     )
+    terms: dict[str, TermDecision] = Field(
+        default_factory=dict,
+        description="Что обговаривается с заказчиком отдельно: кто делает и как оплачивается "
+        "(пункты — electrical/terms.yaml)",
+    )
 
     def price(self, key: str) -> Price | None:
         item = self.items.get(key)
@@ -413,15 +527,61 @@ def cable_title(mark: str) -> str:
     return f"{DEFAULT_CABLE} {bare[1]}×{bare[2].replace('.', ',')}"
 
 
+# Items priced from another one unless the price list names them itself: key → (base key, factor).
+# A large hole (core drill) costs 2.5 times a normal one: 100 → 250 UAH, Kyiv 2026-11
+# A wide chase costs half as much again as a narrow one in the same material (work.chase_wide.brick
+# from work.chase.brick)
+DERIVED_PRICES: dict[str, tuple[str, float]] = {
+    "work.wall_hole_large": ("work.wall_hole", 2.5),
+    "work.chase_wide": ("work.chase", 1.5),
+}
+
+
+def derived_from(key: str) -> tuple[str, float] | None:
+    """The item a DERIVED_PRICES item is priced from, with the factor; a parameter carries over
+    (work.chase_wide.brick → work.chase.brick). None — the item has its own price."""
+    if key in DERIVED_PRICES:
+        return DERIVED_PRICES[key]
+    base, param = split_key(key)
+    if param and base in DERIVED_PRICES:
+        of, factor = DERIVED_PRICES[base]
+        return f"{of}.{param}", factor
+    return None
+
+
+def derived_quote(prices: PriceSource, key: str) -> Quote:
+    """Price of an item: its own price list entry first; for a DERIVED_PRICES item without one,
+    the base item's price (from the list or the service) times the factor."""
+    quote = prices.lookup(key)
+    derived = derived_from(key)
+    if derived is None or (quote.exact is not None and not quote.service):
+        return quote
+    base_key, factor = derived
+    base = prices.lookup(base_key)
+    if base.price is None:
+        return quote
+    return Quote(Price(price=round(base.price.price * factor, 2)), None, base.service)
+
+
 def split_key(key: str) -> tuple[str, str]:
-    """Split "cable.3x1.5" → ("cable", "3x1.5"); a key without a parameter → (key, "")."""
-    base, _, param = key.partition(".")
-    return (base, param) if base in PARAM_KEYS and param else (key, "")
+    """Split "cable.3x1.5" → ("cable", "3x1.5"), "work.chase.brick" → ("work.chase", "brick");
+    a key without a parameter → (key, "")."""
+    head = WORK_PREFIX if key.startswith(WORK_PREFIX) else ""
+    base, _, param = key[len(head) :].partition(".")
+    return (head + base, param) if head + base in PARAM_KEYS and param else (key, "")
+
+
+# Items folded into others: an old price list may still name them, the price is ignored
+RETIRED = {
+    "work.marking",  # cable end marking — part of work.cable since 2026-11-11
+    "cable_fixing",  # split into conduit_clip.<Ø> and cable_pad on 2026-11-11
+}
 
 
 def unknown_keys(prices: PriceList) -> list[str]:
-    """Price list keys that match no estimate item (a typo or a foreign key)."""
-    return [k for k in prices.items if split_key(k)[0] not in LINES]
+    """Price list keys that match no estimate item (a typo or a foreign key); retired items
+    (RETIRED) are not errors."""
+    return [k for k in prices.items if split_key(k)[0] not in LINES and k not in RETIRED]
 
 
 ITEMS_LINE = re.compile(r"^items:\s*(#.*)?$")
@@ -516,14 +676,6 @@ class Estimate:
         return sum(1 for ln in self.lines if ln.service)
 
 
-def conduit_diameter(mark: str) -> int:
-    """Conduit by cable type, mm: up to 1.5 mm² Ø16, up to 2.5 Ø20, up to 6 Ø25, larger Ø32;
-    an unreadable type (low-voltage) gets Ø20."""
-    m = re.search(r"[x×]\s*([\d.,]+)", mark)
-    section = float(m.group(1).replace(",", ".")) if m else 2.5
-    return next((d for limit, d in CONDUIT_SIZES if section <= limit), CONDUIT_SIZES[-1][1])
-
-
 def conduit_mm(run: Run, conduit: Conduit) -> float:
     """How much of a line goes in conduit (decisions 2026-11-01, 2026-11-08,
     docs/wiring-variants.md): on the floor always, the whole line including the rise to the
@@ -534,18 +686,58 @@ def conduit_mm(run: Run, conduit: Conduit) -> float:
     return run.plan_mm if conduit == "ceiling" else 0.0
 
 
+def conduit_lengths(wiring: Wiring, conduit: Conduit) -> dict[int, float]:
+    """Conduit by diameter, mm, without margin: each line's conduit_mm in the conduit of its
+    cable; a chain pair in one conduit (mounting.shared_pairs) — the drop once, in a conduit of
+    pair_diameter."""
+    out: dict[int, float] = {}
+    pairs = shared_pairs(wiring)
+    for r in wiring.runs:
+        mm = conduit_mm(r, conduit)
+        if r.id in wiring.shared_rises:  # its rise is in the conduit of the cable coming in
+            mm -= r.rise_start_mm
+        if (out_run := pairs.get(r.id)) is not None:
+            mm -= r.rise_end_mm
+            d = pair_diameter(r.mark, out_run.mark)
+            out[d] = out.get(d, 0.0) + r.rise_end_mm
+        d = conduit_diameter(r.mark)
+        out[d] = out.get(d, 0.0) + mm
+    return out
+
+
+def conduit_entries(wiring: Wiring, conduit: Conduit) -> dict[int, int]:
+    """Conduit entries by diameter: a line end at a junction box, the panel or the media cabinet
+    reached in conduit — down the wall in conduit or, with no rise there, along the ceiling or
+    floor in conduit. Ends at points go into a flush box or a fitting without an entry."""
+    boxes = {b.id for b in wiring.boxes}
+    out: dict[int, int] = {}
+    for r in wiring.runs:
+        (plan_in, _, _), (start_in, _, start), (end_in, _, end) = fixing_spans(r, conduit)
+        ends = [
+            (r.source in boxes or r.source in ("board", "media"), start_in if start else plan_in),
+            (r.target in boxes, end_in if end else plan_in),
+        ]
+        n = sum(1 for at_box, in_conduit in ends if at_box and in_conduit)
+        if n:
+            d = conduit_diameter(r.mark)
+            out[d] = out.get(d, 0) + n
+    return out
+
+
 def quantities(wiring: Wiring, elec: Electrical) -> dict[str, float]:
     """Quantities by item key (no prices)."""
     q: dict[str, float] = {}
     for mark, m in wiring.by_mark().items():
         q[f"cable.{mark}"] = round(m * (1 + RESERVE), 1)
-    conduit: dict[int, float] = {}
-    for r in wiring.runs:
-        d = conduit_diameter(r.mark)
-        conduit[d] = conduit.get(d, 0.0) + conduit_mm(r, elec.conduit_level)
+    conduit = conduit_lengths(wiring, elec.conduit_level)
     for d in sorted(conduit):
         if conduit[d] > 0:
             q[f"conduit.{d}"] = round(conduit[d] / 1000 * (1 + RESERVE), 1)
+    for d in sorted(conduit):
+        if conduit[d] > 0:
+            q[f"conduit_joint.{d}"] = math.ceil(conduit[d] / CONDUIT_JOINT_EVERY)
+    for d, n in sorted(conduit_entries(wiring, elec.conduit_level).items()):
+        q[f"conduit_entry.{d}"] = n
     mounted = [p for p in elec.points if p.type in MOUNTED]
     posts = sum(p.count for p in mounted)
     q["socket_box"] = posts
@@ -559,7 +751,7 @@ def quantities(wiring: Wiring, elec: Electrical) -> dict[str, float]:
         if r.source != "board" and r.target in by_id and by_id[r.target].type in SWITCHES
     )
     q["crimp"] = 3 * len(wiring.boxes) + keys
-    q["cable_fixing"] = math.ceil(sum(r.plan_mm for r in wiring.runs) / FIXING_STEP)
+    q.update(fixings(wiring, elec.conduit_level))
     if elec.board is not None:
         q["board_enclosure"] = 1
     q["breaker"] = len({r.group for r in wiring.runs})
@@ -584,6 +776,9 @@ def quantities(wiring: Wiring, elec: Electrical) -> dict[str, float]:
     led_m = sum(s.end - s.start for s in elec.led_strips) / 1000
     if led_m:
         q["led_strip"] = round(led_m, 2)
+    led_psu = "led_psu_din" if elec.led_supply == "board" else "led_psu"
+    led_outputs = sum(p.count for p in elec.points if p.type is PointType.LED_OUTPUT)
+    q[led_psu] = led_outputs
     rough_rooms = len({p.room for p in elec.points if p.type in LIGHT_TYPES})
     if elec.rough_light and rough_rooms:
         q["rough_holder"] = q["rough_lamp"] = q["rough_switch"] = rough_rooms
@@ -591,19 +786,32 @@ def quantities(wiring: Wiring, elec: Electrical) -> dict[str, float]:
     in_conduit = sum(conduit_mm(r, elec.conduit_level) for r in wiring.runs)
     if in_conduit > 0:
         q["work.conduit"] = round(in_conduit / 1000, 1)
-    q["work.chase"] = round(wiring.chase_length(wide=False) / 1000, 1)
-    q["work.chase_wide"] = round(wiring.chase_length(wide=True) / 1000, 1)
-    q["work.wall_hole"] = len(wiring.holes)
+    q.update(chase_quantities(wiring))
+    q["work.wall_hole"] = sum(1 for h in wiring.holes if not h.large)
+    q["work.wall_hole_large"] = sum(1 for h in wiring.holes if h.large)
     q["work.socket_box"] = posts
     q["work.junction_box"] = len(wiring.boxes)
     if elec.board is not None:
         q["work.board_install"] = 1
     q["work.mechanism"] = sum(pieces.values())
+    q[f"work.{led_psu}"] = led_outputs
     if elec.rough_light and rough_rooms:
         q["work.rough_light"] = q["work.rough_switch"] = rough_rooms
-    q["work.marking"] = 2 * len(wiring.runs)
     q["work.insulation_test"] = len({r.group for r in wiring.runs if r.circuit == "power"})
     return {k: v for k, v in q.items() if v}
+
+
+def chase_quantities(wiring: Wiring) -> dict[str, float]:
+    """Chase metres by item: narrow, then wide, each by wall material from the hardest one; a
+    chase without a known material — the item without a parameter, after the others."""
+    order: list[WallMaterial | None] = [*WALL_MATERIALS, None]
+    out: dict[str, float] = {}
+    for base, wide in zip(CHASE_KEYS, (False, True), strict=True):
+        for m in order:
+            mm = sum(c.length_mm for c in wiring.chases if c.wide == wide and c.material == m)
+            if mm > 0:
+                out[base if m is None else f"{base}.{m.value}"] = round(mm / 1000, 1)
+    return out
 
 
 def build_estimate(
@@ -629,7 +837,7 @@ def build_estimate(
     def line(key: str, qty: float, name: str | None = None) -> Line:
         base, param = split_key(key)
         section, unit, ru, uk = LINES[base]
-        quote = prices.lookup(key)
+        quote = derived_quote(prices, key)
         p, exact = quote.price, quote.exact
         if exact and exact.name:
             name = exact.name
@@ -640,7 +848,11 @@ def build_estimate(
         elif name is None:
             mark = cable_title(param) if base == "cable" else BOX_TITLES.get(param, param)
             name = (ru if language == "ru" else uk).format(mark=mark, n=param)
+            if base in CHASE_KEYS and param:
+                name = f"{name}, {WALL_MATERIALS[WallMaterial(param)][language]}"
         hint = HINTS.get(base, {}).get(language)
+        if base in CHASE_KEYS and not param:
+            hint = NO_MATERIAL[language]
         if hint and p is None:
             hint = f"{hint}. {PRICE_TBD[language]}"
         if quote.service and p is not None:
@@ -677,8 +889,15 @@ def format_number(x: float, digits: int = 2) -> str:
 
 
 def write_markdown(
-    est: Estimate, path: Path, title: str, notes: list[str], language: Language
+    est: Estimate,
+    path: Path,
+    title: str,
+    notes: list[str],
+    language: Language,
+    tail: Sequence[str] = (),
 ) -> Path:
+    """Estimate in Markdown; tail — lines after the total (the agreed terms, terms.py)."""
+
     def t(key: str, **values: object) -> str:
         return text(key, language, **values)
 
@@ -695,6 +914,7 @@ def write_markdown(
             out.append(f"| {k} | {ln.name} | {ln.unit} | {qty} | {price} | {total} |")
         out += [f"| | **{t('subtotal')}** | | | | **{format_number(est.subtotal(section))}** |", ""]
     out += [f"**{t('total')}: {format_number(est.total)} {est.currency}**", ""]
+    out += tail
     if est.unpriced:
         out += [t("unpriced", n=est.unpriced, f=PRICES_FILE), ""]
     out += [f"- {n}" for n in notes]
@@ -732,11 +952,14 @@ def write_xlsx(
     notes: list[str],
     language: Language,
     extra: Callable[[Workbook], None] | None = None,
+    tail: Callable[[Worksheet, Mapping[str, str]], None] | None = None,
 ) -> Path:
     """Estimate in Excel: sections, row sum as a formula "qty × price", section totals and "Total"
     as formulas, prices and quantities highlighted (they get edited). An item without a price has
     an empty price with a note; once a price is entered it counts in the totals. extra adds its
-    own sheets after the estimate (the work scope, work_scope.scope_sheet)."""
+    own sheets after the estimate (the work scope, work_scope.scope_sheet); tail adds rows after
+    "Total" (the agreed terms, terms.terms_sheet_tail) and gets the cells of the section
+    totals and of "Total" by name."""
 
     def t(key: str, **values: object) -> str:
         return text(key, language, **values)
@@ -764,7 +987,7 @@ def write_xlsx(
         cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
     edit = PatternFill("solid", start_color=XLSX_EDIT_FILL, end_color=XLSX_EDIT_FILL)
     grey = Font(color="999999", size=8)
-    subtotals: list[str] = []
+    subtotals: dict[str, str] = {}
     for section in SECTIONS:
         rows = [ln for ln in est.lines if ln.section == section]
         if not rows:
@@ -791,7 +1014,7 @@ def write_xlsx(
         ws.cell(total_row, 2).font = Font(bold=True)
         ws.cell(total_row, 6).font = Font(bold=True)
         ws.cell(total_row, 6).number_format = XLSX_MONEY
-        subtotals.append(f"F{total_row}")
+        subtotals[section] = f"F{total_row}"
     ws.append([])
     ws.append(
         [
@@ -800,13 +1023,15 @@ def write_xlsx(
             "",
             "",
             "",
-            "=" + "+".join(subtotals) if subtotals else 0,
+            "=" + "+".join(subtotals.values()) if subtotals else 0,
         ]
     )
     grand = ws.max_row
     for col in (2, 6):
         ws.cell(grand, col).font = Font(bold=True, size=12)
     ws.cell(grand, 6).number_format = XLSX_MONEY
+    if tail is not None:
+        tail(ws, {**subtotals, "total": f"F{grand}"})
     ws.append([])
     if est.unpriced:
         ws.append(["", t("unpriced", n=est.unpriced, f=PRICES_FILE)])

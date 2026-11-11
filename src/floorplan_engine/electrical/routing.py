@@ -1,9 +1,18 @@
-"""Cable routing on the plan: only inside rooms and through door openings.
+"""Cable routing on the plan: inside rooms, through door openings and, if the way round through
+a door is long, through a wall that may be drilled.
 
 The plan is split into a grid with step STEP. Cells inside rooms and in door openings are
-free (at least CLEARANCE from walls), walls and windows are blocked. The path is the
-shortest on the grid with a TURN_COST penalty per turn, so a route goes in straight runs at
-90°. The path is computed once from a source (panel, box) to all its targets at once.
+free (at least CLEARANCE from walls), windows are blocked. The path is the shortest on the grid
+with a TURN_COST penalty per turn, so a route goes in straight runs at 90°. The path is computed
+once from a source (panel, box) to all its targets at once.
+
+Walls (decision 2026-11-11): a wall between two rooms of the flat that is not load-bearing and no
+thicker than WALL_DRILL_MAX (or explicitly `partition: true`) may be drilled (drillable_walls).
+Its band plus CLEARANCE on each side is open, a pass across it costs about WALL_PASS_COST
+whatever the thickness (spread over the cells across the band), so a door stays the first choice
+and a wall is crossed only when the way round through the door is longer than that; running along
+a wall inside its band costs several times the cable and is not worth it. Load-bearing walls,
+outer walls and thick walls (shafts, pylons, boxes) are never crossed.
 
 Any angle (any_angle: economy, docs/wiring-variants.md): the search goes in eight directions
 without a turn penalty, then the path is pulled tight (pull): corners are cut where a straight
@@ -25,7 +34,7 @@ import shapely
 from shapely.geometry import Polygon
 from shapely.geometry.base import BaseGeometry
 
-from floorplan_engine.model.geometry import RoomGeometry, Vec
+from floorplan_engine.model.geometry import RoomGeometry, Vec, WallSegment, point_in_polygon
 from floorplan_engine.model.schema import Opening, OpeningType
 
 STEP = 100.0  # mm: grid step
@@ -37,6 +46,8 @@ DIAGONALS = ((1, 1), (-1, 1), (-1, -1), (1, -1))
 # Eight directions around the circle: neighbours differ by 45° (sewer uses search45)
 DIRS8 = ((1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0), (-1, -1), (0, -1), (1, -1))
 BEND_COST = TURN_COST / 2  # mm: penalty for a 45° bend
+WALL_DRILL_MAX = 300.0  # mm: thicker non-bearing walls (shafts, pylons, boxes) are not drilled
+WALL_PASS_COST = 1000.0  # mm: one pass through a drillable wall weighs as this much cable
 
 
 def free_area(geoms: Sequence[RoomGeometry]) -> BaseGeometry:
@@ -57,6 +68,71 @@ def opening_strip(g: RoomGeometry, op: Opening) -> Polygon:
     a, b = seg.point_at(op.offset), seg.point_at(op.offset + op.width)
     out = seg.outward * seg.thickness
     return Polygon([a.as_tuple(), b.as_tuple(), (b + out).as_tuple(), (a + out).as_tuple()])
+
+
+def wall_strips(
+    geoms: Sequence[RoomGeometry],
+    accept: Callable[[WallSegment], bool],
+    blocked: Sequence[Polygon] = (),
+    inner: bool = False,
+) -> list[Polygon]:
+    """Bands of walls between rooms of the flat through the whole wall thickness, for walls that
+    accept() lets through; without windows and without the blocked bands (openings). inner=True
+    means walls inside one room (the same room on both sides). Outer walls (no room beyond) are
+    never in. A shared wall is described in both rooms, so its bands are merged: one wall, one
+    band."""
+    cut = shapely.unary_union(list(blocked)).buffer(1.0) if blocked else None
+    out: list[Polygon] = []
+    for g in geoms:
+        for seg in g.contour.segments:
+            if not accept(seg):
+                continue
+            probe = seg.point_at(seg.length / 2) + seg.outward * (seg.thickness + 50.0)
+            beyond = [o for o in geoms if point_in_polygon(probe, o.contour.vertices)]
+            if not beyond:
+                continue
+            within = all(o is g for o in beyond)
+            if within != inner or (within and not seg.partition):
+                continue
+            out_v = seg.outward * seg.thickness
+            strip: BaseGeometry = Polygon(
+                [
+                    seg.start.as_tuple(),
+                    seg.end.as_tuple(),
+                    (seg.end + out_v).as_tuple(),
+                    (seg.start + out_v).as_tuple(),
+                ]
+            )
+            for op in g.room.openings:
+                if op.wall == seg.id and op.type is OpeningType.WINDOW:
+                    strip = strip.difference(opening_strip(g, op))
+            if cut is not None:
+                strip = strip.difference(cut)
+            out += _polygons(strip)
+    return _polygons(shapely.unary_union(out)) if out else []
+
+
+def _polygons(geom: BaseGeometry) -> list[Polygon]:
+    parts = list(geom.geoms) if hasattr(geom, "geoms") else [geom]
+    return [p for p in parts if isinstance(p, Polygon) and p.area > 1.0]
+
+
+def drillable(seg: WallSegment) -> bool:
+    """A wall a cable may go through: not load-bearing and no thicker than WALL_DRILL_MAX, or
+    explicitly a partition."""
+    return not seg.bearing and (seg.thickness <= WALL_DRILL_MAX or seg.partition)
+
+
+def drillable_walls(geoms: Sequence[RoomGeometry]) -> list[Polygon]:
+    """Walls between rooms that a route may cross (drillable), without doors and openings: those
+    are free passes anyway."""
+    openings = [
+        opening_strip(g, op)
+        for g in geoms
+        for op in g.room.openings
+        if op.type is not OpeningType.WINDOW
+    ]
+    return wall_strips(geoms, drillable, openings)
 
 
 def room_area(g: RoomGeometry) -> BaseGeometry:
@@ -100,8 +176,18 @@ class Grid:
         iy, ix = divmod(idx, self.nx)
         return Vec(self.x0 + ix * STEP, self.y0 + iy * STEP)
 
-    def nearest_free(self, p: Vec) -> int:
-        """Free cell nearest to the point."""
+    def nearest_free(self, p: Vec, open_only: bool = False) -> int:
+        """Free cell nearest to the point; open_only: a cell without a penalty first (a route end
+        is in the room, not in the band of a wall it stands on), any free one if there is none."""
+        if open_only and self.penalty:
+            penalty = self.penalty
+            try:
+                return self._nearest(p, lambda k: self.free[k] and k not in penalty)
+            except ValueError:
+                pass
+        return self._nearest(p, lambda k: self.free[k])
+
+    def _nearest(self, p: Vec, ok: Callable[[int], bool]) -> int:
         best, best_d = -1, float("inf")
         cx = round((p.x - self.x0) / STEP)
         cy = round((p.y - self.y0) / STEP)
@@ -110,7 +196,7 @@ class Grid:
                 for ix in range(cx - r, cx + r + 1):
                     if max(abs(ix - cx), abs(iy - cy)) != r:
                         continue
-                    if 0 <= ix < self.nx and 0 <= iy < self.ny and self.free[iy * self.nx + ix]:
+                    if 0 <= ix < self.nx and 0 <= iy < self.ny and ok(iy * self.nx + ix):
                         c = self.center(iy * self.nx + ix)
                         d = abs(c.x - p.x) + abs(c.y - p.y)
                         if d < best_d:
@@ -141,8 +227,11 @@ class Grid:
                 side_a, side_b = self.free[iy * self.nx + jx], self.free[jy * self.nx + ix]
                 if dx and dy and not (side_a and side_b):
                     continue
-                ns = (jy * self.nx + jx) * 4
+                nxt = jy * self.nx + jx
+                ns = nxt * 4
                 c = cost + (diagonal if dx and dy else STEP)
+                if self.penalty is not None:
+                    c += self.penalty.get(nxt, 0.0)
                 if c < dist.get(ns, float("inf")):
                     dist[ns] = c
                     prev[ns] = state
@@ -342,30 +431,60 @@ class End:
 
 class Router:
     """Routes from one source to many targets in a given area. any_angle allows any angle
-    (economy): the shortest path is pulled tight instead of running at 90°."""
+    (economy): the shortest path is pulled tight instead of running at 90°. walls are bands of
+    drillable walls (drillable_walls): open, but a pass costs WALL_PASS_COST per cell; the pull
+    stays in the area itself, so it does not cut through a wall where the search did not."""
 
-    def __init__(self, area: BaseGeometry, source: End, any_angle: bool = False) -> None:
-        self.grid = Grid.of(area)
+    def __init__(
+        self,
+        area: BaseGeometry,
+        source: End,
+        any_angle: bool = False,
+        walls: Sequence[Polygon] = (),
+    ) -> None:
+        if walls:
+            self.grid = Grid.of(shapely.unary_union([area, *walls]))
+            self.grid.inner = Grid.of(area).inner
+            self.grid.penalty = _wall_penalty(self.grid, walls)
+        else:
+            self.grid = Grid.of(area)
         self.source = source
         self.any_angle = any_angle
-        self.start = self.grid.nearest_free(source.node)
+        self.start = self.grid.nearest_free(source.node, open_only=True)
         search = self.grid.search_any if any_angle else self.grid.search
         self.prev, self.dist = search(self.start)
 
     def cost(self, node: Vec) -> float:
         """Route cost to the point (with turns); infinity if unreachable."""
-        cell = self.grid.nearest_free(node)
+        cell = self.grid.nearest_free(node, open_only=True)
         costs = [self.dist[s] for s in range(cell * 4, cell * 4 + 4) if s in self.dist]
         return min(costs, default=float("inf"))
 
     def route(self, target: End) -> list[Vec]:
-        cell = self.grid.nearest_free(target.node)
+        cell = self.grid.nearest_free(target.node, open_only=True)
         middle = self.grid.path(self.prev, self.dist, cell)
         if self.any_angle:
             middle = self.grid.pull(middle)
         head = _join(self.source.node, middle[0], self.source.vertical_wall)
         tail = list(reversed(_join(target.node, middle[-1], target.vertical_wall)))
         return simplify([*head, *middle, *tail])
+
+
+def _wall_penalty(grid: Grid, walls: Sequence[Polygon]) -> dict[int, float]:
+    """Free cells in the band of a wall widened by CLEARANCE on each side: WALL_PASS_COST spread
+    over the cells across the band, so a pass costs about the same through any thickness."""
+    idx = [k for k, ok in enumerate(grid.free) if ok]
+    xs = [grid.center(k).x for k in idx]
+    ys = [grid.center(k).y for k in idx]
+    out: dict[int, float] = {}
+    for wall in walls:
+        thickness = 2 * wall.area / wall.length  # a long thin band (or an L of two)
+        cost = WALL_PASS_COST * STEP / (thickness + 2 * CLEARANCE)
+        inside = shapely.contains_xy(wall.buffer(CLEARANCE), xs, ys)
+        for k, hit in zip(idx, inside, strict=True):
+            if hit:
+                out[k] = max(out.get(k, 0.0), cost)
+    return out
 
 
 def length(path: Sequence[Vec]) -> float:

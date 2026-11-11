@@ -36,7 +36,7 @@ TEXT: dict[str, dict[str, str]] = {
     "socket": {"ru": "Розетка", "uk": "Розетка"},
     "outlets": {"ru": "Выводы", "uk": "Виводи"},
     "outlet": {"ru": "Вывод", "uk": "Вивід"},
-    "low": {"ru": "Слаботочка", "uk": "Слабкий струм"},
+    "low": {"ru": "Связь", "uk": "Зв'язок"},
     "switches": {"ru": "Выключатели", "uk": "Вимикачі"},
     "note": {
         "ru": "* — назначение составлено по точкам группы; уточните",
@@ -154,41 +154,7 @@ def group_rows(plan: Plan, elec: Electrical) -> list[GroupRow]:
     return [replace(r, purpose=t) for r, t in zip(out, told, strict=True)]
 
 
-# Group colours: soft RGB (true color in DXF), distinct from each other and readable as a
-# thin line on white (decision 2026-10-25); no greys: the dark viewer theme recolours grey
-GROUP_PALETTE = (
-    "#4e79a7",  # blue
-    "#f28e2b",  # orange
-    "#59a14f",  # green
-    "#e15759",  # red
-    "#76b7b2",  # turquoise
-    "#d4a72c",  # ochre
-    "#b07aa1",  # lilac
-    "#e67f8a",  # pink
-    "#9c755f",  # brown
-    "#5f9ed1",  # light blue
-    "#8cbf5f",  # lime
-    "#c9845c",  # terracotta
-    "#7f7fc9",  # lavender
-    "#4fb0a0",  # sea green
-)
-
-
 def group_key(group: str) -> tuple[str, int, int]:
     """QF2 before QF10, line QF1.2 right after QF1: sort by the numbers in the group name."""
     m = re.match(r"^(\D*)(\d+)(?:\.(\d+))?", group)
     return (m.group(1), int(m.group(2)), int(m.group(3) or 1)) if m else (group, 0, 0)
-
-
-def rgb(hex_color: str) -> int:
-    """Convert "#4e79a7" → DXF true color number (0xRRGGBB)."""
-    return int(hex_color.lstrip("#"), 16)
-
-
-def group_colors(elec: Electrical) -> dict[str, int]:
-    """A colour of its own (true color, 0xRRGGBB) for each group, in number order."""
-    groups = sorted(
-        {p.group for p in elec.points if p.group} | {c.group for c in elec.cables if c.group},
-        key=group_key,
-    )
-    return {g: rgb(GROUP_PALETTE[k % len(GROUP_PALETTE)]) for k, g in enumerate(groups)}

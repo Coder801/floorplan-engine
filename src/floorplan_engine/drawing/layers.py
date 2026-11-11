@@ -42,6 +42,13 @@ def text_width(text: str, height: float = 1.0) -> float:
     return float(fonts.make_font(TEXT_FONT, height).text_width(text))
 
 
+def text_descender(height: float = 1.0) -> float:
+    """How far text in TEXT_STYLE goes below its baseline, mm: centred text ("M" alignment) is
+    centred on the cap height, so its real extents reach this much lower than height / 2."""
+    register_fonts()
+    return float(fonts.make_font(TEXT_FONT, height).measurements.descender_height)
+
+
 CABLE_LINETYPE = "E_CABLE_DASH"
 LED_LINETYPE = "E_LED_DASH"
 FLOOR_LINETYPE = "W_FLOOR_DASHDOT"
@@ -77,11 +84,11 @@ E_BOARD = LayerSpec("E-BOARD", 1, "Электрощит")
 # Labels are dark (7); only symbols and groups are coloured on sheets (feedback 2026-10-28:
 # red labels blended into red sockets)
 E_TEXT = LayerSpec("E-TEXT", 7, "Группы, высоты, сечения")
-E_DATA = LayerSpec("E-DATA", 140, "Интернет и TV")
+E_DATA = LayerSpec("E-DATA", 140, "Связь: интернет и TV")
 E_LED = LayerSpec("E-LED", 221, "LED-подсветка и выводы под неё", LED_LINETYPE)
 W_BOX = LayerSpec("W-BOX", 1, "Распаечные коробки (проводка через коробки)")
 # Cables: a layer per line purpose, protection (-RCD: RCBO or RCD) and route (-FLOOR: in the screed)
-CABLE_PURPOSES = {"light": "свет", "socket": "розетки", "device": "приборы", "low": "слаботочка"}
+CABLE_PURPOSES = {"light": "свет", "socket": "розетки", "device": "приборы", "low": "связь"}
 
 
 def _cable_spec(purpose: str, rcd: bool, floor: bool) -> LayerSpec:
@@ -117,6 +124,8 @@ ELECTRICAL_LAYERS = (
 )
 WIRING_LAYERS = (W_BOX, *W_CABLES.values(), W_TEXT, A_SHEET)
 PANEL_LAYERS = (E_PANEL, E_PANEL_WIRE, A_SHEET)
+M_FIX = LayerSpec("M-FIX", 7, "Монтаж: места креплений кабеля и гофры")
+MOUNTING_LAYERS = (M_FIX, A_SHEET)
 E_LINK = LayerSpec("E-LINK", 5, "Освещение: что чем включает выключатель", CABLE_LINETYPE)
 L_TEXT = LayerSpec("L-TEXT", 7, "Освещение: номера светильников и выключателей")
 LW_LINK = 18  # switch link line weight, 1/100 mm
@@ -138,6 +147,7 @@ ALL_LAYERS = tuple(
         + LIGHTING_LAYERS
         + WIRING_LAYERS
         + PANEL_LAYERS
+        + MOUNTING_LAYERS
         + (E_ELEV,)
         + PLUMBING_LAYERS
     )

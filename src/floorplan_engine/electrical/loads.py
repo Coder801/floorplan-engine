@@ -305,6 +305,19 @@ def _kind(points: Sequence[ElectricalPoint], loads: Sequence[Load], section: flo
     return Kind.SOCKETS
 
 
+def group_kind(elec: Electrical, group: str) -> Kind | None:
+    """Kind of a model group, as the panel sees the whole group (before splitting into lines);
+    None for a low-voltage group, which is not in the panel."""
+    points = [p for p in elec.points if p.group == group]
+    if points and all(p.type in LOW for p in points):
+        return None
+    loads = [ld for p in points if (ld := point_load(p, p.room, "ru")) is not None]
+    sections = [
+        s for c in elec.cables if c.group == group and (s := cable_section(c.cable)) is not None
+    ]
+    return _kind(points, loads, min(sections) if sections else None)
+
+
 def _breaker(kind: Kind, amps_: float, section: float | None, curve: str) -> Breaker:
     """Breaker by group kind, but no larger than recommended for the cable."""
     rating = {Kind.LIGHT: LIGHT_A, Kind.SOCKETS: SOCKETS_A}.get(kind) or rating_for(amps_)

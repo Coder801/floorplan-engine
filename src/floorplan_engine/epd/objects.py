@@ -8,7 +8,7 @@ A wiring line is named by meaning, "QF4: К3 → Розетка, Кухня", no
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from typing import Any
 
@@ -25,6 +25,7 @@ from floorplan_engine.electrical.panel import BoardPanel, build_panel
 from floorplan_engine.electrical.panel_text import amps, kw
 from floorplan_engine.electrical.point_numbers import BLOCK_TYPES, block_name
 from floorplan_engine.electrical.routing import opening_strip
+from floorplan_engine.electrical.switch_links import SwitchLink, switch_links
 from floorplan_engine.electrical.wiring import RESERVE
 from floorplan_engine.electrical.wiring_model import (
     BOX_ABOVE_FLOOR,
@@ -42,6 +43,7 @@ from floorplan_engine.model.schema import (
     Plan,
 )
 from floorplan_engine.model.texts import Language, tr
+from floorplan_engine.model.wall_names import wall_names
 from floorplan_engine.model.zones import plan_floors, point_places, room_floors
 
 Point = tuple[float, float]
@@ -103,6 +105,7 @@ TEXT: dict[str, dict[str, str]] = {
     "window": {"ru": "Окно", "uk": "Вікно"},
     "opening": {"ru": "Проём", "uk": "Проріз"},
     "dimension": {"ru": "Размеры стены {wall}", "uk": "Розміри стіни {wall}"},
+    "about": {"ru": "Описание", "uk": "Опис"},
     "points": {"ru": "Точки", "uk": "Точки"},
     "label": {"ru": "Подпись точек", "uk": "Підпис точок"},
     "led": {"ru": "LED-подсветка", "uk": "LED-підсвітка"},
@@ -137,11 +140,16 @@ class ObjectInfo:
     title: str
     rows: tuple[tuple[str, str], ...]
     block: dict[str, object] | None = None  # socket block: its scheme and wall in a pinned hint
+    # Short card for the simple interface mode: where a line runs, without group, cable and
+    # lengths (wiring lines and boxes)
+    brief: ObjectInfo | None = None
 
     def as_dict(self) -> dict[str, object]:
         out: dict[str, object] = {"title": self.title, "rows": [list(r) for r in self.rows]}
         if self.block is not None:
             out["block"] = self.block
+        if self.brief is not None:
+            out["brief"] = self.brief.as_dict()
         return out
 
 
@@ -168,6 +176,8 @@ def describe_objects(
     also walls that only have plumbing)."""
     lang = plan.language
     out: dict[str, ObjectInfo] = {}
+    names = wall_names(plan, contours)
+    codes = {key: n.code for key, n in names.items()}
     height_assumed = "ceiling_height" not in plan.model_fields_set
     ceiling = (
         text("default", lang, h=f"{plan.ceiling_height:g}")
@@ -193,22 +203,24 @@ def describe_objects(
                 out[floor.key] = ObjectInfo(floor.name, zone_rows)
         for seg in contour.segments:
             kind = text("bearing" if seg.bearing else "partition", lang)
+            wname = names[(room.id, seg.id)]
             wall_rows = (
                 (text("room", lang), room.name),
                 (text("length", lang), _mm(seg.length)),
+                (text("about", lang), wname.text),
                 (text("thickness", lang), _mm(seg.thickness)),
                 (text("kind", lang), kind),
             )
-            title = f"{text('wall', lang)} {seg.id}"
+            title = f"{text('wall', lang)} {wname.code}"
             out[f"wall:{room.id}.{seg.id}"] = ObjectInfo(title, wall_rows)
             out[f"dimension:{room.id}.{seg.id}"] = ObjectInfo(
-                text("dimension", lang, wall=seg.id), wall_rows[:2]
+                text("dimension", lang, wall=wname.code), wall_rows[:2]
             )
         for op in room.openings:
             name = {OpeningType.DOOR: "door", OpeningType.WINDOW: "window"}.get(op.type, "opening")
             rows = [
                 (text("room", lang), room.name),
-                (text("wall", lang), op.wall),
+                (text("wall", lang), codes[(room.id, op.wall)]),
                 (text("width", lang), _mm(op.width)),
             ]
             if op.height is not None:
@@ -217,7 +229,7 @@ def describe_objects(
                 rows.append((text("sill", lang), _mm(op.sill)))
             out[f"opening:{op.id}"] = ObjectInfo(f"{text(name, lang)} {op.id}", tuple(rows))
     if elec is not None:
-        out.update(_electrical(plan, elec, wiring))
+        out.update(_electrical(plan, elec, wiring, codes))
         # Elevations: name (viewer pager and hint) and what is behind the wall
         for e in wall_elevations(plan, contours, elec, wiring, water=water):
             rows = [
@@ -227,9 +239,7 @@ def describe_objects(
             ]
             if e.water:
                 rows.append((text("water_on_wall", lang), str(len(e.water))))
-            out[f"elevation:{e.key}"] = ObjectInfo(
-                tr("elev_card", lang, room=e.room_name, n=e.index), tuple(rows)
-            )
+            out[f"elevation:{e.key}"] = ObjectInfo(e.title, tuple(rows))
             for pv in e.points:
                 if pv.type in BLOCK_TYPES:
                     block = {
@@ -274,8 +284,18 @@ def device_cards(panel: BoardPanel, lang: Language) -> dict[str, ObjectInfo]:
     return out
 
 
-def _electrical(plan: Plan, elec: Electrical, wiring: Wiring | None) -> dict[str, ObjectInfo]:
+def _electrical(
+    plan: Plan,
+    elec: Electrical,
+    wiring: Wiring | None,
+    codes: Mapping[tuple[str, str], str] | None = None,
+) -> dict[str, ObjectInfo]:
+    """Cards of electrical objects; codes are wall codes ("2.В") by (room, wall), else the id."""
     lang = plan.language
+
+    def wall(room: str, wall_id: str | None) -> str:
+        return (codes or {}).get((room, wall_id or ""), str(wall_id))
+
     rooms = {r.id: r.name for r in plan.rooms}
     points = {p.id: p for p in elec.points}
     places = point_places(plan, elec.points)  # a zone of an open-plan room, or the room
@@ -306,7 +326,7 @@ def _electrical(plan: Plan, elec: Electrical, wiring: Wiring | None) -> dict[str
         rows = [(text("room", lang), places[pt.id])]
         if pt.ceiling is None:
             rows += [
-                (text("wall", lang), str(pt.wall)),
+                (text("wall", lang), wall(pt.room, pt.wall)),
                 (text("offset", lang), _mm(pt.offset or 0)),
                 (text("height", lang), _mm(pt.height or 0)),
             ]
@@ -353,13 +373,15 @@ def _electrical(plan: Plan, elec: Electrical, wiring: Wiring | None) -> dict[str
             ]
             if b.wet:
                 rows.append((text("wet", lang), text("ip44", lang)))
-            out[f"box:{b.id}"] = ObjectInfo(text("box", lang, label=b.label), tuple(rows))
+            title = text("box", lang, label=b.label)
+            brief = ObjectInfo(title, (rows[1], rows[4]))  # room and height
+            out[f"box:{b.id}"] = ObjectInfo(title, tuple(rows), brief=brief)
 
     if elec.board is not None:
         groups = sorted({r.group for r in wiring.runs}) if wiring else []
         rows = [
             (text("room", lang), rooms.get(elec.board.room, elec.board.room)),
-            (text("wall", lang), elec.board.wall),
+            (text("wall", lang), wall(elec.board.room, elec.board.wall)),
             (text("height", lang), _mm(elec.board.height)),
         ]
         if wiring is not None:
@@ -374,7 +396,7 @@ def _electrical(plan: Plan, elec: Electrical, wiring: Wiring | None) -> dict[str
         m = elec.media
         rows = [
             (text("room", lang), rooms.get(m.room, m.room)),
-            (text("wall", lang), m.wall),
+            (text("wall", lang), wall(m.room, m.wall)),
             (text("height", lang), _mm(m.height)),
         ]
         if wiring is not None:
@@ -385,7 +407,7 @@ def _electrical(plan: Plan, elec: Electrical, wiring: Wiring | None) -> dict[str
     for strip in elec.led_strips:
         strip_rows = (
             (text("room", lang), rooms.get(strip.room, strip.room)),
-            (text("wall", lang), strip.wall),
+            (text("wall", lang), wall(strip.room, strip.wall)),
             (text("length", lang), _mm(strip.end - strip.start)),
         )
         out[f"led_strip:{strip.id}"] = ObjectInfo(f"{text('led', lang)} · {strip.id}", strip_rows)
@@ -417,8 +439,9 @@ def _run_info(
             f"{_m(run.length_mm * (1 + RESERVE))} м",
         ),
     )
-    title = f"{run.group}: {short(run.source)} → {short(run.target)}"
-    return ObjectInfo(title, rows)
+    way = f"{short(run.source)} → {short(run.target)}"
+    brief = ObjectInfo(way, (rows[2], rows[3], rows[4]))  # from, to, route
+    return ObjectInfo(f"{run.group}: {way}", rows, brief=brief)
 
 
 def wire_titles(plan: Plan, elec: Electrical, wiring: Wiring) -> dict[str, str]:
@@ -517,6 +540,48 @@ def plan_chains(plan: Plan, contours: dict[str, Contour]) -> dict[str, list[str]
 
 
 SOURCES = frozenset({"board", "media"})  # line sources that are not boxes: panel and cabinet
+
+
+def light_chains(elec: Electrical) -> dict[str, list[str]]:
+    """What to highlight on click on the lighting sheet: the whole switch bundle. Switches that
+    share a light (pass switches of one light) are one bundle: the switches, their links to the
+    lights (switch_link), the links between the lights (light_set, keyed as the sheet draws them)
+    and the lights. Every key of a bundle maps to all of it, the switches first: a link has no card
+    of its own, the hint shows the switch."""
+    links = [lk for lk in switch_links(elec) if lk.targets]
+    strips = {s.id for s in elec.led_strips}
+    parent = {lk.switch: lk.switch for lk in links}
+
+    def root(k: str) -> str:
+        while parent[k] != k:
+            parent[k] = parent[parent[k]]
+            k = parent[k]
+        return k
+
+    owner: dict[str, str] = {}  # light → a switch of it
+    for lk in links:
+        for t in lk.targets:
+            if t in owner:
+                parent[root(lk.switch)] = root(owner[t])
+            else:
+                owner[t] = lk.switch
+    bundles: dict[str, list[SwitchLink]] = {}
+    for lk in links:
+        bundles.setdefault(root(lk.switch), []).append(lk)
+    out: dict[str, list[str]] = {}
+    for group in bundles.values():
+        switches = sorted(lk.switch for lk in group)
+        sets = sorted({",".join(sorted(lk.targets)) for lk in group if len(lk.targets) > 1})
+        lights = sorted({t for lk in group for t in lk.targets})
+        keys = [
+            *(f"point:{s}" for s in switches),
+            *(f"switch_link:{s}" for s in switches),
+            *(f"light_set:{s}" for s in sets),
+            *(f"led_strip:{t}" if t in strips else f"point:{t}" for t in lights),
+        ]
+        for k in keys:
+            out[k] = keys
+    return out
 
 
 def line_chains(wiring: Wiring) -> dict[str, list[str]]:

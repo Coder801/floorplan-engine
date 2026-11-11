@@ -45,7 +45,14 @@ def test_mock_knows_every_line_and_is_deterministic() -> None:
         ("diff.C16 30 мА 4P", 2375),
         ("input.C40 4P", 1300),
         ("ats.АВР", 4500),  # no rating: price for the kind
-        ("work.chase", 200),
+        ("work.chase", 120),  # wall material unknown: as brick
+        ("work.chase.concrete", 200),
+        ("work.chase.claydite", 150),
+        ("work.chase.brick", 120),
+        ("work.chase.aerated", 90),
+        ("work.chase_wide.concrete", 300),  # wide: narrow × 1.5 in the same material
+        ("work.chase_wide.aerated", 135),
+        ("work.chase_wide", 180),
     ],
 )
 def test_mock_price_by_parameter(key: str, price: float | None) -> None:

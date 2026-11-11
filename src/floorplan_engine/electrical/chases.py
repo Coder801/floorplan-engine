@@ -1,6 +1,6 @@
 """Chases and holes: cable drops and rises along walls to points and boxes (shared ones in one
 chase, a wider one above CHASE_NARROW cables), cable channels, cable passes through door
-openings."""
+openings and through drillable walls."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from collections import defaultdict
 from collections.abc import Sequence
 from dataclasses import replace
 
-from shapely.geometry import LineString, Polygon
+from shapely.geometry import LineString, Point, Polygon
 
 from floorplan_engine.electrical.routing import (
     opening_strip,
@@ -29,12 +29,14 @@ from floorplan_engine.model.schema import (
     CableChannel,
     Conduit,
     ElectricalPoint,
+    LoopConduit,
     OpeningType,
+    Plan,
 )
 
 CHASE_SHARE = 150.0  # mm along the wall: closer drops share a chase
 CHASE_CABLES = 4  # cables per chase, at most
-HOLE_CABLES = 4  # cables per hole through a wall, at most
+WALL_HOLE_SHARE = 300.0  # mm: lines crossing a wall closer than this share a hole
 
 
 def wall_chases(
@@ -59,8 +61,11 @@ def wall_chases(
         group: list[tuple[float, float, str]] = []
         for item in sorted(items):
             if group and (item[0] - group[0][0] > CHASE_SHARE or len(group) == CHASE_CABLES):
+                # A chain point's cable in and cable out stay in one chase (they may share a
+                # conduit, with_conduit): a full chase hands the first of the pair on
+                carry = group.pop() if len(group) > 1 and group[-1][2] == item[2] else None
                 out.append(_shared(key, group))
-                group = []
+                group = [carry] if carry is not None else []
             group.append(item)
         out.append(_shared(key, group))
 
@@ -110,26 +115,60 @@ def channel_chases(channels: Sequence[CableChannel]) -> tuple[Chase, ...]:
     )
 
 
-def before_plaster(chases: Sequence[Chase], conduit: Conduit) -> tuple[Chase, ...]:
+def before_plaster(chases: Sequence[Chase]) -> tuple[Chase, ...]:
     """Cable laid before the plaster needs no chases: it fits in the plaster layer. Conduit does
-    not, so chases stay where it goes down the wall: ceiling routes with conduit in the walls,
-    floor routes always (conduit only on the ceiling ends there). A cable channel stays too: it
-    is cut for cables that come later."""
-    if conduit == "walls":
-        return tuple(chases)
-    return tuple(c for c in chases if c.kind == "channel" or c.route == "floor")
+    not, so chases stay where it goes down the wall (marked by with_conduit: ceiling routes with
+    conduit in the walls, floor routes always, as conduit only on the ceiling ends there). A
+    cable channel stays too: it is cut for cables that come later."""
+    return tuple(c for c in chases if c.kind == "channel" or c.conduit)
 
 
-def with_conduit(chases: Sequence[Chase], conduit: Conduit) -> tuple[Chase, ...]:
+def with_conduit(
+    chases: Sequence[Chase], conduit: Conduit, loop: LoopConduit = "separate"
+) -> tuple[Chase, ...]:
     """Mark the chases the cables go down in conduit (estimate.conduit_mm): floor routes always,
     ceiling routes with conduit in the walls. Such a chase is narrow only for one conduit
-    (CHASE_NARROW_CONDUIT). A cable channel is cut wide for cables that come later: unchanged."""
-    return tuple(
-        replace(c, conduit=True)
-        if c.kind != "channel" and (c.route == "floor" or conduit == "walls")
-        else c
-        for c in chases
+    (CHASE_NARROW_CONDUIT). With loop "shared" a chain point's cable in and cable out go in one
+    conduit (decision 2026-11-11): a point twice in the chase is a pair, one conduit
+    (Chase.pairs). A cable channel is cut wide for cables that come later: unchanged."""
+    out: list[Chase] = []
+    for c in chases:
+        if c.kind == "channel" or not (c.route == "floor" or conduit == "walls"):
+            out.append(c)
+            continue
+        pairs = c.cables - len(c.targets) if loop == "shared" and c.kind == "point" else 0
+        out.append(replace(c, conduit=True, pairs=pairs))
+    return tuple(out)
+
+
+def shared_rises(
+    runs: Sequence[Run], points: Sequence[ElectricalPoint], conduit: Conduit, loop: LoopConduit
+) -> frozenset[str]:
+    """Lines whose rise from a chain point shares one conduit with the cable coming in (loop
+    "shared", decision 2026-11-11): a wall point with a cable in and a cable out, both down the
+    wall in conduit (floor routes always, ceiling routes with conduit in the walls). The same
+    pairs make Chase.pairs (with_conduit)."""
+    if loop != "shared":
+        return frozenset()
+    on_wall = {p.id for p in points if p.wall is not None}
+    coming = {r.target: r for r in runs}
+    return frozenset(
+        r.id
+        for r in runs
+        if r.source in on_wall
+        and r.rise_start_mm > 0
+        and r.source in coming
+        and coming[r.source].rise_end_mm > 0
+        and (r.route == "floor" or conduit == "walls")
     )
+
+
+def with_material(chases: Sequence[Chase], plan: Plan) -> tuple[Chase, ...]:
+    """Wall material of every chase (the estimate prices chases by it): the wall's own material,
+    otherwise the plan default; a chase at a box has no wall, so the default too."""
+    walls = {(r.id, w.id): w.material for r in plan.rooms for w in r.walls}
+    default = plan.default_wall_material
+    return tuple(replace(c, material=walls.get((c.room, c.wall)) or default) for c in chases)
 
 
 def _shared(key: ChaseKey, group: Sequence[tuple[float, float, str]]) -> Chase:
@@ -173,21 +212,40 @@ def passages(geoms: Sequence[RoomGeometry]) -> list[tuple[str, Polygon]]:
     return out
 
 
-def wall_holes(runs: Sequence[Run], passes: Sequence[tuple[str, Polygon]]) -> tuple[Hole, ...]:
-    """Holes above doors and openings for ceiling routes, up to HOLE_CABLES cables."""
-    lines = [
-        (r, LineString([v.as_tuple() for v in r.path]))
-        for r in runs
-        if r.route == "ceiling" and len(r.path) > 1
-    ]
+def wall_holes(
+    runs: Sequence[Run],
+    passes: Sequence[tuple[str, Polygon]],
+    walls: Sequence[Polygon] = (),
+) -> tuple[Hole, ...]:
+    """One hole per entry into a room whatever the number of cables (decision 2026-11-11; more
+    than HOLE_CABLES is a large hole, Hole.large), power and low-voltage apart: above doors and
+    openings for ceiling routes; through drillable walls (routing.drillable_walls) for ceiling
+    and floor routes, lines crossing a wall closer than WALL_HOLE_SHARE share a hole."""
+    lines = [(r, LineString([v.as_tuple() for v in r.path])) for r in runs if len(r.path) > 1]
     out: list[Hole] = []
     for pid, strip in passes:
         through: dict[Circuit, list[str]] = defaultdict(list)
         for r, line in lines:
-            if line.intersection(strip).length > 1.0:
+            if r.route == "ceiling" and line.intersection(strip).length > 1.0:
                 through[r.circuit].append(r.id)
         for circuit, ids in sorted(through.items()):
-            for k in range(0, len(ids), HOLE_CABLES):
-                chunk = tuple(ids[k : k + HOLE_CABLES])
-                out.append(Hole(pid, len(chunk), circuit, chunk))
+            out.append(Hole(pid, len(ids), circuit, tuple(ids)))
+    for k, strip in enumerate(walls):
+        spots: dict[tuple[str, Circuit], list[tuple[Point, list[str]]]] = defaultdict(list)
+        for r, line in lines:
+            cut = line.intersection(strip)
+            for piece in getattr(cut, "geoms", [cut]):
+                if piece.is_empty or piece.length <= 1.0:
+                    continue
+                at = piece.centroid
+                near = spots[(r.route, r.circuit)]
+                hit = next((ids for p, ids in near if p.distance(at) < WALL_HOLE_SHARE), None)
+                if hit is None:
+                    near.append((at, [r.id]))
+                elif r.id not in hit:
+                    hit.append(r.id)
+        for (route, circuit), found in sorted(spots.items()):
+            for at, ids in found:
+                pid = f"wall:{k}:{route}:{at.x:.0f},{at.y:.0f}"
+                out.append(Hole(pid, len(ids), circuit, tuple(ids)))
     return tuple(out)

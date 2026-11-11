@@ -1,10 +1,12 @@
-"""Plan drawing: walls, openings, dimensions, room names and areas.
+"""Plan drawing: walls, openings, dimensions, room names and areas, wall codes.
 
 The walls of all rooms are first merged into one silhouette: a partition shared by two rooms
 is drawn once, and where a partition meets an exterior wall there are no inner lines.
 The silhouette boundary is drawn as segments by coordinates, openings are gaps with reveals.
 Hatching: load-bearing (monolithic) walls are dense, partitions are sparse. Where a
 load-bearing wall meets a partition, a material boundary line remains.
+Every wall gets its code ("2.В", model/wall_names.py) inside the room along the wall, on a spot
+free of dimensions, labels and door swings: the same code as on the elevations and in the viewer.
 """
 
 from __future__ import annotations
@@ -52,6 +54,7 @@ from floorplan_engine.model.geometry import (
 from floorplan_engine.model.scale import DEFAULT_SCALE, sheet, sheet_scale
 from floorplan_engine.model.schema import Opening, OpeningType, Plan, Room
 from floorplan_engine.model.texts import Language, tr
+from floorplan_engine.model.wall_names import wall_codes
 from floorplan_engine.model.zones import Floor, plan_floors
 
 HATCH_PATTERN = "ANSI31"
@@ -70,6 +73,9 @@ DIM_LINE_BAND_MM = 0.4  # dimension line band for overlap checks
 DIM_STEPS_MM = (0.0, 1.0, 2.0, 3.0, 4.0, 6.0, 8.0)  # how much farther to move the label
 DIM_MAX_SHIFTS = 4  # how many levels a row may move if its place is taken
 SHARED_WALL_TOLERANCE = 1.0
+CODE_INSETS_MM = (3.0, 13.0, 18.0, 23.0)  # wall code from the inner face, sheet mm (dims at 8)
+CODE_ALONG = (0.5, 0.35, 0.65, 0.2, 0.8, 0.1, 0.9)  # spots along the wall, middle first
+CODE_GAP_MM = 0.6  # free margin around a wall code
 
 
 def _xy(v: Vec) -> tuple[float, float]:
@@ -298,10 +304,26 @@ def _draw_window(
         shift = seg.outward * (seg.thickness * frac)
         msp.add_line(_xy(seg.point_at(a) + shift), _xy(seg.point_at(b) + shift), dxfattribs=layer)
     if op.sill is not None:
-        mid = seg.point_at((a + b) / 2) + seg.inward * sheet(TEXT_SMALL_MM * 1.2)
+        mid = sill_spot(seg, op)
         text = tr("sill", language, sill=f"{op.sill:g}")
         # On the plan labels layer: the other sheets take windows, but a sill is not for them
         add_text(msp, text, mid, TEXT_SMALL_MM, A_TEXT.name, seg.angle_deg)
+
+
+def sill_spot(seg: WallSegment, op: Opening) -> Vec:
+    """Centre of a window's sill label: inside the room by the middle of the window."""
+    return seg.point_at(op.offset + op.width / 2) + seg.inward * sheet(TEXT_SMALL_MM * 1.2)
+
+
+def _sill_box(g: RoomGeometry, op: Opening, language: Language) -> BaseGeometry:
+    """Spot of a sill label (_draw_window): wall codes do not sit on it."""
+    seg = g.contour.segment(op.wall)
+    d, up = _reading(seg)
+    c = sill_spot(seg, op)
+    text = tr("sill", language, sill=f"{op.sill:g}")
+    hw = sheet(text_width(text, TEXT_SMALL_MM) / 2 + CODE_GAP_MM)
+    hh = sheet(TEXT_SMALL_MM / 2 + CODE_GAP_MM)
+    return Polygon([_xy(c + d * sx * hw + up * sy * hh) for sx, sy in CORNERS])
 
 
 # --- Dimensions --------------------------------------------------------------
@@ -659,7 +681,64 @@ def draw_plan(msp: Modelspace, plan: Plan, contours: dict[str, Contour]) -> dict
     for g in sorted(geoms, key=lambda r: r.contour.area_mm2, reverse=True):
         draw_dimensions(msp, g, geoms, done, taken)
         done.append(g)
+    codes = wall_codes(plan, contours)
+    # Codes stay off door swings and sill labels too, and off each other
+    taken += [
+        door_swing(g, op) for g in geoms for op in g.room.openings if op.type is OpeningType.DOOR
+    ]
+    taken += [
+        _sill_box(g, op, plan.language)
+        for g in geoms
+        for op in g.room.openings
+        if op.type is OpeningType.WINDOW and op.sill is not None
+    ]
+    for g in geoms:
+        draw_wall_codes(msp, g, codes, taken)
     return areas
+
+
+def door_swing(g: RoomGeometry, op: Opening) -> BaseGeometry:
+    """Square the door leaf sweeps (holds its arc), in whichever room it opens into."""
+    hinge, edge, way = door_leaf(g, g.contour.segment(op.wall), op)
+    reach = way * op.width
+    return Polygon([_xy(hinge), _xy(edge), _xy(edge + reach), _xy(hinge + reach)])
+
+
+def _code_box(seg: WallSegment, code: str, at: float, inset: float) -> tuple[Vec, BaseGeometry]:
+    """Centre and outline of a wall code at offset at along the wall, inset from its inner face
+    (model mm)."""
+    d, up = _reading(seg)
+    c = seg.point_at(at) + seg.inward * inset
+    hw = sheet(text_width(code, TEXT_DIM_MM) / 2 + CODE_GAP_MM)
+    hh = sheet(TEXT_DIM_MM / 2 + CODE_GAP_MM)
+    return c, Polygon([_xy(c + d * sx * hw + up * sy * hh) for sx, sy in CORNERS])
+
+
+def draw_wall_codes(
+    msp: Modelspace,
+    g: RoomGeometry,
+    codes: dict[tuple[str, str], str],
+    taken: list[BaseGeometry],
+) -> None:
+    """Code of every wall inside the room along it: the first spot (middle first, close to the
+    face first) that is inside the room and off what is in taken (dimensions, labels, door
+    swings); with no free spot, the middle by the face. Placed codes are added to taken."""
+    room = Polygon([_xy(v) for v in g.contour.vertices])
+    for seg in g.contour.segments:
+        code = codes[(g.room.id, seg.id)]
+        spots = [
+            _code_box(seg, code, seg.length * k, sheet(inset))
+            for inset in CODE_INSETS_MM
+            for k in CODE_ALONG
+        ]
+        at, box = next(
+            ((c, b) for c, b in spots if room.contains(b) and not _hits(b, taken)),
+            spots[0],
+        )
+        taken.append(box)
+        d, _ = _reading(seg)
+        with tagged(msp, "wall", f"{g.room.id}.{seg.id}"):
+            add_text(msp, code, at, TEXT_DIM_MM, A_TEXT.name, math.degrees(math.atan2(d.y, d.x)))
 
 
 def plan_stamp(

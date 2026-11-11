@@ -5,10 +5,18 @@ from pathlib import Path
 import pytest
 from ezdxf import bbox
 from ezdxf.document import Drawing
+from ezdxf.filemanagement import new as ezdxf_new
 from ezdxf.filemanagement import readfile
 
-from floorplan_engine.drawing.electrical import legend_rows, legend_size
+from floorplan_engine.drawing.electrical import (
+    draw_legend,
+    legend_rows,
+    legend_size,
+    wiring_legend_rows,
+)
 from floorplan_engine.drawing.ids import object_id
+from floorplan_engine.electrical.colors import FAMILIES, rgb
+from floorplan_engine.model.geometry import Vec
 from floorplan_engine.model.scale import SCALES
 from floorplan_engine.model.schema import Electrical
 from floorplan_engine.sheets.document import build_project_document, sheet_png_name
@@ -180,6 +188,42 @@ def test_legend_rows_only_symbol_and_meaning() -> None:
     assert width > 0 and height > 0
 
 
+def test_wiring_legend_colour_families() -> None:
+    """Wiring legend: one row per colour family present, the sample is its shades in use."""
+    elec = Electrical.model_validate(
+        {
+            "points": [
+                {"id": "l", "room": "r", "ceiling": [1, 1], "type": "light", "group": "QF1"},
+                *(
+                    {
+                        "id": f"s{k}",
+                        "room": "r",
+                        "wall": "w1",
+                        "offset": 500 * k,
+                        "type": "socket",
+                        "height": 300,
+                        "group": f"QF{k + 1}",
+                    }
+                    for k in range(1, 5)
+                ),
+            ]
+        }
+    )
+    rows = wiring_legend_rows(elec, "uk")
+    assert [(r.tag, r.text) for r in rows] == [
+        (None, "Кольори ліній"),
+        ("wires_light", "Освітлення"),
+        ("wires_sockets", "Розетки"),
+    ]
+    assert len(rows[2].colors) == 4
+    doc = ezdxf_new()
+    psp = doc.paperspace()
+    draw_legend(psp, rows, Vec(0, 100))
+    lines = psp.query("LINE")
+    sockets = {rgb(c) for c in FAMILIES["sockets"][:3]}  # three shades at most in the sample
+    assert {ln.dxf.true_color for ln in lines} == {rgb(FAMILIES["light"][0])} | sockets
+
+
 @pytest.mark.parametrize(
     ("point", "message"),
     [
@@ -340,5 +384,5 @@ def test_all_sheets_share_one_format(tmp_path: Path) -> None:
     )
     doc = _save(build_project_document(plan, contours, elec), tmp_path / "project.dxf")
     sizes = {lay.dxf_layout.dxf.paper_size for lay in sheet_layouts(doc)}
-    # plan, electrical, wiring, panel, points, elevations
-    assert len(sheet_layouts(doc)) == 6 and len(sizes) == 1
+    # plan, electrical, wiring, panel, points, elevations, mounting
+    assert len(sheet_layouts(doc)) == 7 and len(sizes) == 1

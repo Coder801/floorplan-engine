@@ -19,6 +19,7 @@ from dataclasses import dataclass, field
 
 from floorplan_engine.electrical.boxes import BOX_TITLES
 from floorplan_engine.electrical.estimate import (
+    DERIVED_PRICES,
     LINES,
     PRICES_FILE,
     Estimate,
@@ -39,7 +40,7 @@ CURRENCY = "грн"
 MOCK_PRICES: dict[str, float] = {
     "socket_box": 20,
     "crimp": 8,
-    "cable_fixing": 2,
+    "cable_pad": 5,  # pad with a nail for the gun and a tie
     "board_enclosure": 6000,
     "breaker": 140,
     "diff": 950,
@@ -69,27 +70,34 @@ MOCK_PRICES: dict[str, float] = {
     "led_output": 150,
     "outlet": 150,
     "led_strip": 250,
+    "led_psu": 450,
+    "led_psu_din": 1300,
     "rough_holder": 60,
     "rough_lamp": 50,
     "rough_switch": 80,
-    "work.cable": 30,
-    "work.conduit": 10,
-    "work.chase": 200,
-    "work.chase_wide": 300,
-    "work.wall_hole": 150,
-    "work.socket_box": 100,
-    "work.junction_box": 450,
-    "work.board_install": 2500,
-    "work.board_module": 120,
-    "work.mechanism": 120,
+    "work.cable": 34,  # with a tag at each cable end
+    "work.conduit": 15,
+    "work.chase": 120,  # wall material unknown: as brick
+    "work.wall_hole": 100,
+    "work.socket_box": 140,
+    "work.junction_box": 250,
+    "work.board_install": 1500,
+    "work.board_module": 100,
+    "work.mechanism": 100,
+    "work.led_psu": 220,
+    "work.led_psu_din": 250,
     "work.rough_light": 100,
     "work.rough_switch": 100,
-    "work.marking": 10,
     "work.insulation_test": 150,
 }
+# Narrow chase by wall material, UAH per metre (Kyiv 2026-11); a wide one is × 1.5 (DERIVED_PRICES)
+CHASE_PRICES = {"concrete": 200.0, "claydite": 150.0, "brick": 120.0, "aerated": 90.0}
 CABLE_PER_MM2 = 10.0  # UAH per metre per mm² of total conductor section: 3×1.5 → 45, 3×2.5 → 75
 BOX_PRICES = {"80": 40.0, "100x100": 60.0, "150x110": 110.0, "190x140": 180.0}
 CONDUIT_PRICES = {16: 10.0, 20: 14.0, 25: 20.0, 32: 30.0}  # PVC conduit, UAH per metre
+CLIP_PRICES = {16: 4.0, 20: 5.0, 25: 6.0, 32: 8.0}  # conduit clip with a gun nail, UAH each
+JOINT_PRICES = {16: 4.0, 20: 5.0, 25: 7.0, 32: 10.0}  # conduit joint coupling, UAH each
+ENTRY_PRICES = {16: 6.0, 20: 7.0, 25: 9.0, 32: 12.0}  # conduit entry into a box, UAH each
 IP_FACTOR = 2.0  # IP44 costs twice a normal one
 FRAME_FIRST, FRAME_NEXT = 60.0, 40.0  # frame: first post and each next one
 HEAVY_A = 40  # rating from which supply, relay and breaker cost more
@@ -121,8 +129,16 @@ def _mock_price(base: str, param: str) -> float | None:
         if m is None:
             return None
         return round(CABLE_PER_MM2 * int(m.group(1)) * float(m.group(2).replace(",", ".")), 1)
+    if base == "work.chase" and param:
+        return CHASE_PRICES.get(param)
     if base == "conduit":
         return CONDUIT_PRICES.get(_rating(param) or 20)
+    if base == "conduit_clip":
+        return CLIP_PRICES.get(_rating(param) or 20)
+    if base == "conduit_joint":
+        return JOINT_PRICES.get(_rating(param) or 20)
+    if base == "conduit_entry":
+        return ENTRY_PRICES.get(_rating(param) or 20)
     if base == "frame":
         posts = _rating(param) or 1
         return FRAME_FIRST + FRAME_NEXT * (posts - 1)
@@ -134,6 +150,10 @@ def _mock_price(base: str, param: str) -> float | None:
         light, heavy = HEAVY[base]
         rating = _rating(param)
         return heavy if rating is not None and rating > HEAVY_A else light
+    if base in DERIVED_PRICES:
+        of, factor = DERIVED_PRICES[base]
+        known = _mock_price(of, param)
+        return None if known is None else round(known * factor, 2)
     return MOCK_PRICES.get(base)
 
 

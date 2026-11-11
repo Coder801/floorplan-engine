@@ -26,6 +26,7 @@ from floorplan_engine.electrical.market import (
     used_sources,
 )
 from floorplan_engine.electrical.pricing import Prices, mock_price
+from floorplan_engine.electrical.terms import term_issues
 from floorplan_engine.model.intake import (
     Stage,
 )
@@ -66,7 +67,8 @@ def find_prices(project: Path) -> Path | None:
 
 
 def load_prices(path: Path) -> tuple[PriceList | None, list[Issue]]:
-    """Project price list; errors come with a field path, an unknown item key is also an error."""
+    """Project price list; errors come with a field path, an unknown item key and a decision on
+    terms the catalogue does not allow (terms.term_issues) are also errors."""
     data, issues = load_yaml(path)
     if data is None:
         return None, issues
@@ -75,6 +77,9 @@ def load_prices(path: Path) -> tuple[PriceList | None, list[Issue]]:
         return None, issues
     keys = [k for k in unknown_keys(prices) if k not in PLUMBING_LINES]
     bad = [Issue(path.name, f"items.{k}", "нет такой позиции сметы") for k in keys]
+    for problem in term_issues(prices.terms):
+        field, _, message = problem.partition(": ")
+        bad.append(Issue(path.name, field, message))
     return (None, bad) if bad else (prices, [])
 
 

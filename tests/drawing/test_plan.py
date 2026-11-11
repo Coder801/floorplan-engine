@@ -207,3 +207,29 @@ def test_sill_label_only_on_the_plan_sheet() -> None:
     assert A_TEXT in PLAN_SHEET_LAYERS
     others = (ELECTRICAL_SHEET_LAYERS, LIGHTING_SHEET_LAYERS, WIRING_SHEET_LAYERS)
     assert all(A_TEXT not in layers for layers in (*others, PLUMBING_SHEET_LAYERS))
+
+
+def test_every_wall_has_its_code_inside_the_room_off_the_door_swing() -> None:
+    """A code per wall, tagged as that wall, inside the room and not on the door's swing square."""
+    from ezdxf.entities.text import Text
+
+    from floorplan_engine.drawing.plan import door_swing, draw_plan
+
+    plan = make_plan(L_SHAPE, [{"wall": "w6", "type": "door", "offset": 1500, "width": 900}])
+    _, contours = validate_plan(plan)
+    doc = new_document()
+    msp = doc.modelspace()
+    draw_plan(msp, plan, contours)
+    codes = {
+        e.dxf.text: (object_id(e), Vec(e.dxf.align_point.x, e.dxf.align_point.y))
+        for e in msp.query("TEXT")
+        if isinstance(e, Text) and e.dxf.layer == A_TEXT.name and "." in e.dxf.text
+    }
+    assert sorted(codes) == ["1.А", "1.Б", "1.В", "1.Г", "1.Д", "1.Е"]
+    assert codes["1.Е"][0] == ("wall", "r.w6")
+    g = room_geometries(plan, contours)[0]
+    room = shapely.Polygon([(v.x, v.y) for v in g.contour.vertices])
+    swing = door_swing(g, g.room.openings[0])
+    for _, at in codes.values():
+        assert room.contains(shapely.Point(at.x, at.y))
+        assert not swing.contains(shapely.Point(at.x, at.y))

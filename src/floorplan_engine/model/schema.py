@@ -32,8 +32,23 @@ class StrictModel(BaseModel):
 # --- Plan -------------------------------------------------------------------
 
 
+class WallMaterial(StrEnum):
+    """What a wall is built of: the chase price depends on it (electrical/estimate.py)."""
+
+    CONCRETE = "concrete"  # monolith, reinforced concrete panel
+    CLAYDITE = "claydite"  # expanded clay concrete block
+    BRICK = "brick"
+    AERATED = "aerated"  # aerated or foam concrete block
+
+
 class Wall(StrictModel):
     id: str = Field(pattern=ID_PATTERN, description="Уникален в комнате: w1, w2…")
+    name: str | None = Field(
+        default=None,
+        min_length=1,
+        description="Описание стены для людей («стена с телевизором»): заменяет описание, "
+        "которое код строит сам (что за стеной, окна и двери); код стены «2.В» остаётся",
+    )
     length: float = Field(gt=0, description="Длина по внутреннему контуру, мм")
     turn: float = Field(
         default=90, gt=0, lt=360, description="Внутренний угол к следующей стене, градусы"
@@ -46,6 +61,11 @@ class Wall(StrictModel):
         default=False,
         description="Ненесущая перегородка любой толщины (из источника или со слов заказчика): "
         "трубы сквозь неё можно",
+    )
+    material: WallMaterial | None = Field(
+        default=None,
+        description="Материал стены: concrete | claydite | brick | aerated; "
+        "по умолчанию default_wall_material",
     )
 
     @model_validator(mode="after")
@@ -168,6 +188,11 @@ class Plan(StrictModel):
     units: Literal["mm"] = "mm"
     name: str = Field(min_length=1)
     default_wall_thickness: float = Field(gt=0)
+    default_wall_material: WallMaterial | None = Field(
+        default=None,
+        description="Материал стен без своего material; не задан — материал не известен, "
+        "штроба в смете — без материала",
+    )
     ceiling_height: float = Field(
         default=2700, gt=0, description="Высота потолка, мм; не задана — 2700 (допущение)"
     )
@@ -287,7 +312,7 @@ class Cable(StrictModel):
     direct: bool | None = Field(
         default=None,
         description="Каждая точка — своей линией от щита, без коробок. По умолчанию — да "
-        "для сечения от 4 мм², выводов к технике и слаботочки",
+        "для сечения от 4 мм², выводов к технике и связи (интернет, TV)",
     )
 
 
@@ -469,9 +494,19 @@ WireRoute = Literal["ceiling", "floor"]
 Distribution = Literal["boxes", "loop"]
 WirePath = Literal["right", "shortest"]  # right angles or the shortest path, on ceiling and floor
 Plaster = Literal["after", "before"]  # cable laid after the plaster, in chases, or before it
+# LED power supply (decision 2026-11-11): at the strip, 230 V from the room box; or on a DIN rail
+# in the panel, a 12 V line of its own from the panel to each LED output
+LedSupply = Literal["room", "board"]
+# Light wiring (decision 2026-11-11): through junction boxes, or in a chain without boxes: panel →
+# switch → its lights one after another, with a loop at each ceiling light
+LightWiring = Literal["boxes", "chain"]
 # Conduit besides the floor, where it is always (decision 2026-11-08): none — bare cable on the
 # ceiling; ceiling — the ceiling part; walls — the ceiling part and the drops in the walls
 Conduit = Literal["none", "ceiling", "walls"]
+# Daisy chain drop in conduit (decision 2026-11-11): separate — the cable in and the cable out of a
+# point each in its own conduit (two conduits, a wide chase); shared — both in one conduit of a
+# larger diameter (one narrow chase, one row of clips). Only where the drops are in conduit
+LoopConduit = Literal["separate", "shared"]
 
 
 def mode_path(mode: ElectricalMode) -> WirePath:
@@ -536,6 +571,23 @@ class Electrical(StrictModel):
         default=False,
         description="Черновой свет на время ремонта: в смете патрон, лампа и черновой выключатель "
         "на помещение. Ставит вариант проводки",
+    )
+    loop_conduit: LoopConduit = Field(
+        default="separate",
+        description="Шлейф в гофре на спуске к точке: separate — приход и уход в двух гофрах; "
+        "shared — в одной гофре большего диаметра. Только где спуски в гофре. Ставит вариант "
+        "проводки",
+    )
+    light_wiring: LightWiring = Field(
+        default="boxes",
+        description="Свет: boxes — через распаечные коробки; chain — без коробок: щит → "
+        "выключатель → его светильники по очереди, петля 0,6 м на каждом потолочном. Ставит "
+        "вариант проводки",
+    )
+    led_supply: LedSupply = Field(
+        default="room",
+        description="Блоки питания LED: room — у ленты, к выводу 230 В от коробки света; board — "
+        "в щите на DIN-рейке, к каждому выводу своя линия 12 В от щита. Ставит вариант проводки",
     )
     groups: dict[str, Group] = Field(
         default_factory=dict, description="Группы щита по имени (QF4): назначение, автомат"
@@ -612,17 +664,20 @@ class Variant(StrictModel):
     and distribution, and from the setup wizard the path and the conduit, on top of what
     the mode gives (None: as in the mode). Points come from the project and do not change between
     variants. Ceiling height (mm) is an edit from the "Overview" page: it is applied on top of
-    room.yaml, the original is not changed. plaster and rough_light are how the job is done, not
-    how the cable runs: they apply to every variant and are not in the key, so route edits stay
-    (None: as in electrical.yaml)."""
+    room.yaml, the original is not changed. plaster, rough_light and loop_conduit are how the job
+    is done, not how the cable runs: they apply to every variant and are not in the key, so route
+    edits stay (None: as in electrical.yaml)."""
 
     mode: ElectricalMode = "standard"
     route: WireRoute = "ceiling"
     distribution: Distribution = "boxes"
     path: WirePath | None = None
     conduit: Conduit | None = None
+    light_wiring: LightWiring = "boxes"
+    led_supply: LedSupply = "room"
     plaster: Plaster | None = None
     rough_light: bool | None = None
+    loop_conduit: LoopConduit | None = None
     ceiling_height: float | None = Field(default=None, ge=CEILING_MIN, le=CEILING_MAX)
 
     @property
@@ -641,12 +696,17 @@ class Variant(StrictModel):
         wiring.yaml. An option differing from its mode is added ("standard-floor-boxes-shortest",
         "economy-ceiling-loop-conduit", "proper-ceiling-boxes-bare",
         "standard-ceiling-boxes-walls"); one equal to the mode is not, so a mode keeps its key
-        however it was chosen."""
+        however it was chosen. Light in a chain adds "-chain", LED supplies in the panel "-led":
+        their lines change the routes."""
         key = f"{self.mode}-{self.route}-{self.distribution}"
         if self.wire_path != mode_path(self.mode):
             key += f"-{self.wire_path}"
         if self.conduit_level != mode_conduit(self.mode):
             key += CONDUIT_KEY[self.conduit_level]
+        if self.light_wiring == "chain":
+            key += "-chain"
+        if self.led_supply == "board":
+            key += "-led"
         return key
 
 

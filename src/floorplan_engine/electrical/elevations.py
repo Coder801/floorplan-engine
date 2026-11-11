@@ -4,13 +4,14 @@ A wall is seen from inside the room: the wall start (in walk order) is on the le
 the right (the walk is clockwise along the inner outline, so from inside the offset always
 grows left to right); the floor is at the bottom, the ceiling at the top. On the wall:
 openings, points (numbered as on the electrical sheet), panel, junction boxes, chases (drops
-from the ceiling or rises from the floor). Only walls with points, a panel, boxes or chases.
+from the ceiling or rises from the floor) and the cable fixings on the drops (mounting.py; on
+the drops, so they show without chases too). Only walls with points, a panel, boxes or chases.
 
 A partition shared by two rooms has two elevations, one from each side (each from inside its
 own room). To tell them apart, an elevation states what is behind the wall (behind): the
-neighbouring room and the number of its wall on the other side, or "outside the flat". The
-neighbour's outlets on the far side (back) are shown in place, as seen from this side: drill
-through or mount back to back.
+neighbouring room and the code of its wall on the other side (model/wall_names.py), or
+"outside the flat". The neighbour's outlets on the far side (back) are shown in place, as seen
+from this side: drill through or mount back to back.
 
 No new calculations: points and panel come from the model, boxes and chases from wiring.py,
 opening heights without data use the same assumptions as in 3D (scene3d).
@@ -26,9 +27,10 @@ from typing import Any
 from shapely.geometry import Polygon
 
 from floorplan_engine.electrical.boxes import box_wall
+from floorplan_engine.electrical.mounting import PRACTICE, spots
 from floorplan_engine.electrical.point_numbers import number_points, point_name
 from floorplan_engine.electrical.routing import opening_strip
-from floorplan_engine.electrical.wiring_model import Wiring
+from floorplan_engine.electrical.wiring_model import Route, Wiring
 from floorplan_engine.model.geometry import (
     DOOR_TOP_MM,
     WINDOW_HEIGHT_MM,
@@ -37,7 +39,6 @@ from floorplan_engine.model.geometry import (
     RoomGeometry,
     Vec,
     WallSegment,
-    point_in_polygon,
     room_geometries,
 )
 from floorplan_engine.model.schema import (
@@ -49,14 +50,18 @@ from floorplan_engine.model.schema import (
     Room,
 )
 from floorplan_engine.model.texts import Language, tr
+from floorplan_engine.model.wall_names import (
+    FACE_TOLERANCE_MM,
+    WallName,
+    behind,
+    facing_segments,
+    wall_names,
+)
 
 BOARD_HEIGHT_MM = 400.0  # panel height on the elevation: not in the model, an assumption
 POST_PITCH_MM = 71.0  # post step in a frame
 LOW_VOLTAGE = (PointType.DATA, PointType.TV)
 BOX_DEFAULT_MM = 100.0
-BEHIND_PROBE_MM = 50.0  # how far past the outer wall face to look for a neighbouring room
-FACE_TOLERANCE_MM = 30.0  # neighbour face no farther than this from this wall's outer face
-BEHIND_STEP_MM = 500.0  # probe step along the wall (neighbour behind part of a wall)
 
 
 @dataclass(frozen=True)
@@ -112,6 +117,14 @@ class ChaseView:
 
 
 @dataclass(frozen=True)
+class FixingView:
+    """Fixing on a cable drop along the wall (mounting.py): spot x, height y, mm."""
+
+    x: float
+    y: float
+
+
+@dataclass(frozen=True)
 class BoardView:
     name: str
     x: float  # centre
@@ -153,9 +166,16 @@ class WallElevation:
     boxes: tuple[BoxView, ...] = ()
     chases: tuple[ChaseView, ...] = ()
     board: BoardView | None = None
-    behind: tuple[tuple[str, int | None], ...] = ()  # behind the wall: (room, its wall number)
+    behind: tuple[tuple[str, str | None], ...] = ()  # behind the wall: (room, its wall code)
     back: tuple[PointView, ...] = ()  # outlets on the far side of the wall (x from this side)
     water: tuple[WaterView, ...] = ()  # plumbing water outlets and drains
+    name: WallName | None = None  # code and description (model/wall_names.py)
+    fixings: tuple[FixingView, ...] = ()  # fixings on the cable drops (decision 2026-11-11)
+
+    @property
+    def title(self) -> str:
+        """ "Спальня — 1.В · Кабинет за стеной, дверь": room, then the wall for people."""
+        return f"{self.room_name} — {self.name.full if self.name else self.wall}"
 
     @property
     def key(self) -> str:
@@ -198,6 +218,7 @@ class _Wall:
     points: list[PointView] = field(default_factory=list)
     boxes: list[BoxView] = field(default_factory=list)
     chases: list[ChaseView] = field(default_factory=list)
+    fixings: list[FixingView] = field(default_factory=list)
     board: BoardView | None = None
 
 
@@ -215,6 +236,7 @@ def wall_elevations(
     assumed = wiring.height_assumed if wiring is not None else True
     numbers = number_points(plan, elec)
     geoms = {g.room.id: g for g in room_geometries(plan, contours)}
+    names = wall_names(plan, contours)
     doors = _doors(geoms)
     walls: dict[tuple[str, str], _Wall] = defaultdict(_Wall)
 
@@ -241,10 +263,16 @@ def wall_elevations(
             y = box.rise_mm if box.route == "floor" else ceiling - box.rise_mm
             side = _box_side(box.size)
             walls[(box.room, seg.id)].boxes.append(BoxView(box.id, box.label, x, y, side))
+            walls[(box.room, seg.id)].fixings += _drop_fixings(x, box.rise_mm, box.route, ceiling)
             # Chase from the box to the route plane: none if cable goes in before the plaster
             if (box.room, box.route) in box_chases:
                 y0, y1 = (0.0, y) if box.route == "floor" else (y, ceiling)
                 walls[(box.room, seg.id)].chases.append(ChaseView(x, y0, y1, 1, False, False))
+        for c in wiring.drops:
+            if c.wall and c.kind != "channel":
+                walls[(c.room, c.wall)].fixings += _drop_fixings(
+                    c.offset, c.length_mm, c.route, ceiling
+                )
         for c in wiring.chases:
             if not c.wall:
                 continue  # at a box: drawn higher up
@@ -282,12 +310,27 @@ def wall_elevations(
                     tuple(sorted(w.boxes, key=lambda b: b.x)),
                     tuple(sorted(w.chases, key=lambda c: (c.x, c.y0))),
                     w.board,
-                    behind(geoms[room.id], seg, list(geoms.values())),
+                    tuple(
+                        (b.name, names[(b.room, b.wall)].code if b.wall else None)
+                        for b in behind(geoms[room.id], seg, list(geoms.values()))
+                    ),
                     _back_points(seg, room.id, geoms, elec, numbers),
                     wet,
+                    names[(room.id, wall.id)],
+                    tuple(sorted(set(w.fixings), key=lambda f: (f.x, f.y))),
                 )
             )
     return out
+
+
+def _drop_fixings(x: float, length: float, route: Route, ceiling: float) -> list[FixingView]:
+    """Fixings on a drop of `length` mm at x: counted from the route plane (ceiling down, floor
+    up) with the wall step and offset of the norms (mounting.spots)."""
+    step, offset = PRACTICE.steps["wall"], PRACTICE.offset
+    return [
+        FixingView(round(x, 1), round(d if route == "floor" else ceiling - d, 1))
+        for d in spots(length, step, offset)
+    ]
 
 
 def elevation_data(
@@ -366,6 +409,7 @@ def elevation_data(
                 {"x": r(c.x), "y0": r(c.y0), "y1": r(c.y1), "wide": c.wide, "low": c.low}
                 for c in e.chases
             ],
+            "fixings": [{"x": r(f.x), "y": r(f.y)} for f in e.fixings],
             "boxes": [
                 {
                     "id": b.id,
@@ -454,7 +498,7 @@ def elevation_data(
         k = e.index - 1
         data = {
             **done[(e.room, e.wall)],
-            "title": tr("elev_card", lang, room=e.room_name, n=e.index),
+            "title": e.title,
             "behind": behind_text(e, lang),
             "height": r(e.height),
             "height_assumed": e.height_assumed,
@@ -470,11 +514,8 @@ def elevation_data(
 
 
 def behind_text(e: WallElevation, language: Language) -> str:
-    """What is behind the wall, in words: "Спальня (стена 2); Балкон" or "вне квартиры"."""
-    names = [
-        tr("elev_behind_wall", language, room=room, n=n) if n is not None else room
-        for room, n in e.behind
-    ]
+    """What is behind the wall, in words: "Спальня (1.Б); Балкон" or "вне квартиры"."""
+    names = [f"{room} ({code})" if code is not None else room for room, code in e.behind]
     return "; ".join(names) if names else tr("elev_outside", language)  # names may contain commas
 
 
@@ -492,7 +533,7 @@ def _back_points(
     for g in geoms.values():
         if g.room.id == room:
             continue
-        for other in _facing_segments(seg, g):
+        for other in facing_segments(seg, g):
             for p in elec.points:
                 if (
                     p.room != g.room.id
@@ -531,49 +572,6 @@ def _blocks(points: Sequence[PointView]) -> list[PointView]:
 def _posts(p: ElectricalPoint) -> int:
     """Posts in a frame: count for sockets and low-voltage, one for everything else."""
     return p.count if p.type in (PointType.SOCKET, PointType.DATA, PointType.TV) else 1
-
-
-def behind(
-    g: RoomGeometry, seg: WallSegment, geoms: Sequence[RoomGeometry]
-) -> tuple[tuple[str, int | None], ...]:
-    """What is behind wall seg of room g: neighbouring rooms (probed beyond the outer face along the
-    whole wall: a partition may be shared only in part, a long wall may have several rooms behind
-    it) and the neighbour's wall number on the same face; empty means no room of the flat behind."""
-    out: list[tuple[str, int | None]] = []
-    n = max(3, round(seg.length / BEHIND_STEP_MM))
-    for k in range(n):
-        at = seg.length * (k + 0.5) / n
-        p = seg.point_at(at) + seg.outward * (seg.thickness + BEHIND_PROBE_MM)
-        for o in geoms:
-            if o is g or not point_in_polygon(p, o.contour.vertices):
-                continue
-            item = (o.room.name, _facing(seg, o))
-            if item not in out:
-                out.append(item)
-    return tuple(out)
-
-
-def _facing_segments(seg: WallSegment, other: RoomGeometry) -> list[WallSegment]:
-    """Neighbour walls on the far side of seg: they run the opposite way along seg's outer face and
-    overlap it along the wall."""
-    far = seg.start + seg.outward * seg.thickness
-    out: list[WallSegment] = []
-    for o in other.contour.segments:
-        if o.direction.dot(seg.direction) > -0.99:
-            continue
-        if abs((o.start - far).dot(seg.outward)) > FACE_TOLERANCE_MM:
-            continue
-        a = (o.end - seg.start).dot(seg.direction)
-        b = (o.start - seg.start).dot(seg.direction)
-        if min(b, seg.length) - max(a, 0.0) > FACE_TOLERANCE_MM:
-            out.append(o)
-    return out
-
-
-def _facing(seg: WallSegment, other: RoomGeometry) -> int | None:
-    """Number (from 1) of the neighbour's first wall on the far side of seg."""
-    found = _facing_segments(seg, other)
-    return found[0].index + 1 if found else None
 
 
 def _doors(geoms: Mapping[str, RoomGeometry]) -> list[tuple[Polygon, Vec]]:

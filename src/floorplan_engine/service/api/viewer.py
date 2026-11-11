@@ -48,12 +48,14 @@ from fastapi.responses import FileResponse, PlainTextResponse, Response
 from floorplan_engine import BRAND, __version__
 from floorplan_engine.electrical.estimate import PRICES_FILE
 from floorplan_engine.epd.thumbnail import PREVIEW_FILE
-from floorplan_engine.model.intake import ANSWERS_FILE, INTAKE_FILE
+from floorplan_engine.model.intake import ANSWERS_FILE, INTAKE_FILE, AnswerNote
 from floorplan_engine.pipeline import (
     ARTIFACT_FILE,
     OUT_DIR,
     PROJECT_FILE,
+    AnswerSaved,
     AuditError,
+    BuildResult,
     build_project,
     price_page,
     review_answer,
@@ -259,6 +261,32 @@ def _read_routes(
             return Response(zf.read(page["file"]), media_type="application/json")
 
 
+def _note(auth: Auth | None, request: Request) -> AnswerNote:
+    """Who answers and when, for the log of answers.yaml; login off: nobody."""
+    who = None
+    if auth is not None:
+        with auth.db() as db:
+            who = auth.principal(db, request)
+    return answer_note(who)
+
+
+def _build(path: Path) -> BuildResult:
+    """Rebuild the project after a change; a failed audit of the artifact is 500."""
+    try:
+        return build_project(path)
+    except AuditError as exc:
+        raise HTTPException(500, str(exc)) from exc
+
+
+def _rebuilt(path: Path, saved: AnswerSaved) -> dict[str, Any]:
+    """After an answers.yaml change: a refused one is 422, a rebuild only if it needs one."""
+    if saved.issues:
+        raise refused_answer(saved)
+    if not saved.rebuild:
+        return {"built": False, "rebuilt": False}
+    return {"built": _build(path).built, "rebuilt": True}
+
+
 def _edit_routes(
     app: FastAPI, auth: Auth | None, project_dir: Callable[[Request, str], Path]
 ) -> None:
@@ -274,10 +302,7 @@ def _edit_routes(
         issues = save_wiring_edits(path, changes)
         if issues:
             raise HTTPException(422, "; ".join(f"{i.path}: {i.message}" for i in issues))
-        try:
-            result = build_project(path)
-        except AuditError as exc:
-            raise HTTPException(500, str(exc)) from exc
+        result = _build(path)
         notes = [i for i in result.assessment.report.issues if i.file == WIRING_FILE]
         return {"built": result.built, "notes": [f"{i.path}: {i.message}" for i in notes]}
 
@@ -289,20 +314,8 @@ def _edit_routes(
         answer is text waiting for the analyzer (it changes nothing in the sheets)."""
         path = project_dir(request, name)
         qid, raw = answer_body(data)
-        who = None
-        if auth is not None:
-            with auth.db() as db:
-                who = auth.principal(db, request)
-        saved = save_answer(path, qid, raw, answer_note(who), client=client_side(request))
-        if saved.issues:
-            raise refused_answer(saved)
-        if not saved.rebuild:
-            return {"built": False, "rebuilt": False}
-        try:
-            result = build_project(path)
-        except AuditError as exc:
-            raise HTTPException(500, str(exc)) from exc
-        return {"built": result.built, "rebuilt": True}
+        saved = save_answer(path, qid, raw, _note(auth, request), client=client_side(request))
+        return _rebuilt(path, saved)
 
     @app.post("/api/projects/{name}/answers/review")
     def review(
@@ -314,20 +327,8 @@ def _edit_routes(
         qid, outcome, comment = review_body(data)
         if not _allowed(auth, request, "review"):
             raise HTTPException(403, "нет права на это действие")
-        who = None
-        if auth is not None:
-            with auth.db() as db:
-                who = auth.principal(db, request)
-        saved = review_answer(path, qid, outcome, comment, answer_note(who))
-        if saved.issues:
-            raise refused_answer(saved)
-        if not saved.rebuild:
-            return {"built": False, "rebuilt": False}
-        try:
-            result = build_project(path)
-        except AuditError as exc:
-            raise HTTPException(500, str(exc)) from exc
-        return {"built": result.built, "rebuilt": True}
+        saved = review_answer(path, qid, outcome, comment, _note(auth, request))
+        return _rebuilt(path, saved)
 
     @app.post("/api/projects/{name}/wizard")
     def wizard(
@@ -336,20 +337,8 @@ def _edit_routes(
         """The setup wizard: {variant?, answers?} → variant.yaml and answers.yaml, one rebuild."""
         path = project_dir(request, name)
         variant, items = wizard_body(data, lambda action: _allowed(auth, request, action))
-        who = None
-        if auth is not None:
-            with auth.db() as db:
-                who = auth.principal(db, request)
-        saved = save_wizard(path, variant, items, answer_note(who), client=client_side(request))
-        if saved.issues:
-            raise refused_answer(saved)
-        if not saved.rebuild:
-            return {"built": False, "rebuilt": False}
-        try:
-            result = build_project(path)
-        except AuditError as exc:
-            raise HTTPException(500, str(exc)) from exc
-        return {"built": result.built, "rebuilt": True}
+        saved = save_wizard(path, variant, items, _note(auth, request), client=client_side(request))
+        return _rebuilt(path, saved)
 
 
 def _price_routes(

@@ -38,7 +38,7 @@ from floorplan_engine.drawing.plan import convex
 from floorplan_engine.drawing.wiring import lanes as lane_offsets
 from floorplan_engine.drawing.wiring import offset_path, segments
 from floorplan_engine.electrical.anchors import Anchor, board_anchor, point_anchor
-from floorplan_engine.electrical.groups import group_colors
+from floorplan_engine.electrical.colors import group_colors
 from floorplan_engine.electrical.routing import fit_path
 from floorplan_engine.electrical.wiring_model import JunctionBox, Wiring
 from floorplan_engine.epd.thumbnail import room_kind

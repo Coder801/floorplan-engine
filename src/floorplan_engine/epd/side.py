@@ -12,7 +12,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass, field, replace
 
-from floorplan_engine.drawing.electrical import legend_rows
+from floorplan_engine.drawing.electrical import legend_rows, wiring_legend_rows
 from floorplan_engine.drawing.fields import format_area
 from floorplan_engine.drawing.lighting import lighting_model, switch_rows, switch_table
 from floorplan_engine.drawing.panel import ASSUMED, devices_table, panel_notes
@@ -23,9 +23,10 @@ from floorplan_engine.drawing.schedules import (
 )
 from floorplan_engine.drawing.tables import Mark, Table
 from floorplan_engine.drawing.wiring import wiring_notes
+from floorplan_engine.electrical.colors import group_colors
 from floorplan_engine.electrical.estimate import build_estimate
 from floorplan_engine.electrical.estimate import text as estimate_text
-from floorplan_engine.electrical.groups import group_colors, group_rows
+from floorplan_engine.electrical.groups import group_rows
 from floorplan_engine.electrical.groups import text as groups_text
 from floorplan_engine.electrical.panel import BoardPanel, build_panel, color_of
 from floorplan_engine.electrical.point_numbers import point_rows
@@ -43,6 +44,7 @@ STAGE_OBJECTS: dict[str, frozenset[str]] = {
     "electrical": frozenset({"point", "label", "board", "cable", "led_strip"}),
     "lighting": frozenset({"point", "led_strip"}),
     "wiring": frozenset({"wire", "box", "board"}),
+    "mounting": frozenset({"wire", "box", "board"}),
     "panel": frozenset({"device", "board"}),
     "elevations": frozenset({"elevation"}),
     "plumbing": frozenset({"fixture", "pipe", "riser", "collector", "obstacle"}),
@@ -215,10 +217,12 @@ def legend_entries(elec: Electrical, language: Language) -> list[LegendEntry]:
 
 
 def side_legends(elec: Electrical, language: Language) -> dict[str, list[LegendEntry]]:
-    """Legend by sheet topic: electrical has all symbols of the sheet, lighting only lights."""
+    """Legend by sheet topic: electrical has all symbols of the sheet, lighting only lights,
+    wiring the line colour families (electrical.wiring_legend_rows)."""
     return {
         "electrical": legend_entries(elec, language),
         "lighting": legend_entries(lighting_model(elec), language),
+        "wiring": [LegendEntry(r.tag, r.text) for r in wiring_legend_rows(elec, language) if r.tag],
     }
 
 

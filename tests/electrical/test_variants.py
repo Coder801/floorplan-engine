@@ -15,10 +15,12 @@ from pydantic import ValidationError
 
 from floorplan_engine.electrical.pricing import MockPriceService, Prices
 from floorplan_engine.electrical.variants import (
-    all_variants,
+    MODES,
+    ROUTES,
     apply_variant,
     chosen_job,
     default_variant,
+    has_loop_drops,
     neighbour_variants,
     variant_summary,
 )
@@ -32,19 +34,13 @@ from floorplan_engine.pipeline import (
 from floorplan_engine.validation.issues import Severity
 from floorplan_engine.validation.plan import validate_plan
 from tests.conftest import make_plan
-from tests.electrical.test_estimate import DOOR, ELEC, RECT
+from tests.electrical.test_estimate import DOOR, ELEC, LED, RECT
 
 EDIT = {"from": "board", "to": "s1", "path": [[0, 0], [0, 100], [50, 100]]}
 
 
 def _elec(**extra: Any) -> Electrical:
     return Electrical.model_validate({**ELEC, **extra})
-
-
-def test_all_variants_and_keys() -> None:
-    keys = [v.key for v in all_variants()]
-    assert len(keys) == len(set(keys)) == 6  # 3 modes × 2 routes × 1 distribution
-    assert "economy-floor-boxes" in keys and "proper-ceiling-boxes" in keys
 
 
 def test_option_changes_the_key_only_when_it_differs_from_the_mode() -> None:
@@ -81,6 +77,19 @@ def test_job_options_apply_to_any_variant_and_stay_out_of_the_key() -> None:
     assert default_variant(elec).plaster == "before" and default_variant(elec).rough_light
 
 
+def test_loop_conduit_is_a_job_option_and_a_neighbour_only_with_chain_drops_in_conduit() -> None:
+    job = Variant(distribution="loop", conduit="walls", loop_conduit="shared")
+    assert job.key == Variant(distribution="loop", conduit="walls").key  # route edits stay
+    assert apply_variant(_elec(), job).loop_conduit == "shared"
+    assert apply_variant(_elec(loop_conduit="shared"), Variant()).loop_conduit == "shared"
+    assert has_loop_drops(Variant(distribution="loop", route="floor"))
+    assert not has_loop_drops(Variant(distribution="loop", conduit="ceiling"))
+    assert not has_loop_drops(Variant(conduit="walls"))
+    near = neighbour_variants(_elec(), Variant(distribution="loop", conduit="walls"))
+    assert [v.loop_conduit for v in near if v.loop_conduit == "shared"] == ["shared"]
+    assert all(v.loop_conduit == "separate" for v in neighbour_variants(_elec(), Variant()))
+
+
 def test_job_options_show_in_the_summary() -> None:
     plan = make_plan(RECT, [DOOR])
     _, contours = validate_plan(plan)
@@ -95,7 +104,8 @@ def test_job_options_show_in_the_summary() -> None:
 
 
 def _options(v: Variant) -> tuple[object, ...]:
-    return (v.mode, v.route, v.distribution, v.wire_path, v.conduit_level, v.plaster, v.rough_light)
+    return (v.mode, v.route, v.distribution, v.wire_path, v.conduit_level, v.light_wiring,
+            v.plaster, v.rough_light)  # fmt: skip
 
 
 def test_neighbours_change_one_option_each() -> None:
@@ -103,8 +113,8 @@ def test_neighbours_change_one_option_each() -> None:
     base = chosen_job(_elec(), chosen)
     assert base.path == "right" and base.plaster == "after" and base.rough_light is False
     near = neighbour_variants(_elec(), chosen)
-    # route 1, distribution 1, path 1, conduit 2, mode 2, plaster 1, rough light 1
-    assert len(near) == 9 and len({_options(v) for v in near}) == 9
+    # route 1, distribution 1, path 1, conduit 2, light 1, mode 2, plaster 1, rough light 1
+    assert len(near) == 10 and len({_options(v) for v in near}) == 10
     for v in near:
         changed = [a != b for a, b in zip(_options(v), _options(base), strict=True)]
         assert sum(changed) == 1 or v.mode != base.mode  # "don't know" conduit follows the mode
@@ -112,9 +122,29 @@ def test_neighbours_change_one_option_each() -> None:
     assert proper.conduit_level == "ceiling" and proper.wire_path == "right"  # path as chosen
 
 
+def test_light_chain_is_in_the_key() -> None:
+    assert Variant(light_wiring="chain").key == "standard-ceiling-boxes-chain"
+    assert (
+        Variant(light_wiring="chain", led_supply="board").key == "standard-ceiling-boxes-chain-led"
+    )
+    assert apply_variant(_elec(), Variant(light_wiring="chain")).light_wiring == "chain"
+    assert default_variant(_elec(light_wiring="chain")).light_wiring == "chain"
+
+
+def test_led_supply_is_in_the_key_and_a_neighbour_only_with_led_outputs() -> None:
+    assert Variant(led_supply="board").key == "standard-ceiling-boxes-led"
+    assert Variant(led_supply="room").key == Variant().key
+    assert apply_variant(_elec(), Variant(led_supply="board")).led_supply == "board"
+    assert default_variant(_elec(led_supply="board")).led_supply == "board"
+    assert all(v.led_supply == "room" for v in neighbour_variants(_elec(), Variant()))
+    led = _elec(points=[*ELEC["points"], LED])
+    near = neighbour_variants(led, Variant())
+    assert [v.key for v in near if v.led_supply == "board"] == ["standard-ceiling-boxes-led"]
+
+
 def test_neighbours_keep_to_project_routes() -> None:
     near = neighbour_variants(_elec(routes=["ceiling"]), Variant(route="ceiling", conduit="walls"))
-    assert {v.route for v in near} == {"ceiling"} and len(near) == 8
+    assert {v.route for v in near} == {"ceiling"} and len(near) == 9
     assert all(v.conduit == "walls" for v in near if v.mode != "standard")  # the choice stays
 
 
@@ -132,7 +162,9 @@ def test_routes_must_agree_with_route_and_cables() -> None:
 def test_default_variant_keeps_project_as_is() -> None:
     elec = _elec(mode="economy")
     default = default_variant(elec)
-    expected = Variant(mode="economy", route="ceiling", plaster="after", rough_light=False)
+    expected = Variant(
+        mode="economy", route="ceiling", plaster="after", rough_light=False, loop_conduit="separate"
+    )
     assert default == expected
     assert apply_variant(elec, default) is elec  # "as in project": no changes
     floor = apply_variant(elec, Variant(mode="proper", route="floor"))
@@ -172,7 +204,8 @@ def test_variant_summary_differs_by_mode_and_route() -> None:
     elec = _elec()
     prices = Prices(None, MockPriceService())
     summaries = {
-        v.key: variant_summary(plan, contours, elec, v, None, prices) for v in all_variants()
+        v.key: variant_summary(plan, contours, elec, v, None, prices)
+        for v in (Variant(mode=m, route=r) for m in MODES for r in ROUTES)
     }
     assert all(s is not None for s in summaries.values())
     std, prem = summaries["standard-ceiling-boxes"], summaries["proper-ceiling-boxes"]
@@ -251,6 +284,9 @@ def test_job_options_survive_a_variant_change(tmp_path: Path) -> None:
     assert saved["plaster"] == "before" and saved["rough_light"] is True
     assert not save_variant(project, {"mode": "economy", "rough_light": False})
     assert yaml.safe_load((project / "variant.yaml").read_text("utf-8"))["rough_light"] is False
+    assert not save_variant(project, {"mode": "economy", "loop_conduit": "shared"})
+    assert not save_variant(project, {"mode": "standard"})
+    assert yaml.safe_load((project / "variant.yaml").read_text("utf-8"))["loop_conduit"] == "shared"
 
 
 def test_build_writes_variant_summaries_to_manifest(tmp_path: Path) -> None:
@@ -264,9 +300,10 @@ def test_build_writes_variant_summaries_to_manifest(tmp_path: Path) -> None:
     assert block["active"] == "proper-ceiling-boxes"
     assert block["default"] == "standard-ceiling-boxes"
     assert block["items"][0]["key"] == "proper-ceiling-boxes"  # the chosen set first
-    assert len(block["items"]) == 10  # and its neighbours, one option changed each
+    assert len(block["items"]) == 11  # and its neighbours, one option changed each
     assert {i["mode"] for i in block["items"]} == {"economy", "standard", "proper"}
     assert all(i["total"] > 0 and i["devices"] > 0 for i in block["items"])
+    assert block["led"] is False  # no LED outputs: the wizard does not ask
 
 
 def test_chosen_set_of_options_joins_the_summary(tmp_path: Path) -> None:
@@ -282,7 +319,7 @@ def test_chosen_set_of_options_joins_the_summary(tmp_path: Path) -> None:
     assert active["key"] == block["active"]
     assert active["path"] == "shortest" and active["conduit"] == "ceiling"
     assert block["conduit"] == "ceiling"  # chosen, not by the mode
-    assert len(block["items"]) == 10
+    assert len(block["items"]) == 11
     assert not save_variant(project, {"mode": "standard"})
     assert assess_project(project).report.variant.key == "standard-ceiling-boxes"  # type: ignore[union-attr]
 
@@ -304,4 +341,4 @@ def test_project_without_floor_builds_only_ceiling_variants(tmp_path: Path) -> N
     with zipfile.ZipFile(result.artifact) as zf:
         block = json.loads(zf.read("manifest.json"))["variants"]
     assert block["active"] == "standard-ceiling-boxes"
-    assert {i["route"] for i in block["items"]} == {"ceiling"} and len(block["items"]) == 9
+    assert {i["route"] for i in block["items"]} == {"ceiling"} and len(block["items"]) == 10

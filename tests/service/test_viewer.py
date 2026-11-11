@@ -209,7 +209,7 @@ def test_price_page_and_edit(root: Path) -> None:
     assert chase["price"] == 200 and chase["service"] is None
     assert chase["market"]["median"] == 100 and chase["market"]["n"] == 2
     assert [q["source"] for q in chase["market"]["quotes"]] == ["a", "b"]
-    assert rows["work.cable"]["price"] is None and rows["work.cable"]["service"] == 30
+    assert rows["work.cable"]["price"] is None and rows["work.cable"]["service"] == 34
     assert rows["work.cable"]["market"] is None
     market = page["market"]
     assert market["period"] == {"start": "2026-03", "end": "2026-03", "dated": 1, "undated": 1}

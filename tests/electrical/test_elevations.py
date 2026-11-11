@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import itertools
+
 from floorplan_engine.drawing.elevations import elevation_panel, spread
-from floorplan_engine.electrical.elevations import elevation_data, wall_elevations
+from floorplan_engine.electrical.elevations import WallElevation, elevation_data, wall_elevations
 from floorplan_engine.electrical.wiring import box_wiring
 from floorplan_engine.model.geometry import DOOR_TOP_MM
 from floorplan_engine.model.schema import CableChannel, Electrical, Plan
@@ -147,9 +149,9 @@ def test_behind_names_neighbour_and_its_wall() -> None:
     """
     from typing import Any
 
-    from floorplan_engine.electrical.elevations import behind
     from floorplan_engine.model.geometry import room_geometries
     from floorplan_engine.model.schema import Plan
+    from floorplan_engine.model.wall_names import Behind, behind
 
     def room(rid: str, x: float) -> dict[str, Any]:
         walls = [{"id": f"w{k + 1}", "length": n} for k, n in enumerate((3000, 4000, 3000, 4000))]
@@ -167,8 +169,8 @@ def test_behind_names_neighbour_and_its_wall() -> None:
     geoms = room_geometries(plan, contours)
     a, b = geoms
     # The right wall of a (w3) is the left wall of b (w1)
-    assert behind(a, a.contour.segments[2], geoms) == (("B", 1),)
-    assert behind(b, b.contour.segments[0], geoms) == (("A", 3),)
+    assert behind(a, a.contour.segments[2], geoms) == (Behind("b", "B", "w1"),)
+    assert behind(b, b.contour.segments[0], geoms) == (Behind("a", "A", "w3"),)
     assert behind(a, a.contour.segments[0], geoms) == ()
 
 
@@ -182,8 +184,8 @@ def test_elevation_side_line() -> None:
     elec = _elec([{"id": "s1", "offset": 1000, "height": 300, **SOCKETS}])
     w2 = next(e for e in wall_elevations(plan, contours, elec, None) if e.wall == "w2")
     assert _side(w2, "ru") == "вид изнутри · за стеной: вне квартиры"
-    neighbours = replace(w2, behind=(("Кухня, коридор", 2), ("Спальня", None)))
-    assert _side(neighbours, "ru") == "вид изнутри · за стеной: Кухня, коридор (стена 2); Спальня"
+    neighbours = replace(w2, behind=(("Кухня, коридор", "2.Б"), ("Спальня", None)))
+    assert _side(neighbours, "ru") == "вид изнутри · за стеной: Кухня, коридор (2.Б); Спальня"
 
 
 def test_back_side_points_mirrored_onto_this_wall() -> None:
@@ -322,3 +324,35 @@ def test_door_shows_on_both_sides_with_its_hinge() -> None:
     assert (near.kind, near.hinge) == ("door", "start")
     # From the other room the door is the same one, its hinges on the opposite side
     assert (far.kind, far.hinge) == ("door", "end")
+
+
+def _two_sockets(plaster: str) -> tuple[Plan, Electrical, list[WallElevation]]:
+    plan = make_plan(WALLS, [DOOR])
+    _, contours = validate_plan(plan)
+    elec = _elec(
+        [
+            {"id": "s1", "offset": 1000, "height": 300, **SOCKETS},
+            {"id": "s2", "offset": 2500, "height": 300, **SOCKETS},
+        ]
+    ).model_copy(update={"plaster": plaster})
+    wiring = box_wiring(plan, contours, elec)
+    return plan, elec, list(wall_elevations(plan, contours, elec, wiring))
+
+
+def test_drop_fixings_follow_the_wall_step_from_the_ceiling() -> None:
+    """Fixings on a drop (decision 2026-11-11): first 50 mm under the ceiling, last 50 mm above
+    the flush box, no farther apart than the wall step."""
+    _, _, walls = _two_sockets("after")
+    w2 = next(e for e in walls if e.wall == "w2")
+    chase = next(c for c in w2.chases if c.y0 > 0)
+    on = sorted(f.y for f in w2.fixings if f.x == chase.x)
+    assert on and on[-1] == chase.y1 - 50 and on[0] == chase.y0 + 50
+    assert max(b - a for a, b in itertools.pairwise(on)) <= 500 + 1e-6
+
+
+def test_before_plaster_keeps_fixings_without_chases() -> None:
+    _, _, walls = _two_sockets("before")
+    w2 = next(e for e in walls if e.wall == "w2")
+    assert not w2.chases and w2.fixings
+    data_fixings = {(f.x, f.y) for f in w2.fixings}
+    assert len(data_fixings) == len(w2.fixings)  # no duplicates

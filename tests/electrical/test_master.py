@@ -9,7 +9,6 @@ import pytest
 import yaml
 from pydantic import ValidationError
 
-from floorplan_engine.drawing.lighting import switch_links
 from floorplan_engine.electrical.master import (
     CONTROL_ID,
     CONTROL_MARK,
@@ -21,6 +20,7 @@ from floorplan_engine.electrical.master import (
 )
 from floorplan_engine.electrical.panel import build_panel
 from floorplan_engine.electrical.panel_questions import GROUPS_FIELD, panel_questions
+from floorplan_engine.electrical.switch_links import switch_links
 from floorplan_engine.electrical.wiring import box_wiring
 from floorplan_engine.epd.panel_data import master_data, panel_data
 from floorplan_engine.model.panel_catalog import DeviceKind

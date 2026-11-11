@@ -385,6 +385,25 @@ def _edit_routes(
             ]
             return {"built": build.status == "built", "notes": notes}
 
+    def rewrite_answers(
+        request: Request, key: str, save: Callable[[Path, AnswerNote], AnswerSaved]
+    ) -> dict[str, Any]:
+        """An answers.yaml change by save, noted with who and when: a refused change gives
+        refused_answer; a rebuild only if save says the change needs one."""
+        with auth.db() as db:
+            note = answer_note(auth.principal(db, request))
+        saved = AnswerSaved()
+
+        def apply(folder: Path) -> list[Issue]:
+            nonlocal saved
+            saved = save(folder, note)
+            if saved.issues:
+                raise refused_answer(saved)
+            return []
+
+        result = rewrite(request, key, apply, lambda: saved.rebuild)
+        return {"built": result["built"], "rebuilt": saved.rebuild}
+
     @app.post("/api/projects/{key}/wiring")
     def save_wiring(
         request: Request, key: str, changes: Annotated[dict[str, Any], Body()]
@@ -399,21 +418,10 @@ def _edit_routes(
         """One answer: {id, answer} → answers.yaml of a new model version; a rebuild unless the
         answer is text waiting for the analyzer."""
         qid, raw = answer_body(data)
-        with auth.db() as db:
-            note = answer_note(auth.principal(db, request))
-        saved = AnswerSaved()
-
         client = client_side(request)
-
-        def apply(folder: Path) -> list[Issue]:
-            nonlocal saved
-            saved = save_answer(folder, qid, raw, note, client=client)
-            if saved.issues:
-                raise refused_answer(saved)
-            return []
-
-        result = rewrite(request, key, apply, lambda: saved.rebuild)
-        return {"built": result["built"], "rebuilt": saved.rebuild}
+        return rewrite_answers(
+            request, key, lambda folder, note: save_answer(folder, qid, raw, note, client=client)
+        )
 
     @app.post("/api/projects/{key}/answers/review")
     def review(
@@ -422,19 +430,9 @@ def _edit_routes(
         """The developer reviews a client answer: {id, outcome: resolve | return, comment?} →
         answers.yaml of a new model version; a rebuild when it is taken into account."""
         qid, outcome, comment = review_body(data)
-        with auth.db() as db:
-            note = answer_note(auth.principal(db, request))
-        saved = AnswerSaved()
-
-        def apply(folder: Path) -> list[Issue]:
-            nonlocal saved
-            saved = review_answer(folder, qid, outcome, comment, note)
-            if saved.issues:
-                raise refused_answer(saved)
-            return []
-
-        result = rewrite(request, key, apply, lambda: saved.rebuild)
-        return {"built": result["built"], "rebuilt": saved.rebuild}
+        return rewrite_answers(
+            request, key, lambda folder, note: review_answer(folder, qid, outcome, comment, note)
+        )
 
     @app.post("/api/projects/{key}/wizard")
     def wizard(
@@ -444,21 +442,12 @@ def _edit_routes(
         variant, items = wizard_body(data, lambda action: allowed(request, action))
         if variant is None and not items:  # no new version for an empty call
             return {"built": False, "rebuilt": False}
-        with auth.db() as db:
-            note = answer_note(auth.principal(db, request))
-        saved = AnswerSaved()
-
         client = client_side(request)
-
-        def apply(folder: Path) -> list[Issue]:
-            nonlocal saved
-            saved = save_wizard(folder, variant, items, note, client=client)
-            if saved.issues:
-                raise refused_answer(saved)
-            return []
-
-        result = rewrite(request, key, apply, lambda: saved.rebuild)
-        return {"built": result["built"], "rebuilt": saved.rebuild}
+        return rewrite_answers(
+            request,
+            key,
+            lambda folder, note: save_wizard(folder, variant, items, note, client=client),
+        )
 
 
 def _price_routes(app: FastAPI, auth: Auth, market_root: Path) -> None:

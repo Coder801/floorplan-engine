@@ -11,6 +11,7 @@ from ezdxf.document import Drawing
 from ezdxf.filemanagement import readfile
 
 from floorplan_engine.drawing.wiring import write_chases, write_journal
+from floorplan_engine.electrical.colors import group_colors
 from floorplan_engine.electrical.elevations import elevation_data
 from floorplan_engine.electrical.estimate import (
     ESTIMATE_CSV,
@@ -18,7 +19,6 @@ from floorplan_engine.electrical.estimate import (
     ESTIMATE_XLSX,
     PriceSource,
 )
-from floorplan_engine.electrical.groups import group_colors
 from floorplan_engine.electrical.panel import BoardPanel, build_panel, write_loads
 from floorplan_engine.electrical.pricing import Prices
 from floorplan_engine.electrical.wiring import box_wiring, estimate_wiring
@@ -27,6 +27,7 @@ from floorplan_engine.electrical.work_scope import WORK_SCOPE_MD
 from floorplan_engine.epd.artifact import export_artifact
 from floorplan_engine.epd.objects import (
     describe_objects,
+    light_chains,
     line_chains,
     line_groups,
     plan_areas,
@@ -332,6 +333,7 @@ def _export(
             run.report.source_electrical,
         ),
         plan_chains=plan_chains(plan, contours),
+        light_chains=light_chains(elec) if elec is not None else None,
         plan_areas=plan_areas(plan, contours),
         plan_floors=plan_floor_rings(plan, contours),
     )

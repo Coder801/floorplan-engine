@@ -8,7 +8,12 @@ from typing import Any
 import yaml
 
 from floorplan_engine.electrical.pricing import Prices
-from floorplan_engine.electrical.variants import chosen_job, neighbour_variants, variant_summary
+from floorplan_engine.electrical.variants import (
+    chosen_job,
+    has_led,
+    neighbour_variants,
+    variant_summary,
+)
 from floorplan_engine.model.schema import Variant, WiringFile
 from floorplan_engine.validation.answers import load_optional
 from floorplan_engine.validation.issues import (
@@ -18,7 +23,8 @@ from floorplan_engine.validation.issues import (
 )
 from floorplan_engine.validation.validate import Report
 
-KEPT = {"ceiling_height", "plaster", "rough_light"}  # not part of the wiring variant
+# Not part of the wiring variant: changing the variant keeps them
+KEPT = {"ceiling_height", "plaster", "rough_light", "loop_conduit"}
 
 
 def variant_block(report: Report, prices: Prices) -> dict[str, Any] | None:
@@ -26,7 +32,7 @@ def variant_block(report: Report, prices: Prices) -> dict[str, Any] | None:
     and a summary (estimate, cable, devices, chases), without drawings, of the chosen set first and
     then of its neighbours: the set with one option changed (variants.neighbour_variants), for the
     comparison and the prices on the wizard cards. conduit is the choice itself: null — "don't
-    know", as the mode gives."""
+    know", as the mode gives. led: the project has LED outputs, so the LED supply is asked."""
     source, chosen, default = report.source_electrical, report.variant, report.default_variant
     if report.plan is None or source is None or chosen is None or default is None:
         return None
@@ -41,14 +47,15 @@ def variant_block(report: Report, prices: Prices) -> dict[str, Any] | None:
         "active": chosen.key,
         "default": default.key,
         "conduit": chosen.conduit,
+        "led": has_led(source),
         "items": items,
     }
 
 
 def save_variant(project: Path, data: dict[str, Any]) -> list[Issue]:
     """Save the wiring variant from the viewer to variant.yaml: {mode, route, distribution, path?,
-    conduit?, plaster?, rough_light?, ceiling_height?}. What is not in data of KEPT stays as it
-    was. Errors come with a field path, and the file is left unchanged."""
+    conduit?, led_supply?, plaster?, rough_light?, loop_conduit?, ceiling_height?}. What is not in
+    data of KEPT stays as it was. Errors come with a field path, and the file is left unchanged."""
     path = project / VARIANT_FILE
     old, _ = load_optional(path, Variant)
     if old is not None:  # changing the variant does not reset these

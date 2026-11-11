@@ -5,12 +5,12 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from floorplan_engine.electrical.chases import CHASE_CABLES, CHASE_SHARE, HOLE_CABLES
+from floorplan_engine.electrical.chases import CHASE_CABLES, CHASE_SHARE
 from floorplan_engine.electrical.estimate import (
+    CONDUIT_JOINT_EVERY,
     ESTIMATE_CSV,
     ESTIMATE_MD,
     ESTIMATE_XLSX,
-    FIXING_STEP,
     PRICES_FILE,
     Estimate,
     PriceList,
@@ -22,10 +22,19 @@ from floorplan_engine.electrical.estimate import (
 )
 from floorplan_engine.electrical.estimate import text as estimate_text
 from floorplan_engine.electrical.groups import group_key
+from floorplan_engine.electrical.mounting import PRACTICE
 from floorplan_engine.electrical.panel import BoardPanel, build_panel
 from floorplan_engine.electrical.pricing import Prices, price_notes
+from floorplan_engine.electrical.terms import (
+    open_note,
+    term_rows,
+    terms_markdown,
+    terms_scope_markdown,
+    terms_scope_sheet,
+    terms_sheet_tail,
+)
 from floorplan_engine.electrical.wiring import END_ALLOWANCE, RESERVE, estimate_wiring
-from floorplan_engine.electrical.wiring_model import CHASE_NARROW, Wiring
+from floorplan_engine.electrical.wiring_model import CHASE_NARROW, HOLE_CABLES, Wiring
 from floorplan_engine.electrical.work_scope import (
     WORK_SCOPE_MD,
     scope_entries,
@@ -144,24 +153,49 @@ def write_estimate(
     """Estimate in out/: estimate.md, .csv and .xlsx (formulas), from the same quantities as the
     wiring sheet; the panel follows the "Panel" sheet set (panel). Next to it the work scope of
     the estimate's work items (electrical/work_scope.py): work-scope.md and a sheet in the
-    workbook. Written by both estimate and build."""
+    workbook; after the total, the items agreed with the client apart from the work
+    (electrical/terms.py, decisions in the price list's terms). Written by both estimate and
+    build."""
     assert assessment.report.plan is not None
     plan = assessment.report.plan
     lang = plan.language
     est = build_estimate(wiring, elec, prices, lang, panel)
     notes = _estimate_notes(assessment, est, wiring, elec, prices, source)
+    decisions = prices.own.terms if prices.own is not None else {}
+    terms = term_rows(decisions, est.subtotal("material"), est.currency, lang)
+    note = open_note(terms, source.name if source else PRICES_FILE, lang)
+    if note is not None:
+        notes.append(note)
     title = estimate_text("title", lang, name=plan.name)
     scope = scope_entries(est, lang)
     left_out = [estimate_text("note_excluded", lang)]
     out = project / OUT_DIR
     files = [
-        write_markdown(est, out / ESTIMATE_MD, title, notes, lang),
+        write_markdown(
+            est,
+            out / ESTIMATE_MD,
+            title,
+            notes,
+            lang,
+            terms_markdown(terms, est.total, est.currency, lang),
+        ),
         write_csv(est, out / ESTIMATE_CSV),
         write_xlsx(
-            est, out / ESTIMATE_XLSX, title, notes, lang, scope_sheet(scope, left_out, lang)
+            est,
+            out / ESTIMATE_XLSX,
+            title,
+            notes,
+            lang,
+            scope_sheet(scope, left_out, lang, terms_scope_sheet(terms, est.currency, lang)),
+            terms_sheet_tail(terms, lang),
         ),
         write_scope_markdown(
-            scope, out / WORK_SCOPE_MD, scope_text("title", lang, name=plan.name), left_out, lang
+            scope,
+            out / WORK_SCOPE_MD,
+            scope_text("title", lang, name=plan.name),
+            left_out,
+            lang,
+            terms_scope_markdown(terms, est.currency, lang),
         ),
     ]
     return est, files
@@ -187,7 +221,14 @@ def _estimate_notes(
     notes += [
         estimate_text("note_cable", lang, pct=round(RESERVE * 100)),
         estimate_text("note_holes", lang, k=HOLE_CABLES),
-        estimate_text("note_fixing", lang, step=f"{FIXING_STEP:g}"),
+        estimate_text(
+            "note_fixing",
+            lang,
+            c=f"{PRACTICE.steps['ceiling']:g}",
+            w=f"{PRACTICE.steps['wall']:g}",
+            f=f"{PRACTICE.steps['floor']:g}",
+            pct=round(PRACTICE.reserve * 100),
+        ),
         estimate_text("note_crimp", lang),
     ]
     if any(ln.key.startswith("work.chase") for ln in est.lines):
@@ -196,6 +237,11 @@ def _estimate_notes(
         )
     if any(ln.key.startswith("conduit.") for ln in est.lines):
         notes.append(estimate_text("note_conduit", lang))
+        notes.append(
+            estimate_text("note_conduit_fittings", lang, m=f"{CONDUIT_JOINT_EVERY / 1000:g}")
+        )
+    if wiring.shared_rises:
+        notes.append(estimate_text("note_loop_conduit", lang, n=len(wiring.shared_rises)))
     if elec.board is not None:
         notes.append(estimate_text("note_panel", lang))
         notes.append(
