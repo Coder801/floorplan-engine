@@ -11,14 +11,14 @@ import { Welcome } from "@/pages/Welcome";
 import { base, enc, getManifest, getPage, getProject, isProject, listProjects, reviewAnswer, saveAnswer, saveWizard, type ReviewOutcome, type WizardBody } from "@/shared/api";
 import { NARROW_PX, SIDE_TABS, stickersPdf, type DrawerTab, type PanelMode, type SideTab, type Theme } from "@/shared/consts";
 import { cx } from "@/shared/cx";
-import { label } from "@/shared/i18n";
+import { label, pageTitle } from "@/shared/i18n";
 import { modeDrawerTabs, modeTabs, rememberMode, savedMode, stageShown, type UiMode } from "@/shared/mode";
 import { applyTheme, remember, remembered, savedTheme } from "@/shared/palette";
 import { hideSplash } from "@/shared/splash";
 import { useUnderline } from "@/shared/underline";
 import { resetSelection, useView, view } from "@/shared/store";
 import ui from "@/shared/styles/ui.module.scss";
-import { sheetTabs, tabOf, VIEWS, type TabView } from "@/shared/tabs";
+import { ELECTRICAL_VIEW, sheetTabs, shownView as viewShown, tabOf, tabViews, viewSheet, type TabView } from "@/shared/tabs";
 import type { ManifestPage, Overview, Page, Project, ProjectSummary, Scene, Variants } from "@/shared/types";
 import { RESERVE_KEY, type Answer, type QuestionsMemory } from "@/shared/questions";
 import { watchRebuild } from "@/shared/rebuild";
@@ -37,7 +37,7 @@ import { activeSummary, breakersOf, parseKey } from "@/widgets/VariantInfo/varia
 import { PanelStage } from "@/widgets/PanelStage";
 import { ProjectsMenu } from "@/widgets/ProjectsMenu";
 import { type Account, Settings } from "@/widgets/Settings";
-import { SheetStage, type StageHandle } from "@/widgets/SheetStage";
+import { SheetStage, type LightMode, type StageHandle } from "@/widgets/SheetStage";
 import { SidePanel } from "@/widgets/SidePanel";
 import { SourceView } from "@/widgets/SourceView";
 import { WallMap } from "@/widgets/WallMap";
@@ -69,8 +69,19 @@ export const unresolved = (p: Project | null) =>
 // account is who is logged in (Gate, for settings); null if login is off
 const QUESTION_AROUND = 0.4;  // a question's object is seen in its room, not alone at the largest zoom
 
+// A project page, loaded once into the cache; a failed load leaves it so it can be tried again
+function cachedPage(cache: { current: Map<number, Promise<Page>> }, project: string, index: number): Promise<Page> {
+  let p = cache.current.get(index);
+  if (!p) {
+    p = getPage(project, index);
+    cache.current.set(index, p);
+    p.catch(() => cache.current.delete(index));
+  }
+  return p;
+}
+
 export function Viewer({ account = null }: { account?: Account | null }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [list, setList] = useState<ProjectSummary[]>([]);
   const [current, setCurrent] = useState<string | null>(fromHash);
   const [studio, setStudio] = useState(studioFromHash);  // the open studio settings section
@@ -232,28 +243,14 @@ export function Viewer({ account = null }: { account?: Account | null }) {
   useEffect(() => {
     if (!wizard || scene || !current || sceneSheet === undefined) return;
     let alive = true;
-    let p = cache.current.get(sceneSheet);
-    if (!p) {
-      p = getPage(current, sceneSheet);
-      cache.current.set(sceneSheet, p);
-      p.catch(() => cache.current.delete(sceneSheet));
-    }
-    p.then((pg) => alive && setScene(pg.scene ?? null), () => {});
+    cachedPage(cache, current, sceneSheet).then((pg) => alive && setScene(pg.scene ?? null), () => {});
     return () => { alive = false; };
   }, [wizard, scene, current, sceneSheet]);
 
   useEffect(() => {
     if (!current || sheet === null || !pages.length) return;
     let alive = true;
-    const load = (i: number) => {
-      let p = cache.current.get(i);
-      if (!p) {
-        p = getPage(current, i);
-        cache.current.set(i, p);
-        p.catch(() => cache.current.delete(i));
-      }
-      return p;
-    };
+    const load = (i: number) => cachedPage(cache, current, i);
     const walls = elevSheets.includes(sheet);
     const want = drawingSheets.includes(sheet) ? drawingSheets : walls ? elevSheets : [sheet];
     // The mini map scene is optional: if it fails to load, elevations go without the map
@@ -307,11 +304,6 @@ export function Viewer({ account = null }: { account?: Account | null }) {
   };
   // From a question to its object, or to the "Panel" tab; on a narrow screen the panel covers
   // the drawing, so it closes (what was typed stays in questionsMemory)
-  // An object of the electrical sheet that lives on another view now (SheetStage, goto)
-  const openStage = (stage: string) => {
-    const index = pages.find((pg) => pg.stage === stage)?.index;
-    if (index !== undefined) openSheet(index);
-  };
   const showQuestion = ({ stage, key }: { stage: string; key: string | null }) => {
     const index = pages.find((pg) => pg.stage === stage)?.index;
     if (index === undefined || !openSheet(index)) return;
@@ -406,25 +398,45 @@ export function Viewer({ account = null }: { account?: Account | null }) {
   const electricalView = useView((s) => s.electricalView);
   const tab = source || estimate || info ? null : tabOf(tabs, sheet);
   const stageOf = (i: number) => pages.find((pg) => pg.index === i)?.stage ?? "";
-  // The electrical sheet gives two views: sockets and, if the project has it, low voltage
+  // The "Electrical" tab by system: lighting, sockets, low voltage (if the project has it) and wiring
+  // with everything (shared/tabs.ts). Lighting is its lines or its links, remembered; the simple
+  // mode has no lines on the point views, so its lighting is the links
   const hasLow = !!sheetDrawing?.items.some((it) => it.l === "E-DATA" || it.l.startsWith("W-CABLE-LOW"));
-  const views: TabView[] | null = tab?.views ? tab.pages.flatMap((i) => {
-    const key = stageOf(i), one = { key, index: i, label: label("views", key) };
-    return key === "electrical" && hasLow ? [one, { key: "low", index: i, label: label("views", "low") }] : [one];
-  }) : null;
+  const [lightMode, setLightMode] = useState<LightMode>(() => (remembered("light-mode") === "links" ? "links" : "wiring"));
+  const links = lightMode === "links" || mode !== "engineering";
+  const views: TabView[] | null = tab?.views
+    ? tabViews(tab, stageOf, hasLow, links).map((v) => ({ ...v, label: label("views", v.key) }))
+    : null;
   const pickView = (v: TabView) => {
-    view.set({ electricalView: v.key === "low" ? "low" : "sockets", selected: null, neighbors: null, pinned: null, tip: null });
-    openSheet(v.index);
+    const ev = ELECTRICAL_VIEW[v.key];
+    view.set({ ...(ev ? { electricalView: ev } : {}), selected: null, neighbors: null, pinned: null, tip: null });
+    if (v.index !== sheet) openSheet(v.index);  // another view of the same sheet keeps 3D
   };
-  const shownView = stageOf(sheet ?? -1) === "electrical" && electricalView === "low" ? "low" : stageOf(sheet ?? -1);
-  // A tab with views opens on the last chosen view
+  const shownView = viewShown(stageOf(sheet ?? -1), electricalView);
+  // "Wiring | Links" over the drawing: only where lighting has both sheets
+  const lightSwitch = tab?.views && shownView === "lighting" && mode === "engineering"
+    && tab.pages.some((i) => stageOf(i) === "electrical") && tab.pages.some((i) => stageOf(i) === "lighting")
+    ? {
+        mode: (stageOf(sheet ?? -1) === "lighting" ? "links" : "wiring") as LightMode,
+        onMode: (m: LightMode) => {
+          setLightMode(m); remember("light-mode", m);
+          const i = viewSheet(tab, stageOf, "lighting", m === "links");
+          if (m === "wiring") view.set({ electricalView: "light" });
+          if (i !== undefined) openSheet(i);
+        },
+      }
+    : null;
+  // A tab with views opens on the last chosen view (an older choice is a sheet topic, also a view key)
   const [lastView, setLastView] = useState(() => remembered("view") || "electrical");
   useEffect(() => {
-    const st = pages.find((pg) => pg.index === sheet)?.stage;
-    if (st && VIEWS.has(st)) { setLastView(st); remember("view", st); }
-  }, [sheet, pages]);
+    const ev = ELECTRICAL_VIEW[lastView];
+    if (ev) view.set({ electricalView: ev });
+  }, []);  // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (tab?.views && shownView) { setLastView(shownView); remember("view", shownView); }
+  }, [tab, shownView]);
   const tabTarget = (tb: (typeof tabs)[number]) =>
-    (tb === tab && sheet !== null ? sheet : tb.views ? tb.pages.find((i) => stageOf(i) === lastView) ?? tb.pages[0] : tb.pages[0]);
+    (tb === tab && sheet !== null ? sheet : tb.views ? viewSheet(tb, stageOf, lastView, links) ?? tb.pages[0] : tb.pages[0]);
   const at = tab && sheet !== null ? tab.pages.indexOf(sheet) : -1;
   // The simple mode was switched on over a sheet it hides (wiring, panel): to the first tab it shows
   const hidden = !source && !estimate && !info && sheet !== null && !stageShown(mode, stageOf(sheet));
@@ -432,7 +444,8 @@ export function Viewer({ account = null }: { account?: Account | null }) {
     if (hidden && tabs[0]) openSheet(tabTarget(tabs[0]));
   }, [hidden]);
   const drawerTabs = modeDrawerTabs(mode);
-  useEffect(() => { view.set({ cables: mode === "engineering" }); }, [mode]);
+  // The simple mode: brief wiring, no route editing
+  useEffect(() => { view.set(mode === "engineering" ? { cables: true } : { cables: false, editMode: false }); }, [mode]);
   useEffect(() => {  // a header panel the mode hides closes
     if (drawer && !modeDrawerTabs(mode).includes(drawer)) drawerClosed();
   }, [drawer, mode, drawerClosed]);
@@ -490,6 +503,14 @@ export function Viewer({ account = null }: { account?: Account | null }) {
     ? t("app.stale", { name: project.name })
     : project && !project.report ? t("app.notBuilt", { name: project.name }) : null;
 
+  // Tab title follows the open page: studio settings, or project · sheet (shared/i18n pageTitle)
+  const projectTitle = list.find((p) => isProject(p, current))?.title ?? project?.title ?? current;
+  const sheetTitle = source ?? (info ? t("overview.tab") : estimate ? t("estimate.tab")
+    : tab?.views ? label("views", shownView) : tab ? (tab.stage ? label("stage", tab.stage) : tab.name) : null);
+  useEffect(() => {
+    document.title = studio ? pageTitle(t("studio.title")) : current ? pageTitle(projectTitle, sheetTitle) : pageTitle(t("app.projects"));
+  }, [studio, current, projectTitle, sheetTitle, i18n.language]);
+
   // While a project or sheet is loading: a preloader over the drawing (the previous sheet shows under it)
   const loading = !!current && !error && !source && (!project || (!!project.artifact && loaded !== sheet));
   // Between drawings: fade to the loading mark and back (shared/curtain.ts)
@@ -538,8 +559,8 @@ export function Viewer({ account = null }: { account?: Account | null }) {
     main = <ElevationStage ref={stage} elevation={wall.data} withMap={!!scene} download={download} />;
     downloadInStage = true;
   } else if (page && project && drawing) {
-    main = <SheetStage ref={stage} onStage={openStage} page={wallPage ?? page} drawing={drawing} project={project.name} language={overview?.language}
-                       editable={project.can?.edit_wiring ?? true} download={download} onWall={toWall}
+    main = <SheetStage ref={stage} lightMode={lightSwitch} page={wallPage ?? page} drawing={drawing} project={project.name} language={overview?.language}
+                       editable={mode === "engineering" && (project.can?.edit_wiring ?? true)} download={download} onWall={toWall}
                        onSaved={saved} onBusy={setSaving} onBanner={(b) => setBanners([b])} />;
     downloadInStage = true;
   }
@@ -670,7 +691,7 @@ export function Viewer({ account = null }: { account?: Account | null }) {
       <SidePanel tab={side} onTab={showSide} page={source ? null : page} drawing={source ? null : drawing}
                  estimate={estimate && !source ? page?.estimate ?? null : null}
                  views={views} view={shownView} onView={pickView}
-                 wall={!source && !loading ? wall?.data ?? null : null} onWiring={mode === "engineering" ? toWiring : undefined}
+                 wall={!source && !loading ? wall?.data ?? null : null} onWiring={toWiring}
                  layers={mode === "engineering"}
                  variant={variantLabel ? { label: variantLabel, onOpen: openInfo } : null}
                  summary={info && !source ? <OverviewSummary setup={setup} questions={project?.report?.questions ?? []} refreshing={refreshing || choosing}

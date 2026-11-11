@@ -17,6 +17,12 @@
   &.ok { grid-template-columns: minmax(0, 1fr) auto; border-color: var(--ok); b { color: var(--ok); font-weight: 500; } }
 }
 .group { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 16px 0 8px; font-weight: 600; }
+// The closed group's title is a button: the whole line folds and unfolds the list
+.fold {
+  @include bare-button; padding: 0; font-family: inherit; display: flex; justify-content: space-between; align-items: center; width: 100%;
+  min-height: 36px; margin-bottom: 0; text-align: left; cursor: pointer;
+  &:hover { color: var(--text); }
+}
 
 .ring {
   width: 14px; height: 14px; border: 2px solid var(--line); border-top-color: var(--text); border-radius: 50%;

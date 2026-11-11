@@ -21,19 +21,19 @@ export const en: Messages = {
   stage: {
     plan: "Plan", electrical: "Electrical", wiring: "Wiring", plumbing: "Plumbing",
     furniture: "Furniture", lighting: "Lighting", panel: "Panel", elevations: "Elevations",
-    points: "Points",
+    points: "Points", mounting: "Mounting",
   },
-  views: { electrical: "Sockets", low: "Low voltage", lighting: "Lighting", wiring: "Wiring" },
+  views: { electrical: "Sockets", low: "Comms", lighting: "Lighting", wiring: "Wiring" },
   severity: { critical: "critical", major: "important", minor: "clarification" },
   layer: {
     "A-WALL": "walls", "A-DOOR": "doors", "A-WIND": "windows", "A-DIMS": "dimensions",
     "A-TEXT": "plan labels", "A-SHEET": "frame and title block", "E-SOCKET": "sockets",
-    "E-SWITCH": "switches", "E-LIGHT": "lights", "E-DATA": "low voltage", "E-LED": "LED",
+    "E-SWITCH": "switches", "E-LIGHT": "lights", "E-DATA": "comms", "E-LED": "LED",
     "E-BOARD": "panel", "E-TEXT": "electrical labels", "W-BOX": "boxes",
     "W-CABLE-LIGHT": "cables: light", "W-CABLE-SOCKET": "cables: sockets", "W-CABLE-DEVICE": "cables: appliances",
-    "W-CABLE-LOW": "cables: low voltage", "W-CABLE-RCD": "cables with RCD/RCBO", "W-CABLE-NORCD": "cables without RCD/RCBO",
+    "W-CABLE-LOW": "cables: comms", "W-CABLE-RCD": "cables with RCD/RCBO", "W-CABLE-NORCD": "cables without RCD/RCBO",
     "W-CABLE-CEILING": "ceiling cables",
-    "W-CABLE-FLOOR": "floor cables", "W-TEXT": "wiring labels", "E-LINK": "light links",
+    "W-CABLE-FLOOR": "floor cables", "W-TEXT": "wiring labels", "M-FIX": "fixings", "E-LINK": "light links",
     "L-TEXT": "light numbers",
     "P-COLD": "cold water", "P-HOT": "hot water", "P-SEWER": "sewer", "P-FIXT": "fixtures",
     "P-RISER": "risers and manifolds", "P-OBST": "obstacles", "P-TEXT": "plumbing labels",
@@ -47,7 +47,7 @@ export const en: Messages = {
   side: {
     tables: "Tables", layers: "Layers", tablesAndLayers: "Tables and layers", onWall: "On the wall",
     collapse: "Collapse", view: "Drawing view", noSheet: "No sheet open",
-    noTables: "This sheet has no tables", ownLayers: "View layers", otherLayers: "Other layers",
+    noTables: "This sheet has no tables", wiringBrief: "The lines show where the cable will run: from the panel to the boxes and from the boxes to the points. Hover a line to see where it runs from and to.", ownLayers: "View layers", otherLayers: "Other layers",
     otherNote: "Add to the drawing: dimensions on wiring, point numbers on lighting — from other views and the plan.",
   },
   questions: {
@@ -97,7 +97,6 @@ export const en: Messages = {
     newVersion: "A new version of {{brand}} is available — this tab was opened before the update and may show sheets incorrectly.",
     loadingSheet: "Loading sheet…", loadingProject: "Loading project…",
     sheetPages: "Sheet pages", prevPage: "Previous page", nextPage: "Next page",
-    savedNotes: "wiring.yaml: {{notes}}",
   },
   alpha: {
     title: "is in alpha testing",
@@ -144,7 +143,7 @@ export const en: Messages = {
     dev: "Sign in for development",
     visitor: "Sign in as guest (debug)",
     code: "Access code", codeNote: "A code from your designer or installer opens one project, view only.",
-    accessCodeLabel: "Code from the studio", openByCode: "Open project", byCode: "by code",
+    accessCodeLabel: "Code from the studio", openByCode: "Open project",
   },
   firm: {
     title: "Register your company", note: "Your clients and installers will see this. You can change the name later.",
@@ -152,7 +151,7 @@ export const en: Messages = {
     kind: "What the company does",
     kinds: {
       design: "Design and planning", designNote: "plans, wall elevations, turnkey design",
-      electric: "Electrical work", electricNote: "wiring, panels, low-voltage",
+      electric: "Electrical work", electricNote: "wiring, panels, comms",
       construction: "Renovation and building", constructionNote: "turnkey flat renovation",
       master: "Independent tradesperson", masterNote: "I work on my own",
     },
@@ -170,7 +169,7 @@ export const en: Messages = {
     none: "No estimate: rebuild the project (floorplan-engine build)",
   },
   settings: {
-    mode: "Interface", modes: { simple: "Simple", engineering: "Engineering", simpleNote: "drawing, elevations, estimate and questions — no engineering sheets", engineeringNote: "every sheet: wiring, panel, layers, sources, DXF" },
+    mode: "Interface", modes: { simple: "Simple", engineering: "Engineering", simpleNote: "drawing, elevations, wiring routes, estimate and questions — no engineering details", engineeringNote: "every sheet: route editing, cables, panel, layers, sources, DXF" },
     studio: "Studio settings", studioNote: "profile, price list",
     title: "Settings", account: "Account", loginOff: "Sign-in is off — local viewing",
     plan: "Plan", theme: "Theme", language: "Language", version: "{{version}} · {{stage}}", build: "build {{build}}",
@@ -218,6 +217,9 @@ export const en: Messages = {
   projects: { title: "Projects", empty: "No built projects." },
   source: { noPreview: "No preview — open the file in a new tab", back: "← Back to sheet" },
   sheet: {
+    lightMode: "Lighting: what to show",
+    lightModes: { wiring: "Wiring", links: "Links", wiringTitle: "Lighting cables, boxes and points, also in 3D", linksTitle: "Which switch turns on which lights, also in 3D" },
+    systems: "Systems on the wiring plan", systemsTitle: "Show or hide the lines of the system",
     hint: "wheel — zoom by steps, drag — pan, double click — zoom in at that point (at the last step — whole drawing)",
     editHint: "Drag a line segment or a box · ⌘/Ctrl+click — several segments · Esc — clear selection",
     editTitle: "Drag a line segment: neighbouring segments stretch, corners stay square. ⌘/Ctrl+click — select several segments. A box on a wall slides along the wall, on the ceiling — freely. Consumers and the panel do not move.",
@@ -233,7 +235,7 @@ export const en: Messages = {
     autoTitle: "Selected lines and the chosen box — back to how the program routes them; saves immediately",
     auto: "Auto route",
   },
-  legend: { title: "Legend" },
+  legend: { title: "Legend", box: "Junction box", low: "Comms lines" },
   filter3d: {
     room: "Room", allRooms: "All rooms",
   },
@@ -285,7 +287,7 @@ export const en: Messages = {
     tab: "Overview", side: "In brief", title: "Overview",
     object: "Object", building: "Building, premises", code: "Document code", stage: "Stage",
     organization: "Organization", area: "Area", ceiling: "Ceiling height",
-    assumed: "assumption: not given in the plan", rooms: "Rooms", room: "Room", wet: "wet",
+    assumed: "assumption: not given in the plan", room: "Room", wet: "wet",
     planned: "What is planned", points: "Points", qty: "Qty", panel: "Panel",
     supply1: "single phase", supply3: "three phases", panelLine: "breakers — {{scheme}}, {{supply}}, input {{input}}, {{devices}} devices, {{groups}} circuits",
     load: "load: installed {{installed}} kW, calculated {{calculated}} kW",
@@ -381,6 +383,13 @@ export const en: Messages = {
           loop: { name: "Daisy chain", note: "Cable runs from socket to socket, joined in the flush boxes. Up to 7 sockets on a chain." },
         },
       },
+      lights: {
+        short: "Light wiring", title: "How should the lights be connected?", why: "Switches and lights stay where they are: this is only about how the cable runs.",
+        options: {
+          boxes: { name: "Through boxes", note: "A junction box in the room, with a cable from it to the switch and to each light." },
+          chain: { name: "In a chain, no boxes", note: "From the panel to the switch, then from light to light. A 60 cm loop at each ceiling light: a reserve for the output." },
+        },
+      },
       path: {
         short: "Route shape", title: "How should routes be laid?", why: "On the ceiling and the floor. On walls cable always runs vertically.",
         options: {
@@ -394,6 +403,20 @@ export const en: Messages = {
           none: { name: "No conduit", note: "Cheaper: plain cable on the ceiling and in the walls." },
           ceiling: { name: "On the ceiling", note: "Cable on the ceiling runs in conduit, the drops to points in the walls without it." },
           walls: { name: "Ceiling and walls", note: "Conduit to every point. There will be chases anyway, even when cabling before plastering: conduit is thicker than the plaster." },
+        },
+      },
+      loopConduit: {
+        short: "Chain in conduit", title: "How to run the socket chain in conduit?", why: "A socket in a chain has two cables: in and out. They can go in two conduits or in one thicker one; conduit and clips are in the estimate.",
+        options: {
+          separate: { name: "Two conduits", note: "Each cable in its own Ø20 conduit: easier to replace. A chase for two conduits is wide." },
+          shared: { name: "One conduit", note: "Both cables in one Ø25–32 conduit: a narrow chase, half the clips. The chase is deeper and may not fit a thin partition." },
+        },
+      },
+      led: {
+        short: "LED power supplies", title: "Where do the LED power supplies go?", why: "A LED strip runs on 12 V: each lighting output needs a power supply. The supply and fitting it are in the estimate.",
+        options: {
+          room: { name: "At the strip", note: "230 V runs to the output from the light box in the room, the supply sits next to the strip: in furniture, a niche or above the ceiling." },
+          board: { name: "In the panel", note: "Supplies on a DIN rail in the panel, a 12 V line of its own from the panel to each output. Easy to replace, but more cable." },
         },
       },
       plaster: {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { OverviewMaster, Question, Variants, VariantSummary } from "@/shared/types";
 import { ART } from "@/widgets/WizardArt";
-import { UNKNOWN, applyPick, chasesKept, initialPicks, invalid, otherQuestions, setupProgress, variantOf, wizardBody, wizardSteps, type Picks, type Setup, type Step } from "./steps";
+import { UNKNOWN, applyPick, chasesKept, initialPicks, invalid, optionKey, otherQuestions, setupProgress, variantOf, wizardBody, wizardSteps, type Picks, type Setup, type Step } from "./steps";
 
 const q = (id: string, assumption: unknown, state = "open"): Question =>
   ({ id, stage: "panel", severity: "major", state, text: id, answer: "choice", assumption });
@@ -21,12 +21,41 @@ function setup(over: Partial<Setup> = {}): Setup {
   };
 }
 const ids = (s: Setup, picks = initialPicks(s)) => wizardSteps(s, picks).map((x) => x.id);
-const WIRING = ["route", "distribution", "path", "conduit", "plaster", "ceiling", "rough"];
+const WIRING = ["route", "distribution", "lights", "path", "conduit", "plaster", "ceiling", "rough"];
 const yes = (picks: Picks): Picks => ({ ...picks, standby: "yes" });
 
 describe("шаги мастера", () => {
   it("уровня проводки нет: каждый пункт — свой шаг; про резерв — только закладка", () => {
     expect(ids(setup())).toEqual([...WIRING, "input", "breakers", "standby"]);
+  });
+  it("блоки питания LED — шаг после гофры, только если в проекте есть выводы LED", () => {
+    const led = setup({ variants: { ...variants, led: true } });
+    expect(ids(led).slice(0, 6)).toEqual(["route", "distribution", "lights", "path", "conduit", "led"]);
+    expect(initialPicks(led).led).toBe("room");  // an older build: at the strip
+    expect(wizardBody(led, { ...initialPicks(led), led: "board" }).variant?.led_supply).toBe("board");
+    expect(wizardBody(led, initialPicks(led))).toEqual({});
+    expect(ids(setup())).not.toContain("led");
+    expect(ART["led-room"]).toBeDefined();
+    expect(ART["led-board"]).toBeDefined();
+  });
+  it("шлейф в гофре — шаг после гофры, только у шлейфа со спусками в гофре", () => {
+    const s = setup();
+    const loop = (over: Picks) => ids(s, { ...initialPicks(s), distribution: "loop", ...over });
+    expect(loop({ conduit: "walls" })).toContain("loopConduit");
+    expect(loop({ conduit: "walls" }).indexOf("loopConduit")).toBe(loop({ conduit: "walls" }).indexOf("conduit") + 1);
+    expect(loop({ conduit: "none", route: "floor" })).toContain("loopConduit");  // the floor is always in conduit
+    expect(loop({ conduit: "ceiling" })).not.toContain("loopConduit");  // drops without conduit
+    expect(ids(s, { ...initialPicks(s), conduit: "walls" })).not.toContain("loopConduit");  // through boxes
+    expect(wizardBody(s, { ...initialPicks(s), distribution: "loop", conduit: "walls", loopConduit: "shared" }).variant?.loop_conduit).toBe("shared");
+    expect(ART["loopConduit-separate"]).toBeDefined();
+    expect(ART["loopConduit-shared"]).toBeDefined();
+  });
+  it("свет — через коробки или последовательно, сразу после розеток", () => {
+    const s = setup();
+    expect(initialPicks(s).lights).toBe("boxes");  // an older build: through boxes
+    expect(wizardBody(s, { ...initialPicks(s), lights: "chain" }).variant?.light_wiring).toBe("chain");
+    expect(ART["lights-boxes"]).toBeDefined();
+    expect(ART["lights-chain"]).toBeDefined();
   });
   it("закладка «да» открывает резерв, «нет» и без ответа — закрывает", () => {
     const s = setup();
@@ -151,7 +180,7 @@ describe("начальный выбор", () => {
   it("вариант, потолок и ответы; открытый вопрос не выбран за человека", () => {
     const s = setup({ answers: { panel_input: 40, panel_battery: { accept: true } } });
     expect(initialPicks(s)).toEqual({
-      route: "ceiling", distribution: "boxes", path: "right", conduit: "none", plaster: "after", rough: "no", breakers: "groups",
+      route: "ceiling", distribution: "boxes", lights: "boxes", path: "right", conduit: "none", led: "room", plaster: "after", rough: "no", loopConduit: "separate", breakers: "groups",
       ceiling: "2700", input: "40", battery: UNKNOWN,
     });
   });
@@ -184,9 +213,9 @@ describe("что уходит на сервер", () => {
   it("вариант целиком, высота — только если менялась", () => {
     const s = setup();
     expect(wizardBody(s, { ...initialPicks(s), route: "floor" }).variant)
-      .toEqual({ mode: "standard", route: "floor", distribution: "boxes", path: "right", conduit: "none", plaster: "after", rough_light: false });
+      .toEqual({ mode: "standard", route: "floor", distribution: "boxes", path: "right", conduit: "none", light_wiring: "boxes", led_supply: "room", plaster: "after", rough_light: false, loop_conduit: "separate" });
     expect(wizardBody(s, { ...initialPicks(s), ceiling: "3000" }).variant)
-      .toEqual({ mode: "standard", route: "ceiling", distribution: "boxes", path: "right", conduit: "none", plaster: "after", rough_light: false, ceiling_height: 3000 });
+      .toEqual({ mode: "standard", route: "ceiling", distribution: "boxes", path: "right", conduit: "none", light_wiring: "boxes", led_supply: "room", plaster: "after", rough_light: false, loop_conduit: "separate", ceiling_height: 3000 });
   });
   it("каждый пункт меняет вариант", () => {
     const s = setup();
@@ -288,8 +317,8 @@ describe("штробы при монтаже до штукатурки", () => {
 describe("сколько осталось решить", () => {
   it("открытые вопросы; вариант и потолок уже со значением", () => {
     const progress = setupProgress(setup());
-    expect(progress).toMatchObject({ total: 10, open: ["input", "standby"] });
-    expect(progress.steps).toHaveLength(10);
+    expect(progress).toMatchObject({ total: 11, open: ["input", "standby"] });
+    expect(progress.steps).toHaveLength(11);
     expect(progress.steps).toEqual(expect.arrayContaining(progress.open));
   });
   it("ответ, «оставить» и резерв без инвертора закрывают шаги", () => {
@@ -359,5 +388,12 @@ describe("мастер-выключатель", () => {
     });
     expect(wizardBody(on, { ...initialPicks(on), master: "no" }).answers)
       .toEqual({ panel_master: "no", panel_master_off: null });
+  });
+});
+
+describe("название карточки", () => {
+  it("трасса — как у варианта, остальные шаги — свои варианты", () => {
+    expect(optionKey("route", "floor")).toBe("variant.routes.floor");
+    expect(optionKey("breakers", "lines")).toBe("wizard.steps.breakers.options.lines.name");
   });
 });

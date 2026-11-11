@@ -6,11 +6,11 @@
 
 import type { WizardBody } from "@/shared/api";
 import { parseNumber, plainNumber, type Answer } from "@/shared/questions";
-import type { OverviewMaster, OverviewReserve, Project, Question, VariantConduit, VariantDistribution, VariantPath, VariantPlaster, VariantRoute, Variants } from "@/shared/types";
+import type { OverviewMaster, OverviewReserve, Project, Question, VariantConduit, VariantDistribution, VariantLedSupply, VariantLightWiring, VariantLoopConduit, VariantPath, VariantPlaster, VariantRoute, Variants } from "@/shared/types";
 import { parseCeiling } from "./ceiling";
-import { activeSummary, availableRoutes, breakersOf, modeConduit, modeOfBreakers, optionsOf, parseKey, type VariantChoice } from "@/widgets/VariantInfo/variants";
+import { activeSummary, availableRoutes, breakersOf, hasLoopDrops, modeConduit, modeOfBreakers, optionsOf, parseKey, type VariantChoice } from "@/widgets/VariantInfo/variants";
 
-export type StepId = "route" | "distribution" | "path" | "conduit" | "plaster" | "ceiling" | "rough" | "phases" | "input" | "breakers" | "standby" | "backup" | "power" | "inverter" | "battery" | "pv" | "npe" | "reserve" | "master" | "masterOff";
+export type StepId = "route" | "distribution" | "lights" | "path" | "conduit" | "loopConduit" | "led" | "plaster" | "ceiling" | "rough" | "phases" | "input" | "breakers" | "standby" | "backup" | "power" | "inverter" | "battery" | "pv" | "npe" | "reserve" | "master" | "masterOff";
 export type Picks = Partial<Record<StepId, string>>;
 // "I don't know": the question closes with {accept}, the model keeps its typical value, and the
 // person can come back to it later; the project is not held up by a device not chosen yet
@@ -57,7 +57,7 @@ const MASTER: ReadonlySet<StepId> = new Set(["master", "masterOff"]);
 const CEILINGS = ["2500", "2700", "3000"];
 const SUPPLY: ReadonlySet<StepId> = new Set(["phases", "input"]);  // the supply: the "Panel" group, first
 // Options of the wiring variant; each changes the calculation (docs/wiring-variants.md)
-export const VARIANT_STEPS: ReadonlySet<StepId> = new Set(["route", "distribution", "path", "conduit", "plaster", "rough", "breakers"]);
+export const VARIANT_STEPS: ReadonlySet<StepId> = new Set(["route", "distribution", "lights", "path", "conduit", "loopConduit", "led", "plaster", "rough", "breakers"]);
 
 export function setupOf(project: Project, variants: Variants | null, ceiling: number | null, reserve: OverviewReserve | null,
                         master: OverviewMaster | null = null): Setup {
@@ -90,11 +90,11 @@ export function initialPicks(setup: Setup): Picks {
   if (setup.variants) {
     const { mode, route } = parseKey(setup.variants.active);
     const item = activeSummary(setup.variants);
-    const { path, conduit, plaster, rough_light } = optionsOf(item, mode);
+    const { path, conduit, light_wiring, led_supply, plaster, rough_light, loop_conduit } = optionsOf(item, mode);
     Object.assign(picks, {
-      route, distribution: item?.distribution ?? "boxes", path,
+      route, distribution: item?.distribution ?? "boxes", lights: light_wiring, path,
       // "don't know" is the conduit not chosen: the mode gives it; an older build has no choice to show
-      conduit: setup.variants.conduit === null ? UNKNOWN : conduit, plaster, rough: rough_light ? "yes" : "no",
+      conduit: setup.variants.conduit === null ? UNKNOWN : conduit, led: led_supply, plaster, rough: rough_light ? "yes" : "no", loopConduit: loop_conduit,
       breakers: breakersOf(mode),
     });
   }
@@ -126,8 +126,11 @@ export function variantOf(setup: Setup, picks: Picks): VariantChoice {
     distribution: picks.distribution as VariantDistribution,
     path: picks.path as VariantPath,
     conduit: picks.conduit === UNKNOWN ? null : picks.conduit as VariantConduit,
+    light_wiring: (picks.lights ?? "boxes") as VariantLightWiring,
+    led_supply: (picks.led ?? "room") as VariantLedSupply,
     plaster: picks.plaster as VariantPlaster,
     rough_light: picks.rough === "yes",
+    loop_conduit: (picks.loopConduit ?? "separate") as VariantLoopConduit,
   };
 }
 
@@ -207,9 +210,17 @@ export function wizardSteps(setup: Setup, picks: Picks): Step[] {
     const routes = availableRoutes(setup.variants!);
     if (routes.length > 1) steps.push({ id: "route", group: "wiring", kind: "cards", options: routes });
     steps.push({ id: "distribution", group: "wiring", kind: "cards", options: ["boxes", "loop"] });
+    steps.push({ id: "lights", group: "wiring", kind: "cards", options: ["boxes", "chain"] });
     steps.push({ id: "path", group: "wiring", kind: "cards", options: ["right", "shortest"] });
     const mode = modeOfBreakers(picks.breakers) ?? parseKey(setup.variants!.active).mode;
     steps.push({ id: "conduit", group: "wiring", kind: "cards", options: ["none", "ceiling", "walls", UNKNOWN], assumed: modeConduit(mode) });
+    // Only while chain drops go in conduit: a daisy chain with conduit in the walls or on the floor
+    const conduit = picks.conduit === UNKNOWN ? null : picks.conduit as VariantConduit | undefined;
+    if (hasLoopDrops({ distribution: picks.distribution as VariantDistribution, route: picks.route as VariantRoute, conduit: conduit ?? null, mode })) {
+      steps.push({ id: "loopConduit", group: "wiring", kind: "cards", options: ["separate", "shared"] });
+    }
+    // Only with LED outputs in the project (pipeline.variant_block led)
+    if (setup.variants!.led) steps.push({ id: "led", group: "wiring", kind: "cards", options: ["room", "board"] });
     steps.push({ id: "plaster", group: "wiring", kind: "cards", options: ["after", "before"] });
     if (setup.ceiling !== null) steps.push({ id: "ceiling", group: "wiring", kind: "number", options: CEILINGS });
     steps.push({ id: "rough", group: "wiring", kind: "cards", options: ["no", "yes"] });
@@ -242,6 +253,10 @@ export function invalid(step: Step, pick: string | undefined): boolean {
   const n = parseNumber(pick);
   return n === null || n <= 0 || (step.id !== "power" && !Number.isInteger(n));
 }
+
+// The i18n key of a card name; the route step names its cards as the variant does
+export const optionKey = (step: StepId, value: string): string =>
+  (step === "route" ? `variant.routes.${value}` : `wizard.steps.${step}.options.${value}.name`);
 
 export const isPicked = (pick: string | undefined) => pick !== undefined && pick !== "";
 

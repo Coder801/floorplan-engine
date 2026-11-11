@@ -1,5 +1,5 @@
-// Legend: a collapsible badge in the top-left corner of the drawing (electrical and lighting
-// sheets, page key legend): the icon is the same primitives as on the sheet (SVG from paths in
+// Legend: a collapsible badge in the top-left corner of the drawing (electrical, lighting and
+// wiring sheets, page key legend): the icon is the same primitives as on the sheet (SVG from paths in
 // sheet mm), and what it means. Point counts are in "Points", group colours in "Groups".
 // Collapsed or expanded is remembered in the browser; on a narrow screen it is collapsed by default.
 // The legend is part of the drawing: its title is in the project language, like its rows.

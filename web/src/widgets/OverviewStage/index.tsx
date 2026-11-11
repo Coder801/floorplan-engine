@@ -11,8 +11,9 @@ import { useTranslation } from "react-i18next";
 import { cx } from "@/shared/cx";
 import type { Overview, Project, Question, Variants, VariantSummary } from "@/shared/types";
 import { VariantInfo } from "@/widgets/VariantInfo";
-import type { SetupProgress, StepId } from "@/widgets/Wizard/steps";
-import { activeSummary, breakersOfScheme, neighbours, type Neighbour } from "@/widgets/VariantInfo/variants";
+import { anyKey } from "@/shared/i18n";
+import { optionKey, type SetupProgress, type StepId } from "@/widgets/Wizard/steps";
+import { activeSummary, breakersOfScheme, neighbours } from "@/widgets/VariantInfo/variants";
 import { SEVERITIES, questionCounts } from "./questions";
 import { projectTotal } from "./total";
 import css from "./OverviewStage.module.scss";
@@ -38,7 +39,7 @@ const SETUP_NAMES = 3;  // decisions named in the note; the rest are a number
 // What is left to decide: the estimate rests on assumptions until the wizard is done
 function SetupNote({ total, open }: { total: number; open: StepId[] }) {
   const { t } = useTranslation();
-  const say = t as unknown as (key: string) => string;  // a key built from a step, as in Wizard
+  const say = anyKey(t);  // a key built from a step, as in Wizard
   const names = open.slice(0, SETUP_NAMES).map((id) => lowerFirst(say(`wizard.steps.${id}.short`))).join(", ");
   const rest = open.length - SETUP_NAMES;
   return (
@@ -78,9 +79,7 @@ export function OverviewStage({ overview, variants, project, openQuestions, canC
     const d = Math.round(s.total - base.total);
     return d === 0 ? "0" : `${d > 0 ? "+" : "−"}${cash(Math.abs(d), s.currency)}`;
   };
-  const say = t as unknown as (key: string) => string;  // a key built from a step, as in Wizard
-  const optionName = (n: Neighbour) =>
-    say(n.step === "route" ? `variant.routes.${n.value}` : `wizard.steps.${n.step}.options.${n.value}.name`);
+  const say = anyKey(t);  // a key built from a step, as in Wizard
   const compareRow = (s: VariantSummary, name: ReactNode, base: VariantSummary | null, key: string) => (
     <tr key={key} className={cx(!base && css.on)}>
       <td>{name}{s.key === variants?.default && !base && <span className={css.tag}>{t("variant.asProject")}</span>}</td>
@@ -227,7 +226,7 @@ export function OverviewStage({ overview, variants, project, openQuestions, canC
                       {compareRow(current, t("overview.yourSet"), null, "current")}
                       {neighbours(variants).map((n) => compareRow(
                         n.summary,
-                        <><span className="muted">{say(`wizard.steps.${n.step}.short`)}:</span> {lowerFirst(optionName(n))}</>,
+                        <><span className="muted">{say(`wizard.steps.${n.step}.short`)}:</span> {lowerFirst(say(optionKey(n.step, n.value)))}</>,
                         current, `${n.step}-${n.value}`,
                       ))}
                     </tbody>
@@ -290,7 +289,7 @@ function CheckIcon() {
 
 export function OverviewSummary({ setup, questions, onWizard, onDrawer, refreshing = false }: SummaryProps) {
   const { t } = useTranslation();
-  const say = t as unknown as (key: string) => string;  // a key built from a step, as in Wizard
+  const say = anyKey(t);  // a key built from a step, as in Wizard
   const counts = questionCounts(questions);
   const open = SEVERITIES.reduce((n, s) => n + counts[s], 0);
   const done = setup ? setup.total - setup.open.length : 0;
@@ -318,7 +317,9 @@ export function OverviewSummary({ setup, questions, onWizard, onDrawer, refreshi
           <p className={cx("small muted", css.note)}>
             {setup.open.length ? t("overview.progress.done", { done, total: setup.total }) : t("overview.progress.all")}
           </p>
-          {onWizard && <div><button onClick={() => onWizard()}>{t("wizard.open")}</button></div>}
+          {onWizard && (
+            <button className={css.wizardOpen} onClick={() => onWizard()}>{t("wizard.open")}</button>
+          )}
         </section>
       )}
       <section className={css.block}>

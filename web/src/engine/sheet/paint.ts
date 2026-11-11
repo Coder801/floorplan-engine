@@ -8,8 +8,8 @@ export interface DrawItem extends Item {
   path: Path2D;
 }
 
-// [colour, opacity, how much thicker]
-export type Look = (it: DrawItem) => [string, number, number];
+// [colour, opacity, how much thicker, the path moved elsewhere (a socket of an opening stack)]
+export type Look = (it: DrawItem) => [string, number, number, Path2D?];
 
 // The screen shows only the drawing: the sheet viewport (view); old artifacts show the whole sheet
 export const viewOf = (page: Page): Box => page.view || [0, 0, page.size[0], page.size[1]];
@@ -20,21 +20,27 @@ export function inView(page: Page, box: Box): boolean {
   return box[2] >= x0 && box[0] <= x1 && box[3] >= y0 && box[1] <= y1;
 }
 
+// Layers the screen draws bolder (bold in paint): everything but the building (walls, openings,
+// dimensions, sheet frame)
+const boldLayer = (l: string) => !l.startsWith("A-") && l !== "0";
+
 // Primitives in order; pxPerMm is for the minimum line width; cableMinPx keeps wiring lines on
-// screen at least this thick (device px); 0 in PNG
+// screen at least this thick (device px); 0 in PNG. bold thickens the engineering lines on
+// screen (SCREEN_BOLD); 1 in PNG, the printed sheet stays as built
 export function paint(ctx: CanvasRenderingContext2D, items: DrawItem[], pxPerMm: number, look: Look,
-                      shown: (layer: string) => boolean, cableMinPx = 0) {
+                      shown: (layer: string) => boolean, cableMinPx = 0, bold = 1) {
   ctx.lineCap = "round"; ctx.lineJoin = "round";
   const minW = MIN_LINE_PX / pxPerMm, cableW = Math.max(cableMinPx / pxPerMm, minW);
   for (const it of items) {
     if (!shown(it.l)) continue;
-    const [c, alpha, k] = look(it);
+    const [c, alpha, k, path] = look(it);
     ctx.globalAlpha = alpha;
-    if (it.k === "f") { ctx.fillStyle = c; ctx.fill(it.path, "nonzero"); }
+    if (!alpha) continue;
+    if (it.k === "f") { ctx.fillStyle = c; ctx.fill(path ?? it.path, "nonzero"); }
     else {
       ctx.strokeStyle = c;
-      ctx.lineWidth = Math.max(it.w || 0, it.l.startsWith("W-CABLE") ? cableW : minW) * k;
-      ctx.stroke(it.path);
+      ctx.lineWidth = Math.max(it.w || 0, it.l.startsWith("W-CABLE") ? cableW : minW) * k * (boldLayer(it.l) ? bold : 1);
+      ctx.stroke(path ?? it.path);
     }
   }
   ctx.globalAlpha = 1;

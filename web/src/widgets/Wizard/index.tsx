@@ -9,6 +9,7 @@ import { useTranslation } from "react-i18next";
 import type { WizardBody } from "@/shared/api";
 import { REDUCED_MOTION } from "@/shared/consts";
 import { cx } from "@/shared/cx";
+import { anyKey } from "@/shared/i18n";
 import { FADE_MS } from "@/shared/popover";
 import { plainNumber } from "@/shared/questions";
 import type { OverviewMaster, OverviewReserve, Project, Scene, Variants, VariantSummary } from "@/shared/types";
@@ -21,7 +22,7 @@ import { masterOn } from "@/widgets/MasterList/master";
 import { findChoice } from "@/widgets/VariantInfo/variants";
 import { WizardArt } from "@/widgets/WizardArt";
 import { clearDraft, loadDraft, samePicks, saveDraft } from "./draft";
-import { UNKNOWN, VARIANT_STEPS, applyPick, chasesKept, initialPicks, invalid, isPicked, otherQuestions, setupOf, variantOf, wizardBody, wizardSteps, type Picks, type Step, type StepId } from "./steps";
+import { UNKNOWN, VARIANT_STEPS, applyPick, chasesKept, initialPicks, invalid, isPicked, optionKey, otherQuestions, setupOf, variantOf, wizardBody, wizardSteps, type Picks, type Step, type StepId } from "./steps";
 import css from "./Wizard.module.scss";
 
 const DONE = "done";
@@ -46,8 +47,7 @@ interface Props {
 
 export function Wizard({ project, variants, ceiling, scene = null, reserve, master = null, onApply, onClose, onQuestions, start }: Props) {
   const { t, i18n } = useTranslation();
-  // Keys built from a step and its values: the same cast as i18n label()
-  const say = t as unknown as (key: string) => string;
+  const say = anyKey(t);  // keys built from a step and its values
   const setup = useMemo(() => setupOf(project, variants, ceiling?.height ?? null, reserve, master), [project, variants, ceiling, reserve, master]);
   const before = useMemo(() => initialPicks(setup), [setup]);
   const [draft] = useState(() => loadDraft(project.id, project.built));
@@ -93,10 +93,9 @@ export function Wizard({ project, variants, ceiling, scene = null, reserve, mast
   const priced = !!step && VARIANT_STEPS.has(step.id) && step.options.every((value) => summary(step.id, value));
   const optionName = (s: Step, value: string): string => {
     if (value === UNKNOWN) return t("wizard.unknown");
-    if (s.id === "route") return say(`variant.routes.${value}`);
     if (s.kind === "groups") return value.split(",").join(", ");
     if (s.kind === "number") return `${plainNumber(value)} ${t(unitOf(s.id))}`;
-    return say(`wizard.steps.${s.id}.options.${value}.name`);
+    return say(optionKey(s.id, value));
   };
   // What "don't know" leaves in the project, as a person reads it
   const unknownNote = (s: Step) => {

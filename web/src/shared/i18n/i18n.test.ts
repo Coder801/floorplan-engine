@@ -27,3 +27,13 @@ describe("словари интерфейса", () => {
     });
   }
 });
+
+describe("заголовок вкладки", () => {
+  it("сначала что открыто, потом бренд со стадией в скобках", async () => {
+    const { default: i18n, pageTitle } = await import("./index");
+    await i18n.changeLanguage("ru");
+    expect(pageTitle("Квартира", "План")).toBe("Квартира · План — Shtroba [альфа]");
+    expect(pageTitle("Квартира", null)).toBe("Квартира — Shtroba [альфа]");
+    expect(pageTitle()).toBe("Shtroba [альфа]");
+  });
+});

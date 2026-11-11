@@ -1,6 +1,7 @@
 // Drawing 3D (key scene of the wiring page, scene3d.py): model mm, Z axis up. One for all tabs
-// of the drawing: it shows what the tab's layers show (plan: walls, electrical: points,
-// lighting: lights and switches, wiring: everything). The "cut" wall mode makes partitions a
+// of the drawing: it shows what the tab's layers show (plan: walls, electrical: points of the
+// view and its lines, lighting links: lights, switches and the links under the ceiling
+// (engine/three/lightLinks.ts), wiring: everything). The "cut" wall mode makes partitions a
 // low rim, and exterior walls a rim when they stand between the camera and the room; the part
 // of a line hidden by a wall is faint and drawn over everything; hints, selection and the
 // link to tables go through the shared state.
@@ -14,6 +15,7 @@ import { useEffect, useMemo, useRef, type MutableRefObject } from "react";
 import * as THREE from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import { layerShown } from "@/engine/sheet/drawing";
+import { LINK_LAYER, type LightLink3D } from "@/engine/three/lightLinks";
 import { wallEdges } from "@/engine/three/wallEdges";
 import {
   CUT_DOT, CUT_HEIGHT_MM, DIM_ALPHA, FLOW_DASH_PX, FLOW_GAP_PX, FLOW_SPEED_PX, GHOST_ALPHA,
@@ -43,6 +45,7 @@ interface Props {
   index: PageIndex;
   own: Set<string> | null;          // tab layers (sheet/drawing.ts); null means all
   layerOf: Map<string, string>;     // object → its layer on the drawing
+  links: LightLink3D[];             // light links (E-LINK), visible where the tab shows that layer
   apiRef: MutableRefObject<Scene3DApi | null>;
   onZoom: (zoom: Zoom) => void;
   onHome: (home: boolean) => void;  // the camera came to the isometry or left it
@@ -90,7 +93,7 @@ export function Scene3D(props: Props) {
   );
 }
 
-function World({ scene, index, own, layerOf, apiRef, onZoom, onHome }: Props) {
+function World({ scene, index, own, layerOf, links, apiRef, onZoom, onHome }: Props) {
   const { camera, size, invalidate } = useThree();
   const controls = useRef<OrbitControlsImpl>(null);
   const s = useView((st) => st);
@@ -300,9 +303,10 @@ function World({ scene, index, own, layerOf, apiRef, onZoom, onHome }: Props) {
       <directionalLight position={[-0.6, -1, 2]} intensity={1.1} />
       <OrbitControls ref={controls} makeDefault screenSpacePanning enableZoom={false} />
       <group ref={groupRef}>
+        {/* Both sides: from below the slab must stay opaque, not be culled as a back face */}
         {floors.map((geo, i) => (
           <mesh key={`f${i}`} geometry={geo} position={[0, 0, -1]}>
-            <meshBasicMaterial color={dark ? "#34373a" : "#d9dadc"} />
+            <meshBasicMaterial color={dark ? "#34373a" : "#d9dadc"} side={THREE.DoubleSide} />
           </mesh>
         ))}
         {walls.map((w, i) => (
@@ -318,6 +322,12 @@ function World({ scene, index, own, layerOf, apiRef, onZoom, onHome }: Props) {
           <WireLines key={id} id={id} w={w} s={s} lit={lit(`wire:${id}`)} alpha={alpha(`wire:${id}`)}
                      handlers={handlers(`wire:${id}`)} flowLines={flowLines.current} />
         ))}
+        {links.filter((l) => visible(l.key, undefined, LINK_LAYER)
+                             && l.ends.some((k) => shown3d(s.filter3d, null, scene.points[k.slice(6)]?.room)))
+          .map((l) => (
+            <LinkLines key={l.key} link={l} lit={lit(l.key) || l.ends.some(lit)}
+                       alpha={!s.selected || l.ends.some((k) => s.selected!.has(k)) ? 1 : DIM_ALPHA} />
+          ))}
         {Object.entries(scene.pipes ?? {})
           .filter(([, p]) => shown3d(s.filter3d, null, p.room) && visible(p.key, undefined, PIPE_LAYER[p.kind])).map(([id, p]) => (
           <PipeLine key={id} p={p} lit={lit(p.key)} alpha={alpha(p.key)} handlers={handlers(p.key)} />
@@ -385,6 +395,24 @@ function WireLines({ id, w, s, lit, alpha, handlers, flowLines }: {
               raycast={() => null}
               ref={(l) => { if (l) flowLines.set(id, l as never); else flowLines.delete(id); }} />
       )}
+    </>
+  );
+}
+
+// A light link: thin, without its own hint (as on the sheet, it lights up with its switch or lights);
+// the part hidden by a wall is faint, on top of everything
+function LinkLines({ link, lit, alpha }: { link: LightLink3D; lit: boolean; alpha: number }) {
+  const color = lit ? palette.hl : screenColor(link.color);
+  return (
+    <>
+      {link.lines.map((pts, i) => (
+        <group key={i}>
+          <Line points={pts} color={color} lineWidth={lit ? WIRE_LIT_PX : WIRE_PX} transparent opacity={alpha}
+                raycast={() => null} />
+          <Line points={pts} color={color} lineWidth={2} transparent opacity={GHOST_ALPHA * alpha}
+                depthTest={false} renderOrder={ON_TOP} raycast={() => null} />
+        </group>
+      ))}
     </>
   );
 }

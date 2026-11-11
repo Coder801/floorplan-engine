@@ -140,8 +140,15 @@ export type VariantRoute = "ceiling" | "floor";
 export type VariantDistribution = "boxes" | "loop";
 export type VariantPath = "right" | "shortest";
 export type VariantPlaster = "after" | "before";
+// LED power supplies: at the strip (230 V from the room box) or in the panel (a 12 V line each)
+export type VariantLedSupply = "room" | "board";
+// Light: through junction boxes, or in a chain without boxes (panel → switch → lights)
+export type VariantLightWiring = "boxes" | "chain";
 // Besides the floor, where it always is: none, on the ceiling, on the ceiling and in the walls
 export type VariantConduit = "none" | "ceiling" | "walls";
+// A daisy chain point in conduit: the cable in and the cable out each in its own conduit, or both
+// in one conduit of a larger diameter (one narrow chase)
+export type VariantLoopConduit = "separate" | "shared";
 
 export interface VariantSummary {
   key: string;            // «economy-floor-boxes»
@@ -152,6 +159,9 @@ export interface VariantSummary {
   conduit?: VariantConduit | boolean;  // boolean: an older build, yes or no on the ceiling
   plaster?: VariantPlaster;  // no key: an older build, after the plaster (optionsOf)
   rough_light?: boolean;  // lamp holders, bulbs and rough switches in the estimate
+  led_supply?: VariantLedSupply;  // no key: an older build, at the strip (optionsOf)
+  light_wiring?: VariantLightWiring;  // no key: an older build, through boxes (optionsOf)
+  loop_conduit?: VariantLoopConduit;  // no key: an older build, separate conduits (optionsOf)
   total: number;          // estimate total
   currency: string;
   unpriced: number;
@@ -166,6 +176,7 @@ export interface Variants {
   active: string;         // key of the chosen one
   default: string;        // "as in project"
   conduit?: VariantConduit | null;  // what was chosen; null: "don't know", by the mode; none: an older build
+  led?: boolean;          // the project has LED outputs: the LED supply is asked; none: an older build
   items: VariantSummary[];  // the modes and the chosen one, also if it is a set from the wizard
 }
 
@@ -180,10 +191,10 @@ export interface Item {
   d: string;
 }
 
-// Legend for the viewer badge (key legend of the electrical and lighting pages): the icon is
-// the same primitives as on the sheet (sheet mm), and what it means
+// Legend for the viewer badge (key legend of the electrical, lighting and wiring pages): the
+// icon is the same primitives as on the sheet (sheet mm), and what it means
 export interface LegendEntry {
-  key: string;     // symbol: socket, switch, board, led_strip…
+  key: string;     // symbol: socket, switch, board, led_strip…; wiring: wires_light, wires_sockets…
   text: string;
   items: Item[];
 }
@@ -200,6 +211,7 @@ export interface ObjectCard {
   title: string;
   rows: [string, string][];
   block?: PointBlock;  // absent in builds made before it appeared
+  brief?: ObjectCard;  // wiring line or box: the short card of the simple interface mode
 }
 
 export interface TableRow {
@@ -465,6 +477,7 @@ export interface ElevWall {
   length: number;
   openings: { kind: string; x0: number; x1: number; y0: number; y1: number; assumed: boolean; hinge?: "start" | "end" }[];
   chases: { x: number; y0: number; y1: number; wide: boolean; low: boolean }[];
+  fixings?: { x: number; y: number }[];  // fixings on the cable drops (older .epd: none)
   boxes: ElevBox[];
   points: ElevPoint[];
   board?: { key: string; name: string; x: number; y: number; width: number; height: number };

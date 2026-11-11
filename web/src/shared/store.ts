@@ -31,8 +31,13 @@ export function toggledGroups(shown: Set<string> | null, all: string[], g: strin
 // Elevation layers: electrical (points, boxes, panel, chases, neighbour outlets) and water
 export interface WallLayers { electrical: boolean; water: boolean }
 
-// What the electrical sheet shows: sockets with their lines or low voltage (engine/sheet/views.ts)
-export type ElectricalView = "sockets" | "low";
+// What the electrical sheet shows: sockets, low voltage or lighting, each with its lines
+// (engine/sheet/views.ts)
+export type ElectricalView = "sockets" | "low" | "light";
+
+// Systems of the electrics: the wiring view shows them all, each can be switched off there
+export const SYSTEMS = ["light", "sockets", "low"] as const;
+export type System = (typeof SYSTEMS)[number];
 
 export interface ViewState {
   hover: string | null;             // object under the cursor (sheet or 3D)
@@ -51,7 +56,8 @@ export interface ViewState {
   // Open this sheet right at the object (from an elevation, from a question); around: SheetView.reveal
   goto: { key: string; stage: string; around?: number } | null;
   electricalView: ElectricalView;   // what the electrical sheet shows (engine/sheet/views.ts)
-  cables: boolean;                  // wiring layers on the sheets (off in the simple interface mode, shared/mode.ts)
+  systemsOff: ReadonlySet<System>;  // systems switched off on the wiring view (chips over the drawing)
+  cables: boolean;                  // full wiring layers (off in the simple interface mode, shared/mode.ts: no lines on the point views, no labels on wiring)
   wallLayers: WallLayers;           // what is visible on the elevation (the eye in the "On the wall" table)
 }
 
@@ -60,7 +66,7 @@ type Listener = () => void;
 let state: ViewState = {
   hover: null, lit: null, selected: null, neighbors: null, tip: null, pinned: null,
   hidden: new Set(), extra: new Set(), editMode: false, show3d: false, wallMode: "cut",
-  filter3d: { groups: null, room: null }, themeTick: 0, goto: null, electricalView: "sockets", cables: true,
+  filter3d: { groups: null, room: null }, themeTick: 0, goto: null, electricalView: "sockets", systemsOff: new Set(), cables: true,
   wallLayers: { electrical: true, water: true },
 };
 const listeners = new Set<Listener>();

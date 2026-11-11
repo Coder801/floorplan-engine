@@ -5,7 +5,7 @@
 // Drawings, tables and cards are in the project language (room.yaml: language): the build
 // writes them and the interface does not translate them.
 
-import i18n from "i18next";
+import i18n, { type TFunction } from "i18next";
 import { initReactI18next } from "react-i18next";
 import { remember, remembered } from "@/shared/palette";
 import { en } from "./en";
@@ -42,19 +42,31 @@ void i18n.use(initReactI18next).init({
   fallbackLng: "ru",
   interpolation: { escapeValue: false },  // React escapes on its own
 });
-// The page language and tab title follow the interface language
+// Tab title: what is open first (project · sheet), then the brand with the stage in brackets —
+// "Квартира · План — Shtroba [альфа]"; nothing open — the brand alone. The viewer sets it for
+// the open page (pages/Viewer), here only the start one
+export function pageTitle(...parts: (string | null | undefined)[]): string {
+  const brand = `${BRAND} [${i18n.t(`app.stages.${STAGE}`)}]`;
+  const what = parts.filter((p): p is string => !!p).join(" · ");
+  return what ? `${what} — ${brand}` : brand;
+}
+
+// The page language follows the interface language
 const applyDocument = () => {
   if (typeof document === "undefined") return;
   document.documentElement.lang = i18n.language;
-  document.title = `${BRAND} ${i18n.t(`app.stages.${STAGE}`)} · ${i18n.t("app.projects").toLowerCase()}`;
 };
 applyDocument();
+if (typeof document !== "undefined") document.title = pageTitle(i18n.t("app.projects"));
 i18n.on("languageChanged", applyDocument);
 
 export function setLanguage(code: UiLanguage) {
   remember("lang", code);
   void i18n.changeLanguage(code);
 }
+
+// t for a key built at run time (a wizard step and its values): the typed t does not know it
+export const anyKey = (t: TFunction): ((key: string) => string) => t as unknown as (key: string) => string;
 
 // Label for a value from data (status, stage, layer, object type); without a translation, the
 // value itself. The component that shows it takes useTranslation so it re-renders on language change

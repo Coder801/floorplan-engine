@@ -15,7 +15,7 @@ import { SHEET_ONLY, SIDE_TABS, type SideTab } from "@/shared/consts";
 import { cx } from "@/shared/cx";
 import { label } from "@/shared/i18n";
 import { rowKind, totals } from "@/shared/estimate";
-import { expand, rowSelection } from "@/shared/page";
+import { expand, rowPicked, rowSelection } from "@/shared/page";
 import { refreshPalette, screenColor } from "@/shared/palette";
 import { toggledGroups, useView, view } from "@/shared/store";
 import ui from "@/shared/styles/ui.module.scss";
@@ -103,6 +103,7 @@ function Tables({ page, drawing }: { page: Page | null; drawing: Drawing | null 
   const { t } = useTranslation();
   const electricalView = useView((s) => s.electricalView);
   const cables = useView((s) => s.cables);
+  const systemsOff = useView((s) => s.systemsOff);
   const hover = useView((s) => s.hover);
   const filter = useView((s) => s.filter3d);
   const selected = useView((s) => s.selected);
@@ -113,10 +114,18 @@ function Tables({ page, drawing }: { page: Page | null; drawing: Drawing | null 
   useEffect(() => {
     if (hover) document.querySelector(`.${css.side} tr.${css.lit}`)?.scrollIntoView({ block: "nearest" });
   }, [hover]);
+  // A line selected on the drawing: scroll to its row too
+  useEffect(() => {
+    if (selected) document.querySelector(`.${css.side} tr.${css.lit}`)?.scrollIntoView({ block: "nearest" });
+  }, [selected]);
 
   if (!page) return <div className="muted">{t("side.noSheet")}</div>;
-  const tables = page.stage === "electrical" && drawing
-    ? viewTables(page.tables || [], ownLayers(drawing, page, electricalView, cables), objectLayers(drawing))
+  // The simple interface mode: the routes without the group table (breakers, cables, kW)
+  if (!cables && page.stage === "wiring") return <p className="muted">{t("side.wiringBrief")}</p>;
+  // The electrical views and the wiring view without a system: rows of the objects shown
+  const filtered = page.stage === "electrical" || (page.stage === "wiring" && systemsOff.size > 0);
+  const tables = filtered && drawing
+    ? viewTables(page.tables || [], ownLayers(drawing, page, electricalView, cables, systemsOff), objectLayers(drawing))
     : page.tables || [];
   if (!tables.length) return <div className="muted">{t("side.noTables")}</div>;
   // The eye of a group: every group of the sheet counts, also one with no table row
@@ -158,7 +167,7 @@ function TableView({ t, id, rowHover, hoverKeys, shown, onGroup, selected, onRow
         <tbody>
           {t.rows.map((r, ri) => {
             const rid = `${id}/${ri}`;
-            const picked = !!selected && !!r.keys?.length && r.keys.every((k) => selected.has(k));
+            const picked = rowPicked(selected, r.keys);
             const lit = picked || rid === rowHover || (!!r.keys && r.keys.some((k) => hoverKeys.has(k)));
             const on = !r.group || !shown || shown.has(r.group);
             return (

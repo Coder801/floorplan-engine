@@ -47,14 +47,15 @@ describe("tabs of the mode", () => {
   it("engineering — everything", () => {
     expect(modeTabs(tabs, stageOf, "engineering")).toEqual(tabs);
   });
-  it("simple — without wiring view, panel and points", () => {
+  it("simple — without panel and points, the wiring view stays (read-only, brief)", () => {
     const out = modeTabs(tabs, stageOf, "simple");
     expect(out.map((t) => t.name)).toEqual(["План", "Электрика", "Развёртки"]);
-    expect(out[1].pages).toEqual([1, 2]);
+    expect(out[1].pages).toEqual([1, 2, 3]);
   });
   it("sheets without a topic stay", () => {
     expect(stageShown("simple", undefined)).toBe(true);
-    expect(stageShown("simple", "wiring")).toBe(false);
+    expect(stageShown("simple", "wiring")).toBe(true);
+    expect(stageShown("simple", "panel")).toBe(false);
   });
   it("simple header keeps only the questions", () => {
     expect(modeDrawerTabs("simple")).toEqual(["questions"]);

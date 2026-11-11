@@ -30,6 +30,7 @@ const LABEL_PX = 11;       // dimension labels
 const BADGE_PX = 12;       // point number
 const SYMBOL_MM = 34;      // Ø68 flush box radius
 const PITCH_MM = 71;       // post step in a frame
+const FIXING_MM = 40;      // half the fixing stroke across a cable drop
 const MIN_R = 5;           // px: symbol no smaller than this
 const ISO_PAD = 28;        // px around the isometry: number badges
 const SIDE_ALPHA = 0.45;   // neighbouring wall in isometry is translucent
@@ -293,6 +294,11 @@ export class ElevationView {
       const half = Math.max(((c.wide ? 50 : 30) / 2) * s, 1.5);
       ctx.fillStyle = screenColor(c.low ? CHASE_LOW : CHASE);
       ctx.fillRect(this.sx(c.x) - half, this.sy(c.y1), 2 * half, (c.y1 - c.y0) * s);
+    }
+    // Fixings on the cable drops: a short stroke across the drop
+    for (const f of elec ? e.fixings ?? [] : []) {
+      const half = Math.max(FIXING_MM * s, 3), x = this.sx(f.x), y = this.sy(f.y);
+      this.line(x - half, y, x + half, y, INK, 1.2);
     }
 
     // Wall: floor and ceiling lines thicker, ends are the room corners

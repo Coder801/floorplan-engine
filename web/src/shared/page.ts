@@ -34,6 +34,11 @@ export function rowSelection(selected: Set<string> | null, keys: string[], chain
   return new Set(keys.flatMap((k) => [k, ...(chains?.[k] ?? [])]));
 }
 
+// A table row is highlighted while the selection holds any of its objects: a route picked on the
+// wiring sheet lights the row of its group, which lists all the group's objects (2026-11-11)
+export const rowPicked = (selected: Set<string> | null, keys: string[] | undefined): boolean =>
+  !!selected && !!keys?.length && keys.some((k) => selected.has(k));
+
 // Objects of the groups not shown (wiring sheet): null filter means none
 export function filteredKeys(groups: Record<string, string[]> | undefined, shown: Set<string> | null): Set<string> {
   if (!groups || !shown) return new Set();
@@ -101,4 +106,11 @@ export class PageIndex {
     const i = o.indexOf(":");
     return { title: `${label("object", o.slice(0, i))} · ${o.slice(i + 1)}`, rows: [] };
   }
+}
+
+// The card of the simple interface mode: a wiring line or box gets its short card (where it runs,
+// without group, cable and lengths); a build made before it, only the title
+export function briefCard(key: string, card: ObjectCard): ObjectCard {
+  if (card.brief) return card.brief;
+  return /^(wire|box):/.test(key) ? { title: card.title, rows: [] } : card;
 }

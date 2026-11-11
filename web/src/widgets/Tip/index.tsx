@@ -1,12 +1,13 @@
 // Object hint: at the cursor (right and below; if it does not fit, on the other side) or, pinned
 // by a click, in the top-right corner, not over the drawing; closed by ×, Esc (on the sheet and
 // in 3D) and by switching sheets (store.resetSelection). A pinned socket block also shows its
-// scheme and a link to the elevation of the whole wall
+// scheme and a link to the elevation of the whole wall. The simple interface mode shows the
+// short card of a line or a box: where it runs, without group, cable and lengths
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { cx } from "@/shared/cx";
-import type { PageIndex } from "@/shared/page";
+import { briefCard, type PageIndex } from "@/shared/page";
 import { useView, view } from "@/shared/store";
 import { PointBlock } from "@/widgets/PointBlock";
 import css from "./Tip.module.scss";
@@ -15,7 +16,7 @@ const unpin = () => view.set({ selected: null, neighbors: null, pinned: null });
 
 export function Tip({ index, onWall }: { index: PageIndex; onWall?: (key: string) => void }) {
   const { t } = useTranslation();
-  const { tip, pinned } = useView((s) => s);
+  const { tip, pinned, cables } = useView((s) => s);
   const el = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
   const key = pinned || tip?.key || null;
@@ -39,7 +40,7 @@ export function Tip({ index, onWall }: { index: PageIndex; onWall?: (key: string
   }, [tip, pinned]);
 
   if (!key) return null;
-  const card = index.card(key);
+  const card = cables ? index.card(key) : briefCard(key, index.card(key));
   const { block } = card;
   return (
     <div ref={el} className={cx(css.tip, !!pinned && css.docked)}

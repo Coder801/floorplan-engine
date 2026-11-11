@@ -1,13 +1,46 @@
 // Sheet tabs. Continuation sheets of one topic (elevations "07 Розгортки", "08 … (продовження)")
 // are one tab, with pages switched inside the drawing (Viewer, "‹ 1 / 3 ›"). Electrical,
 // lighting and wiring are one "Electrical" tab with views: it is one drawing (sheet/drawing.ts),
-// the view is picked on the right (SidePanel), while the printed sheets stay separate
+// the view is picked on the right (SidePanel), while the printed sheets stay separate.
+// The views are systems: lighting, sockets, low voltage, and wiring with everything. Lighting,
+// sockets and low voltage are layers of the electrical sheet (engine/sheet/views.ts); lighting
+// also has its links, the lighting sheet ("Wiring | Links" over the drawing, SheetStage)
 
+import type { ElectricalView } from "./store";
 import type { ManifestPage } from "./types";
 
-// A view of the "Electrical" tab: key is its label in i18n views.*; low voltage is a view of the
-// electrical sheet, it has no sheet of its own
+// A view of the "Electrical" tab: key is its label in i18n views.*
 export interface TabView { key: string; index: number; label: string }
+
+// Views in tab order; "electrical" is sockets (the key stays the sheet topic)
+export const VIEW_KEYS = ["lighting", "electrical", "low", "wiring"] as const;
+
+// What the electrical sheet shows in a view; wiring and the lighting links are sheets of their own
+export const ELECTRICAL_VIEW: Readonly<Record<string, ElectricalView>> = { lighting: "light", electrical: "sockets", low: "low" };
+
+type StageOf = (i: number) => string | undefined;
+
+// The sheet of a view in a tab. Lighting is its lines (electrical sheet) or, with links, its
+// links (lighting sheet); either one when the other sheet is missing
+export function viewSheet(tb: SheetTab, stageOf: StageOf, key: string, links: boolean): number | undefined {
+  const at = (st: string) => tb.pages.find((i) => stageOf(i) === st);
+  if (key === "lighting") return links ? at("lighting") ?? at("electrical") : at("electrical") ?? at("lighting");
+  return at(key === "wiring" ? "wiring" : "electrical");
+}
+
+// Views of a tab with their sheets; low voltage only if the project has it
+export function tabViews(tb: SheetTab, stageOf: StageOf, hasLow: boolean, links: boolean): { key: string; index: number }[] {
+  return VIEW_KEYS.filter((k) => k !== "low" || hasLow).flatMap((key) => {
+    const index = viewSheet(tb, stageOf, key, links);
+    return index === undefined ? [] : [{ key, index }];
+  });
+}
+
+// The view shown: by the sheet, and on the electrical sheet by what it shows
+export function shownView(stage: string, view: ElectricalView): string {
+  if (stage !== "electrical") return stage;
+  return view === "light" ? "lighting" : view === "low" ? "low" : "electrical";
+}
 
 // Views of the "Electrical" tab are sheet topics (labels in i18n views.*)
 export const VIEWS = new Set(["electrical", "lighting", "wiring"]);

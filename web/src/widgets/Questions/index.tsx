@@ -68,7 +68,8 @@ export function Questions({ project: p, busy, onAnswer, onReview, stages, onShow
   const [expanded, setExpanded] = useState<string | null>(
     memory.current.expanded !== undefined ? memory.current.expanded : can ? firstOpen ?? null : null);
   const [drafts, setDrafts] = useState<Record<string, string>>(memory.current.drafts);
-  memory.current = { drafts, expanded };
+  const [closedShown, setClosedShown] = useState(memory.current.closedShown === true);  // closed ones fold away
+  memory.current = { drafts, expanded, closedShown };
   const [failures, setFailures] = useState<Record<string, Failure>>({});
   const [editing, setEditing] = useState<string | null>(null);
   const [asking, setAsking] = useState<string | null>(null);
@@ -169,7 +170,19 @@ export function Questions({ project: p, busy, onAnswer, onReview, stages, onShow
 
   const group = (g: Group, title: string) => {
     const rows = ids.filter((id) => order.current.get(id) === g).flatMap((id) => byId.get(id) ?? []);
-    return rows.length > 0 && <><div className={css.group}>{title}</div>{rows.map(card)}</>;
+    if (!rows.length) return false;
+    if (g !== "closed") return <><div className={css.group}>{title}</div>{rows.map(card)}</>;
+    // Closed questions are folded: they open on a click, or when one of them is opened from a link
+    const shown = closedShown || rows.some((q) => q.id === expanded);
+    return (
+      <>
+        <button className={cx(css.group, css.fold)} aria-expanded={shown} onClick={() => setClosedShown(!shown)}>
+          <span>{`${title} · ${rows.length}`}</span>
+          <span className={css.chevron} aria-hidden="true">{shown ? "▴" : "▾"}</span>
+        </button>
+        {shown && rows.map(card)}
+      </>
+    );
   };
 
   return (

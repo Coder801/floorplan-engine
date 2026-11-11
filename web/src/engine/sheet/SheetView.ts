@@ -7,7 +7,7 @@
 import { WiringEdit, type Hit } from "@/engine/edit/WiringEdit";
 import {
   CABLE_MIN_PX, DIM_ALPHA, EDIT_HIT_PX, EDIT_MOVE_PX, FOCUS_MS, NEIGHBOR_ALPHA,
-  FIT_SHRINK, REDUCED_MOTION, TIP_GAP, VIEW_PAD,
+  FIT_SHRINK, REDUCED_MOTION, SCREEN_BOLD, STACK_MS, SYMBOL_GROW, TIP_GAP, VIEW_PAD,
 } from "@/shared/consts";
 import { expand, filteredKeys, PageIndex } from "@/shared/page";
 import { palette, refreshPalette, screenColor } from "@/shared/palette";
@@ -15,10 +15,11 @@ import { view } from "@/shared/store";
 import type { Page } from "@/shared/types";
 import { clampStep, Glide, LAST_STEP, PinchSteps, RAIL_PX, stepBelow, WheelSteps, ZOOM_STEPS, zoomLabel, type Zoom } from "@/shared/zoom";
 import { layerShown, objectLayers, sceneOf, type Drawing, type DrawingItem } from "./drawing";
-import { followsObject, objectVisible, ownLayers, repeatsNumbers, scoped, wiringChains } from "./views";
+import { followsObject, linkEnds, objectVisible, ownLayers, repeatsNumbers, scoped, wiringChains } from "./views";
 import { FLOOR_ALPHA, FLOOR_FADE_MS, floorPath, stepFades } from "./floors";
 import { inBox, paint, type DrawItem } from "./paint";
 import { Pinch } from "./pinch";
+import { grownBox, isSymbol, openStacks, socketStacks, symbolCenters, type Stack } from "./stacks";
 
 const TIP_WIDTH = 320;  // pinned hint (max-width in CSS): room on the right when they overlap
 
@@ -30,6 +31,15 @@ function pathOf(it: DrawingItem): Path2D {
   out.addPath(p, new DOMMatrix([f, 0, 0, f, dx, dy]));
   return out;
 }
+
+// A path moved by (dx, dy) and grown f times about (cx, cy)
+function movedPath(p: Path2D, f: number, cx: number, cy: number, dx = 0, dy = 0): Path2D {
+  const out = new Path2D();
+  out.addPath(p, new DOMMatrix([f, 0, 0, f, cx * (1 - f) + dx, cy * (1 - f) + dy]));
+  return out;
+}
+
+const easeOut = (t: number) => 1 - (1 - t) ** 3;
 
 interface Drag {
   edit?: boolean;
@@ -65,10 +75,24 @@ export class SheetView {
   private readonly lines: Record<string, string[]>;
   private fitted = true;  // the view is "whole drawing": refit on resize, otherwise keep it
   private readonly cleanup: (() => void)[] = [];
+  // Socket stacks (stacks.ts): all of the drawing, those of this view, a hidden socket → its
+  // stack, the open share of each stack, its frame and the last step time, the one the pointer holds
+  private readonly allStacks: Stack[];
+  private stacks: Stack[] = [];
+  private stackOf = new Map<string, Stack>();
+  private opens = new Map<string, number>(); private openFrame = 0; private openAt = 0;
+  private held: string | null = null;
 
   constructor(private readonly canvas: HTMLCanvasElement, private readonly wrap: HTMLElement,
               readonly drawing: Drawing, page: Page, index: PageIndex) {
-    this.items = drawing.items.map((i) => ({ ...i, w: i.w && i.w * i.shift.f, path: pathOf(i) }));
+    // Point and box symbols are larger on screen, each about its own centre
+    const raw = drawing.items.map((i) => ({ ...i, w: i.w && i.w * i.shift.f, path: pathOf(i) }));
+    const centers = symbolCenters(raw);
+    this.items = raw.map((it) => {
+      const c = isSymbol(it) ? centers.get(it.o!) : undefined;
+      return c ? { ...it, path: movedPath(it.path, SYMBOL_GROW, c[0], c[1]), box: grownBox(it.box, c, SYMBOL_GROW) } : it;
+    });
+    this.allStacks = socketStacks(this.items);
     this.has3d = !!sceneOf(drawing);
     this.layerOf = objectLayers(drawing);
     this.lines = wiringChains(drawing);
@@ -83,7 +107,7 @@ export class SheetView {
     let seen: unknown[] = [];
     this.cleanup.push(view.subscribe(() => {
       const s = view.get();
-      const now = [s.hover, s.lit, s.selected, s.neighbors, s.hidden, s.extra, s.editMode, s.show3d, s.themeTick, s.filter3d, s.electricalView, s.cables];
+      const now = [s.hover, s.lit, s.selected, s.neighbors, s.hidden, s.extra, s.editMode, s.show3d, s.themeTick, s.filter3d, s.electricalView, s.systemsOff, s.cables];
       if (now.some((v, i) => v !== seen[i])) { seen = now; this.applyView(); this.draw(); }
     }));
     this.bind();
@@ -103,7 +127,44 @@ export class SheetView {
 
   // Layers of this tab in the chosen view (views.ts)
   private applyView() {
-    this.own = ownLayers(this.drawing, this.page, view.get().electricalView, view.get().cables) ?? new Set(this.items.map((i) => i.l));
+    const st = view.get();
+    this.own = ownLayers(this.drawing, this.page, st.electricalView, st.cables, st.systemsOff) ?? new Set(this.items.map((i) => i.l));
+    // Sockets close into stacks on the electrical views; the wiring sheet keeps every socket, a line runs to each
+    this.stacks = this.page.stage === "electrical" && this.shown("E-SOCKET") ? this.allStacks : [];
+    this.stackOf = new Map(this.stacks.flatMap((s) => s.rest.map((k) => [k, s] as const)));
+    if (this.held && !this.stacks.some((s) => s.key === this.held)) this.held = null;
+  }
+
+  // Stacks open: towards the wanted ones, smoothly; while one moves, the next frame is requested
+  private stepStacks() {
+    const s = view.get(), now = performance.now();
+    const want = openStacks(this.stacks, this.held, [s.hover, s.pinned, s.selected, s.lit]);
+    const dt = this.openAt ? now - this.openAt : 0;
+    const moving = stepFades(this.opens, want, dt, REDUCED_MOTION ? 0 : STACK_MS);
+    this.openAt = moving ? now : 0;
+    if (moving && !this.openFrame) {
+      this.openFrame = requestAnimationFrame(() => { this.openFrame = 0; this.draw(); });
+    }
+  }
+
+  // Closed stacks: a count on the socket at the wall, fading as the stack opens
+  private paintCounts(ctx: CanvasRenderingContext2D) {
+    const r = 7 / this.scale;
+    ctx.save();
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.font = `600 ${10 / this.scale}px system-ui, sans-serif`;
+    const off = this.filtered();
+    for (const st of this.stacks) {
+      const share = this.opens.get(st.key) ?? 0;
+      if (share >= 1 || off.has(st.anchor)) continue;
+      const [x, y] = st.count;
+      ctx.globalAlpha = 1 - share;
+      ctx.fillStyle = palette.pin;
+      ctx.beginPath(); ctx.arc(x, y, r, 0, 2 * Math.PI); ctx.fill();
+      ctx.fillStyle = palette.paper;
+      ctx.fillText(String(st.rest.length + 1), x, y + 0.5 / this.scale);
+    }
+    ctx.restore();
   }
 
   // A label or a box on the electrics views: only with its object
@@ -124,6 +185,7 @@ export class SheetView {
   destroy() {
     for (const f of this.cleanup) f();
     cancelAnimationFrame(this.frame); cancelAnimationFrame(this.flowFrame); cancelAnimationFrame(this.fadeFrame);
+    cancelAnimationFrame(this.openFrame);
   }
 
   editing() {
@@ -177,7 +239,7 @@ export class SheetView {
     if (!lit) return false;
     // A question about a room (room:hall) also lights the zones of it on the plan
     const room = o.startsWith("zone:") ? `room:${o.slice(5, o.lastIndexOf("."))}` : null;
-    return expand(o).some((k) => lit.has(k)) || (!!room && lit.has(room));
+    return (linkEnds(o) ?? expand(o)).some((k) => lit.has(k)) || (!!room && lit.has(room));
   }
 
   // Floors filled now: the room or zone under the cursor and the lit ones (table row, question)
@@ -205,15 +267,32 @@ export class SheetView {
     }
   }
 
-  // How to draw a primitive: colour, opacity, how much thicker
-  private look(it: DrawItem): [string, number, number] {
+  // How to draw a primitive: colour, opacity, how much thicker; a socket of a stack slides out
+  // from the socket at the wall and shows as the stack opens
+  private look(it: DrawItem): [string, number, number, Path2D?] {
+    const st = it.o ? this.stackOf.get(it.o) : undefined;
+    if (!st) return this.lookOf(it);
+    const share = this.opens.get(st.key) ?? 0;
+    if (!share) return ["", 0, 1];
+    const [c, alpha, k] = this.lookOf(it);
+    if (share >= 1) return [c, alpha, k];
+    const [dx, dy] = st.shift[it.o!], back = 1 - easeOut(share);
+    return [c, alpha * share, k, movedPath(it.path, 1, 0, 0, dx * back, dy * back)];
+  }
+
+  private lookOf(it: DrawItem): [string, number, number] {
     const o = it.o;
     // A floor under the cursor is shown by its fill: its outline (along the walls) and label stay
     const floorHover = !!o && o === view.get().hover && o in this.index.floors;
     if (!floorHover && this.isLit(o)) return [palette.hl, 1, 2];
     const c = screenColor(it.c);
     const { selected, neighbors } = view.get();
-    if (!selected || !this.index.interactive(o)) return [c, 1, 1];
+    if (!selected) return [c, 1, 1];
+    // A light link is in its switch bundle (chains of the lighting sheet); a build without
+    // them lights it by its points. The rest are dimmed with the drawing
+    const ends = linkEnds(o);
+    if (ends) return selected.has(o!) || ends.some((e) => selected.has(e)) ? [c, 1, 1.8] : [c, DIM_ALPHA, 1];
+    if (!this.index.interactive(o)) return [c, 1, 1];
     if (selected.has(o)) return [c, 1, 1.8];
     return neighbors && neighbors.has(o) ? [c, NEIGHBOR_ALPHA, 1] : [c, DIM_ALPHA, 1];
   }
@@ -294,7 +373,9 @@ export class SheetView {
     const skip = this.ed && this.editing() ? this.ed.hiddenKeys() : this.filtered();
     const items = this.items.filter((it) => this.inView(it) && (!it.o || !skip.has(it.o)));
     this.paintFloors(ctx);
-    paint(ctx, items, k, (it) => this.look(it), this.shown, CABLE_MIN_PX * this.dpr);
+    this.stepStacks();
+    paint(ctx, items, k, (it) => this.look(it), this.shown, CABLE_MIN_PX * this.dpr, SCREEN_BOLD);
+    this.paintCounts(ctx);
     if (this.ed) this.ed.paint(ctx, k, performance.now(), this.dpr);
     ctx.restore();
     // Running dashes: request the next frame while there are lines being edited
@@ -415,7 +496,7 @@ export class SheetView {
       }
     });
     this.on("pointercancel", (ev) => { this.pinch.up(ev); this.stop(); });
-    this.on("pointerleave", () => this.setHover(null));
+    this.on("pointerleave", () => { this.hold(null, null); this.setHover(null); });
     // Double click zooms one step in at the click point; at the last step, the whole drawing
     this.on("dblclick", (ev) => this.zoomIn(this.toSheet(ev)));
   }
@@ -448,6 +529,7 @@ export class SheetView {
     const off = this.editing() ? null : this.filtered();
     for (const it of this.items) {
       if (it.o && off?.has(it.o)) continue;
+      if (it.o && this.stackOf.has(it.o) && (this.opens.get(this.stackOf.get(it.o)!.key) ?? 0) < 0.5) continue;
       if (!this.shown(it.l) || !this.inView(it) || !this.index.interactive(it.o) || !inBox(it.box, mx, my, tol)) continue;
       const area = (it.box[2] - it.box[0] + tol) * (it.box[3] - it.box[1] + tol);
       if (best && area >= best.area) continue;
@@ -468,10 +550,22 @@ export class SheetView {
 
   private pick(ev: MouseEvent) {
     const o = this.objectAt(ev);
+    this.hold(o, ev);
     this.setHover(o);
     if (!o || view.get().pinned) return;  // a pinned hint stays in place
     const { x, y } = this.toSheet(ev);
     view.set({ tip: { key: o, x, y } });
+  }
+
+  // The pointer keeps a stack open while it is on its sockets or in the gaps between them
+  private hold(o: string | null, ev: MouseEvent | null) {
+    let held: string | null = null;
+    if (o) held = this.stacks.find((s) => s.key === o || s.anchor === o || s.rest.includes(o))?.key ?? null;
+    if (!held && this.held && ev) {
+      const st = this.stacks.find((s) => s.key === this.held), { mx, my } = this.toSheet(ev);
+      if (st && inBox(st.box, mx, my, 4 / this.scale)) held = st.key;
+    }
+    if (held !== this.held) { this.held = held; this.draw(); }
   }
 
   private setHover(o: string | null) {

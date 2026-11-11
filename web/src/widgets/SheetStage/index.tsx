@@ -6,13 +6,15 @@ import {
 } from "react";
 import { useTranslation } from "react-i18next";
 import { objectLayers, sceneOf, type Drawing } from "@/engine/sheet/drawing";
-import { ownLayers, viewOfLayer, wiringChains } from "@/engine/sheet/views";
+import { legendShown, wiringLegend } from "@/engine/sheet/legend";
+import { ownLayers, systemOf, viewOfLayer, wiringChains } from "@/engine/sheet/views";
+import { lightLinks } from "@/engine/three/lightLinks";
 import { SheetView } from "@/engine/sheet/SheetView";
 import { saveWiring } from "@/shared/api";
 import { WALL_MODES } from "@/shared/consts";
 import { cx } from "@/shared/cx";
 import { PageIndex } from "@/shared/page";
-import { useView, view } from "@/shared/store";
+import { SYSTEMS, useView, view, type System } from "@/shared/store";
 import ui from "@/shared/styles/ui.module.scss";
 import type { Page } from "@/shared/types";
 import type { Zoom } from "@/shared/zoom";
@@ -27,6 +29,13 @@ import { Tip } from "@/widgets/Tip";
 // 3D (three.js) is a separate file, loaded the first time it is turned on
 const Scene3D = lazy(() => import("@/widgets/Scene3D").then((m) => ({ default: m.Scene3D })));
 
+// The lighting view: its lines (the electrical sheet) or its links (the lighting sheet)
+export const LIGHT_MODES = ["wiring", "links"] as const;
+export type LightMode = (typeof LIGHT_MODES)[number];
+
+// The label of a system is the label of its view
+const SYSTEM_VIEW = { light: "lighting", sockets: "electrical", low: "low" } as const satisfies Record<System, string>;
+
 export interface StageHandle {
   pending(): number;              // unsaved route edits
 }
@@ -36,17 +45,18 @@ interface Props {
   drawing: Drawing;
   project: string;
   language?: string;             // project language (manifest), for the legend title
-  onStage?: (stage: string) => void;  // open the sheet of a topic: the object is on another view
   editable?: boolean;            // routes may be edited (no for a studio client: no button)
   download?: ReactNode;          // the Download menu, last in the first options row
   onWall?: (key: string) => void;  // open the elevation of a wall
   onSaved: (notes: string[]) => void;
   onBusy?: (busy: boolean) => void;  // saving and rebuilding in progress: the page blocks the interface
   onBanner: (text: string) => void;
+  // The lighting view: "Wiring | Links" over the drawing; null when it is not the lighting view
+  lightMode?: { mode: LightMode; onMode: (mode: LightMode) => void } | null;
 }
 
 
-export const SheetStage = forwardRef<StageHandle, Props>(function SheetStage({ page, drawing, project, language, editable = true, download, onWall, onSaved, onBusy, onBanner, onStage }, ref) {
+export const SheetStage = forwardRef<StageHandle, Props>(function SheetStage({ page, drawing, project, language, editable = true, download, onWall, onSaved, onBusy, onBanner, lightMode }, ref) {
   const { t } = useTranslation();
   const wrap = useRef<HTMLElement | null>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -67,7 +77,21 @@ export const SheetStage = forwardRef<StageHandle, Props>(function SheetStage({ p
   const layerOf = useMemo(() => objectLayers(drawing), [drawing]);
   const electricalView = useView((s) => s.electricalView);
   const cables = useView((s) => s.cables);
-  const own = useMemo(() => ownLayers(drawing, page, electricalView, cables), [drawing, page, electricalView, cables]);
+  const systemsOff = useView((s) => s.systemsOff);
+  const own = useMemo(() => ownLayers(drawing, page, electricalView, cables, systemsOff),
+    [drawing, page, electricalView, cables, systemsOff]);
+  const links = useMemo(() => (scene3d ? lightLinks(drawing.pages.find((p) => p.stage === "lighting"), scene3d) : []),
+    [drawing, scene3d]);
+  // The wiring view shows everything, so its legend is full: points, boxes and lines (legend.ts)
+  const legend = useMemo(() => (page.stage === "wiring"
+    ? wiringLegend(drawing, page, { box: t("legend.box", { lng: language }), low: t("legend.low", { lng: language }) })
+    : page.legend ?? []), [drawing, page, t, language]);
+  // Systems of the wiring sheet, each a chip over the drawing (one system has nothing to switch)
+  const systems = useMemo(() => {
+    const layers = page.stage === "wiring" ? [...(drawing.own.get(page) ?? [])] : [];
+    const has = SYSTEMS.filter((sys) => layers.some((l) => systemOf(l) === sys));
+    return has.length > 1 ? has : [];
+  }, [drawing, page]);
   const in3d = show3d && !!scene3d;
 
   // The canvas is per drawing; a tab of the same drawing only calls setPage (below)
@@ -96,14 +120,10 @@ export const SheetStage = forwardRef<StageHandle, Props>(function SheetStage({ p
   const goto = useView((s) => s.goto);
   useEffect(() => {
     if (!goto || page.stage !== goto.stage || !sheet.current) return;
-    if (page.stage === "electrical") {  // light is not on the electrical sheet any more
-      const target = viewOfLayer(layerOf.get(goto.key));
-      if (target === "lighting") { view.set({ goto: { ...goto, stage: target } }); onStage?.(target); return; }
-      view.set({ electricalView: target });
-    }
+    if (page.stage === "electrical") view.set({ electricalView: viewOfLayer(layerOf.get(goto.key)) });
     view.set({ goto: null });
     sheet.current.reveal(goto.key, goto.around);
-  }, [drawing, page, goto, layerOf, onStage]);
+  }, [drawing, page, goto, layerOf]);
 
   useImperativeHandle(ref, () => ({
     pending: () => (sheet.current && !sheet.current.saved && sheet.current.ed ? sheet.current.ed.pending() : 0),
@@ -111,9 +131,15 @@ export const SheetStage = forwardRef<StageHandle, Props>(function SheetStage({ p
 
   const sv = sheet.current, ed = sv?.ed ?? null;
 
+  // Route editing works on every line: the systems switched off come back
   const toggleEdit = () => {
-    view.set({ editMode: !editMode });
+    view.set({ editMode: !editMode, ...(editMode ? {} : { systemsOff: new Set<System>() }) });
     sheet.current?.editModeChanged();
+  };
+  const toggleSystem = (sys: System) => {
+    const off = new Set(systemsOff);
+    if (off.has(sys)) off.delete(sys); else off.add(sys);
+    view.set({ systemsOff: off, selected: null, neighbors: null, pinned: null, tip: null });
   };
   const toggle3d = () => {
     ed?.clearSelection();
@@ -156,17 +182,34 @@ export const SheetStage = forwardRef<StageHandle, Props>(function SheetStage({ p
       <canvas ref={canvas} tabIndex={0} aria-label={t("sheet.canvas")} />
       {in3d && (
         <Suspense fallback={<div className={cx(ui.three, ui.empty)}>{t("sheet.loading3d")}</div>}>
-          <Scene3D scene={scene3d!} index={index} own={own} layerOf={layerOf} apiRef={scene} onZoom={setZoom3d} onHome={setHome} />
+          <Scene3D scene={scene3d!} index={index} own={own} layerOf={layerOf} links={links} apiRef={scene} onZoom={setZoom3d} onHome={setHome} />
         </Suspense>
       )}
       <Tip index={index} onWall={onWall} />
-      {!in3d && page.legend && (
-        <Legend entries={page.legend.filter((e) => !own || e.items.some((i) => own.has(i.l)))} language={language} />
+      {!in3d && legend.length > 0 && (
+        <Legend entries={legend.filter((e) => !own || legendShown(e, own))} language={language} />
       )}
       <ZoomRail zoom={in3d ? zoom3d : zoom} onFit={fit} fitLabel={t("sheet.fit")}
                 onStep={(s) => (in3d ? scene.current?.zoomTo(s) : sv?.zoomTo(s))} />
       <div className={ui.options}>
         <div className={ui.optionsRow}>
+          {lightMode && (
+            <div className={ui.group} role="radiogroup" aria-label={t("sheet.lightMode")}>
+              {LIGHT_MODES.map((m) => (
+                <button key={m} role="radio" aria-checked={lightMode.mode === m} aria-pressed={lightMode.mode === m}
+                        title={t(`sheet.lightModes.${m}Title`)}
+                        onClick={() => lightMode.mode !== m && lightMode.onMode(m)}>{t(`sheet.lightModes.${m}`)}</button>
+              ))}
+            </div>
+          )}
+          {systems.length > 0 && !(editMode && ed) && (
+            <div className={ui.group} role="group" aria-label={t("sheet.systems")}>
+              {systems.map((sys) => (
+                <button key={sys} aria-pressed={!systemsOff.has(sys)} title={t("sheet.systemsTitle")}
+                        onClick={() => toggleSystem(sys)}>{t(`views.${SYSTEM_VIEW[sys]}`)}</button>
+              ))}
+            </div>
+          )}
           {ed && !in3d && editable && (
             <div className={ui.group}>
               <button aria-pressed={editMode} title={t("sheet.editTitle")} onClick={toggleEdit}>{t("sheet.edit")}</button>

@@ -138,7 +138,54 @@ function Plaster({ wall, outline, children }: { wall: string; outline: string; c
   );
 }
 
+// A LED strip under a cabinet on the right: the light it gives below
+const STRIP = (
+  <>
+    <path d="M96 38H148V44H96" />
+    <path strokeDasharray="2 3" d="M98 47H146" />
+    <path className={css.faint} d="M104 52l-4 10M122 52v10M140 52l4 10" />
+  </>
+);
+
 export const ART: Record<string, ReactNode> = {
+  // LED supply: at the strip, 230 V from the room box on the ceiling; or in the panel, 12 V from it
+  // Light: a box on the ceiling with a cable to the switch and to each light; or a chain from the
+  // switch from light to light, with a loop at each
+  "lights-boxes": (
+    <>
+      <path d="M16 12H148" />
+      <rect x="64" y="12" width="16" height="10" rx="1" />
+      <rect x="20" y="52" width="10" height="14" rx="1" />
+      <circle cx="40" cy="12" r="4" /><circle cx="104" cy="12" r="4" /><circle cx="136" cy="12" r="4" />
+      <path className={css.hot} d="M25 52V28H64M64 17H40M80 17H136" />
+    </>
+  ),
+  "lights-chain": (
+    <>
+      <path d="M16 12H148" />
+      <rect x="20" y="52" width="10" height="14" rx="1" />
+      <circle cx="56" cy="12" r="4" /><circle cx="96" cy="12" r="4" /><circle cx="136" cy="12" r="4" />
+      <path className={css.hot} d="M25 52V20H50q6 14 12 0H90q6 14 12 0H130q6 14 12 0" />
+    </>
+  ),
+  "led-room": (
+    <>
+      <path d="M16 12H148" />
+      <rect x="36" y="12" width="16" height="10" rx="1" />
+      <path className={css.hot} d="M52 17H86V40" />
+      <rect x="78" y="40" width="16" height="10" rx="1" />
+      <path d="M94 45H96" />
+      {STRIP}
+    </>
+  ),
+  "led-board": (
+    <>
+      <rect x="12" y="24" width="20" height="40" rx="1" />
+      <rect className={css.hot} x="16" y="46" width="12" height="12" rx="1" />
+      <path className={css.hot} d="M28 52H40V16H86V45H96" />
+      {STRIP}
+    </>
+  ),
   "path-shortest": <>{PLAN}<path className={css.hot} d="M28 66L130 21M28 71L138 66" /></>,
   "path-right": <>{PLAN}<path className={css.hot} d="M20 62V18H130M110 18V66H138" /></>,
   "distribution-boxes": (
@@ -152,6 +199,25 @@ export const ART: Record<string, ReactNode> = {
   "conduit-none": <>{ROOM}<path className={css.hot} d="M29 36V18H117V52" /></>,
   "conduit-ceiling": <>{ROOM}<path className={css.tube} d="M29 18H117" /><path className={css.hot} d="M29 36V18H117V52" /></>,
   "conduit-walls": <>{ROOM}<path className={css.tube} d="M29 36V18H117V52" /><path className={css.hot} d="M29 36V18H117V52" /></>,
+  // Chain drop in conduit: the cable in and the cable out of a socket each in its own conduit, or
+  // both in one wider conduit
+  "loopConduit-separate": (
+    <>
+      <path d="M16 12H148" />
+      <rect x="40" y="56" width="20" height="14" rx="1" /><rect x="100" y="56" width="20" height="14" rx="1" />
+      <path className={css.tube} d="M16 20H44V56M56 56V20H110V56" />
+      <path className={css.hot} d="M16 20H44V56M56 56V20H110V56" />
+    </>
+  ),
+  "loopConduit-shared": (
+    <>
+      <path d="M16 12H148" />
+      <rect x="40" y="56" width="20" height="14" rx="1" /><rect x="100" y="56" width="20" height="14" rx="1" />
+      <path className={css.tube} d="M16 20H44M56 20H110V56" />
+      <path className={`${css.tube} ${css.wide}`} d="M50 20V56" />
+      <path className={css.hot} d="M16 20H47V56M53 56V20H110V56" />
+    </>
+  ),
   "plaster-after": <Plaster wall="M38 70H14V8H122V20" outline="M38 20H84V62H100V20H146V82H38Z"><path d="M84 8V20M100 8V20" /></Plaster>,
   "plaster-before": <Plaster wall="M104 70H14V8H122V20" outline="M146 20H106q6 7.75 0 15.5t0 15.5 0 15.5 0 15.5H146Z" />,
   "rough-no": <><path d="M16 12H148" /><path className={css.hot} d="M80 12V36" /><path d="M72 36H88" /></>,

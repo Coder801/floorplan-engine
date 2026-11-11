@@ -75,6 +75,14 @@
 .check { width: 14px; height: 14px; }
 .dash { display: block; width: 8px; height: 2px; border-radius: 1px; background: var(--major); }
 .note { margin: 0; }
+// The way into the wizard is the main action of the side panel: white, the full width, a frame
+// in the text colour so it stands out from the ordinary buttons
+.wizardOpen {
+  width: 100%; min-height: 40px; margin-top: 4px;
+  background: var(--raise); color: var(--text); border: 1px solid var(--text);
+  font-weight: 600; box-shadow: 0 1px 2px rgba(0, 0, 0, .12);
+  &:hover { background: var(--soft); }
+}
 .stepLink {
   @include bare-button;
   min-height: 0; padding: 0; border-radius: 0; line-height: inherit;

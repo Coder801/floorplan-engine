@@ -103,4 +103,4 @@ export function shownOn(q: Question, stages: string[]): { stage: string; key: st
 }
 
 // What survives closing the panel: typed answers and the open question
-export interface QuestionsMemory { drafts: Record<string, string>; expanded?: string | null }
+export interface QuestionsMemory { drafts: Record<string, string>; expanded?: string | null; closedShown?: boolean }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { filteredKeys, inRings, PageIndex, rowSelection } from "./page";
+import { briefCard, filteredKeys, inRings, PageIndex, rowPicked, rowSelection } from "./page";
 import type { Page, XY } from "./types";
 
 const square = (a: number, b: number): XY[] => [[a, a], [b, a], [b, b], [a, b], [a, a]];
@@ -13,6 +13,13 @@ describe("выделение строкой таблицы", () => {
     const picked = rowSelection(null, ["point:a"], chains);
     expect(rowSelection(picked, ["point:a"], chains)).toBeNull();
     expect(rowSelection(picked, ["point:c"], chains)).toEqual(new Set(["point:c"]));
+  });
+  it("трасса на листе подсвечивает строку своей группы, чужие — нет", () => {
+    const route = new Set(["wire:w1", "box:b", "point:a"]);
+    expect(rowPicked(route, ["point:a", "point:x", "wire:w1", "wire:w9"])).toBe(true);
+    expect(rowPicked(route, ["point:y", "wire:w2"])).toBe(false);
+    expect(rowPicked(null, ["point:a"])).toBe(false);
+    expect(rowPicked(route, undefined)).toBe(false);
   });
 });
 
@@ -64,5 +71,20 @@ describe("what is selected on a sheet", () => {
   it("keeps the building selectable on other sheets", () => {
     expect(onStage("plumbing").interactive("wall:a.w1")).toBe(true);
     expect(onStage("plan").interactive("dimension:a.w1")).toBe(true);
+  });
+});
+
+describe("card of the simple mode", () => {
+  const rows: [string, string][] = [["Автомат (группа)", "QF1"], ["Кабель", "3x1.5"]];
+  it("a line shows its short card", () => {
+    const brief = { title: "ЩР → К1", rows: [["Трасса", "по потолку"]] as [string, string][] };
+    expect(briefCard("wire:w1", { title: "QF1: ЩР → К1", rows, brief })).toBe(brief);
+  });
+  it("a line of an old build: the title only", () => {
+    expect(briefCard("box:b1", { title: "Коробка К1", rows })).toEqual({ title: "Коробка К1", rows: [] });
+  });
+  it("other objects keep their card", () => {
+    const card = { title: "Розетка", rows };
+    expect(briefCard("point:s1", card)).toBe(card);
   });
 });

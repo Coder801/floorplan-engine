@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { sheetTabs, tabOf } from "./tabs";
+import { sheetTabs, shownView, tabOf, tabViews, viewSheet } from "./tabs";
 import type { ManifestPage } from "./types";
 
 const page = (index: number, name: string, stage?: string): ManifestPage =>
@@ -55,5 +55,33 @@ describe("sheetTabs", () => {
 
   it("листы без темы не склеиваются", () => {
     expect(sheetTabs([page(1, "01"), page(2, "02")]).length).toBe(2);
+  });
+});
+
+describe("views of the Electrical tab", () => {
+  const stages: Record<number, string> = { 2: "electrical", 3: "lighting", 4: "wiring" };
+  const stageOf = (i: number) => stages[i];
+  const [tab] = sheetTabs([page(2, "02 Электрика", "electrical"), page(3, "03 Освещение", "lighting"), page(4, "04 Проводка", "wiring")]);
+
+  it("goes by system: lighting, sockets, low voltage, wiring", () => {
+    expect(tabViews(tab, stageOf, true, false)).toEqual([
+      { key: "lighting", index: 2 }, { key: "electrical", index: 2 }, { key: "low", index: 2 }, { key: "wiring", index: 4 },
+    ]);
+    expect(tabViews(tab, stageOf, false, false).map((v) => v.key)).toEqual(["lighting", "electrical", "wiring"]);
+  });
+
+  it("lighting is its lines on the electrical sheet or its links on the lighting sheet", () => {
+    expect(viewSheet(tab, stageOf, "lighting", false)).toBe(2);
+    expect(viewSheet(tab, stageOf, "lighting", true)).toBe(3);
+    const [onlyLinks] = sheetTabs([page(3, "03 Освещение", "lighting"), page(4, "04 Проводка", "wiring")]);
+    expect(viewSheet(onlyLinks, stageOf, "lighting", false)).toBe(3);  // no electrical sheet: the links
+  });
+
+  it("names the view shown by the sheet and what the electrical sheet shows", () => {
+    expect(shownView("electrical", "light")).toBe("lighting");
+    expect(shownView("electrical", "low")).toBe("low");
+    expect(shownView("electrical", "sockets")).toBe("electrical");
+    expect(shownView("lighting", "sockets")).toBe("lighting");
+    expect(shownView("wiring", "light")).toBe("wiring");
   });
 });

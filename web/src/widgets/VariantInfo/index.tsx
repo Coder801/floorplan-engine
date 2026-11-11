@@ -5,7 +5,7 @@
 
 import { useTranslation } from "react-i18next";
 import type { Variants } from "@/shared/types";
-import { activeSummary, breakersOf, optionsOf, parseKey } from "./variants";
+import { activeSummary, breakersOf, hasLoopDrops, optionsOf, parseKey } from "./variants";
 import css from "./VariantInfo.module.scss";
 
 interface Props {
@@ -18,12 +18,16 @@ export function VariantInfo({ variants, canChoose, onEdit }: Props) {
   const { t } = useTranslation();
   const { mode, route } = parseKey(variants.active);
   const current = activeSummary(variants);
-  const { path, conduit, plaster, rough_light } = optionsOf(current, mode);
+  const { path, conduit, light_wiring, led_supply, plaster, rough_light, loop_conduit } = optionsOf(current, mode);
+  const loopDrops = hasLoopDrops({ distribution: current?.distribution ?? "boxes", route, conduit, mode });
   const rows: [string, string][] = [
     [t("wizard.steps.route.short"), t(`variant.routes.${route}`)],
     [t("wizard.steps.distribution.short"), t(`wizard.steps.distribution.options.${current?.distribution ?? "boxes"}.name`)],
+    [t("wizard.steps.lights.short"), t(`wizard.steps.lights.options.${light_wiring}.name`)],
     [t("wizard.steps.path.short"), t(`wizard.steps.path.options.${path}.name`)],
     [t("wizard.steps.conduit.short"), t(`wizard.steps.conduit.options.${conduit}.name`) + (variants.conduit === null ? ` · ${t("variant.typical")}` : "")],
+    ...(loopDrops ? [[t("wizard.steps.loopConduit.short"), t(`wizard.steps.loopConduit.options.${loop_conduit}.name`)] as [string, string]] : []),
+    ...(variants.led ? [[t("wizard.steps.led.short"), t(`wizard.steps.led.options.${led_supply}.name`)] as [string, string]] : []),
     [t("wizard.steps.plaster.short"), t(`wizard.steps.plaster.options.${plaster}.name`)],
     [t("wizard.steps.rough.short"), t(`wizard.steps.rough.options.${rough_light ? "yes" : "no"}.name`)],
     [t("wizard.steps.breakers.short"), t(`wizard.steps.breakers.options.${breakersOf(mode)}.name`)],
