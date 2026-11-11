@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from floorplan_engine.service.facts.analysis import PageFacts, page_facts
-from floorplan_engine.service.facts.source import is_image, read_source
+from floorplan_engine.service.facts.source import CAD_PENDING, is_cad, is_image, read_source
 
 MIN_DIMS = 4
 MIN_CONFIDENCE = 0.8
@@ -69,9 +69,10 @@ def check_sources(source_dir: Path) -> Gate:
     if any(p.suffix.lower() in TEXT_TYPES for p in files):
         return Gate(True)
     drawings = [p for p in files if p.suffix.lower() == ".pdf" or is_image(p)]
+    cad = [f"{p.name} — {CAD_PENDING}" for p in files if is_cad(p)]
     if not drawings:
-        return Gate(False, ["нет ни чертежей (PDF, картинки), ни текстового описания"])
-    reasons = []
+        return Gate(False, cad or ["нет ни чертежей (PDF, картинки), ни текстового описания"])
+    reasons = cad
     for p in drawings:
         problem = file_problem(p)
         if problem is None:

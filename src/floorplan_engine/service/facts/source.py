@@ -18,6 +18,18 @@ from floorplan_engine.service.facts.vector import page_sheet
 
 MIN_VECTOR_CHARS = 20
 
+# CAD drawings: reading DWG and DXF is in development (decision 2026-11-11). Until then such a
+# file is named and the client is asked for a PDF of it; the drawing is not parsed
+CAD_TYPES = frozenset({".dwg", ".dxf"})
+CAD_PENDING = (
+    "чтение DWG и DXF в разработке, пока не разбирается: сохраните чертёж в PDF "
+    "(в AutoCAD — печать в PDF) и пришлите его"
+)
+
+
+def is_cad(path: Path) -> bool:
+    return path.suffix.lower() in CAD_TYPES
+
 
 def is_image(path: Path) -> bool:
     return path.suffix.lower() in IMAGE_TYPES

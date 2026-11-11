@@ -15,8 +15,9 @@ eye and no adjusting to fit.
   `source: photo`.
 - If the image is a hand drawing (a sketch, a plan on paper or drawn over a photo), do not parse it
   (rule 7 in `analyzer_prompt.md`): do not write `room.yaml`, only `intake.yaml` with the source marked
-  `note: "рисунок от руки — не разбирается"` and a critical question "please send a drawing (PDF,
-  DWG) or a measured plan". Tell the user.
+  `note: "рисунок от руки — не разбирается"` and a critical question "пришлите чертёж в PDF или
+  обмерный план (DWG — в разработке: пока сохраните его в PDF)". A DWG or DXF source is not read
+  yet (in development): list it and ask for a PDF of it (rule 7 in `analyzer_prompt.md`). Tell the user.
   Otherwise it is a text description: `source: text`. If the user says they measured it
   themselves: `source: measured`.
 - Project name: from the arguments if given; otherwise make up a short Latin name and state it.

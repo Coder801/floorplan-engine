@@ -157,7 +157,7 @@ def test_api_source_blocks(tmp_path: Path) -> None:
     # By name: photo.JPG, plan.dwg (explained in text), plan.pdf and its digest
     assert kinds == ["text", "image", "text", "text", "document", "text"]
     assert blocks[1]["source"]["media_type"] == "image/jpeg"
-    assert "plan.dwg не читается" in blocks[2]["text"]
+    assert "plan.dwg не читается: чтение DWG и DXF в разработке" in blocks[2]["text"]
     assert "Выжимка из source/plan.pdf" in blocks[5]["text"]
     assert "PDF не разобран" in blocks[5]["text"]  # not a real PDF in the test
 

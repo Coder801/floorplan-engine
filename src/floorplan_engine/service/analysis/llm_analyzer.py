@@ -48,6 +48,7 @@ from floorplan_engine.service.analysis.analyzer import (
     ManualAnalyzer,
 )
 from floorplan_engine.service.analysis.pdf_facts import describe
+from floorplan_engine.service.facts.source import CAD_PENDING, is_cad
 from floorplan_engine.validation.answers_file import dump_answers
 from floorplan_engine.validation.issues import ELECTRICAL_FILE, ROOM_FILE, Issue
 from floorplan_engine.validation.validate import validate_project
@@ -276,9 +277,8 @@ class ApiBackend:
             elif suffix in IMAGE_TYPES:
                 kind, media = "image", IMAGE_TYPES[suffix]
             else:
-                blocks.append(
-                    {"type": "text", "text": f"Файл {name} не читается (формат {suffix})."}
-                )
+                why = f"{CAD_PENDING} (правило 7)" if is_cad(path) else f"формат {suffix}"
+                blocks.append({"type": "text", "text": f"Файл {name} не читается: {why}."})
                 continue
             data = path.read_bytes()
             total += len(data)

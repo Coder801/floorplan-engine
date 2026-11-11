@@ -10,6 +10,7 @@ import pytest
 from floorplan_engine.service.facts.analysis import page_facts
 from floorplan_engine.service.facts.primitives import Label, Segment, Sheet
 from floorplan_engine.service.facts.raster import Word, _label, dedupe, merge, snap, tiles
+from floorplan_engine.service.facts.source import CAD_PENDING
 
 
 def test_tiles_cover_image_with_overlap() -> None:
@@ -98,3 +99,13 @@ def test_gate_text_source_always_passes(tmp_path: Path) -> None:
     assert not gate.ok and gate.reasons[0].startswith("plan.pdf")
     (src / "notes.md").write_text("Кухня 3×4 м", "utf-8")
     assert check_sources(src).ok
+
+
+def test_gate_cad_drawing_asks_for_a_pdf(tmp_path: Path) -> None:
+    from floorplan_engine.service.facts.gate import check_sources
+
+    (tmp_path / "plan.dwg").write_bytes(b"AC1032")
+    gate = check_sources(tmp_path)
+    assert not gate.ok
+    assert gate.reasons == [f"plan.dwg — {CAD_PENDING}"]
+    assert "в разработке" in gate.reasons[0] and "PDF" in gate.reasons[0]
