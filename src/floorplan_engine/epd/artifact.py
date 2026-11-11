@@ -336,6 +336,7 @@ def export_artifact(
     light_chains: dict[str, list[str]] | None = None,
     plan_areas: dict[str, list[list[tuple[float, float]]]] | None = None,
     plan_floors: dict[str, list[list[tuple[float, float]]]] | None = None,
+    work_plan: dict[str, Any] | None = None,
 ) -> Path:
     """Write the .epd: the manifest and one page per document sheet. objects are object cards for
     hints (objects.describe_objects): a page gets only its own objects and only those of the sheet
@@ -356,7 +357,8 @@ def export_artifact(
     where a click lands on a wall of the plan sheet (objects.plan_areas), mm of the model;
     plan_floors are the floors (a room or a zone) the viewer fills on hover on that sheet
     (objects.plan_floor_rings),
-    mm of the model."""
+    mm of the model; work_plan is the installation task draft from the estimates
+    (pipeline/work_plan.py), in the manifest."""
     pages = []
     path.parent.mkdir(parents=True, exist_ok=True)
     with _replacing(path) as zf:
@@ -425,6 +427,7 @@ def export_artifact(
             "pages": pages,
             **({"variants": variants} if variants else {}),
             **({"overview": overview} if overview else {}),
+            **({"work_plan": work_plan} if work_plan else {}),
         }
         _write(zf, MANIFEST, manifest)
     return path

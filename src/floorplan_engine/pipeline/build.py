@@ -17,6 +17,7 @@ from floorplan_engine.electrical.estimate import (
     ESTIMATE_CSV,
     ESTIMATE_MD,
     ESTIMATE_XLSX,
+    Estimate,
     PriceSource,
 )
 from floorplan_engine.electrical.panel import BoardPanel, build_panel, write_loads
@@ -72,6 +73,7 @@ from floorplan_engine.pipeline.files import (
 )
 from floorplan_engine.pipeline.prices import find_prices, sheet_inputs
 from floorplan_engine.pipeline.variants import variant_block
+from floorplan_engine.pipeline.work_plan import work_plan
 from floorplan_engine.plumbing.estimate import build_estimate as build_plumbing_estimate
 from floorplan_engine.plumbing.network import Network, build_network, routes_json
 from floorplan_engine.plumbing.rows import water_views
@@ -255,15 +257,17 @@ def _plumbing_step(run: _Build) -> Network | None:
     return net
 
 
-def _estimate_step(run: _Build, quantities: Wiring | None, panel: BoardPanel | None) -> None:
+def _estimate_step(
+    run: _Build, quantities: Wiring | None, panel: BoardPanel | None
+) -> Estimate | None:
     """Estimate files are the same as on the sheet, so the Excel in the viewer matches the sheets;
     if the price list has errors, no estimate is written (errors go to price_issues) and the old
-    one is removed."""
+    one is removed. The estimate itself, for the work plan draft."""
     if quantities is None or run.elec is None or run.result.price_issues:
         for name in (ESTIMATE_MD, ESTIMATE_CSV, ESTIMATE_XLSX, WORK_SCOPE_MD):
             (run.out / name).unlink(missing_ok=True)
-        return
-    _, run.result.estimate = write_estimate(
+        return None
+    est, run.result.estimate = write_estimate(
         run.project,
         run.assessment,
         quantities,
@@ -272,6 +276,7 @@ def _estimate_step(run: _Build, quantities: Wiring | None, panel: BoardPanel | N
         find_prices(run.project),
         panel,
     )
+    return est
 
 
 def _export(
@@ -303,7 +308,12 @@ def _export(
         if scene is not None:
             ceiling = wiring.ceiling_height if wiring is not None else plan.ceiling_height
             scene |= plumbing_scene(pipes[1], ceiling)
-    _estimate_step(run, quantities, panel)
+    estimate = _estimate_step(run, quantities, panel)
+    plumbing_estimate = (
+        build_plumbing_estimate(pipes[1], pipes[0], prices or Prices(), plan.language)
+        if pipes is not None
+        else None
+    )
     return export_artifact(
         saved,
         plan,
@@ -327,15 +337,14 @@ def _export(
             panel,
             plumbing,
             net,
-            build_plumbing_estimate(pipes[1], pipes[0], prices or Prices(), plan.language)
-            if pipes is not None
-            else None,
+            plumbing_estimate,
             run.report.source_electrical,
         ),
         plan_chains=plan_chains(plan, contours),
         light_chains=light_chains(elec) if elec is not None else None,
         plan_areas=plan_areas(plan, contours),
         plan_floors=plan_floor_rings(plan, contours),
+        work_plan=work_plan(estimate, plumbing_estimate, plan.language),
     )
 
 

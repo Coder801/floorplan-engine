@@ -1,0 +1,63 @@
+# Этапы монтажа электрики (docs/work-tasks.md, «Черновик из сметы»): каждая позиция сметы входит
+# ровно в один этап. Ключи — базовые ключи LINES (electrical/estimate.py, split_key): позиция с
+# параметром (`work.chase.brick`, `breaker.C16`, `cable.3x1.5`) идёт по ключу без параметра.
+# «prefix.*» — все ключи LINES с этим началом. Тест сверяет: все ключи разложены, лишних нет.
+#   key    — ключ этапа; у задачи — «electrical.<key>»;
+#   title  — название задачи на языке проекта;
+#   lines  — позиции сметы этапа: работы и материалы;
+#   photo  — фото при сдаче: required — без фото не сдать, optional — по желанию, none — не нужно;
+#   after  — этапы, после которых (мягкая зависимость); этапа нет в смете — берутся его after;
+#   result — критерий приёмки; пусто — поле result работ этапа из work_scope.yaml.
+# Порядок этапов — порядок работ; номер этапа — его место в этом списке.
+
+stages:
+  - key: chases
+    title: { ru: "Штробы, проходы, подрозетники", uk: "Штроби, проходи, підрозетники" }
+    lines: [work.chase, work.chase_wide, work.wall_hole, work.wall_hole_large, work.socket_box,
+            socket_box]
+    photo: optional
+
+  - key: cable
+    title: { ru: "Прокладка кабеля", uk: "Прокладання кабелю" }
+    lines: [work.cable, work.conduit, cable, conduit, conduit_joint, conduit_entry, conduit_clip,
+            cable_pad]
+    photo: required  # трассы до штукатурки: то, что потом в стене
+    after: [chases]
+
+  - key: boxes
+    title: { ru: "Распаечные коробки", uk: "Розподільчі коробки" }
+    lines: [work.junction_box, junction_box, junction_box_ip, crimp]
+    photo: optional
+    after: [cable]
+
+  - key: board
+    title: { ru: "Установка корпуса щита", uk: "Встановлення корпусу щита" }
+    lines: [work.board_install, board_enclosure, dc_enclosure]
+    photo: optional
+
+  - key: insulation
+    title: { ru: "Замер изоляции", uk: "Вимірювання ізоляції" }
+    lines: [work.insulation_test]
+    photo: required  # протокол замера: фото или PDF
+    after: [cable, boxes]
+
+  - key: rough_light
+    title: { ru: "Черновой свет", uk: "Чорнове світло" }
+    lines: [work.rough_light, work.rough_switch, rough_holder, rough_lamp, rough_switch]
+    photo: none
+    after: [cable]
+
+  - key: assembly
+    title: { ru: "Сборка щита", uk: "Збирання щита" }
+    lines: [work.board_module, breaker, diff, rcd, input, relay, spd, changeover, ats, contactor,
+            feed, output, dc_battery, dc_breaker, dc_spd]
+    photo: optional
+    after: [board, insulation]
+
+  - key: devices
+    title: { ru: "Механизмы и светильники", uk: "Механізми і світильники" }
+    lines: [work.mechanism, work.led_psu, work.led_psu_din, socket, switch1, switch2, pass_switch,
+            data, tv, frame, light, downlight, pendant, sconce, led_output, outlet, led_strip,
+            led_psu, led_psu_din]
+    photo: optional
+    after: [assembly]

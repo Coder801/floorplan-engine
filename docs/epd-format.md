@@ -79,6 +79,32 @@ pages/02.json
              "cable_m": 440.2, "devices": 25, "chases_m": 61.3, "edited": false}]}
 ```
 
+- `work_plan` (необязательный, с 2026-11-11) — черновик задач монтажа из смет электрики и
+  сантехники (`pipeline/work_plan.py`, `docs/work-tasks.md`). Из него сервис создаёт план работ
+  в базе, сам черновик не пересчитывает; просмотр его не рисует. Нет ни одной позиции в сметах
+  (или прайс с ошибками и сметы электрики нет) — ключа нет. `currency` — валюта смет;
+  `tasks` — задачи по номеру этапа, при равном номере сначала электрика: `key`
+  (`<domain>.<этап>`), `domain` (`electrical` | `plumbing`), `order` — номер этапа в шаблоне
+  раздела (`electrical/stages.yaml`, `plumbing/stages.yaml`), `title` и `result` (критерий
+  приёмки, строки) — на языке проекта, `after` — ключи задач этого черновика, после которых
+  (мягкая зависимость; этапа без позиций нет — его место занимают его предшественники),
+  `photo` — фото при сдаче (`required`, `optional`, `none`), `lines` — позиции сметы этапа
+  (`key` — ключ сметы как есть, с параметром: `work.chase.brick`, `breaker.C16`; `kind` —
+  `work` | `material`; `title`, `unit`, `qty`; `price` и `sum` — `null`, если цены в прайсе
+  нет), `work_total` и `material_total` — суммы строк с ценой, `unpriced` — строк без цены
+  («цена уточняется»: сумма считается без них). Ключ необязательный, смысл других ключей не
+  менялся — версия формата осталась 1 (`docs/development.md`).
+
+```json
+"work_plan": {"currency": "грн", "tasks": [
+  {"key": "electrical.cable", "domain": "electrical", "order": 2, "title": "Прокладка кабеля",
+   "after": ["electrical.chases"], "photo": "required",
+   "result": ["кабель лежит по трассе и закреплён, …"],
+   "lines": [{"key": "work.cable", "kind": "work", "title": "Прокладка кабеля", "unit": "м",
+              "qty": 609.4, "price": 34, "sum": 20719.6}],
+   "work_total": 29860.6, "material_total": 59012.2, "unpriced": 0}]}
+```
+
 ## Страница `pages/NN.json`
 
 ```json
