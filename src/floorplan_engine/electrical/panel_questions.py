@@ -1,7 +1,7 @@
 """The "Panel" stage questions (panel_*): backup, supply (phases and main breaker), backup bus
 contents, a group split on the panel, the cable of a heavy appliance, the master switch (whether,
-what it cuts, where); with an inverter also the battery, solar panels and the battery box
-location. Built by code; answers go to answers.yaml and
+what it cuts, where), the backup power; with an inverter also the battery, solar panels and
+the battery box location. Built by code; answers go to answers.yaml and
 are applied by answers.apply_auto_answers."""
 
 from __future__ import annotations
@@ -13,6 +13,7 @@ from floorplan_engine.electrical.loads import (
 )
 from floorplan_engine.electrical.master import is_master, master_on
 from floorplan_engine.electrical.panel import (
+    INVERTER_KW,
     BoardPanel,
     reserve_groups,
 )
@@ -25,6 +26,8 @@ AUTO_PREFIX = "panel_"  # ids of questions built by code; they are never written
 BACKUP_OPTIONS = ["none", "inverter", "plug", "station"]
 # A "groups" answer goes into this panel field (validation/answers.apply_auto_answers)
 GROUPS_FIELD = {f"{AUTO_PREFIX}reserve": "reserve", f"{AUTO_PREFIX}master_off": "master_off"}
+# A "value" answer goes into a panel field as an int, except these (fractional kW)
+FLOAT_FIELDS = frozenset({"backup_power"})
 
 
 def panel_questions(
@@ -78,6 +81,25 @@ def panel_questions(
                     language,
                     r=panel.input.rating,
                     i=amps(panel.design_current),
+                ),
+            )
+        )
+    if panel.backup is not None and setup.backup_power is None:
+        inverter = panel.backup == "inverter"
+        out.append(
+            Question(
+                id=f"{AUTO_PREFIX}backup_power",
+                stage=Stage.PANEL,
+                target="panel.backup_power",
+                answer="value",
+                unit="кВт",
+                # The inverter is counted at the typical power; a generator is not checked
+                assumption=INVERTER_KW if inverter else None,
+                text=text(
+                    f"q_power_{panel.backup}",
+                    language,
+                    p=kw(panel.reserve_peak),
+                    lim=f"{INVERTER_KW:g}",
                 ),
             )
         )

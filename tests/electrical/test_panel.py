@@ -291,7 +291,7 @@ def test_backup_plug_reserve_bus_and_warning() -> None:
     assert {d.group for d in after if d.group} == {g.group for g in panel.groups if g.reserved}
     texts = [w.text["ru"] for w in panel.warnings]
     assert any("вилка-вилка" in t for t in texts)
-    assert any("Резервная шина" in t for t in texts)
+    assert any("пик резервной шины" in t for t in texts)
     ats = build_panel(_plan(), _elec(points, cables, panel={**setup, "ats": True}))
     assert ats is not None and any(d.kind is DeviceKind.ATS for d in ats.devices)
 
@@ -312,6 +312,9 @@ def test_reserve_kinds_for_quick_picks() -> None:
     assert block is not None
     kinds = {g["id"]: g["kind"] for g in cast(list[dict[str, Any]], block["items"])}
     assert kinds == {"QF1": "sockets", "QF2": "light", "QF3": "heavy", "QF4": "heavy"}
+    # Share in the design peak: the oven is the occasional appliance, the fridge is steady
+    share = {g["id"]: (g["steady"], g["peak"]) for g in cast(list[dict[str, Any]], block["items"])}
+    assert share["QF4"] == (0, 3500) and share["QF1"] == (300, 0)
 
 
 def test_charging_station_comes_in_through_a_plug() -> None:
@@ -338,7 +341,7 @@ def test_panel_data_carries_catalog_models_and_texts() -> None:
     assert qf1["key"] == "device:QF1" and qf1["model"]["id"] == "generic.diff"
     assert qf1["model"]["width"] == 35.0  # 2 modules of 17.5 mm
     assert data["groups"]["QF1"]["color"] == "#4e79a7"  # type: ignore[index]
-    assert "звичайний, резерв: інвертор*" in data["texts"]["title"]  # type: ignore[index]
+    assert "автомат на групу, резерв: інвертор*" in data["texts"]["title"]  # type: ignore[index]
 
 
 def test_answers_to_panel_questions_apply_to_model(tmp_path: Path) -> None:
@@ -368,6 +371,25 @@ def test_answers_to_panel_questions_apply_to_model(tmp_path: Path) -> None:
     assert any(i.path == "answers.panel_xyz" for i in report.warnings)
     stages = {r.stage: r for r in assess(report)}
     assert stages[Stage.PANEL].status.builds
+
+
+def test_backup_power_answer_keeps_fraction(tmp_path: Path) -> None:
+    """The backup power is kW with a fraction: 3.6 stays 3.6, not 3; the question closes."""
+    project = tmp_path / "p"
+    project.mkdir()
+    plan = {"name": "T", "default_wall_thickness": 100, "source": "text", "rooms": ROOMS}
+    elec = {
+        "points": [_pt("s1", "socket", "QF1", room="b")],
+        "board": {"room": "k", "wall": "w1", "offset": 2000, "height": 1700},
+        "panel": {"backup": "inverter"},
+    }
+    (project / "room.yaml").write_text(yaml.safe_dump(plan, allow_unicode=True), "utf-8")
+    (project / "electrical.yaml").write_text(yaml.safe_dump(elec, allow_unicode=True), "utf-8")
+    assert "panel_backup_power" in {q.id for q in validate_project(project).auto_questions}
+    (project / "answers.yaml").write_text(yaml.safe_dump({"answers": {"panel_backup_power": 3.6}}))
+    report = validate_project(project)
+    assert report.electrical is not None and report.electrical.panel.backup_power == 3.6
+    assert report.question_states["panel_backup_power"] == "answered"
 
 
 def test_unknown_brand_is_an_error() -> None:
@@ -462,8 +484,11 @@ def test_inverter_gets_battery_box_with_assumptions_and_questions() -> None:
     assert dc.enclosure.article == "VS112PD"
     assert any("АКБ 48 В" in w.text["ru"] for w in panel.warnings)
     assert [d.id for d in panel.all_devices][-1] == "QB1"
-    ids = {q.id for q in panel_questions(elec, panel, "ru")}
-    assert {"panel_battery", "panel_pv", "panel_dc_place"} <= ids
+    questions = {q.id: q for q in panel_questions(elec, panel, "ru")}
+    assert {"panel_battery", "panel_pv", "panel_dc_place", "panel_backup_power"} <= set(questions)
+    power = questions["panel_backup_power"]
+    assert (power.target, power.unit, power.assumption) == ("panel.backup_power", "кВт", 5.0)
+    assert power.text.startswith("Мощность инвертора")
 
 
 def test_battery_box_from_source_with_pv_strings() -> None:
@@ -477,6 +502,7 @@ def test_battery_box_from_source_with_pv_strings() -> None:
     assert dc.enclosure.per_row == 18  # 13 modules
     ids = {q.id for q in panel_questions(elec, panel, "ru")}
     assert "panel_battery" not in ids and "panel_pv" not in ids
+    assert "panel_backup_power" not in ids  # given in the source
     data = panel_data(panel, {}, "ЩР", "ru")
     block = data["dc"]
     assert isinstance(block, dict) and block["pv_strings"] == 2
@@ -493,6 +519,8 @@ def test_no_battery_box_without_inverter() -> None:
     elec = _elec([_pt("s1", "socket", "QF1")], {"QF1": "3x2.5"}, panel={"backup": "plug"})
     panel = build_panel(_plan(), elec)
     assert panel is not None and panel.dc is None
+    power = next(q for q in panel_questions(elec, panel, "uk") if q.id == "panel_backup_power")
+    assert power.assumption is None and power.text.startswith("Потужність генератора")
     with pytest.raises(ValidationError, match="только с инвертором"):
         Electrical.model_validate({"panel": {"backup": "none", "pv_strings": 1}})
 

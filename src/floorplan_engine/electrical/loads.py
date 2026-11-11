@@ -4,7 +4,13 @@ lighting 10 A, sockets 16 A, heavy loads by current, no more than the cable can 
 overloaded group is split into lines on the panel (QF8 → QF8, QF8.2). Supply 230 V, single or
 three phases (`panel.phases`); on three phases one appliance from THREE_PHASE_W (a cooktop, an
 electric boiler) goes on all three, its current is per phase, its cable five cores; which phase
-the other groups take is electrical/phases.py."""
+the other groups take is electrical/phases.py.
+
+Backup bus (decision 2026-11-11): the source is checked against the design peak, not the sum of
+installed power: lighting and steady appliances (fridge, router, boiler, towel rail…) in full, a
+socket post of typical power at POST_SHARE (a laptop and chargers, not ten loaded sockets), and of
+the occasional appliances (microwave, kettle, oven, washing machine…) only the largest one: on a
+backup source they run one at a time. The headroom of 20 % lives in the viewer (near the limit)."""
 
 from __future__ import annotations
 
@@ -24,6 +30,7 @@ from floorplan_engine.electrical.master import master_on
 from floorplan_engine.electrical.panel_text import text
 from floorplan_engine.model.schema import Electrical, ElectricalPoint, PanelScheme, Plan, PointType
 from floorplan_engine.model.texts import Language, tr
+from floorplan_engine.model.zones import point_places
 
 VOLTAGE = 230.0
 COS_PHI = 1.0  # power factor: a flat is mostly resistive load (assumption)
@@ -73,7 +80,16 @@ NOTE_W: tuple[tuple[re.Pattern[str], float], ...] = tuple(
         (r"котел|котёл|котл", 200.0),
         (r"насос", 500.0),
         (r"домофон|роутер|відеоспост|видеонаб", 20.0),
+        (r"вентил", 50.0),  # a ceiling or exhaust fan, not an unknown 1 kW output
     )
+)
+# Backup bus peak (decision 2026-11-11): share of a typical socket post, and the appliances that
+# run now and then, one at a time on a backup source (only the largest counts)
+POST_SHARE = 0.3
+OCCASIONAL = re.compile(
+    r"варильн|варочн|індукц|индукц|плит|духов|пральн|стирал|сушил|посудом|чайник|"
+    r"мікрохвил|микроволн|\bсвч\b",
+    re.IGNORECASE,
 )
 # What the backup bus carries by default: lighting, kitchen sockets and these loads (by note)
 RESERVE_NOTE = re.compile(r"холодил|котел|котёл|котл|роутер|насос|ворот|домофон", re.IGNORECASE)
@@ -159,6 +175,12 @@ class Load:
     count: int
     power: float  # W, for the whole point
     assumed: bool  # typical power, not from the source
+    post: bool = False  # a socket post of typical power (SOCKET_POST_W): no appliance known
+
+    @property
+    def occasional(self) -> bool:
+        """Runs now and then, one at a time on a backup source: microwave, oven, washer…"""
+        return bool(OCCASIONAL.search(self.title))
 
     @property
     def heavy(self) -> bool:
@@ -216,9 +238,9 @@ class PanelGroup:
         return any(ld.assumed for ld in self.loads)
 
 
-def point_load(p: ElectricalPoint, rooms: dict[str, str], language: Language) -> Load | None:
-    """Load for a point; None for a switch without a note and for low-voltage."""
-    room = rooms.get(p.room, p.room)
+def point_load(p: ElectricalPoint, room: str, language: Language) -> Load | None:
+    """Load for a point at a place (zone or room name); None for a switch without a note and
+    for low-voltage."""
     note_w = next((w for rx, w in NOTE_W if p.note and rx.search(p.note)), None)
     title = p.note[0].upper() + p.note[1:] if p.note else tr(f"symbol_{p.type.value}", language)
     if p.power is not None:
@@ -229,11 +251,25 @@ def point_load(p: ElectricalPoint, rooms: dict[str, str], language: Language) ->
         return Load(p.id, room, title, p.count, TYPE_W[p.type] * p.count, True)
     if p.type is PointType.SOCKET:
         title = text("socket_generic", language) if not p.note else title
-        return Load(p.id, room, title, p.count, SOCKET_POST_W * p.count, True)
+        return Load(p.id, room, title, p.count, SOCKET_POST_W * p.count, True, post=True)
     if p.type is PointType.OUTLET:
         title = text("outlet_generic", language) if not p.note else title
         return Load(p.id, room, title, p.count, OUTLET_W, True)
     return None
+
+
+def backup_share(loads: Sequence[Load]) -> tuple[float, float]:
+    """Loads on the backup bus: (steady part, the largest occasional appliance), W. A typical
+    socket post counts at POST_SHARE, an occasional appliance goes to the second number only."""
+    steady = sum(ld.power * (POST_SHARE if ld.post else 1.0) for ld in loads if not ld.occasional)
+    peak = max((ld.power for ld in loads if ld.occasional), default=0.0)
+    return steady, peak
+
+
+def backup_peak(loads: Sequence[Load]) -> float:
+    """Design peak of the backup bus, W: the steady part and one occasional appliance."""
+    steady, peak = backup_share(loads)
+    return steady + peak
 
 
 def is_three_phase(elec: Electrical, group: str, loads: Sequence[Load]) -> bool:
@@ -251,7 +287,7 @@ def heavy_cable(elec: Electrical, group: str, points: Sequence[ElectricalPoint])
     """Cable for a group with a heavy load and no type in the model, to match the breaker the
     code picks for it (assumption): on three phases five cores and the current per phase; None
     without a heavy load."""
-    loads = [ld for p in points if (ld := point_load(p, {}, "ru")) is not None]
+    loads = [ld for p in points if (ld := point_load(p, p.room, "ru")) is not None]
     if not any(ld.heavy for ld in loads):
         return None
     amps_ = current(sum(ld.power for ld in loads))
@@ -302,7 +338,7 @@ def panel_groups(
     plan: Plan, elec: Electrical, scheme: PanelScheme, backup: bool
 ) -> list[PanelGroup]:
     lang = plan.language
-    rooms = {r.id: r.name for r in plan.rooms}
+    places = point_places(plan, elec.points)
     wet_rooms = {r.id for r in plan.rooms if r.wet or WET_NAME.search(r.name)}
     names = {p.group for p in elec.points if p.group} | {c.group for c in elec.cables if c.group}
     reserve = set(elec.panel.reserve)
@@ -312,7 +348,7 @@ def panel_groups(
         points = [p for p in elec.points if p.group == g]
         if points and all(p.type in LOW for p in points):
             continue  # low-voltage: not in the panel
-        loads = [ld for p in points if (ld := point_load(p, rooms, lang)) is not None]
+        loads = [ld for p in points if (ld := point_load(p, places[p.id], lang)) is not None]
         marks = sorted({c.cable for c in elec.cables if c.group == g})
         sections = [s for m in marks if (s := cable_section(m)) is not None]
         section = min(sections) if sections else None
@@ -334,9 +370,7 @@ def panel_groups(
         if rcd is None and (wet or scheme == "premium"):
             rcd = "30 мА"
         purpose = info.name if info is not None and info.name else None
-        kitchen = kind is Kind.SOCKETS and any(
-            KITCHEN.search(rooms.get(p.room, "")) for p in points
-        )
+        kitchen = kind is Kind.SOCKETS and any(KITCHEN.search(places[p.id]) for p in points)
         # A three-phase appliance is never on the backup bus: the backup source has one phase
         reserved = (
             backup
@@ -354,7 +388,7 @@ def panel_groups(
         base = PanelGroup(
             g,
             kind,
-            purpose or composed_purpose(points, rooms, lang),
+            purpose or composed_purpose(points, places, lang),
             purpose is None,
             tuple(loads),
             ", ".join(marks),
@@ -384,7 +418,7 @@ def panel_groups(
                     base,
                     group=g if k == 1 else f"{g}.{k}",
                     kind=_kind(pts, line, section),
-                    purpose=composed_purpose(pts, rooms, lang)
+                    purpose=composed_purpose(pts, places, lang)
                     if k > 1 or purpose is None
                     else base.purpose,
                     purpose_assumed=k > 1 or purpose is None,

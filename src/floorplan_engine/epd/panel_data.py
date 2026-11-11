@@ -11,6 +11,7 @@ from floorplan_engine.electrical.groups import LIGHT
 from floorplan_engine.electrical.loads import (
     Kind,
     PanelGroup,
+    backup_share,
 )
 from floorplan_engine.electrical.panel import (
     BoardPanel,
@@ -211,9 +212,17 @@ def master_data(panel: BoardPanel, model: Electrical) -> dict[str, object]:
     }
 
 
+def _peak_share(lines: Sequence[PanelGroup]) -> dict[str, int]:
+    """Share of a group in the design peak of the backup bus (loads.backup_share): steady part and
+    its largest occasional appliance; the viewer sums the steady parts and adds one appliance."""
+    steady, peak = backup_share([ld for g in lines for ld in g.loads])
+    return {"steady": round(steady), "peak": round(peak)}
+
+
 def reserve_data(panel: BoardPanel, model: Electrical) -> dict[str, object] | None:
     """What can go on the backup bus (key `overview.panel.reserve`): groups of the model with
-    their power and purpose, and the power of the source. None without a backup: there is no bus.
+    their power and purpose, their share in the design peak (steady, peak: decision 2026-11-11)
+    and the power of the source. None without a backup: there is no bus.
     A plug-in generator of unknown power gives limit_kw None."""
     if panel.backup is None:
         return None
@@ -229,6 +238,7 @@ def reserve_data(panel: BoardPanel, model: Electrical) -> dict[str, object] | No
                 "id": name,
                 "purpose": "; ".join(dict.fromkeys(g.purpose for g in lines)),
                 "power": round(sum(g.power for g in lines)),
+                **_peak_share(lines),
                 "kind": _reserve_kind(lines, model),
                 "on": any(g.reserved for g in lines),
             }

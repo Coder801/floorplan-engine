@@ -51,6 +51,7 @@ from floorplan_engine.electrical.loads import (
     Breaker,
     Kind,
     PanelGroup,
+    backup_peak,
     current,
     demand_factor,
     panel_groups,
@@ -184,7 +185,13 @@ class BoardPanel:
 
     @property
     def reserve_power(self) -> float:
+        """Installed power of the backup bus, W."""
         return sum(g.power for g in self.groups if g.reserved)
+
+    @property
+    def reserve_peak(self) -> float:
+        """Design peak of the backup bus, W (loads.backup_peak): checked against the source."""
+        return backup_peak([ld for g in self.groups if g.reserved for ld in g.loads])
 
     @property
     def master(self) -> bool:
@@ -686,7 +693,7 @@ def weak_spots(panel: BoardPanel, relay: bool, npe: bool | None = True) -> list[
     if not relay:
         out.append(Warning("minor", _both("w_no_relay")))
     if panel.backup is not None:
-        res = panel.reserve_power
+        res = panel.reserve_peak
         if panel.backup_power is None:
             out.append(Warning("minor", _both("w_backup_unknown", p=kw(res))))
         elif res / 1000 > panel.backup_power:
@@ -795,8 +802,8 @@ def write_loads(panel: BoardPanel, path: Path) -> Path:
 
 
 def scheme_title(panel: BoardPanel, language: Language) -> str:
-    """Scheme label such as "преміум, резерв: інвертор*": scheme and backup, "*" marks an
-    assumption."""
+    """Scheme label such as "автомат на кожну лінію, резерв: інвертор*": scheme and backup, "*"
+    marks an assumption."""
     out = text(panel.scheme, language)
     if panel.backup is not None:
         out += ", " + text(f"with_{panel.backup}", language) + ("*" if panel.backup_assumed else "")
@@ -804,7 +811,7 @@ def scheme_title(panel: BoardPanel, language: Language) -> str:
 
 
 def panel_title(panel: BoardPanel, name: str, language: Language) -> str:
-    """Panel title such as "Щит ЩР: 3 фазы, 400 В — премиум": supply and scheme."""
+    """Panel title such as "Щит ЩР: 3 фазы, 400 В — автомат на каждую линию": supply and scheme."""
     supply = text(f"supply_{panel.phases}", language)
     return text("title", language, name=name, supply=supply, scheme=scheme_title(panel, language))
 
