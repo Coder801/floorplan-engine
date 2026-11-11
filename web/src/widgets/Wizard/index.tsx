@@ -74,6 +74,15 @@ export function Wizard({ project, variants, ceiling, scene = null, reserve, mast
   const changed = !!body.variant || !!body.answers;
   const pick = (id: StepId, value: string) => { setPicks((p) => applyPick(p, id, value)); setError(null); };
   const go = (delta: number) => setAt(steps[index + delta]?.id ?? DONE);
+  // A list of groups always shows a set (the project's one until changed): "next" agrees with it,
+  // so the step is decided, not skipped
+  const shownGroups = (s: Step) =>
+    (s.id === "masterOff" && master ? masterOn(master).join() : s.id === "reserve" && reserve ? reserveOn(reserve).join() : undefined);
+  const next = (s: Step) => {
+    const shown = isPicked(picks[s.id]) ? undefined : shownGroups(s);
+    if (shown !== undefined) pick(s.id, shown);
+    go(1);
+  };
 
   const money = (s: VariantSummary | undefined) =>
     (s ? `${Math.round(s.total).toLocaleString(i18n.language)} ${s.currency}` : "");
@@ -299,8 +308,8 @@ export function Wizard({ project, variants, ceiling, scene = null, reserve, mast
         <footer className={css.foot}>
           <button disabled={at === steps[0]?.id} onClick={() => go(at === DONE ? steps.length - 1 - index : -1)}>{t("wizard.back")}</button>
           {step ? (
-            <button className={css.primary} disabled={invalid(step, picks[step.id])} onClick={() => go(1)}>
-              {isPicked(picks[step.id]) ? t("wizard.next") : t("wizard.skip")}
+            <button className={css.primary} disabled={invalid(step, picks[step.id])} onClick={() => next(step)}>
+              {isPicked(picks[step.id]) || shownGroups(step) !== undefined ? t("wizard.next") : t("wizard.skip")}
             </button>
           ) : changed ? (
             <button className={css.primary} disabled={!!wrong} onClick={apply}>{t("wizard.done.apply")}</button>

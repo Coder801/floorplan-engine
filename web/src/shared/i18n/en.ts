@@ -306,7 +306,7 @@ export const en: Messages = {
     sewerErrors: "routes with errors: {{n}}", weak: "Weak spots: {{n}} — see the Plumbing sheet",
     noData: "No overview: rebuild the project (floorplan-engine build)",
   },
-  rebuild: { title: "Recalculating the estimate…", note: "The project is being rebuilt, this takes a few seconds." },
+  rebuild: { title: "Recalculating the estimate…", note: "The project is being rebuilt, this takes a few minutes." },
   variant: {
     routes: { ceiling: "Along the ceiling", floor: "Under the floor" },
     distributions: { boxes: "Junction boxes", loop: "Through socket boxes" },
@@ -343,7 +343,7 @@ export const en: Messages = {
     },
   },
   wizard: {
-    unknown: "I don't know", unknownNote: "We will use a typical value, you can change it later.", unknownValue: "We will use a typical {{value}}. You can change it later.",
+    unknown: "I don't know", unknownNote: "We will use a typical value, you can change it later.", unknownValue: "We will use the typical value: {{value}}. You can change it later.",
     unknownGroups: "We will keep the typical set of groups, you can change it later.",
     restored: "Restored the choice you had not applied.", reset: "Reset",
     notice: { title: "Setup is not finished.", body: "The estimate and the panel rest on assumptions. Undecided, {{n}} of {{total}}: {{list}}", more: "and {{n}} more" },
@@ -424,7 +424,7 @@ export const en: Messages = {
         options: {
           simple: { name: "Simple panel", note: "One breaker per group, wet zones under a shared RCD, no voltage relay, backup by a manual switch." },
           groups: { name: "By project groups", note: "One breaker per group: several lines from the panel can share one. A voltage relay, RCBOs on wet zones, backup through an ATS." },
-          lines: { name: "As correct as possible", note: "A breaker for every line, RCBOs on all groups, curve B, a surge protector." },
+          lines: { name: "A breaker per line", note: "Lines do not depend on each other: a trip on one leaves the rest on. RCBOs on all groups, curve B, a surge protector." },
         },
       },
       standby: {
