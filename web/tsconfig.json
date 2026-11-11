@@ -28,6 +28,7 @@
   },
   "include": [
     "src",
+    ".storybook",
     "vite.config.ts"
   ]
 }
