@@ -22,7 +22,7 @@ export function inRings(rings: XY[][], x: number, y: number): boolean {
 // On the electrics sheets the building is a backdrop: walls, doors, rooms and dimensions are not
 // selected there, even on a layer switched on from the plan
 const ELECTRIC_STAGES = new Set(["electrical", "lighting", "wiring"]);
-const BUILDING = new Set(["room", "wall", "opening", "dimension"]);
+const BUILDING = new Set(["room", "zone", "wall", "opening", "dimension"]);
 const kindOf = (o: string) => o.slice(0, o.indexOf(":"));
 
 // other holds cards of other sheets of the shared drawing, for objects on a layer switched on
@@ -44,6 +44,7 @@ export class PageIndex {
   readonly objects: Record<string, ObjectCard> | null;
   readonly chains: Record<string, string[]>;
   readonly areas: Record<string, XY[][]>;
+  readonly floors: Record<string, XY[][]>;
   readonly groupOf = new Map<string, Set<string>>();
   private readonly electric: boolean;
 
@@ -53,6 +54,7 @@ export class PageIndex {
     this.objects = page.objects || null;
     this.chains = page.chains || lines;
     this.areas = page.areas || {};
+    this.floors = page.floors || {};
     for (const keys of Object.values(page.groups || {})) {
       const all = new Set(keys);
       for (const k of keys) this.groupOf.set(k, all);
@@ -82,6 +84,12 @@ export class PageIndex {
   // Object by its area on the sheet (walls of the plan): hatching alone is hard to hit
   areaAt(x: number, y: number): string | null {
     const found = Object.entries(this.areas).find(([, rings]) => inRings(rings, x, y));
+    return found ? found[0] : null;
+  }
+
+  // Floor (a room or a zone of it) under a point of the plan sheet
+  floorAt(x: number, y: number): string | null {
+    const found = Object.entries(this.floors).find(([, rings]) => inRings(rings, x, y));
     return found ? found[0] : null;
   }
 

@@ -1,4 +1,5 @@
-// "Download" at the end of the drawing options: sheet PNG for the album or the DXF of the whole project
+// "Download" at the end of the drawing options: sheet PNG for the album or the DXF of the whole
+// project (engineering interface mode only)
 
 import { useTranslation } from "react-i18next";
 import { usePopover } from "@/shared/popover";
@@ -8,10 +9,11 @@ import css from "./DownloadMenu.module.scss";
 interface Props {
   onPng: (() => void) | null;   // missing means no sheet is open (a source, loading)
   dxf: { href: string; name: string } | null;
+  withDxf?: boolean;            // the simple interface mode offers only the sheet PNG
 }
 
-export function DownloadMenu({ onPng, dxf }: Props) {
-  const { open, setOpen, toggle, ref } = usePopover<HTMLDivElement>();
+export function DownloadMenu({ onPng, dxf, withDxf = true }: Props) {
+  const { open, closing, setOpen, toggle, ref } = usePopover<HTMLDivElement>();
   const { t } = useTranslation();
   return (
     <div ref={ref} className={css.download}>
@@ -19,14 +21,14 @@ export function DownloadMenu({ onPng, dxf }: Props) {
         <DownloadIcon /> <span className={css.label}>{t("download.download")}</span> <span aria-hidden="true">▾</span>
       </button>
       {open && (
-        <div className={menu.panel} role="menu">
+        <div className={menu.panel} data-pop="" data-closing={closing || undefined} role="menu">
           <button className={menu.item} role="menuitem" disabled={!onPng}
                   onClick={() => { onPng?.(); setOpen(false); }}>
             <span className={css.badge}>PNG</span>
             {t("download.sheet")}
             <span className={menu.note}>A3, 150 dpi</span>
           </button>
-          {dxf ? (
+          {!withDxf ? null : dxf ? (
             <a className={menu.item} role="menuitem" href={dxf.href} download={dxf.name} onClick={() => setOpen(false)}>
               <span className={css.badge}>DXF</span>
               {t("download.dxf")}

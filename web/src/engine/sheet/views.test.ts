@@ -18,6 +18,12 @@ describe("views of the electrical tab", () => {
     for (const l of ["E-SOCKET", "E-LIGHT", "W-BOX", "W-CABLE-SOCKET"]) expect(v.has(l)).toBe(false);
   });
 
+  it("without cables (simple interface mode): points only, no lines, boxes or their labels", () => {
+    const v = viewLayers(new Set([...own, "W-BOX"]), all, "sockets", false);
+    expect(v.has("E-SOCKET") && v.has("E-BOARD") && v.has("A-WALL")).toBe(true);
+    for (const l of ["W-BOX", "W-TEXT", "W-CABLE-SOCKET", "W-CABLE-DEVICE"]) expect(v.has(l)).toBe(false);
+  });
+
   it("a label and a box follow their object", () => {
     const layerOf = new Map([
       ["point:s", "E-SOCKET"], ["point:l", "E-LIGHT"], ["wire:a", "W-CABLE-LIGHT"], ["wire:b", "W-CABLE-SOCKET"],

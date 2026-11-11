@@ -1,0 +1,10 @@
+// Tooltip of a button: fixed to the screen, so a menu panel or a scrolled list does not clip it;
+// above the menu panels (z-index 25)
+
+.tip {
+  position: fixed; z-index: 30; max-width: 260px; pointer-events: none;
+  padding: 8px 10px; border-radius: 8px; font-size: 13px; line-height: 1.4;
+  font-weight: 400; text-align: left; white-space: normal;
+  color: var(--text); background: var(--raise); border: 1px solid var(--line);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .12);
+}

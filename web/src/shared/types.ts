@@ -18,6 +18,9 @@ export interface Question {
   state: string;
   text: string;
   answer: "value" | "choice" | "text" | "groups";
+  // Who is asked (decision 2026-11-11): the client's answer only clarifies, it never goes into the
+  // model; an older build has no audience — the studio's
+  audience?: "studio" | "client";
   options?: string[];
   option_labels?: Record<string, string>;  // how an option reads for a person, in the project language
   also?: string[];
@@ -48,12 +51,14 @@ export interface ProjectSummary {
   stale: boolean;
   stages: Stage[];
   open_questions: number;
+  waiting_answers?: number;  // client answers waiting for the studio; missing on an old server
   preview: boolean;  // out/preview.svg exists: the plan preview from the model
 }
 
 export interface Project extends ProjectSummary {
   // Missing on an old server: everything allowed, except answers (they write nothing there)
-  can?: { edit_wiring: boolean; choose_variant: boolean; answer?: boolean };
+  // review: take a client answer into account or send it back (the studio)
+  can?: { edit_wiring: boolean; choose_variant: boolean; answer?: boolean; review?: boolean };
   report: Report | null;
   answers: Record<string, unknown>;
   artifact: boolean;
@@ -85,8 +90,11 @@ export interface Manifest {
 export interface OverviewReserve {
   limit_kw: number | null;  // power of the source; null: a generator of unknown power
   limit_assumed: boolean;
+  // power — installed; steady, peak — share in the design peak (loads.backup_share): the steady
+  // part and the largest occasional appliance, one at a time (older builds: power counts whole).
   // kind: light | sockets | heavy (older builds have none: no "lighting only" pick)
-  items: { id: string; purpose: string; power: number; kind?: "light" | "sockets" | "heavy"; on: boolean }[];
+  items: { id: string; purpose: string; power: number; steady?: number; peak?: number;
+           kind?: "light" | "sockets" | "heavy"; on: boolean }[];
 }
 
 // What the master switch can cut (overview.panel.master, panel_data.master_data): groups of the
@@ -405,6 +413,7 @@ export interface Page {
   objects?: Record<string, ObjectCard>;
   chains?: Record<string, string[]>;
   areas?: Record<string, XY[][]>;
+  floors?: Record<string, XY[][]>;  // plan sheet: room and zone floors, filled on hover (engine/sheet/floors.ts)
   groups?: Record<string, string[]>;
   edit?: { wires: Record<string, EditWire>; boxes: Record<string, EditBox> };
   scene?: Scene;

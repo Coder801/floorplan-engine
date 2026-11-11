@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Scene, XY } from "@/shared/types";
-import { CUT_SHARE, frame, standPoint, viewer, wallMap } from "./wallMap";
+import { ceilingGuide, CUT_SHARE, frame, hull, outerRing, standPoint, viewer, wallMap } from "./wallMap";
 
 const rect = (x0: number, y0: number, x1: number, y1: number): XY[] => [[x0, y0], [x1, y0], [x1, y1], [x0, y1]];
 
@@ -71,5 +71,39 @@ describe("standPoint", () => {
     const { at } = standPoint([[0, 0], [0, 4000]], rect(0, 0, 1000, 4000));
     expect(at[0]).toBeCloseTo(450);
     expect(at[1]).toBeCloseTo(2000);
+  });
+});
+
+describe("ceilingGuide", () => {
+  it("the ceiling outline is the flat outline lifted to the height, the dimension spans it", () => {
+    const slab = [rect(-100, 0, 6000, 4100)];
+    const low = ceilingGuide({ ...scene(), slab }, 2500)!;
+    const high = ceilingGuide({ ...scene(), slab }, 3000)!;
+    expect(low.outline).toHaveLength(4);
+    // Higher ceiling: the outline goes up on screen by the same amount at every corner
+    const lift = low.outline[0][1] - high.outline[0][1];
+    expect(lift).toBeGreaterThan(0);
+    low.outline.forEach((p, i) => expect(p[1] - high.outline[i][1]).toBeCloseTo(lift));
+    // The dimension is vertical and as long as a post
+    const [[, py0], [, py1]] = low.posts[0];
+    expect(low.dim.from[0]).toBeCloseTo(low.dim.to[0]);
+    expect(Math.abs(low.dim.from[1] - low.dim.to[1])).toBeCloseTo(Math.abs(py0 - py1));
+    expect(low.posts.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("without a slab the outline is the hull of the room floors; nothing to draw — null", () => {
+    expect(outerRing(scene())).toHaveLength(4);
+    expect(ceilingGuide({ ...scene(), floors: [] }, 2700)).toBeNull();
+  });
+
+  it("walls are cut where asked", () => {
+    const tops = (cut: number) => wallMap(scene(), null, null, undefined, cut).filter((f) => f.kind === "top");
+    expect(tops(1000)[0].pts[0][1]).toBeGreaterThan(tops(2000)[0].pts[0][1]);  // higher cut: higher on screen
+  });
+});
+
+describe("hull", () => {
+  it("drops the inner points", () => {
+    expect(hull([[0, 0], [2, 0], [1, 1], [2, 2], [0, 2]])).toHaveLength(4);
   });
 });

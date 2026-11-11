@@ -7,8 +7,39 @@
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@600&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<!-- Saved theme before the first paint: the splash and the page do not flash the other theme (palette.ts applyTheme) -->
+<script>try{var t=localStorage.getItem("theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t}catch(e){}</script>
+<!-- Splash (shared/splash.ts): the mark over the whole screen until the app is ready; then both
+     corners are erased clockwise along their path, linearly, and the splash fades out.
+     Inline styles: it shows before the bundle and the fonts load (the letters are paths, not text) -->
+<style>
+#splash{position:fixed;inset:0;z-index:1000;display:grid;place-items:center;background:#efebe2;color:#29251f}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) #splash{background:#121314;color:#d4d4d4}}
+:root[data-theme="dark"] #splash{background:#121314;color:#d4d4d4}
+#splash svg{width:99px;height:88px;overflow:visible}
+#splash .corner{fill:none;stroke:currentColor;stroke-width:3;stroke-linecap:square;stroke-dasharray:1 1;stroke-dashoffset:0}
+#splash .letters{fill:currentColor;animation:splash-breathe 1.6s ease-in-out infinite}
+#splash[data-state="out"] .corner{animation:splash-erase .6s linear forwards}
+#splash[data-state="out"] .letters{animation:none}
+#splash[data-state="out"]{animation:splash-fade .3s ease-out .55s forwards}
+@keyframes splash-erase{to{stroke-dashoffset:-1}}
+@keyframes splash-fade{to{opacity:0;visibility:hidden}}
+@keyframes splash-breathe{50%{opacity:.55}}
+@media (prefers-reduced-motion:reduce){#splash .letters,#splash[data-state="out"] .corner{animation:none}#splash[data-state="out"]{animation-delay:0s}}
+</style>
 </head>
 <body>
+<div id="splash" role="status" aria-busy="true" aria-label="Shtroba">
+  <svg viewBox="-2 0 36 32" aria-hidden="true">
+    <!-- Each corner is drawn clockwise: top left goes up and right, bottom right goes down and left -->
+    <path class="corner" pathLength="1" d="M-.5 11V1.5H9"/>
+    <path class="corner" pathLength="1" d="M32.5 21v9.5H23"/>
+    <g class="letters">
+      <path transform="translate(-3.5 -4.5) scale(1.2)" d="M9.4 19.4q1.4 1.1 3.1 1.1 2 0 2-1.5 0-1.1-1.7-1.6l-1.2-.4q-3-.9-3-3.3 0-3.2 3.9-3.2 1.9 0 3.4.9l-.8 1.9q-1.3-.7-2.6-.7-1.6 0-1.6 1.1 0 .9 1.4 1.3l1.3.4q3.2 1 3.2 3.5 0 3.3-4.3 3.3-2.4 0-4.1-1.3z"/>
+      <path transform="translate(1.2 0)" d="M19.4 12.6h2.2v-2.4h2.4v2.4h2.6v2h-2.6v4.5q0 1.4 1.3 1.4.7 0 1.3-.3v2q-.8.3-1.9.3-3.1 0-3.1-3.2v-4.7h-2.2z"/>
+    </g>
+  </svg>
+</div>
 <div id="root"></div>
 <script type="module" src="/src/main.tsx"></script>
 </body>

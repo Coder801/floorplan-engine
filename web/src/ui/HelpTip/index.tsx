@@ -26,7 +26,7 @@ export function HelpTip({ label, text, mark = "?", size = 24, align = "right" }:
               onBlur={() => setOpen(false)}>
         {mark}
       </button>
-      {shown && <span id={id} role="tooltip" className={cx(css.tip, align === "left" && css.left)}>{text}</span>}
+      {shown && <span id={id} role="tooltip" data-pop="" className={cx(css.tip, align === "left" && css.left)}>{text}</span>}
     </span>
   );
 }

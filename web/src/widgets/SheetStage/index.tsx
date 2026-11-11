@@ -66,7 +66,8 @@ export const SheetStage = forwardRef<StageHandle, Props>(function SheetStage({ p
   const scene3d = useMemo(() => sceneOf(drawing), [drawing]);
   const layerOf = useMemo(() => objectLayers(drawing), [drawing]);
   const electricalView = useView((s) => s.electricalView);
-  const own = useMemo(() => ownLayers(drawing, page, electricalView), [drawing, page, electricalView]);
+  const cables = useView((s) => s.cables);
+  const own = useMemo(() => ownLayers(drawing, page, electricalView, cables), [drawing, page, electricalView, cables]);
   const in3d = show3d && !!scene3d;
 
   // The canvas is per drawing; a tab of the same drawing only calls setPage (below)

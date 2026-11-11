@@ -26,7 +26,7 @@ const GAP = 6;     // from the button to the list
 const MARGIN = 12; // from the list to the screen edge
 
 export function Select({ options, value, onChange, label, flat }: Props) {
-  const { open, setOpen, ref } = usePopover<HTMLDivElement>();
+  const { open, closing, setOpen, ref } = usePopover<HTMLDivElement>();
   const [place, setPlace] = useState<CSSProperties>({});
   const button = useRef<HTMLButtonElement>(null);
   const list = useRef<HTMLDivElement>(null);
@@ -40,7 +40,7 @@ export function Select({ options, value, onChange, label, flat }: Props) {
     const box = button.current!.getBoundingClientRect();
     const top = box.bottom + GAP;
     setPlace({ left: box.left, top, minWidth: box.width, maxHeight: innerHeight - top - MARGIN });
-    setOpen(!open);
+    setOpen(!open || closing);
   };
   const pick = (v: string) => { onChange(v); setOpen(false); button.current?.focus(); };
   const arrows = (ev: KeyboardEvent) => {
@@ -61,7 +61,7 @@ export function Select({ options, value, onChange, label, flat }: Props) {
         <span className={css.arrow} aria-hidden="true">▾</span>
       </button>
       {open && (
-        <div ref={list} className={cx(menu.panel, css.list)} style={place} role="listbox" aria-label={label} onKeyDown={arrows}>
+        <div ref={list} className={cx(menu.panel, css.list)} style={place} data-pop="" data-closing={closing || undefined} role="listbox" aria-label={label} onKeyDown={arrows}>
           {options.map((o) => (
             <button key={o.value} className={menu.item} role="option" aria-selected={o.value === value} onClick={() => pick(o.value)}>
               {o.icon ?? <span />}

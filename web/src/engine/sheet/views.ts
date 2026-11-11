@@ -22,17 +22,23 @@ const CABLES: Record<ElectricalView, RegExp> = {
 const SCOPED = new Set(["electrical", "lighting"]);
 export const scoped = (page: Page) => SCOPED.has(page.stage || "");
 
+// Wiring layers: cables, boxes, their labels (W-…). The simple interface mode (shared/mode.ts)
+// shows the points without them: where things are, not how they are wired
+const WIRING = /^W-/;
+
 // Layers of the sheet in this view: without the other systems, with the lines of its own
-export function viewLayers(own: Set<string>, all: Iterable<string>, view: ElectricalView): Set<string> {
-  const out = new Set([...own].filter((l) => !HIDES[view].includes(l)));
-  for (const l of all) if (CABLES[view].test(l)) out.add(l);
+// (without any lines when cables is false)
+export function viewLayers(own: Set<string>, all: Iterable<string>, view: ElectricalView, cables = true): Set<string> {
+  const out = new Set([...own].filter((l) => !HIDES[view].includes(l) && (cables || !WIRING.test(l))));
+  if (cables) for (const l of all) if (CABLES[view].test(l)) out.add(l);
   return out;
 }
 
-export function ownLayers(d: Drawing, page: Page, view: ElectricalView): Set<string> | null {
+export function ownLayers(d: Drawing, page: Page, view: ElectricalView, cables = true): Set<string> | null {
   const own = d.own.get(page);
-  if (!own || page.stage !== "electrical") return own ?? null;
-  return viewLayers(own, new Set(d.items.map((i) => i.l)), view);
+  if (!own) return null;
+  if (page.stage !== "electrical") return cables ? own : new Set([...own].filter((l) => !WIRING.test(l)));
+  return viewLayers(own, new Set(d.items.map((i) => i.l)), view, cables);
 }
 
 // A label or a box is visible with its object: a label with one of its points, a box with one of

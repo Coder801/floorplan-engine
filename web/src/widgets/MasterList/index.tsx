@@ -14,9 +14,11 @@ interface Props {
   master: OverviewMaster;
   value: string[];
   onChange: (groups: string[]) => void;
+  // "Don't know" as one more quick pick: the person leaves the choice to the studio default
+  unknown?: { on: boolean; note: string; onPick: () => void };
 }
 
-export function MasterList({ master, value, onChange }: Props) {
+export function MasterList({ master, value, onChange, unknown }: Props) {
   const { t, i18n } = useTranslation();
   const kw = (w: number) => (w / 1000).toLocaleString(i18n.language, { maximumFractionDigits: 2 });
   // "By hand" stays chosen once pressed, even while the set happens to match a quick pick
@@ -27,6 +29,7 @@ export function MasterList({ master, value, onChange }: Props) {
     { id: "light", groups: masterLight(master) },
     { id: "manual", groups: null },
   ];
+  const unsure = unknown?.on === true;
   const choose = (id: MasterPreset, groups: string[] | null) => {
     setHand(id === "manual");
     if (groups) onChange(groups);
@@ -35,13 +38,19 @@ export function MasterList({ master, value, onChange }: Props) {
     <>
       <div className={cx(ui.segmented, css.presets)} role="radiogroup" aria-label={t("master.presets.label")}>
         {picks.map(({ id, groups }) => (
-          <button key={id} role="radio" aria-checked={preset === id} className={cx(preset === id && ui.on)}
-                  disabled={id !== "manual" && !groups?.length} onClick={() => choose(id, groups)}>
+          <button key={id} role="radio" aria-checked={!unsure && preset === id} className={cx(!unsure && preset === id && ui.on)}
+                  disabled={id !== "manual" && !groups?.length} onClick={() => choose(id, groups ?? (unsure ? value : null))}>
             {t(`master.presets.${id}`)}
           </button>
         ))}
+        {unknown && (
+          <button role="radio" aria-checked={unsure} className={cx(unsure && ui.on)}
+                  onClick={() => { setHand(false); unknown.onPick(); }}>
+            {t("wizard.unknown")}
+          </button>
+        )}
       </div>
-      <p className={cx("small muted", css.note)}>{t(`master.presets.${preset}Note`)}</p>
+      <p className={cx("small muted", css.note)}>{unsure ? unknown.note : t(`master.presets.${preset}Note`)}</p>
       <ul className={css.list}>
         {master.items.map((g) => (
           <li key={g.id}>

@@ -21,8 +21,8 @@ export function RebuildModal() {
     return () => { window.removeEventListener("keydown", lock, true); prev?.focus?.(); };
   }, []);
   return (
-    <div className={css.veil}>
-      <div ref={box} className={css.modal} role="alertdialog" aria-modal="true" aria-busy="true"
+    <div className={css.veil} data-veil="">
+      <div ref={box} className={css.modal} data-pop="modal" role="alertdialog" aria-modal="true" aria-busy="true"
            aria-labelledby="rebuild-title" tabIndex={-1}>
         {/* Calculator: body, screen and 3×3 buttons pulsing in a diagonal wave */}
         <svg className={css.icon} viewBox="0 0 80 100" width="64" height="80" fill="none" stroke="currentColor"

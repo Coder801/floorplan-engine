@@ -1,5 +1,5 @@
 // Settings, a gear in the header (and on the welcome screen): account (who is logged in, "Log
-// out"), plan (account type), "Studio settings" (pages/Studio, studio only), theme and interface language (i18n: Ukrainian, Russian, English; the choice is remembered);
+// out"), plan (account type), "Studio settings" (pages/Studio, studio only), interface mode (simple or engineering, shared/mode.ts; what each shows is a tooltip on its button, ui/Tooltip), theme and interface language (i18n: Ukrainian, Russian, English; the choice is remembered);
 // at the bottom the product version and stage with the build number (shared/version.ts)
 
 import { useTranslation } from "react-i18next";
@@ -7,7 +7,9 @@ import type { Space } from "@/shared/auth";
 import { THEMES, type Theme } from "@/shared/consts";
 import { cx } from "@/shared/cx";
 import { LANGUAGES, setLanguage } from "@/shared/i18n";
+import { UI_MODES, type UiMode } from "@/shared/mode";
 import { usePopover } from "@/shared/popover";
+import { useTooltip } from "@/ui/Tooltip";
 import { APP_VERSION, BRAND, BUILD_ID, STAGE } from "@/shared/version";
 import menu from "@/shared/styles/menu.module.scss";
 import ui from "@/shared/styles/ui.module.scss";
@@ -29,12 +31,15 @@ interface Props {
   account: Account | null;
   theme: Theme;
   onTheme: (t: Theme) => void;
+  mode: UiMode;
+  onMode: (m: UiMode) => void;
   onStudio?: () => void;  // open the studio settings (studio only; no button otherwise)
 }
 
-export function Settings({ account, theme, onTheme, onStudio }: Props) {
-  const { open, setOpen, toggle, ref } = usePopover<HTMLDivElement>();
+export function Settings({ account, theme, onTheme, mode, onMode, onStudio }: Props) {
+  const { open, closing, setOpen, toggle, ref } = usePopover<HTMLDivElement>();
   const { t } = useTranslation();
+  const modeTip = useTooltip();
   const plan = account?.visitor ? "guest" : account?.code ? "code" : account?.plan ?? "none";
   return (
     <div ref={ref} className={cx(menu.wrap, css.settings)}>
@@ -43,7 +48,7 @@ export function Settings({ account, theme, onTheme, onStudio }: Props) {
         <GearIcon />
       </button>
       {open && (
-        <div className={cx(menu.panel, css.panel)} role="dialog" aria-label={t("settings.title")}>
+        <div className={cx(menu.panel, css.panel)} data-pop="" data-closing={closing || undefined} role="dialog" aria-label={t("settings.title")}>
           <section>
             <h3>{t("settings.account")}</h3>
             {account ? (
@@ -69,6 +74,17 @@ export function Settings({ account, theme, onTheme, onStudio }: Props) {
             </section>
           )}
           <section>
+            <h3>{t("settings.mode")}</h3>
+            <div className={cx(ui.segmented, css.themes)} role="radiogroup" aria-label={t("settings.mode")}>
+              {UI_MODES.map((m) => (
+                <button key={m} role="radio" aria-checked={m === mode} className={cx(m === mode && ui.on)}
+                        {...modeTip.on(t(`settings.modes.${m}Note`))}
+                        onClick={() => onMode(m)}>{t(`settings.modes.${m}`)}</button>
+              ))}
+            </div>
+            {modeTip.tip}
+          </section>
+          <section>
             <h3>{t("settings.theme")}</h3>
             <div className={cx(ui.segmented, css.themes)} role="radiogroup" aria-label={t("settings.theme")}>
               {THEMES.map((th) => (
@@ -93,7 +109,7 @@ export function Settings({ account, theme, onTheme, onStudio }: Props) {
 
 // Interface language: a button with the name and a language menu; switches right away, no reload
 function LanguageSelect() {
-  const { open, setOpen, toggle, ref } = usePopover<HTMLDivElement>();
+  const { open, closing, setOpen, toggle, ref } = usePopover<HTMLDivElement>();
   const { t, i18n } = useTranslation();
   const code = i18n.language;
   const current = LANGUAGES.find((l) => l.code === code) ?? LANGUAGES[0];
@@ -105,7 +121,7 @@ function LanguageSelect() {
         <span aria-hidden="true">▾</span>
       </button>
       {open && (
-        <div className={cx(menu.panel, css.langs)} role="listbox" aria-label={t("settings.language")}>
+        <div className={cx(menu.panel, css.langs)} data-pop="" data-closing={closing || undefined} role="listbox" aria-label={t("settings.language")}>
           {LANGUAGES.map(({ code: c, name }) => (
             <button key={c} className={menu.item} role="option" aria-selected={c === code} onClick={() => pick(c)}>
               {name}

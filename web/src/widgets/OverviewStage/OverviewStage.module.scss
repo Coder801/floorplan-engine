@@ -36,6 +36,7 @@
 .scroll { overflow-x: auto; }
 .error { color: var(--major); }
 .on td { background: var(--hl-row); font-weight: 600; }
+.cheaper { color: var(--ok); }  // the neighbour saves money
 .tag {
   margin-left: 6px; padding: 1px 6px; border-radius: 10px; font-size: 10px; font-weight: 400;
   color: var(--muted); border: 1px solid var(--line); white-space: nowrap;
@@ -55,6 +56,34 @@
   background: var(--accent); color: var(--accent-text);
 }
 .side { @include pairs(8px 12px); font-size: 13px; }
+
+// Side panel of the tab: setup progress and questions (OverviewSummary)
+.sideBody { display: grid; gap: 20px; }
+.block {
+  display: grid; gap: 10px;
+  h3 { margin: 0; font-size: 13px; font-weight: 600; }
+  p { margin: 0; }
+  .actions button { flex: 1 1 auto; }
+}
+// Every row is the same height: an open step is a button, a decided one is text
+.steps {
+  display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; font-size: 13px; line-height: 20px;
+  li { display: grid; grid-template-columns: 16px 1fr; align-items: center; gap: 8px; color: var(--muted); }
+  .todo { color: var(--text); }
+}
+.mark { display: flex; align-items: center; justify-content: center; height: 20px; color: var(--ok); }
+.check { width: 14px; height: 14px; }
+.dash { display: block; width: 8px; height: 2px; border-radius: 1px; background: var(--major); }
+.note { margin: 0; }
+.stepLink {
+  @include bare-button;
+  min-height: 0; padding: 0; border-radius: 0; line-height: inherit;
+  text-align: left; cursor: pointer; color: var(--text);
+  text-decoration: underline; text-decoration-color: var(--line); text-underline-offset: 3px;
+  &:hover { text-decoration-color: currentColor; }
+}
+// Kept on the page only where the side panel folds under the drawing
+@media (min-width: $narrow + 1) { .narrowOnly { display: none; } }
 
 @media (max-width: $phone) { .setup { flex-wrap: wrap; justify-content: stretch; } .setupNote { max-width: none; text-align: left; } .card { padding: 16px; } .total { grid-template-columns: 1fr; grid-template-areas: "h" "sum" "btn"; row-gap: 4px; } .primary { width: 100%; } }
 

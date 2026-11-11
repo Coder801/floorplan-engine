@@ -1,15 +1,17 @@
 // Project questions in the slide-out panel: short rows with one open card, an answer right in the
 // card. A value, a choice and a kept assumption rebuild the project (the panel stays usable, the
 // next question opens at once); a text answer is only saved and waits for the analyzer. Who may
-// answer — can.answer; the studio also sees ids and field paths.
+// answer — can.answer; the studio also sees ids and field paths. A client question only clarifies
+// (decision 2026-11-11): any answer goes as { text }, the studio takes it into account or sends it
+// back with a comment (can.review).
 
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { AnswerRefused, type AnswerResult } from "@/shared/api";
+import { AnswerRefused, type AnswerResult, type ReviewOutcome } from "@/shared/api";
 import { cx } from "@/shared/cx";
 import i18n, { label } from "@/shared/i18n";
 import {
-  keepOrder, listOrder, nextOpen, parseNumber, plainNumber, shortMessage, shownOn, statusOf,
+  forClient, groupOf, keepOrder, listOrder, nextOpen, parseNumber, plainNumber, returnedComment, shortMessage, shownOn, statusOf,
   type Answer, type Group, type QuestionsMemory, type Status,
 } from "@/shared/questions";
 import ui from "@/shared/styles/ui.module.scss";
@@ -21,6 +23,7 @@ interface Props {
   busy: boolean;  // an answer is being saved or the project reloaded
   // null: the person chose to stay with unsaved route edits
   onAnswer: (id: string, answer: Answer | null) => Promise<AnswerResult | null>;
+  onReview: (id: string, outcome: ReviewOutcome, comment?: string) => Promise<AnswerResult | null>;
   stages: string[];  // stages of the sheets: where "show" can lead
   onShow: (to: { stage: string; key: string | null }) => void;
   memory: React.MutableRefObject<QuestionsMemory>;  // the panel closes, this stays
@@ -34,6 +37,7 @@ interface CardProps {
   status: Status;
   can: boolean;       // this person may answer
   studio: boolean;    // ids, field paths, whole check messages
+  reviewer: boolean;  // takes client answers into account or sends them back
   busy: boolean;
   working: boolean;   // this question's answer is being checked and the project rebuilt
   editing: boolean;
@@ -46,19 +50,21 @@ interface CardProps {
   onAsk: (on: boolean) => void;
   onOpen: (id: string) => void;
   onLocal: (message: string) => void;
+  onReview: (outcome: ReviewOutcome, comment?: string) => void;
 }
 
-export function Questions({ project: p, busy, onAnswer, stages, onShow, memory }: Props) {
+export function Questions({ project: p, busy, onAnswer, onReview, stages, onShow, memory }: Props) {
   const { t } = useTranslation();
   const qs = p.report?.questions ?? [];
   const can = p.can?.answer === true;
   const studio = p.can?.edit_wiring !== false;
+  const reviewer = p.can?.review === true;
   const order = useRef<Map<string, Group>>(listOrder(qs, p.answers));
   order.current = keepOrder(order.current, qs);
   const ids = [...order.current.keys()];
   const byId = new Map(qs.map((q) => [q.id, q]));
   const status = (id: string): Status => statusOf(p.answers[id]);
-  const firstOpen = ids.find((id) => status(id) === "open");
+  const firstOpen = ids.find((id) => groupOf(status(id)) === "open");
   const [expanded, setExpanded] = useState<string | null>(
     memory.current.expanded !== undefined ? memory.current.expanded : can ? firstOpen ?? null : null);
   const [drafts, setDrafts] = useState<Record<string, string>>(memory.current.drafts);
@@ -120,13 +126,29 @@ export function Questions({ project: p, busy, onAnswer, stages, onShow, memory }
     }
   };
 
-  const counts = ids.reduce((n, id) => {
-    const s = status(id);
-    return { ...n, [s === "open" || s === "pending" ? s : "closed"]: n[s === "open" || s === "pending" ? s : "closed"] + 1 };
-  }, { open: 0, pending: 0, closed: 0 } as Record<Group, number>);
+  // Taken into account: the question closes and the project is rebuilt; sent back: only saved
+  const review = async (q: Question, outcome: ReviewOutcome, comment?: string) => {
+    fail(q.id, null);
+    setDone(null);
+    setWorking(outcome === "resolve" ? q.id : null);
+    before.current = qs.length;
+    try {
+      const result = await onReview(q.id, outcome, comment);
+      if (result === null) { setWorking(null); return; }
+      setDrafts(({ [q.id]: _, ...rest }) => rest);
+      if (result.rebuilt) settled.current = true;
+      else setWorking(null);
+    } catch (e) {
+      fail(q.id, e instanceof AnswerRefused ? e : (e as Error).message);
+      setWorking(null);
+    }
+  };
+
+  const counts = ids.reduce((n, id) => ({ ...n, [groupOf(status(id))]: n[groupOf(status(id))] + 1 }),
+                            { open: 0, pending: 0, closed: 0 } as Record<Group, number>);
 
   const card = (q: Question) => (
-    <Card key={q.id} q={q} answer={p.answers[q.id]} status={status(q.id)} can={can} studio={studio}
+    <Card key={q.id} q={q} answer={p.answers[q.id]} status={status(q.id)} can={can} studio={studio} reviewer={reviewer}
           busy={busy} working={working === q.id} editing={editing === q.id} asking={asking === q.id}
           draft={drafts[q.id]} failure={failures[q.id]}
           open={expanded === q.id}
@@ -141,7 +163,8 @@ export function Questions({ project: p, busy, onAnswer, stages, onShow, memory }
           }}
           onAsk={(on) => setAsking(on ? q.id : null)}
           onOpen={setExpanded}
-          onLocal={(message) => fail(q.id, message)} />
+          onLocal={(message) => fail(q.id, message)}
+          onReview={(outcome, comment) => void review(q, outcome, comment)} />
   );
 
   const group = (g: Group, title: string) => {
@@ -180,6 +203,9 @@ export function Questions({ project: p, busy, onAnswer, stages, onShow, memory }
   );
 }
 
+// Card stripe by severity (critical, major, minor); an unknown one has none
+const SEVERITY: Record<string, string | undefined> = { critical: css.critical, major: css.major, minor: css.minor };
+
 interface RowProps extends CardProps {
   open: boolean;
   onToggle: () => void;
@@ -188,15 +214,18 @@ interface RowProps extends CardProps {
 }
 
 function Card(props: RowProps) {
-  const { q, answer, status, can, studio, working, failure, open, onToggle, shows, onShow } = props;
+  const { q, answer, status, can, studio, reviewer, working, failure, open, onToggle, shows, onShow } = props;
   const { t } = useTranslation();
   const word = working ? "rebuilding" : status === "open" ? null : status;
+  const comment = returnedComment(answer);
   return (
-    <div className={cx(css.row, open && css.expanded, failure && css.failed)}>
+    <div className={cx(css.row, SEVERITY[q.severity], groupOf(status) === "closed" && css.done,
+                       open && css.expanded, failure && css.failed)}>
       <button className={css.head} aria-expanded={open} onClick={onToggle}>
         <span className={css.meta}>
           <span className={`sev-${q.severity}`}>
             {`${label("severity", q.severity)} · ${label("stage", q.stage)}`}
+            {studio && forClient(q) && ` · ${t("questions.forClient")}`}
             {studio && <span className={cx(css.id, "mono muted")}>{` · ${q.id}`}</span>}
           </span>
           {word && <span className={cx(css.word, css[word])}>{t(`questions.status.${word}`)}</span>}
@@ -210,7 +239,10 @@ function Card(props: RowProps) {
           {q.assumption !== undefined && q.answer !== "choice" && status === "open" && (
             <div className={css.now}>{t("questions.now", { value: shown(q, q.assumption) })}</div>
           )}
+          {comment && status === "returned" && <div className={css.returned}>{t("questions.returnedBy", { comment })}</div>}
           {can ? <Controls {...props} /> : <Answered q={q} answer={answer} status={status} empty />}
+          {forClient(q) && status === "pending" && (reviewer ? <Review {...props} /> : can && <div className={css.hint}>{t("questions.clientWaits")}</div>)}
+          {forClient(q) && status === "resolved" && <div className={css.hint}>{t("questions.resolvedClient")}</div>}
           {shows && (
             <div className={css.actions}>
               <button className={css.quiet} onClick={() => onShow(shows)}>
@@ -236,7 +268,11 @@ function shown(q: Question, value: unknown): string {
 function answerValue(q: Question, answer: unknown): string {
   if (Array.isArray(answer)) return answer.join(", ");
   const o = answer as { text?: string };
-  return o && typeof o === "object" ? `«${o.text}»` : shown(q, answer);
+  if (!o || typeof o !== "object") return shown(q, answer);
+  // A client value or choice is kept as text: it reads as the value it is
+  if (forClient(q) && q.answer === "value") return shown(q, parseNumber(o.text ?? "") ?? o.text);
+  if (forClient(q) && q.answer === "choice") return shown(q, o.text);
+  return `«${o.text}»`;
 }
 
 function kept(q: Question): string {
@@ -272,7 +308,7 @@ function Controls(props: CardProps) {
       </>
     );
   }
-  if (status === "open" || editing) return <Form {...props} />;
+  if (status === "open" || status === "returned" || editing) return <Form {...props} />;
   const resolved = status === "resolved";
   return (
     <>
@@ -295,7 +331,7 @@ function Controls(props: CardProps) {
           )}
         </div>
       )}
-      {resolved && <div className={css.hint}>{t("questions.resolvedNote")}</div>}
+      {resolved && !forClient(q) && <div className={css.hint}>{t("questions.resolvedNote")}</div>}
       <FailureBox {...props} />
     </>
   );
@@ -310,15 +346,17 @@ function Form(props: CardProps) {
       {q.answer === "value" ? t("questions.keep", { value: shown(q, q.assumption) }) : t("questions.keepPlain")}
     </button>
   ) : null;
-  const value = draft ?? (editing && typeof answer !== "object" ? plainNumber(answer) : "");
+  const client = forClient(q);
+  const before = typeof answer === "object" && answer !== null ? (answer as { text?: string }).text : answer;
+  const value = draft ?? (editing && before !== undefined ? plainNumber(before) : "");
   let form: React.ReactNode;
   if (q.answer === "choice") {
-    const chosen = editing ? answer : undefined;
+    const chosen = editing ? before : undefined;
     form = (
       <div className={css.options} role="radiogroup" aria-label={t("questions.yourAnswer")}>
         {(q.options ?? []).map((v) => (
           <button key={v} className={css.option} role="radio" aria-checked={v === chosen} disabled={busy}
-                  onClick={() => onSave(v === q.assumption ? { accept: true } : v)}>
+                  onClick={() => onSave(client ? { text: v } : v === q.assumption ? { accept: true } : v)}>
             <span className={css.dot} />
             <span>
               {shown(q, v)}
@@ -335,7 +373,7 @@ function Form(props: CardProps) {
         ev.preventDefault();
         const n = parseNumber(value);
         if (n === null) onLocal(t("questions.notNumber"));
-        else onSave(n);
+        else onSave(client ? { text: plainNumber(n) } : n);
       }}>
         <label className={css.label} htmlFor={`q-${q.id}`}>{t("questions.yourAnswer")}</label>
         <div className={css.valueRow}>
@@ -377,6 +415,42 @@ function Form(props: CardProps) {
         </div>
       )}
     </>
+  );
+}
+
+// The studio on a client answer waiting for it: taken into account, or sent back with a comment
+function Review(props: CardProps) {
+  const { busy, working, draft, onDraft, onReview } = props;
+  const { t } = useTranslation();
+  const [back, setBack] = useState(false);
+  if (working) return null;
+  if (!back) {
+    return (
+      <>
+        <div className={css.actions}>
+          <button className={ui.primary} disabled={busy} onClick={() => onReview("resolve")}>{t("questions.accept")}</button>
+          <button className={css.quiet} disabled={busy} onClick={() => setBack(true)}>{t("questions.sendBack")}</button>
+        </div>
+        <div className={css.hint}>{t("questions.reviewHint")}</div>
+        {!props.can && <FailureBox {...props} />}
+      </>
+    );
+  }
+  const text = draft ?? "";
+  return (
+    <form onSubmit={(ev) => {
+      ev.preventDefault();
+      if (text.trim()) onReview("return", text.trim());
+    }}>
+      <label className={css.label} htmlFor={`back-${props.q.id}`}>{t("questions.backComment")}</label>
+      <textarea id={`back-${props.q.id}`} className={css.area} value={text} maxLength={2000}
+                onChange={(ev) => onDraft(ev.target.value)} />
+      <div className={css.actions}>
+        <button className={ui.primary} disabled={busy || !text.trim()}>{t("questions.backSend")}</button>
+        <button type="button" className={css.quiet} onClick={() => setBack(false)}>{t("questions.cancel")}</button>
+      </div>
+      {!props.can && <FailureBox {...props} />}
+    </form>
   );
 }
 

@@ -16,6 +16,7 @@ import type { Page } from "@/shared/types";
 import { clampStep, Glide, LAST_STEP, PinchSteps, RAIL_PX, stepBelow, WheelSteps, ZOOM_STEPS, zoomLabel, type Zoom } from "@/shared/zoom";
 import { layerShown, objectLayers, sceneOf, type Drawing, type DrawingItem } from "./drawing";
 import { followsObject, objectVisible, ownLayers, repeatsNumbers, scoped, wiringChains } from "./views";
+import { FLOOR_ALPHA, FLOOR_FADE_MS, floorPath, stepFades } from "./floors";
 import { inBox, paint, type DrawItem } from "./paint";
 import { Pinch } from "./pinch";
 
@@ -56,6 +57,8 @@ export class SheetView {
   private w = 1; private h = 1; private dpr = 1;
   private scale = 1; private fitScale = 1; private ox = 0; private oy = 0;
   private frame = 0; private flowFrame = 0;
+  // Floor highlight under the cursor: share shown per floor, its frame and the last step time
+  private fades = new Map<string, number>(); private fadeFrame = 0; private fadeAt = 0;
   private drag: Drag | null = null;
   private readonly pinch = new Pinch();
   private readonly layerOf: Map<string, string>;
@@ -80,7 +83,7 @@ export class SheetView {
     let seen: unknown[] = [];
     this.cleanup.push(view.subscribe(() => {
       const s = view.get();
-      const now = [s.hover, s.lit, s.selected, s.neighbors, s.hidden, s.extra, s.editMode, s.show3d, s.themeTick, s.filter3d, s.electricalView];
+      const now = [s.hover, s.lit, s.selected, s.neighbors, s.hidden, s.extra, s.editMode, s.show3d, s.themeTick, s.filter3d, s.electricalView, s.cables];
       if (now.some((v, i) => v !== seen[i])) { seen = now; this.applyView(); this.draw(); }
     }));
     this.bind();
@@ -100,7 +103,7 @@ export class SheetView {
 
   // Layers of this tab in the chosen view (views.ts)
   private applyView() {
-    this.own = ownLayers(this.drawing, this.page, view.get().electricalView) ?? new Set(this.items.map((i) => i.l));
+    this.own = ownLayers(this.drawing, this.page, view.get().electricalView, view.get().cables) ?? new Set(this.items.map((i) => i.l));
   }
 
   // A label or a box on the electrics views: only with its object
@@ -120,7 +123,7 @@ export class SheetView {
 
   destroy() {
     for (const f of this.cleanup) f();
-    cancelAnimationFrame(this.frame); cancelAnimationFrame(this.flowFrame);
+    cancelAnimationFrame(this.frame); cancelAnimationFrame(this.flowFrame); cancelAnimationFrame(this.fadeFrame);
   }
 
   editing() {
@@ -171,13 +174,43 @@ export class SheetView {
     if (!o) return false;
     const { hover, lit } = view.get();
     if (o === hover) return true;
-    return !!lit && expand(o).some((k) => lit.has(k));
+    if (!lit) return false;
+    // A question about a room (room:hall) also lights the zones of it on the plan
+    const room = o.startsWith("zone:") ? `room:${o.slice(5, o.lastIndexOf("."))}` : null;
+    return expand(o).some((k) => lit.has(k)) || (!!room && lit.has(room));
+  }
+
+  // Floors filled now: the room or zone under the cursor and the lit ones (table row, question)
+  private litFloors(): Set<string> {
+    return new Set(Object.keys(this.index.floors).filter((k) => this.isLit(k)));
+  }
+
+  // Floor fills under the drawing; while one is fading, the next frame is requested
+  private paintFloors(ctx: CanvasRenderingContext2D) {
+    const now = performance.now();
+    const dt = this.fadeAt ? now - this.fadeAt : 0;
+    const moving = stepFades(this.fades, this.litFloors(), dt, REDUCED_MOTION ? 0 : FLOOR_FADE_MS);
+    this.fadeAt = moving ? now : 0;
+    ctx.save();
+    ctx.fillStyle = palette.hl;
+    for (const [key, share] of this.fades) {
+      const rings = this.index.floors[key];
+      if (!rings) continue;
+      ctx.globalAlpha = FLOOR_ALPHA * share;
+      ctx.fill(floorPath(rings), "evenodd");
+    }
+    ctx.restore();
+    if (moving && !this.fadeFrame) {
+      this.fadeFrame = requestAnimationFrame(() => { this.fadeFrame = 0; this.draw(); });
+    }
   }
 
   // How to draw a primitive: colour, opacity, how much thicker
   private look(it: DrawItem): [string, number, number] {
     const o = it.o;
-    if (this.isLit(o)) return [palette.hl, 1, 2];
+    // A floor under the cursor is shown by its fill: its outline (along the walls) and label stay
+    const floorHover = !!o && o === view.get().hover && o in this.index.floors;
+    if (!floorHover && this.isLit(o)) return [palette.hl, 1, 2];
     const c = screenColor(it.c);
     const { selected, neighbors } = view.get();
     if (!selected || !this.index.interactive(o)) return [c, 1, 1];
@@ -260,6 +293,7 @@ export class SheetView {
     // the whole wiring is shown, so the group filter is off
     const skip = this.ed && this.editing() ? this.ed.hiddenKeys() : this.filtered();
     const items = this.items.filter((it) => this.inView(it) && (!it.o || !skip.has(it.o)));
+    this.paintFloors(ctx);
     paint(ctx, items, k, (it) => this.look(it), this.shown, CABLE_MIN_PX * this.dpr);
     if (this.ed) this.ed.paint(ctx, k, performance.now(), this.dpr);
     ctx.restore();
@@ -426,7 +460,10 @@ export class SheetView {
     }
     if (best) return best.o;
     const area = this.shown("A-WALL") ? this.index.areaAt(mx, my) : null;
-    return this.index.interactive(area) ? area : null;
+    if (this.index.interactive(area)) return area;
+    // Nothing drawn under the cursor: the floor of the room or zone (plan sheet)
+    const floor = this.index.floorAt(mx, my);
+    return this.index.interactive(floor) ? floor : null;
   }
 
   private pick(ev: MouseEvent) {

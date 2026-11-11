@@ -2,7 +2,17 @@
 
 @use "@/shared/styles/mixins" as *;
 
-.at { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); z-index: 4; }
+.at {
+  position: absolute; top: 12px; left: 50%; transform: translateX(-50%); z-index: 4;
+  display: flex; align-items: stretch; gap: 8px;
+}
+
+// "All walls": a button of its own, with its name, like "Isometry"
+.all {
+  @include bare-button; @include raised;
+  display: flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 12px;
+  white-space: nowrap; font-size: 14px;
+}
 
 .pager {
   @include raised;
@@ -34,7 +44,11 @@
 
 @media (max-width: $narrow) {
   // Pager on the left, "Download" on the right
-  .at { left: 8px; top: 8px; transform: none; max-width: calc(100% - 172px); }
+  .at { left: 8px; top: 8px; transform: none; max-width: calc(100% - 172px); gap: 6px; }
+  // On a phone the button is the icon alone
+  .all { padding: 0 10px; }
+  .allLabel { display: none; }
+  .pager { min-width: 0; }
   .pager > .title { max-width: none; }
   .list { left: 0; transform: none; width: min(320px, calc(100vw - 16px)); }
 }

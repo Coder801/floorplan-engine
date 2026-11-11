@@ -1,4 +1,5 @@
-// Question list: counters over short rows, one row opened as a card
+// Question list: counters over rows; an open row stays a row (the answer is added below, nothing
+// moves, no card); a stripe on the left is the severity
 
 @use "@/shared/styles/mixins" as *;
 
@@ -24,14 +25,22 @@
 }
 @keyframes ring { to { transform: rotate(360deg); } }
 
-.row { border-bottom: 1px solid var(--line); min-width: 0; }
-.expanded { @include raised; padding: 0 10px 10px; margin: 8px 0; }
-.failed { border-color: var(--critical); }
+.row {
+  --sev: var(--line);
+  min-width: 0; padding: 0 2px 0 12px; border-bottom: 1px solid var(--line);
+  box-shadow: inset 3px 0 var(--sev);
+}
+// Severity: the same colours as its word (global .sev-*); a closed question keeps a pale stripe
+.critical { --sev: var(--critical); }
+.major { --sev: var(--major); }
+.minor { --sev: var(--minor); }
+.done { box-shadow: inset 3px 0 color-mix(in srgb, var(--sev) 35%, var(--line)); }
+.expanded { padding-bottom: 12px; }
+.failed { box-shadow: inset 3px 0 var(--critical); }
 .head {
   @include bare-button;
   display: grid; grid-template-columns: minmax(0, 1fr) 18px; gap: 0 6px; width: 100%; text-align: left;
-  padding: 8px 2px; min-height: 64px; border-radius: 0;
-  .expanded & { padding: 8px 0 2px; min-height: 44px; }
+  padding: 10px 0 8px; min-height: 56px; border-radius: 0;
 }
 .meta {
   display: flex; flex-wrap: wrap; gap: 0 8px; justify-content: space-between;
@@ -42,6 +51,9 @@
 .word { font-size: 12px; font-weight: 500; text-transform: none; letter-spacing: 0; }
 .answered, .accepted, .resolved { color: var(--ok); }
 .pending { color: var(--pin); }
+// A client answer the studio sent back: its comment above the form
+.returned { color: var(--major); }
+div.returned { font-size: 13px; margin: 2px 0 8px; }
 .rebuilding { color: var(--muted); }
 .text, .summary { grid-column: 1 / 3; font-weight: 400; }
 .text { margin: 4px 0; }

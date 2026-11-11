@@ -50,3 +50,20 @@ pre {
 .st-questions { color: var(--major); }
 .st-insufficient, .st-invalid, .st-blocked { color: var(--critical); }
 .st-absent, .st-unsupported { color: var(--muted); }
+
+// Popups fade in and out, one rule for all (attributes, not module classes):
+// data-veil — a full-screen backdrop, data-pop — a card or list ("modal" — a dialog in the
+// middle, slightly scaled), data-closing — it is leaving (usePopover and the dialogs keep it on
+// screen for FADE_MS, shared/popover.ts)
+[data-veil] { animation: fade-in .18s ease-out; }
+[data-pop] { animation: fade-in .14s ease-out; }
+[data-pop="modal"] { animation: modal-in .18s ease-out; }
+[data-veil][data-closing], [data-pop][data-closing] { animation: fade-out .14s ease-in forwards; pointer-events: none; }
+[data-pop="modal"][data-closing] { animation: modal-out .14s ease-in forwards; }
+@keyframes fade-in { from { opacity: 0; } }
+@keyframes fade-out { to { opacity: 0; } }
+@keyframes modal-in { from { opacity: 0; transform: scale(.97); } }
+@keyframes modal-out { to { opacity: 0; transform: scale(.97); } }
+@media (prefers-reduced-motion: reduce) {
+  [data-veil], [data-pop], [data-veil][data-closing], [data-pop][data-closing] { animation: none; }
+}

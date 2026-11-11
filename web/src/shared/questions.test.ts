@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  groupOf, keepOrder, listOrder, nextOpen, objectOf, parseNumber, plainNumber, shortMessage, shownOn, statusOf,
+  forClient, groupOf, keepOrder, listOrder, nextOpen, objectOf, parseNumber, plainNumber, returnedComment, shortMessage, shownOn, statusOf,
 } from "./questions";
 import type { Question } from "./types";
 
@@ -16,6 +16,18 @@ describe("вопросы", () => {
     expect(statusOf(700)).toBe("answered");
     expect(statusOf(0)).toBe("answered");
     expect(groupOf("resolved")).toBe("closed");
+  });
+
+  it("ответ заказчика, возвращённый студией, снова ждёт ответа", () => {
+    const back = { text: "2", returned: "У какого стола?" };
+    expect(statusOf(back)).toBe("returned");
+    expect(groupOf("returned")).toBe("open");
+    expect(returnedComment(back)).toBe("У какого стола?");
+    expect(returnedComment({ text: "2" })).toBeNull();
+    expect(returnedComment(700)).toBeNull();
+    expect(nextOpen(["a", "b", "c"], (id) => (id === "c" ? "returned" : "answered"), "a")).toBe("c");
+    expect(forClient({ audience: "client" })).toBe(true);
+    expect(forClient({})).toBe(false);  // an older build: the studio's
   });
 
   it("порядок: группы, внутри — вес", () => {

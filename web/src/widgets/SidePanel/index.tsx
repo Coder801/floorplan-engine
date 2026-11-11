@@ -41,6 +41,7 @@ interface Props {
   // choice is on the "Overview" tab (onOpen)
   variant?: { label: string; onOpen: () => void } | null;
   summary?: React.ReactNode;    // "Overview" tab: totals instead of tables and layers
+  layers?: boolean;             // the "Layers" tab (the simple interface mode has only tables)
   children?: React.ReactNode;  // the header slide-out panel, on top of the side panel
 }
 
@@ -51,9 +52,9 @@ const VARIANT_STAGES = new Set(["electrical", "lighting", "wiring"]);
 export const hasLayers = (page: Page | null) =>
   !!page && !page.panel && page.items.some((it) => !SHEET_ONLY.has(it.l));
 
-export function SidePanel({ tab, onTab, page, drawing, views, view: current, onView, wall, estimate, onWiring, variant, summary, children }: Props) {
+export function SidePanel({ tab, onTab, page, drawing, views, view: current, onView, wall, estimate, onWiring, variant, summary, layers = true, children }: Props) {
   const { t } = useTranslation();
-  const tabs: SideTab[] = wall || estimate || summary ? [] : SIDE_TABS.filter((k) => k !== "layers" || hasLayers(page));
+  const tabs: SideTab[] = wall || estimate || summary ? [] : SIDE_TABS.filter((k) => k !== "layers" || (layers && hasLayers(page)));
   const shown = tabs.includes(tab) ? tab : "tables";
   const [open, setOpen] = useState(false);  // narrow screen: the drawer is expanded
   const hasViews = !estimate && !summary && !!views && views.length > 1;
@@ -101,6 +102,7 @@ export function SidePanel({ tab, onTab, page, drawing, views, view: current, onV
 function Tables({ page, drawing }: { page: Page | null; drawing: Drawing | null }) {
   const { t } = useTranslation();
   const electricalView = useView((s) => s.electricalView);
+  const cables = useView((s) => s.cables);
   const hover = useView((s) => s.hover);
   const filter = useView((s) => s.filter3d);
   const selected = useView((s) => s.selected);
@@ -114,7 +116,7 @@ function Tables({ page, drawing }: { page: Page | null; drawing: Drawing | null 
 
   if (!page) return <div className="muted">{t("side.noSheet")}</div>;
   const tables = page.stage === "electrical" && drawing
-    ? viewTables(page.tables || [], ownLayers(drawing, page, electricalView), objectLayers(drawing))
+    ? viewTables(page.tables || [], ownLayers(drawing, page, electricalView, cables), objectLayers(drawing))
     : page.tables || [];
   if (!tables.length) return <div className="muted">{t("side.noTables")}</div>;
   // The eye of a group: every group of the sheet counts, also one with no table row

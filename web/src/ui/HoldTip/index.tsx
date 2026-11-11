@@ -28,7 +28,7 @@ export function useHoldTip(): {
     timer.current = window.setTimeout(() => setShown({ text, ...at.current }), HOLD_MS);
   };
   const tip = shown && (
-    <div role="tooltip" className={css.tip} style={place(shown, window.innerWidth, window.innerHeight)}>{shown.text}</div>
+    <div role="tooltip" data-pop="" className={css.tip} style={place(shown, window.innerWidth, window.innerHeight)}>{shown.text}</div>
   );
   return { start, move, stop, tip };
 }

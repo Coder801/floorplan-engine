@@ -40,7 +40,7 @@ export const en: Messages = {
     "0": "other",
   },
   object: {
-    room: "Room", wall: "Wall", dimension: "Wall dimensions", opening: "Opening",
+    room: "Room", zone: "Room zone", wall: "Wall", dimension: "Wall dimensions", opening: "Opening",
     point: "Point", label: "Point label", board: "Panel", cable: "Cable", led_strip: "LED strip",
     wire: "Wiring line", box: "Box",
   },
@@ -65,7 +65,11 @@ export const en: Messages = {
     fewer: "{{n}} fewer questions: this answer made them unnecessary.", more: "New questions: {{n}}.",
     locked: "You can save after the build. Your text stays here.", notSaved: "Not saved. The project is unchanged.",
     show: "Show on the drawing", showPanel: "Open the panel", pickGroups: "Choose groups", notNumber: "Enter a number", blockedBy: "Blocked by the answer to:", also: "same answer in {{n}} more fields",
-    status: { answered: "answer applied", accepted: "kept as is", pending: "answer received, awaiting review", resolved: "answer reviewed", rebuilding: "rebuilding" },
+    forClient: "for the client", clientWaits: "The studio has your answer and will take it into account.",
+    returnedBy: "The studio asks to clarify: {{comment}}", resolvedClient: "The studio took the answer into account.",
+    accept: "Taken into account", sendBack: "Send back", backComment: "What to clarify", backSend: "Send back with a comment",
+    reviewHint: "Taken into account closes the question; if the answer changes something, edit the project sources.",
+    status: { answered: "answer applied", accepted: "kept as is", pending: "answer received, awaiting review", returned: "needs clarifying", resolved: "answer reviewed", rebuilding: "rebuilding" },
   },
   drawer: {
     questions: "Questions", sources: "Sources", project: "Project",
@@ -94,6 +98,18 @@ export const en: Messages = {
     loadingSheet: "Loading sheet…", loadingProject: "Loading project…",
     sheetPages: "Sheet pages", prevPage: "Previous page", nextPage: "Next page",
     savedNotes: "wiring.yaml: {{notes}}",
+  },
+  alpha: {
+    title: "is in alpha testing",
+    lead: "Thank you for being one of the first to try the service. The core already works, but the product is still in development — here is what to keep in mind.",
+    points: {
+      errors: "Drawings, calculations and estimates may contain errors. Check dimensions, cable sizes and totals before starting work on site.",
+      changes: "Features and the interface change often: after an update something may move or look different.",
+      projects: "Your projects are kept. After updates they are rebuilt with the new code, so sheets and estimates may change slightly.",
+      feedback: "Spotted a mistake or missing something? Tell us — it helps the service get accurate faster.",
+    },
+    ok: "Got it, continue",
+    foot: "This window is shown once. The product stage is in settings, next to the version.",
   },
   boundary: {
     failed: "The sheet failed to render: {{message}}",
@@ -154,6 +170,7 @@ export const en: Messages = {
     none: "No estimate: rebuild the project (floorplan-engine build)",
   },
   settings: {
+    mode: "Interface", modes: { simple: "Simple", engineering: "Engineering", simpleNote: "drawing, elevations, estimate and questions — no engineering sheets", engineeringNote: "every sheet: wiring, panel, layers, sources, DXF" },
     studio: "Studio settings", studioNote: "profile, price list",
     title: "Settings", account: "Account", loginOff: "Sign-in is off — local viewing",
     plan: "Plan", theme: "Theme", language: "Language", version: "{{version}} · {{stage}}", build: "build {{build}}",
@@ -256,23 +273,27 @@ export const en: Messages = {
   eye: { show: "Show: {{what}}", hide: "Hide: {{what}}" },
   pager: {
     walls: "Wall elevations", prev: "Previous wall", next: "Next wall",
-    all: "All walls", list: "Walls",
+    all: "Wall list", list: "Walls", overview: "All walls",
+  },
+  wallGrid: {
+    back: "Back to the wall", count: "Walls: {{n}}",
+    open: "Open: {{title}}",
   },
   tip: { close: "Close tooltip", openWall: "Wall elevation", mm: "{{v}} mm", blockAria: "Block: {{n}} posts, {{x}} mm from the wall start, {{y}} mm from the floor" },
   overview: {
+    progress: { title: "Project readiness", done: "{{done}} of {{total}} decided", all: "All decided: the estimate and panel follow your answers", open: "not decided", decided: "decided", noQuestions: "No open questions" },
     tab: "Overview", side: "In brief", title: "Overview",
     object: "Object", building: "Building, premises", code: "Document code", stage: "Stage",
     organization: "Organization", area: "Area", ceiling: "Ceiling height",
     assumed: "assumption: not given in the plan", rooms: "Rooms", room: "Room", wet: "wet",
     planned: "What is planned", points: "Points", qty: "Qty", panel: "Panel",
-    schemes: { economy: "economy", standard: "standard", premium: "premium" },
-    supply1: "single phase", supply3: "three phases", panelLine: "scheme — {{scheme}}, {{supply}}, input {{input}}, {{devices}} devices, {{groups}} circuits",
+    supply1: "single phase", supply3: "three phases", panelLine: "breakers — {{scheme}}, {{supply}}, input {{input}}, {{devices}} devices, {{groups}} circuits",
     load: "load: installed {{installed}} kW, calculated {{calculated}} kW",
-    variant: "Wiring option", compare: "Options compared",
-    col: { mode: "Mode", route: "Route", total: "Electrical estimate", cable: "Cable, m", conduit: "Conduit, m", devices: "Devices", chases: "Chases, m" },
+    variant: "Wiring option", compare: "What if one item changes", compareNote: "The same set with only one setup answer changed. “Difference” is how much the electrical estimate changes.",
+    col: { change: "What changes", total: "Electrical estimate", delta: "Difference", cable: "Cable, m", conduit: "Conduit, m", devices: "Devices", chases: "Chases, m" },
     sources: "Source data", sourcesLine: "Files: {{n}}, parsed: {{parsed}}.",
     questions: "Open questions: {{n}}", openQuestions: "Questions", openSources: "Sources",
-    customRow: "Your set", ceilingRange: "from {{min}} to {{max}} mm",
+    yourSet: "Your set", ceilingRange: "from {{min}} to {{max}} mm",
     total: "Project total", openEstimate: "Open the estimate",
     totalParts: "electrical (chosen option) {{electrical}} · plumbing {{plumbing}}",
     plumbingEstimate: "Plumbing estimate", unpriced: "unpriced: {{n}} items",
@@ -287,32 +308,9 @@ export const en: Messages = {
   },
   rebuild: { title: "Recalculating the estimate…", note: "The project is being rebuilt, this takes a few seconds." },
   variant: {
-    modes: { economy: "Economy", standard: "Standard", proper: "Premium" },
-    differences: "How the modes differ",
-    modeDetails: {
-      economy: {
-        route: "Ceiling and floor runs take the shortest path at any angle, at least 150 mm from walls.",
-        breakers: "Breakers follow the design's circuits.",
-        panel: "Panel: wet zones under one shared RCD, no voltage relay, backup via a manual switch.",
-        conduit: "Conduit under the floor only.",
-      },
-      standard: {
-        route: "Runs at right angles, along the walls.",
-        breakers: "Breakers follow the design's circuits.",
-        panel: "Panel: voltage relay, wet zones on RCBOs, backup via ATS.",
-        conduit: "Conduit under the floor only.",
-      },
-      proper: {
-        route: "Runs at right angles, as in Standard.",
-        breakers: "Each line from the panel gets its own breaker: a circuit is split by lines (QF1, QF1.2…).",
-        panel: "Panel: as in Standard, plus surge protection, every circuit on an RCBO, B curve (motors — C).",
-        conduit: "Conduit under the floor and along the ceiling; drops in wall chases go without it.",
-      },
-    },
-    common: "In every mode the points, their places and heights come from the design, and the codes are met. Under the floor the cable is always in conduit; to ceiling lights it runs along the ceiling.",
     routes: { ceiling: "Along the ceiling", floor: "Under the floor" },
     distributions: { boxes: "Junction boxes", loop: "Through socket boxes" },
-    typical: "typical", custom: "A custom set from the project setup.",
+    typical: "typical",
     asProject: "as in the design", edited: "has your route edits",
     stats: "{{devices}} devices · {{cable}} m cable · {{chases}} m chases",
     readOnly: "The studio chooses the option: view only here.",
@@ -330,7 +328,8 @@ export const en: Messages = {
   },
   reserve: {
     title: "What stays on backup", why: "These groups stay live when the grid is down. The rest switch off.",
-    sum: "On backup: {{power}} kW of {{limit}} kW", sumNoLimit: "On backup: {{power}} kW, source power not set",
+    sum: "Backup peak {{power}} kW of {{limit}} kW", sumNoLimit: "Backup peak {{power}} kW, source power not set",
+    installed: "installed {{power}} kW", peakNote: "Peak is what really runs at once: lighting and steady appliances (fridge, router, boiler) in full, ordinary sockets at 30 %, and of the microwave, kettle, oven, washer only the most powerful one. 20 % headroom: from 80 % of the source it is “near the limit”.",
     assumed: "assumed power", near: "close to the source limit", over: "above the source power: it cannot carry everything at once",
     empty: "Tick at least one group.", save: "Save and recalculate",
     readOnly: "View only: the list is set in the project, or only the studio can change it.",
@@ -338,7 +337,7 @@ export const en: Messages = {
     presets: {
       label: "Quick pick", light: "Lighting only", max: "Most by power", manual: "By hand",
       lightNote: "The minimum: only lighting stays on backup.",
-      maxNote: "As many groups as the source holds: lighting first, then sockets, then heavy appliances, smaller ones first.",
+      maxNote: "As many groups as the source holds by peak: lighting first, then sockets, then heavy appliances, smaller ones first.",
       maxNoLimitNote: "Source power not set: everything except heavy appliances (hob, oven, boiler, floor heating, air conditioners).",
       manualNote: "Tick the groups in the list yourself.",
     },
@@ -423,9 +422,9 @@ export const en: Messages = {
       breakers: {
         short: "Breakers", title: "How should breakers be split?", why: "It decides how many devices go in the panel.",
         options: {
-          simple: { name: "Simple panel", note: "As in Economy: one breaker per group, wet zones under a shared RCD, no voltage relay, backup by a manual switch." },
+          simple: { name: "Simple panel", note: "One breaker per group, wet zones under a shared RCD, no voltage relay, backup by a manual switch." },
           groups: { name: "By project groups", note: "One breaker per group: several lines from the panel can share one. A voltage relay, RCBOs on wet zones, backup through an ATS." },
-          lines: { name: "As correct as possible", note: "As in Premium: a breaker for every line, RCBOs on all groups, curve B, a surge protector." },
+          lines: { name: "As correct as possible", note: "A breaker for every line, RCBOs on all groups, curve B, a surge protector." },
         },
       },
       standby: {
@@ -443,6 +442,7 @@ export const en: Messages = {
           station: { name: "Charging station", note: "The station connects to the panel with a power plug, like a generator." },
         },
       },
+      power: { short: "Backup power", title: "How powerful is the inverter or generator?", why: "The backup bus must not draw more than the backup gives. For an inverter, the power sets the discharge current, the battery breaker and cable.", field: "Power" },
       inverter: {
         short: "Inverter type", title: "Which inverter?", why: "It decides what switches the backup in the panel.",
         options: {

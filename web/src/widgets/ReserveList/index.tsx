@@ -1,5 +1,5 @@
-// What stays on the backup bus: the groups of the project with their power and the sum against
-// the power of the source. Used on the "Panel" page (ReserveStage) and in the setup wizard. A
+// What stays on the backup bus: the groups of the project with their installed power and the
+// design peak against the power of the source (decision 2026-11-11: not everything runs at once). Used on the "Panel" page (ReserveStage) and in the setup wizard. A
 // sum near or over the limit only warns, with a sign and a word: not everything runs at once,
 // and the source may be larger.
 
@@ -8,7 +8,7 @@ import { useTranslation } from "react-i18next";
 import { cx } from "@/shared/cx";
 import ui from "@/shared/styles/ui.module.scss";
 import type { OverviewReserve } from "@/shared/types";
-import { lightOnly, mostByPower, presetOf, type ReservePreset, reserveLevel, reservePower, toggleGroup } from "./reserve";
+import { lightOnly, mostByPower, presetOf, type ReservePreset, reserveLevel, reservePeak, reservePower, toggleGroup } from "./reserve";
 import css from "./ReserveList.module.scss";
 
 interface Props {
@@ -21,7 +21,8 @@ interface Props {
 export function ReserveList({ reserve, value, disabled = false, onChange }: Props) {
   const { t, i18n } = useTranslation();
   const kw = (w: number) => (w / 1000).toLocaleString(i18n.language, { maximumFractionDigits: 2 });
-  const power = reservePower(reserve, value);
+  const power = reservePeak(reserve, value);
+  const installed = reservePower(reserve, value);
   const limit = reserve.limit_kw;
   const level = reserveLevel(power, limit);
   // "By hand" stays chosen once pressed, even while the set happens to match a quick pick
@@ -55,10 +56,12 @@ export function ReserveList({ reserve, value, disabled = false, onChange }: Prop
           {limit === null
             ? t("reserve.sumNoLimit", { power: kw(power) })
             : t("reserve.sum", { power: kw(power), limit: kw(limit * 1000) })}
+          {installed > power && <span className="muted"> · {t("reserve.installed", { power: kw(installed) })}</span>}
           {reserve.limit_assumed && <span className="muted"> · {t("reserve.assumed")}</span>}
           {level !== "ok" && <span> · {t(`reserve.${level}`)}</span>}
         </span>
       </p>
+      <p className={cx("small muted", css.peakNote)}>{t("reserve.peakNote")}</p>
       <ul className={css.list}>
         {reserve.items.map((g) => (
           <li key={g.id}>

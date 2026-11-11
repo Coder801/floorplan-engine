@@ -9,6 +9,7 @@ import { useTranslation } from "react-i18next";
 import { acceptInvite, chooseAccountType, devLogin, enterAsVisitor, getInvite, getMe, logout, type Invite, type Me } from "@/shared/auth";
 import { cx } from "@/shared/cx";
 import ui from "@/shared/styles/ui.module.scss";
+import { hideSplash } from "@/shared/splash";
 import { BRAND, STAGE } from "@/shared/version";
 import { GoogleButton } from "@/ui/GoogleButton";
 import { HelpTip } from "@/ui/HelpTip";
@@ -53,6 +54,11 @@ export function Gate({ children }: { children: (account: Account | null) => Reac
       .then((r) => { cleanUrl(); if (r.project) location.hash = encodeURIComponent(r.project); void refresh(); })
       .catch((e: Error) => { setError(e.message); cleanUrl(); });
   }, [token, me?.user?.id]);
+
+  // The splash leaves when Gate shows its own screen (login, account type, an error); the viewer
+  // removes it itself once the projects are loaded
+  const own = me === null ? !!error : me.auth && !(me.user || me.visitor || me.code) || (!!me.user && !me.user.account_type && !token);
+  useEffect(() => { if (own) hideSplash(); }, [own]);
 
   // Product mark and name above the form
   const brand = <span className={css.brand}><Logo size={32} /><b>{BRAND}</b><i>{t(`app.stages.${STAGE}`)}</i></span>;

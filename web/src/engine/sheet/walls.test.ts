@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Item, Page } from "@/shared/types";
-import { wallPages, wallSheet } from "./walls";
+import { splitTitle, wallPages, wallRooms, wallSheet } from "./walls";
 
 const item = (o: string | undefined, d: string): Item => ({ k: "s", c: "#000000", l: "E-ELEV", o, d });
 const page = (items: Item[], objects: Page["objects"] = {}): Page =>
@@ -34,5 +34,23 @@ describe("wallPages", () => {
     expect(view.slice(1)).toEqual([y0, x1, y1]);
     expect(view[0]).toBeLessThan(x0);  // on the left, a margin for the mini map
     expect(wallSheet(p, w).items.map((i) => i.o)).toEqual(["elevation:a.w1"]);
+  });
+});
+
+describe("wallRooms", () => {
+  it("splits titles into room and wall", () => {
+    expect(splitTitle("Санвузол 2 (пральня) — стіна 2")).toEqual(["Санвузол 2 (пральня)", "стіна 2"]);
+    expect(splitTitle("w3")).toEqual(["", "w3"]);
+  });
+
+  it("groups walls by room in sheet order; a room met again later is a new group", () => {
+    const rooms = wallRooms([
+      { title: "Кухня — стена 1" }, { title: "Кухня — стена 2" }, { title: "Ванная — стена 1" }, { title: "Кухня — стена 3" },
+    ]);
+    expect(rooms).toEqual([
+      { room: "Кухня", items: [{ index: 0, wall: "стена 1" }, { index: 1, wall: "стена 2" }] },
+      { room: "Ванная", items: [{ index: 2, wall: "стена 1" }] },
+      { room: "Кухня", items: [{ index: 3, wall: "стена 3" }] },
+    ]);
   });
 });

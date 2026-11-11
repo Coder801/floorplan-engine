@@ -13,9 +13,28 @@ const ROOM = (
     <rect x="112" y="52" width="10" height="10" rx="1" />
   </>
 );
-// Flat on the right, fed from the left
-const HOUSE = <path d="M96 40l24-22 24 22M102 36V72H138V36" />;
-const FEED = <path className={css.hot} d="M58 56H102" />;
+// The client's flat on the right, fed from the left: an illustrative room in isometry (two walls
+// and the floor, no door) with windows, a sofa, a coffee table and a TV; the feed comes in at the
+// left wall
+const HOUSE = (
+  <>
+    <path d="M100 31L126 16L152 31V65L126 80L100 65Z" />
+    <path className={css.faint} d="M126 16V50M126 50L135.9 55.7M148.62 63.05L152 65M126 50L120.5 53.2M103.9 62.75L100 65" />
+    <g className={css.thin}>
+      {/* windows: one on each wall, with a mullion */}
+      <path d="M107.8 43.5L116.9 38.25V27.25L107.8 32.5ZM112.35 40.9V29.9" />
+      <path d="M128.6 34.5L135.1 38.25V27.25L128.6 23.5ZM131.85 36.4V25.4" />
+      {/* TV on the right wall over a low cabinet */}
+      <path d="M139.5 47.8L148.1 52.75V43.75L139.5 38.8Z" />
+      <path d="M139 53.5L148.62 59.05L145.5 60.85L135.88 55.3ZM135.88 55.3V59.3L145.5 64.85L148.62 63.05V59.05M145.5 60.85V64.85" />
+      {/* two-seat sofa along the left wall */}
+      <path d="M103.9 49.75L114.3 43.75L116.12 44.8L105.72 50.8ZM103.9 49.75V62.75L109.62 66.05L120.02 60.05V55.05L116.12 52.8V44.8M105.72 50.8V58.8L109.62 61.05V66.05M105.72 58.8L116.12 52.8M109.62 61.05L120.02 55.05M110.92 47.8V55.8L114.82 58.05" />
+      {/* coffee table */}
+      <path d="M126 59.5L120.8 62.5L127.3 66.25L132.5 63.25ZM120.8 62.5V66.5M127.3 66.25V70.25M132.5 63.25V67.25" />
+    </g>
+  </>
+);
+const FEED = <path className={css.hot} d="M58 56H100" />;
 const BATTERY = (
   <>
     <rect x="16" y="42" width="42" height="28" rx="2" />
@@ -149,11 +168,31 @@ export const ART: Record<string, ReactNode> = {
   "breakers-simple": <>{breaker(37)}<path className={css.hot} d="M36 45H148M70 45L148 18M100 45L148 72" /></>,
   "breakers-groups": <>{breaker(37)}<path className={css.hot} d="M36 45H70M70 45L148 18M70 45H148M70 45L148 72" /></>,
   "breakers-lines": <>{breaker(10)}{breaker(37)}{breaker(64)}<path className={css.hot} d="M36 18H148M36 45H148M36 72H148" /></>,
-  "standby-no": <>{HOUSE}<path className={css.hot} d="M14 56H102" /><path d="M22 34V72M14 42H30" /></>,
-  "standby-yes": <>{HOUSE}<path className={css.hot} d="M14 56H102" /><rect x="14" y="14" width="44" height="28" rx="2" strokeDasharray="3 4" /></>,
+  "standby-no": <>{HOUSE}<path className={css.hot} d="M14 56H100" /><path d="M22 34V72M14 42H30" /></>,
+  "standby-yes": <>{HOUSE}<path className={css.hot} d="M14 56H100" /><rect x="14" y="14" width="44" height="28" rx="2" strokeDasharray="3 4" /></>,
   "route-ceiling": <>{ROOM}<path className={css.hot} d="M29 36V18H117V52" /></>,
   "route-floor": <>{ROOM}<path className={css.hot} d="M29 56V77H117V62" /></>,
-  ceiling: <><path d="M16 12H148M16 78H148" /><path className={css.hot} d="M80 16V74M75 22l5-6 5 6M75 68l5 6 5-6" /></>,
+  // A living room between the ceiling and the floor: a plant, a sofa under a pendant lamp, a coffee
+  // table and an armchair under a window; the height on the right. The ceiling is faint, the floor
+  // is not drawn: the furniture shows where it is. A wider and taller picture (TALL)
+  ceiling: (
+    <>
+      <path className={css.faint} d="M8 10H192" />
+      <path d="M14 86L16 100H26L28 86ZM21 86V64M21 80q-10-2-11-11q9 1 11 11M21 73q10-2 11-11q-9 1-11 11M21 64q-5-7 0-13q5 6 0 13" />
+      <path d="M70 10V28M62 36L66 28H74L78 36Z" />
+      <rect x="34" y="76" width="8" height="18" rx="2" />
+      <rect x="98" y="76" width="8" height="18" rx="2" />
+      <rect x="42" y="70" width="56" height="14" rx="3" />
+      <path d="M42 84V94H98V84M38 94V100M102 94V100" />
+      <path d="M110 84H132M114 84V100M128 84V100" />
+      <rect x="138" y="76" width="8" height="18" rx="2" />
+      <rect x="158" y="66" width="8" height="28" rx="2" />
+      <path d="M146 84H158M146 94H158M142 94V100M162 94V100" />
+      <rect x="130" y="28" width="24" height="28" rx="1" />
+      <path d="M142 28V56M130 42H154M127 56H157" />
+      <path className={css.hot} d="M184 14V96M179 20l5-6 5 6M179 90l5 6 5-6" />
+    </>
+  ),
   input: (
     <>
       <rect x="56" y="14" width="48" height="62" rx="3" />
@@ -172,7 +211,7 @@ export const ART: Record<string, ReactNode> = {
       <rect x="14" y="40" width="34" height="30" rx="2" />
       <circle cx="31" cy="55" r="8" />
       <path d="M26 55q2.500-5 5 0t5 0" />
-      <path className={css.hot} d="M48 56H74M74 50v12h6v-12zM80 53h6M80 59h6M86 56H102" />
+      <path className={css.hot} d="M48 56H74M74 50v12h6v-12zM80 53h6M80 59h6M86 56H100" />
     </>
   ),
   "backup-station": (
@@ -180,7 +219,7 @@ export const ART: Record<string, ReactNode> = {
       {HOUSE}
       <rect x="14" y="36" width="34" height="36" rx="3" />
       <path d="M22 28h18M24 44h14M24 52h14M24 60h14" />
-      <path className={css.hot} d="M48 56H74M74 50v12h6v-12zM80 53h6M80 59h6M86 56H102" />
+      <path className={css.hot} d="M48 56H74M74 50v12h6v-12zM80 53h6M80 59h6M86 56H100" />
     </>
   ),
   unknown: (
@@ -208,6 +247,15 @@ export const ART: Record<string, ReactNode> = {
       <path className={css.hot} d="M66 45H94M132 45H154" />
     </>
   ),
+  // Backup power: a gauge with its needle near the top
+  power: (
+    <>
+      <path d="M40 72a40 40 0 0 1 80 0" />
+      <path d="M48 56l6 3M80 32v7M112 56l-6 3M58 40l5 5M102 40l-5 5" />
+      <circle cx="80" cy="72" r="4" />
+      <path className={css.hot} d="M80 72L101 47" />
+    </>
+  ),
   "battery-12": cells(1),
   "battery-24": cells(2),
   "battery-48": cells(4),
@@ -220,9 +268,13 @@ export const ART: Record<string, ReactNode> = {
   "master-no": master(false),
 };
 
+// Pictures drawn on a bigger canvas (more detail, shown taller); the rest are 160×90
+const TALL: Record<string, string> = { ceiling: "0 0 200 110" };
+
 export function WizardArt({ name }: { name: string }) {
+  const tall = TALL[name];
   return (
-    <svg className={css.art} viewBox="0 0 160 90" aria-hidden="true">
+    <svg className={tall ? `${css.art} ${css.tall}` : css.art} viewBox={tall ?? "0 0 160 90"} aria-hidden="true">
       {ART[name]}
     </svg>
   );

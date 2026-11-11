@@ -68,6 +68,16 @@ export async function saveAnswer(name: string, id: string, answer: Answer | null
   return answerResult(r);
 }
 
+// The studio reviews a client answer: taken into account (a rebuild) or sent back with a comment
+export type ReviewOutcome = "resolve" | "return";
+
+export async function reviewAnswer(name: string, id: string, outcome: ReviewOutcome, comment?: string): Promise<AnswerResult> {
+  const r = await fetch(`${base(name)}/answers/review`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, outcome, comment }),
+  });
+  return answerResult(r);
+}
+
 // What the setup wizard writes: everything or nothing, with one rebuild
 export interface WizardBody {
   variant?: { mode: string; route: string; distribution: string; path: string; conduit: string | null; plaster: string; rough_light: boolean; ceiling_height?: number };

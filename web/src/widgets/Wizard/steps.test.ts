@@ -75,6 +75,27 @@ describe("шаги мастера", () => {
     expect(ids(setup({ questions: dc }), {})).toEqual([...WIRING, "breakers", "inverter", "battery", "pv", "npe"]);
     expect(ids(setup({ questions: [] }), {})).toEqual([...WIRING, "breakers"]);
   });
+  it("мощность резерва: шаг с любым резервом, в кВт с дробью, уходит вместе с резервом", () => {
+    const power = q("panel_backup_power", 5);
+    const s = setup({ questions: [q("panel_backup", "inverter"), power] });
+    expect(ids(s, yes({ backup: "plug" }))).toContain("power");
+    expect(ids(s, yes({}))).toEqual([...WIRING, "breakers", "standby", "backup", "power"]);
+    expect(ids(s, { standby: "no", backup: "none" })).not.toContain("power");
+    const step = wizardSteps(s, yes({})).find((x) => x.id === "power")!;
+    expect(step.kind).toBe("number");
+    expect(step.question).toBe(power);
+    expect(invalid(step, "3,6")).toBe(false);
+    expect(invalid(step, "0")).toBe(true);
+    expect(wizardBody(s, yes({ ...initialPicks(s), power: "3.6" })).answers).toEqual({ panel_backup_power: 3.6 });
+    const answered = setup({ questions: [q("panel_backup", "inverter", "answered"), power], answers: { panel_backup: "inverter", panel_backup_power: 8 } });
+    expect(wizardBody(answered, { standby: "no", backup: "none" }).answers).toEqual({ panel_backup: "none", panel_backup_power: null });
+  });
+  it("резерва в модели нет: шаг мощности появляется с выбором резерва", () => {
+    const s = setup({ questions: [q("panel_backup", "inverter", "answered")], answers: { panel_backup: "none" } });
+    expect(ids(s)).not.toContain("power");
+    expect(wizardSteps(s, yes({ backup: "station" })).find((x) => x.id === "power")?.question).toBeUndefined();
+    expect(ids(s, yes({ backup: "station" }))).toContain("power");
+  });
   it("одна трасса в проекте — не спрашиваем", () => {
     const one = { ...variants, items: variants.items.filter((i) => i.route === "ceiling") };
     expect(ids(setup({ variants: one }))).not.toContain("route");
@@ -266,7 +287,10 @@ describe("штробы при монтаже до штукатурки", () => {
 
 describe("сколько осталось решить", () => {
   it("открытые вопросы; вариант и потолок уже со значением", () => {
-    expect(setupProgress(setup())).toEqual({ total: 10, open: ["input", "standby"] });
+    const progress = setupProgress(setup());
+    expect(progress).toMatchObject({ total: 10, open: ["input", "standby"] });
+    expect(progress.steps).toHaveLength(10);
+    expect(progress.steps).toEqual(expect.arrayContaining(progress.open));
   });
   it("ответ, «оставить» и резерв без инвертора закрывают шаги", () => {
     const answers = { panel_input: 40, panel_backup: "none" };

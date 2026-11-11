@@ -1,0 +1,15 @@
+@use "@/shared/styles/mixins" as *;
+
+.mark {
+  flex: none; overflow: visible; color: var(--text);
+  text { fill: currentColor; text-anchor: middle; font: 600 15px $brand; letter-spacing: -.02em; }
+}
+.rim { fill: none; stroke: var(--line); stroke-width: 3; }
+// Two segments of .14 with gaps of .36: opposite each other on the frame
+.trace {
+  fill: none; stroke: currentColor; stroke-width: 3; stroke-linecap: square;
+  stroke-dasharray: .14 .36;
+  animation: trace 3s linear infinite;
+  @include no-motion;
+}
+@keyframes trace { to { stroke-dashoffset: -1; } }

@@ -51,6 +51,7 @@ export interface ViewState {
   // Open this sheet right at the object (from an elevation, from a question); around: SheetView.reveal
   goto: { key: string; stage: string; around?: number } | null;
   electricalView: ElectricalView;   // what the electrical sheet shows (engine/sheet/views.ts)
+  cables: boolean;                  // wiring layers on the sheets (off in the simple interface mode, shared/mode.ts)
   wallLayers: WallLayers;           // what is visible on the elevation (the eye in the "On the wall" table)
 }
 
@@ -59,7 +60,7 @@ type Listener = () => void;
 let state: ViewState = {
   hover: null, lit: null, selected: null, neighbors: null, tip: null, pinned: null,
   hidden: new Set(), extra: new Set(), editMode: false, show3d: false, wallMode: "cut",
-  filter3d: { groups: null, room: null }, themeTick: 0, goto: null, electricalView: "sockets",
+  filter3d: { groups: null, room: null }, themeTick: 0, goto: null, electricalView: "sockets", cables: true,
   wallLayers: { electrical: true, water: true },
 };
 const listeners = new Set<Listener>();

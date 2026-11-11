@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Variants, VariantSummary } from "@/shared/types";
-import { activeSummary, availableRoutes, breakersOf, findChoice, findVariant, isCustom, modeOfBreakers, optionsOf, parseKey } from "./variants";
+import { activeSummary, availableRoutes, breakersOf, breakersOfScheme, findChoice, modeOfBreakers, neighbours, optionsOf, parseKey } from "./variants";
 
 const item = (mode: VariantSummary["mode"], route: VariantSummary["route"], total: number): VariantSummary => ({
   key: `${mode}-${route}-boxes`, mode, route, distribution: "boxes", total, currency: "грн",
@@ -13,21 +13,34 @@ describe("варианты проводки", () => {
     expect(parseKey("??")).toEqual({ mode: "standard", route: "ceiling" });
   });
 
-  it("находит сводку по режиму и трассе", () => {
-    const v: Variants = { active: "standard-ceiling-boxes", default: "standard-ceiling-boxes",
-      items: [item("standard", "ceiling", 100), item("economy", "floor", 80)] };
-    expect(findVariant(v, "economy", "floor")?.total).toBe(80);
-    expect(findVariant(v, "proper", "floor")).toBeUndefined();
+  it("набор из мастера: ключ с опциями, выбранный — первый в сводке", () => {
+    const own = { ...item("standard", "ceiling", 120), key: "standard-ceiling-loop-shortest", distribution: "loop", path: "shortest" } as VariantSummary;
+    // a neighbour with another plaster shares the key: the chosen one comes first
+    const plaster = { ...own, plaster: "before", total: 90 } as VariantSummary;
+    const v: Variants = { active: own.key, default: "standard-ceiling-boxes", items: [own, plaster] };
+    expect(parseKey(own.key)).toEqual({ mode: "standard", route: "ceiling" });
+    expect(activeSummary(v)?.total).toBe(120);
   });
 
-  it("набор из мастера: ключ с опциями, режимы ищутся мимо него", () => {
-    const own = { ...item("standard", "ceiling", 120), key: "standard-ceiling-loop-shortest", distribution: "loop", path: "shortest" } as VariantSummary;
-    const v: Variants = { active: own.key, default: "standard-ceiling-boxes", items: [own, item("standard", "ceiling", 100)] };
-    expect(parseKey(own.key)).toEqual({ mode: "standard", route: "ceiling" });
-    expect(isCustom(v)).toBe(true);
-    expect(activeSummary(v)?.total).toBe(120);
-    expect(findVariant(v, "standard", "ceiling")?.total).toBe(100);
-    expect(isCustom({ ...v, active: "standard-ceiling-boxes" })).toBe(false);
+  it("соседи: какой шаг отличается, в порядке шагов мастера", () => {
+    const base = item("standard", "ceiling", 100);
+    const v: Variants = { active: base.key, default: base.key, items: [
+      base,
+      { ...item("proper", "ceiling", 150), conduit: "ceiling" },  // breakers; "don't know" conduit follows
+      { ...base, plaster: "before", total: 90 },
+      item("standard", "floor", 110),
+      { ...base, key: "standard-ceiling-loop", distribution: "loop", total: 95 },
+      { ...item("standard", "floor", 1), distribution: "loop" },  // two steps: not a neighbour
+    ] };
+    expect(neighbours(v).map((n) => [n.step, n.value, n.summary.total])).toEqual([
+      ["route", "floor", 110], ["distribution", "loop", 95], ["plaster", "before", 90], ["breakers", "lines", 150],
+    ]);
+    expect(neighbours({ ...v, active: "none" })).toEqual([]);
+  });
+
+  it("схема щита называется как шаг «Автоматы»", () => {
+    expect(breakersOfScheme("economy")).toBe("simple");
+    expect(breakersOfScheme("premium")).toBe("lines");
   });
 
   it("сводка точного набора; чего нет — не подставляем похожее", () => {

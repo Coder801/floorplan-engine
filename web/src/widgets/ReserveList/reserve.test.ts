@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { OverviewReserve } from "@/shared/types";
-import { lightOnly, mostByPower, presetOf, reserveLevel, reserveOn, reservePower, toggleGroup } from "./reserve";
+import { lightOnly, mostByPower, peakOf, presetOf, reserveLevel, reserveOn, reservePeak, reservePower, toggleGroup } from "./reserve";
 
 const r: OverviewReserve = {
   limit_kw: 5, limit_assumed: true,
@@ -54,5 +54,27 @@ describe("быстрый выбор резерва", () => {
     expect(presetOf(groups, ["QF1", "QF5"])).toBe("light");
     expect(presetOf(groups, mostByPower(groups))).toBe("max");
     expect(presetOf(groups, ["QF1"])).toBe("manual");
+  });
+});
+
+describe("пик резерва", () => {
+  const groups: OverviewReserve = {
+    limit_kw: 3, limit_assumed: false,
+    items: [
+      { id: "QF1", purpose: "Свет", power: 200, steady: 200, peak: 0, kind: "light", on: true },
+      { id: "QF2", purpose: "Розетки спальни", power: 1000, steady: 300, peak: 0, kind: "sockets", on: false },
+      { id: "QF3", purpose: "Розетки кухни", power: 2800, steady: 600, peak: 1200, kind: "sockets", on: false },
+      { id: "QF4", purpose: "Стиралка", power: 2200, steady: 0, peak: 2200, kind: "heavy", on: false },
+    ],
+  };
+  it("постоянная часть всех групп и один самый мощный прибор", () => {
+    expect(reservePeak(groups, ["QF1", "QF2", "QF3", "QF4"])).toBe(200 + 300 + 600 + 2200);
+    expect(reservePower(groups, ["QF1", "QF2", "QF3", "QF4"])).toBe(6200);
+  });
+  it("старая сборка без доли: группа считается целиком", () => {
+    expect(peakOf([{ id: "QF1", purpose: "", power: 700, on: true }])).toBe(700);
+  });
+  it("максимум по мощности считает пик: спальня и кухня влезают, стиралка — нет", () => {
+    expect(mostByPower(groups)).toEqual(["QF1", "QF2", "QF3"]);  // 2300 из 3000; со стиралкой 3300
   });
 });

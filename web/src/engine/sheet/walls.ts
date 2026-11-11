@@ -53,3 +53,24 @@ export function wallSheet(page: Page, w: WallPage): Page {
   const room = MAP_ROOM * Math.max(x1 - x0, y1 - y0);
   return { ...page, items: page.items.filter((it) => it.o === w.key), view: [x0 - room, y0, x1, y1] };
 }
+
+// "Санвузол 2 (пральня) — стіна 2" → room and wall; without " — " the whole name is the wall
+export function splitTitle(title: string): [string, string] {
+  const k = title.lastIndexOf(" — ");
+  return k < 0 ? ["", title] : [title.slice(0, k), title.slice(k + 3)];
+}
+
+export interface WallRoom { room: string; items: { index: number; wall: string }[] }
+
+// Walls by room in sheet order (the pager list and the "All walls" overview); a room met again
+// later is a new group, as on the sheets
+export function wallRooms(walls: readonly { title: string }[]): WallRoom[] {
+  const out: WallRoom[] = [];
+  walls.forEach((w, index) => {
+    const [room, wall] = splitTitle(w.title);
+    const last = out[out.length - 1];
+    if (last && last.room === room) last.items.push({ index, wall });
+    else out.push({ room, items: [{ index, wall }] });
+  });
+  return out;
+}

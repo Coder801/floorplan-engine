@@ -10,7 +10,7 @@ import type { OverviewMaster, OverviewReserve, Project, Question, VariantConduit
 import { parseCeiling } from "./ceiling";
 import { activeSummary, availableRoutes, breakersOf, modeConduit, modeOfBreakers, optionsOf, parseKey, type VariantChoice } from "@/widgets/VariantInfo/variants";
 
-export type StepId = "route" | "distribution" | "path" | "conduit" | "plaster" | "ceiling" | "rough" | "phases" | "input" | "breakers" | "standby" | "backup" | "inverter" | "battery" | "pv" | "npe" | "reserve" | "master" | "masterOff";
+export type StepId = "route" | "distribution" | "path" | "conduit" | "plaster" | "ceiling" | "rough" | "phases" | "input" | "breakers" | "standby" | "backup" | "power" | "inverter" | "battery" | "pv" | "npe" | "reserve" | "master" | "masterOff";
 export type Picks = Partial<Record<StepId, string>>;
 // "I don't know": the question closes with {accept}, the model keeps its typical value, and the
 // person can come back to it later; the project is not held up by a device not chosen yet
@@ -43,6 +43,7 @@ const PANEL_STEPS: PanelStep[] = [
   { id: "phases", qid: "panel_phases", kind: "cards", options: ["1", "3"], numeric: true },
   { id: "input", qid: "panel_input", kind: "number", options: ["40", "50", "63", "80"], numeric: true },
   { id: "backup", qid: "panel_backup", kind: "cards", options: ["inverter", "plug", "station"] },
+  { id: "power", qid: "panel_backup_power", kind: "number", options: ["3", "5", "6", "8", "10"], numeric: true },
   { id: "inverter", qid: "panel_inverter", kind: "cards", options: ["hybrid", "basic"], dc: true },
   { id: "battery", qid: "panel_battery", kind: "cards", options: ["12", "24", "48"], dc: true, numeric: true },
   { id: "pv", qid: "panel_pv", kind: "cards", options: ["0", "1", "2"], dc: true, numeric: true },
@@ -188,6 +189,12 @@ function shown(step: PanelStep, setup: Setup, picks: Picks): boolean {
   const open = now === null || picks.standby === "yes";
   if (step.id === "backup") return now !== null && open;
   if (step.kind === "groups") return open && !!setup.reserve && !!question(setup, step.qid) && backupOf(setup, picks) !== "none";
+  // The power of any backup: asked with it; with no backup in the model yet, it appears with the answer
+  if (step.id === "power") {
+    if (now === null) return !!question(setup, step.qid);
+    const backup = backupOf(setup, picks);
+    return open && !!backup && backup !== "none" && (now === "none" || !!question(setup, step.qid));
+  }
   if (!step.dc || now === null) return !!question(setup, step.qid);
   if (!open || backupOf(setup, picks) !== "inverter") return false;
   return now !== "inverter" || !!question(setup, step.qid);
@@ -227,12 +234,13 @@ export function wizardSteps(setup: Setup, picks: Picks): Step[] {
   return steps;
 }
 
-// A typed number that cannot be saved: the ceiling out of its limits, a breaker not in whole amperes
+// A typed number that cannot be saved: the ceiling out of its limits, a breaker not in whole
+// amperes; the backup power is kW with a fraction (3.6)
 export function invalid(step: Step, pick: string | undefined): boolean {
   if (step.kind !== "number" || pick === undefined || pick === "" || pick === UNKNOWN) return false;
   if (step.id === "ceiling") return parseCeiling(pick) === null;
   const n = parseNumber(pick);
-  return n === null || n <= 0 || !Number.isInteger(n);
+  return n === null || n <= 0 || (step.id !== "power" && !Number.isInteger(n));
 }
 
 export const isPicked = (pick: string | undefined) => pick !== undefined && pick !== "";
@@ -246,7 +254,7 @@ function asAnswer(s: PanelStep, pick: string): Answer {
 // An answer that the model refuses without its backup: the inverter ones, and the bus with none
 function goesWithBackup(s: PanelStep, setup: Setup, picks: Picks): boolean {
   const backup = backupOf(setup, picks);
-  return backupNow(setup) !== null && (s.dc ? backup !== "inverter" : s.kind === "groups" && backup === "none");
+  return backupNow(setup) !== null && (s.dc ? backup !== "inverter" : (s.kind === "groups" || s.id === "power") && backup === "none");
 }
 
 // What changes: the variant if any of its parts differs, the answers that differ. Answers of a
@@ -279,10 +287,16 @@ export function wizardBody(setup: Setup, picks: Picks): WizardBody {
 
 // How far the setup is: steps of the project and those still without a decision. A step of the
 // variant always holds a value, and an unchanged one writes nothing, so only questions stay open
-export function setupProgress(setup: Setup): { total: number; open: StepId[] } {
+export interface SetupProgress { total: number; open: StepId[]; steps: StepId[] }
+
+export function setupProgress(setup: Setup): SetupProgress {
   const picks = initialPicks(setup);
   const steps = wizardSteps(setup, picks);
-  return { total: steps.length, open: steps.filter((s) => !isPicked(picks[s.id])).map((s) => s.id) };
+  return {
+    total: steps.length,
+    open: steps.filter((s) => !isPicked(picks[s.id])).map((s) => s.id),
+    steps: steps.map((s) => s.id),
+  };
 }
 
 // Open questions the wizard does not ask: they stay in the "Questions" panel. Those behind a

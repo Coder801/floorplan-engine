@@ -7,10 +7,13 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
 import type { WizardBody } from "@/shared/api";
+import { REDUCED_MOTION } from "@/shared/consts";
 import { cx } from "@/shared/cx";
+import { FADE_MS } from "@/shared/popover";
 import { plainNumber } from "@/shared/questions";
-import type { OverviewMaster, OverviewReserve, Project, Variants, VariantSummary } from "@/shared/types";
-import { CEILING_MAX, CEILING_MIN } from "./ceiling";
+import type { OverviewMaster, OverviewReserve, Project, Scene, Variants, VariantSummary } from "@/shared/types";
+import { FlatCut } from "@/widgets/FlatCut";
+import { CEILING_MAX, CEILING_MIN, parseCeiling } from "./ceiling";
 import { ReserveList } from "@/widgets/ReserveList";
 import { reserveOn } from "@/widgets/ReserveList/reserve";
 import { MasterList } from "@/widgets/MasterList";
@@ -24,20 +27,24 @@ import css from "./Wizard.module.scss";
 const DONE = "done";
 const FOCUSABLE = "button:not(:disabled), input, a[href]";
 // Steps whose question text carries numbers of this project (a current, a battery breaker)
-const WITH_FACTS = new Set<StepId>(["input", "battery"]);
+const WITH_FACTS = new Set<StepId>(["input", "power", "battery"]);
+// Unit of a number step
+const unitOf = (id: StepId) => (id === "ceiling" ? "units.mm" : id === "power" ? "units.kw" : "units.a");
 
 interface Props {
   project: Project;
   variants: Variants | null;
   ceiling: { height: number; assumed: boolean } | null;
+  scene?: Scene | null;  // the flat in 3D: the ceiling step shows it cut away (FlatCut)
   reserve: OverviewReserve | null;
   master?: OverviewMaster | null;
   onApply: (body: WizardBody) => Promise<boolean>;  // false: the person stayed, nothing was saved
   onClose: () => void;
   onQuestions: () => void;
+  start?: StepId;  // open on this step (from the overview's "Progress" list); a saved draft yields to it
 }
 
-export function Wizard({ project, variants, ceiling, reserve, master = null, onApply, onClose, onQuestions }: Props) {
+export function Wizard({ project, variants, ceiling, scene = null, reserve, master = null, onApply, onClose, onQuestions, start }: Props) {
   const { t, i18n } = useTranslation();
   // Keys built from a step and its values: the same cast as i18n label()
   const say = t as unknown as (key: string) => string;
@@ -48,6 +55,7 @@ export function Wizard({ project, variants, ceiling, reserve, master = null, onA
   const [restored, setRestored] = useState(!!draft && !samePicks(before, { ...before, ...draft.picks }));
   const [at, setAt] = useState<StepId | typeof DONE>(() => {
     const shown = wizardSteps(setup, { ...before, ...draft?.picks });
+    if (start && shown.some((s) => s.id === start)) return start;
     return draft && (draft.step === DONE || shown.some((s) => s.id === draft.step)) ? draft.step : shown[0]?.id ?? DONE;
   });
   const [error, setError] = useState<string | null>(null);
@@ -69,7 +77,8 @@ export function Wizard({ project, variants, ceiling, reserve, master = null, onA
 
   const money = (s: VariantSummary | undefined) =>
     (s ? `${Math.round(s.total).toLocaleString(i18n.language)} ${s.currency}` : "");
-  // Only the modes and the current variant are computed: a step gets prices if all its cards have one
+  // Only the saved set and its neighbours (one step answered otherwise) are computed: a step gets
+  // prices if all its cards have one, that is while the other steps are as saved
   const summary = (id: StepId, value: string) =>
     (variants ? findChoice(variants, variantOf(setup, applyPick(picks, id, value))) : undefined);
   const priced = !!step && VARIANT_STEPS.has(step.id) && step.options.every((value) => summary(step.id, value));
@@ -77,7 +86,7 @@ export function Wizard({ project, variants, ceiling, reserve, master = null, onA
     if (value === UNKNOWN) return t("wizard.unknown");
     if (s.id === "route") return say(`variant.routes.${value}`);
     if (s.kind === "groups") return value.split(",").join(", ");
-    if (s.kind === "number") return `${plainNumber(value)} ${t(s.id === "ceiling" ? "units.mm" : "units.a")}`;
+    if (s.kind === "number") return `${plainNumber(value)} ${t(unitOf(s.id))}`;
     return say(`wizard.steps.${s.id}.options.${value}.name`);
   };
   // What "don't know" leaves in the project, as a person reads it
@@ -104,7 +113,7 @@ export function Wizard({ project, variants, ceiling, reserve, master = null, onA
     );
   };
   const onKey = (ev: KeyboardEvent) => {
-    if (ev.key === "Escape") { ev.stopPropagation(); onClose(); }
+    if (ev.key === "Escape") { ev.stopPropagation(); close(); }
     if (ev.key !== "Tab" || !box.current) return;
     const all = [...box.current.querySelectorAll<HTMLElement>(FOCUSABLE)];
     const first = all[0], last = all[all.length - 1];
@@ -114,6 +123,13 @@ export function Wizard({ project, variants, ceiling, reserve, master = null, onA
   };
 
   const reset = () => { setPicks(before); setRestored(false); setError(null); };
+  // Closing fades out first (global.scss data-closing), then the parent unmounts the wizard
+  const [closing, setClosing] = useState(false);
+  const close = () => {
+    if (closing) return;
+    setClosing(true);
+    setTimeout(onClose, REDUCED_MOTION ? 0 : FADE_MS);
+  };
 
   const others = otherQuestions(setup, steps);
   const kept = chasesKept(picks);
@@ -123,8 +139,8 @@ export function Wizard({ project, variants, ceiling, reserve, master = null, onA
   const position = step ? index + 1 : steps.length + 1;
 
   return (
-    <div className={css.veil}>
-      <div ref={box} className={css.dialog} role="dialog" aria-modal="true" aria-labelledby="wizard-title"
+    <div className={css.veil} data-veil="" data-closing={closing || undefined}>
+      <div ref={box} className={css.dialog} data-pop="modal" data-closing={closing || undefined} role="dialog" aria-modal="true" aria-labelledby="wizard-title"
            tabIndex={-1} onKeyDown={onKey}>
         <nav className={css.steps} aria-label={t("wizard.stepsLabel")}>
           <h2 id="wizard-title">{t("wizard.title")}</h2>
@@ -158,7 +174,7 @@ export function Wizard({ project, variants, ceiling, reserve, master = null, onA
             {t("wizard.stepOf", { n: position, total: steps.length + 1 })}
             {restored && <> · {t("wizard.restored")} <button className={css.link} onClick={reset}>{t("wizard.reset")}</button></>}
           </span>
-          <button className={css.close} aria-label={t("common.close")} onClick={onClose}>×</button>
+          <button className={css.close} aria-label={t("common.close")} onClick={close}>×</button>
         </div>
 
         <section className={css.body}>
@@ -187,12 +203,8 @@ export function Wizard({ project, variants, ceiling, reserve, master = null, onA
               ) : step.id === "masterOff" ? (
                 <>
                   <MasterList master={master!} value={picks.masterOff && picks.masterOff !== UNKNOWN ? picks.masterOff.split(",") : masterOn(master!)}
-                              onChange={(groups) => pick("masterOff", groups.join())} />
-                  <div className={css.presets}>
-                    <button aria-pressed={picks.masterOff === UNKNOWN} className={cx(picks.masterOff === UNKNOWN && css.chosen)}
-                            onClick={() => pick("masterOff", UNKNOWN)}>{t("wizard.unknown")}</button>
-                  </div>
-                  {picks.masterOff === UNKNOWN && <p className="small muted">{unknownNote(step)}</p>}
+                              onChange={(groups) => pick("masterOff", groups.join())}
+                              unknown={{ on: picks.masterOff === UNKNOWN, note: unknownNote(step), onPick: () => pick("masterOff", UNKNOWN) }} />
                 </>
               ) : step.kind === "groups" ? (
                 <>
@@ -206,7 +218,11 @@ export function Wizard({ project, variants, ceiling, reserve, master = null, onA
                 </>
               ) : (
                 <div className={css.number}>
-                  <div className={css.picture}><WizardArt name={step.id} /></div>
+                  <div className={css.picture}>
+                    {step.id === "ceiling" && scene
+                      ? <FlatCut scene={scene} height={parseCeiling(picks[step.id] ?? "") ?? ceiling?.height ?? scene.ceiling} />
+                      : <WizardArt name={step.id} />}
+                  </div>
                   <div className={css.field}>
                     <label>
                       <span className="small muted">{say(`wizard.steps.${step.id}.field`)}</span>
@@ -215,7 +231,7 @@ export function Wizard({ project, variants, ceiling, reserve, master = null, onA
                                className={cx(invalid(step, picks[step.id]) && css.bad)}
                                value={picks[step.id] === UNKNOWN ? "" : picks[step.id] ?? ""} placeholder={step.question?.assumption != null ? plainNumber(step.question.assumption) : undefined}
                                onChange={(e) => pick(step.id, e.target.value.trim())} />
-                        {t(step.id === "ceiling" ? "units.mm" : "units.a")}
+                        {t(unitOf(step.id))}
                       </span>
                     </label>
                     <div className={css.presets}>
@@ -289,10 +305,11 @@ export function Wizard({ project, variants, ceiling, reserve, master = null, onA
           ) : changed ? (
             <button className={css.primary} disabled={!!wrong} onClick={apply}>{t("wizard.done.apply")}</button>
           ) : (
-            <button className={css.primary} onClick={onClose}>{t("common.close")}</button>
+            <button className={css.primary} onClick={close}>{t("common.close")}</button>
           )}
         </footer>
       </div>
     </div>
   );
 }
+

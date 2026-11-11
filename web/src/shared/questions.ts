@@ -3,7 +3,8 @@
 
 import type { Question } from "./types";
 
-export type Status = "open" | "pending" | "answered" | "accepted" | "resolved";
+// pending: answered, waits for the studio; returned: the studio sent the answer back with a comment
+export type Status = "open" | "pending" | "returned" | "answered" | "accepted" | "resolved";
 export type Group = "open" | "pending" | "closed";
 export type Answer = number | string | string[] | { accept: true } | { text: string };
 
@@ -12,14 +13,24 @@ const SEVERITY: Record<string, number> = { critical: 0, major: 1, minor: 2 };
 // By the answer, not by the report alone: a text answer does not rebuild the project
 export function statusOf(answer: unknown): Status {
   if (answer && typeof answer === "object") {
-    const o = answer as { accept?: boolean; text?: string; resolved?: boolean };
+    const o = answer as { accept?: boolean; text?: string; resolved?: boolean; returned?: string };
     if (o.accept) return "accepted";
-    if ("text" in o) return o.resolved ? "resolved" : "pending";
+    if ("text" in o) return o.resolved ? "resolved" : o.returned ? "returned" : "pending";
   }
   return answer === undefined || answer === null ? "open" : "answered";
 }
 
-export const groupOf = (s: Status): Group => (s === "open" || s === "pending" ? s : "closed");
+// A sent-back answer needs an answer again
+export const groupOf = (s: Status): Group => (s === "returned" ? "open" : s === "open" || s === "pending" ? s : "closed");
+
+// A client question only clarifies: any answer goes as { text } and never into the model
+export const forClient = (q: { audience?: string }) => q.audience === "client";
+
+// The studio's comment on a sent-back answer
+export function returnedComment(answer: unknown): string | null {
+  const o = answer as { returned?: unknown } | null;
+  return o && typeof o === "object" && typeof o.returned === "string" ? o.returned : null;
+}
 
 // Groups in order, the most important first inside a group
 export function listOrder(qs: Question[], answers: Record<string, unknown>): Map<string, Group> {
@@ -42,7 +53,7 @@ export function keepOrder(order: Map<string, Group>, qs: Question[]): Map<string
 export function nextOpen(ids: string[], statusById: (id: string) => Status, after: string): string | null {
   const from = ids.indexOf(after);
   const ring = [...ids.slice(from + 1), ...ids.slice(0, Math.max(from, 0))];
-  return ring.find((id) => statusById(id) === "open") ?? null;
+  return ring.find((id) => groupOf(statusById(id)) === "open") ?? null;
 }
 
 // A number as people type it: a comma is fine, spaces are not part of it

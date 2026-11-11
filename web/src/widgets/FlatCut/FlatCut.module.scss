@@ -1,0 +1,25 @@
+// Cut-away flat in the wizard line style (WizardArt): muted lines, the ceiling and its height in the highlight colour
+
+@use "@/shared/styles/mixins" as *;
+
+.art {
+  display: block; width: 100%; height: 230px;
+  polygon, polyline { stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+  polyline, .ceiling { fill: none; }
+}
+
+// One floor colour for every room and one light colour for every wall face (top cut and sides):
+// a background drawing, so the ceiling and its height in the highlight colour lead
+.slab { fill: color-mix(in srgb, var(--muted) 14%, var(--paper)); stroke: none; }
+.floor, .room, .living, .wet, .kitchen, .outdoor, .service { fill: color-mix(in srgb, var(--muted) 8%, var(--paper)); stroke: none; }
+.top, .left, .right {
+  fill: color-mix(in srgb, var(--muted) 35%, var(--paper));
+  stroke: color-mix(in srgb, var(--muted) 45%, var(--paper)); stroke-width: .5px;
+}
+.lit, .litTop, .view { display: none; }
+
+// The ceiling at the entered height, the corner edges up to it and the dimension
+.post { stroke: var(--muted); stroke-width: 1px; stroke-dasharray: 3 4; }
+.ceiling { stroke: var(--hl); stroke-width: 1.5px; stroke-dasharray: 6 4; }
+.dim { stroke: var(--hl); stroke-width: 2.25px; }
+.label { fill: var(--hl); font-family: $mono; }

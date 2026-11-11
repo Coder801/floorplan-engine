@@ -1,18 +1,24 @@
 // "Overview" tab, the first project tab (manifest keys overview and variants of the .epd):
 // object and rooms, what is planned (points by kind, panel), plumbing (fixtures, water, sewer,
-// estimate), the wiring variant and a comparison of all variants, source data and questions, and
+// estimate), the wiring variant and a comparison with its neighbours (one wizard step answered
+// otherwise), source data and questions, and
 // the project total: electrical of the chosen variant + plumbing. Read only: every choice,
 // the ceiling height too, is made in the setup wizard.
 // Everything is computed by code at build time (epd/overview.py, pipeline.variant_block); this only displays it.
 
+import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { cx } from "@/shared/cx";
-import type { Overview, OverviewPlumbing, Project, Variants, VariantSummary } from "@/shared/types";
+import type { Overview, Project, Question, Variants, VariantSummary } from "@/shared/types";
 import { VariantInfo } from "@/widgets/VariantInfo";
-import type { StepId } from "@/widgets/Wizard/steps";
-import { MODES, ROUTES, activeSummary, findVariant, isCustom, parseKey } from "@/widgets/VariantInfo/variants";
+import type { SetupProgress, StepId } from "@/widgets/Wizard/steps";
+import { activeSummary, breakersOfScheme, neighbours, type Neighbour } from "@/widgets/VariantInfo/variants";
+import { SEVERITIES, questionCounts } from "./questions";
 import { projectTotal } from "./total";
 import css from "./OverviewStage.module.scss";
+
+// A name inside a sentence: "По полу" → "по полу"; "N–PE link" keeps its capitals
+const lowerFirst = (s: string) => (/^.\p{Ll}/u.test(s) ? s[0].toLocaleLowerCase() + s.slice(1) : s);
 
 interface Props {
   overview: Overview | null;
@@ -24,7 +30,7 @@ interface Props {
   onEstimate?: () => void;
   onDrawer: (tab: "questions" | "sources") => void;
   onWizard?: () => void;  // the setup wizard; none if there is nothing to ask in the project
-  setup?: { total: number; open: StepId[] };  // decisions left in the wizard
+  setup?: SetupProgress;  // decisions left in the wizard
 }
 
 const SETUP_NAMES = 3;  // decisions named in the note; the rest are a number
@@ -33,9 +39,7 @@ const SETUP_NAMES = 3;  // decisions named in the note; the rest are a number
 function SetupNote({ total, open }: { total: number; open: StepId[] }) {
   const { t } = useTranslation();
   const say = t as unknown as (key: string) => string;  // a key built from a step, as in Wizard
-  // "N–PE link" keeps its capitals: only a plain word goes to lower case inside a sentence
-  const inline = (s: string) => (/^.\p{Ll}/u.test(s) ? s[0].toLocaleLowerCase() + s.slice(1) : s);
-  const names = open.slice(0, SETUP_NAMES).map((id) => inline(say(`wizard.steps.${id}.short`))).join(", ");
+  const names = open.slice(0, SETUP_NAMES).map((id) => lowerFirst(say(`wizard.steps.${id}.short`))).join(", ");
   const rest = open.length - SETUP_NAMES;
   return (
     <p className={css.setupNote}>
@@ -68,12 +72,20 @@ export function OverviewStage({ overview, variants, project, openQuestions, canC
   const parts = grand && grand.electrical !== undefined && grand.plumbing !== undefined
     ? t("overview.totalParts", { electrical: cash(grand.electrical, grand.currency), plumbing: cash(grand.plumbing, grand.currency) })
     : null;
-  // One line of the comparison; the chosen set of the wizard is a line of its own
-  const compareRow = (s: VariantSummary, name: string) => (
-    <tr key={s.key} className={cx(s.key === variants?.active && css.on)}>
-      <td>{name}{s.key === variants?.default && <span className={css.tag}>{t("variant.asProject")}</span>}</td>
-      <td>{t(`variant.routes.${s.route}`)}</td>
+  // The comparison: the chosen set, then the same set with one wizard step answered otherwise,
+  // and how much that changes the estimate
+  const delta = (s: VariantSummary, base: VariantSummary) => {
+    const d = Math.round(s.total - base.total);
+    return d === 0 ? "0" : `${d > 0 ? "+" : "−"}${cash(Math.abs(d), s.currency)}`;
+  };
+  const say = t as unknown as (key: string) => string;  // a key built from a step, as in Wizard
+  const optionName = (n: Neighbour) =>
+    say(n.step === "route" ? `variant.routes.${n.value}` : `wizard.steps.${n.step}.options.${n.value}.name`);
+  const compareRow = (s: VariantSummary, name: ReactNode, base: VariantSummary | null, key: string) => (
+    <tr key={key} className={cx(!base && css.on)}>
+      <td>{name}{s.key === variants?.default && !base && <span className={css.tag}>{t("variant.asProject")}</span>}</td>
       <td className={css.num}>{money(s)}</td>
+      <td className={cx(css.num, base && s.total < base.total && css.cheaper)}>{base ? delta(s, base) : ""}</td>
       <td className={css.num}>{num(s.cable_m, 0)}</td>
       <td className={css.num}>{num(s.conduit_m, 0)}</td>
       <td className={css.num}>{s.devices}</td>
@@ -90,7 +102,8 @@ export function OverviewStage({ overview, variants, project, openQuestions, canC
             <p className="muted">{o.name}</p>
           </div>
           {onWizard && (
-            <div className={css.setup}>
+            // On a wide screen the side panel lists what is left and opens the wizard (OverviewSummary)
+            <div className={cx(css.setup, css.narrowOnly)}>
               {setup && setup.open.length > 0 && <SetupNote {...setup} />}
               <button className={css.primary} onClick={onWizard}>{t("wizard.open")}</button>
             </div>
@@ -139,7 +152,7 @@ export function OverviewStage({ overview, variants, project, openQuestions, canC
               <p className={css.line}>
                 <b>{t("overview.panel")}:</b>{" "}
                 {t("overview.panelLine", {
-                  scheme: t(`overview.schemes.${overview.panel.scheme}`), input: overview.panel.input,
+                  scheme: lowerFirst(t(`wizard.steps.breakers.options.${breakersOfScheme(overview.panel.scheme)}.name`)), input: overview.panel.input,
                   supply: t(overview.panel.phases === 3 ? "overview.supply3" : "overview.supply1"),
                   devices: overview.panel.devices, groups: overview.panel.groups,
                 })}
@@ -196,30 +209,37 @@ export function OverviewStage({ overview, variants, project, openQuestions, canC
           <section className={css.card}>
             <h2>{t("overview.variant")}</h2>
             <VariantInfo variants={variants} canChoose={canChoose} onEdit={onWizard} />
-            <h3>{t("overview.compare")}</h3>
-            <div className={css.scroll}>
-              <table className={css.table}>
-                <thead>
-                  <tr>
-                    <th>{t("overview.col.mode")}</th><th>{t("overview.col.route")}</th>
-                    <th className={css.num}>{t("overview.col.total")}</th><th className={css.num}>{t("overview.col.cable")}</th>
-                    <th className={css.num}>{t("overview.col.conduit")}</th><th className={css.num}>{t("overview.col.devices")}</th>
-                    <th className={css.num}>{t("overview.col.chases")}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {MODES.flatMap((mode) => ROUTES.map((route) => {
-                    const s = findVariant(variants, mode, route);
-                    return s ? compareRow(s, t(`variant.modes.${mode}`)) : null;
-                  }))}
-                  {current && isCustom(variants) && compareRow(current, t("overview.customRow"))}
-                </tbody>
-              </table>
-            </div>
+            {current && neighbours(variants).length > 0 && (
+              <>
+                <h3>{t("overview.compare")}</h3>
+                <p className="small muted">{t("overview.compareNote")}</p>
+                <div className={css.scroll}>
+                  <table className={css.table}>
+                    <thead>
+                      <tr>
+                        <th>{t("overview.col.change")}</th>
+                        <th className={css.num}>{t("overview.col.total")}</th><th className={css.num}>{t("overview.col.delta")}</th>
+                        <th className={css.num}>{t("overview.col.cable")}</th><th className={css.num}>{t("overview.col.conduit")}</th>
+                        <th className={css.num}>{t("overview.col.devices")}</th><th className={css.num}>{t("overview.col.chases")}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {compareRow(current, t("overview.yourSet"), null, "current")}
+                      {neighbours(variants).map((n) => compareRow(
+                        n.summary,
+                        <><span className="muted">{say(`wizard.steps.${n.step}.short`)}:</span> {lowerFirst(optionName(n))}</>,
+                        current, `${n.step}-${n.value}`,
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
           </section>
         )}
 
-        <section className={css.card}>
+        {/* On a wide screen the side panel holds the questions and sources (OverviewSummary) */}
+        <section className={cx(css.card, css.narrowOnly)}>
           <h2>{t("overview.sources")}</h2>
           <p className={css.line}>
             {t("overview.sourcesLine", { n: project.sources.length, parsed: project.parsed?.length ?? 0 })}{" "}
@@ -247,24 +267,75 @@ export function OverviewStage({ overview, variants, project, openQuestions, canC
   );
 }
 
-// Tab side panel: variant, project total (electrical + plumbing), questions
+// Tab side panel (decision 2026-11-11): what is left to do, always in sight while the page
+// scrolls: the setup progress (wizard steps, an open one opens the wizard on it) and the
+// unresolved questions by weight. Below the narrow breakpoint the panel folds under the drawing,
+// so the page keeps its own note and "Source data" card there
 interface SummaryProps {
-  variants: Variants | null;
-  plumbing?: OverviewPlumbing["estimate"];
-  openQuestions: number;
+  setup: SetupProgress | null;
+  questions: Question[];
+  onWizard?: (step?: StepId) => void;  // none: no right to choose, the list is read only
+  onDrawer: (tab: "questions" | "sources") => void;
   refreshing?: boolean;
 }
 
-export function OverviewSummary({ variants, plumbing, openQuestions, refreshing = false }: SummaryProps) {
-  const { t, i18n } = useTranslation();
-  const active = variants ? parseKey(variants.active) : null;
-  const s = variants ? activeSummary(variants) : undefined;
-  const grand = projectTotal(s, plumbing);
+// A decided step: a plain check, not a ring (a ring reads as a radio button)
+function CheckIcon() {
   return (
-    <dl className={cx(css.side, refreshing && css.skeleton)}>
-      {active && <><dt>{t("overview.variant")}</dt><dd>{t(`variant.modes.${active.mode}`)} · {t(`variant.routes.${active.route}`)}</dd></>}
-      {grand && <><dt>{t("overview.total")}</dt><dd>{Math.round(grand.total).toLocaleString(i18n.language)} {grand.currency}</dd></>}
-      <dt>{t("overview.openQuestions")}</dt><dd>{openQuestions}</dd>
-    </dl>
+    <svg className={css.check} viewBox="0 0 16 16" aria-hidden="true">
+      <path d="M3.5 8.5l3 3 6-7" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+export function OverviewSummary({ setup, questions, onWizard, onDrawer, refreshing = false }: SummaryProps) {
+  const { t } = useTranslation();
+  const say = t as unknown as (key: string) => string;  // a key built from a step, as in Wizard
+  const counts = questionCounts(questions);
+  const open = SEVERITIES.reduce((n, s) => n + counts[s], 0);
+  const done = setup ? setup.total - setup.open.length : 0;
+  return (
+    <div className={cx(css.sideBody, refreshing && css.skeleton)}>
+      {setup && setup.total > 0 && (
+        <section className={css.block}>
+          <h3>{t("overview.progress.title")}</h3>
+          <ul className={css.steps}>
+            {setup.steps.map((id) => {
+              const todo = setup.open.includes(id);
+              const name = say(`wizard.steps.${id}.short`);
+              return (
+                <li key={id} className={cx(todo && css.todo)}>
+                  <span className={css.mark} role="img" aria-label={t(todo ? "overview.progress.open" : "overview.progress.decided")}>
+                    {todo ? <span className={css.dash} /> : <CheckIcon />}
+                  </span>
+                  {todo && onWizard
+                    ? <button className={css.stepLink} onClick={() => onWizard(id)}>{name}</button>
+                    : <span>{name}</span>}
+                </li>
+              );
+            })}
+          </ul>
+          <p className={cx("small muted", css.note)}>
+            {setup.open.length ? t("overview.progress.done", { done, total: setup.total }) : t("overview.progress.all")}
+          </p>
+          {onWizard && <div><button onClick={() => onWizard()}>{t("wizard.open")}</button></div>}
+        </section>
+      )}
+      <section className={css.block}>
+        <h3>{t("overview.openQuestions")}</h3>
+        {open === 0 ? <p className="small muted">{t("overview.progress.noQuestions")}</p> : (
+          <dl className={css.side}>
+            {SEVERITIES.filter((s) => counts[s] > 0).map((s) => [
+              <dt key={`k${s}`}><span className={`sev-${s}`} aria-hidden="true">●</span> {t(`severity.${s}`)}</dt>,
+              <dd key={`v${s}`}>{counts[s]}</dd>,
+            ])}
+          </dl>
+        )}
+        <div className={css.actions}>
+          <button onClick={() => onDrawer("questions")}>{t("overview.openQuestions")}</button>
+          <button onClick={() => onDrawer("sources")}>{t("overview.openSources")}</button>
+        </div>
+      </section>
+    </div>
   );
 }
