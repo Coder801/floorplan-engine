@@ -122,3 +122,31 @@ def test_line_link_draws_straight_segments() -> None:
     assert isinstance(pl, LWPolyline)
     assert [(x, y) for x, y, *_ in pl.get_points("xy")] == [(0, 0), (1000, 0), (1000, 1000)]
     assert all(b == 0.0 for *_, b in pl.get_points("xyb"))
+
+
+def test_right_angle_path_adds_elbows() -> None:
+    """Links run at right angles (2026-11-11): an elbow between points not on one axis,
+    horizontal first by default; points on one axis stay one leg."""
+    from floorplan_engine.drawing.lighting import right_angle_path
+
+    path = right_angle_path([Vec(0, 0), Vec(1000, 500), Vec(1000, 1500)])
+    assert [v.as_tuple() for v in path] == [(0, 0), (1000, 0), (1000, 500), (1000, 1500)]
+    assert right_angle_path([]) == []
+
+
+def test_right_angle_path_first_leg_leaves_the_wall() -> None:
+    from floorplan_engine.drawing.lighting import right_angle_path
+
+    path = right_angle_path([Vec(0, 0), Vec(1000, 500)], first=Vec(0, 1))
+    assert [v.as_tuple() for v in path] == [(0, 0), (0, 500), (1000, 500)]
+
+
+def test_right_angle_path_keeps_elbow_inside() -> None:
+    """An L-shaped room: the elbow that would leave the room loses."""
+    from shapely.geometry import Polygon
+
+    from floorplan_engine.drawing.lighting import right_angle_path
+
+    room = Polygon([(0, 0), (2000, 0), (2000, 1000), (1000, 1000), (1000, 2000), (0, 2000)])
+    path = right_angle_path([Vec(1500, 500), Vec(500, 1500)], room)
+    assert [v.as_tuple() for v in path] == [(1500, 500), (500, 500), (500, 1500)]

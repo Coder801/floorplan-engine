@@ -6,18 +6,22 @@ controls (CLAUDE.md rule) and turns on the lights of its group in its room. Such
 assumption marked "*": for a two-key switch the code does not know which key does what.
 
 The sheet shows walls and openings, light and switch symbols (layers E-SWITCH, E-LIGHT, E-LED),
-links (E-LINK, dashed straight lines: switch → nearest light → next one…; a link differs from
-a cable by its dashes and layer: a cable runs at 90°, a link goes straight; decision
-2026-11-03: no arcs), point numbers as on the electrical sheet, only for lights and switches
-(L-TEXT), and the "Switches" table.
+links (E-LINK, dashed lines at right angles: switch → nearest light → next one…; a link
+differs from a cable by its dashes and layer; decision 2026-11-03: no arcs; decision 2026-11-11:
+right angles instead of slanted segments, each leg along the plan axes, the elbow inside the
+rooms, from a wall switch the first leg goes away from its wall), point numbers as on the
+electrical sheet, only for lights and switches (L-TEXT), and the "Switches" table.
 """
 
 from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+from itertools import pairwise
 
 from ezdxf.layouts.layout import Modelspace
+from shapely.geometry import LineString, Polygon
+from shapely.geometry.base import BaseGeometry
 from shapely.ops import unary_union
 
 from floorplan_engine.drawing.electrical import (
@@ -79,7 +83,7 @@ def lighting_model(elec: Electrical) -> Electrical:
     """Lighting-only electrical model: lights, switches and strips, no panel. Used for the legend of
     the "Lighting" sheet and its badge in the viewer."""
     return elec.model_copy(
-        update={"points": [p for p in elec.points if is_lighting(p)], "board": None}
+        update={"points": [p for p in elec.points if is_lighting(p)], "board": None, "media": None}
     )
 
 
@@ -153,13 +157,49 @@ def line_link(msp: Modelspace, points: Sequence[Vec], attribs: dict[str, object]
     msp.add_lwpolyline([(v.x, v.y) for v in points], format="xy", dxfattribs=attribs)
 
 
+ALIGNED_MM = 1.0  # points closer than this along an axis are joined by one straight leg
+
+
+def _manhattan(a: Vec, b: Vec) -> float:
+    return abs(a.x - b.x) + abs(a.y - b.y)
+
+
+def right_angle_path(
+    points: Sequence[Vec], inside: BaseGeometry | None = None, first: Vec | None = None
+) -> list[Vec]:
+    """Path through points with legs along the plan axes: between two points not on one axis an
+    elbow is added. Of the two elbows the one whose legs stay inside `inside` (the rooms) wins;
+    for the first pair, the one whose first leg goes along `first` (away from the switch's wall);
+    otherwise horizontal first."""
+    if not points:
+        return []
+    out = [points[0]]
+    for k, (a, b) in enumerate(pairwise(points)):
+        if abs(a.x - b.x) < ALIGNED_MM or abs(a.y - b.y) < ALIGNED_MM:
+            out.append(b)
+            continue
+        horizontal, vertical = Vec(b.x, a.y), Vec(a.x, b.y)
+        prefer_vertical = k == 0 and first is not None and abs(first.y) > abs(first.x)
+        elbows = [vertical, horizontal] if prefer_vertical else [horizontal, vertical]
+        if inside is not None:
+            fits = [
+                e
+                for e in elbows
+                if inside.covers(LineString([a.as_tuple(), e.as_tuple(), b.as_tuple()]))
+            ]
+            elbows = fits or elbows
+        out += [elbows[0], b]
+    return out
+
+
 def chain(start: Vec, targets: Sequence[tuple[str, Vec]]) -> list[tuple[str, Vec]]:
-    """Visit targets from start: always go to the nearest one not yet visited."""
+    """Visit targets from start: always go to the nearest one not yet visited (along the axes, as
+    the link is drawn)."""
     left = list(targets)
     out: list[tuple[str, Vec]] = []
     at = start
     while left:
-        k = min(range(len(left)), key=lambda i: ((left[i][1] - at).length(), left[i][0]))
+        k = min(range(len(left)), key=lambda i: (_manhattan(left[i][1], at), left[i][0]))
         item = left.pop(k)
         out.append(item)
         at = item[1]
@@ -183,8 +223,11 @@ def draw_lighting(
         c = strip_area(strip, geoms).centroid
         spots[strip.id] = Vec(c.x, c.y)
 
-    # As on the lighting plan: lights of one set form one chain of straight lines, and the
-    # switch gets one segment to the nearest light of the set
+    # As on the lighting plan: lights of one set form one chain of lines at right angles, and
+    # the switch gets one link to the nearest light of the set
+    inside = unary_union(
+        [Polygon([v.as_tuple() for v in g.contour.vertices]) for g in geoms_list]
+    ).buffer(ALIGNED_MM)
     links = switch_links(elec)
     attribs = {"layer": E_LINK.name, "lineweight": LW_LINK}
     drawn: set[frozenset[str]] = set()
@@ -196,13 +239,14 @@ def draw_lighting(
         key = frozenset(t for t, _ in targets)
         if key not in drawn and len(targets) > 1:
             drawn.add(key)
-            head = min(targets, key=lambda tv: ((tv[1] - start).length(), tv[0]))
+            head = min(targets, key=lambda tv: (_manhattan(tv[1], start), tv[0]))
             path = chain(head[1], [tv for tv in targets if tv[0] != head[0]])
             with tagged(msp, "light_set", ",".join(sorted(key))):
-                line_link(msp, [head[1], *(v for _, v in path)], attribs)
-        nearest = min(targets, key=lambda tv: ((tv[1] - start).length(), tv[0]))
+                line_link(msp, right_angle_path([head[1], *(v for _, v in path)], inside), attribs)
+        nearest = min(targets, key=lambda tv: (_manhattan(tv[1], start), tv[0]))
         with tagged(msp, "switch_link", link.switch):
-            line_link(msp, [start, nearest[1]], attribs)
+            route = right_angle_path([start, nearest[1]], inside, anchors[link.switch].inward)
+            line_link(msp, route, attribs)
 
     lights = [p for p in elec.points if is_lighting(p)]
     symbols = [symbol_area(anchors[p.id]) for p in lights]
