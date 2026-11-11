@@ -1,11 +1,12 @@
 """Wiring variants (docs/wiring-variants.md): mode (economy, standard, premium), route (ceiling,
 floor), distribution (through boxes or a daisy chain through flush boxes), path and ceiling
 conduit, and for every variant alike when the cable goes in (plaster) and rough light. Points
-come from the project; a variant only changes how cable is run. The modes are presets and all
-of them are built (project_variants: without routes the project will not have,
-see electrical.yaml routes): the chosen one as sheets, the others as a summary for comparison
-(variant_summary), with no drawings. Any other set of options comes from the setup wizard and
-is added to the summary only while chosen: 32 sets would take a minute on every build.
+come from the project; a variant only changes how cable is run. The modes are presets of the
+options; the person chooses each option in the setup wizard. The chosen set is built as sheets,
+and it and its neighbours (neighbour_variants: the set with one option changed, without routes
+the project will not have, see electrical.yaml routes) as a summary for comparison and for the
+prices on the wizard cards (variant_summary), with no drawings: all 64 sets would take minutes on
+every build.
 
 The "as in project" variant (default_variant) uses the mode and routes from electrical.yaml
 as is; the others use one route for all cables.
@@ -24,11 +25,14 @@ from floorplan_engine.electrical.panel import build_panel
 from floorplan_engine.electrical.wiring import estimate_wiring
 from floorplan_engine.model.geometry import Contour
 from floorplan_engine.model.schema import (
+    Conduit,
+    Distribution,
     Electrical,
     ElectricalMode,
     Plan,
     Plaster,
     Variant,
+    WirePath,
     WireRoute,
     WiringEdits,
 )
@@ -46,10 +50,35 @@ def project_routes(elec: Electrical) -> tuple[WireRoute, ...]:
     return ROUTES if elec.routes is None else tuple(r for r in ROUTES if r in elec.routes)
 
 
-def project_variants(elec: Electrical) -> list[Variant]:
-    """Project presets: all except routes the project will not have (routes)."""
-    routes = project_routes(elec)
-    return [v for v in all_variants() if v.route in routes]
+def chosen_job(elec: Electrical, variant: Variant) -> Variant:
+    """The variant with plaster and rough light spelt out (None: as in electrical.yaml) and the
+    path spelt out (None: as the mode gives), as the setup wizard sends it."""
+    return variant.model_copy(
+        update={
+            "path": variant.wire_path,
+            "plaster": variant.plaster or elec.plaster,
+            "rough_light": elec.rough_light if variant.rough_light is None else variant.rough_light,
+        }
+    )
+
+
+def neighbour_variants(elec: Electrical, chosen: Variant) -> list[Variant]:
+    """The chosen set with one option changed, each other value of each wizard step: route (only
+    those the project has), distribution, path, conduit, breakers (the mode), plaster and rough
+    light. conduit "don't know" (None) stays with another mode, as in the wizard: then the
+    conduit of that mode comes with it."""
+    base = chosen_job(elec, chosen)
+    others: list[tuple[str, tuple[object, ...], object]] = [
+        ("route", project_routes(elec), base.route),
+        ("distribution", get_args(Distribution), base.distribution),
+        ("path", get_args(WirePath), base.path),
+        ("conduit", get_args(Conduit), base.conduit_level),
+        ("mode", MODES, base.mode),
+        ("plaster", get_args(Plaster), base.plaster),
+        ("rough_light", (False, True), base.rough_light),
+    ]
+    changes = [{f: v} for f, values, now in others for v in values if v != now]
+    return [base.model_copy(update=change) for change in changes]
 
 
 def default_variant(elec: Electrical) -> Variant:

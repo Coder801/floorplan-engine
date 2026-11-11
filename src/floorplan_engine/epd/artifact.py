@@ -304,6 +304,19 @@ def _replacing(path: Path) -> Iterator[zipfile.ZipFile]:
         temp.unlink(missing_ok=True)
 
 
+def _on_sheet(
+    rings_by_key: dict[str, list[list[tuple[float, float]]]], model: list[float], drawn: set[str]
+) -> dict[str, list[list[list[float]]]]:
+    """Rings from mm of the model to sheet coordinates (page model transform), only for objects
+    drawn on the page."""
+    k, tx, ty = model
+    return {
+        key: [[[round(k * x + tx, 2), round(ty - k * y, 2)] for x, y in r] for r in rings]
+        for key, rings in sorted(rings_by_key.items())
+        if key in drawn
+    }
+
+
 def export_artifact(
     doc: Drawing,
     plan: Plan,
@@ -321,6 +334,7 @@ def export_artifact(
     overview: dict[str, Any] | None = None,
     plan_chains: dict[str, list[str]] | None = None,
     plan_areas: dict[str, list[list[tuple[float, float]]]] | None = None,
+    plan_floors: dict[str, list[list[tuple[float, float]]]] | None = None,
 ) -> Path:
     """Write the .epd: the manifest and one page per document sheet. objects are object cards for
     hints (objects.describe_objects): a page gets only its own objects and only those of the sheet
@@ -337,7 +351,9 @@ def export_artifact(
     summary of all go into the manifest; overview is the project overview
     (overview.overview_data) for the first viewer tab, also in the manifest; plan_chains is what
     to highlight on click on the plan sheet (objects.plan_chains); plan_areas is where a click
-    lands on a wall of that sheet (objects.plan_areas), mm of the model."""
+    lands on a wall of that sheet (objects.plan_areas), mm of the model; plan_floors are the
+    floors (a room or a zone) the viewer fills on hover on that sheet (objects.plan_floor_rings),
+    mm of the model."""
     pages = []
     path.parent.mkdir(parents=True, exist_ok=True)
     with _replacing(path) as zf:
@@ -365,16 +381,12 @@ def export_artifact(
                     for k, chain in sorted(sheet_chains.items())
                     if k in drawn
                 }
-            if plan_areas and stage == "plan" and "model" in page:
+            if stage == "plan" and "model" in page:
                 drawn = {item["o"] for item in page["items"] if "o" in item}
-                k, tx, ty = page["model"]
-                page["areas"] = {
-                    key: [
-                        [[round(k * x + tx, 2), round(ty - k * y, 2)] for x, y in r] for r in rings
-                    ]
-                    for key, rings in sorted(plan_areas.items())
-                    if key in drawn
-                }
+                if plan_areas:
+                    page["areas"] = _on_sheet(plan_areas, page["model"], drawn)
+                if plan_floors:
+                    page["floors"] = _on_sheet(plan_floors, page["model"], drawn)
             if groups and stage == "wiring":
                 drawn = {item["o"] for item in page["items"] if "o" in item}
                 page["groups"] = {g: [k for k in keys if k in drawn] for g, keys in groups.items()}

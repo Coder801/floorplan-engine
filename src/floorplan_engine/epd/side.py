@@ -35,10 +35,11 @@ from floorplan_engine.electrical.work_scope import ScopeEntry, scope_entries
 from floorplan_engine.model.geometry import Contour
 from floorplan_engine.model.schema import Electrical, Plan
 from floorplan_engine.model.texts import Language, tr
+from floorplan_engine.model.zones import plan_floors
 
 # Sheet topic (sheets.SHEET_SLUGS) → object types that get hints on it
 STAGE_OBJECTS: dict[str, frozenset[str]] = {
-    "plan": frozenset({"room", "wall", "dimension", "opening"}),
+    "plan": frozenset({"room", "zone", "wall", "dimension", "opening"}),
     "electrical": frozenset({"point", "label", "board", "cable", "led_strip"}),
     "lighting": frozenset({"point", "led_strip"}),
     "wiring": frozenset({"wire", "box", "board"}),
@@ -174,19 +175,22 @@ def drop_column(table: SideTable, index: int) -> SideTable:
 
 
 def room_table(plan: Plan, contours: dict[str, Contour]) -> SideTable:
-    """Room schedule: the same rows as on the sheet; area as the AutoCAD field will show it."""
+    """Room schedule: the same rows as on the sheet (a room, or each zone of an open-plan room);
+    area as the AutoCAD field will show it."""
     lang = plan.language
     rows = []
     total = 0.0
-    for k, room in enumerate(plan.rooms, 1):
-        contour = contours[room.id]
-        area = contour.area_m2 * 1e6
+    for k, floor in enumerate(plan_floors(plan, contours), 1):
+        room, contour = floor.room, contours[floor.room.id]
+        area = floor.area_mm2
         total += area
-        keys = [f"room:{room.id}"]
+        walls = set(floor.walls)
+        keys = [floor.key]
         for seg in contour.segments:
-            keys += [f"wall:{room.id}.{seg.id}", f"dimension:{room.id}.{seg.id}"]
-        keys += [f"opening:{op.id}" for op in room.openings]
-        rows.append(SideRow((str(k), room.name, format_area(area)), tuple(keys)))
+            if seg.id in walls:
+                keys += [f"wall:{room.id}.{seg.id}", f"dimension:{room.id}.{seg.id}"]
+        keys += [f"opening:{op.id}" for op in room.openings if op.wall in walls]
+        rows.append(SideRow((str(k), floor.name, format_area(area)), tuple(keys)))
     return SideTable(
         tr("schedule_title", lang),
         (tr("schedule_no", lang), tr("schedule_name", lang), tr("schedule_area", lang)),

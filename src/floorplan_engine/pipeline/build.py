@@ -31,6 +31,7 @@ from floorplan_engine.epd.objects import (
     line_groups,
     plan_areas,
     plan_chains,
+    plan_floor_rings,
     wire_titles,
     wiring_handles,
 )
@@ -332,6 +333,7 @@ def _export(
         ),
         plan_chains=plan_chains(plan, contours),
         plan_areas=plan_areas(plan, contours),
+        plan_floors=plan_floor_rings(plan, contours),
     )
 
 

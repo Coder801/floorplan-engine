@@ -46,7 +46,7 @@ DOOR = {"wall": "w2", "type": "door", "offset": 1000, "width": 900}
 
 
 def _wall(
-    pid: str, kind: str, wall: str, offset: float, height: float, group: str
+    pid: str, kind: str, wall: str, offset: float, height: float, group: str | None
 ) -> dict[str, Any]:
     return {
         "id": pid,
@@ -88,7 +88,7 @@ def _elec(cables: list[dict[str, Any]] | None = None) -> Electrical:
                     "wall": "w4",
                     "offset": 3000,
                     "height": 300,
-                },  # no group: not in the calculation
+                },  # no group: low-voltage, a line of its own (from the panel without media)
             ],
             "board": {"room": "r", "wall": "w1", "offset": 500, "height": 1700},
             "cables": cables or [],
@@ -115,7 +115,26 @@ def test_topology_board_box_point_only() -> None:
     targets = {r.target: r.source for r in w.runs}
     assert targets["s1"] == "board"
     assert {targets["l1"], targets["l2"], targets["k1"]} == {"box_1"}
-    assert w.skipped == ("d1",)
+    assert targets["d1"] == "board"
+    assert w.skipped == ()
+
+
+def test_low_voltage_without_group_from_media_cabinet() -> None:
+    """Internet and TV without a group: a line of their own each, from the low-voltage cabinet
+    if there is one, with the assumed cable by type; a grouped socket is unaffected."""
+    base = _elec().model_dump(by_alias=True)
+    base["points"].append(_wall("t1", "tv", "w2", 1000, 300, None))
+    base["media"] = {"room": "r", "wall": "w2", "offset": 2500, "height": 1500}
+    w = _wiring(make_plan(RECT, [DOOR]), Electrical.model_validate(base))
+    low = {r.target: r for r in w.runs if r.circuit == "low"}
+    assert set(low) == {"d1", "t1"}
+    assert {r.source for r in low.values()} == {"media"}
+    assert (low["d1"].mark, low["t1"].mark) == ("UTP cat.6", "RG-6")
+    assert all(r.mark_assumed and r.group == "Слаботочка" for r in low.values())
+    assert low["d1"].ends_mm == END_ALLOWANCE + 1500  # cabinet tail like the panel's
+    assert any(c.kind == "media" and c.circuit == "low" for c in w.chases)
+    assert next(r for r in w.runs if r.target == "s1").source == "board"
+    assert w.skipped == ()
 
 
 def test_run_length_parts() -> None:

@@ -10,11 +10,12 @@ from __future__ import annotations
 
 import re
 from collections import Counter
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 
 from floorplan_engine.model.schema import Electrical, ElectricalPoint, Plan, PointType
 from floorplan_engine.model.texts import Language
+from floorplan_engine.model.zones import point_places
 
 ASSUMED = "*"
 DISTINCT_NOTES = 2  # notes that tell apart groups with the same purpose built from points
@@ -77,15 +78,16 @@ class GroupRow:
 
 
 def composed_purpose(
-    points: Sequence[ElectricalPoint], rooms: dict[str, str], language: Language
+    points: Sequence[ElectricalPoint], places: Mapping[str, str], language: Language
 ) -> str:
-    """Purpose from the group's points: point kinds (switches count as lighting) and rooms.
+    """Purpose from the group's points: point kinds (switches count as lighting) and places
+    (point id → zone or room name, model/zones.py; a point not in it takes its room id).
     A single socket or output with a note uses the note: "Розетка: духовка". The place is where
     the consumers are: a switch by the door of another room does not add it (the bathroom
     light switched from the hall is "Освітлення — Санвузол")."""
     types = {p.type for p in points}
     fed = [p for p in points if p.type not in SWITCHES] or points
-    where = ", ".join(dict.fromkeys(rooms.get(p.room, p.room) for p in fed))
+    where = ", ".join(dict.fromkeys(places.get(p.id, p.room) for p in fed))
     single = {PointType.SOCKET: "socket", PointType.OUTLET: "outlet"}
     if len(points) == 1 and points[0].note and points[0].type in single:
         what = f"{text(single[points[0].type], language)}: {points[0].note}"
@@ -126,7 +128,7 @@ def tell_apart(items: Sequence[tuple[str, bool, Sequence[ElectricalPoint]]]) -> 
 def group_rows(plan: Plan, elec: Electrical) -> list[GroupRow]:
     """Rows by group in number order; the group comes from the point or the cable."""
     lang = plan.language
-    rooms = {r.id: r.name for r in plan.rooms}
+    places = point_places(plan, elec.points)
     names = {p.group for p in elec.points if p.group} | {c.group for c in elec.cables if c.group}
     out = []
     for group in sorted(names, key=group_key):
@@ -138,7 +140,7 @@ def group_rows(plan: Plan, elec: Electrical) -> list[GroupRow]:
         out.append(
             GroupRow(
                 group,
-                purpose or composed_purpose(points, rooms, lang),
+                purpose or composed_purpose(points, places, lang),
                 purpose is None,
                 ", ".join(sorted({c.cable for c in cables})),
                 sum(p.count for p in points),

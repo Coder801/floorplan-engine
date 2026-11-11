@@ -316,6 +316,8 @@ def elevation_data(
             return None
         if src == "board":
             return board
+        if src == "media" and elec.media is not None:
+            return elec.media.name
         return boxes[src].label if src in boxes else point_name(points[src], lang)
 
     def color(group: str | None) -> str | None:

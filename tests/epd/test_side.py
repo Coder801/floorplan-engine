@@ -181,3 +181,23 @@ def test_estimate_work_rows_carry_their_scope() -> None:
     material = next(r for r in table.rows if len(r.cells) > 1 and r.cells[1] == "Подрозетник")
     assert material.scope is None and "scope" not in material.as_dict()
     assert all(r.scope is None for r in table.rows if r.section)
+
+
+def test_room_table_has_a_row_per_zone() -> None:
+    """Zones that take every wall are rows of the room schedule (2026-11-11), each with its own
+    walls."""
+    from floorplan_engine.epd.side import room_table
+    from floorplan_engine.model.schema import Plan
+    from floorplan_engine.validation.plan import validate_plan
+
+    walls = [{"id": f"w{k + 1}", "length": n} for k, n in enumerate((3000, 4000, 3000, 4000))]
+    zones = [{"name": "Кухня", "walls": ["w1", "w2"]}, {"name": "Прихожая", "walls": ["w3", "w4"]}]
+    room = {"id": "r", "name": "Кухня + прихожая", "walls": walls, "zones": zones}
+    plan = Plan.model_validate(
+        {"name": "тест", "default_wall_thickness": 120, "source": "text", "rooms": [room]}
+    )
+    _, contours = validate_plan(plan)
+    table = room_table(plan, contours)
+    assert [r.cells[1] for r in table.rows] == ["Кухня", "Прихожая"]
+    assert table.rows[0].keys[:3] == ("zone:r.1", "wall:r.w1", "dimension:r.w1")
+    assert "wall:r.w3" not in table.rows[0].keys

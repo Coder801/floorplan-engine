@@ -37,7 +37,10 @@ Variant rules:
 Line length = plan path + vertical from the connection point to the ceiling (or floor) at
 both ends + tails: at the panel the cable runs down to the floor (BOARD_TAIL is the panel
 height), at other connections END_ALLOWANCE. The total per cable type includes RESERVE.
-Points without a group (usually low-voltage) are not counted.
+Points without a group are not counted, except low-voltage (decision 2026-11-11): internet and
+TV without a group get a line of their own each (group "Слаботочка" by language) from the
+low-voltage cabinet `media`, without it from the panel (assumption); the cabinet tail is like
+the panel's.
 
 Chases (wall_chases) are vertical: from the ceiling down (or the floor up) to a wall point,
 at the panel and at a box. Drops on one wall closer than CHASE_SHARE share one chase, at most
@@ -90,6 +93,7 @@ from floorplan_engine.electrical.chases import (
     wall_holes,
 )
 from floorplan_engine.electrical.groups import group_key
+from floorplan_engine.electrical.groups import text as group_text
 from floorplan_engine.electrical.loads import heavy_cable
 from floorplan_engine.electrical.master import CONTROL_ID, CONTROL_MARK, master_point
 from floorplan_engine.electrical.routing import (
@@ -213,6 +217,14 @@ class _Context:
     free: BaseGeometry  # the whole flat with openings, for branches to switches behind a door
     any_angle: bool = False  # ceiling and floor routes at any angle (routing.py)
     rooms: dict[str, str] = field(default_factory=dict)  # room of each point
+    media: Board | None = None  # low-voltage cabinet (source "media")
+    from_media: Router | None = None
+
+    def tail(self, source: str) -> float:
+        """Tail inside the panel or the cabinet down to the floor; END_ALLOWANCE elsewhere."""
+        if source == "media" and self.media is not None:
+            return self.media.height
+        return self.board.height if source == "board" else END_ALLOWANCE
 
     @property
     def ceiling(self) -> float:
@@ -244,7 +256,8 @@ def box_wiring(
         return None
     master = master_point(elec)
     grouped = [p for p in elec.points if p.group and p is not master]
-    if not grouped:
+    low = [p for p in elec.points if not p.group and p.type in LOW_TYPES]
+    if not grouped and not low:
         return None
     geoms = {g.room.id: g for g in room_geometries(plan, contours)}
     shifts = stack_shifts(elec.points)
@@ -260,6 +273,10 @@ def box_wiring(
         free,
         any_angle,
         {p.id: p.room for p in elec.points},
+        elec.media,
+        None
+        if elec.media is None
+        else Router(free, anchor_end(board_anchor(elec.media, geoms)), any_angle),
     )
     boxes: list[JunctionBox] = []
     links: list[_Link] = []
@@ -268,6 +285,7 @@ def box_wiring(
         links += _group_links(ctx, elec, group, pts, boxes)
     if master is not None:
         links.append(_control_link(ctx, elec, master))
+    links += [_low_link(ctx, elec, p) for p in low]
     boxes = _sized(boxes, links)
     edited: set[str] = set()
     notes: list[tuple[str, str]] = []
@@ -277,8 +295,8 @@ def box_wiring(
     if edits is not None:
         runs = _manual_runs(runs, edits.wires, free, edited, notes, any_angle)
     height_assumed = "ceiling_height" not in plan.model_fields_set
-    skipped = tuple(p.id for p in elec.points if not p.group and p is not master)
-    chases = wall_chases(runs, elec.points, elec.board, boxes)
+    skipped = tuple(p.id for p in elec.points if not p.group and p is not master and p not in low)
+    chases = wall_chases(runs, elec.points, elec.board, boxes, elec.media)
     chases += channel_chases(elec.cable_channels)
     if elec.plaster == "before":
         chases = before_plaster(chases, elec.conduit_level)
@@ -487,6 +505,18 @@ def _control_link(ctx: _Context, elec: Electrical, p: ElectricalPoint) -> _Link:
     return _Link(CONTROL_ID, CONTROL_MARK, False, "board", p.id, anchor, up, down, route, "power")
 
 
+def _low_link(ctx: _Context, elec: Electrical, p: ElectricalPoint) -> _Link:
+    """Low-voltage point without a group: a line of its own from the cabinet, else the panel."""
+    source = "media" if ctx.media is not None else "board"
+    height = ctx.media.height if ctx.media is not None else ctx.board.height
+    route: Route = "floor" if elec.route == "floor" else "ceiling"
+    up = height if route == "floor" else max(ctx.ceiling - height, 0.0)
+    mark = DEFAULT_MARK["tv" if p.type is PointType.TV else "data"]
+    group = group_text("low", ctx.plan.language)
+    down = _rise(p, ctx.ceiling, route)
+    return _Link(group, mark, True, source, p.id, ctx.anchors[p.id], up, down, route, "low")
+
+
 def _looped(points: Sequence[ElectricalPoint]) -> list[ElectricalPoint]:
     """Wall sockets of a room that go in a daisy chain; a single one stays where it was."""
     sockets = [p for p in points if p.type in POWER_TYPES and p.ceiling is None]
@@ -546,14 +576,15 @@ def _route_runs(ctx: _Context, links: Sequence[_Link], boxes: Sequence[JunctionB
         for b in boxes
         if any(ln.cross and ln.source == b.id for ln in links)
     }
-    for src in {ln.source for ln in links} - set(routers) - {"board"}:  # a daisy chain
+    for src in {ln.source for ln in links} - set(routers) - {"board", "media"}:  # a daisy chain
         area = room_area(ctx.geoms[ctx.rooms[src]])
         routers[src] = Router(area, anchor_end(ctx.anchors[src]), ctx.any_angle)
-    board_tail = ctx.board.height  # tail inside the panel down to the floor
     runs: list[Run] = []
     for k, ln in enumerate(links):
         if ln.source == "board":
             router = ctx.from_board
+        elif ln.source == "media" and ctx.from_media is not None:
+            router = ctx.from_media
         else:
             router = wide[ln.source] if ln.cross else routers[ln.source]
         path = tuple(router.route(anchor_end(ln.target_anchor)))
@@ -569,7 +600,7 @@ def _route_runs(ctx: _Context, links: Sequence[_Link], boxes: Sequence[JunctionB
                 plan_mm=length(path),
                 rise_start_mm=ln.source_rise,
                 rise_end_mm=ln.target_rise,
-                ends_mm=END_ALLOWANCE + (board_tail if ln.source == "board" else END_ALLOWANCE),
+                ends_mm=END_ALLOWANCE + ctx.tail(ln.source),
                 route=ln.route,
                 circuit=ln.circuit,
             )

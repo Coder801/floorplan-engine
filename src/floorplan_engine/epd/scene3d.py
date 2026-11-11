@@ -298,6 +298,8 @@ def build_scene(
     ends: dict[str, Anchor] = {**anchors, **{b.id: b.anchor for b in wiring.boxes}}
     if elec.board is not None:
         ends["board"] = board_anchor(elec.board, by_room)
+    if elec.media is not None:
+        ends["media"] = board_anchor(elec.media, by_room)
 
     def inward(a: Anchor) -> list[float] | None:
         return None if a.inward is None else [round(a.inward.x, 6), round(a.inward.y, 6)]
@@ -353,4 +355,7 @@ def build_scene(
     if elec.board is not None:
         a = ends["board"]
         scene["board"] = {"pos": _xyz(_face(a), elec.board.height), "inward": inward(a)}
+    if elec.media is not None:
+        a = ends["media"]
+        scene["media"] = {"pos": _xyz(_face(a), elec.media.height), "inward": inward(a)}
     return scene

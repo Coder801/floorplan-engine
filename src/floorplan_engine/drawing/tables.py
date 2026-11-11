@@ -153,23 +153,23 @@ def name_width(names: list[str]) -> float:
 
 
 def room_schedule(plan: Plan, areas: dict[str, RoomArea]) -> Table:
-    """Room schedule: No., name, area (field), total (sum field)."""
+    """Room schedule: No., name, area (field), total (sum field). A row per floor of draw_plan:
+    a room, or each zone of an open-plan room (zones.plan_floors)."""
     lang = plan.language
+    floors = list(areas.values())
     columns = (
         Column(tr("schedule_no", lang), 12.0),
-        Column(tr("schedule_name", lang), name_width([r.name for r in plan.rooms]), "left"),
+        Column(tr("schedule_name", lang), name_width([a.name for a in floors]), "left"),
         Column(tr("schedule_area", lang), 25.0),
     )
 
     def area_cell(area: RoomArea) -> Cell:
         return lambda m: add_area_field(_doc(m), m, area.contour, area.area_mm2)
 
-    rows = tuple(
-        (str(k), room.name, area_cell(areas[room.id])) for k, room in enumerate(plan.rooms, 1)
-    )
+    rows = tuple((str(k), a.name, area_cell(a)) for k, a in enumerate(floors, 1))
 
     def total_cell(m: MText) -> None:
-        targets = [(areas[r.id].contour, areas[r.id].area_mm2) for r in plan.rooms]
+        targets = [(a.contour, a.area_mm2) for a in floors]
         add_area_sum_field(_doc(m), m, targets)
 
     return Table(

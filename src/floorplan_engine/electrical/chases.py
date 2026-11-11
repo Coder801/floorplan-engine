@@ -41,6 +41,7 @@ def wall_chases(
     points: Sequence[ElectricalPoint],
     board: Board | None,
     boxes: Sequence[JunctionBox],
+    media: Board | None = None,
 ) -> tuple[Chase, ...]:
     """Wall chases: shared by drops close together (CHASE_SHARE), up to CHASE_CABLES cables."""
     by_id = {p.id: p for p in points}
@@ -76,6 +77,9 @@ def wall_chases(
     from_board = [r for r in runs if r.source == "board" and r.rise_start_mm > 0]
     if board is not None and from_board:
         bundle("board", board.room, board.wall, board.offset, from_board)
+    from_media = [r for r in runs if r.source == "media" and r.rise_start_mm > 0]
+    if media is not None and from_media:
+        bundle("media", media.room, media.wall, media.offset, from_media)
     for b in boxes:
         if b.on_ceiling:  # on the ceiling: no chase in the wall
             continue

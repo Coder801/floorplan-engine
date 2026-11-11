@@ -58,10 +58,10 @@ def test_switch_in_another_room_does_not_add_it() -> None:
             else _pt(pid, kind, "QF1", room=room)
         )
 
-    rooms = {"bath": "Санузел", "hall": "Прихожая"}
+    places = {"l1": "Санузел", "k1": "Прихожая"}
     light = [pt("l1", "light", "bath"), pt("k1", "switch", "hall")]
-    assert composed_purpose(light, rooms, "ru") == "Освещение — Санузел"
-    assert composed_purpose([pt("k1", "switch", "hall")], rooms, "ru") == "Выключатели — Прихожая"
+    assert composed_purpose(light, places, "ru") == "Освещение — Санузел"
+    assert composed_purpose([pt("k1", "switch", "hall")], places, "ru") == "Выключатели — Прихожая"
 
 
 def test_same_built_purposes_are_told_apart_by_notes() -> None:

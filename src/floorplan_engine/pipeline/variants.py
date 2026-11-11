@@ -8,7 +8,7 @@ from typing import Any
 import yaml
 
 from floorplan_engine.electrical.pricing import Prices
-from floorplan_engine.electrical.variants import project_variants, variant_summary
+from floorplan_engine.electrical.variants import chosen_job, neighbour_variants, variant_summary
 from floorplan_engine.model.schema import Variant, WiringFile
 from floorplan_engine.validation.answers import load_optional
 from floorplan_engine.validation.issues import (
@@ -23,21 +23,18 @@ KEPT = {"ceiling_height", "plaster", "rough_light"}  # not part of the wiring va
 
 def variant_block(report: Report, prices: Prices) -> dict[str, Any] | None:
     """Wiring variants for the viewer (.epd manifest, key variants): the chosen one, "as in project"
-    and a summary of each preset and of the chosen one (estimate, cable, devices, chases), without
-    drawings. conduit is the choice itself: null — "don't know", as the mode gives."""
+    and a summary (estimate, cable, devices, chases), without drawings, of the chosen set first and
+    then of its neighbours: the set with one option changed (variants.neighbour_variants), for the
+    comparison and the prices on the wizard cards. conduit is the choice itself: null — "don't
+    know", as the mode gives."""
     source, chosen, default = report.source_electrical, report.variant, report.default_variant
     if report.plan is None or source is None or chosen is None or default is None:
         return None
     wiring_file = report.wiring_file or WiringFile()
     items = []
-    variants = project_variants(source)  # without routes the project does not have (routes)
-    if chosen.key not in {v.key for v in variants}:
-        variants.append(chosen)  # a set from the setup wizard
-    job = {"plaster": chosen.plaster, "rough_light": chosen.rough_light}  # alike in every variant
-    for variant in variants:
+    for variant in [chosen_job(source, chosen), *neighbour_variants(source, chosen)]:
         edits = wiring_file.edits_for(variant.key, default.key)
-        same_job = variant.model_copy(update=job)
-        summary = variant_summary(report.plan, report.contours, source, same_job, edits, prices)
+        summary = variant_summary(report.plan, report.contours, source, variant, edits, prices)
         if summary is not None:
             items.append(summary.as_dict())
     return {

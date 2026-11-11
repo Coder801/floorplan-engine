@@ -17,8 +17,9 @@ from floorplan_engine.electrical.pricing import MockPriceService, Prices
 from floorplan_engine.electrical.variants import (
     all_variants,
     apply_variant,
+    chosen_job,
     default_variant,
-    project_variants,
+    neighbour_variants,
     variant_summary,
 )
 from floorplan_engine.model.schema import Electrical, Variant, WireEdit, WiringEdits, WiringFile
@@ -93,12 +94,28 @@ def test_job_options_show_in_the_summary() -> None:
     assert summary.total != base.total
 
 
-def test_project_routes_limit_variants() -> None:
-    assert project_variants(_elec()) == all_variants()
-    ceiling_only = project_variants(_elec(routes=["ceiling"]))
-    assert [v.key for v in ceiling_only] == [
-        "economy-ceiling-boxes", "standard-ceiling-boxes", "proper-ceiling-boxes"
-    ]  # fmt: skip
+def _options(v: Variant) -> tuple[object, ...]:
+    return (v.mode, v.route, v.distribution, v.wire_path, v.conduit_level, v.plaster, v.rough_light)
+
+
+def test_neighbours_change_one_option_each() -> None:
+    chosen = Variant(mode="standard", route="ceiling")
+    base = chosen_job(_elec(), chosen)
+    assert base.path == "right" and base.plaster == "after" and base.rough_light is False
+    near = neighbour_variants(_elec(), chosen)
+    # route 1, distribution 1, path 1, conduit 2, mode 2, plaster 1, rough light 1
+    assert len(near) == 9 and len({_options(v) for v in near}) == 9
+    for v in near:
+        changed = [a != b for a, b in zip(_options(v), _options(base), strict=True)]
+        assert sum(changed) == 1 or v.mode != base.mode  # "don't know" conduit follows the mode
+    proper = next(v for v in near if v.mode == "proper")
+    assert proper.conduit_level == "ceiling" and proper.wire_path == "right"  # path as chosen
+
+
+def test_neighbours_keep_to_project_routes() -> None:
+    near = neighbour_variants(_elec(routes=["ceiling"]), Variant(route="ceiling", conduit="walls"))
+    assert {v.route for v in near} == {"ceiling"} and len(near) == 8
+    assert all(v.conduit == "walls" for v in near if v.mode != "standard")  # the choice stays
 
 
 def test_routes_must_agree_with_route_and_cables() -> None:
@@ -246,12 +263,14 @@ def test_build_writes_variant_summaries_to_manifest(tmp_path: Path) -> None:
     block = manifest["variants"]
     assert block["active"] == "proper-ceiling-boxes"
     assert block["default"] == "standard-ceiling-boxes"
-    assert {i["key"] for i in block["items"]} == {v.key for v in all_variants()}
+    assert block["items"][0]["key"] == "proper-ceiling-boxes"  # the chosen set first
+    assert len(block["items"]) == 10  # and its neighbours, one option changed each
+    assert {i["mode"] for i in block["items"]} == {"economy", "standard", "proper"}
     assert all(i["total"] > 0 and i["devices"] > 0 for i in block["items"])
 
 
 def test_chosen_set_of_options_joins_the_summary(tmp_path: Path) -> None:
-    """A set from the wizard is summed up with the presets; a preset drops the options."""
+    """A set from the wizard is summed up with its neighbours; a mode alone drops the options."""
     project = _project(tmp_path)
     assert not save_variant(project, {"mode": "standard", "path": "shortest", "conduit": "ceiling"})
     result = build_project(project)
@@ -259,10 +278,11 @@ def test_chosen_set_of_options_joins_the_summary(tmp_path: Path) -> None:
     with zipfile.ZipFile(result.artifact) as zf:
         block = json.loads(zf.read("manifest.json"))["variants"]
     assert block["active"] == "standard-ceiling-boxes-shortest-conduit"
-    active = next(i for i in block["items"] if i["key"] == block["active"])
+    active = block["items"][0]
+    assert active["key"] == block["active"]
     assert active["path"] == "shortest" and active["conduit"] == "ceiling"
     assert block["conduit"] == "ceiling"  # chosen, not by the mode
-    assert len(block["items"]) == len(all_variants()) + 1
+    assert len(block["items"]) == 10
     assert not save_variant(project, {"mode": "standard"})
     assert assess_project(project).report.variant.key == "standard-ceiling-boxes"  # type: ignore[union-attr]
 
@@ -284,4 +304,4 @@ def test_project_without_floor_builds_only_ceiling_variants(tmp_path: Path) -> N
     with zipfile.ZipFile(result.artifact) as zf:
         block = json.loads(zf.read("manifest.json"))["variants"]
     assert block["active"] == "standard-ceiling-boxes"
-    assert {i["route"] for i in block["items"]} == {"ceiling"} and len(block["items"]) == 3
+    assert {i["route"] for i in block["items"]} == {"ceiling"} and len(block["items"]) == 9

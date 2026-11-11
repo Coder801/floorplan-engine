@@ -42,6 +42,7 @@ from floorplan_engine.model.schema import (
     Plan,
 )
 from floorplan_engine.model.texts import Language, tr
+from floorplan_engine.model.zones import plan_floors, point_places, room_floors
 
 Point = tuple[float, float]
 
@@ -106,6 +107,8 @@ TEXT: dict[str, dict[str, str]] = {
     "label": {"ru": "Подпись точек", "uk": "Підпис точок"},
     "led": {"ru": "LED-подсветка", "uk": "LED-підсвітка"},
     "board": {"ru": "Щит {name}", "uk": "Щит {name}"},
+    "media": {"ru": "Слаботочный щит {name}", "uk": "Слабкострумовий щит {name}"},
+    "media_lines": {"ru": "Линий от щита", "uk": "Ліній від щита"},
     "device": {"ru": "Аппарат", "uk": "Апарат"},
     "load": {"ru": "Нагрузка", "uk": "Навантаження"},
     "load_value": {"ru": "{p} кВт, {i} А", "uk": "{p} кВт, {i} А"},
@@ -180,6 +183,14 @@ def describe_objects(
         if room.wet:
             rows.append((text("wet", lang), text("ip44", lang)))
         out[f"room:{room.id}"] = ObjectInfo(room.name, tuple(rows))
+        for floor in room_floors(room, contour):
+            if floor.key.startswith("zone:"):  # a zone of an open-plan room: its own card
+                zone_rows = (
+                    (text("area", lang), f"{floor.area_m2:.2f} м²".replace(".", ",")),
+                    (text("room", lang), room.name),
+                    *rows[1:],
+                )
+                out[floor.key] = ObjectInfo(floor.name, zone_rows)
         for seg in contour.segments:
             kind = text("bearing" if seg.bearing else "partition", lang)
             wall_rows = (
@@ -267,30 +278,32 @@ def _electrical(plan: Plan, elec: Electrical, wiring: Wiring | None) -> dict[str
     lang = plan.language
     rooms = {r.id: r.name for r in plan.rooms}
     points = {p.id: p for p in elec.points}
+    places = point_places(plan, elec.points)  # a zone of an open-plan room, or the room
     board_name = elec.board.name if elec.board else "ЩР"
+    names = {"board": board_name, "media": elec.media.name if elec.media else "ЩСС"}
     boxes = {b.id: b for b in wiring.boxes} if wiring else {}
     feeds = {r.target: r for r in wiring.runs} if wiring else {}
     out: dict[str, ObjectInfo] = {}
 
     def where(end: str) -> str:
-        if end == "board":
-            return board_name
+        if end in names:
+            return names[end]
         if end in boxes:
             b = boxes[end]
             return text("box_where", lang, label=b.label, room=rooms.get(b.room, b.room))
         pt = points[end]
-        return f"{_point_name(pt, lang)}, {rooms.get(pt.room, pt.room)}"
+        return f"{_point_name(pt, lang)}, {places[pt.id]}"
 
     def short(end: str) -> str:
-        if end == "board":
-            return board_name
+        if end in names:
+            return names[end]
         if end in boxes:
             return boxes[end].label
         pt = points[end]
-        return f"{_point_name(pt, lang)}, {rooms.get(pt.room, pt.room)}"
+        return f"{_point_name(pt, lang)}, {places[pt.id]}"
 
     for pt in elec.points:
-        rows = [(text("room", lang), rooms.get(pt.room, pt.room))]
+        rows = [(text("room", lang), places[pt.id])]
         if pt.ceiling is None:
             rows += [
                 (text("wall", lang), str(pt.wall)),
@@ -310,8 +323,8 @@ def _electrical(plan: Plan, elec: Electrical, wiring: Wiring | None) -> dict[str
             rows.append((text("group", lang), pt.group))
         if run is not None:
             src = (
-                text("from_board", lang, board=board_name)
-                if run.source == "board"
+                text("from_board", lang, board=names[run.source])
+                if run.source in names
                 else where(run.source)
             )
             rows += [
@@ -356,6 +369,18 @@ def _electrical(plan: Plan, elec: Electrical, wiring: Wiring | None) -> dict[str
                 (text("board_lines", lang), str(from_board)),
             ]
         out["board:board"] = ObjectInfo(text("board", lang, name=elec.board.name), tuple(rows))
+
+    if elec.media is not None:
+        m = elec.media
+        rows = [
+            (text("room", lang), rooms.get(m.room, m.room)),
+            (text("wall", lang), m.wall),
+            (text("height", lang), _mm(m.height)),
+        ]
+        if wiring is not None:
+            from_media = sum(1 for r in wiring.runs if r.source == "media")
+            rows.append((text("media_lines", lang), str(from_media)))
+        out["board:media"] = ObjectInfo(text("media", lang, name=m.name), tuple(rows))
 
     for strip in elec.led_strips:
         strip_rows = (
@@ -411,6 +436,13 @@ def plan_areas(plan: Plan, contours: dict[str, Contour]) -> dict[str, list[list[
         rings = [ring for p in polys for ring in (p.exterior, *p.interiors)]
         out[f"wall:{tag}"] = [[(x, y) for x, y in ring.coords] for ring in rings]
     return out
+
+
+def plan_floor_rings(plan: Plan, contours: dict[str, Contour]) -> dict[str, list[list[Point]]]:
+    """Floors for the hover highlight on the plan sheet (decision 2026-11-11): floor key (a room,
+    or a zone of an open-plan room, zones.plan_floors) → its outline, mm of the model. The viewer
+    fills the floor under the cursor; walls are not highlighted."""
+    return {f.key: [[(v.x, v.y) for v in f.vertices]] for f in plan_floors(plan, contours)}
 
 
 def _covering_wall(geoms: Sequence[RoomGeometry]) -> dict[str, str]:
@@ -475,12 +507,16 @@ def plan_chains(plan: Plan, contours: dict[str, Contour]) -> dict[str, list[str]
     for tag, chain in walls.items():
         out[f"wall:{tag}"] = out[f"dimension:{tag}"] = list(dict.fromkeys(chain))
     for g in geoms:
-        tags = [f"{g.room.id}.{seg.id}" for seg in g.contour.segments]
-        room = [f"room:{g.room.id}", *(k for tag in tags for k in walls[tag])]
-        out[f"room:{g.room.id}"] = list(dict.fromkeys(room))
+        for floor in room_floors(g.room, g.contour):  # a room, or each zone with its walls
+            tags = [f"{g.room.id}.{w}" for w in floor.walls]
+            keys = [floor.key, *(k for tag in tags for k in walls[tag])]
+            out[floor.key] = list(dict.fromkeys(keys))
     for r, op, strip in strips:
         out[f"opening:{op.id}"] = list(dict.fromkeys(opening_keys(r, op, strip)))
     return out
+
+
+SOURCES = frozenset({"board", "media"})  # line sources that are not boxes: panel and cabinet
 
 
 def line_chains(wiring: Wiring) -> dict[str, list[str]]:
@@ -491,7 +527,7 @@ def line_chains(wiring: Wiring) -> dict[str, list[str]]:
     feed = {r.target: r for r in wiring.runs if r.source == "board"}
     children: dict[str, list[str]] = {}
     for r in wiring.runs:
-        if r.source != "board":
+        if r.source not in SOURCES:
             children.setdefault(r.source, []).extend([f"wire:{r.id}", f"point:{r.target}"])
     out: dict[str, list[str]] = {}
 
@@ -506,7 +542,7 @@ def line_chains(wiring: Wiring) -> dict[str, list[str]]:
             chain = whole_box(r.target)
         else:
             chain = [f"wire:{r.id}"]
-            if r.source != "board":
+            if r.source not in SOURCES:
                 chain.append(f"box:{r.source}")
                 if r.source in feed:
                     chain.append(f"wire:{feed[r.source].id}")

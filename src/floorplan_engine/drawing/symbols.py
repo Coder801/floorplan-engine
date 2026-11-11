@@ -96,6 +96,7 @@ SYMBOLS: dict[str, SymbolSpec] = {
         (PointType.LED_OUTPUT, BLOCK_LED_OUTPUT, E_LED),
         (PointType.OUTLET, BLOCK_OUTLET, E_SOCKET),
         ("board", BLOCK_BOARD, E_BOARD),
+        ("media", BLOCK_BOARD, E_DATA),  # low-voltage cabinet: the panel symbol, low layer
     )
 }
 
@@ -114,6 +115,7 @@ LEGEND_ORDER: tuple[str, ...] = (
     PointType.DATA,
     PointType.TV,
     "board",
+    "media",
 )
 
 

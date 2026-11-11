@@ -33,7 +33,8 @@ OUTLET_R = 0.8
 OUTLET_DEPTH = WALL_GAP + 2.5
 BOARD_DEPTH = 3.0
 
-# Symbol key: the point type, "switch2" for a two-key switch, "board" for the panel
+# Symbol key: the point type, "switch2" for a two-key switch, "board" for the panel, "media" for
+# the low-voltage cabinet
 # sheet mm: how far the symbol sticks out from the wall (radius for ceiling ones)
 SYMBOL_DEPTH: dict[str, float] = {
     PointType.SOCKET: SOCKET_DEPTH,
@@ -49,6 +50,7 @@ SYMBOL_DEPTH: dict[str, float] = {
     PointType.LED_OUTPUT: LED_OUTPUT_DEPTH,
     PointType.OUTLET: OUTLET_DEPTH,
     "board": BOARD_DEPTH,
+    "media": BOARD_DEPTH,
 }
 
 

@@ -268,6 +268,8 @@ def legend_rows(elec: Electrical, language: Language = "ru") -> list[LegendRow]:
     present = {symbol_key(p) for p in elec.points}
     if elec.board is not None:
         present.add("board")
+    if elec.media is not None:
+        present.add("media")
     for key in (k for k in LEGEND_ORDER if k in present):
         rows.append(LegendRow(tr(f"symbol_{key}", language), TEXT_SMALL_MM, LEGEND_ROW, key=key))
     if elec.led_strips:
@@ -302,7 +304,7 @@ def draw_legend(psp: BaseLayout, rows: Sequence[LegendRow], top_left: Vec) -> No
             sym_at = Vec(x0 + LEGEND_SYMBOL_X, y if on_ceiling else y - depth / 2)
             anchor = Anchor(sym_at, None if on_ceiling else Vec(0, 1), Vec(1, 0), depth)
             with tagged(psp, "legend", row.key):
-                if row.key == "board":
+                if row.key in ("board", "media"):
                     insert_symbol(psp, spec, anchor, xscale=6.0, yscale=BOARD_DEPTH)
                 else:
                     insert_symbol(psp, spec, anchor)
@@ -339,11 +341,13 @@ def draw_electrical(
                 yscale=k_ins,
                 attribs=point_attribs(pt),
             )
-    board_area = None
-    if elec.board is not None:
-        board = board_anchor(elec.board, geoms)
-        board_area = symbol_area(board, elec.board.width / 2)
-    symbols = [symbol_area(a) for a in anchors] + ([board_area] if board_area else [])
+    cabinets = {"board": elec.board, "media": elec.media}
+    cabinet_area = {
+        key: symbol_area(board_anchor(b, geoms), b.width / 2)
+        for key, b in cabinets.items()
+        if b is not None
+    }
+    symbols = [symbol_area(a) for a in anchors] + list(cabinet_area.values())
     strips = [strip_area(strip, geoms) for strip in elec.led_strips]
     placer = label_placer(geoms_list, symbols, strips)
     numbers = number_points(plan, elec)
@@ -363,17 +367,19 @@ def draw_electrical(
         own = unary_union([symbol_area(anchors[k]) for k in cluster])
         with tagged(msp, "label", ",".join(elec.points[k].id for k in cluster)):
             place_label(msp, placer, lines, label_at, own, elec.points[cluster[0]].room)
-    if elec.board is not None:
-        b = elec.board
+    for key, b in cabinets.items():
+        if b is None:
+            continue
         anchor = board_anchor(b, geoms)
-        with tagged(msp, "board", "board"):
-            attribs = {"ID": "board", "H": f"{b.height:g}", "GROUP": ""}
+        with tagged(msp, "board", key):
+            attribs = {"ID": key, "H": f"{b.height:g}", "GROUP": ""}
             insert_symbol(
                 msp,
-                SYMBOLS["board"],
+                SYMBOLS[key],
                 anchor,
                 xscale=b.width,
                 yscale=sheet(BOARD_DEPTH),
                 attribs=attribs,
             )
-            place_label(msp, placer, [b.name, f"h{b.height:g}"], anchor, board_area, b.room)
+            area = cabinet_area[key]
+            place_label(msp, placer, [b.name, f"h{b.height:g}"], anchor, area, b.room)

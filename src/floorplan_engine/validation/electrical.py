@@ -145,8 +145,8 @@ def _check_point(
     return issues
 
 
-def _check_board_width(plan: Plan, board: Board, file: str) -> list[Issue]:
-    """The panel (offset is its centre) fits entirely on the wall."""
+def _check_board_width(plan: Plan, board: Board, file: str, path: str = "board") -> list[Issue]:
+    """The panel or the low-voltage cabinet (offset is its centre) fits entirely on the wall."""
     room = next((r for r in plan.rooms if r.id == board.room), None)
     index = room.wall_index(board.wall) if room is not None else None
     if room is None or index is None:
@@ -157,7 +157,7 @@ def _check_board_width(plan: Plan, board: Board, file: str) -> list[Issue]:
         return [
             Issue(
                 file,
-                "board",
+                path,
                 f"щит шириной {board.width:g} мм с серединой на offset {board.offset:g} "
                 f"занимает {lo:g}…{hi:g} мм и не помещается на стене {board.wall} "
                 f"длиной {length:g} мм",
@@ -182,6 +182,7 @@ def validate_electrical(
         for k, op in enumerate(room.openings)
     }
     taken["board"] = "board (зарезервировано для щита)"
+    taken["media"] = "media (зарезервировано для слаботочного щита)"
     issues += duplicates(
         [
             *((f"points[{k}].id", pt.id) for k, pt in enumerate(elec.points)),
@@ -202,6 +203,11 @@ def validate_electrical(
         issues += _check_height(b.height, "board.height", file)
         issues += check_wall_anchor(plan, b.room, b.wall, b.offset, "board", file)
         issues += _check_board_width(plan, b, file)
+    if elec.media is not None:
+        m = elec.media
+        issues += _check_height(m.height, "media.height", file)
+        issues += check_wall_anchor(plan, m.room, m.wall, m.offset, "media", file)
+        issues += _check_board_width(plan, m, file, "media")
     for s, strip in enumerate(elec.led_strips):
         # The strip end must lie on the wall; landing in an opening is not an error here
         issues += [

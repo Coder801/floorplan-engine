@@ -81,6 +81,16 @@ class Opening(StrictModel):
         return self
 
 
+class Zone(StrictModel):
+    """Part of an open-plan room by its walls: "Кухня-вітальня", "Передпокій" (model/zones.py)."""
+
+    name: str = Field(min_length=1)
+    walls: list[str] = Field(
+        min_length=1,
+        description="id стен зоны: точки на них и потолочные точки, ближайшие к ним, — в зоне",
+    )
+
+
 class Room(StrictModel):
     id: str = Field(pattern=ID_PATTERN, description="Латиница, цифры, _ и -")
     name: str = Field(min_length=1)
@@ -93,6 +103,24 @@ class Room(StrictModel):
     wet: bool = Field(
         default=False, description="Влажное помещение (санузел, ванная, прачечная): коробки IP44"
     )
+    zones: list[Zone] = Field(
+        default_factory=list,
+        description="Зоны помещения без стен между ними (кухня-гостиная и прихожая): имя зоны "
+        "идёт в назначение групп и подписи точек вместо имени помещения",
+    )
+
+    @model_validator(mode="after")
+    def _zone_walls(self) -> Room:
+        ids = {w.id for w in self.walls}
+        seen: set[str] = set()
+        for z in self.zones:
+            for w in z.walls:
+                if w not in ids:
+                    raise ValueError(f"зона «{z.name}»: в помещении нет стены {w}")
+                if w in seen:
+                    raise ValueError(f"зона «{z.name}»: стена {w} уже в другой зоне")
+                seen.add(w)
+        return self
 
     def wall_index(self, wall_id: str) -> int | None:
         """Wall index in the walk by its id; None if there is no such wall."""
@@ -163,7 +191,7 @@ class PointType(StrEnum):
     DATA = "data"  # internet
     TV = "tv"  # TV socket
     LED_OUTPUT = "led_output"  # lighting output (LED only)
-    OUTLET = "outlet"  # power cable output to an appliance: hood, air conditioner, towel rail
+    OUTLET = "outlet"  # power cable output without a plug: the hob (other appliances are sockets)
 
 
 # Lights: what switches turn on ("Lighting" sheet)
@@ -238,6 +266,13 @@ class Board(StrictModel):
     height: float
     name: str = "ЩР"
     width: float = Field(default=300, gt=0)
+
+
+class MediaBox(Board):
+    """Low-voltage cabinet (decision 2026-11-11): internet and TV points without a group get a
+    line of their own from it. Without it they come from the electrical panel (assumption)."""
+
+    name: str = "ЩСС"
 
 
 class Cable(StrictModel):
@@ -507,6 +542,11 @@ class Electrical(StrictModel):
     )
     points: list[ElectricalPoint] = Field(default_factory=list)
     board: Board | None = None
+    media: MediaBox | None = Field(
+        default=None,
+        description="Слаботочный щит: от него — линии к интернету и TV без группы, каждой точке "
+        "своя. Только из источника; нет — от электрощита (допущение)",
+    )
     cables: list[Cable] = Field(default_factory=list)
     led_strips: list[LedStrip] = Field(default_factory=list)
     cable_channels: list[CableChannel] = Field(default_factory=list)

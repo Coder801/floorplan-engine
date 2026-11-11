@@ -18,6 +18,7 @@ from floorplan_engine.model.geometry import Contour
 from floorplan_engine.model.plumbing import FixtureType, Plumbing
 from floorplan_engine.model.schema import Electrical, Plan
 from floorplan_engine.model.texts import Language
+from floorplan_engine.model.zones import plan_floors
 from floorplan_engine.plumbing.network_model import Network, drop_bends
 from floorplan_engine.plumbing.rules import FIXTURE_NAMES
 
@@ -37,12 +38,17 @@ def overview_data(
     goes into the project total together with the electrical estimate of the chosen variant.
     model is the electrical before the variant and lines: the backup bus is chosen by its groups."""
     sheet = plan.sheet
-    areas = {r.id: round(contours[r.id].area_m2, 2) for r in plan.rooms if r.id in contours}
+    # As the room schedule: a row per room, or per zone of an open-plan room (zones.plan_floors)
     rooms = [
-        {"id": r.id, "name": r.name, "area": areas[r.id], "wet": r.wet}
-        for r in plan.rooms
-        if r.id in areas
+        {
+            "id": f.key.partition(":")[2],
+            "name": f.name,
+            "area": round(f.area_m2, 2),
+            "wet": f.room.wet,
+        }
+        for f in plan_floors(plan, contours)
     ]
+    areas = {r.id: round(contours[r.id].area_m2, 2) for r in plan.rooms if r.id in contours}
     out: dict[str, Any] = {
         "object": {
             "name": plan.name,

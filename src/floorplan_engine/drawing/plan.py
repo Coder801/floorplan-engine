@@ -52,6 +52,7 @@ from floorplan_engine.model.geometry import (
 from floorplan_engine.model.scale import DEFAULT_SCALE, sheet, sheet_scale
 from floorplan_engine.model.schema import Opening, OpeningType, Plan, Room
 from floorplan_engine.model.texts import Language, tr
+from floorplan_engine.model.zones import Floor, plan_floors
 
 HATCH_PATTERN = "ANSI31"
 # Hatch scale at 1:50; at another sheet scale it is proportional, so the step on paper
@@ -558,11 +559,10 @@ def polygon_centroid(points: Sequence[Vec]) -> Vec:
     return Vec(cx / (6 * area), cy / (6 * area))
 
 
-def label_point(contour: Contour) -> Vec:
-    """Label point: the centroid, or the nearest node inside if the centroid is outside (L
-    shape).
+def label_point(pts: Sequence[Vec]) -> Vec:
+    """Label point of an outline: the centroid, or the nearest node inside if the centroid is
+    outside (L shape).
     """
-    pts = contour.vertices
     c = polygon_centroid(pts)
     if point_in_polygon(c, pts):
         return c
@@ -584,24 +584,26 @@ def label_point(contour: Contour) -> Vec:
 
 @dataclass(frozen=True)
 class RoomArea:
-    """Room area outline in the model and its current area, for AutoCAD fields."""
+    """Floor area outline in the model (a room, or a zone of it) and its current area, for
+    AutoCAD fields; name is the room schedule row."""
 
     contour: LWPolyline
     area_mm2: float
+    name: str
 
 
-def draw_area_contour(msp: Modelspace, g: RoomGeometry) -> RoomArea:
-    """Inner room outline as a separate polyline: the area fields refer to it."""
+def draw_area_contour(msp: Modelspace, floor: Floor) -> RoomArea:
+    """Inner floor outline as a separate polyline: the area fields refer to it."""
     poly = msp.add_lwpolyline(
-        [_xy(v) for v in g.contour.vertices], close=True, dxfattribs={"layer": A_AREA.name}
+        [_xy(v) for v in floor.vertices], close=True, dxfattribs={"layer": A_AREA.name}
     )
-    return RoomArea(poly, g.contour.area_mm2)
+    return RoomArea(poly, floor.area_mm2, floor.name)
 
 
-def _room_label_box(g: RoomGeometry) -> BaseGeometry:
-    """Spot of the room name and area (draw_room_label): dimensions do not sit on it."""
-    at = label_point(g.contour)
-    w = max(text_width(g.room.name, TEXT_ROOM_MM), text_width("00,00 м²", TEXT_DIM_MM))
+def _room_label_box(floor: Floor) -> BaseGeometry:
+    """Spot of the floor name and area (draw_room_label): dimensions do not sit on it."""
+    at = label_point(floor.vertices)
+    w = max(text_width(floor.name, TEXT_ROOM_MM), text_width("00,00 м²", TEXT_DIM_MM))
     hw, hh = sheet(w / 2 + 1.0), sheet(TEXT_ROOM_MM * 1.6)
     return Polygon(
         [
@@ -613,13 +615,13 @@ def _room_label_box(g: RoomGeometry) -> BaseGeometry:
     )
 
 
-def draw_room_label(msp: Modelspace, g: RoomGeometry, area: RoomArea) -> None:
-    """Room name and area; the area is an AutoCAD field from the area outline."""
+def draw_room_label(msp: Modelspace, floor: Floor, area: RoomArea) -> None:
+    """Floor name and area; the area is an AutoCAD field from the area outline."""
     doc = msp.doc
     assert doc is not None
-    at = label_point(g.contour)
+    at = label_point(floor.vertices)
     gap = sheet(TEXT_ROOM_MM) * 0.8
-    add_text(msp, g.room.name, at + Vec(0, gap), TEXT_ROOM_MM, A_TEXT.name)
+    add_text(msp, floor.name, at + Vec(0, gap), TEXT_ROOM_MM, A_TEXT.name)
     mtext = msp.add_mtext(
         "",
         dxfattribs={"layer": A_TEXT.name, "style": TEXT_STYLE, "char_height": sheet(TEXT_DIM_MM)},
@@ -634,21 +636,25 @@ def draw_room_label(msp: Modelspace, g: RoomGeometry, area: RoomArea) -> None:
 def draw_plan(msp: Modelspace, plan: Plan, contours: dict[str, Contour]) -> dict[str, RoomArea]:
     """Plan in the model at 1:1: walls, openings, area outlines, labels, dimensions.
 
-    Returns the area outlines by room id: the room schedule fields refer to them.
+    Returns the area outlines by floor key (`zones.plan_floors`: a room, or each zone of an
+    open-plan room), in schedule order: the room schedule fields refer to them.
     """
     geoms = room_geometries(plan, contours)
+    floors = plan_floors(plan, contours)
     areas: dict[str, RoomArea] = {}
     draw_walls(msp, geoms)
     for g in geoms:
         draw_openings(msp, g, plan.language)
-        with tagged(msp, "room", g.room.id):
-            areas[g.room.id] = draw_area_contour(msp, g)
-            draw_room_label(msp, g, areas[g.room.id])
+    for f in floors:
+        kind, _, object_id = f.key.partition(":")
+        with tagged(msp, kind, object_id):
+            areas[f.key] = draw_area_contour(msp, f)
+            draw_room_label(msp, f, areas[f.key])
     # Shared partitions are dimensioned from the larger room
     done: list[RoomGeometry] = []
     # Dimension labels do not sit on room names or walls. Door swings do not count: in a
     # hallway with three doors the labels would otherwise have nowhere to go near their segment
-    taken = [_room_label_box(g) for g in geoms]
+    taken = [_room_label_box(f) for f in floors]
     taken += [p.polygon for g in geoms for p in wall_pieces(g)]
     for g in sorted(geoms, key=lambda r: r.contour.area_mm2, reverse=True):
         draw_dimensions(msp, g, geoms, done, taken)
