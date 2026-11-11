@@ -17,6 +17,8 @@ from floorplan_engine.model.geometry import Vec
 BOX_BELOW_CEILING = 200.0  # mm: from the ceiling to the box
 BOX_ABOVE_FLOOR = 300.0  # mm: from the floor to the box for floor routes
 CHASE_NARROW = 2  # up to this many cables a chase is narrow, more is wide
+# A conduit is wider than a flat cable: a narrow chase takes one, two side by side need a wide one
+CHASE_NARROW_CONDUIT = 1
 
 
 Route = Literal["ceiling", "floor"]
@@ -107,10 +109,11 @@ class Chase:
     route: Route = "ceiling"
     circuit: Circuit = "power"
     span: tuple[float, float] | None = None  # heights from the floor, low to high: only a channel
+    conduit: bool = False  # the cables go down the chase in conduit (chases.with_conduit)
 
     @property
     def wide(self) -> bool:
-        return self.cables > CHASE_NARROW
+        return self.cables > (CHASE_NARROW_CONDUIT if self.conduit else CHASE_NARROW)
 
 
 @dataclass(frozen=True)

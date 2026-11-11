@@ -7,6 +7,7 @@ from __future__ import annotations
 import math
 from collections import defaultdict
 from collections.abc import Sequence
+from dataclasses import replace
 
 from shapely.geometry import LineString, Polygon
 
@@ -117,6 +118,18 @@ def before_plaster(chases: Sequence[Chase], conduit: Conduit) -> tuple[Chase, ..
     if conduit == "walls":
         return tuple(chases)
     return tuple(c for c in chases if c.kind == "channel" or c.route == "floor")
+
+
+def with_conduit(chases: Sequence[Chase], conduit: Conduit) -> tuple[Chase, ...]:
+    """Mark the chases the cables go down in conduit (estimate.conduit_mm): floor routes always,
+    ceiling routes with conduit in the walls. Such a chase is narrow only for one conduit
+    (CHASE_NARROW_CONDUIT). A cable channel is cut wide for cables that come later: unchanged."""
+    return tuple(
+        replace(c, conduit=True)
+        if c.kind != "channel" and (c.route == "floor" or conduit == "walls")
+        else c
+        for c in chases
+    )
 
 
 def _shared(key: ChaseKey, group: Sequence[tuple[float, float, str]]) -> Chase:

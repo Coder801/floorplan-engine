@@ -91,6 +91,7 @@ from floorplan_engine.electrical.chases import (
     passages,
     wall_chases,
     wall_holes,
+    with_conduit,
 )
 from floorplan_engine.electrical.groups import group_key
 from floorplan_engine.electrical.groups import text as group_text
@@ -296,7 +297,9 @@ def box_wiring(
         runs = _manual_runs(runs, edits.wires, free, edited, notes, any_angle)
     height_assumed = "ceiling_height" not in plan.model_fields_set
     skipped = tuple(p.id for p in elec.points if not p.group and p is not master and p not in low)
-    chases = wall_chases(runs, elec.points, elec.board, boxes, elec.media)
+    chases = with_conduit(
+        wall_chases(runs, elec.points, elec.board, boxes, elec.media), elec.conduit_level
+    )
     chases += channel_chases(elec.cable_channels)
     if elec.plaster == "before":
         chases = before_plaster(chases, elec.conduit_level)

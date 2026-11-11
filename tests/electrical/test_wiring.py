@@ -23,7 +23,7 @@ from floorplan_engine.drawing.wiring import (
     segments,
 )
 from floorplan_engine.electrical.boxes import BOX_CLEARANCE
-from floorplan_engine.electrical.chases import HOLE_CABLES
+from floorplan_engine.electrical.chases import HOLE_CABLES, with_conduit
 from floorplan_engine.electrical.estimate import PriceList, build_estimate
 from floorplan_engine.electrical.panel import LineClass
 from floorplan_engine.electrical.wiring import END_ALLOWANCE, box_wiring, section
@@ -974,6 +974,28 @@ def test_before_plaster_keeps_chases_with_conduit() -> None:
     assert not ceiling.chases
     floor = _wiring(plan, _sockets(route="floor", plaster="before"))  # the floor is always in it
     assert floor.chases == _wiring(plan, _sockets(route="floor")).chases
+
+
+def test_chase_with_conduit_is_narrow_for_one_conduit_only() -> None:
+    """A conduit is wider than a flat cable: two side by side need a wide chase (2026-11-11)."""
+    two = Chase("point", "r", "w1", 500.0, 1200.0, 2)
+    assert not two.wide and Chase("point", "r", "w1", 500.0, 1200.0, 1, conduit=True).wide is False
+    floor = Chase("point", "r", "w1", 500.0, 1200.0, 2, route="floor")
+    channel = Chase("channel", "r", "w2", 1500.0, 700.0, 2)
+    assert [c.wide for c in with_conduit([two, floor, channel], "none")] == [False, True, False]
+    assert [c.wide for c in with_conduit([two, floor, channel], "ceiling")] == [False, True, False]
+    assert [c.wide for c in with_conduit([two, floor, channel], "walls")] == [True, True, False]
+
+
+def test_conduit_in_the_walls_widens_the_chases() -> None:
+    plan = make_plan(walls=RECT)
+    bare = _wiring(plan, _sockets(route="ceiling"))
+    walls = _wiring(plan, _sockets(route="ceiling", conduit="walls"))
+    assert [c.length_mm for c in walls.chases] == [c.length_mm for c in bare.chases]
+    assert all(c.conduit for c in walls.chases) and not any(c.conduit for c in bare.chases)
+    wide = walls.chase_length(wide=True)
+    assert wide >= bare.chase_length(wide=True)
+    assert wide == sum(c.length_mm for c in walls.chases if c.cables > 1)
 
 
 def test_before_plaster_keeps_a_cable_channel() -> None:
