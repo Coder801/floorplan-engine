@@ -4,6 +4,7 @@ file storage with build and build_file rows."""
 
 from __future__ import annotations
 
+import uuid
 import zipfile
 from io import BytesIO
 from pathlib import Path
@@ -20,12 +21,16 @@ from floorplan_engine.service.db.models import (
     PriceList,
     Source,
     StudioProfile,
+    WorkPlan,
+    WorkTask,
 )
 from floorplan_engine.service.objects import (
     LocalObjectStore,
     build_key,
     build_prefix,
+    project_prefix,
     source_key,
+    work_photo_key,
 )
 from tests.electrical.test_variants import _project
 
@@ -115,3 +120,25 @@ def test_too_little_data_is_insufficient(db: Session, tmp_path: Path) -> None:
     assert build.status == "insufficient"
     assert ps.build_file(db, build, "project.epd") is None
     assert ps.build_file(db, build, "report.md") is not None
+
+
+def test_delete_project_takes_its_files_and_work(db: Session, tmp_path: Path) -> None:
+    """Deleting a project removes its rows (the work plan too) and every file under
+    projects/<id>/: sources, builds, task photos; another project's files stay."""
+    store = LocalObjectStore(tmp_path / "store")
+    studio = repo.create_studio(db, "Искра")
+    project, other = (repo.create_project(db, studio.id, n) for n in ("Кв", "Другой"))
+    version = repo.add_model_version(db, project.id, {"room.yaml": "name: Кв\n"}, "operator")
+    plan = WorkPlan(project_id=project.id, model_version_id=version.id, state="draft")
+    plan.tasks.append(WorkTask(domain="other", position=0, title="Задача"))
+    db.add(plan)
+    db.flush()
+    task_id = plan.tasks[0].id
+    photo = work_photo_key(project.id, task_id, uuid.uuid4(), "jpg")
+    keep = source_key(other.id, "cd", "plan.pdf")
+    for key in (photo, source_key(project.id, "ab", "plan.pdf"), keep):
+        store.put(key, b"x")
+    ps.delete_project(db, store, project)
+    assert db.get(WorkTask, task_id) is None and db.scalars(select(WorkPlan)).all() == []
+    assert not store.exists(photo) and store.exists(keep)
+    assert not (tmp_path / "store" / project_prefix(project.id)).exists()

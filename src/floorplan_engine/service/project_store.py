@@ -34,7 +34,12 @@ from floorplan_engine.service.db.models import (
     Source,
     StudioProfile,
 )
-from floorplan_engine.service.objects import ObjectStore, build_key, build_prefix
+from floorplan_engine.service.objects import (
+    ObjectStore,
+    build_key,
+    build_prefix,
+    project_prefix,
+)
 from floorplan_engine.validation.issues import STUDIO_FILE
 from floorplan_engine.validation.report import REPORT_JSON
 
@@ -197,3 +202,13 @@ def build_file(session: Session, build: Build, name: str) -> BuildFile | None:
     return session.scalar(
         select(BuildFile).where(BuildFile.build_id == build.id, BuildFile.name == name)
     )
+
+
+def delete_project(session: Session, store: ObjectStore, project: Project) -> None:
+    """A project row with everything under it in the database (cascade: versions, builds, the
+    work plan with its tasks) and every file of it in storage: sources, builds, task photos
+    (projects/<id>/)."""
+    prefix = project_prefix(project.id)
+    session.execute(delete(Project).where(Project.id == project.id))  # cascade in the database
+    session.expire_all()  # rows the cascade took are reloaded, that is, gone
+    store.delete_prefix(prefix)

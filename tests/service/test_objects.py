@@ -12,8 +12,11 @@ from floorplan_engine.service.objects import (
     ObjectKeyError,
     build_key,
     check_key,
+    project_prefix,
     safe_name,
     source_key,
+    work_photo_key,
+    work_prefix,
 )
 
 
@@ -29,6 +32,10 @@ def test_keys_of_sources_and_builds() -> None:
     assert safe_name("...") == "file"
     assert source_key(pid, "ab12", "dir/План.pdf") == f"projects/{pid}/sources/ab12/План.pdf"
     assert build_key(pid, bid, "out/project.epd").endswith(f"{bid}/out/project.epd")
+    photo = uuid.uuid4()
+    assert work_photo_key(pid, bid, photo, "jpg") == f"projects/{pid}/work/{bid}/{photo}.jpg"
+    assert work_photo_key(pid, bid, photo, "jpg").startswith(work_prefix(pid) + "/")
+    assert work_prefix(pid).startswith(project_prefix(pid) + "/")
 
 
 def test_local_store_round_trip(tmp_path: Path) -> None:

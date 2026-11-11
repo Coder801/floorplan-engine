@@ -50,7 +50,18 @@ Role = Literal[
 ]
 CodeRole = Literal["viewer", "client_code"]
 CODE_ROLES: tuple[CodeRole, ...] = ("viewer", "client_code")
-Action = Literal["view", "answer", "review", "edit_wiring", "choose_variant", "invite", "manage"]
+Action = Literal[
+    "view",
+    "answer",
+    "review",
+    "edit_wiring",
+    "choose_variant",
+    "invite",
+    "manage",
+    "work_do",
+    "work_accept",
+    "work_manage",
+]
 
 CAN: dict[Action, frozenset[str]] = {
     "view": frozenset(
@@ -82,6 +93,12 @@ CAN: dict[Action, frozenset[str]] = {
     # Service API (api/app.py): model upload, starting analysis, project deletion. Not a limit on
     # tokens: anyone can own a studio (docs/status.md, "Техдолг")
     "manage": frozenset({"owner", "designer", "superuser"}),
+    # Installation by tasks (docs/work-tasks.md): the installer takes a task, hands it in with
+    # photos and the fact; the client approves the plan, accepts or returns a task; the studio
+    # makes the plan, prices, assigns and records payments. A view code only views
+    "work_do": frozenset({"owner", "designer", "installer", "superuser"}),
+    "work_accept": frozenset({"owner", "designer", "client", "client_code", "superuser"}),
+    "work_manage": frozenset({"owner", "designer", "superuser"}),
 }
 STUDIO_ROLES = frozenset({"owner", "designer", "installer"})
 # The client side (decision 2026-11-11): sees and answers only the questions asked of the client

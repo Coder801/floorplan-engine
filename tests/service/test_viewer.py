@@ -81,6 +81,7 @@ def test_list_and_project(root: Path) -> None:
     assert p["files"] == ["project.dxf", "project.epd", "report.json"]
     assert p["sources"] == ["план.pdf"]
     assert p["model"] == ["room.yaml", "answers.yaml"]
+    assert p["work"] is False  # installation by tasks lives only in the database
 
     assert client.get("/api/projects/kv1/sheets").json()["pages"][0]["name"] == "01 План"
     assert client.get("/api/projects/kv1/sheets/1").json() == PAGE

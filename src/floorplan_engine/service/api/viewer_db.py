@@ -46,6 +46,7 @@ from floorplan_engine.pipeline import (
 from floorplan_engine.service import project_store as ps
 from floorplan_engine.service import sync
 from floorplan_engine.service.api.auth import Auth
+from floorplan_engine.service.api.work import install_work_routes
 from floorplan_engine.service.db import access as acc
 from floorplan_engine.service.db import repositories as repo
 from floorplan_engine.service.db.models import (
@@ -284,6 +285,7 @@ def _read_routes(
                 ],
                 "model": [f for f in repo.MODEL_COLUMNS if f in model]
                 + ([PRICES_FILE] if own_prices else []),
+                "work": True,  # installation by tasks (api/work.py): only with the database
                 "can": {
                     "edit_wiring": allowed(request, "edit_wiring"),
                     "choose_variant": allowed(request, "choose_variant"),
@@ -512,4 +514,5 @@ def install_db_routes(app: FastAPI, auth: Auth, store: ObjectStore, market_root:
 
     _read_routes(app, auth, store, project_of, allowed)
     _edit_routes(app, auth, store, project_of, allowed)
+    install_work_routes(app, auth, store, project_of)
     _price_routes(app, auth, market_root)

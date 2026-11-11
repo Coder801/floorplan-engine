@@ -9,13 +9,14 @@ holds only the object_key.
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from typing import Any, ClassVar
 
 from sqlalchemy import (
     BigInteger,
     Boolean,
     CheckConstraint,
+    Date,
     DateTime,
     Float,
     ForeignKey,
@@ -492,4 +493,157 @@ class Usage(Base):
     input_tokens: Mapped[int] = mapped_column(Integer, default=0)
     output_tokens: Mapped[int] = mapped_column(Integer, default=0)
     cost_usd: Mapped[float] = mapped_column(Numeric(10, 4, asdecimal=False), default=0)
+    created_at: Mapped[datetime] = _created()
+
+
+# --- Installation by tasks (docs/work-tasks.md) -------------------------------------------
+
+
+class WorkPlan(Base):
+    """The work plan of a project: tasks made from the .epd work_plan draft of a build. State:
+    draft → proposed → approved → closed; one plan that is not closed per project. The model
+    version is the one the plan was made from and approved by."""
+
+    __tablename__ = "work_plan"
+    __table_args__ = (
+        Index(
+            "uq_work_plan_active",
+            "project_id",
+            unique=True,
+            postgresql_where=text("state <> 'closed'"),
+        ),
+    )
+    id: Mapped[uuid.UUID] = _id()
+    project_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("project.id", ondelete="CASCADE"))
+    model_version_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("model_version.id", ondelete="SET NULL")
+    )
+    # Builds are pruned (project_store.KEEP_BUILDS): the plan outlives its build
+    build_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("build.id", ondelete="SET NULL"))
+    state: Mapped[str] = mapped_column(String(20), default="draft")
+    currency: Mapped[str] = mapped_column(String(8), default="")
+    created_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("app_user.id", ondelete="SET NULL")
+    )
+    created_at: Mapped[datetime] = _created()
+    approved_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("app_user.id", ondelete="SET NULL")
+    )
+    approved_label: Mapped[str] = mapped_column(String(200), default="")  # a code has no user
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    tasks: Mapped[list[WorkTask]] = relationship(
+        back_populates="plan", order_by="WorkTask.position", cascade="all, delete-orphan"
+    )
+
+
+class WorkTask(Base):
+    """A task card: a stage of the draft (key electrical.cable) or the studio's own (key None).
+    Status: proposed | todo | in_progress | review | returned | accepted. Sums are not stored:
+    the code counts them from the lines (db/work.py)."""
+
+    __tablename__ = "work_task"
+    __table_args__ = (Index("ix_work_task_plan", "plan_id", "position"),)
+    id: Mapped[uuid.UUID] = _id()
+    plan_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("work_plan.id", ondelete="CASCADE"))
+    key: Mapped[str | None] = mapped_column(String(60))
+    domain: Mapped[str] = mapped_column(String(20))  # electrical | plumbing | other
+    position: Mapped[int] = mapped_column(Integer)
+    title: Mapped[str] = mapped_column(String(200))
+    description: Mapped[str] = mapped_column(Text, default="")
+    status: Mapped[str] = mapped_column(String(20), default="proposed")
+    extra: Mapped[bool] = mapped_column(Boolean, default=False)  # outside the approved plan
+    photo: Mapped[str] = mapped_column(String(10), default="optional")  # required | optional | none
+    result: Mapped[list[Any]] = mapped_column(default=list)  # acceptance criterion, lines
+    after: Mapped[list[Any]] = mapped_column(default=list)  # task keys or ids
+    assignee_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("app_user.id", ondelete="SET NULL")
+    )
+    materials_included: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = _created()
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, onupdate=now)
+    plan: Mapped[WorkPlan] = relationship(back_populates="tasks")
+    lines: Mapped[list[WorkLine]] = relationship(
+        order_by="WorkLine.position", cascade="all, delete-orphan"
+    )
+    photos: Mapped[list[WorkPhoto]] = relationship(
+        order_by="WorkPhoto.created_at", cascade="all, delete-orphan"
+    )
+    comments: Mapped[list[WorkComment]] = relationship(
+        order_by="WorkComment.created_at", cascade="all, delete-orphan"
+    )
+    payments: Mapped[list[WorkPayment]] = relationship(
+        order_by="WorkPayment.created_at", cascade="all, delete-orphan"
+    )
+
+
+class WorkLine(Base):
+    """A task line: an estimate item (key as in the estimate) or the studio's own. price None —
+    no price in the list; fact_qty None — as planned."""
+
+    __tablename__ = "work_line"
+    __table_args__ = (Index("ix_work_line_task", "task_id", "position"),)
+    id: Mapped[uuid.UUID] = _id()
+    task_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("work_task.id", ondelete="CASCADE"))
+    position: Mapped[int] = mapped_column(Integer)
+    key: Mapped[str] = mapped_column(String(80), default="")
+    kind: Mapped[str] = mapped_column(String(10))  # work | material
+    title: Mapped[str] = mapped_column(Text)
+    unit: Mapped[str] = mapped_column(String(20), default="")
+    plan_qty: Mapped[float] = mapped_column(Float)
+    fact_qty: Mapped[float | None] = mapped_column(Float)
+    price: Mapped[float | None] = mapped_column(Float)
+
+
+class WorkPhoto(Base):
+    """A photo or a PDF of a task; the file is in object storage (objects.work_photo_key)."""
+
+    __tablename__ = "work_photo"
+    __table_args__ = (Index("ix_work_photo_task", "task_id", "created_at"),)
+    id: Mapped[uuid.UUID] = _id()
+    task_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("work_task.id", ondelete="CASCADE"))
+    object_key: Mapped[str] = mapped_column(Text)
+    file_name: Mapped[str] = mapped_column(Text, default="")
+    content_type: Mapped[str] = mapped_column(String(100))
+    size: Mapped[int] = mapped_column(Integer, default=0)
+    caption: Mapped[str] = mapped_column(Text, default="")
+    target: Mapped[str | None] = mapped_column(String(100))  # drawing object type:id, later
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("app_user.id", ondelete="SET NULL")
+    )
+    author_label: Mapped[str] = mapped_column(String(200), default="")
+    created_at: Mapped[datetime] = _created()
+
+
+class WorkComment(Base):
+    """The task feed: a comment, a return with its reason or a status change (status — the new
+    status of return and status entries)."""
+
+    __tablename__ = "work_comment"
+    __table_args__ = (Index("ix_work_comment_task", "task_id", "created_at"),)
+    id: Mapped[uuid.UUID] = _id()
+    task_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("work_task.id", ondelete="CASCADE"))
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("app_user.id", ondelete="SET NULL")
+    )
+    author_label: Mapped[str] = mapped_column(String(200), default="")  # a code: its label
+    kind: Mapped[str] = mapped_column(String(10), default="comment")  # comment | return | status
+    status: Mapped[str | None] = mapped_column(String(20))
+    text: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = _created()
+
+
+class WorkPayment(Base):
+    """A payment for a task; an advance is a payment before acceptance."""
+
+    __tablename__ = "work_payment"
+    __table_args__ = (Index("ix_work_payment_task", "task_id", "created_at"),)
+    id: Mapped[uuid.UUID] = _id()
+    task_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("work_task.id", ondelete="CASCADE"))
+    amount: Mapped[float] = mapped_column(Numeric(12, 2, asdecimal=False))
+    paid_on: Mapped[date] = mapped_column(Date)
+    note: Mapped[str] = mapped_column(Text, default="")
+    recorded_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("app_user.id", ondelete="SET NULL")
+    )
     created_at: Mapped[datetime] = _created()

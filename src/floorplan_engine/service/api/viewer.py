@@ -230,6 +230,7 @@ def _read_routes(
                 if isinstance(s, dict)
             ],
             "model": [f for f in SHOWN_FILES if (path / f).exists()],
+            "work": False,  # installation by tasks lives in the database (viewer_db, api/work.py)
             # What the caller may do: edit routes and choose a variant (studio, "Мой ремонт")
             "can": {
                 "edit_wiring": allowed(request, "edit_wiring"),

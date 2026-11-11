@@ -29,6 +29,7 @@ uv run alembic revision --autogenerate -m "что изменилось"
 | `service/db/session.py` | Подключение: `DATABASE_URL`, `make_engine`, `make_sessions`. База — только Postgres (решение 2026-11-01): схему строят миграции, `create_tables` и SQLite убраны |
 | `tests/service/conftest.py` | Тесты базы — на Postgres из `docker-compose.yml`, своя база `floorplan_engine_test` (`TEST_DATABASE_URL`, имя обязано кончаться на `_test` — она пересоздаётся): миграции вверх, вниз до нуля и снова вверх, после теста таблицы очищаются; `test_db.test_migrations_match_models` сверяет схему миграций с моделями. Postgres не запущен — пропуск, `TEST_REQUIRE_DB=1` — ошибка |
 | `service/db/repositories.py` | Проекты, источники (без повторов по sha256), кэш выжимок по версии алгоритма, версии модели, расход LLM. Функции не делают commit — транзакцией управляет вызывающий |
+| `service/db/work.py`, `service/db/work_records.py` | Монтаж по задачам (`docs/work-tasks.md`): план из черновика `.epd`, его жизнь, задачи, строки, статусы и права на них, суммы (`totals`); фото в хранилище, комментарии, оплаты. Без commit, как `repositories.py` |
 | `migrations/` | Alembic: `env.py`, `versions/0001_initial.py` |
 
 ## Схема
@@ -260,6 +261,96 @@ erDiagram
   PROJECT ||--o{ AUDIT_EVENT : "журнал"
   APP_USER ||--o{ AUDIT_EVENT : "кто"
 ```
+
+### Монтаж по задачам (решение 2026-11-11, миграция `0013`)
+
+Состояние работ — только здесь, в папке проекта и в YAML его нет; черновик задач — ключ
+`work_plan` в `.epd` последней сборки (его считает ядро, `pipeline/work_plan.py`). Правила —
+`docs/work-tasks.md`, API — `docs/service-api.md`, раздел «Монтаж по задачам».
+
+```mermaid
+erDiagram
+  PROJECT ||--o{ WORK_PLAN : "планы работ"
+  WORK_PLAN ||--o{ WORK_TASK : tasks
+  WORK_TASK ||--o{ WORK_LINE : lines
+  WORK_TASK ||--o{ WORK_PHOTO : photos
+  WORK_TASK ||--o{ WORK_COMMENT : comments
+  WORK_TASK ||--o{ WORK_PAYMENT : payments
+  WORK_PLAN {
+    uuid id PK
+    uuid project_id FK "CASCADE; незакрытый план — один (частичный уникальный индекс)"
+    uuid model_version_id FK "версия, из которой сделан и по которой утверждён; SET NULL"
+    uuid build_id FK "сборка черновика; SET NULL — сборки чистятся"
+    string state "draft | proposed | approved | closed"
+    string currency
+    uuid created_by FK
+    uuid approved_by FK "у кода доступа пусто"
+    string approved_label "кто утвердил: имя или «код: …»"
+    timestamp approved_at
+    timestamp closed_at
+  }
+  WORK_TASK {
+    uuid id PK
+    uuid plan_id FK
+    string key "electrical.cable; у своей задачи пусто"
+    string domain "electrical | plumbing | other"
+    int position "порядок в списке, с 0"
+    string title
+    text description
+    string status "proposed | todo | in_progress | review | returned | accepted"
+    bool extra "доп. работа после утверждения"
+    string photo "required | optional | none"
+    jsonb result "критерий приёмки, строки"
+    jsonb after "ключи или id задач"
+    uuid assignee_id FK
+    bool materials_included
+  }
+  WORK_LINE {
+    uuid id PK
+    uuid task_id FK
+    int position
+    string key "ключ сметы с параметром; у своей строки — любой или пусто"
+    string kind "work | material"
+    text title
+    string unit
+    float plan_qty
+    float fact_qty "пусто — как в плане"
+    float price "пусто — нет цены"
+  }
+  WORK_PHOTO {
+    uuid id PK
+    uuid task_id FK
+    text object_key "projects/<проект>/work/<задача>/<фото>.<ext>"
+    text file_name
+    string content_type
+    int size
+    text caption
+    string target "объект чертежа тип:id, позже"
+    uuid user_id FK
+    string author_label
+  }
+  WORK_COMMENT {
+    uuid id PK
+    uuid task_id FK
+    uuid user_id FK
+    string author_label "у кода доступа — «код: подпись»"
+    string kind "comment | return | status"
+    string status "новый статус у return и status"
+    text text
+  }
+  WORK_PAYMENT {
+    uuid id PK
+    uuid task_id FK
+    numeric amount
+    date paid_on
+    text note
+    uuid recorded_by FK
+  }
+```
+
+Суммы не хранятся: сумма строки — `(fact_qty ?? plan_qty) × price`, задачи — по строкам, работы
+и материалы отдельно (`db/work.py`, `totals`). Удаление проекта (`project_store.delete_project`)
+снимает его строки каскадом и все файлы под `projects/<id>/`, фото задач тоже.
 
 ### Доступ (решения пользователя 2026-10-28, схема — черновик)
 

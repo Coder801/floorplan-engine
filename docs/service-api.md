@@ -199,3 +199,104 @@ GET  /projects/{id}                  ждать, пока state не analyzing /
 
 Позже это хранилище заменят база данных и объектное хранилище, интерфейс `Storage` при этом
 не изменится.
+
+## Просмотр: монтаж по задачам (`/api/projects/{key}/work`)
+
+Решение 2026-11-11, `docs/work-tasks.md`. Это API просмотра (`floorplan-engine view`/`dev` со входом
+и базой, `service/api/work.py`, правила — `service/db/work.py`, `work_records.py`), а не API
+сервиса выше. Только в режиме базы: у просмотра папок задач нет, `GET /api/projects/{key}` там
+отдаёт `"work": false`, в режиме базы — `"work": true`. `key` — id проекта (или имя, как у
+остальных адресов просмотра).
+
+Доступ: middleware пускает любого, кто видит проект (`view`), чужой проект — `404`; дальше каждая
+ручка проверяет своё право по роли в проекте (`service/db/access.py`):
+
+| Право | Роли | Что |
+| --- | --- | --- |
+| `view` | все роли проекта, в том числе код просмотра (`viewer`) и поддержка | видеть план, задачи, фото |
+| `work_do` | `owner`, `designer`, `installer`, `superuser` | взять, сдать, факт по строкам, фото, комментарий |
+| `work_accept` | `owner`, `designer`, `client`, `client_code`, `superuser` | утвердить план, принять, вернуть, согласовать доп. работу, фото, комментарий |
+| `work_manage` | `owner`, `designer`, `superuser` | создать, отправить, закрыть, сбросить план; задачи, цены, строки, исполнитель, удаление, оплаты; взять задачу, которая ещё ждёт другие |
+
+Ошибки — `{"detail": "текст по-русски"}`: `403` — нет права, `404` — нет плана, задачи, строки,
+фото, оплаты, `409` — не в этом состоянии (план не утверждён, сумма согласована, задача ждёт,
+нужно фото…), `422` — неверное значение (текст начинается с поля: `comment: …`, `lines[0].kind: …`),
+`413` — файл больше 15 МБ, `415` — не тот тип файла. Деньги — числа, формат — на фронте.
+
+| Метод | Путь | Право | Тело | Что |
+| --- | --- | --- | --- | --- |
+| GET | `/work` | view | — | состояние (ниже) |
+| POST | `/work/plan` | work_manage | — | план `draft` из черновика `work_plan` последней сборки; `409` — уже есть незакрытый план или в сборке нет черновика |
+| POST | `/work/plan/{action}` | по действию | — | `propose` (manage): `draft` → `proposed`; `approve` (accept): `proposed` → `approved`, задачи `proposed` → `todo`, кто и когда — в плане; `close` (manage): `approved` → `closed`, только когда все задачи приняты и оплачены; `discard` (manage): удалить план `draft` или `proposed` |
+| POST | `/work/tasks` | work_manage | `{title, description?, domain?: electrical\|plumbing\|other, photo?, materials_included?, lines?: [строка]}` | своя задача в конец списка; после утверждения — `extra: true`, статус `proposed`, пока заказчик не согласует |
+| PATCH | `/work/tasks/{id}` | work_manage | `{title?, description?, position?, assignee_id?, materials_included?, photo?, after?}` | `position` — место в списке с 0 (остальные сдвигаются); `assignee_id` — id из `assignees` или `null`; `after` — id или ключи задач плана; `materials_included` — пока сумма не согласована |
+| DELETE | `/work/tasks/{id}` | work_manage | — | только `proposed` / `todo` без фото и оплат |
+| POST | `/work/tasks/{id}/status` | по переходу | `{to, comment?}` | переходы ниже; только в утверждённом плане |
+| PATCH | `/work/tasks/{id}/lines/{line}` | work_do — `fact_qty`, work_manage — `price` | `{fact_qty?, price?}` | `null` — как в плане / без цены; факт — пока задача не принята, цена — пока сумма не согласована |
+| POST | `/work/tasks/{id}/lines` | work_manage | `{title, kind: work\|material, unit?, qty, price?, key?}` | своя строка, пока сумма не согласована |
+| POST | `/work/tasks/{id}/photos` | work_do или work_accept | multipart: `file`, `caption?` | JPEG, PNG, WebP, HEIC/HEIF, PDF (протокол), до 15 МБ; только в утверждённом плане |
+| GET | `/work/photos/{id}` | view | — | файл с его `content-type` |
+| DELETE | `/work/photos/{id}` | автор (до приёмки задачи) или work_manage | — | фото с кода доступа удаляет только студия: у кода нет учётки |
+| POST | `/work/tasks/{id}/comments` | work_do или work_accept | `{text}` | комментарий в ленту задачи |
+| POST | `/work/tasks/{id}/payments` | work_manage | `{amount, paid_on: "ГГГГ-ММ-ДД", note?}` | оплата (аванс — оплата до приёмки); только в утверждённом плане |
+| DELETE | `/work/payments/{id}` | work_manage | — | |
+
+Пути — от `/api/projects/{key}`. Пока план не закрыт, менять можно; в закрытом — ничего (`409`).
+
+Переходы статуса (`to`) и право: `proposed → todo` — work_accept (доп. работа согласована);
+`todo → in_progress` — work_do, но если задача ждёт непринятые (`waiting`), — только
+work_manage; `in_progress → review`, `returned → review` — work_do, при `photo: required` нужно
+хотя бы одно фото; `review → accepted` — work_accept; `review → returned` — work_accept, только с
+`comment`; `returned → in_progress` — work_do. Каждый переход — запись в ленте задачи
+(`comments`, `kind: status` или `return`) и в журнале (`audit_event`: `work_status`; ещё
+`work_plan_<action>`, `work_plan_create`, `work_task_add`, `work_task_delete`, `work_photo`,
+`work_photo_delete`, `work_payment`, `work_payment_delete`).
+
+Ответ `GET /work` и любой записи — всё состояние, страница его просто заменяет:
+
+```json
+{
+  "plan": {
+    "id": "…", "state": "approved", "currency": "грн", "model_version": 3,
+    "created_at": "2026-11-11T10:00:00+00:00", "approved_at": "…", "approved_by": "Иван",
+    "closed_at": null,
+    "totals": {"work": 52000.0, "material": 91000.0, "total": 143000.0, "paid": 20000.0,
+               "tasks": 9, "accepted": 2, "settled": 1, "unpriced": 0}
+  },
+  "tasks": [{
+    "id": "…", "key": "electrical.cable", "domain": "electrical", "position": 1,
+    "title": "Прокладка кабеля", "description": "", "status": "todo", "extra": false,
+    "photo": "required", "result": ["кабель лежит по трассе и закреплён, …"],
+    "after": ["electrical.chases"], "waiting": [{"id": "…", "title": "Штробы, проходы, подрозетники"}],
+    "assignee": {"id": "…", "name": "Петро"}, "materials_included": true, "money_editable": false,
+    "lines": [{"id": "…", "key": "work.cable", "kind": "work", "title": "Прокладка кабеля",
+               "unit": "м", "plan_qty": 609.4, "fact_qty": null, "price": 34.0, "sum": 20719.6}],
+    "work_total": 29860.6, "material_total": 59012.2, "total": 88872.8, "paid": 0.0,
+    "settled": false, "unpriced": 0,
+    "photos": [{"id": "…", "url": "/api/projects/<id>/work/photos/<id>", "file_name": "IMG_1.HEIC",
+                "content_type": "image/heic", "size": 812345, "caption": "", "author": "Петро",
+                "user_id": "…", "created_at": "…"}],
+    "comments": [{"id": "…", "kind": "status", "status": "in_progress", "text": "",
+                  "author": "Петро", "user_id": "…", "created_at": "…"}],
+    "payments": [{"id": "…", "amount": 10000.0, "paid_on": "2026-11-11", "note": "аванс",
+                  "created_at": "…"}]
+  }],
+  "draft_available": true,
+  "model_version": 4,
+  "assignees": [{"id": "…", "name": "Петро"}],
+  "can": {"work_do": true, "work_accept": false, "work_manage": true}
+}
+```
+
+- `plan: null`, `tasks: []` — плана ещё нет; `draft_available` — есть ли черновик в последней
+  сборке (кнопка «Создать задачи из сметы»). Показывается незакрытый план, иначе последний
+  закрытый.
+- Сумма строки — `(fact_qty ?? plan_qty) × price`, `null` без цены; суммы задачи — по строкам с
+  ценой, работы и материалы отдельно, `total` — работы плюс материалы, если
+  `materials_included`; `paid` — сумма оплат, `settled` — `paid ≥ total`. Суммы не хранятся.
+- `model_version` у плана — версия модели, из которой он сделан и по которой утверждён; рядом —
+  последняя версия проекта: разные — модель менялась после плана (новая работа — доп. задачей).
+- `money_editable` — можно ли менять цены, строки и `materials_included`: план ещё не утверждён
+  или это доп. работа, которую заказчик ещё не согласовал.
+- `assignees` — только для `work_manage` (люди студии проекта и приглашённые монтажники), у
+  остальных пусто. `author` у кода доступа — «код: <подпись>».

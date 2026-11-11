@@ -4,7 +4,9 @@ project folder. For now one implementation — a folder on the server volume (Lo
 R2/S3 will be a second one behind the same protocol.
 
 Keys are slash-separated paths of safe segments: `projects/<project id>/sources/<sha256>/plan.pdf`,
-`projects/<project id>/builds/<build id>/project.epd` (source_key, build_key).
+`projects/<project id>/builds/<build id>/project.epd`, task photos
+`projects/<project id>/work/<task id>/<photo id>.jpg` (source_key, build_key, work_photo_key).
+Everything of a project is under `projects/<project id>/` (project_prefix).
 """
 
 from __future__ import annotations
@@ -37,6 +39,11 @@ def safe_name(name: str) -> str:
     return clean or "file"
 
 
+def project_prefix(project_id: uuid.UUID) -> str:
+    """Every file of a project: sources, builds, task photos."""
+    return check_key(f"projects/{project_id}")
+
+
 def source_key(project_id: uuid.UUID, sha256: str, name: str) -> str:
     return check_key(f"projects/{project_id}/sources/{sha256}/{safe_name(name)}")
 
@@ -47,6 +54,15 @@ def build_prefix(project_id: uuid.UUID, build_id: uuid.UUID) -> str:
 
 def build_key(project_id: uuid.UUID, build_id: uuid.UUID, rel: str) -> str:
     return check_key(f"{build_prefix(project_id, build_id)}/{rel}")
+
+
+def work_prefix(project_id: uuid.UUID) -> str:
+    return check_key(f"{project_prefix(project_id)}/work")
+
+
+def work_photo_key(project_id: uuid.UUID, task_id: uuid.UUID, photo_id: uuid.UUID, ext: str) -> str:
+    """A task photo or PDF (docs/work-tasks.md, "Фото"); ext without the dot: jpg, pdf."""
+    return check_key(f"{work_prefix(project_id)}/{task_id}/{photo_id}.{ext}")
 
 
 class ObjectStore(Protocol):
