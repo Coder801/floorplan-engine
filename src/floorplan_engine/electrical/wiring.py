@@ -167,7 +167,7 @@ LED_MARK = "2x1.5"  # 12 V line from a LED supply in the panel to its output (as
 # Light in a chain without boxes (Electrical.light_wiring "chain")
 LAMP_TYPES = LIGHT_TYPES - SWITCH_TYPES  # lights and LED outputs, without switches
 LIGHT_LOOP = 600.0  # mm: cable loop at each ceiling light of a chain, 30 cm each way
-PASS_MARK = "5x1.5"  # between pass switches without a box (assumption)
+PASS_MARK = "4x1.5"  # between pass switches without a box: two travellers, N, PE (assumption)
 TWO_KEY_MARK = "4x1.5"  # from a two-key switch to its lights: two switched lines (assumption)
 
 
