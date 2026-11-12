@@ -53,7 +53,9 @@ into "Before / after the push" in the summary:
   `docker build --target web .` and `docker build --target admin .`; a failure means no release.
   If Docker is not running, say the build was not checked.
 - new files in `migrations/versions/`: name them; `deploy/start.sh` applies them on start when
-  login is on (`SHTROBA_AUTH=on`), nothing to run by hand.
+  login is on (`SHTROBA_AUTH=on`), nothing to run by hand. **Before the push** the human takes a
+  backup: `uv run python scripts/server.py backup` (a migration runs on the live database at
+  start and has no way back without it). Put this command first in the summary's command list.
 - new variables in `.env.example` (`git diff <tag>..develop -- .env.example`): name them; they are
   set in Railway by hand, the code must work without them.
 - `FORMAT_VERSION` changed (`epd/artifact.py`): old builds on the server are stale until rebuilt.

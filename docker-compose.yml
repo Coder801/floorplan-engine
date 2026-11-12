@@ -1,9 +1,14 @@
-# Service database for development: uv run floorplan-engine … with DATABASE_URL from .env (see .env.example)
-#   docker compose up -d db        — start
-#   uv run alembic upgrade head    — create or update the tables
+# Local environment as close to production as possible (docs/development.md, "Локально как на сервере").
+# Variables come from .env (see .env.example).
+#   docker compose up -d db mail          — the database (Postgres 18, as on Railway) and Mailpit
+#   uv run alembic upgrade head           — create or update the tables
+#   uv run python scripts/local.py restore — a copy of the production data (server.py backup)
+#   uv run floorplan-engine dev           — the viewer with hot reload: http://127.0.0.1:5173
+#   docker compose --profile prod up --build — the production image itself: http://127.0.0.1:8080
+# Letters (login codes, feedback notices) — http://127.0.0.1:8025
 services:
   db:
-    image: postgres:17
+    image: postgres:18
     container_name: floorplan-engine-db
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-floorplan_engine}
@@ -12,12 +17,53 @@ services:
     ports:
       - "${POSTGRES_PORT:-5433}:5432"  # 5432 is often taken by other projects
     volumes:
-      - floorplan-engine-pgdata:/var/lib/postgresql/data
+      # Postgres 18 keeps its data under /var/lib/postgresql/18 (not …/data as 17 did)
+      - floorplan-engine-pg18:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-floorplan_engine} -d ${POSTGRES_DB:-floorplan_engine}"]
       interval: 2s
       timeout: 3s
       retries: 30
 
+  # SMTP without TLS on 1025 (SMTP_TLS=off), the inbox in the browser on 8025
+  mail:
+    image: axllent/mailpit:v1.27
+    container_name: floorplan-engine-mail
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+
+  # The production image (Dockerfile: Caddy, deploy/start.sh, migrations, Python 3.12) with the
+  # local database and data/ as the /data volume — the same files the `dev` API uses.
+  # Login: by e-mail code (the letter is in Mailpit); Google needs the redirect
+  # http://127.0.0.1:8080/api/auth/google/callback in the Cloud Console.
+  app:
+    profiles: [prod]
+    build: .
+    container_name: floorplan-engine-app
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-floorplan_engine}:${POSTGRES_PASSWORD:-floorplan_engine}@db:5432/${POSTGRES_DB:-floorplan_engine}
+      SHTROBA_PUBLIC_URL: http://127.0.0.1:8080
+      SHTROBA_OBJECTS: /data/objects
+      PROJECTS_DIR: /data/projects
+      SMTP_HOST: mail
+      SMTP_PORT: "1025"
+      SMTP_TLS: "off"
+      # As on the server: no development login and no guest
+      SHTROBA_DEV_LOGIN: ""
+      SHTROBA_VISITOR: ""
+      # The bot polls the Bot API from one process only: leave it to `dev`
+      TELEGRAM_BOT_TOKEN: ""
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/data
+    depends_on:
+      db:
+        condition: service_healthy
+      mail:
+        condition: service_started
+
 volumes:
-  floorplan-engine-pgdata:
+  floorplan-engine-pg18:

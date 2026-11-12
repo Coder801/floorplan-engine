@@ -21,7 +21,10 @@ uv run floorplan-engine estimate projects/<имя>              # смета э�
 uv run floorplan-engine render-artifact projects/<имя>       # PNG листов из project.epd — для проверки
 uv run floorplan-engine print projects/<имя> [--paper A3]    # PDF-альбом листов в натуральную величину
 uv run floorplan-engine serve --data data/projects           # API сервиса (docs/service-api.md)
-uv run floorplan-engine dev                                  # просмотр одной командой: API + страница http://127.0.0.1:5173, оба перезагружаются при правках
+uv run floorplan-engine dev                                  # просмотр одной командой: API + страница http://127.0.0.1:5173 + админка /admin/, всё перезагружается при правках
+docker compose up -d db mail && uv run alembic upgrade head  # база (Postgres 18, как на сервере; docs/database.md) и Mailpit (письма — http://127.0.0.1:8025)
+uv run python scripts/local.py restore                       # копию сервера (server.py backup) — в локальную базу и data/objects
+docker compose --profile prod up --build                     # боевой образ локально: http://127.0.0.1:8080 (docs/development.md, «Локально как на сервере»)
 uv run floorplan-engine view                                 # только API просмотра projects/ (8000); пишет только wiring.yaml
 uv run floorplan-engine access link projects/<имя> --owner <email>  # связать папку с базой (вход)
 uv run floorplan-engine access invite projects/<имя> --role client  # ссылка-приглашение
@@ -40,11 +43,10 @@ uv run floorplan-engine pdf-facts projects/<имя>/source/x.pdf # выжимк�
 uv run floorplan-engine facts projects/<имя>/source/x.jpg   # выжимка из любого источника: вектор или растр
 uv run floorplan-engine facts-bench projects/<имя>/source/x.pdf # точность растра против вектора
 uv run floorplan-engine preview projects/<имя>               # PNG листов из DXF (отладка ezdxf)
-docker compose up -d db && uv run alembic upgrade head  # база сервиса (docs/database.md), только Postgres
 TEST_REQUIRE_DB=1 uv run pytest --cov && uv run mypy && uv run ruff check . && uv run ruff format --check . && uv run lint-imports
 uv run python scripts/flow.py feature <имя> | integrate | release [--dry-run]  # ветки и релиз: develop → feature → develop → main (docs/development.md)
 uv run python scripts/flow.py ship [--increment patch] [--rebuild]  # всё после /commit: вливание, проверки, релиз, пуш, пересборка
-uv run python scripts/server.py check | rebuild [имена] [--wait] | send <проект> room.yaml  # боевой сервер через railway ssh
+uv run python scripts/server.py check | rebuild [имена] [--wait] | send <проект> room.yaml | backup  # боевой сервер через railway ssh; backup — база и файлы в ~/shtroba-backups
 ```
 
 Slash-команды: `/plan`, `/electrical`, `/check`, `/review`, `/commit`, `/release` (в `.claude/commands/`).

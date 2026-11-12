@@ -63,6 +63,7 @@ def test_dev_viewer_factory_reads_projects_from_env(
     (tmp_path / "kv1" / "room.yaml").write_text("name: x\n", "utf-8")
     monkeypatch.setenv(DEV_PROJECTS_ENV, str(tmp_path))
     monkeypatch.delenv("SHTROBA_AUTH", raising=False)
+    monkeypatch.delenv("SHTROBA_STORAGE", raising=False)  # .env may set db: folders here
     names = [p["name"] for p in TestClient(dev_viewer()).get("/api/projects").json()]
     assert names == ["kv1"]
 
@@ -73,18 +74,42 @@ def test_dev_watches_the_whole_package(tmp_path: Path, monkeypatch: pytest.Monke
 
     runs: list[tuple[tuple[object, ...], dict[str, object]]] = []
     monkeypatch.setattr("uvicorn.run", lambda *a, **k: runs.append((a, k)))
-    monkeypatch.setattr("subprocess.Popen", MagicMock())
+    popen = MagicMock()
+    monkeypatch.setattr("subprocess.Popen", popen)
     monkeypatch.setattr("shutil.which", lambda name: "npm")
     monkeypatch.setattr("floorplan_engine.cli.load_env", lambda path: None)
     monkeypatch.setenv(DEV_PROJECTS_ENV, "")  # the command sets it: restored after the test
     (tmp_path / "web" / "node_modules").mkdir(parents=True)
     (tmp_path / "web" / "package.json").write_text("{}", "utf-8")
     args = ["dev", "--projects", str(tmp_path), "--web", str(tmp_path / "web")]
+    args += ["--admin", str(tmp_path / "admin")]
     assert runner.invoke(app, args).exit_code == 0
     ((target,), options) = runs[0]
+    assert popen.call_count == 1  # no admin/ next to it: the viewer page only
     assert options["reload_dirs"] == [str(Path(floorplan_engine.__file__).resolve().parent)]
     module, factory = str(target).split(":")
     assert callable(getattr(importlib.import_module(module), factory))
+
+
+def test_dev_starts_the_admin_too(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """With admin/ the admin dev server starts next to the page (5173/admin/ proxies to it), and
+    Ctrl+C stops both."""
+    from floorplan_engine.cli import DEV_PROJECTS_ENV
+
+    monkeypatch.setattr("uvicorn.run", lambda *a, **k: None)
+    popen = MagicMock()
+    monkeypatch.setattr("subprocess.Popen", popen)
+    monkeypatch.setattr("shutil.which", lambda name: "npm")
+    monkeypatch.setattr("floorplan_engine.cli.load_env", lambda path: None)
+    monkeypatch.setenv(DEV_PROJECTS_ENV, "")
+    for name in ("web", "admin"):
+        (tmp_path / name / "node_modules").mkdir(parents=True)
+        (tmp_path / name / "package.json").write_text("{}", "utf-8")
+    args = ["dev", "--projects", str(tmp_path), "--web", str(tmp_path / "web")]
+    args += ["--admin", str(tmp_path / "admin")]
+    assert runner.invoke(app, args).exit_code == 0
+    assert [c.kwargs["cwd"] for c in popen.call_args_list] == [tmp_path / "web", tmp_path / "admin"]
+    assert popen.return_value.terminate.call_count == 2
 
 
 def test_serve_refuses_a_public_address_without_login(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -15,6 +15,8 @@ export default defineConfig({
   css: {
     modules: { localsConvention: "camelCaseOnly" },
   },
-  server: { host: "127.0.0.1", port: 5174, proxy: api },
+  // hmr.clientPort: opened through the viewer's proxy (5173/admin/) the page still reloads from
+  // this server directly
+  server: { host: "127.0.0.1", port: 5174, strictPort: true, proxy: api, hmr: { clientPort: 5174 } },
   preview: { host: "127.0.0.1", port: 4174, proxy: api },
 });

@@ -92,7 +92,11 @@ def _viewer_auth() -> Auth | None:
     if config.dev_login:
         guest += f", «Зайти для разработки» — как {config.superusers[0]}"
     typer.echo(f"Вход включён: {google}{guest}")
-    mailer = mailer_from_env(dict(os.environ), local=not config.secure)
+    try:
+        mailer = mailer_from_env(dict(os.environ), local=not config.secure)
+    except ValueError as exc:
+        typer.secho(f"Почта: {exc}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(2) from exc
     if mailer is None:
         typer.echo("Вход по коду на почту выключен: нет SMTP_HOST")
     elif isinstance(mailer, LogMailer):
@@ -176,11 +180,13 @@ def dev(
     projects: Annotated[Path, typer.Option(help="Папка собранных проектов")] = Path("projects"),
     port: Annotated[int, typer.Option(help="Порт API")] = 8000,
     web: Annotated[Path, typer.Option(help="Папка фронта")] = Path("web"),
+    admin: Annotated[Path, typer.Option(help="Папка админки")] = Path("admin"),
 ) -> None:
-    """Просмотр одной командой для разработки: API (`view`) и страница web/ (`npm run dev`,
-    http://127.0.0.1:5173). Оба перезагружаются при правках: страница — Vite, API — uvicorn
+    """Просмотр одной командой для разработки: API (`view`), страница web/ (`npm run dev`,
+    http://127.0.0.1:5173) и админка admin/ (5174, открывается и как 5173/admin/ — один адрес и
+    общий вход, как на сервере). Все перезагружаются при правках: страницы — Vite, API — uvicorn
     следит за кодом пакета и перезапускается сам (иначе после правок Python пересборки шли бы
-    старым кодом). Ctrl+C останавливает оба."""
+    старым кодом). Ctrl+C останавливает всё."""
     import shutil
     import subprocess
 
@@ -196,11 +202,14 @@ def dev(
     if npm is None:
         typer.echo("Нет npm — поставьте Node.js 22", err=True)
         raise typer.Exit(1)
-    if not (web / "node_modules").is_dir():
-        subprocess.run([npm, "install"], cwd=web, check=True)
+    fronts = [web] + ([admin] if (admin / "package.json").is_file() else [])
+    for folder in fronts:
+        if not (folder / "node_modules").is_dir():
+            subprocess.run([npm, "install"], cwd=folder, check=True)
     env = {**os.environ, "API_URL": f"http://127.0.0.1:{port}"}
-    front = subprocess.Popen([npm, "run", "dev"], cwd=web, env=env)
-    typer.echo(f"Страница: http://127.0.0.1:5173 · API: http://127.0.0.1:{port}/api")
+    procs = [subprocess.Popen([npm, "run", "dev"], cwd=folder, env=env) for folder in fronts]
+    pages = "http://127.0.0.1:5173" + (" · админка: /admin/" if len(fronts) > 1 else "")
+    typer.echo(f"Страница: {pages} · API: http://127.0.0.1:{port}/api")
     os.environ[DEV_PROJECTS_ENV] = str(projects.resolve())  # read by the API factory
     try:
         uvicorn.run(
@@ -213,11 +222,13 @@ def dev(
             reload_dirs=[str(Path(__file__).resolve().parent.parent)],
         )
     finally:
-        front.terminate()
-        try:
-            front.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            front.kill()
+        for proc in procs:
+            proc.terminate()
+        for proc in procs:
+            try:
+                proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                proc.kill()
 
 
 app.command()(check)

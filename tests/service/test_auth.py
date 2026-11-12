@@ -5,6 +5,7 @@ code with Google cannot be tested without keys."""
 from __future__ import annotations
 
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
 from fastapi.testclient import TestClient
@@ -189,6 +190,27 @@ def test_mailer_from_env() -> None:
     assert mailer_from_env({}, local=False) is None  # in production without SMTP: no code login
     smtp = mailer_from_env({"SMTP_HOST": "smtp.x", "SMTP_USER": "u@x"}, local=False)
     assert isinstance(smtp, SmtpMailer) and smtp.port == 587 and smtp.sender == "u@x"
+    assert smtp.tls == "starttls"
+    ssl_ = mailer_from_env({"SMTP_HOST": "smtp.x", "SMTP_PORT": "465"}, local=False)
+    assert isinstance(ssl_, SmtpMailer) and ssl_.tls == "ssl"
+    with pytest.raises(ValueError, match="SMTP_TLS"):
+        mailer_from_env({"SMTP_HOST": "smtp.x", "SMTP_TLS": "maybe"}, local=False)
+
+
+def test_smtp_without_tls(monkeypatch: pytest.MonkeyPatch) -> None:
+    """SMTP_TLS=off (the local Mailpit): plain SMTP, no STARTTLS and no login without a user."""
+    smtp = MagicMock()
+    monkeypatch.setattr("smtplib.SMTP", MagicMock(return_value=smtp))
+    mailer = mailer_from_env(
+        {"SMTP_HOST": "127.0.0.1", "SMTP_PORT": "1025", "SMTP_TLS": "off", "MAIL_FROM": "s@x"},
+        local=True,
+    )
+    assert isinstance(mailer, SmtpMailer)
+    mailer.send("u@x", "тема", "текст")
+    session = smtp.__enter__.return_value
+    session.starttls.assert_not_called()
+    session.login.assert_not_called()
+    assert session.send_message.call_args.args[0]["To"] == "u@x"
 
 
 def test_email_code_login(auth: Auth, root: Path) -> None:

@@ -4,6 +4,9 @@ sending service works (Resend, Postmark, SES, Gmail); without SMTP_HOST in local
 
 Environment:
   SMTP_HOST, SMTP_PORT (587 for STARTTLS, 465 for SSL), SMTP_USER, SMTP_PASSWORD
+  SMTP_TLS                     starttls | ssl | off; by default ssl on port 465, otherwise
+                               starttls. off — plain SMTP, for the local Mailpit
+                               (docker-compose.yml, port 1025)
   MAIL_FROM                    sender: "Shtroba <login@…>"
 """
 
@@ -40,6 +43,9 @@ TEXTS: dict[str, tuple[str, str]] = {
 }
 
 
+TLS_MODES = ("starttls", "ssl", "off")
+
+
 class MailError(RuntimeError):
     """The e-mail was not sent."""
 
@@ -55,6 +61,7 @@ class SmtpMailer:
     user: str
     password: str
     sender: str
+    tls: str = "starttls"  # TLS_MODES
 
     def send(self, to: str, subject: str, text: str) -> None:
         msg = EmailMessage()
@@ -62,12 +69,13 @@ class SmtpMailer:
         msg.set_content(text)
         context = ssl.create_default_context()
         try:
-            if self.port == 465:
+            if self.tls == "ssl":
                 with smtplib.SMTP_SSL(self.host, self.port, context=context, timeout=15) as s:
                     self._deliver(s, msg)
             else:
                 with smtplib.SMTP(self.host, self.port, timeout=15) as s:
-                    s.starttls(context=context)
+                    if self.tls == "starttls":
+                        s.starttls(context=context)
                     self._deliver(s, msg)
         except (smtplib.SMTPException, OSError) as exc:
             log.warning("письмо на %s не ушло: %s", to, exc)
@@ -94,9 +102,14 @@ def mailer_from_env(env: dict[str, str], local: bool) -> Mailer | None:
     host = env.get("SMTP_HOST", "").strip()
     if not host:
         return LogMailer() if local else None
+    port = int(env.get("SMTP_PORT") or 587)
+    tls = env.get("SMTP_TLS", "").strip().lower() or ("ssl" if port == 465 else "starttls")
+    if tls not in TLS_MODES:
+        raise ValueError(f"SMTP_TLS: {tls!r} — одно из {', '.join(TLS_MODES)}")
     return SmtpMailer(
         host=host,
-        port=int(env.get("SMTP_PORT") or 587),
+        port=port,
+        tls=tls,
         user=env.get("SMTP_USER", ""),
         password=env.get("SMTP_PASSWORD", ""),
         sender=env.get("MAIL_FROM") or env.get("SMTP_USER", ""),

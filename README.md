@@ -47,21 +47,87 @@ uv run floorplan-engine --help
 
 ## Команды
 
+Полный список ключей — `uv run floorplan-engine <команда> --help`.
+
+**Проект: проверка, сборка, смета, печать**
+
 ```bash
 uv run floorplan-engine check   projects/kv42                          # только валидация
-uv run floorplan-engine build   projects/kv42                          # out/project.dxf + project.epd
+uv run floorplan-engine build   projects/kv42                          # out/project.dxf + project.epd, смета сантехники
 uv run floorplan-engine build   projects/kv42 --png                    # ещё PNG листов из DXF (sheets/)
-uv run floorplan-engine preview projects/kv42                          # PNG листов из готового DXF
-uv run floorplan-engine render-artifact projects/kv42                  # PNG листов из out/project.epd (проверка)
-uv run floorplan-engine serve --data data/projects                     # API сервиса, документация на /docs
-uv run floorplan-engine dev                                            # просмотр собранных projects/: API + страница, http://127.0.0.1:5173
-uv run floorplan-engine view                                           # только API просмотра (порт 8000)
-uv run floorplan-engine estimate projects/kv42                         # смета электрики таблицей
-uv run floorplan-engine print projects/kv42 --paper A3                  # PDF-альбом на A3
-uv run floorplan-engine analyze projects/kv42                          # LLM-анализ source/ → YAML
-uv run floorplan-engine pdf-facts projects/kv42/source/plan.pdf        # выжимка из PDF без LLM
+uv run floorplan-engine estimate projects/kv42                         # смета электрики: out/estimate.md, .csv, .xlsx и состав работ out/work-scope.md
+uv run floorplan-engine print projects/kv42 --paper A3                 # PDF-альбом листов в натуральную величину
+uv run floorplan-engine render-artifact projects/kv42                  # PNG листов из out/project.epd — как в браузере (проверка)
+uv run floorplan-engine preview projects/kv42                          # PNG листов из готового DXF (отладка ezdxf)
 uv run floorplan-engine symbols symbols/                               # блоки УГО в отдельные DXF
-uv run python scripts/flow.py feature <имя> | integrate | release      # ветки и релиз: develop → feature → develop → main (docs/development.md)
+```
+
+**Источники: выжимка и анализ**
+
+```bash
+uv run floorplan-engine pdf-facts projects/kv42/source/plan.pdf        # выжимка из векторного PDF без LLM (--json)
+uv run floorplan-engine facts projects/kv42/source/plan.jpg            # выжимка из любого источника: вектор или растр
+uv run floorplan-engine facts-bench projects/kv42/source/plan.pdf      # точность растра против вектора
+uv run floorplan-engine analyze projects/kv42                          # LLM-анализ source/ → YAML (тратит токены)
+```
+
+**Просмотр и сервис**
+
+```bash
+uv run floorplan-engine dev                                            # просмотр одной командой: API + страница http://127.0.0.1:5173
+uv run floorplan-engine view                                           # только API просмотра projects/ (порт 8000)
+uv run floorplan-engine serve --data data/projects                     # API сервиса, документация на /docs
+docker compose up -d db mail && uv run alembic upgrade head            # база сервиса (Postgres 18, docs/database.md) и Mailpit
+```
+
+**Доступ к проектам**
+
+```bash
+uv run floorplan-engine access link projects/kv42 --owner <email>      # связать папку с базой
+uv run floorplan-engine access invite projects/kv42 --role client      # ссылка-приглашение
+uv run floorplan-engine access code projects/kv42 --label "Иван" [--role client_code]  # код доступа без учётки
+uv run floorplan-engine access codes projects/kv42                     # коды проекта: кому, срок, входов
+uv run floorplan-engine access revoke-code projects/kv42 <id>          # отозвать код
+```
+
+**Проекты в базе (правда — база)**
+
+```bash
+uv run floorplan-engine project push projects/kv42 [--owner <email>]   # папку — в базу новой версией
+uv run floorplan-engine project pull kv42 [--to projects] [--force]    # из базы — в папку
+uv run floorplan-engine project build [kv42 …] [--owner <email>]       # пересобрать из базы текущим кодом
+uv run floorplan-engine project import projects --owner <email>        # перенести папку проектов и студию в базу
+uv run floorplan-engine studio push|pull projects --owner <email>      # прайс и профиль студии ↔ база
+```
+
+**Боевой сервер** (`railway` с привязанным проектом; команды идут в контейнер через `railway ssh`)
+
+```bash
+uv run python scripts/server.py check                                  # версия, хранилище, диск, переменные без значений
+uv run python scripts/server.py rebuild [имена…] [--wait]              # пересобрать проекты текущим кодом
+uv run python scripts/server.py send kv42 room.yaml                    # файл модели — новой версией, сначала разница
+uv run python scripts/server.py backup [--to папка]                    # дамп базы и файлы в ~/shtroba-backups (нужен Docker)
+```
+
+**Ветки и релиз** (`docs/development.md`, «Ветки и релизы»)
+
+```bash
+uv run python scripts/flow.py feature <имя>                            # ветка feature/<имя> от develop
+uv run python scripts/flow.py integrate [--keep]                       # feature → develop
+uv run python scripts/flow.py release [--dry-run] [--increment patch]  # develop → main: версия, CHANGELOG, тег
+uv run python scripts/flow.py ship [--increment patch] [--rebuild]     # всё после /commit: вливание, проверки, релиз, пуш, пересборка
+git push origin main develop --follow-tags                             # пуш релиза — вручную
+```
+
+**Фронт: просмотр `web/` и админка `admin/`**
+
+```bash
+cd web && npm install && npm run dev            # страница просмотра (API — view)
+cd web && npm run build                         # сборка в web/dist
+cd web && npm run check && npm test             # типы и тесты (vitest); покрытие — npm run coverage
+cd web && npm run storybook                     # компоненты по отдельности, http://127.0.0.1:6006
+cd admin && npm install && npm run dev          # админка http://127.0.0.1:5174/admin/ (API — view)
+cd admin && npm run check && npm test && npm run build
 ```
 
 `build` сначала проверяет проект. При ошибках не создаётся ни одного файла, код выхода 1.
@@ -182,7 +248,9 @@ items:
 
 Собранные проекты (`projects/<имя>/` после `build`) можно смотреть в браузере. Одна
 команда — `uv run floorplan-engine dev` → `http://127.0.0.1:5173`: она запускает API (`view`,
-порт 8000) и страницу (`web/`, `npm run dev`). Листы, этапы, вопросы с ответами из
+порт 8000), страницу (`web/`, `npm run dev`) и админку (`admin/`, открывается как `/admin/`).
+Чтобы локально было как на сервере — проекты из базы, копия боевых данных, письма в Mailpit,
+тот же Docker-образ, — см. `docs/development.md`, «Локально как на сервере». Листы, этапы, вопросы с ответами из
 `answers.yaml`, замечания проверки, файлы `out/`, источники и YAML модели. Если YAML правили
 после сборки, страница предупреждает, что листы устарели.
 
@@ -590,6 +658,7 @@ log:                            # пишет просмотр: кто и ког�
 | `/check <проект>` | Валидация и превью без перегенерации; ничего не исправляет |
 | `/review [уровень] [диапазон]` | Ревью изменений в два прохода: встроенный `/code-review` и агент `reviewer` (правила Штробы, границы слоёв, документация); сводный список находок, код не правит |
 | `/commit` | Коммитит несохранённые изменения агентом `committer`: делит на независимые коммиты, сообщение по-английски; пуш — вручную |
+| `/release [patch\|minor]` | Релиз агентом `releaser`: вливает готовую `feature/…` в `develop`, проверки, риски выкладки (миграции, переменные, пересборка), версия, CHANGELOG и тег; пуш и `server.py backup` / `rebuild` — вручную |
 
 Типичный сценарий:
 
@@ -607,10 +676,16 @@ log:                            # пишет просмотр: кто и ког�
 ## Разработка
 
 ```bash
-uv run pytest
-uv run mypy                       # strict
+docker compose up -d db                                   # для тестов базы
+TEST_REQUIRE_DB=1 uv run pytest --cov                     # тесты, покрытие не ниже 90 %
+uv run mypy                                               # strict
 uv run ruff check . && uv run ruff format --check .
+uv run lint-imports                                       # слои пакетов
+uv run python scripts/check_layout.py kv42 [имена…]       # раскладка листов кодом, без картинок
+uv run python scripts/sticker_icons.py <папка иконок> <имена…>  # пересобрать иконки наклеек (Tabler)
 ```
+
+Те же проверки (кроме раскладки листов) идут в CI на каждый push: `.github/workflows/ci.yml`.
 
 Структура `src/floorplan_engine/`:
 

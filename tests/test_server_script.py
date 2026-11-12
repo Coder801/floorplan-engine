@@ -155,3 +155,169 @@ def test_send_refuses_files_the_viewer_writes(
     with pytest.raises(server.ServerError, match=r"wiring\.yaml"):
         server.send("kv42", ["wiring.yaml"], yes=True)
     assert calls == []
+
+
+def _variables(monkeypatch: pytest.MonkeyPatch, stdout: str, code: int = 0) -> list[list[str]]:
+    seen: list[list[str]] = []
+
+    def run(command: list[str], **_: Any) -> subprocess.CompletedProcess[str]:
+        seen.append(command)
+        return subprocess.CompletedProcess(command, code, stdout, "нет доступа")
+
+    monkeypatch.setattr(server.subprocess, "run", run)
+    return seen
+
+
+def test_database_url_is_the_public_one(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The private address only resolves inside Railway."""
+    seen = _variables(
+        monkeypatch,
+        "DATABASE_URL=postgresql://u:p@postgres.railway.internal/db\n"
+        "DATABASE_PUBLIC_URL=postgresql://u:p=x@proxy.rlwy.net:1234/db\n",
+    )
+    assert server.database_url("База") == "postgresql://u:p=x@proxy.rlwy.net:1234/db"
+    assert seen[0][:4] == ["railway", "variables", "--service", "База"]
+
+
+def test_database_url_without_a_public_address(monkeypatch: pytest.MonkeyPatch) -> None:
+    _variables(monkeypatch, "DATABASE_URL=postgresql://u:p@postgres.railway.internal/db\n")
+    with pytest.raises(server.ServerError, match="TCP Proxy"):
+        server.database_url()
+    _variables(monkeypatch, "", code=1)
+    with pytest.raises(server.ServerError, match="нет доступа"):
+        server.database_url()
+
+
+def test_dump_keeps_the_password_out_of_arguments(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(server.shutil, "which", lambda _: "/usr/bin/docker")
+    url = "postgresql://u:секрет@proxy.rlwy.net:1234/db"
+    calls: list[dict[str, Any]] = []
+
+    def run(command: list[str], **kw: Any) -> subprocess.CompletedProcess[Any]:
+        calls.append({"command": command, **kw})
+        if "pg_dump" in " ".join(command):
+            kw["stdout"].write(b"PGDMP")
+            return subprocess.CompletedProcess(command, 0, None, b"")
+        listing = "1; 0 0 TABLE DATA public project u\n2; 0 0 TABLE DATA public firm u\n"
+        return subprocess.CompletedProcess(command, 0, listing, "")
+
+    monkeypatch.setattr(server.subprocess, "run", run)
+    dest = tmp_path / "x.dump"
+    assert server.dump_database(url, dest) == 2
+    assert dest.read_bytes() == b"PGDMP" and not (tmp_path / "x.dump.part").exists()
+    assert all(url not in " ".join(c["command"]) for c in calls)
+    assert calls[0]["env"]["DATABASE_URL"] == url
+
+
+def test_failed_dump_leaves_no_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(server.shutil, "which", lambda _: "/usr/bin/docker")
+    monkeypatch.setattr(
+        server.subprocess,
+        "run",
+        lambda c, **_: subprocess.CompletedProcess(
+            c, 1, None, b"Cannot connect to the Docker daemon"
+        ),
+    )
+    with pytest.raises(server.ServerError, match="Docker"):
+        server.dump_database("postgresql://x", tmp_path / "x.dump")
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_server_objects_reads_the_listing(monkeypatch: pytest.MonkeyPatch) -> None:
+    listing = "12 projects/a/sources/f/plan (1).pdf\n3 feedback/b/c.png\n"
+    out = f"шум\n{server.FILE_START}\n{listing}{server.FILE_END}\n"
+    monkeypatch.setattr(server, "remote", lambda script, capture=False: out)
+    assert server.server_objects() == {
+        "projects/a/sources/f/plan (1).pdf": 12,
+        "feedback/b/c.png": 3,
+    }
+
+
+def test_missing_skips_files_already_mirrored(tmp_path: Path) -> None:
+    (tmp_path / "a").mkdir()
+    (tmp_path / "a" / "same").write_bytes(b"123")
+    (tmp_path / "a" / "cut").write_bytes(b"1")
+    objects = {"a/same": 3, "a/cut": 3, "a/new": 5}
+    assert server.missing(objects, tmp_path) == ["a/cut", "a/new"]
+
+
+def test_batches_stay_under_the_limit() -> None:
+    sizes = {"a": 4, "b": 4, "c": 4, "big": 50}
+    assert server.batches(["a", "b", "c", "big"], sizes, limit=8) == [["a", "b"], ["c"], ["big"]]
+    assert server.batches([], sizes) == []
+
+
+def test_fetch_unpacks_into_the_mirror(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    import io
+    import tarfile
+
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w") as tar:
+        info = tarfile.TarInfo("projects/a/sources/f/plan (1).pdf")
+        info.size = 3
+        tar.addfile(info, io.BytesIO(b"pdf"))
+    packed = base64.encodebytes(buf.getvalue()).decode(
+        "ascii"
+    )  # with line breaks, as base64 prints
+    scripts: list[str] = []
+
+    def remote(script: str, capture: bool = False) -> str:
+        scripts.append(script)
+        return f"{server.FILE_START}\n{packed}{server.FILE_END}\n"
+
+    monkeypatch.setattr(server, "remote", remote)
+    server.fetch(["projects/a/sources/f/plan (1).pdf"], tmp_path)
+    assert (tmp_path / "projects/a/sources/f/plan (1).pdf").read_bytes() == b"pdf"
+    listing = base64.b64encode(b"projects/a/sources/f/plan (1).pdf\n").decode("ascii")
+    assert listing in scripts[0] and 'tar -C "$SHTROBA_OBJECTS"' in scripts[0]
+
+
+def test_backup_dumps_then_fetches_only_new_files(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (tmp_path / "objects" / "a").mkdir(parents=True)
+    (tmp_path / "objects" / "a" / "old").write_bytes(b"12")
+    fetched: list[list[str]] = []
+
+    def dump(url: str, dest: Path) -> int:
+        dest.write_bytes(b"PGDMP")
+        return 7
+
+    def fetch(keys: list[str], mirror: Path) -> None:
+        fetched.append(keys)
+        for key in keys:
+            (mirror / key).write_bytes(b"123")
+
+    monkeypatch.setattr(server, "database_url", lambda service: "postgresql://x")
+    monkeypatch.setattr(server, "dump_database", dump)
+    monkeypatch.setattr(server, "server_objects", lambda: {"a/old": 2, "a/new": 3})
+    monkeypatch.setattr(server, "fetch", fetch)
+    server.backup(tmp_path)
+    assert fetched == [["a/new"]]
+    dumps = sorted(p.name for p in (tmp_path / "db").iterdir())
+    assert len(dumps) == 2 and dumps[0].endswith("-objects.txt") and dumps[1].endswith(".dump")
+    assert (tmp_path / "db" / dumps[0]).read_text(encoding="utf-8") == "3 a/new\n2 a/old\n"
+
+
+def test_backup_fails_when_a_file_did_not_arrive(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(server, "database_url", lambda service: "postgresql://x")
+
+    def dump(url: str, dest: Path) -> int:
+        dest.write_bytes(b"PGDMP")
+        return 0
+
+    monkeypatch.setattr(server, "dump_database", dump)
+    monkeypatch.setattr(server, "server_objects", lambda: {"a/new": 3})
+    monkeypatch.setattr(server, "fetch", lambda keys, mirror: None)
+    with pytest.raises(server.ServerError, match="не скачались 1"):
+        server.backup(tmp_path)
+
+
+def test_dump_needs_docker(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(server.shutil, "which", lambda _: None)
+    with pytest.raises(server.ServerError, match="нужен Docker"):
+        server.dump_database("postgresql://x", tmp_path / "x.dump")
