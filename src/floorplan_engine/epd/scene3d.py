@@ -26,7 +26,7 @@ estimate (wiring.py), here they are only unfolded by height. Model mm, Z axis up
 from __future__ import annotations
 
 import itertools
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 import shapely
@@ -52,7 +52,7 @@ from floorplan_engine.model.geometry import (
     WallSegment,
     room_geometries,
 )
-from floorplan_engine.model.schema import Electrical, Opening, OpeningType, Plan
+from floorplan_engine.model.schema import Electrical, ElectricalPoint, Opening, OpeningType, Plan
 
 PITCH_MM = 15.0  # cables of a bundle, apart from each other
 WALL_GAP_MM = 20.0  # drop and point symbol off the wall face so they do not sink into it
@@ -250,9 +250,20 @@ def _wires(
     colors: dict[str, str],
     ceiling: float,
     rooms: dict[str, str],
+    points: Mapping[str, ElectricalPoint],
 ) -> dict[str, Any]:
-    """Routes in 3D: rise from the source, plan path in the ceiling or floor plane, drop.
-    A line's room is the room of its target (point or box): the viewer filters by it."""
+    """Routes in 3D: rise from the source, plan path in the ceiling or floor plane, drop; a drop
+    beside an opening (Run.end_drop, start_drop) turns along the wall to its point at the point
+    height. A line's room is the room of its target (point or box): the viewer filters by it."""
+
+    def beside(end: str, drop: float | None) -> tuple[Vec, Vec, float] | None:
+        """Drop spot beside an opening, the point and its height; None for a straight drop."""
+        p, a = points.get(end), ends[end]
+        if drop is None or p is None or p.offset is None or a.wall_dir is None:
+            return None
+        face = _face(a)
+        return face + a.wall_dir * (drop - p.offset), face, float(p.height or 0.0)
+
     paths = [list(r.path) for r in wiring.runs]
     for route in ("ceiling", "floor"):
         idx = [k for k, r in enumerate(wiring.runs) if r.route == route]
@@ -264,15 +275,21 @@ def _wires(
             paths[k] = offset_path(run, shifts)
     out: dict[str, Any] = {}
     for r, path in zip(wiring.runs, paths, strict=True):
-        start, end = _face(ends[r.source]), _face(ends[r.target])
+        first, last = beside(r.source, r.start_drop), beside(r.target, r.end_drop)
+        start = first[0] if first else _face(ends[r.source])
+        end = last[0] if last else _face(ends[r.target])
         plan = fit_path(path, start, end) if len(path) >= 2 else [start, end]
         floor = r.route == "floor"
         plane = FLOOR_Z_MM if floor else ceiling
         z0 = r.rise_start_mm if floor else ceiling - r.rise_start_mm
         z1 = r.rise_end_mm if floor else ceiling - r.rise_end_mm
-        pts = [_xyz(plan[0], max(z0, 0.0))]
+        pts = [_xyz(first[1], first[2]), _xyz(plan[0], first[2])] if first else []
+        pts += [] if first else [_xyz(plan[0], max(z0, 0.0))]
         pts += [_xyz(p, plane) for p in plan]
-        pts.append(_xyz(plan[-1], max(z1, 0.0)))
+        if last:
+            pts += [_xyz(plan[-1], last[2]), _xyz(last[1], last[2])]
+        else:
+            pts.append(_xyz(plan[-1], max(z1, 0.0)))
         clean = [p for k, p in enumerate(pts) if k == 0 or p != pts[k - 1]]
         out[r.id] = {
             "group": r.group,
@@ -349,6 +366,7 @@ def build_scene(
             colors,
             ceiling,
             {**{p.id: p.room for p in elec.points}, **{b.id: b.room for b in wiring.boxes}},
+            {p.id: p for p in elec.points},
         ),
         "points": points,
         "boxes": boxes,

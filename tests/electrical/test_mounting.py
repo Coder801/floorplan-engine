@@ -12,7 +12,6 @@ import pytest
 
 from floorplan_engine.electrical.estimate import (
     CONDUIT_JOINT_EVERY,
-    conduit_entries,
     conduit_lengths,
     quantities,
 )
@@ -268,22 +267,13 @@ def test_conduit_joints_by_metres_of_each_diameter() -> None:
         assert q[f"conduit_joint.{d}"] == math.ceil(mm / CONDUIT_JOINT_EVERY)
 
 
-def test_conduit_entries_only_at_boxes_and_panel_in_conduit() -> None:
-    """An entry where conduit reaches a junction box or the panel; none at points (flush box)
-    and none where the cable there is bare."""
-    chain = _chain("separate")  # floor, daisy chain: only the panel end of the head line
-    assert conduit_entries(chain, "none") == {20: 1}
-    boxes = _plan_wiring(make_plan(walls=RECT), _sockets(route="floor"))
-    assert boxes.boxes
-    lines_at_box = sum(
-        1 for r in boxes.runs for end in (r.source, r.target) if end == boxes.boxes[0].id
-    )
-    panel = sum(1 for r in boxes.runs if r.source == "board")
-    assert sum(conduit_entries(boxes, "none").values()) == lines_at_box + panel
-    bare = _plan_wiring(make_plan(walls=RECT), _sockets(route="ceiling"))
-    assert conduit_entries(bare, "none") == {}
-    q = quantities(boxes, _sockets(route="floor"))
-    assert q["conduit_entry.20"] == lines_at_box + panel
+def test_no_conduit_entries_in_the_estimate() -> None:
+    """Conduit goes into flush boxes, junction boxes and the panel through knock-outs: the
+    estimate has no separate entry fittings."""
+    wiring = _plan_wiring(make_plan(walls=RECT), _sockets(route="floor"))
+    assert wiring.boxes
+    q = quantities(wiring, _sockets(route="floor"))
+    assert not any(k.startswith("conduit_entry") for k in q)
 
 
 def test_bundle_is_fixed_in_one_line_with_a_fixing_per_cable() -> None:

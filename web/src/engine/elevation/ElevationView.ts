@@ -294,6 +294,11 @@ export class ElevationView {
     for (const c of elec ? e.chases : []) {
       const half = Math.max(((c.wide ? 50 : 30) / 2) * s, 1.5);
       ctx.fillStyle = screenColor(c.low ? CHASE_LOW : CHASE);
+      if (c.x1 !== undefined) {  // the turn past an opening, along the wall
+        const a = Math.min(this.sx(c.x), this.sx(c.x1)), b = Math.max(this.sx(c.x), this.sx(c.x1));
+        ctx.fillRect(a - half, this.sy(c.y0) - half, b - a + 2 * half, 2 * half);
+        continue;
+      }
       ctx.fillRect(this.sx(c.x) - half, this.sy(c.y1), 2 * half, (c.y1 - c.y0) * s);
     }
     // Cables along the wall, those of one drop side by side in their group colour; a fixing is
@@ -301,9 +306,25 @@ export class ElevationView {
     // together: decision 2026-11-12)
     const lane = Math.max(CABLE_PITCH_MM * s, 3);
     const drops = new Map<number, number>();
-    for (const c of elec ? e.cables ?? [] : []) drops.set(c.x, (drops.get(c.x) ?? 0) + 1);
+    const cables = elec ? e.cables ?? [] : [];
+    for (const c of cables) if (c.x1 === undefined) drops.set(c.x, (drops.get(c.x) ?? 0) + 1);
     const placed = new Map<number, number>();
-    for (const c of elec ? e.cables ?? [] : []) {
+    // The turn past an opening: from the foot of its drop along the wall to the point
+    const lanes = new Map<string, number>();
+    for (const c of cables) {
+      if (c.x1 !== undefined) continue;
+      const n = drops.get(c.x)!, k = placed.get(c.x) ?? 0;
+      placed.set(c.x, k + 1);
+      lanes.set(`${c.key}@${c.x}`, (k - (n - 1) / 2) * lane);
+    }
+    placed.clear();
+    for (const c of cables) {
+      if (c.x1 !== undefined) {
+        const d = lanes.get(`${c.key}@${c.x}`) ?? 0, y = this.sy(c.y0) - d, x = this.sx(c.x) + d;
+        this.line(x, this.sy(c.y0), x, y, c.color ?? INK, 0.8);  // the corner: lanes stay nested
+        this.line(x, y, this.sx(c.x1), y, c.color ?? INK, 0.8);
+        continue;
+      }
       const n = drops.get(c.x)!, k = placed.get(c.x) ?? 0;
       placed.set(c.x, k + 1);
       const x = this.sx(c.x) + (k - (n - 1) / 2) * lane;

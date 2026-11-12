@@ -97,7 +97,6 @@ BOX_PRICES = {"80": 40.0, "100x100": 60.0, "150x110": 110.0, "190x140": 180.0}
 CONDUIT_PRICES = {16: 10.0, 20: 14.0, 25: 20.0, 32: 30.0}  # PVC conduit, UAH per metre
 CLIP_PRICES = {16: 4.0, 20: 5.0, 25: 6.0, 32: 8.0}  # conduit clip with a gun nail, UAH each
 JOINT_PRICES = {16: 4.0, 20: 5.0, 25: 7.0, 32: 10.0}  # conduit joint coupling, UAH each
-ENTRY_PRICES = {16: 6.0, 20: 7.0, 25: 9.0, 32: 12.0}  # conduit entry into a box, UAH each
 IP_FACTOR = 2.0  # IP44 costs twice a normal one
 FRAME_FIRST, FRAME_NEXT = 60.0, 40.0  # frame: first post and each next one
 HEAVY_A = 40  # rating from which supply, relay and breaker cost more
@@ -137,8 +136,6 @@ def _mock_price(base: str, param: str) -> float | None:
         return CLIP_PRICES.get(_rating(param) or 20)
     if base == "conduit_joint":
         return JOINT_PRICES.get(_rating(param) or 20)
-    if base == "conduit_entry":
-        return ENTRY_PRICES.get(_rating(param) or 20)
     if base == "frame":
         posts = _rating(param) or 1
         return FRAME_FIRST + FRAME_NEXT * (posts - 1)

@@ -38,6 +38,9 @@ CHASE_SHARE = 150.0  # mm along the wall: closer drops share a chase
 CHASE_CABLES = 4  # cables per chase, at most
 WALL_HOLE_SHARE = 300.0  # mm: lines crossing a wall closer than this share a hole
 
+# A drop to a point: wall offset, rise, point id, turn past an opening (offset and height)
+_Drop = tuple[float, float, str, tuple[float, float] | None]
+
 
 def wall_chases(
     runs: Sequence[Run],
@@ -46,19 +49,27 @@ def wall_chases(
     boxes: Sequence[JunctionBox],
     media: Board | None = None,
 ) -> tuple[Chase, ...]:
-    """Wall chases: shared by drops close together (CHASE_SHARE), up to CHASE_CABLES cables."""
+    """Wall chases: shared by drops close together (CHASE_SHARE), up to CHASE_CABLES cables. A
+    drop beside an opening (Run.end_drop, start_drop) is at its own spot and turns along the
+    wall to the point (Chase.bend)."""
     by_id = {p.id: p for p in points}
-    drops: dict[ChaseKey, list[tuple[float, float, str]]] = defaultdict(list)
+    drops: dict[ChaseKey, list[_Drop]] = defaultdict(list)
     for r in runs:
         # In a daisy chain the line also leaves a point: a second cable in its chase
-        for end, rise in ((r.target, r.rise_end_mm), (r.source, r.rise_start_mm)):
+        for end, rise, at in (
+            (r.target, r.rise_end_mm, r.end_drop),
+            (r.source, r.rise_start_mm, r.start_drop),
+        ):
             p = by_id.get(end)
             if rise <= 0 or p is None or p.wall is None or p.offset is None:
                 continue
-            drops[(p.room, p.wall, r.route, r.circuit)].append((p.offset, rise, p.id))
+            bend = None if at is None or p.height is None else (p.offset, p.height)
+            drops[(p.room, p.wall, r.route, r.circuit)].append(
+                (p.offset if at is None else at, rise, p.id, bend)
+            )
     out: list[Chase] = []
     for key, items in sorted(drops.items()):
-        group: list[tuple[float, float, str]] = []
+        group: list[_Drop] = []
         for item in sorted(items):
             if group and (item[0] - group[0][0] > CHASE_SHARE or len(group) == CHASE_CABLES):
                 # A chain point's cable in and cable out stay in one chase (they may share a
@@ -171,20 +182,24 @@ def with_material(chases: Sequence[Chase], plan: Plan) -> tuple[Chase, ...]:
     return tuple(replace(c, material=walls.get((c.room, c.wall)) or default) for c in chases)
 
 
-def _shared(key: ChaseKey, group: Sequence[tuple[float, float, str]]) -> Chase:
-    """Shared chase for a group of drops: middle along the wall, length to the farthest point."""
+def _shared(key: ChaseKey, group: Sequence[_Drop]) -> Chase:
+    """Shared chase for a group of drops: middle along the wall, length to the farthest point; a
+    turn past an opening to the farthest point it reaches."""
     room, wall, route, circuit = key
     offsets = [g[0] for g in group]
+    middle = (min(offsets) + max(offsets)) / 2
+    bends = [g[3] for g in group if g[3] is not None]
     return Chase(
         "point",
         room,
         wall,
-        (min(offsets) + max(offsets)) / 2,
+        middle,
         max(g[1] for g in group),
         len(group),
         tuple(dict.fromkeys(g[2] for g in group)),  # a chain passes a point twice
         route,
         circuit,
+        bend=max(bends, key=lambda b: (abs(b[0] - middle), b)) if bends else None,
     )
 
 

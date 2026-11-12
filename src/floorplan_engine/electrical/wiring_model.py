@@ -74,6 +74,11 @@ class Run:
     ends_mm: float
     route: Route = "ceiling"
     circuit: Circuit = "power"
+    # Wall offset of the drop at the line end (start) when it goes down beside an opening, not
+    # above the point (detours.py): the path ends (starts) there, the rise includes the turn
+    # along the wall at the point height
+    end_drop: float | None = None
+    start_drop: float | None = None
 
     @property
     def vertical_mm(self) -> float:
@@ -99,7 +104,8 @@ def line_starts(runs: Sequence[Run]) -> dict[str, str]:
 
 @dataclass(frozen=True)
 class Chase:
-    """Wall chase from the ceiling down (route floor: from the floor up): kind is point (to points),
+    """Wall chase from the ceiling down (route floor: from the floor up), past an opening with a
+    turn along the wall (bend): kind is point (to points),
     board (at the panel), box (at a box), channel (a cable channel between two heights, span)."""
 
     kind: str
@@ -117,6 +123,9 @@ class Chase:
     # Daisy chain points whose cable in and cable out share one conduit (Electrical.loop_conduit
     # "shared", chases.with_conduit): each pair is one conduit, not two
     pairs: int = 0
+    # Past an opening (detours.py): the chase goes along the wall at height y to offset x after
+    # its drop at offset; length_mm includes that turn
+    bend: tuple[float, float] | None = None
 
     @property
     def conduits(self) -> int:

@@ -207,3 +207,21 @@ def test_slab_covers_rooms_walls_and_openings_without_holes() -> None:
     assert all(slab.covers(Polygon(f["rings"][0])) for f in scene["floors"])
     for wall in scene["walls"]:
         assert all(slab.covers(Polygon(p[0], p[1:])) for p in wall["polys"])
+
+
+def test_wire_to_a_socket_under_a_window_turns_beside_it() -> None:
+    """Down beside the window to the socket height, then along the wall to the socket."""
+    window = {"wall": "w3", "type": "window", "offset": 300, "width": 1000, "sill": 700}
+    plan = make_plan(RECT, [DOOR, {**window, "height": 2000}])
+    _, contours = validate_plan(plan)
+    elec = _elec()
+    wiring = box_wiring(plan, contours, elec)
+    assert wiring is not None
+    run = next(r for r in wiring.runs if r.target == "s2")  # w3 at 500, h 300
+    assert run.end_drop == 200
+    pts = build_scene(plan, contours, elec, wiring)["wires"][run.id]["pts"]
+    *_, top, foot, socket = pts
+    assert top[2] == 2700 and foot[2] == socket[2] == 300
+    assert foot[:2] != socket[:2] and top[:2] == foot[:2]
+    along = abs(foot[0] - socket[0]) + abs(foot[1] - socket[1])
+    assert along == pytest.approx(300, abs=1)

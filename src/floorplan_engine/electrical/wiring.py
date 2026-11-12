@@ -51,7 +51,10 @@ low-voltage cabinet `media`, without it from the panel (assumption); the cabinet
 the panel's.
 
 Chases (wall_chases) are vertical: from the ceiling down (or the floor up) to a wall point,
-at the panel and at a box. Drops on one wall closer than CHASE_SHARE share one chase, at most
+at the panel and at a box. A drop never crosses an opening: to a point under a window it goes
+down beside the window (detours.py) and turns at 90° along the wall to the point; the route
+on the ceiling ends at the drop, the turn is part of the rise. Drops on one wall closer than
+CHASE_SHARE share one chase, at most
 CHASE_CABLES cables per chase; a shared chase runs to the farthest point. At the panel and a
 box there is one chase per CHASE_CABLES cables. Power and low-voltage (circuit) cables never
 share a chase, nor do ceiling and floor routes. A chase with up to CHASE_NARROW cables is
@@ -109,6 +112,7 @@ from floorplan_engine.electrical.chases import (
     with_conduit,
     with_material,
 )
+from floorplan_engine.electrical.detours import drop_offset
 from floorplan_engine.electrical.groups import group_key
 from floorplan_engine.electrical.groups import text as group_text
 from floorplan_engine.electrical.loads import DEFAULT_MARK, LOW_TYPES, POWER_TYPES, assumed_mark
@@ -238,6 +242,19 @@ class _Context:
     media: Board | None = None  # low-voltage cabinet (source "media")
     from_media: Router | None = None
     walls: Sequence[Polygon] = ()  # drillable walls (routing.drillable_walls)
+    points: dict[str, ElectricalPoint] = field(default_factory=dict)
+
+    def drop(self, pid: str, route: Route) -> tuple[Anchor, float] | None:
+        """Where the cable goes down to a wall point beside an opening (detours.py): the route
+        end there and the wall offset of the drop; None when it goes straight above the point."""
+        p = self.points.get(pid)
+        if p is None or p.offset is None:
+            return None
+        at = drop_offset(self.geoms[p.room], p, self.ceiling, route)
+        a = self.anchors[pid]
+        if at is None or a.wall_dir is None:
+            return None
+        return Anchor(a.pos + a.wall_dir * (at - p.offset), a.inward, a.wall_dir, a.depth), at
 
     def tail(self, source: str) -> float:
         """Tail inside the panel or the cabinet down to the floor; END_ALLOWANCE elsewhere."""
@@ -301,6 +318,7 @@ def box_wiring(
         if elec.media is None
         else Router(free, anchor_end(board_anchor(elec.media, geoms)), any_angle, walls),
         walls,
+        {p.id: p for p in elec.points},
     )
     boxes: list[JunctionBox] = []
     links: list[_Link] = []
@@ -698,7 +716,23 @@ def _box_spot(
 
 def _route_runs(ctx: _Context, links: Sequence[_Link], boxes: Sequence[JunctionBox]) -> list[Run]:
     """Line routes: from the panel through the whole flat, from a box or a socket of a daisy chain
-    only inside its room."""
+    only inside its room. A wall point past an opening is reached where its drop goes down
+    beside the opening (_Context.drop); the turn to the point adds to the rise."""
+    routes = {ln.source: ln.route for ln in links}
+    drops = {
+        (pid, route): spot
+        for ln in links
+        for pid, route, rise in (
+            (ln.source, ln.route, ln.source_rise),
+            (ln.target, ln.route, ln.target_rise),
+        )
+        if rise > 0 and (spot := ctx.drop(pid, route)) is not None
+    }
+
+    def source_anchor(src: str) -> Anchor:
+        spot = drops.get((src, routes[src]))
+        return spot[0] if spot is not None else ctx.anchors[src]
+
     routers = {
         b.id: Router(room_area(ctx.geoms[b.room]), anchor_end(b.anchor), ctx.any_angle)
         for b in boxes
@@ -708,13 +742,16 @@ def _route_runs(ctx: _Context, links: Sequence[_Link], boxes: Sequence[JunctionB
     box_anchors = {b.id: b.anchor for b in boxes}
     wide = {
         src: Router(
-            ctx.free, anchor_end(box_anchors.get(src) or ctx.anchors[src]), ctx.any_angle, ctx.walls
+            ctx.free,
+            anchor_end(box_anchors.get(src) or source_anchor(src)),
+            ctx.any_angle,
+            ctx.walls,
         )
         for src in {ln.source for ln in links if ln.cross}
     }
     for src in {ln.source for ln in links} - set(routers) - {"board", "media"}:  # a daisy chain
         area = room_area(ctx.geoms[ctx.rooms[src]])
-        routers[src] = Router(area, anchor_end(ctx.anchors[src]), ctx.any_angle)
+        routers[src] = Router(area, anchor_end(source_anchor(src)), ctx.any_angle)
     runs: list[Run] = []
     for k, ln in enumerate(links):
         if ln.source == "board":
@@ -723,7 +760,9 @@ def _route_runs(ctx: _Context, links: Sequence[_Link], boxes: Sequence[JunctionB
             router = ctx.from_media
         else:
             router = wide[ln.source] if ln.cross else routers[ln.source]
-        path = tuple(router.route(anchor_end(ln.target_anchor)))
+        end = drops.get((ln.target, ln.route)) if ln.target_rise > 0 else None
+        start = drops.get((ln.source, ln.route)) if ln.source_rise > 0 else None
+        path = tuple(router.route(anchor_end(end[0] if end else ln.target_anchor)))
         runs.append(
             Run(
                 id=f"wire_{k + 1}",
@@ -734,11 +773,21 @@ def _route_runs(ctx: _Context, links: Sequence[_Link], boxes: Sequence[JunctionB
                 target=ln.target,
                 path=path,
                 plan_mm=length(path),
-                rise_start_mm=ln.source_rise,
-                rise_end_mm=ln.target_rise,
+                rise_start_mm=ln.source_rise + _turn(ctx, ln.source, start),
+                rise_end_mm=ln.target_rise + _turn(ctx, ln.target, end),
                 ends_mm=END_ALLOWANCE + ctx.tail(ln.source) if ln.ends is None else ln.ends,
                 route=ln.route,
                 circuit=ln.circuit,
+                end_drop=end[1] if end else None,
+                start_drop=start[1] if start else None,
             )
         )
     return runs
+
+
+def _turn(ctx: _Context, pid: str, spot: tuple[Anchor, float] | None) -> float:
+    """Along the wall from a drop beside an opening to the point, mm; 0 without one."""
+    p = ctx.points.get(pid)
+    if spot is None or p is None or p.offset is None:
+        return 0.0
+    return abs(spot[1] - p.offset)

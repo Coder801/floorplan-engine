@@ -61,7 +61,6 @@ from pydantic import Field
 from floorplan_engine.electrical.boxes import BOX_ORDER, BOX_TITLES
 from floorplan_engine.electrical.mounting import (
     conduit_diameter,
-    fixing_spans,
     fixings,
     pair_diameter,
     shared_pairs,
@@ -116,12 +115,6 @@ LINES: dict[str, tuple[Section, str, str, str]] = {
         "шт",
         "Муфта соединительная для гофры Ø{n}",
         "Муфта з'єднувальна для гофри Ø{n}",
-    ),
-    "conduit_entry": (
-        "material",
-        "шт",
-        "Ввод гофры в коробку Ø{n}",
-        "Введення гофри в коробку Ø{n}",
     ),
     "socket_box": ("material", "шт", "Подрозетник", "Підрозетник"),
     "junction_box": ("material", "шт", "Коробка распаечная {mark}", "Коробка розподільча {mark}"),
@@ -289,7 +282,6 @@ PARAM_KEYS = (
     "conduit",
     "conduit_clip",
     "conduit_joint",
-    "conduit_entry",
     "frame",
     "junction_box",
     "junction_box_ip",
@@ -724,25 +716,6 @@ def conduit_lengths(wiring: Wiring, conduit: Conduit) -> dict[int, float]:
     return out
 
 
-def conduit_entries(wiring: Wiring, conduit: Conduit) -> dict[int, int]:
-    """Conduit entries by diameter: a line end at a junction box, the panel or the media cabinet
-    reached in conduit — down the wall in conduit or, with no rise there, along the ceiling or
-    floor in conduit. Ends at points go into a flush box or a fitting without an entry."""
-    boxes = {b.id for b in wiring.boxes}
-    out: dict[int, int] = {}
-    for r in wiring.runs:
-        (plan_in, _, _), (start_in, _, start), (end_in, _, end) = fixing_spans(r, conduit)
-        ends = [
-            (r.source in boxes or r.source in ("board", "media"), start_in if start else plan_in),
-            (r.target in boxes, end_in if end else plan_in),
-        ]
-        n = sum(1 for at_box, in_conduit in ends if at_box and in_conduit)
-        if n:
-            d = conduit_diameter(r.mark)
-            out[d] = out.get(d, 0) + n
-    return out
-
-
 def quantities(wiring: Wiring, elec: Electrical) -> dict[str, float]:
     """Quantities by item key (no prices)."""
     q: dict[str, float] = {}
@@ -755,8 +728,6 @@ def quantities(wiring: Wiring, elec: Electrical) -> dict[str, float]:
     for d in sorted(conduit):
         if conduit[d] > 0:
             q[f"conduit_joint.{d}"] = math.ceil(conduit[d] / CONDUIT_JOINT_EVERY)
-    for d, n in sorted(conduit_entries(wiring, elec.conduit_level).items()):
-        q[f"conduit_entry.{d}"] = n
     mounted = [p for p in elec.points if p.type in MOUNTED]
     posts = sum(p.count for p in mounted)
     q["socket_box"] = posts

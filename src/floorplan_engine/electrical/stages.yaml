@@ -19,7 +19,7 @@ stages:
 
   - key: cable
     title: { ru: "Прокладка кабеля", uk: "Прокладання кабелю" }
-    lines: [work.cable, work.conduit, cable, conduit, conduit_joint, conduit_entry, conduit_clip,
+    lines: [work.cable, work.conduit, cable, conduit, conduit_joint, conduit_clip,
             cable_pad]
     photo: required  # трассы до штукатурки: то, что потом в стене
     after: [chases]

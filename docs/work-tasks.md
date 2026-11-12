@@ -35,7 +35,7 @@
 | # | Этап (`key`) | Работы | Материалы | Фото при сдаче | После |
 | --- | --- | --- | --- | --- | --- |
 | 1 | Штробы, проходы, подрозетники (`chases`) | `work.chase`, `work.chase_wide` (обе — с материалом стены: `work.chase.brick`…), `work.wall_hole`, `work.wall_hole_large`, `work.socket_box` | `socket_box` | `optional` | — |
-| 2 | Прокладка кабеля (`cable`) | `work.cable` (маркировка концов входит в неё: `work.marking` снят 2026-11-11), `work.conduit` | `cable`, `conduit`, `conduit_joint`, `conduit_entry`, `conduit_clip`, `cable_pad` | `required`: трассы до штукатурки | 1 |
+| 2 | Прокладка кабеля (`cable`) | `work.cable` (маркировка концов входит в неё: `work.marking` снят 2026-11-11), `work.conduit` | `cable`, `conduit`, `conduit_joint`, `conduit_clip`, `cable_pad` | `required`: трассы до штукатурки | 1 |
 | 3 | Распаечные коробки (`boxes`) | `work.junction_box` | `junction_box`, `junction_box_ip`, `crimp` | `optional` | 2 |
 | 4 | Установка корпуса щита (`board`) | `work.board_install` | `board_enclosure`, `dc_enclosure` (щит АКБ) | `optional` | — |
 | 5 | Замер изоляции (`insulation`) | `work.insulation_test` | — | `required`: протокол, фото или PDF | 2, 3 |

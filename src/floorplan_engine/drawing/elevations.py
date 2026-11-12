@@ -202,19 +202,38 @@ def _draw(
     # Chases go under everything else
     for ch in e.chases:
         half = max((50.0 if ch.wide else 30.0) / 2 / scale, 0.3)
+        fill = CHASE_LOW if ch.low else CHASE
         a, b = at(ch.x, ch.y0), at(ch.x, ch.y1)
-        rect((a.x - half, a.y, a.x + half, b.y), LW_THIN, GREY, CHASE_LOW if ch.low else CHASE)
+        if ch.x1 is not None:  # the turn past an opening, along the wall
+            c = at(ch.x1, ch.y0)
+            rect(
+                (min(a.x, c.x) - half, a.y - half, max(a.x, c.x) + half, a.y + half),
+                LW_THIN,
+                GREY,
+                fill,
+            )
+            continue
+        rect((a.x - half, a.y, a.x + half, b.y), LW_THIN, GREY, fill)
     # Cables along the wall (decision 2026-11-12), those of one drop side by side, in the group
     # colour; a fixing is one line across the cables of its drop, their number at the top one
     pitch = CABLE_PITCH_SHEET
     by_x: dict[float, list[str]] = {}
     for cable in e.cables:
-        by_x.setdefault(cable.x, []).append(cable.run)
+        if cable.x1 is None:
+            by_x.setdefault(cable.x, []).append(cable.run)
     for cable in e.cables:
+        color = colors.get(cable.group, DARK)
+        if cable.x1 is not None:  # the turn past an opening: from the drop along the wall
+            runs = by_x.get(cable.x, [cable.run])
+            k = runs.index(cable.run) if cable.run in runs else 0
+            dx = (k - (len(runs) - 1) / 2) * pitch
+            a, b = at(cable.x, cable.y0), at(cable.x1, cable.y0)
+            line(Vec(a.x + dx, a.y), Vec(a.x + dx, a.y + dx), LW_CABLE, color)  # the corner
+            line(Vec(a.x + dx, a.y + dx), Vec(b.x, b.y + dx), LW_CABLE, color)
+            continue
         runs = by_x[cable.x]
         dx = (runs.index(cable.run) - (len(runs) - 1) / 2) * pitch
         a, b = at(cable.x, cable.y0), at(cable.x, cable.y1)
-        color = colors.get(cable.group, DARK)
         line(Vec(a.x + dx, a.y), Vec(b.x + dx, b.y), LW_CABLE, color)
     tops = {f.x: max(g.y for g in e.fixings if g.x == f.x) for f in e.fixings}
     for f in e.fixings:

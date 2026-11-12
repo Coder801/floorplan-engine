@@ -30,7 +30,7 @@ from floorplan_engine.electrical.boxes import box_wall
 from floorplan_engine.electrical.mounting import PRACTICE, spots
 from floorplan_engine.electrical.point_numbers import number_points, point_name
 from floorplan_engine.electrical.routing import opening_strip
-from floorplan_engine.electrical.wiring_model import Route, Run, Wiring
+from floorplan_engine.electrical.wiring_model import Chase, Route, Run, Wiring
 from floorplan_engine.model.geometry import (
     DOOR_TOP_MM,
     WINDOW_HEIGHT_MM,
@@ -106,7 +106,8 @@ class BoxView:
 
 @dataclass(frozen=True)
 class ChaseView:
-    """Chase: vertical at x, from y0 to y1 (y0 < y1), mm; wide means more than two cables."""
+    """Chase: vertical at x, from y0 to y1 (y0 < y1), mm; wide means more than two cables. With
+    x1 it is horizontal at height y0 (= y1) from x to x1: the turn past an opening."""
 
     x: float
     y0: float
@@ -114,6 +115,7 @@ class ChaseView:
     cables: int
     wide: bool
     low: bool  # low-voltage (internet, TV)
+    x1: float | None = None
 
 
 @dataclass(frozen=True)
@@ -129,13 +131,15 @@ class FixingView:
 @dataclass(frozen=True)
 class CableView:
     """A cable along the wall (decision 2026-11-12): line `run` of `group` at x, from height y0
-    to y1, mm — from the route plane (ceiling or floor) down or up to its point, panel or box."""
+    to y1, mm — from the route plane (ceiling or floor) down or up to its point, panel or box.
+    With x1 it is horizontal at height y0 (= y1) from x to x1: the turn past an opening."""
 
     run: str
     group: str
     x: float
     y0: float
     y1: float
+    x1: float | None = None
 
 
 @dataclass(frozen=True)
@@ -297,7 +301,7 @@ def wall_elevations(
         for c in wiring.drops:
             if c.wall and c.kind != "channel":
                 walls[(c.room, c.wall)].fixings += _drop_fixings(
-                    c.offset, c.length_mm, c.route, ceiling, max(c.cables, 1), walls_in(c.route)
+                    c.offset, _vertical(c), c.route, ceiling, max(c.cables, 1), walls_in(c.route)
                 )
         for r in wiring.runs:
             for wall_key, cable in _cables(r, elec, box_at, ceiling):
@@ -305,15 +309,21 @@ def wall_elevations(
         for c in wiring.chases:
             if not c.wall:
                 continue  # at a box: drawn higher up
+            low = c.circuit != "power"
             if c.span is not None:
                 y0, y1 = c.span
             elif c.route == "floor":
-                y0, y1 = 0.0, c.length_mm
+                y0, y1 = 0.0, _vertical(c)
             else:
-                y0, y1 = ceiling - c.length_mm, ceiling
+                y0, y1 = ceiling - _vertical(c), ceiling
             walls[(c.room, c.wall)].chases.append(
-                ChaseView(c.offset, y0, y1, c.cables, c.wide, c.circuit != "power")
+                ChaseView(c.offset, y0, y1, c.cables, c.wide, low)
             )
+            if c.bend is not None:
+                x, y = c.bend
+                walls[(c.room, c.wall)].chases.append(
+                    ChaseView(c.offset, y, y, c.cables, c.wide, low, x)
+                )
 
     out: list[WallElevation] = []
     for room in plan.rooms:
@@ -351,6 +361,13 @@ def wall_elevations(
                 )
             )
     return out
+
+
+def _vertical(c: Chase) -> float:
+    """The vertical part of a chase, mm: without its turn past an opening."""
+    if c.bend is None:
+        return c.length_mm
+    return max(c.length_mm - abs(c.bend[0] - c.offset), 0.0)
 
 
 def _drop_fixings(
@@ -398,7 +415,10 @@ def _cables(
             return (p.room, p.wall, p.offset, p.height)
         return boxes.get(end)
 
-    for end, rise in ((r.target, r.rise_end_mm), (r.source, r.rise_start_mm)):
+    for end, rise, drop in (
+        (r.target, r.rise_end_mm, r.end_drop),
+        (r.source, r.rise_start_mm, r.start_drop),
+    ):
         if rise <= 0:
             continue
         spot = at(end)
@@ -406,9 +426,13 @@ def _cables(
             continue
         room, wall, x, y = spot
         lo, hi = sorted((y, plane))
+        down = x if drop is None else drop  # beside an opening, then along the wall to the point
         out.append(
-            ((room, wall), CableView(r.id, r.group, round(x, 1), round(lo, 1), round(hi, 1)))
+            ((room, wall), CableView(r.id, r.group, round(down, 1), round(lo, 1), round(hi, 1)))
         )
+        if drop is not None:
+            turn = CableView(r.id, r.group, round(drop, 1), round(y, 1), round(y, 1), round(x, 1))
+            out.append(((room, wall), turn))
     return out
 
 
@@ -485,7 +509,14 @@ def elevation_data(
                 for o in e.openings
             ],
             "chases": [
-                {"x": r(c.x), "y0": r(c.y0), "y1": r(c.y1), "wide": c.wide, "low": c.low}
+                {
+                    "x": r(c.x),
+                    "y0": r(c.y0),
+                    "y1": r(c.y1),
+                    "wide": c.wide,
+                    "low": c.low,
+                    **({"x1": r(c.x1)} if c.x1 is not None else {}),
+                }
                 for c in e.chases
             ],
             "fixings": [
@@ -498,6 +529,7 @@ def elevation_data(
                     "x": r(c.x),
                     "y0": r(c.y0),
                     "y1": r(c.y1),
+                    **({"x1": r(c.x1)} if c.x1 is not None else {}),
                     "color": color(c.group),
                 }
                 for c in e.cables

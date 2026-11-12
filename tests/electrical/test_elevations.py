@@ -381,3 +381,36 @@ def test_cables_run_from_the_ceiling_to_their_points_and_fixings_count_them() ->
         d for d in elevation_data(plan, contours, elec, wiring, {}) if d["key"] == "elevation:r.w2"
     )
     assert data["cables"] and all(c["key"].startswith("wire:") for c in data["cables"])
+
+
+def test_socket_under_a_window_is_reached_beside_it() -> None:
+    """The cable cannot go down through a window: it drops beside it (OPENING_GAP from the
+    edge) to the socket height and turns along the wall to the socket; the chase and the
+    cable on the wall turn the same way, the turn is in the length."""
+    window = {"wall": "w2", "type": "window", "offset": 800, "width": 1500, "sill": 700}
+    window["height"] = 2000  # to the ceiling
+    plan = make_plan(WALLS, [DOOR, window])
+    _, contours = validate_plan(plan)
+    elec = _elec([{"id": "s1", "offset": 1000, "height": 300, **SOCKETS}])
+    wiring = box_wiring(plan, contours, elec)
+    assert wiring is not None
+    run = next(r for r in wiring.runs if r.target == "s1")
+    assert run.end_drop == 700
+    assert run.rise_end_mm == 2700 - 300 + 300  # down, then 300 mm along the wall
+    chase = next(c for c in wiring.chases if "s1" in c.targets)
+    assert (chase.offset, chase.bend, chase.length_mm) == (700, (1000, 300), 2700)
+    w2 = next(e for e in wall_elevations(plan, contours, elec, wiring) if e.wall == "w2")
+    assert {(c.x, c.y0, c.y1, c.x1) for c in w2.chases} == {
+        (700, 300, 2700, None),
+        (700, 300, 300, 1000),
+    }
+    assert {(c.x, c.y0, c.y1, c.x1) for c in w2.cables} == {
+        (700, 300, 2700, None),
+        (700, 300, 300, 1000),
+    }
+    assert all(f.x == 700 and 300 < f.y < 2700 for f in w2.fixings)
+    data = next(
+        d for d in elevation_data(plan, contours, elec, wiring, {}) if d["key"] == "elevation:r.w2"
+    )
+    assert [c.get("x1") for c in data["chases"]].count(1000) == 1
+    assert next(c for c in data["cables"] if "x1" in c)["x1"] == 1000
