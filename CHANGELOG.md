@@ -1,3 +1,13 @@
+## v0.5.1 (2026-11-12)
+
+### Feat
+
+- **electrical,drawing,viewer**: mark material prices as a placeholder
+
+### Fix
+
+- **drawing**: draw panel sheet rails as in the chosen enclosure
+
 ## v0.5.0 (2026-11-12)
 
 ### Feat
