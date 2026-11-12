@@ -6,7 +6,7 @@ leader points to the place).
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 
 from ezdxf.colors import RGB
@@ -45,6 +45,8 @@ HANDLE_MM = 1000.0  # door handle above the floor: a mark on the drawing, not a 
 HANDLE_INSET_MM, HANDLE_END_MM = 60.0, 180.0  # handle from the free edge of the leaf
 LW_THIN = 13
 FIXING_HALF_MM = 1.6  # half the fixing stroke across a cable drop, sheet mm
+CABLE_PITCH_SHEET = 0.9  # cables of one drop side by side on the sheet, mm
+LW_CABLE = 20  # cables along the wall, 1/100 mm
 
 TITLE_H = TEXT_DIM_MM
 SIDE_H = TEXT_SMALL_MM  # line under the heading: view from inside, what is behind the wall
@@ -84,8 +86,11 @@ class ElevationPanel:
     draw: Callable[[Paperspace, Vec], None]
 
 
-def elevation_panel(e: WallElevation, scale: float, language: Language) -> ElevationPanel:
-    """Elevation of wall e on the sheet at 1:scale; draw is from the block's top-left corner."""
+def elevation_panel(
+    e: WallElevation, scale: float, language: Language, colors: Mapping[str, int] | None = None
+) -> ElevationPanel:
+    """Elevation of wall e on the sheet at 1:scale; draw is from the block's top-left corner;
+    colors are the group colours of the cables (group_colors), dark without."""
     w, h = e.length / scale, e.top / scale
     right = _ord_width([*e.heights(), e.height])
     bottom = _ord_width([*e.offsets(), 0.0, e.length])
@@ -98,7 +103,7 @@ def elevation_panel(e: WallElevation, scale: float, language: Language) -> Eleva
 
     def draw(psp: Paperspace, top_left: Vec) -> None:
         with tagged(psp, "elevation", e.key):
-            _draw(psp, e, scale, language, top_left, w, h)
+            _draw(psp, e, scale, language, top_left, w, h, colors or {})
 
     return ElevationPanel(width, height, draw)
 
@@ -127,6 +132,7 @@ def _draw(
     top_left: Vec,
     w: float,
     h: float,
+    colors: Mapping[str, int],
 ) -> None:
     x0 = top_left.x
     floor = top_left.y - HEAD - h
@@ -198,10 +204,25 @@ def _draw(
         half = max((50.0 if ch.wide else 30.0) / 2 / scale, 0.3)
         a, b = at(ch.x, ch.y0), at(ch.x, ch.y1)
         rect((a.x - half, a.y, a.x + half, b.y), LW_THIN, GREY, CHASE_LOW if ch.low else CHASE)
-    # Fixings on the cable drops: a short stroke across the drop
+    # Cables along the wall (decision 2026-11-12), those of one drop side by side, in the group
+    # colour; a fixing is one line across the cables of its drop, their number at the top one
+    pitch = CABLE_PITCH_SHEET
+    by_x: dict[float, list[str]] = {}
+    for cable in e.cables:
+        by_x.setdefault(cable.x, []).append(cable.run)
+    for cable in e.cables:
+        runs = by_x[cable.x]
+        dx = (runs.index(cable.run) - (len(runs) - 1) / 2) * pitch
+        a, b = at(cable.x, cable.y0), at(cable.x, cable.y1)
+        color = colors.get(cable.group, DARK)
+        line(Vec(a.x + dx, a.y), Vec(b.x + dx, b.y), LW_CABLE, color)
+    tops = {f.x: max(g.y for g in e.fixings if g.x == f.x) for f in e.fixings}
     for f in e.fixings:
         spot = at(f.x, f.y)
-        line(Vec(spot.x - FIXING_HALF_MM, spot.y), Vec(spot.x + FIXING_HALF_MM, spot.y), LW_WALL)
+        half = FIXING_HALF_MM + (max(f.count, len(by_x.get(f.x, ()))) - 1) / 2 * pitch
+        line(Vec(spot.x - half, spot.y), Vec(spot.x + half, spot.y), LW_WALL)
+        if f.count > 1 and f.y == tops[f.x]:
+            text(f"×{f.count}", Vec(spot.x + half + 0.4, spot.y))
 
     # Wall: floor and ceiling lines are thicker, the ends are room corners
     line(Vec(x0, floor), Vec(x0 + w, floor), LW_FLOOR)

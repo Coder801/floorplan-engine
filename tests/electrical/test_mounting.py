@@ -33,11 +33,12 @@ from floorplan_engine.electrical.mounting import (
     fixings,
     mounting_notes,
     pair_diameter,
+    plan_fixings,
     run_fixings,
     shared_pairs,
     spots,
 )
-from floorplan_engine.electrical.wiring_model import Run
+from floorplan_engine.electrical.wiring_model import Run, Wiring
 from floorplan_engine.model.geometry import Vec
 from tests.conftest import make_plan
 from tests.electrical.test_estimate import _wiring
@@ -102,6 +103,7 @@ def test_floor_route_is_in_conduit_with_floor_step() -> None:
 def test_norms_profile_changes_the_spots() -> None:
     dense = MountingNorms(
         "test",
+        {"ceiling": 100.0, "wall": 100.0, "floor": 100.0},
         {"ceiling": 100.0, "wall": 100.0, "floor": 100.0},
         50.0,
         10.0,
@@ -282,3 +284,43 @@ def test_conduit_entries_only_at_boxes_and_panel_in_conduit() -> None:
     assert conduit_entries(bare, "none") == {}
     q = quantities(boxes, _sockets(route="floor"))
     assert q["conduit_entry.20"] == lines_at_box + panel
+
+
+def test_bundle_is_fixed_in_one_line_with_a_fixing_per_cable() -> None:
+    """Three cables along one line: every spot holds all three in one line (the clips snap
+    together, decision 2026-11-12), the spots go by the bundle piece; where one turns away the
+    bundle piece ends and the rest are fixed on their own spots."""
+    long = [Vec(0, 0), Vec(3000, 0)]
+    short = [Vec(0, 0), Vec(1500, 0), Vec(1500, 1000)]
+    runs = tuple(replace(_run(p), id=rid) for rid, p in (("a", long), ("b", long), ("c", short)))
+    wiring = Wiring(2700.0, False, (), runs)
+    spots_ = plan_fixings(wiring, "none")
+    three = [f for f in spots_ if len(f.runs) == 3]
+    two = [f for f in spots_ if set(f.runs) == {"a", "b"}]
+    assert three and two
+    assert all(f.axis == "h" and f.at.y == 0 and 0 < f.at.x < 1500 for f in three)
+    assert all(1500 < f.at.x < 3000 for f in two)
+    # The estimate: one fixing per cable at each spot, plus the vertical piece of "c"
+    counts = fixing_counts(wiring, "none")
+    plan = sum(n for (_, surface), n in counts.items() if surface == "ceiling")
+    assert plan == sum(len(f.runs) for f in spots_)
+    assert any(f.runs == ("c",) and f.axis == "v" for f in spots_)
+
+
+def test_slanted_piece_is_fixed_on_its_own() -> None:
+    wiring = Wiring(2700.0, False, (), (_run([Vec(0, 0), Vec(1000, 1000)]),))
+    (*spots_,) = plan_fixings(wiring, "none")
+    assert spots_ and all(f.axis is None and f.runs == ("r1",) for f in spots_)
+
+
+def test_conduit_is_fixed_wider_apart_than_bare_cable() -> None:
+    """Studio norms (2026-11-12): conduit every 450 mm overhead and 550 mm on a wall, bare cable
+    every 300 and 500."""
+    assert PRACTICE.step("ceiling", True) == 450 and PRACTICE.step("wall", True) == 550
+    assert PRACTICE.step("ceiling", False) == 300 and PRACTICE.step("wall", False) == 500
+    run = _run([Vec(0, 0), Vec(3000, 0)], rise_end=2000.0)
+    bare = run_fixings(run, "none")
+    piped = run_fixings(run, "walls")
+    assert len(piped) < len(bare)
+    wiring = Wiring(2700.0, False, (), (run,))
+    assert len(plan_fixings(wiring, "ceiling")) < len(plan_fixings(wiring, "none"))

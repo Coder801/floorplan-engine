@@ -30,7 +30,7 @@ from floorplan_engine.electrical.boxes import box_wall
 from floorplan_engine.electrical.mounting import PRACTICE, spots
 from floorplan_engine.electrical.point_numbers import number_points, point_name
 from floorplan_engine.electrical.routing import opening_strip
-from floorplan_engine.electrical.wiring_model import Route, Wiring
+from floorplan_engine.electrical.wiring_model import Route, Run, Wiring
 from floorplan_engine.model.geometry import (
     DOOR_TOP_MM,
     WINDOW_HEIGHT_MM,
@@ -118,10 +118,24 @@ class ChaseView:
 
 @dataclass(frozen=True)
 class FixingView:
-    """Fixing on a cable drop along the wall (mounting.py): spot x, height y, mm."""
+    """Fixing on a cable drop along the wall (mounting.py): spot x, height y, mm; count is how
+    many clips or pads stand there in one line (one per cable of the drop, decision 2026-11-12)."""
 
     x: float
     y: float
+    count: int = 1
+
+
+@dataclass(frozen=True)
+class CableView:
+    """A cable along the wall (decision 2026-11-12): line `run` of `group` at x, from height y0
+    to y1, mm — from the route plane (ceiling or floor) down or up to its point, panel or box."""
+
+    run: str
+    group: str
+    x: float
+    y0: float
+    y1: float
 
 
 @dataclass(frozen=True)
@@ -171,6 +185,7 @@ class WallElevation:
     water: tuple[WaterView, ...] = ()  # plumbing water outlets and drains
     name: WallName | None = None  # code and description (model/wall_names.py)
     fixings: tuple[FixingView, ...] = ()  # fixings on the cable drops (decision 2026-11-11)
+    cables: tuple[CableView, ...] = ()  # the cables along the wall (decision 2026-11-12)
 
     @property
     def title(self) -> str:
@@ -219,6 +234,7 @@ class _Wall:
     boxes: list[BoxView] = field(default_factory=list)
     chases: list[ChaseView] = field(default_factory=list)
     fixings: list[FixingView] = field(default_factory=list)
+    cables: list[CableView] = field(default_factory=list)
     board: BoardView | None = None
 
 
@@ -252,6 +268,12 @@ def wall_elevations(
             b.name, b.offset, b.height, b.width, BOARD_HEIGHT_MM
         )
 
+    box_at: dict[str, tuple[str, str, float, float]] = {}  # box on a wall: room, wall, x, y
+
+    def walls_in(route: Route) -> bool:
+        """Drops in conduit: from the floor always, from the ceiling with conduit in the walls."""
+        return route == "floor" or elec.conduit_level == "walls"
+
     if wiring is not None:
         box_chases = {(c.room, c.route) for c in wiring.chases if c.kind == "box"}
         for box in wiring.boxes:
@@ -263,7 +285,11 @@ def wall_elevations(
             y = box.rise_mm if box.route == "floor" else ceiling - box.rise_mm
             side = _box_side(box.size)
             walls[(box.room, seg.id)].boxes.append(BoxView(box.id, box.label, x, y, side))
-            walls[(box.room, seg.id)].fixings += _drop_fixings(x, box.rise_mm, box.route, ceiling)
+            lines = sum(1 for r in wiring.runs if box.id in (r.source, r.target))
+            walls[(box.room, seg.id)].fixings += _drop_fixings(
+                x, box.rise_mm, box.route, ceiling, max(lines, 1), walls_in(box.route)
+            )
+            box_at[box.id] = (box.room, seg.id, x, y)
             # Chase from the box to the route plane: none if cable goes in before the plaster
             if (box.room, box.route) in box_chases:
                 y0, y1 = (0.0, y) if box.route == "floor" else (y, ceiling)
@@ -271,8 +297,11 @@ def wall_elevations(
         for c in wiring.drops:
             if c.wall and c.kind != "channel":
                 walls[(c.room, c.wall)].fixings += _drop_fixings(
-                    c.offset, c.length_mm, c.route, ceiling
+                    c.offset, c.length_mm, c.route, ceiling, max(c.cables, 1), walls_in(c.route)
                 )
+        for r in wiring.runs:
+            for wall_key, cable in _cables(r, elec, box_at, ceiling):
+                walls[wall_key].cables.append(cable)
         for c in wiring.chases:
             if not c.wall:
                 continue  # at a box: drawn higher up
@@ -317,20 +346,70 @@ def wall_elevations(
                     _back_points(seg, room.id, geoms, elec, numbers),
                     wet,
                     names[(room.id, wall.id)],
-                    tuple(sorted(set(w.fixings), key=lambda f: (f.x, f.y))),
+                    _merged_fixings(w.fixings),
+                    tuple(sorted(w.cables, key=lambda c: (c.x, c.run))),
                 )
             )
     return out
 
 
-def _drop_fixings(x: float, length: float, route: Route, ceiling: float) -> list[FixingView]:
-    """Fixings on a drop of `length` mm at x: counted from the route plane (ceiling down, floor
-    up) with the wall step and offset of the norms (mounting.spots)."""
-    step, offset = PRACTICE.steps["wall"], PRACTICE.offset
+def _drop_fixings(
+    x: float, length: float, route: Route, ceiling: float, count: int, in_conduit: bool
+) -> list[FixingView]:
+    """Fixings on a drop of `length` mm at x holding `count` cables: counted from the route plane
+    (ceiling down, floor up) with the wall step (conduit or bare) and offset of the norms
+    (mounting.spots)."""
+    step, offset = PRACTICE.step("wall", in_conduit), PRACTICE.offset
     return [
-        FixingView(round(x, 1), round(d if route == "floor" else ceiling - d, 1))
+        FixingView(round(x, 1), round(d if route == "floor" else ceiling - d, 1), count)
         for d in spots(length, step, offset)
     ]
+
+
+def _merged_fixings(fixings: Sequence[FixingView]) -> tuple[FixingView, ...]:
+    """One fixing per spot: two drops meeting at a spot count the larger number of cables."""
+    best: dict[tuple[float, float], int] = {}
+    for f in fixings:
+        best[(f.x, f.y)] = max(best.get((f.x, f.y), 0), f.count)
+    return tuple(FixingView(x, y, n) for (x, y), n in sorted(best.items()))
+
+
+def _cables(
+    r: Run,
+    elec: Electrical,
+    boxes: Mapping[str, tuple[str, str, float, float]],
+    ceiling: float,
+) -> list[tuple[tuple[str, str], CableView]]:
+    """The parts of a line along walls: a drop at its end to a wall point or box, a rise at its
+    start from the panel, a chain point or a box on a wall; from the route plane (ceiling, or the
+    floor for a floor route)."""
+    plane = 0.0 if r.route == "floor" else ceiling
+    points = {p.id: p for p in elec.points}
+    out: list[tuple[tuple[str, str], CableView]] = []
+
+    def at(end: str) -> tuple[str, str, float, float] | None:
+        if end == "board":
+            b = elec.board
+            return (b.room, b.wall, b.offset, b.height) if b is not None else None
+        p = points.get(end)
+        if p is not None:
+            if p.wall is None or p.offset is None or p.height is None:
+                return None
+            return (p.room, p.wall, p.offset, p.height)
+        return boxes.get(end)
+
+    for end, rise in ((r.target, r.rise_end_mm), (r.source, r.rise_start_mm)):
+        if rise <= 0:
+            continue
+        spot = at(end)
+        if spot is None:
+            continue
+        room, wall, x, y = spot
+        lo, hi = sorted((y, plane))
+        out.append(
+            ((room, wall), CableView(r.id, r.group, round(x, 1), round(lo, 1), round(hi, 1)))
+        )
+    return out
 
 
 def elevation_data(
@@ -409,7 +488,20 @@ def elevation_data(
                 {"x": r(c.x), "y0": r(c.y0), "y1": r(c.y1), "wide": c.wide, "low": c.low}
                 for c in e.chases
             ],
-            "fixings": [{"x": r(f.x), "y": r(f.y)} for f in e.fixings],
+            "fixings": [
+                {"x": r(f.x), "y": r(f.y), **({"n": f.count} if f.count > 1 else {})}
+                for f in e.fixings
+            ],
+            "cables": [
+                {
+                    "key": f"wire:{c.run}",
+                    "x": r(c.x),
+                    "y0": r(c.y0),
+                    "y1": r(c.y1),
+                    "color": color(c.group),
+                }
+                for c in e.cables
+            ],
             "boxes": [
                 {
                     "id": b.id,

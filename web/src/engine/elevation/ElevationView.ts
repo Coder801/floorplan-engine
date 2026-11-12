@@ -31,6 +31,7 @@ const BADGE_PX = 12;       // point number
 const SYMBOL_MM = 34;      // Ø68 flush box radius
 const PITCH_MM = 71;       // post step in a frame
 const FIXING_MM = 40;      // half the fixing stroke across a cable drop
+const CABLE_PITCH_MM = 15;  // cables of one drop side by side, wall mm
 const MIN_R = 5;           // px: symbol no smaller than this
 const ISO_PAD = 28;        // px around the isometry: number badges
 const SIDE_ALPHA = 0.45;   // neighbouring wall in isometry is translucent
@@ -295,10 +296,27 @@ export class ElevationView {
       ctx.fillStyle = screenColor(c.low ? CHASE_LOW : CHASE);
       ctx.fillRect(this.sx(c.x) - half, this.sy(c.y1), 2 * half, (c.y1 - c.y0) * s);
     }
-    // Fixings on the cable drops: a short stroke across the drop
-    for (const f of elec ? e.fixings ?? [] : []) {
-      const half = Math.max(FIXING_MM * s, 3), x = this.sx(f.x), y = this.sy(f.y);
+    // Cables along the wall, those of one drop side by side in their group colour; a fixing is
+    // one line across the cables of its drop, their number "×5" at the top one (the clips snap
+    // together: decision 2026-11-12)
+    const lane = Math.max(CABLE_PITCH_MM * s, 3);
+    const drops = new Map<number, number>();
+    for (const c of elec ? e.cables ?? [] : []) drops.set(c.x, (drops.get(c.x) ?? 0) + 1);
+    const placed = new Map<number, number>();
+    for (const c of elec ? e.cables ?? [] : []) {
+      const n = drops.get(c.x)!, k = placed.get(c.x) ?? 0;
+      placed.set(c.x, k + 1);
+      const x = this.sx(c.x) + (k - (n - 1) / 2) * lane;
+      this.line(x, this.sy(c.y0), x, this.sy(c.y1), c.color ?? INK, 0.8);
+    }
+    const fixings = elec ? e.fixings ?? [] : [];
+    const tops = new Map<number, number>();
+    for (const f of fixings) tops.set(f.x, Math.max(tops.get(f.x) ?? -Infinity, f.y));
+    for (const f of fixings) {
+      const spread = (Math.max(f.n ?? 1, drops.get(f.x) ?? 1) - 1) / 2 * lane;
+      const half = Math.max(FIXING_MM * s, 3) + spread, x = this.sx(f.x), y = this.sy(f.y);
       this.line(x - half, y, x + half, y, INK, 1.2);
+      if ((f.n ?? 1) > 1 && f.y === tops.get(f.x)) this.text(`×${f.n}`, x + half + 3, y, LABEL_PX, INK, "left");
     }
 
     // Wall: floor and ceiling lines thicker, ends are the room corners

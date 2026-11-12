@@ -11,6 +11,7 @@ from ezdxf.document import Drawing
 from ezdxf.enums import TextEntityAlignment
 from ezdxf.layouts.layout import Modelspace, Paperspace
 
+from floorplan_engine.drawing.ceilings import ceiling_panel, fixing_bands
 from floorplan_engine.drawing.electrical import (
     LegendRow,
     draw_electrical,
@@ -19,7 +20,7 @@ from floorplan_engine.drawing.electrical import (
     legend_size,
     wiring_legend_rows,
 )
-from floorplan_engine.drawing.elevations import elevation_panel
+from floorplan_engine.drawing.elevations import ElevationPanel, elevation_panel
 from floorplan_engine.drawing.layers import (
     A_DIMS,
     A_DOOR,
@@ -36,7 +37,6 @@ from floorplan_engine.drawing.layers import (
     E_SWITCH,
     ELECTRICAL_LAYERS,
     LIGHTING_LAYERS,
-    MOUNTING_LAYERS,
     PLUMBING_LAYERS,
     TEXT_SMALL_MM,
     WIRING_LAYERS,
@@ -44,7 +44,7 @@ from floorplan_engine.drawing.layers import (
     text_width,
 )
 from floorplan_engine.drawing.lighting import draw_lighting, lighting_model, switch_table
-from floorplan_engine.drawing.mounting import bends_table, draw_bends, draw_fixings, fixings_table
+from floorplan_engine.drawing.mounting import bends_table, bundle_bends, fixings_table
 from floorplan_engine.drawing.panel import devices_table, draw_panel_front, fit_panel, panel_notes
 from floorplan_engine.drawing.plan import RoomArea, add_text, draw_plan
 from floorplan_engine.drawing.plumbing import draw_plumbing, fixtures_table, pipes_table
@@ -56,7 +56,8 @@ from floorplan_engine.drawing.schedules import (
 )
 from floorplan_engine.drawing.symbols import define_blocks
 from floorplan_engine.drawing.tables import Table, draw_table, room_schedule
-from floorplan_engine.drawing.wiring import draw_wiring, wiring_notes
+from floorplan_engine.drawing.wiring import cable_layer, draw_wiring, lay_out, wiring_notes
+from floorplan_engine.electrical.ceilings import ceiling_views
 from floorplan_engine.electrical.colors import group_colors
 from floorplan_engine.electrical.elevations import WaterMap, wall_elevations
 from floorplan_engine.electrical.estimate import build_estimate
@@ -104,7 +105,6 @@ WIRING_SHEET_LAYERS = (
     *WIRING_LAYERS,
 )
 # Mounting: the wiring sheet plus fixing strokes on the lines
-MOUNTING_SHEET_LAYERS = (*WIRING_SHEET_LAYERS, *MOUNTING_LAYERS)
 # Plumbing: walls, openings, pipes, fixtures, risers, obstacles; no electrical
 PLUMBING_SHEET_LAYERS = (A_WALL, A_DOOR, A_WIND, *PLUMBING_LAYERS)
 NOTE_STEP = TEXT_SMALL_MM * 1.8
@@ -302,41 +302,13 @@ def draw_stages(
         points = points_spec(plan, elec)
         if points is not None:
             specs.append(points)
-        # Wall elevations also at the end, as many sheets as needed
+        # Wall elevations also at the end, as many sheets as needed; each room's ceiling (with
+        # its lines and fixings) goes before its walls
         water = water_views(*plumbing) if plumbing is not None else None
         elevations = elevations_spec(plan, contours, elec, wiring, water)
         if elevations is not None:
             specs.append(elevations)
-        # The installer's sheet closes the set: the other sheet numbers do not change
-        if wiring is not None:
-            specs.append(mounting_spec(msp, plan, wiring, elec))
     return doc, specs
-
-
-def mounting_spec(msp: Modelspace, plan: Plan, wiring: Wiring, elec: Electrical) -> SheetSpec:
-    """The "Mounting" sheet (decision 2026-11-11): the wiring with fixing strokes on the lines; on
-    the right the installer notes for this project's variant and the fixings by the drawing."""
-    lang = plan.language
-    conduit = elec.conduit_level
-    draw_fixings(msp, wiring, conduit)
-    draw_bends(msp, wiring, conduit)
-    title = mounting_text("title", lang)
-    notes = notes_panel([title, *mounting_notes(elec, lang)], width=ELEV_NOTES_W)
-    tables = [notes]
-    table = fixings_table(wiring, conduit, lang)
-    if table is not None:
-        reserve = mounting_text("reserve", lang, pct=round(PRACTICE.reserve * 100))
-        tables.append(stacked(table_panel(table), notes_panel([reserve], width=table.width)))
-    bends = bends_table(wiring, lang)
-    if bends is not None:
-        tables.append(table_panel(bends))
-    return SheetSpec(
-        "tab_mounting",
-        "mounting_image",
-        MOUNTING_SHEET_LAYERS,
-        tuple(tables),
-        legends=legend_columns(wiring_legend_rows(elec, lang)),
-    )
 
 
 def plumbing_spec(
@@ -405,19 +377,77 @@ def elevations_spec(
     wiring: Wiring | None,
     water: WaterMap | None = None,
 ) -> SheetSpec | None:
-    """The "Elevations" sheets: wall after wall at the set's scale, page by page; first an
-    explanation of how to read the dimensions. No walls with electrical items, no sheets."""
+    """The "Elevations" sheets: wall after wall at the set's scale, page by page, each room's
+    ceiling before its walls (decision 2026-11-12: lines, fixings, boxes from above); first an
+    explanation of how to read them, and with wiring the installer notes, the fixings by the
+    drawing and the bend radii. No walls with electrical items and no ceilings, no sheets."""
     walls = wall_elevations(plan, contours, elec, wiring, water=water)
-    if not walls:
+    ceilings = _ceiling_blocks(plan, contours, elec, wiring) if wiring is not None else {}
+    if not walls and not ceilings:
         return None
     lang = plan.language
-    blocks = [elevation_panel(e, sheet_scale(), lang) for e in walls]
-    notes = notes_panel([tr("elev_notes", lang)], width=ELEV_NOTES_W)
-    panels = (notes, *(Panel(b.width, b.height, b.draw) for b in blocks))
+    scale = sheet_scale()
+    colors = group_colors(elec)
+    notes: list[Panel] = [notes_panel([tr("elev_notes", lang)], width=ELEV_NOTES_W)]
+    if wiring is not None:
+        notes += _mounting_panels(wiring, elec, lang)
+    blocks: list[Panel] = []
+    for room in plan.rooms:
+        blocks += ceilings.get(room.id, [])
+        blocks += [
+            _panel(elevation_panel(e, scale, lang, colors)) for e in walls if e.room == room.id
+        ]
     nothing: Callable[[float, float], Panel | None] = lambda w, h: None  # noqa: E731
     return SheetSpec(
-        "tab_elevations", "elevations_image", (), body=nothing, wide=True, spill=panels, paged=True
+        "tab_elevations",
+        "elevations_image",
+        (),
+        body=nothing,
+        wide=True,
+        spill=(*notes, *blocks),
+        paged=True,
     )
+
+
+def _panel(block: ElevationPanel) -> Panel:
+    return Panel(block.width, block.height, block.draw)
+
+
+def _ceiling_blocks(
+    plan: Plan, contours: dict[str, Contour], elec: Electrical, wiring: Wiring
+) -> dict[str, list[Panel]]:
+    """Ceiling views by room (a floor route plane after the ceiling) at the set's scale."""
+    lang = plan.language
+    conduit = elec.conduit_level
+    paths, plane_bundles = lay_out(wiring)
+    turns = bundle_bends(wiring, paths, conduit)
+    spots = fixing_bands(wiring, plane_bundles, conduit)
+    colors = group_colors(elec)
+    classes = line_classes(plan, elec)
+    cable_layers = {r.id: cable_layer(r, classes) for r in wiring.runs}
+    out: dict[str, list[Panel]] = {}
+    for view in ceiling_views(plan, contours, elec, wiring):
+        block = ceiling_panel(
+            view, wiring, paths, turns, colors, cable_layers, spots, sheet_scale(), lang
+        )
+        out.setdefault(view.room, []).append(_panel(block))
+    return out
+
+
+def _mounting_panels(wiring: Wiring, elec: Electrical, lang: Language) -> list[Panel]:
+    """Installer notes for this project's variant, the fixings by the drawing and the bend radii
+    (for print; the viewer shows them in the side panel, epd/side.mounting_side_tables)."""
+    conduit = elec.conduit_level
+    title = mounting_text("title", lang)
+    out = [notes_panel([title, *mounting_notes(elec, lang)], width=ELEV_NOTES_W)]
+    table = fixings_table(wiring, conduit, lang)
+    if table is not None:
+        reserve = mounting_text("reserve", lang, pct=round(PRACTICE.reserve * 100))
+        out.append(stacked(table_panel(table), notes_panel([reserve], width=table.width)))
+    bends = bends_table(wiring, lang)
+    if bends is not None:
+        out.append(table_panel(bends))
+    return out
 
 
 def panel_spec(plan: Plan, elec: Electrical) -> SheetSpec | None:

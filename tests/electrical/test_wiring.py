@@ -14,15 +14,14 @@ from shapely.geometry import box as shapely_box
 
 from floorplan_engine.drawing.layers import W_TEXT, new_document
 from floorplan_engine.drawing.wiring import (
-    bundles,
     cable_layer,
     draw_wiring,
     fillet,
     lanes,
     offset_path,
-    segments,
 )
 from floorplan_engine.electrical.boxes import BOX_CLEARANCE
+from floorplan_engine.electrical.bundles import bundles, segments
 from floorplan_engine.electrical.chases import wall_chases, with_conduit
 from floorplan_engine.electrical.estimate import PriceList, build_estimate
 from floorplan_engine.electrical.panel import LineClass
@@ -1210,3 +1209,18 @@ def test_light_chain_pass_and_two_key_switches() -> None:
     assert by_target["l3"].source in ("p1", "p2") and by_target["l3"].source != between.source
     assert by_target["l4"].source == "k2" and by_target["l4"].mark == TWO_KEY_MARK
     assert len({r.target for r in w.runs}) == len(w.runs)  # each point fed once
+
+
+def test_stacked_point_is_wired_at_the_wall_not_at_its_symbol() -> None:
+    """A socket drawn behind another at the same spot gets its cable where it is on the wall:
+    the route end does not move with the stack."""
+    plan = make_plan(RECT, [DOOR])
+    lone = _elec()
+    under = _wall("s0", "socket", "w4", 1000, 300, "QF2")
+    stacked = lone.model_copy(update={"points": [ElectricalPoint(**under), *lone.points]})
+
+    def end(elec: Electrical) -> Vec:
+        point: Vec = next(r for r in _wiring(plan, elec).runs if r.target == "s1").path[-1]
+        return point
+
+    assert (end(stacked) - end(lone)).length() == pytest.approx(0.0, abs=1.0)

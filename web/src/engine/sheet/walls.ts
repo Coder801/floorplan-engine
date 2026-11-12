@@ -23,10 +23,11 @@ export function wallPages(sheets: readonly { index: number; page: Page }[]): Wal
   for (const { index, page } of sheets) {
     const boxes = new Map<string, Box>();
     for (const it of page.items) {
-      if (!it.o || !it.o.startsWith("elevation:")) continue;
+      const key = it.o ? ownerOf(it.o) : null;
+      if (!key) continue;
       const [x0, y0, x1, y1] = bbox(it.d);
-      const b = boxes.get(it.o);
-      boxes.set(it.o, b ? [Math.min(b[0], x0), Math.min(b[1], y0), Math.max(b[2], x1), Math.max(b[3], y1)]
+      const b = boxes.get(key);
+      boxes.set(key, b ? [Math.min(b[0], x0), Math.min(b[1], y0), Math.max(b[2], x1), Math.max(b[3], y1)]
         : [x0, y0, x1, y1]);
     }
     const data = new Map((page.elevations ?? []).map((e) => [e.key, e]));
@@ -51,7 +52,7 @@ export const MAP_ROOM = 0.32;
 export function wallSheet(page: Page, w: WallPage): Page {
   const [x0, y0, x1, y1] = w.box;
   const room = MAP_ROOM * Math.max(x1 - x0, y1 - y0);
-  return { ...page, items: page.items.filter((it) => it.o === w.key), view: [x0 - room, y0, x1, y1] };
+  return { ...page, items: page.items.filter((it) => !!it.o && ownerOf(it.o) === w.key), view: [x0 - room, y0, x1, y1] };
 }
 
 // "Санвузол 2 (пральня) — стіна 2" → room and wall; without " — " the whole name is the wall
@@ -73,4 +74,17 @@ export function wallRooms(walls: readonly { title: string }[]): WallRoom[] {
     else out.push({ room, items: [{ index, wall }] });
   });
   return out;
+}
+
+// A room's ceiling (decision 2026-11-12) or floor route plane on the elevations sheets: one more
+// page of the pager, "elevation:<room>.ceiling" / ".floor"; it has no wall data
+export const isPlane = (key: string): boolean => /\.(ceiling|floor)$/.test(key);
+
+// The elevation page an object belongs to: an elevation itself, or a ceiling scale value
+// (dim:bath.ceiling.x1450, decision 2026-11-12) — its ceiling (elevation:bath.ceiling); null otherwise
+export function ownerOf(o: string): string | null {
+  if (o.startsWith("elevation:")) return o;
+  if (!o.startsWith("dim:")) return null;
+  const id = o.slice(4), k = id.lastIndexOf(".");
+  return k < 0 ? null : `elevation:${id.slice(0, k)}`;
 }

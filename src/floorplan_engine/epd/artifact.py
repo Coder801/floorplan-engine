@@ -268,7 +268,7 @@ def objects_rect(items: list[dict[str, Any]]) -> list[float] | None:
     xs: list[float] = []
     ys: list[float] = []
     for item in items:
-        if "o" not in item:
+        if "o" not in item or item["o"].startswith("legend:"):  # the legend is by the title block
             continue
         nums = [float(n) for n in _NUMBER.findall(item["d"])]
         xs += nums[::2]

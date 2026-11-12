@@ -356,3 +356,28 @@ def test_before_plaster_keeps_fixings_without_chases() -> None:
     assert not w2.chases and w2.fixings
     data_fixings = {(f.x, f.y) for f in w2.fixings}
     assert len(data_fixings) == len(w2.fixings)  # no duplicates
+
+
+def test_cables_run_from_the_ceiling_to_their_points_and_fixings_count_them() -> None:
+    """A wall shows each cable from the ceiling down to its point (decision 2026-11-12); a drop
+    fixing knows how many cables it holds in one line."""
+    plan = make_plan(WALLS, [DOOR])
+    _, contours = validate_plan(plan)
+    elec = _elec(
+        [
+            {"id": "s1", "offset": 1000, "height": 300, **SOCKETS},
+            {"id": "s2", "offset": 2500, "height": 300, **SOCKETS},
+        ]
+    )
+    wiring = box_wiring(plan, contours, elec)
+    assert wiring is not None
+    w2 = next(e for e in wall_elevations(plan, contours, elec, wiring) if e.wall == "w2")
+    assert w2.cables
+    ceiling = wiring.ceiling_height
+    to_points = {(c.x, c.y0, c.y1) for c in w2.cables if c.x in (1000, 2500)}
+    assert {(1000, 300, ceiling), (2500, 300, ceiling)} <= to_points
+    assert all(f.count >= 1 for f in w2.fixings)
+    data = next(
+        d for d in elevation_data(plan, contours, elec, wiring, {}) if d["key"] == "elevation:r.w2"
+    )
+    assert data["cables"] and all(c["key"].startswith("wire:") for c in data["cables"])

@@ -70,7 +70,12 @@ def test_side_tables_link_rows_to_objects() -> None:
         "panel",
         "points",
         "estimate",
+        "elevations",
     }
+    # Room unfolds: the installer notes as a list (no columns), then the fixings and bend radii
+    notes, *rest = tables["elevations"]
+    assert notes.title == "Памятка монтажника" and not notes.columns and len(notes.notes) > 3
+    assert rest[0].title == "Крепления по чертежу" and rest[0].notes
     # Wiring has only "Groups"; the estimate is separate ("Estimate" tab), there is no specification
     assert [t.title for t in tables["wiring"]] == ["Группы"]
     assert tables["estimate"][0].title.startswith("Ведомость объёмов")  # no price list
@@ -156,6 +161,24 @@ def test_epd_page_has_view_stage_tables_and_theme_objects(tmp_path: Path) -> Non
     assert "device:QS1" in pages[3]["objects"] and "model" not in pages[3]
     assert "panel" not in pages[3]  # no panel data: sheet primitives only
     assert pages[2]["estimate"]["rows"]  # estimate on the wiring page
+    with zipfile.ZipFile(path) as zf:
+        names = [p["file"] for p in json.loads(zf.read("manifest.json"))["pages"]]
+        elev = [
+            page
+            for page in (json.loads(zf.read(n)) for n in names)
+            if page.get("stage") == "elevations"
+        ]
+    # The room's ceiling is one more elevation (viewer pager) with its card; the installer notes
+    # for the side panel
+    assert elev and all(p["tables"][0]["notes"] for p in elev)
+    keys = {it.get("o") for p in elev for it in p["items"]}
+    assert "elevation:r.ceiling" in keys
+    assert elev[0]["objects"]["elevation:r.ceiling"]["title"].endswith("потолок")
+    # Ceiling scale values are objects with cards: hovering one lights what it measures
+    dims = [k for p in elev for k in p["objects"] if k.startswith("dim:r.ceiling.")]
+    assert dims and all(
+        " мм от " in elev[0]["objects"][k]["title"] for k in dims if k in elev[0]["objects"]
+    )
     assert "estimate" not in pages[1]
 
 

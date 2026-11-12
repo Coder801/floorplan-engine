@@ -5,15 +5,19 @@
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { frame, viewer, wallMap } from "@/engine/sheet/wallMap";
+import { isPlane } from "@/engine/sheet/walls";
 import type { Scene, XY } from "@/shared/types";
 import css from "./WallMap.module.scss";
 
-// key is the elevation object: elevation:bath.w3
+// key is the elevation object: elevation:bath.w3; a room's ceiling (elevation:bath.ceiling, or
+// .floor for a floor route plane) lights the whole room
 export function WallMap({ scene, elevation, title, face }: { scene: Scene; elevation: string; title: string; face?: [XY, XY] }) {
   const { t } = useTranslation();
   const id = elevation.slice(elevation.indexOf(":") + 1);
   const room = id.split(".")[0];
-  const faces = useMemo(() => wallMap(scene, `wall:${id}`, room, face), [scene, id, room, face]);
+  const whole = isPlane(elevation);
+  const faces = useMemo(() => wallMap(scene, whole ? null : `wall:${id}`, room, face, undefined, whole),
+    [scene, id, room, face, whole]);
   const man = useMemo(() => (face ? viewer(scene, room, face) : null), [scene, room, face]);
   const [x0, y0, x1, y1] = frame(faces);
   const pad = Math.max(x1 - x0, y1 - y0) * 0.04;

@@ -61,7 +61,6 @@ TEXTS: dict[str, dict[Language, str]] = {
     "tab_points": {"ru": "Точки", "uk": "Точки"},
     "sheet_continued": {"ru": "(продолжение)", "uk": "(продовження)"},
     "tab_elevations": {"ru": "Развёртки", "uk": "Розгортки"},
-    "tab_mounting": {"ru": "Монтаж", "uk": "Монтаж"},
     "tab_lighting": {"ru": "Освещение", "uk": "Освітлення"},
     "tab_plumbing": {"ru": "Сантехника", "uk": "Сантехніка"},
     "plumbing_image": {
@@ -97,7 +96,6 @@ TEXTS: dict[str, dict[Language, str]] = {
         "uk": "Щит розподільчий. Вигляд спереду",
     },
     "wiring_image": {"ru": "План проводки М 1:{scale}", "uk": "План проводки М 1:{scale}"},
-    "mounting_image": {"ru": "Крепления кабеля М 1:{scale}", "uk": "Кріплення кабелю М 1:{scale}"},
     "wiring_grand": {"ru": "Всего", "uk": "Усього"},
     "wiring_note": {
         "ru": "Высота потолка {h} мм{default}; трассы по потолку; коробки на 200 мм ниже потолка",

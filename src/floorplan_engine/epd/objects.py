@@ -20,7 +20,14 @@ from floorplan_engine.drawing.plan import mirrored_wall, wall_areas, wall_pieces
 from floorplan_engine.drawing.wiring import lay_out
 from floorplan_engine.electrical.anchors import symbol_key
 from floorplan_engine.electrical.boxes import BOX_CLEARANCE, BOX_TITLES, box_wall
+from floorplan_engine.electrical.ceilings import (
+    CeilingView,
+    ceiling_views,
+    dimension_key,
+    dimension_spots,
+)
 from floorplan_engine.electrical.elevations import WaterMap, behind_text, wall_elevations
+from floorplan_engine.electrical.mounting import text as mounting_text
 from floorplan_engine.electrical.panel import BoardPanel, build_panel
 from floorplan_engine.electrical.panel_text import amps, kw
 from floorplan_engine.electrical.point_numbers import BLOCK_TYPES, block_name
@@ -58,6 +65,12 @@ TEXT: dict[str, dict[str, str]] = {
     "ceiling": {"ru": "по потолку", "uk": "по стелі"},
     "floor": {"ru": "по полу, в стяжке", "uk": "по підлозі, у стяжці"},
     "length": {"ru": "Длина", "uk": "Довжина"},
+    "size": {"ru": "Размер", "uk": "Розмір"},
+    "ceiling_lines": {"ru": "Линий через помещение", "uk": "Ліній через приміщення"},
+    "from_wall": {"ru": "от стены {wall}", "uk": "від стіни {wall}"},
+    "from_edge_x": {"ru": "от левого края помещения", "uk": "від лівого краю приміщення"},
+    "from_edge_y": {"ru": "от нижнего края помещения", "uk": "від нижнього краю приміщення"},
+    "dim_spots": {"ru": "Мест на этом размере", "uk": "Місць на цьому розмірі"},
     "parts": {
         "ru": "{total} м: по плану {plan}, вертикаль {vert}, выпуски {ends}",
         "uk": "{total} м: по плану {plan}, вертикаль {vert}, випуски {ends}",
@@ -252,6 +265,19 @@ def describe_objects(
         panel = build_panel(plan, elec)
         if panel is not None:
             out.update(device_cards(panel, lang))
+        # Ceilings on the elevations sheets (decision 2026-11-12): "Спальня — потолок" in the pager
+        if wiring is not None:
+            for view in ceiling_views(plan, contours, elec, wiring):
+                plane = mounting_text(f"plane_{view.plane}", lang)
+                size = f"{view.size.x:.0f} × {view.size.y:.0f} мм"
+                card = (
+                    (text("size", lang), size),
+                    (text("ceiling_lines", lang), str(len(view.runs))),
+                )
+                out[f"elevation:{view.room}.{view.plane}"] = ObjectInfo(
+                    f"{view.room_name} — {plane}", card
+                )
+                out.update(_dimension_cards(view, wiring, lang))
     return out
 
 
@@ -268,7 +294,10 @@ def device_cards(panel: BoardPanel, lang: Language) -> dict[str, ObjectInfo]:
         key = "load_assumed" if g.assumed else "load_value"
         rows = [
             (text("device", lang), d.label),
-            (text("cable", lang), g.cable or "—"),
+            (
+                text("cable", lang),
+                text("assumed", lang, mark=g.cable) if g.cable_assumed else g.cable or "—",
+            ),
             (text("load", lang), text(key, lang, p=kw(g.power), i=amps(g.current))),
         ]
         for ld in g.loads[:CARD_LOADS]:
@@ -448,6 +477,19 @@ def wire_titles(plan: Plan, elec: Electrical, wiring: Wiring) -> dict[str, str]:
     """Meaningful line names for the log: line id → "QF4: К3 → Розетка…, Кухня"."""
     infos = _electrical(plan, elec, wiring)
     return {r.id: infos[f"wire:{r.id}"].title for r in wiring.runs}
+
+
+def _dimension_cards(view: CeilingView, wiring: Wiring, lang: Language) -> dict[str, ObjectInfo]:
+    """Ceiling scale values (decision 2026-11-12): "1450 мм от стены 1.А" and how many spots it
+    measures; hovering one lights its leaders and spots."""
+    out: dict[str, ObjectInfo] = {}
+    lows, rights = dimension_spots(view, wiring)
+    for axis, values, wall in (("x", lows, view.left), ("y", rights, view.bottom)):
+        side = text("from_wall", lang, wall=wall) if wall else text(f"from_edge_{axis}", lang)
+        for v, spots in values.items():
+            rows = ((text("dim_spots", lang), str(len(spots))),) if spots else ()
+            out[dimension_key(view, axis, v)] = ObjectInfo(f"{v:.0f} мм {side}", rows)
+    return out
 
 
 def plan_areas(plan: Plan, contours: dict[str, Contour]) -> dict[str, list[list[Point]]]:

@@ -34,9 +34,10 @@ const area = (r: XY[]) => r.reduce((s, [x, y], i) => { const [u, v] = r[(i + 1) 
 
 // wall is the scene wall key (wall:bath.w3), room its room (bath), face the inner wall face on
 // the plan (start at the left corner, view from inside): the figure stands in front of it; cut —
-// where walls are cut, mm (a share of the ceiling by default)
+// where walls are cut, mm (a share of the ceiling by default); whole — the room's ceiling page
+// (decision 2026-11-12): its floor and all its walls are lit, not one wall
 export function wallMap(scene: Scene, wall: string | null, room: string | null, face?: readonly [XY, XY],
-                        cut = scene.ceiling * CUT_SHARE): Face[] {
+                        cut = scene.ceiling * CUT_SHARE, whole = false): Face[] {
   const faces: { depth: number; face: Face }[] = [];
   // The slab first: door openings and pockets between walls are floor too
   for (const ring of scene.slab ?? []) {
@@ -44,11 +45,13 @@ export function wallMap(scene: Scene, wall: string | null, room: string | null, 
   }
   for (const f of scene.floors) {
     const id = f.key.slice(f.key.indexOf(":") + 1);
-    faces.push({ depth: -Infinity, face: { kind: id === room ? "room" : "floor", pts: f.rings[0].map(([x, y]) => screen([x, y, 0])), ...(f.kind ? { room: f.kind } : {}) } });
+    const kind: FaceKind = id !== room ? "floor" : whole ? "lit" : "room";
+    faces.push({ depth: -Infinity, face: { kind, pts: f.rings[0].map(([x, y]) => screen([x, y, 0])), ...(f.kind ? { room: f.kind } : {}) } });
   }
   for (const w of scene.walls) {
     if (w.z[0] >= cut) continue;  // lintels above openings are above the cut
-    const z0 = w.z[0], z1 = Math.min(w.z[1], cut), lit = w.key === wall;
+    const z0 = w.z[0], z1 = Math.min(w.z[1], cut);
+    const lit = w.key === wall || (whole && room !== null && w.key.startsWith(`wall:${room}.`));
     for (const poly of w.polys) {
       const ring = poly[0];
       const ccw = area(ring) > 0;

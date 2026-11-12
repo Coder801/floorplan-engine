@@ -6,7 +6,8 @@ import math
 
 import pytest
 
-from floorplan_engine.drawing.wiring import Bundle, Segment, _m, _readable, _unit, segments
+from floorplan_engine.drawing.wiring import _m, _readable, _unit
+from floorplan_engine.electrical.bundles import Bundle, Segment, segments
 from floorplan_engine.model.geometry import Vec
 
 

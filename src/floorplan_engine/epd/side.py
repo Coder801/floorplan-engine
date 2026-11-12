@@ -15,6 +15,7 @@ from dataclasses import dataclass, field, replace
 from floorplan_engine.drawing.electrical import legend_rows, wiring_legend_rows
 from floorplan_engine.drawing.fields import format_area
 from floorplan_engine.drawing.lighting import lighting_model, switch_rows, switch_table
+from floorplan_engine.drawing.mounting import bends_table, fixings_table
 from floorplan_engine.drawing.panel import ASSUMED, devices_table, panel_notes
 from floorplan_engine.drawing.schedules import (
     estimate_table,
@@ -28,6 +29,8 @@ from floorplan_engine.electrical.estimate import build_estimate
 from floorplan_engine.electrical.estimate import text as estimate_text
 from floorplan_engine.electrical.groups import group_rows
 from floorplan_engine.electrical.groups import text as groups_text
+from floorplan_engine.electrical.mounting import PRACTICE, mounting_notes
+from floorplan_engine.electrical.mounting import text as mounting_text
 from floorplan_engine.electrical.panel import BoardPanel, build_panel, color_of
 from floorplan_engine.electrical.point_numbers import point_rows
 from floorplan_engine.electrical.pricing import Prices, price_notes
@@ -44,9 +47,8 @@ STAGE_OBJECTS: dict[str, frozenset[str]] = {
     "electrical": frozenset({"point", "label", "board", "cable", "led_strip"}),
     "lighting": frozenset({"point", "led_strip"}),
     "wiring": frozenset({"wire", "box", "board"}),
-    "mounting": frozenset({"wire", "box", "board"}),
     "panel": frozenset({"device", "board"}),
-    "elevations": frozenset({"elevation"}),
+    "elevations": frozenset({"elevation", "dim"}),  # walls, ceilings, ceiling scale values
     "plumbing": frozenset({"fixture", "pipe", "riser", "collector", "obstacle"}),
 }
 
@@ -333,8 +335,34 @@ def side_tables(
             groups = group_side_table(plan, elec, wiring, panel, wiring_notes(wiring, lang))
             out["wiring"] = [groups] if groups is not None else []
             out["estimate"] = [estimate_side_table(quantities or wiring, elec, lang, prices, panel)]
+            # The elevations carry the installer notes for the side panel (on a ceiling page)
+            out["elevations"] = mounting_side_tables(elec, wiring, lang)
         if panel is not None:
             out["panel"] = panel_tables(panel, elec, lang)
+    return out
+
+
+def mounting_side_tables(elec: Electrical, wiring: Wiring, language: Language) -> list[SideTable]:
+    """ "Mounting" in the side panel (decision 2026-11-12: on the sheet the text was too small):
+    the installer notes as a list (a table without columns), the fixings by the drawing with the
+    reserve note and the smallest bend radii."""
+    conduit = elec.conduit_level
+    out = [
+        SideTable(
+            mounting_text("title", language),
+            (),
+            (),
+            (),
+            notes=tuple(mounting_notes(elec, language)),
+        )
+    ]
+    fixings = fixings_table(wiring, conduit, language)
+    if fixings is not None:
+        reserve = mounting_text("reserve", language, pct=round(PRACTICE.reserve * 100))
+        out.append(from_table(fixings, notes=[reserve]))
+    bends = bends_table(wiring, language)
+    if bends is not None:
+        out.append(from_table(bends))
     return out
 
 

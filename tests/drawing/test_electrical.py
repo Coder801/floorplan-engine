@@ -384,5 +384,8 @@ def test_all_sheets_share_one_format(tmp_path: Path) -> None:
     )
     doc = _save(build_project_document(plan, contours, elec), tmp_path / "project.dxf")
     sizes = {lay.dxf_layout.dxf.paper_size for lay in sheet_layouts(doc)}
-    # plan, electrical, wiring, panel, points, elevations, mounting
-    assert len(sheet_layouts(doc)) == 7 and len(sizes) == 1
+    # plan, electrical, wiring, panel, points, elevations (the notes, the ceiling and the walls:
+    # on small paper they take a continuation sheet)
+    names = [lay.name for lay in sheet_layouts(doc)]
+    assert len(sizes) == 1 and sum("Развёртки" in n for n in names) >= 1
+    assert names[:5] == [n for n in names if "Развёртки" not in n][:5]

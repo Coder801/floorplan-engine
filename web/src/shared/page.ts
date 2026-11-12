@@ -23,6 +23,9 @@ export function inRings(rings: XY[][], x: number, y: number): boolean {
 // selected there, even on a layer switched on from the plan
 const ELECTRIC_STAGES = new Set(["electrical", "lighting", "wiring"]);
 const BUILDING = new Set(["room", "zone", "wall", "opening", "dimension"]);
+// On the elevations sheet every primitive of a wall is tagged with the wall itself
+// (elevation:<room>.<wall>): under the cursor it would light the whole drawing, so it is a backdrop
+const WALL_DRAWING = "elevation";
 const kindOf = (o: string) => o.slice(0, o.indexOf(":"));
 
 // other holds cards of other sheets of the shared drawing, for objects on a layer switched on
@@ -52,10 +55,12 @@ export class PageIndex {
   readonly floors: Record<string, XY[][]>;
   readonly groupOf = new Map<string, Set<string>>();
   private readonly electric: boolean;
+  private readonly elevations: boolean;
 
   // lines are chains of another sheet, for a sheet that shows its lines (sockets view)
   constructor(page: Page, private readonly other: Record<string, ObjectCard> = {}, lines: Record<string, string[]> = {}) {
     this.electric = ELECTRIC_STAGES.has(page.stage || "");
+    this.elevations = page.stage === "elevations";
     this.objects = page.objects || null;
     this.chains = page.chains || lines;
     this.areas = page.areas || {};
@@ -83,6 +88,7 @@ export class PageIndex {
 
   interactive(o: string | null | undefined): o is string {
     if (!o || (this.electric && BUILDING.has(kindOf(o)))) return false;
+    if (this.elevations && kindOf(o) === WALL_DRAWING) return false;
     return !this.objects || o in this.objects || expand(o).some((k) => k in this.chains) || o in this.other;
   }
 

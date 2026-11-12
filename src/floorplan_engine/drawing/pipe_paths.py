@@ -11,7 +11,8 @@ from dataclasses import replace
 
 from shapely.geometry import Point
 
-from floorplan_engine.drawing.wiring import Segment, clearance, lanes, offset_path, segments
+from floorplan_engine.drawing.wiring import clearance, lanes, offset_path
+from floorplan_engine.electrical.bundles import Segment, segments
 from floorplan_engine.electrical.routing import CLEARANCE
 from floorplan_engine.model.geometry import Vec
 from floorplan_engine.model.scale import sheet

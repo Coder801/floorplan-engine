@@ -68,6 +68,12 @@ describe("what is selected on a sheet", () => {
     expect(index.interactive("wire:w1")).toBe(true);  // a layer of another electrics sheet
   });
 
+  it("elevations: the wall drawing is a backdrop, not selected by the cursor", () => {
+    const index = new PageIndex({ stage: "elevations", objects: { "elevation:a.w1": { title: "", rows: [] } } } as unknown as Page);
+    expect(index.interactive("elevation:a.w1")).toBe(false);
+    expect(index.interactive("point:p")).toBe(false);  // not on this sheet; its own points stay as they are
+  });
+
   it("keeps the building selectable on other sheets", () => {
     expect(onStage("plumbing").interactive("wall:a.w1")).toBe(true);
     expect(onStage("plan").interactive("dimension:a.w1")).toBe(true);

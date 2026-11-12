@@ -22,7 +22,9 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Literal
 
-from floorplan_engine.electrical.wiring_model import Run, Wiring
+from floorplan_engine.electrical.bundles import bundles, segments
+from floorplan_engine.electrical.wiring_model import Route, Run, Wiring
+from floorplan_engine.model.geometry import Vec
 from floorplan_engine.model.schema import Conduit, Electrical
 from floorplan_engine.model.texts import Language
 
@@ -47,6 +49,7 @@ FLAT_CABLE: dict[float, tuple[float, float]] = {
 CONDUIT_BEND: dict[int, float] = {16: 65.0, 20: 80.0, 25: 100.0, 32: 130.0}
 # Practical radius on the conduit axis by the cable inside, mm (studio, 2026-11-11)
 CABLE_IN_CONDUIT_BEND: dict[float, float] = {1.5: 80.0, 2.5: 90.0, 4.0: 100.0, 6.0: 100.0}
+AXIS_TOL_MM = 1.0  # a route piece closer than this to an axis is bundled (bundles.segments)
 PAD = "cable_pad"  # estimate key of a pad for cable without conduit
 CLIP = "conduit_clip"  # estimate key of a conduit clip, conduit_clip.<Ø>
 
@@ -54,12 +57,17 @@ CLIP = "conduit_clip"  # estimate key of a conduit clip, conduit_clip.<Ø>
 @dataclass(frozen=True)
 class MountingNorms:
     key: str
-    steps: Mapping[Surface, float]  # mm: the largest gap between fixings by surface
+    steps: Mapping[Surface, float]  # mm: the largest gap between fixings by surface, bare cable
+    conduit_steps: Mapping[Surface, float]  # mm: the same for conduit
     offset: float  # mm: from a bend, box, flush box or the panel to the nearest fixing
     bend_factor: float  # smallest flat cable bend radius, in cable widths (bent lying flat)
     bend_reserve: int  # free lanes left inside a bundle turn for cables added later
     reserve: float  # fixings lost to misfires and bent nails, share
     source: Mapping[Language, str]  # where the values come from, for the sheet
+
+    def step(self, surface: Surface, in_conduit: bool) -> float:
+        """The largest gap between fixings on this surface, in conduit or bare."""
+        return (self.conduit_steps if in_conduit else self.steps)[surface]
 
 
 # Studio practice (answers 2026-11-11): the overhead step is shorter, the conduit and the cable
@@ -67,6 +75,8 @@ class MountingNorms:
 PRACTICE = MountingNorms(
     key="practice",
     steps={"ceiling": 300.0, "wall": 500.0, "floor": 500.0},
+    # Conduit is stiffer: the studio fixes it every 450 mm overhead, 550 mm on a wall (2026-11-12)
+    conduit_steps={"ceiling": 450.0, "wall": 550.0, "floor": 500.0},
     offset=50.0,
     bend_factor=10.0,
     bend_reserve=2,
@@ -211,27 +221,88 @@ def run_fixings(
     for i, (a, b) in enumerate(itertools.pairwise(run.path)):
         length = (b - a).length()
         out += [
-            Fixing(plane, plan_in, i, d) for d in spots(length, norms.steps[plane], norms.offset)
+            Fixing(plane, plan_in, i, d)
+            for d in spots(length, norms.step(plane, plan_in), norms.offset)
         ]
     for wall_in, surface, mm, paired in rises:
         out += [
             Fixing(surface, wall_in, None, d, paired and wall_in)
-            for d in spots(mm, norms.steps[surface], norms.offset)
+            for d in spots(mm, norms.step(surface, wall_in), norms.offset)
         ]
+    return out
+
+
+@dataclass(frozen=True)
+class PlanFixing:
+    """A fixing spot on the ceiling or the floor (decision 2026-11-12): one line across the
+    bundle — the conduit clips of the cables snap together by their groove, the pads stand side
+    by side — so a bundle is fixed at one spot with one clip or pad per line. at is the spot on
+    the bundle axis, along the line direction; runs are the line ids held there. A slanted piece
+    (routing.any_angle) is not bundled: one line, axis None."""
+
+    route: Route
+    at: Vec
+    along: Vec
+    runs: tuple[str, ...]
+    axis: str | None = None  # "h" / "v": the bundle line; fixed is its coordinate across
+    fixed: float = 0.0
+    first: bool = True  # the first spot of its bundle piece: the number of fixings is signed here
+
+
+def plan_fixings(
+    wiring: Wiring, conduit: Conduit, norms: MountingNorms = PRACTICE
+) -> list[PlanFixing]:
+    """Fixing spots of the plan routes: along each bundle piece (a piece of a line where the set
+    of cables does not change, electrical/bundles.bundles) `offset` from its ends and evenly
+    between, no farther apart than the step of the surface (in conduit or bare: on the floor
+    always in conduit, on the ceiling as chosen); the same along a slanted piece."""
+    out: list[PlanFixing] = []
+    for route in ("ceiling", "floor"):
+        idx = [k for k, r in enumerate(wiring.runs) if r.route == route]
+        surface: Surface = "floor" if route == "floor" else "ceiling"
+        step = norms.step(surface, route == "floor" or conduit in ("ceiling", "walls"))
+        for b in bundles(segments([wiring.runs[k].path for k in idx]), {}):
+            ids = tuple(wiring.runs[idx[j]].id for j in b.runs)
+            along = Vec(1.0, 0.0) if b.axis == "h" else Vec(0.0, 1.0)
+            for n, t in enumerate(spots(b.length, step, norms.offset)):
+                pos = b.lo + t
+                at = Vec(pos, b.fixed) if b.axis == "h" else Vec(b.fixed, pos)
+                out.append(PlanFixing(route, at, along, ids, b.axis, b.fixed, n == 0))
+        for k in idx:
+            r = wiring.runs[k]
+            for a, c in itertools.pairwise(r.path):
+                d = c - a
+                if abs(d.x) <= AXIS_TOL_MM or abs(d.y) <= AXIS_TOL_MM:
+                    continue  # along an axis: in a bundle (or a zero piece)
+                length = d.length()
+                u = d * (1 / length)
+                out += [
+                    PlanFixing(route, a + u * t, u, (r.id,))
+                    for t in spots(length, step, norms.offset)
+                ]
     return out
 
 
 def fixing_counts(
     wiring: Wiring, conduit: Conduit, norms: MountingNorms = PRACTICE
 ) -> Counter[tuple[str, Surface]]:
-    """Fixings by (estimate item, surface), as drawn, without the reserve; a chain pair in one
-    conduit by its clips of pair_diameter."""
+    """Fixings by (estimate item, surface), as drawn, without the reserve: on the plan routes a
+    clip or a pad per line at each bundle spot (plan_fixings), on the rises along each rise; a
+    chain pair in one conduit by its clips of pair_diameter."""
     count: Counter[tuple[str, Surface]] = Counter()
+    runs = {r.id: r for r in wiring.runs}
+    for spot in plan_fixings(wiring, conduit, norms):
+        for rid in spot.runs:
+            r = runs[rid]
+            plan_in, surface, _ = fixing_spans(r, conduit)[0]
+            count[(fixing_key(r, plan_in), surface)] += 1
     pairs = shared_pairs(wiring)
     for r in wiring.runs:
         out = pairs.get(r.id)
         inside = r.id in wiring.shared_rises
         for f in run_fixings(r, conduit, norms, inside=inside, pair=out is not None):
+            if f.piece is not None:
+                continue  # the plan part: by bundle spots above
             key = f"{CLIP}.{pair_diameter(r.mark, out.mark)}" if f.pair and out else None
             count[(key or fixing_key(r, f.in_conduit), f.surface)] += 1
     return count
@@ -255,8 +326,10 @@ TEXT: dict[str, dict[str, str]] = {
         "гофри — площадкою з дюбель-цвяхом і стяжкою.",
     },
     "steps": {
-        "ru": "Шаг креплений — не больше: по потолку {c} мм, по стене {w} мм, по полу {f} мм.",
-        "uk": "Крок кріплень — не більше: по стелі {c} мм, по стіні {w} мм, по підлозі {f} мм.",
+        "ru": "Шаг креплений — не больше, мм: кабель без гофры — по потолку {c}, по стене {w}; "
+        "гофра — по потолку {cc}, по стене {cw}, по полу {f}.",
+        "uk": "Крок кріплень — не більше, мм: кабель без гофри — по стелі {c}, по стіні {w}; "
+        "гофра — по стелі {cc}, по стіні {cw}, по підлозі {f}.",
     },
     "offset": {
         "ru": "Ближайшее крепление — {o} мм от поворота, распаечной коробки, подрозетника и щита.",
@@ -272,10 +345,10 @@ TEXT: dict[str, dict[str, str]] = {
     "bundle": {
         "ru": "Поворот косы: внутренний кабель — опорный, от его наименьшего радиуса оставить "
         "место под {n} кабеля, каждый следующий наружу — дальше на свою ширину (гофра — на свой "
-        "диаметр). У поворота косы на плане — радиусы внутреннего и внешнего кабеля, «R130–160».",
+        "диаметр). У поворота косы на виде — радиусы внутреннего и внешнего кабеля, «R130–160».",
         "uk": "Поворот коси: внутрішній кабель — опорний, від його найменшого радіуса залишити "
         "місце під {n} кабелі, кожен наступний назовні — далі на свою ширину (гофра — на свій "
-        "діаметр). Біля повороту коси на плані — радіуси внутрішнього і зовнішнього кабелю, "
+        "діаметр). Біля повороту коси на вигляді — радіуси внутрішнього і зовнішнього кабелю, "
         "«R130–160».",
     },
     "bends": {"ru": "Наименьший радиус изгиба, мм", "uk": "Найменший радіус вигину, мм"},
@@ -295,11 +368,33 @@ TEXT: dict[str, dict[str, str]] = {
         "ru": "Гофра — на всей трассе: по потолку, в спусках по стенам и по полу.",
         "uk": "Гофра — на всій трасі: по стелі, у спусках по стінах і по підлозі.",
     },
+    "one_line": {
+        "ru": "Крепления косы — в одну линию: клипсы гофры соединяются пазом, площадки кабеля "
+        "без гофры ставятся рядом; на одном месте — по креплению на каждый кабель.",
+        "uk": "Кріплення коси — в одну лінію: кліпси гофри з'єднуються пазом, площадки кабелю "
+        "без гофри ставляться поруч; на одному місці — по кріпленню на кожен кабель.",
+    },
     "sheet": {
-        "ru": "На плане штрих поперёк линии — место крепления по потолку (по полу); крепления "
-        "на спусках по стенам — на развёртках.",
-        "uk": "На плані штрих поперек лінії — місце кріплення по стелі (по підлозі); кріплення "
-        "на спусках по стінах — на розгортках.",
+        "ru": "На развёртке: линия поперёк косы — место крепления, на потолке и на спусках по "
+        "стенам, рядом — сколько креплений в линию, «×5»; у конца линии на потолке кружок с "
+        "точкой — спуск по стене, кружок с крестом — точка на потолке.",
+        "uk": "На розгортці: лінія поперек коси — місце кріплення, на стелі й на спусках по "
+        "стінах, поруч — скільки кріплень у лінію, «×5»; біля кінця лінії на стелі кружечок із "
+        "крапкою — спуск по стіні, кружечок із хрестиком — точка на стелі.",
+    },
+    "view_title": {
+        "ru": "{room} — {plane}, {w} × {h} мм, М 1:{scale}",
+        "uk": "{room} — {plane}, {w} × {h} мм, М 1:{scale}",
+    },
+    "plane_ceiling": {"ru": "потолок", "uk": "стеля"},
+    "plane_floor": {"ru": "пол (в стяжке)", "uk": "підлога (у стяжці)"},
+    "view_side": {
+        "ru": "вид сверху · размеры от стен {left} (слева) и {bottom} (снизу)",
+        "uk": "вигляд згори · розміри від стін {left} (ліворуч) і {bottom} (знизу)",
+    },
+    "view_side_corner": {
+        "ru": "вид сверху · размеры от крайних точек помещения",
+        "uk": "вигляд згори · розміри від крайніх точок приміщення",
     },
     "source": {"ru": "Значения: {s}.", "uk": "Значення: {s}."},
     "table": {"ru": "Крепления по чертежу", "uk": "Кріплення за кресленням"},
@@ -325,10 +420,19 @@ def mounting_notes(
     elec: Electrical, language: Language, norms: MountingNorms = PRACTICE
 ) -> list[str]:
     """Installer notes for this project: how to fix, steps, offsets, bends, where conduit goes."""
-    s = norms.steps
+    s, g = norms.steps, norms.conduit_steps
     return [
         text("gun", language),
-        text("steps", language, c=f"{s['ceiling']:g}", w=f"{s['wall']:g}", f=f"{s['floor']:g}"),
+        text("one_line", language),
+        text(
+            "steps",
+            language,
+            c=f"{s['ceiling']:g}",
+            w=f"{s['wall']:g}",
+            cc=f"{g['ceiling']:g}",
+            cw=f"{g['wall']:g}",
+            f=f"{g['floor']:g}",
+        ),
         text("offset", language, o=f"{norms.offset:g}"),
         text("bend", language, k=f"{norms.bend_factor:g}"),
         text("bundle", language, n=norms.bend_reserve),

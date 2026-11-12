@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Item, Page } from "@/shared/types";
-import { splitTitle, wallPages, wallRooms, wallSheet } from "./walls";
+import { isPlane, ownerOf, splitTitle, wallPages, wallRooms, wallSheet } from "./walls";
 
 const item = (o: string | undefined, d: string): Item => ({ k: "s", c: "#000000", l: "E-ELEV", o, d });
 const page = (items: Item[], objects: Page["objects"] = {}): Page =>
@@ -52,5 +52,27 @@ describe("wallRooms", () => {
       { room: "Ванная", items: [{ index: 2, wall: "стена 1" }] },
       { room: "Кухня", items: [{ index: 3, wall: "стена 3" }] },
     ]);
+  });
+});
+
+describe("ceiling pages", () => {
+  it("a scale value belongs to its ceiling page", () => {
+    expect(ownerOf("dim:bath.ceiling.x1450")).toBe("elevation:bath.ceiling");
+    expect(ownerOf("elevation:bath.w3")).toBe("elevation:bath.w3");
+    expect(ownerOf("wire:wire_1")).toBeNull();
+    expect(isPlane("elevation:bath.ceiling") && isPlane("elevation:bath.floor")).toBe(true);
+    expect(isPlane("elevation:bath.w3")).toBe(false);
+  });
+  it("the ceiling page takes its scale values into its box and drawing", () => {
+    const items = [
+      { k: "s", d: "M0 0L10 10", o: "elevation:bath.ceiling" },
+      { k: "s", d: "M0 20L10 30", o: "dim:bath.ceiling.x1450" },
+      { k: "s", d: "M50 50L60 60", o: "elevation:bath.w1" },
+    ] as unknown as Item[];
+    const page = { items } as unknown as Page;
+    const [ceiling] = wallPages([{ index: 7, page }]);
+    expect(ceiling.key).toBe("elevation:bath.ceiling");
+    expect(ceiling.box[3]).toBeGreaterThanOrEqual(30);  // the scale is inside the page box
+    expect(wallSheet(page, ceiling).items.map((it) => it.o)).toEqual(["elevation:bath.ceiling", "dim:bath.ceiling.x1450"]);
   });
 });
