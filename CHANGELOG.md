@@ -1,3 +1,26 @@
+## v0.5.0 (2026-11-12)
+
+### Feat
+
+- **service,db,viewer**: add the Tasks tab, acceptance ticks and acting for the client
+- **electrical,drawing,viewer**: show room ceilings on elevations, drop mounting sheet
+- **electrical,viewer**: assume group cables on the panel, stack switches
+- **service,db**: add installation by tasks with plans, photos and payments
+- **electrical,plumbing**: draft installation tasks from the estimates
+- **viewer**: layer electrical views by system, light links in 3D, socket stacks
+- **electrical,drawing**: add mounting sheet, light chains, LED supply and wall names
+- **service**: ask for a PDF instead of reading DWG and DXF sources
+- **viewer**: overview progress, zone floors, backup peak, splash and wall grid
+- **core,service,db**: client questions with studio review, client access code
+- **core**: room zones as plan floors, low-voltage cabinet, wiring neighbours
+- **electrical**: size the backup bus by design peak, not installed sum
+- **drawing**: draw switch-to-light links at right angles
+
+### Fix
+
+- **viewer**: accept the shown group set on Next in the wizard
+- **electrical**: narrow chase holds only one conduit
+
 ## v0.4.3 (2026-11-10)
 
 ### Fix
