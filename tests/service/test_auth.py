@@ -74,6 +74,7 @@ def test_closed_without_login_and_open_auth_routes(auth: Auth, root: Path) -> No
         "telegram": False,
         "dev": False,
         "visitor_allowed": True,
+        "feedback": False,  # product feedback: only with projects in the database
     }
     assert client.get("/api/auth/google/login").status_code == 503  # no Google keys
 

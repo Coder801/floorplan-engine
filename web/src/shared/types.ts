@@ -480,11 +480,13 @@ export interface ElevWall {
   key: string;            // elevation:<room>.<wall>
   length: number;
   openings: { kind: string; x0: number; x1: number; y0: number; y1: number; assumed: boolean; hinge?: "start" | "end" }[];
-  chases: { x: number; y0: number; y1: number; wide: boolean; low: boolean }[];
+  // x1: a horizontal piece at height y0 from x to x1 — the turn past an opening (older .epd: none)
+  chases: { x: number; y0: number; y1: number; wide: boolean; low: boolean; x1?: number }[];
   // Fixings on the cable drops (older .epd: none); n is how many clips or pads stand there in one line
   fixings?: { x: number; y: number; n?: number }[];
   // Cables along the wall from the ceiling (floor) to their point (older .epd: none), line key wire:<id>
-  cables?: { key: string; x: number; y0: number; y1: number; color: string | null }[];
+  // x1: the turn past an opening, horizontal at height y0 from the drop at x to the point at x1
+  cables?: { key: string; x: number; y0: number; y1: number; x1?: number; color: string | null }[];
   boxes: ElevBox[];
   points: ElevPoint[];
   board?: { key: string; name: string; x: number; y: number; width: number; height: number };
@@ -650,4 +652,26 @@ export interface WorkState {
   model_version: number | null;   // the latest model version of the project
   assignees: WorkPerson[];        // only for work_manage
   can: WorkCan;
+}
+
+// --- Product feedback (POST /api/feedback, decision 2026-11-12) ----------------------------------
+// About the service itself, not about a work task. Sent as multipart; the context is a JSON string
+
+export type FeedbackKind = "bug" | "idea" | "other";
+
+// Where the user was when writing: attached by the page itself, not typed
+export interface FeedbackContext {
+  sheet: string | null;   // the open tab: a sheet name, "overview", "estimate", "work", a wall
+  path: string;           // the address after the host: /#kv42
+  version: string;        // the product version and build (shared/version.ts)
+  viewport: string;       // "1440×900@2"
+  user_agent: string;
+}
+
+export interface FeedbackBody {
+  kind: FeedbackKind;
+  text: string;
+  context: FeedbackContext;
+  project?: string | null;  // the project key, if a project is open
+  photos?: File[];          // screenshots, up to FEEDBACK_PHOTOS
 }

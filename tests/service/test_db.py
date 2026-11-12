@@ -26,6 +26,7 @@ def test_schema_has_all_tables() -> None:
         "price_list", "usage", "oauth_account", "user_session", "project_member", "invite",
         "support_grant", "audit_event", "email_code", "login_ticket", "access_code",
         "work_plan", "work_task", "work_line", "work_photo", "work_comment", "work_payment",
+        "feedback",
     }  # fmt: skip
     assert set(Base.metadata.tables) == expected
 

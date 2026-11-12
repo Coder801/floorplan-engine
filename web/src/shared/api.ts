@@ -3,7 +3,7 @@
 import i18n from "@/shared/i18n";
 import type { Answer } from "./questions";
 import type {
-  Manifest, Page, PricePage, Project, ProjectSummary, WorkDomain, WorkOnBehalf, WorkPhotoRule, WorkState, WorkStatus,
+  FeedbackBody, Manifest, Page, PricePage, Project, ProjectSummary, WorkDomain, WorkOnBehalf, WorkPhotoRule, WorkState, WorkStatus,
 } from "./types";
 import { FORMAT_VERSION } from "./version";
 
@@ -177,4 +177,27 @@ export function uploadWorkPhoto(key: string, task: string, file: File, caption =
   form.append("file", file);
   if (caption) form.append("caption", caption);
   return workCall(`${work(key)}/tasks/${id(task)}/photos`, { method: "POST", body: form });
+}
+
+// --- Product feedback (docs/service-api.md, POST /api/feedback) ---------------------------------
+// About the service itself (a bug, an idea): multipart with the context as a JSON string and up to
+// three screenshots. 401 — not signed in, 429 — too often (the server text, in Russian, is shown)
+
+export class FeedbackError extends Error {
+  constructor(readonly status: number, message: string) { super(message); }
+}
+
+export async function sendFeedback(body: FeedbackBody): Promise<{ id: string }> {
+  const form = new FormData();
+  form.append("kind", body.kind);
+  form.append("text", body.text);
+  form.append("context", JSON.stringify(body.context));
+  if (body.project) form.append("project", body.project);
+  for (const photo of body.photos ?? []) form.append("photos", photo);
+  const r = await fetch("/api/feedback", { method: "POST", body: form });
+  if (!r.ok) {
+    const d: unknown = await detail(r);  // a 422 list is not a sentence: the status text instead
+    throw new FeedbackError(r.status, typeof d === "string" && d ? d : r.statusText);
+  }
+  return (await r.json()) as { id: string };
 }

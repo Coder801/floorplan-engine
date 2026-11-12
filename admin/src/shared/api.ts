@@ -1,7 +1,7 @@
 // Requests to the admin API /api/admin/* (service/api/admin.py). A broken access rule comes back
 // as 409 with a Russian reason: it is thrown as ApiError and shown next to the action.
 import type {
-  EventRow, Me, ProjectDetail, ProjectRow, StudioDetail, StudioRow, Summary, UserDetail, UserRow,
+  EventRow, FeedbackItem, FeedbackPage, FeedbackStatus, Me, ProjectDetail, ProjectRow, StudioDetail, StudioRow, Summary, UserDetail, UserRow,
 } from "./types";
 
 export class ApiError extends Error {
@@ -73,3 +73,15 @@ export const events = (filter: { project?: string; user?: string; limit?: number
   p.set("limit", String(filter.limit ?? 200));
   return call<EventRow[]>("GET", `${A}/events?${p}`);
 };
+
+// Product feedback: a filter by status and kind, a search over the text and the author, a page
+export interface FeedbackFilter { status?: string; kind?: string; q?: string; offset?: number; limit?: number }
+export const feedback = (filter: FeedbackFilter = {}) => {
+  const p = new URLSearchParams();
+  for (const k of ["status", "kind", "q"] as const) if (filter[k]) p.set(k, filter[k]);
+  p.set("offset", String(filter.offset ?? 0));
+  p.set("limit", String(filter.limit ?? 50));
+  return call<FeedbackPage>("GET", `${A}/feedback?${p}`);
+};
+export const updateFeedback = (id: string, change: { status?: FeedbackStatus; admin_note?: string }) =>
+  call<FeedbackItem>("PATCH", `${A}/feedback/${q(id)}`, change);

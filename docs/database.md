@@ -361,6 +361,39 @@ erDiagram
 `work_comment.on_behalf`/`on_behalf_note`. Удаление проекта (`project_store.delete_project`)
 снимает его строки каскадом и все файлы под `projects/<id>/`, фото задач тоже.
 
+### Отзывы о сервисе (решение 2026-11-12, миграция `0015`)
+
+«Оставить отзыв» в просмотре: человек пишет о самом сервисе — ошибка, идея, другое; читает
+владелец платформы в админке. Это не отзыв о задаче монтажа. Правила — `service/db/feedback.py`,
+API — `docs/service-api.md`, раздел «Отзывы о сервисе».
+
+```mermaid
+erDiagram
+  APP_USER ||--o{ FEEDBACK : "автор"
+  ACCESS_CODE ||--o{ FEEDBACK : "автор без учётки"
+  PROJECT ||--o{ FEEDBACK : "о каком проекте"
+  FEEDBACK {
+    uuid id PK
+    timestamp created_at
+    uuid user_id FK "SET NULL; у кода доступа пусто"
+    uuid access_code_id FK "SET NULL; вход по коду"
+    string author_label "имя или «код: подпись» — остаётся, когда строки автора нет"
+    uuid project_id FK "SET NULL; пусто — без проекта"
+    string kind "bug | idea | other"
+    text text "1…4000 знаков, без пробелов по краям"
+    jsonb context "лист, путь страницы, версия, окно, браузер — обрезано"
+    string status "new | seen | done"
+    text admin_note "заметка владельца платформы"
+    jsonb photos "[{id, key, content_type, size, file_name}], до 3"
+  }
+```
+
+Фото — в хранилище под `feedback/<отзыв>/<фото>.<ext>` (`objects.feedback_photo_key`), не под
+проектом: удаление проекта отзыв и фото не трогает, у отзыва остаётся `project_id = NULL`.
+Частота — не больше 10 отзывов в час от одного пользователя или кода (`RATE_LIMIT`, по строкам
+таблицы, поэтому общая для всех процессов). Отметки и заметки админки — в журнал
+(`feedback_update`, автор — админ).
+
 ### Доступ (решения пользователя 2026-10-28, схема — черновик)
 
 | Кто | Как задан | Видит | Может |
@@ -480,6 +513,7 @@ erDiagram
 | `service/db/telegram_login.py`, `service/api/telegram.py` | Вход через Telegram: билеты (`issue_ticket`, `bind_chat`, `confirm_phone`, `claim_ticket`, номер — `normalize_phone`); бот — клиент Bot API, разбор обновлений (`handle_update`), вебхук или опрос |
 | `service/db/admin.py`, `service/api/admin.py` | Админка платформы: виды (студии, пользователи, проекты, журнал) и изменения (участники, роли, приглашения, коды, поддержка, блокировка) по правилам `access.py`; API `/api/admin/*` — только действующий суперпользователь (иначе 403), нарушение правила — 409 с причиной |
 | `service/api/mail.py` | Письмо с кодом на языке страницы: SMTP или лог (локально) |
+| `service/db/feedback.py`, `service/api/feedback.py` | Отзывы о сервисе: создание (`create`: вид, текст, контекст `clean_context`, фото, частота `check_rate`), список для админки с фильтрами и счётчиками (`listing`), отметка и заметка (`update`, в журнал); маршруты `POST /api/feedback` и `/api/admin/feedback…`, только в режиме базы; письмо о новом отзыве на `FEEDBACK_NOTIFY_EMAIL` |
 | `service/api/auth.py` | Веб: настройки из окружения (`AuthConfig.from_env`), Google через Authlib, код на почту (`/api/auth/email/start`, `/verify`), код доступа (`/api/auth/code`, подбор — `CodeLimiter`), маршруты `/api/auth/*` и `/api/invites/*`, проверка доступа к `/api/projects/{имя}/…` (нет входа — 401, чужой проект — 404, нет права — 403) |
 | `web/src/pages/Gate`, `widgets/TelegramLogin`, `widgets/EmailLogin`, `widgets/CodeLogin`, `shared/auth.ts` | Экран входа (Telegram, Google, код на почту, код доступа к проекту), выбор «кто вы», принятие приглашения, «Выйти» |
 

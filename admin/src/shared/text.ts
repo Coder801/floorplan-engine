@@ -3,7 +3,7 @@
 import type { Section } from "./route";
 
 export const SECTION: Record<Section, string> = {
-  summary: "Сводка", studios: "Студии", users: "Люди", projects: "Проекты", events: "Журнал",
+  summary: "Сводка", studios: "Студии", users: "Люди", projects: "Проекты", feedback: "Отзывы", events: "Журнал",
 };
 
 export const ROLE: Record<string, string> = {
@@ -40,3 +40,7 @@ export const ACTION: Record<string, string> = {
 
 export const word = (dict: Record<string, string>, key: string | null | undefined) =>
   key == null ? "—" : dict[key] ?? key;
+
+// Product feedback: kinds and statuses
+export const FEEDBACK_KIND: Record<string, string> = { bug: "ошибка", idea: "идея", other: "другое" };
+export const FEEDBACK_STATUS: Record<string, string> = { new: "новый", seen: "просмотрен", done: "сделано" };

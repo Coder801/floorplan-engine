@@ -28,3 +28,10 @@
   justify-self: stretch; margin-top: 4px; font-weight: 600;
   background: var(--accent); color: var(--accent-text); border-color: var(--accent);
 }
+// "Leave feedback" in the feedback point: a link in the text, not a second big button
+.write {
+  @include bare-button;
+  display: inline; min-height: 0; padding: 0; border-radius: 0;
+  color: var(--hl); text-decoration: underline; text-underline-offset: 2px; font: inherit; cursor: pointer;
+  &:hover { background: none; }
+}

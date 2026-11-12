@@ -32,6 +32,7 @@ from floorplan_engine.service.db.models import (
     AccessCode,
     AppUser,
     AuditEvent,
+    Feedback,
     Invite,
     Membership,
     OAuthAccount,
@@ -124,6 +125,7 @@ def summary(session: Session) -> dict[str, int]:
         "users": count(AppUser),
         "projects": count(Project),
         "sessions": count(UserSession, UserSession.expires_at > now()),
+        "feedback_new": count(Feedback, Feedback.status == "new"),  # db/feedback.py
     }
 
 

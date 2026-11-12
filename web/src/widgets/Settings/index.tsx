@@ -1,5 +1,6 @@
 // Settings, a gear in the header (and on the welcome screen): account (who is logged in, "Log
-// out"), plan (account type), "Studio settings" (pages/Studio, studio only), interface mode (simple or engineering, shared/mode.ts; what each shows is a tooltip on its button, ui/Tooltip), theme and interface language (i18n: Ukrainian, Russian, English; the choice is remembered);
+// out"), plan (account type), "Studio settings" (pages/Studio, studio only), "Leave feedback"
+// (widgets/Feedback, when the server takes it), interface mode (simple or engineering, shared/mode.ts; what each shows is a tooltip on its button, ui/Tooltip), theme and interface language (i18n: Ukrainian, Russian, English; the choice is remembered);
 // at the bottom the product version and stage with the build number (shared/version.ts)
 
 import { useTranslation } from "react-i18next";
@@ -24,6 +25,7 @@ export interface Account {
   firm?: Space | null;    // the firm's profile for the studio settings (kind "studio" only)
   visitor: boolean;
   code?: boolean;         // logged in by a project access code (no account)
+  feedback?: boolean;     // the server takes product feedback (Me.feedback): "Leave feedback"
   logout: () => void;
 }
 
@@ -35,9 +37,10 @@ interface Props {
   mode: UiMode;
   onMode: (m: UiMode) => void;
   onStudio?: () => void;  // open the studio settings (studio only; no button otherwise)
+  onFeedback?: () => void;  // open "Leave feedback" (widgets/Feedback; no button without it)
 }
 
-export function Settings({ account, theme, onTheme, mode, onMode, onStudio }: Props) {
+export function Settings({ account, theme, onTheme, mode, onMode, onStudio, onFeedback }: Props) {
   const { open, closing, setOpen, toggle, ref } = usePopover<HTMLDivElement>();
   const { t } = useTranslation();
   const modeTip = useTooltip();
@@ -71,6 +74,14 @@ export function Settings({ account, theme, onTheme, mode, onMode, onStudio }: Pr
               <button className={css.studio} onClick={() => { setOpen(false); onStudio(); }}>
                 <span>{t("settings.studio")}</span>
                 <span className="small muted">{t("settings.studioNote")}</span>
+              </button>
+            </section>
+          )}
+          {onFeedback && (
+            <section>
+              <button className={css.studio} onClick={() => { setOpen(false); onFeedback(); }}>
+                <span>{t("settings.feedback")}</span>
+                <span className="small muted">{t("settings.feedbackNote")}</span>
               </button>
             </section>
           )}

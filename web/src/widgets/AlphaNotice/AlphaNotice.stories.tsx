@@ -18,6 +18,9 @@ type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {};
 
+// The server takes product feedback: the feedback point links to the form
+export const WithFeedback: Story = { args: { onFeedback: () => {} } };
+
 export const Dark: Story = { globals: { theme: "dark" } };
 
 export const Ukrainian: Story = { globals: { lang: "uk" } };

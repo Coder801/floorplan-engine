@@ -141,6 +141,7 @@ class Principal:
     code_project: uuid.UUID | None = None
     code_role: CodeRole = "viewer"  # what the code allows (access_codes.issue_code)
     code_label: str = ""  # whom the code was given to: the author of answers made with it
+    code_id: uuid.UUID | None = None  # the code row: the author of product feedback
 
     @property
     def visitor(self) -> bool:

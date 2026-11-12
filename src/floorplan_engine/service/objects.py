@@ -6,7 +6,8 @@ R2/S3 will be a second one behind the same protocol.
 Keys are slash-separated paths of safe segments: `projects/<project id>/sources/<sha256>/plan.pdf`,
 `projects/<project id>/builds/<build id>/project.epd`, task photos
 `projects/<project id>/work/<task id>/<photo id>.jpg` (source_key, build_key, work_photo_key).
-Everything of a project is under `projects/<project id>/` (project_prefix).
+Everything of a project is under `projects/<project id>/` (project_prefix). Product feedback
+photos are not a project's: `feedback/<feedback id>/<photo id>.png` (feedback_photo_key).
 """
 
 from __future__ import annotations
@@ -63,6 +64,11 @@ def work_prefix(project_id: uuid.UUID) -> str:
 def work_photo_key(project_id: uuid.UUID, task_id: uuid.UUID, photo_id: uuid.UUID, ext: str) -> str:
     """A task photo or PDF (docs/work-tasks.md, "Фото"); ext without the dot: jpg, pdf."""
     return check_key(f"{work_prefix(project_id)}/{task_id}/{photo_id}.{ext}")
+
+
+def feedback_photo_key(feedback_id: uuid.UUID, photo_id: uuid.UUID, ext: str) -> str:
+    """A photo of product feedback (db/feedback.py); ext without the dot: jpg, png, webp."""
+    return check_key(f"feedback/{feedback_id}/{photo_id}.{ext}")
 
 
 class ObjectStore(Protocol):

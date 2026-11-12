@@ -8,6 +8,7 @@ import { SECTIONS, href, useRoute } from "@/shared/route";
 import { SECTION } from "@/shared/text";
 import { css, cx, useLoad } from "@/components/ui";
 import { Events } from "@/pages/Events";
+import { Feedback } from "@/pages/Feedback";
 import { ProjectList, ProjectView } from "@/pages/Projects";
 import { StudioList, StudioView } from "@/pages/Studios";
 import { Summary } from "@/pages/Summary";
@@ -38,13 +39,18 @@ function Admin({ me, name }: { me: string; name: string }) {
   // A change in a detail refreshes the counts of its list
   const [version, setVersion] = useState(0);
   const changed = useCallback(() => setVersion((v) => v + 1), []);
-  const wide = route.section === "summary" || route.section === "events";
+  const wide = route.section === "summary" || route.section === "events" || route.section === "feedback";
+  // New feedback is counted next to its section
+  const fresh = useLoad(() => api.feedback({ status: "new", limit: 1 }), [version]);
+  const unread = fresh.data?.counts.new ?? 0;
   return (
     <div className={cx(css.shell, wide && css.wide, route.id && css.hasDetail)}>
       <nav className={css.nav}>
         <div className={css.brand}>Shtroba<span className={css.brandSub}>admin</span></div>
         {SECTIONS.map((s) => (
-          <a key={s} href={href(s)} className={cx(css.navItem, route.section === s && css.on)}>{SECTION[s]}</a>
+          <a key={s} href={href(s)} className={cx(css.navItem, route.section === s && css.on)}>
+            {SECTION[s]}{s === "feedback" && unread > 0 && <span className={css.badge}>{unread}</span>}
+          </a>
         ))}
         <div className={css.navFoot}><span>{name}</span><a className={css.link} href="/">Просмотр ↗</a></div>
       </nav>
@@ -58,6 +64,7 @@ function Admin({ me, name }: { me: string; name: string }) {
       <main className={css.detail}>
         {route.section === "summary" && <Summary />}
         {route.section === "events" && <Events params={route.params} />}
+        {route.section === "feedback" && <Feedback onChanged={changed} />}
         {!wide && !route.id && <div className={css.empty}>Выберите запись в списке</div>}
         {route.section === "studios" && route.id && <StudioView key={route.id} id={route.id} onChanged={changed} />}
         {route.section === "users" && route.id && <UserView key={route.id} id={route.id} me={me} onChanged={changed} />}

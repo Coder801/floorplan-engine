@@ -36,6 +36,7 @@ export interface Me {
   telegram?: boolean;       // Telegram bot for phone login is configured
   dev?: boolean;            // "Log in for development" (locally, SHTROBA_DEV_LOGIN)
   visitor_allowed?: boolean;
+  feedback?: boolean;       // "Leave feedback" is open (POST /api/feedback); never in the folder viewer
 }
 
 export interface Invite { role: string; project: string | null }

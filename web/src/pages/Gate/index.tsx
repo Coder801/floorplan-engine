@@ -78,6 +78,7 @@ export function Gate({ children }: { children: (account: Account | null) => Reac
     firm: me.user?.space?.kind === "studio" ? me.user.space : null,
     visitor: !me.user && !!me.visitor,
     code: !me.user && !!me.code,
+    feedback: !!me.feedback,
     logout: () => run(async () => { await logout(); cleanUrl(); }),
   };
 

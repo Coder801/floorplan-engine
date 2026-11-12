@@ -47,7 +47,8 @@ def test_only_superuser_gets_in(auth: Auth, tmp_path: Path) -> None:
     user = _login(auth, "user")
     assert _client(auth, tmp_path, user).get("/api/admin/studios").status_code == 403
     boss = _client(auth, tmp_path, _login(auth, "boss"))
-    assert boss.get("/api/admin/summary").json()["users"] == 2
+    summary = boss.get("/api/admin/summary").json()
+    assert summary["users"] == 2 and summary["feedback_new"] == 0  # db/feedback.py
     assert boss.get("/api/admin/studios/not-an-id").status_code == 404
 
 

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ApiError, addStudioMember, events, me, setActive, users } from "./api";
+import { ApiError, addStudioMember, events, feedback, me, setActive, updateFeedback, users } from "./api";
 
 const fetched = vi.fn<typeof fetch>();
 
@@ -51,5 +51,19 @@ describe("api", () => {
     await expect(me()).rejects.toThrow('[{"loc":["body"]}]');
     answer(502, undefined, "Bad Gateway");
     await expect(me()).rejects.toMatchObject({ status: 502, message: "Bad Gateway" });
+  });
+  it("builds the feedback filter without empty fields and sends a change", async () => {
+    answer(200, { items: [], total: 0, counts: { new: 0, seen: 0, done: 0 } });
+    await feedback();
+    expect(fetched.mock.calls[0][0]).toBe("/api/admin/feedback?offset=0&limit=50");
+    answer(200, { items: [], total: 0, counts: { new: 0, seen: 0, done: 0 } });
+    await feedback({ status: "new", kind: "", q: "не жмёт", offset: 50, limit: 25 });
+    expect(fetched.mock.calls[1][0]).toBe("/api/admin/feedback?status=new&q=%D0%BD%D0%B5+%D0%B6%D0%BC%D1%91%D1%82&offset=50&limit=25");
+    answer(200, {});
+    await updateFeedback("f/1", { status: "seen", admin_note: "" });
+    const [path, init] = fetched.mock.calls[2];
+    expect(path).toBe("/api/admin/feedback/f%2F1");
+    expect(init).toMatchObject({ method: "PATCH" });
+    expect(JSON.parse(String(init?.body))).toEqual({ status: "seen", admin_note: "" });
   });
 });

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
-  AnswerRefused, base, behalfBody, deleteWorkPayment, editWorkLine, editWorkTask, getWork, isProject, mergeWorkTask, moveWorkLines,
+  AnswerRefused, base, behalfBody, FeedbackError, sendFeedback, deleteWorkPayment, editWorkLine, editWorkTask, getWork, isProject, mergeWorkTask, moveWorkLines,
   saveAnswer, setWorkCheck, setWorkStatus, uploadWorkPhoto, WorkError, workPlanAction,
 } from "./api";
 
@@ -126,5 +126,48 @@ describe("монтаж по задачам", () => {
     expect(e).toBeInstanceOf(WorkError);
     expect((e as WorkError).status).toBe(413);
     expect((e as WorkError).message).toBe("файл больше 15 МБ");
+  });
+});
+
+describe("отзыв о сервисе", () => {
+  const CONTEXT = { sheet: "plan", path: "/#kv", version: "0.5.1 (b)", viewport: "1440×900", user_agent: "UA" };
+  const calls: { url: string; init?: RequestInit }[] = [];
+  const reply = (status: number, body: unknown) => {
+    calls.length = 0;
+    vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
+      calls.push({ url, init });
+      return new Response(JSON.stringify(body), { status, statusText: status === 422 ? "Unprocessable" : "" });
+    });
+  };
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("multipart: вид, текст, контекст строкой JSON, проект и скриншоты", async () => {
+    reply(200, { id: "f1" });
+    const shot = new File(["x"], "a.png", { type: "image/png" });
+    await expect(sendFeedback({ kind: "bug", text: "не жмётся", context: CONTEXT, project: "kv", photos: [shot, shot] }))
+      .resolves.toEqual({ id: "f1" });
+    expect(calls[0].url).toBe("/api/feedback");
+    expect(calls[0].init?.method).toBe("POST");
+    const form = calls[0].init?.body as FormData;
+    expect(form.get("kind")).toBe("bug");
+    expect(form.get("text")).toBe("не жмётся");
+    expect(JSON.parse(form.get("context") as string)).toEqual(CONTEXT);
+    expect(form.get("project")).toBe("kv");
+    expect(form.getAll("photos")).toHaveLength(2);
+  });
+  it("без проекта и скриншотов — без этих полей", async () => {
+    reply(200, { id: "f2" });
+    await sendFeedback({ kind: "idea", text: "т", context: CONTEXT, project: null });
+    const form = calls[0].init?.body as FormData;
+    expect(form.has("project")).toBe(false);
+    expect(form.has("photos")).toBe(false);
+  });
+  it("отказ — статус и текст сервера; список ошибок — словами статуса", async () => {
+    reply(429, { detail: "Слишком часто" });
+    const e = await sendFeedback({ kind: "other", text: "т", context: CONTEXT }).catch((x: unknown) => x);
+    expect(e).toBeInstanceOf(FeedbackError);
+    expect(e).toMatchObject({ status: 429, message: "Слишком часто" });
+    reply(422, { detail: [{ loc: ["body", "text"] }] });
+    await expect(sendFeedback({ kind: "other", text: "т", context: CONTEXT })).rejects.toMatchObject({ status: 422, message: "Unprocessable" });
   });
 });

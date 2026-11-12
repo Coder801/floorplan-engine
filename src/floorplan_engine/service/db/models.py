@@ -654,3 +654,40 @@ class WorkPayment(Base):
         ForeignKey("app_user.id", ondelete="SET NULL")
     )
     created_at: Mapped[datetime] = _created()
+
+
+# --- Product feedback (decision 2026-11-12, db/feedback.py) --------------------------------
+
+
+class Feedback(Base):
+    """A viewer user's feedback about the service itself (a bug, an idea, other), read by the
+    platform superuser in the admin. Not about a work task. The author is a user or an access
+    code (author_label keeps the name or the code's label when the row is gone); photos are in
+    object storage (objects.feedback_photo_key), their list is in `photos`."""
+
+    __tablename__ = "feedback"
+    __table_args__ = (
+        Index("ix_feedback_status", "status", "created_at"),
+        Index("ix_feedback_user", "user_id", "created_at"),
+        Index("ix_feedback_code", "access_code_id", "created_at"),
+    )
+    id: Mapped[uuid.UUID] = _id()
+    created_at: Mapped[datetime] = _created()
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("app_user.id", ondelete="SET NULL")
+    )
+    access_code_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("access_code.id", ondelete="SET NULL")
+    )
+    author_label: Mapped[str] = mapped_column(String(200), default="")
+    project_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("project.id", ondelete="SET NULL")
+    )
+    kind: Mapped[str] = mapped_column(String(10))  # bug | idea | other
+    text: Mapped[str] = mapped_column(Text)
+    # Where it was written: sheet, page path, app version, viewport, user agent (trimmed)
+    context: Mapped[dict[str, Any]] = mapped_column(default=dict)
+    status: Mapped[str] = mapped_column(String(10), default="new")  # new | seen | done
+    admin_note: Mapped[str | None] = mapped_column(Text)
+    # [{id, key, content_type, size, file_name}]
+    photos: Mapped[list[Any]] = mapped_column(default=list)

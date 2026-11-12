@@ -30,6 +30,8 @@ import { AlphaNotice } from "@/widgets/AlphaNotice";
 import { DownloadMenu } from "@/widgets/DownloadMenu";
 import { Drawer } from "@/widgets/Drawer";
 import { ElevationStage } from "@/widgets/ElevationStage";
+import { Feedback } from "@/widgets/Feedback";
+import { sheetOf } from "@/widgets/Feedback/feedback";
 import { EstimateStage, type EstimateItem } from "@/widgets/EstimateStage";
 import { OverviewStage, OverviewSummary } from "@/widgets/OverviewStage";
 import { RebuildModal } from "@/widgets/RebuildModal";
@@ -115,6 +117,7 @@ export function Viewer({ account = null }: { account?: Account | null }) {
   const [info, setInfo] = useState(false);  // "Overview" tab (manifest: overview, variants)
   const [workTab, setWorkTab] = useState(false);  // "Tasks" tab: installation by tasks (database mode, project.work)
   const [task, setTask] = useState<string | null>(null);  // the task whose card is open
+  const [feedback, setFeedback] = useState(false);  // "Leave feedback" is open (widgets/Feedback)
   const [overview, setOverview] = useState<Overview | null>(null);
   const [theme, setTheme] = useState<Theme>(savedTheme);
   const [mode, setMode] = useState<UiMode>(() => savedMode(account));  // simple or engineering interface (shared/mode.ts)
@@ -588,12 +591,25 @@ export function Viewer({ account = null }: { account?: Account | null }) {
   const openStudio = account === null || account.plan === "pro" || account.visitor
     ? () => { location.hash = studioHash("profile"); }
     : undefined;
+  // "Leave feedback": only when the server takes it (Me.feedback; never in the folder viewer). The
+  // open project and tab go with the message by themselves
+  const openFeedback = account?.feedback ? () => setFeedback(true) : undefined;
+  const feedbackProject = current && project ? { key: project.id || current, title: project.title || project.name } : null;
+  const feedbackSheet = feedbackProject
+    ? sheetOf({ info, estimate, work: workTab, source, sheet: pages.find((pg) => pg.index === sheet)?.name ?? null, wall: wall?.key ?? null })
+    : null;
+  const feedbackSheetTitle = !feedbackProject ? null
+    : source ?? (info ? t("overview.tab") : estimate ? t("estimate.tab") : workTab ? t("work.tab")
+      : tab ? [tab.stage ? label("stage", tab.stage) : tab.name, wall?.title].filter(Boolean).join(" · ") : null);
   const settings = <Settings account={account} theme={theme} onTheme={(th) => { remember("theme", th); setTheme(th); }}
-                             mode={mode} onMode={(m) => { rememberMode(m); setMode(m); }} onStudio={openStudio} />;
+                             mode={mode} onMode={(m) => { rememberMode(m); setMode(m); }} onStudio={openStudio} onFeedback={openFeedback} />;
 
   return (
     <div className={css.app}>
-      <AlphaNotice />
+      <AlphaNotice onFeedback={openFeedback} />
+      {feedback && (
+        <Feedback project={feedbackProject} sheet={feedbackSheet} sheetTitle={feedbackSheetTitle} onClose={() => setFeedback(false)} />
+      )}
       {(choosing || saving) && <RebuildModal />}
       {wizard && project && (
         <Wizard key={current} start={wizardStart} project={project} variants={variants} ceiling={overview?.ceiling ?? null} scene={scene}

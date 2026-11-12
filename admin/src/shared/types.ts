@@ -98,3 +98,26 @@ export interface EventRow {
   project: string | null;
   payload: Record<string, unknown>;
 }
+
+// Product feedback from the viewer ("Оставить отзыв", decision 2026-11-12): about the service,
+// not about a work task. GET /api/admin/feedback, PATCH /api/admin/feedback/{id}
+export type FeedbackKind = "bug" | "idea" | "other";
+export type FeedbackStatus = "new" | "seen" | "done";
+export interface FeedbackItem {
+  id: string;
+  created_at: string | null;
+  kind: FeedbackKind;
+  text: string;
+  status: FeedbackStatus;
+  admin_note: string | null;
+  // What the page attached: sheet, path, version, viewport, user_agent (web: FeedbackContext)
+  context: Record<string, unknown> | null;
+  author: { email?: string | null; name?: string | null; code_label?: string | null } | null;
+  project: { key: string; name: string } | null;
+  photos: string[];  // addresses of the screenshots
+}
+export interface FeedbackPage {
+  items: FeedbackItem[];
+  total: number;  // under the filter
+  counts: Record<FeedbackStatus, number>;  // by status, over all feedback
+}

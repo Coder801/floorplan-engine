@@ -33,6 +33,8 @@ Environment:
   SHTROBA_VISITOR=1            "Log in as guest" without an account, for debugging only: sees all
                                projects, read only; forbidden in the Railway "production"
                                environment
+  FEEDBACK_NOTIFY_EMAIL        where a notice of new product feedback goes (api/feedback.py), by
+                               the login mailer; without it there is no notice
   DATABASE_URL                 database (db/session.py)
 """
 
@@ -93,6 +95,7 @@ class AuthConfig:
     dev_login: bool = False  # "Log in for development" as the first superuser
     owner: str | None = None  # SHTROBA_OWNER: whose project folders have no database row
     fixed_codes: tuple[tuple[str, str], ...] = ()  # SHTROBA_ACCESS_CODES: (folder, code)
+    feedback_to: str | None = None  # FEEDBACK_NOTIFY_EMAIL: notice of new product feedback
 
     @property
     def google(self) -> bool:
@@ -157,6 +160,7 @@ class AuthConfig:
             dev_login=dev,
             owner=identity(env["SHTROBA_OWNER"]) if env.get("SHTROBA_OWNER", "").strip() else None,
             fixed_codes=tuple(fixed),
+            feedback_to=env.get("FEEDBACK_NOTIFY_EMAIL", "").strip() or None,
         )
 
 
@@ -258,6 +262,7 @@ class Auth:
     telegram: telegram.TelegramApi | None = None  # bot for phone login; None means no button
     folders: Callable[[], Collection[str]] | None = None  # project folders (set by create_viewer)
     limiter: CodeLimiter = field(default_factory=CodeLimiter)  # access code guessing
+    feedback: bool = False  # product feedback is on (api/feedback.py: projects in the database)
     _bot_name: str | None = field(default=None, init=False, repr=False)
 
     def __post_init__(self) -> None:
@@ -359,6 +364,7 @@ class Auth:
                     code_project=code.project_id,
                     code_role=access_codes.code_role(code),
                     code_label=code.label,
+                    code_id=code.id,
                 )
         if self.config.visitor and request.session.get("visitor"):
             return acc.VISITOR
@@ -518,6 +524,7 @@ class Auth:
                     "telegram": self.telegram is not None,
                     "dev": cfg.dev_login,
                     "visitor_allowed": cfg.visitor,
+                    "feedback": self.feedback,
                 }
 
         @r.get("/api/auth/google/login")

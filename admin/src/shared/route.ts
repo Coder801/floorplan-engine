@@ -2,8 +2,8 @@
 // has its own address, so a link to a user, a studio or a project switches the section.
 import { useEffect, useState } from "react";
 
-export type Section = "summary" | "studios" | "users" | "projects" | "events";
-export const SECTIONS: Section[] = ["summary", "studios", "users", "projects", "events"];
+export type Section = "summary" | "studios" | "users" | "projects" | "feedback" | "events";
+export const SECTIONS: Section[] = ["summary", "studios", "users", "projects", "feedback", "events"];
 
 export interface Route { section: Section; id: string | null; params: URLSearchParams }
 

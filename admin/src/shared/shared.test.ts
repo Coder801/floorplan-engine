@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { agentOf, applyChange, authorOf, contextOf, nextStatus } from "./feedback";
 import { ago, contact, date, who } from "./format";
 import { href, parse } from "./route";
 
@@ -8,6 +9,7 @@ describe("route", () => {
     expect(parse("#/events?project=p1").params.get("project")).toBe("p1");
     expect(parse("")).toMatchObject({ section: "summary", id: null });
     expect(parse("#/nope/1").section).toBe("summary");
+    expect(parse("#/feedback?status=new")).toMatchObject({ section: "feedback", id: null });
   });
   it("writes what it reads", () => {
     const h = href("projects", "a b", { tab: "codes" });
@@ -40,5 +42,41 @@ describe("format", () => {
     expect(contact({ email: "a@b.c", phone: null })).toBe("a@b.c");
     expect(contact({ email: "a@b.c", phone: "+380" })).toBe("a@b.c · +380");
     expect(contact({ email: null, phone: null })).toBe("—");
+  });
+});
+
+describe("feedback", () => {
+  const item = (id: string, status: "new" | "seen" | "done") => ({
+    id, status, created_at: null, kind: "bug" as const, text: "т", admin_note: null, context: null, author: null, project: null, photos: [],
+  });
+  it("moves new → seen → done and stops", () => {
+    expect(nextStatus("new")).toBe("seen");
+    expect(nextStatus("seen")).toBe("done");
+    expect(nextStatus("done")).toBeNull();
+  });
+  it("names the author by what is known", () => {
+    expect(authorOf(null)).toBe("—");
+    expect(authorOf({ name: "Иван", email: "i@x" })).toBe("Иван");
+    expect(authorOf({ email: "i@x" })).toBe("i@x");
+    expect(authorOf({ code_label: "Петров" })).toBe("код «Петров»");
+    expect(authorOf({})).toBe("—");
+  });
+  it("shows the context in a fixed order without empty values", () => {
+    expect(contextOf(null)).toEqual([]);
+    expect(contextOf({ path: "/#kv", sheet: "plan", version: "", viewport: "1440×900", user_agent: "UA" }))
+      .toEqual(["лист: plan", "экран: 1440×900", "адрес: /#kv"]);
+    expect(agentOf({ user_agent: "UA" })).toBe("UA");
+    expect(agentOf({ user_agent: 5 })).toBe("");
+    expect(agentOf(null)).toBe("");
+  });
+  it("puts a changed item back and moves the counts", () => {
+    const page = { items: [item("a", "new"), item("b", "new")], total: 2, counts: { new: 2, seen: 0, done: 1 } };
+    const next = applyChange(page, { ...item("a", "seen"), admin_note: "смотрю" });
+    expect(next.items.map((i) => i.status)).toEqual(["seen", "new"]);
+    expect(next.items[0].admin_note).toBe("смотрю");
+    expect(next.counts).toEqual({ new: 1, seen: 1, done: 1 });
+    expect(page.counts.new).toBe(2);  // the old page is not changed
+    // A note only: the counts stay
+    expect(applyChange(page, { ...item("b", "new"), admin_note: "x" }).counts).toEqual(page.counts);
   });
 });
