@@ -3,37 +3,26 @@
 @use "@/shared/styles/mixins" as *;
 
 .settings { grid-area: settings; }
-.gear { display: inline-grid; place-items: center; width: 40px; padding: 0; }
 .icon {
   width: 18px; height: 18px;
   fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round;
 }
 
 .panel {
-  width: min(320px, calc(100vw - 24px)); padding: 6px 14px 14px; gap: 0;
-  section { padding: 10px 0; border-top: 1px solid var(--line); display: grid; gap: 4px; }
+  width: min(320px, calc(100vw - 24px)); padding: var(--space-1) var(--space-4) var(--space-4); gap: 0;
+  section { padding: var(--space-3) 0; border-top: 1px solid var(--line); display: grid; gap: var(--space-1); }
   section:first-child { border-top: 0; }
-  h3 {
-    margin: 0 0 4px; font-size: 11px; font-weight: 600; letter-spacing: .06em;
-    text-transform: uppercase; color: var(--muted);
-  }
-  p { margin: 0; }
+  h3 { margin-bottom: var(--space-1); }
 }
-.row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px; }
+.row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--space-3); }
 .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
-.themes > button { flex: 1; }
-.about { font-size: 13px; }  // version and build as the last section
 .brand { font-family: $brand; font-weight: 600; letter-spacing: .02em; }  // product name in the brand font
 
 // Language: name | ▾ (in the menu: name | ✓)
 .lang {
-  display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px;
-  width: 100%; text-align: left;
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; text-align: left;
 }
 .langs { left: 0; right: 0; min-width: 0; }
 .langs > button { grid-template-columns: minmax(0, 1fr) auto; }
 // "Studio settings", "Leave feedback": a full-width button with a note
-.studio {
-  display: grid; justify-items: start; gap: 2px; width: 100%; padding: 8px 10px; text-align: left;
-  border: 1px solid var(--line); border-radius: 6px; background: var(--raise); color: var(--text);
-}
+.studio { justify-items: start; gap: 0; width: 100%; border-radius: var(--radius); }

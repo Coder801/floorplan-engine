@@ -4,8 +4,9 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { base, enc, getText } from "@/shared/api";
 import { kindOf } from "@/shared/files";
-import ui from "@/shared/styles/ui.module.scss";
 import type { Project } from "@/shared/types";
+import { Button } from "@/ui/Button";
+import { EmptyState } from "@/ui/EmptyState";
 import css from "./SourceView.module.scss";
 
 export function SourceView({ project, file, onBack }: { project: Project; file: string; onBack: () => void }) {
@@ -23,11 +24,11 @@ export function SourceView({ project, file, onBack }: { project: Project; file: 
   if (kind === "pdf") body = <iframe className={css.frame} src={url} title={file} />;
   else if (kind === "image") body = <img className={css.img} src={url} alt={file} />;
   else if (kind === "text") body = <pre className={css.text}>{text}</pre>;
-  else body = <div className={ui.empty}>{t("source.noPreview")}</div>;
+  else body = <EmptyState>{t("source.noPreview")}</EmptyState>;
   return (
     <div className={css.source}>
       <div className={css.bar}>
-        <button onClick={onBack}>{t("source.back")}</button>
+        <Button size="sm" onClick={onBack}>{t("source.back")}</Button>
         <span className={css.name}>{file}</span>
       </div>
       {body}

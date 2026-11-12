@@ -5,7 +5,9 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { cx } from "@/shared/cx";
-import ui from "@/shared/styles/ui.module.scss";
+import { Checkbox } from "@/ui/Checkbox";
+import { SegmentedControl } from "@/ui/SegmentedControl";
+import { Text } from "@/ui/Text";
 import type { OverviewMaster } from "@/shared/types";
 import { masterLight, masterPreset, masterRule, toggleMaster, type MasterPreset } from "./master";
 import css from "./MasterList.module.scss";
@@ -36,34 +38,31 @@ export function MasterList({ master, value, onChange, unknown }: Props) {
   };
   return (
     <>
-      <div className={cx(ui.segmented, css.presets)} role="radiogroup" aria-label={t("master.presets.label")}>
-        {picks.map(({ id, groups }) => (
-          <button key={id} role="radio" aria-checked={!unsure && preset === id} className={cx(!unsure && preset === id && ui.on)}
-                  disabled={id !== "manual" && !groups?.length} onClick={() => choose(id, groups ?? (unsure ? value : null))}>
-            {t(`master.presets.${id}`)}
-          </button>
-        ))}
-        {unknown && (
-          <button role="radio" aria-checked={unsure} className={cx(unsure && ui.on)}
-                  onClick={() => { setHand(false); unknown.onPick(); }}>
-            {t("wizard.unknown")}
-          </button>
-        )}
-      </div>
-      <p className={cx("small muted", css.note)}>{unsure ? unknown.note : t(`master.presets.${preset}Note`)}</p>
+      <SegmentedControl<MasterPreset | "unknown"> className={css.presets} label={t("master.presets.label")}
+        value={unsure ? "unknown" : preset}
+        onChange={(id) => {
+          if (id === "unknown") { setHand(false); unknown?.onPick(); return; }
+          const pick = picks.find((p) => p.id === id);
+          choose(id, pick?.groups ?? (unsure ? value : null));
+        }}
+        options={[
+          ...picks.map(({ id, groups }) => ({ value: id, label: t(`master.presets.${id}`), disabled: id !== "manual" && !groups?.length })),
+          ...(unknown ? [{ value: "unknown" as const, label: t("wizard.unknown") }] : []),
+        ]} />
+      <Text size="small" tone="muted" className={css.note}>{unsure ? unknown.note : t(`master.presets.${preset}Note`)}</Text>
       <ul className={css.list}>
         {master.items.map((g) => (
           <li key={g.id}>
-            <label className={css.row}>
-              <input type="checkbox" checked={value.includes(g.id)}
-                     onChange={() => { setHand(true); onChange(toggleMaster(master, value, g.id)); }} />
-              <span className="mono">{g.id}</span>
-              <span className={css.purpose}>
-                {g.purpose}
-                {g.keep && <span className={cx("small", css.keep)}> · {t("master.keep")}</span>}
-              </span>
-              <span className={css.power}>{kw(g.power)} {t("units.kw")}</span>
-            </label>
+            <Checkbox className={css.row} checked={value.includes(g.id)}
+                      onChange={() => { setHand(true); onChange(toggleMaster(master, value, g.id)); }}
+                      label={<span className={css.cols}>
+                        <span className="mono">{g.id}</span>
+                        <span className={css.purpose}>
+                          {g.purpose}
+                          {g.keep && <span className={cx("small", css.keep)}> · {t("master.keep")}</span>}
+                        </span>
+                        <span className={css.power}>{kw(g.power)} {t("units.kw")}</span>
+                      </span>} />
           </li>
         ))}
       </ul>

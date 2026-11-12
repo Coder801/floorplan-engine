@@ -31,6 +31,10 @@ Component layout (checked by `src/structure.test.ts`):
   `index.tsx` / `index.ts`, not `index.jsx` / `index.js`). Styles go in
   `ComponentName.module.scss`; the component's tests and helper files sit next to it in the same
   folder.
+- Debug names: the build adds `data-ui="ComponentName"` (helpers: `Folder.Helper`) to the root
+  DOM element of every component (`scripts/uiNames.ts`, `web/README.md`, "Имена блоков"). Do not
+  write `data-ui` by hand unless a block needs a different name; when the user names a block by
+  `data-ui`, the folder is the file to open.
 - One component, one folder. A second exported component gets its own folder, not a second
   `export` in someone else's `index.tsx`. A shared non-component function goes in `shared/` (or
   `engine/`).
@@ -47,7 +51,12 @@ How to work:
    project language and are written by the build: do not translate them.
 2. Styles: the component's SCSS module, layout with CSS grid. Shared parts come from
    `@/shared/styles/` (`@use "@/shared/styles/mixins" as *;`, `ui.module.scss`). Colours are theme
-   variables; the canvas uses `palette.ts`.
+   variables; the canvas uses `palette.ts`. Buttons, fields, checkboxes, cards, dialogs, headings
+   and text are `ui/` components (`Button`, `TextField`, `Card`, `Modal`, `Heading`, `Text`…), not
+   module classes; font size and line-height come from the type scale (`Heading`/`Text` or
+   `@include type(role)`), spacing from `--space-*`, and the space between blocks is the
+   container's gap (`Stack`), not a heading's margin (`web/README.md`, "Стили"). A new `ui/`
+   component gets a story with its variants, states and the dark theme.
 3. A canvas is a class in `engine/` (canvas outside React). Do not break step zoom
    (`shared/zoom.ts`), panning, pinch, hints, layers or PNG export up to A3 at 150 dpi. Shared state
    (hover, selection, layers, modes) lives in `shared/store.ts`.

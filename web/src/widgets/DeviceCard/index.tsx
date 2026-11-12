@@ -7,7 +7,9 @@ import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { cx } from "@/shared/cx";
 import { useView, view } from "@/shared/store";
-import ui from "@/shared/styles/ui.module.scss";
+import { Dot } from "@/ui/Dot";
+import { Heading } from "@/ui/Heading";
+import { IconButton } from "@/ui/IconButton";
 import type { Page, PanelData } from "@/shared/types";
 import css from "./DeviceCard.module.scss";
 
@@ -45,15 +47,15 @@ export function DeviceCard({ page, panel }: { page: Page; panel: PanelData }) {
   return (
     <div className={css.card} role="dialog" aria-label={t("device.aria", { id: dev.id })}>
       <div className={css.head}>
-        {g?.color && <span className={ui.dot} style={{ background: g.color }} aria-hidden="true" />}
+        {g?.color && <Dot color={g.color} />}
         <b>{dev.id}</b>
         <span className={cx(css.title, "muted")}>{dev.title}</span>
-        <button aria-label={t("common.close")} onClick={close}>×</button>
+        <IconButton variant="close" size="sm" className={css.close} label={t("common.close")} onClick={close} />
       </div>
       <dl>{fields.map(([k, v], i) => [<dt key={`t${i}`}>{k}</dt>, <dd key={`d${i}`}>{v}</dd>])}</dl>
       {loads.length > 0 && (
         <>
-          <h4>{t("device.consumers", { n: loads.length })}</h4>
+          <Heading level={4} size="subheading">{t("device.consumers", { n: loads.length })}</Heading>
           <ul className={css.loads}>
             {loads.map((r, i) => (
               <li key={i}><span>{r.cells[1]}</span><span className="muted">{r.cells[2]}</span>
@@ -64,7 +66,7 @@ export function DeviceCard({ page, panel }: { page: Page; panel: PanelData }) {
       )}
       {warnings.length > 0 && (
         <>
-          <h4>{t("device.weak")}</h4>
+          <Heading level={4} size="subheading">{t("device.weak")}</Heading>
           <ul className={css.warns}>{warnings.map((w, i) => <li key={i}>{w.text}</li>)}</ul>
         </>
       )}

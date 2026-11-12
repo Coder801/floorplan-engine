@@ -12,12 +12,14 @@ import { lightLinks } from "@/engine/three/lightLinks";
 import { SheetView } from "@/engine/sheet/SheetView";
 import { saveWiring } from "@/shared/api";
 import { WALL_MODES } from "@/shared/consts";
-import { cx } from "@/shared/cx";
 import { PageIndex } from "@/shared/page";
 import { SYSTEMS, useView, view, type System } from "@/shared/store";
 import ui from "@/shared/styles/ui.module.scss";
 import type { Page } from "@/shared/types";
 import type { Zoom } from "@/shared/zoom";
+import { Button } from "@/ui/Button";
+import { ButtonGroup } from "@/ui/ButtonGroup";
+import { EmptyState } from "@/ui/EmptyState";
 import { Icon } from "@/ui/Icon";
 import { ScaleBar } from "@/ui/ScaleBar";
 import { ZoomRail } from "@/ui/ZoomRail";
@@ -181,7 +183,7 @@ export const SheetStage = forwardRef<StageHandle, Props>(function SheetStage({ p
     <>
       <canvas ref={canvas} tabIndex={0} aria-label={t("sheet.canvas")} />
       {in3d && (
-        <Suspense fallback={<div className={cx(ui.three, ui.empty)}>{t("sheet.loading3d")}</div>}>
+        <Suspense fallback={<EmptyState className={ui.three}>{t("sheet.loading3d")}</EmptyState>}>
           <Scene3D scene={scene3d!} index={index} own={own} layerOf={layerOf} links={links} apiRef={scene} onZoom={setZoom3d} onHome={setHome} />
         </Suspense>
       )}
@@ -194,62 +196,61 @@ export const SheetStage = forwardRef<StageHandle, Props>(function SheetStage({ p
       <div className={ui.options}>
         <div className={ui.optionsRow}>
           {lightMode && (
-            <div className={ui.group} role="radiogroup" aria-label={t("sheet.lightMode")}>
+            <ButtonGroup role="radiogroup" label={t("sheet.lightMode")}>
               {LIGHT_MODES.map((m) => (
-                <button key={m} role="radio" aria-checked={lightMode.mode === m} aria-pressed={lightMode.mode === m}
+                <Button key={m} variant="bare" role="radio" aria-checked={lightMode.mode === m} pressed={lightMode.mode === m}
                         title={t(`sheet.lightModes.${m}Title`)}
-                        onClick={() => lightMode.mode !== m && lightMode.onMode(m)}>{t(`sheet.lightModes.${m}`)}</button>
+                        onClick={() => lightMode.mode !== m && lightMode.onMode(m)}>{t(`sheet.lightModes.${m}`)}</Button>
               ))}
-            </div>
+            </ButtonGroup>
           )}
           {systems.length > 0 && !(editMode && ed) && (
-            <div className={ui.group} role="group" aria-label={t("sheet.systems")}>
+            <ButtonGroup label={t("sheet.systems")}>
               {systems.map((sys) => (
-                <button key={sys} aria-pressed={!systemsOff.has(sys)} title={t("sheet.systemsTitle")}
-                        onClick={() => toggleSystem(sys)}>{t(`views.${SYSTEM_VIEW[sys]}`)}</button>
+                <Button key={sys} variant="bare" pressed={!systemsOff.has(sys)} title={t("sheet.systemsTitle")}
+                        onClick={() => toggleSystem(sys)}>{t(`views.${SYSTEM_VIEW[sys]}`)}</Button>
               ))}
-            </div>
+            </ButtonGroup>
           )}
           {ed && !in3d && editable && (
-            <div className={ui.group}>
-              <button aria-pressed={editMode} title={t("sheet.editTitle")} onClick={toggleEdit}>{t("sheet.edit")}</button>
-            </div>
+            <ButtonGroup>
+              <Button variant="bare" pressed={editMode} title={t("sheet.editTitle")} onClick={toggleEdit}>{t("sheet.edit")}</Button>
+            </ButtonGroup>
           )}
           {scene3d && (
-            <div className={ui.group}>
-              <button aria-pressed={in3d} onClick={toggle3d}
-                      title={t("sheet.title3d")}>3D</button>
-            </div>
+            <ButtonGroup>
+              <Button variant="bare" pressed={in3d} onClick={toggle3d} title={t("sheet.title3d")}>3D</Button>
+            </ButtonGroup>
           )}
           {download}
         </div>
         {in3d && (
           <div className={ui.strip}>
-            <div className={ui.group}>
+            <ButtonGroup>
               {/* Grey and inactive while the view is at the isometry */}
-              <button className={ui.home} disabled={home} aria-label={t("sheet.iso")}
-                      title={t("sheet.iso")} onClick={() => scene.current?.iso()}><Icon name="home" /></button>
+              <Button variant="bare" className={ui.home} disabled={home} aria-label={t("sheet.iso")}
+                      title={t("sheet.iso")} onClick={() => scene.current?.iso()}><Icon name="home" /></Button>
               {WALL_MODES.map((mode) => (
-                <button key={mode} aria-pressed={wallMode === mode} title={t("sheet.walls")}
-                        onClick={() => view.set({ wallMode: mode })}>{t(`sheet.wallModes.${mode}`)}</button>
+                <Button key={mode} variant="bare" pressed={wallMode === mode} title={t("sheet.walls")}
+                        onClick={() => view.set({ wallMode: mode })}>{t(`sheet.wallModes.${mode}`)}</Button>
               ))}
-            </div>
+            </ButtonGroup>
             <Filter3D scene={scene3d!} index={index} />
           </div>
         )}
         {ed && !in3d && editable && editMode && (
           <div className={ui.strip}>
-            <div className={ui.group}>
-              <button className={cx(!!n && ui.primary)} disabled={!n || saving}
+            <ButtonGroup>
+              <Button variant={n ? "primary" : "bare"} disabled={!n || saving}
                       title={t("sheet.saveTitle")} onClick={save}>
                 {n ? t("sheet.saveN", { n }) : t("sheet.save")}
-              </button>
-              <button disabled={!ed.history.length} title={t("sheet.undoTitle")}
-                      onClick={() => sv?.undo()}>{t("sheet.undo")}</button>
-              <button disabled={!(back && (back.wires.length || back.box)) || saving}
+              </Button>
+              <Button variant="bare" disabled={!ed.history.length} title={t("sheet.undoTitle")}
+                      onClick={() => sv?.undo()}>{t("sheet.undo")}</Button>
+              <Button variant="bare" disabled={!(back && (back.wires.length || back.box)) || saving}
                       title={t("sheet.autoTitle")}
-                      onClick={reset}>{t("sheet.auto")}</button>
-            </div>
+                      onClick={reset}>{t("sheet.auto")}</Button>
+            </ButtonGroup>
           </div>
         )}
       </div>

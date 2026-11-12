@@ -14,8 +14,10 @@ import {
   forClient, groupOf, keepOrder, listOrder, nextOpen, parseNumber, plainNumber, returnedComment, shortMessage, shownOn, statusOf,
   type Answer, type Group, type QuestionsMemory, type Status,
 } from "@/shared/questions";
-import ui from "@/shared/styles/ui.module.scss";
 import type { Project, Question } from "@/shared/types";
+import { Button } from "@/ui/Button";
+import { IconButton } from "@/ui/IconButton";
+import { Text } from "@/ui/Text";
 import css from "./Questions.module.scss";
 
 interface Props {
@@ -90,8 +92,8 @@ export function Questions({ project: p, busy, onAnswer, onReview, stages, onShow
     }
   }, [busy, qs.length]);
 
-  if (!p.report) return <div className="muted">{t("drawer.noReport")}</div>;
-  if (!qs.length) return <div className="muted">{t("drawer.noQuestions")}</div>;
+  if (!p.report) return <Text tone="muted">{t("drawer.noReport")}</Text>;
+  if (!qs.length) return <Text tone="muted">{t("drawer.noQuestions")}</Text>;
 
   const fail = (id: string, failure: Failure | null) => setFailures((all) => {
     const { [id]: _, ...rest } = all;
@@ -176,7 +178,7 @@ export function Questions({ project: p, busy, onAnswer, onReview, stages, onShow
     const shown = closedShown || rows.some((q) => q.id === expanded);
     return (
       <>
-        <button className={cx(css.group, css.fold)} aria-expanded={shown} onClick={() => setClosedShown(!shown)}>
+        <button type="button" className={cx(css.group, css.fold)} aria-expanded={shown} onClick={() => setClosedShown(!shown)}>
           <span>{`${title} · ${rows.length}`}</span>
           <span className={css.chevron} aria-hidden="true">{shown ? "▴" : "▾"}</span>
         </button>
@@ -205,7 +207,7 @@ export function Questions({ project: p, busy, onAnswer, onReview, stages, onShow
               {done < 0 && ` ${t("questions.fewer", { n: -done })}`}
               {done > 0 && ` ${t("questions.more", { n: done })}`}
             </span>
-            <button aria-label={t("common.close")} onClick={() => setDone(null)}>×</button>
+            <IconButton variant="close" label={t("common.close")} onClick={() => setDone(null)} />
           </div>
         )}
       </div>
@@ -234,7 +236,7 @@ function Card(props: RowProps) {
   return (
     <div className={cx(css.row, SEVERITY[q.severity], groupOf(status) === "closed" && css.done,
                        open && css.expanded, failure && css.failed)}>
-      <button className={css.head} aria-expanded={open} onClick={onToggle}>
+      <button type="button" className={css.head} aria-expanded={open} onClick={onToggle}>
         <span className={css.meta}>
           <span className={`sev-${q.severity}`}>
             {`${label("severity", q.severity)} · ${label("stage", q.stage)}`}
@@ -258,9 +260,9 @@ function Card(props: RowProps) {
           {forClient(q) && status === "resolved" && <div className={css.hint}>{t("questions.resolvedClient")}</div>}
           {shows && (
             <div className={css.actions}>
-              <button className={css.quiet} onClick={() => onShow(shows)}>
+              <Button variant="link" className={css.quiet} onClick={() => onShow(shows)}>
                 {t(q.answer === "groups" ? "questions.pickGroups" : shows.key ? "questions.show" : "questions.showPanel")}
-              </button>
+              </Button>
             </div>
           )}
           {studio && q.target && <div className={css.path}>{q.target}</div>}
@@ -330,17 +332,17 @@ function Controls(props: CardProps) {
         <>
           <div className={css.hint}>{t("questions.removeAsk")}</div>
           <div className={css.actions}>
-            <button onClick={() => onSave(null)}>{t("questions.removeYes")}</button>
-            <button className={css.quiet} onClick={() => onAsk(false)}>{t("questions.removeNo")}</button>
+            <Button onClick={() => onSave(null)}>{t("questions.removeYes")}</Button>
+            <Button variant="link" className={css.quiet} onClick={() => onAsk(false)}>{t("questions.removeNo")}</Button>
           </div>
         </>
       ) : (
         <div className={css.actions}>
-          <button className={css.quiet} onClick={() => onEdit(true)}>{t("questions.edit")}</button>
+          <Button variant="link" className={css.quiet} onClick={() => onEdit(true)}>{t("questions.edit")}</Button>
           {!resolved && (
-            <button className={css.quiet} onClick={() => (status === "pending" ? onAsk(true) : onSave(null))}>
+            <Button variant="link" className={css.quiet} onClick={() => (status === "pending" ? onAsk(true) : onSave(null))}>
               {t("questions.remove")}
-            </button>
+            </Button>
           )}
         </div>
       )}
@@ -355,9 +357,9 @@ function Form(props: CardProps) {
   const { t } = useTranslation();
   const unit = q.unit === "mm" ? i18n.t("units.mm") : q.unit;
   const keep = q.assumption !== undefined && q.answer !== "choice" && !editing ? (
-    <button className={css.keep} disabled={busy} onClick={() => onSave({ accept: true })}>
+    <Button block className={css.keep} disabled={busy} onClick={() => onSave({ accept: true })}>
       {q.answer === "value" ? t("questions.keep", { value: shown(q, q.assumption) }) : t("questions.keepPlain")}
-    </button>
+    </Button>
   ) : null;
   const client = forClient(q);
   const before = typeof answer === "object" && answer !== null ? (answer as { text?: string }).text : answer;
@@ -368,7 +370,7 @@ function Form(props: CardProps) {
     form = (
       <div className={css.options} role="radiogroup" aria-label={t("questions.yourAnswer")}>
         {(q.options ?? []).map((v) => (
-          <button key={v} className={css.option} role="radio" aria-checked={v === chosen} disabled={busy}
+          <button key={v} type="button" className={css.option} role="radio" aria-checked={v === chosen} disabled={busy}
                   onClick={() => onSave(client ? { text: v } : v === q.assumption ? { accept: true } : v)}>
             <span className={css.dot} />
             <span>
@@ -395,7 +397,7 @@ function Form(props: CardProps) {
                    aria-invalid={!!failure} onChange={(ev) => onDraft(ev.target.value)} />
             {unit && <span className={css.unit}>{unit}</span>}
           </div>
-          <button className={ui.primary} disabled={busy}>{t("questions.save")}</button>
+          <Button type="submit" variant="primary" size="lg" disabled={busy}>{t("questions.save")}</Button>
         </div>
       </form>
     );
@@ -411,7 +413,7 @@ function Form(props: CardProps) {
                   aria-invalid={!!failure} onChange={(ev) => onDraft(ev.target.value)} />
         <div className={css.hint}>{t(q.severity === "critical" ? "questions.textCritical" : "questions.textHint")}</div>
         <div className={css.actions}>
-          <button className={ui.primary} disabled={busy || !text.trim()}>{t("questions.send")}</button>
+          <Button type="submit" variant="primary" disabled={busy || !text.trim()}>{t("questions.send")}</Button>
         </div>
       </form>
     );
@@ -424,7 +426,7 @@ function Form(props: CardProps) {
       {busy && <div className={css.hint}>{t("questions.locked")}</div>}
       {editing && (
         <div className={css.actions}>
-          <button className={css.quiet} onClick={() => onEdit(false)}>{t("questions.cancel")}</button>
+          <Button variant="link" className={css.quiet} onClick={() => onEdit(false)}>{t("questions.cancel")}</Button>
         </div>
       )}
     </>
@@ -441,8 +443,8 @@ function Review(props: CardProps) {
     return (
       <>
         <div className={css.actions}>
-          <button className={ui.primary} disabled={busy} onClick={() => onReview("resolve")}>{t("questions.accept")}</button>
-          <button className={css.quiet} disabled={busy} onClick={() => setBack(true)}>{t("questions.sendBack")}</button>
+          <Button variant="primary" disabled={busy} onClick={() => onReview("resolve")}>{t("questions.accept")}</Button>
+          <Button variant="link" className={css.quiet} disabled={busy} onClick={() => setBack(true)}>{t("questions.sendBack")}</Button>
         </div>
         <div className={css.hint}>{t("questions.reviewHint")}</div>
         {!props.can && <FailureBox {...props} />}
@@ -459,8 +461,8 @@ function Review(props: CardProps) {
       <textarea id={`back-${props.q.id}`} className={css.area} value={text} maxLength={2000}
                 onChange={(ev) => onDraft(ev.target.value)} />
       <div className={css.actions}>
-        <button className={ui.primary} disabled={busy || !text.trim()}>{t("questions.backSend")}</button>
-        <button type="button" className={css.quiet} onClick={() => setBack(false)}>{t("questions.cancel")}</button>
+        <Button type="submit" variant="primary" disabled={busy || !text.trim()}>{t("questions.backSend")}</Button>
+        <Button variant="link" className={css.quiet} onClick={() => setBack(false)}>{t("questions.cancel")}</Button>
       </div>
       {!props.can && <FailureBox {...props} />}
     </form>
@@ -483,7 +485,7 @@ function FailureBox({ q, studio, failure, onOpen }: CardProps) {
       {failure.blockedBy.map((b) => (
         <div key={b.id} className={css.message}>
           {t("questions.blockedBy")}{" "}
-          <button className={css.quiet} onClick={() => onOpen(b.id)}>{b.text}</button>
+          <Button variant="link" className={css.quiet} onClick={() => onOpen(b.id)}>{b.text}</Button>
         </div>
       ))}
     </div>

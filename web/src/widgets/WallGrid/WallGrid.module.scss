@@ -4,35 +4,29 @@
 
 .grid {
   position: absolute; inset: 0; z-index: 6; overflow-y: auto; touch-action: pan-y;
-  background: var(--paper); padding: 16px 20px 32px;
+  background: var(--paper); padding: var(--space-4) var(--space-5) var(--space-8);
 }
 
 .head {
-  position: sticky; top: -16px; z-index: 1; margin: -16px -20px 8px; padding: 12px 20px;
-  display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap;
+  position: sticky; top: calc(-1 * var(--space-4)); z-index: 1;
+  margin: calc(-1 * var(--space-4)) calc(-1 * var(--space-5)) var(--space-2); padding: var(--space-3) var(--space-5);
+  display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap;
   background: var(--paper); border-bottom: 1px solid var(--line);
-  h2 { margin: 0; font-size: 18px; }
 }
-.back { @include bare-button; margin-left: auto; padding: 6px 12px; font-size: 14px; }
+.back { margin-left: auto; }
 
-.room {
-  margin-top: 16px;
-  h3 { margin: 0 0 8px; font-size: 13px; font-weight: 600; color: var(--muted); }
-}
-.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+.room { display: grid; gap: var(--space-2); margin-top: var(--space-4); }
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: var(--space-3); }
 
 .card {
-  @include bare-button;
-  display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; gap: 4px 8px;
-  padding: 8px; text-align: left; border: 1px solid var(--line); border-radius: 8px;
-  canvas { grid-column: 1 / -1; display: block; width: 100%; height: auto; border-radius: 4px; background: var(--paper); }
-  &:hover { border-color: var(--muted); }
-  &[aria-current="true"] { border-color: var(--hl); box-shadow: inset 0 0 0 1px var(--hl); }
+  grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; gap: var(--space-1) var(--space-2);
+  padding: var(--space-2); background: none; border-radius: var(--radius-md);
+  canvas { grid-column: 1 / -1; display: block; width: 100%; height: auto; border-radius: var(--radius-sm); background: var(--paper); }
 }
-.name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
+.name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 @media (max-width: $narrow) {
-  .grid { padding: 12px 12px 24px; }
-  .head { margin: -12px -12px 8px; padding: 10px 12px; top: -12px; }
-  .cards { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+  .grid { padding: var(--space-3) var(--space-3) var(--space-6); }
+  .head { margin: calc(-1 * var(--space-3)) calc(-1 * var(--space-3)) var(--space-2); padding: var(--space-2) var(--space-3); top: calc(-1 * var(--space-3)); }
+  .cards { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--space-2); }
 }

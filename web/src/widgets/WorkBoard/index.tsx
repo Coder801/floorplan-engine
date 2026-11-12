@@ -10,12 +10,19 @@ import { addWorkTask } from "@/shared/api";
 import { cx } from "@/shared/cx";
 import { locale } from "@/shared/i18n";
 import { remember, remembered } from "@/shared/palette";
-import ui from "@/shared/styles/ui.module.scss";
 import type { WorkDomain, WorkPhotoRule, WorkState, WorkTask } from "@/shared/types";
 import {
   behalfText, boardColumns, byColumn, byDomain, DOMAIN_FILTERS, domainsOf, modelChanged, money, progressOf, taskNeed,
   type DomainFilter, type WorkRun,
 } from "@/shared/work";
+import { Button } from "@/ui/Button";
+import { Card } from "@/ui/Card";
+import { Heading } from "@/ui/Heading";
+import { SegmentedControl } from "@/ui/SegmentedControl";
+import { Tag } from "@/ui/Tag";
+import { Text } from "@/ui/Text";
+import { TextArea } from "@/ui/TextArea";
+import { TextField } from "@/ui/TextField";
 import { WorkPlanActions } from "@/widgets/WorkPlanActions";
 import css from "./WorkBoard.module.scss";
 
@@ -48,28 +55,24 @@ export function WorkBoard({ state, run, busy, open, onOpen }: Props) {
     <div className={css.board}>
       <header className={css.head}>
         <div className={css.title}>
-          <h1>{t("work.title")}</h1>
+          <Heading level={1}>{t("work.title")}</Heading>
           <span className={css.state} data-state={plan.state}>{t(`work.plan.${plan.state}`)}</span>
           {plan.approved_on_behalf && <span className={css.behalf}>{behalfText(plan.approved_on_behalf, "plan")}</span>}
         </div>
         {working && <Progress state={state} />}
         {!working && (
-          <p className={css.lead}>
+          <Text tone="muted" className={css.lead}>
             {plan.state === "draft" ? t("work.draftLead") : t("work.proposedLead")}{" "}
             <b>{money(plan.totals.total, plan.currency, locale())}</b>
-          </p>
+          </Text>
         )}
         {modelChanged(state) && (
-          <p className={css.note}>{t("work.modelChanged", { plan: plan.model_version, now: state.model_version })}</p>
+          <Text size="small" tone="major">{t("work.modelChanged", { plan: plan.model_version, now: state.model_version })}</Text>
         )}
         <div className={css.tools}>
           {both && (
-            <div className={ui.segmented} role="radiogroup" aria-label={t("work.filter")}>
-              {DOMAIN_FILTERS.map((f) => (
-                <button key={f} role="radio" aria-checked={f === filter} className={cx(f === filter && ui.on)}
-                        onClick={() => pick(f)}>{t(`work.domain.${f}`)}</button>
-              ))}
-            </div>
+            <SegmentedControl label={t("work.filter")} value={filter} onChange={pick}
+                              options={DOMAIN_FILTERS.map((f) => ({ value: f, label: t(`work.domain.${f}`) }))} />
           )}
           <WorkPlanActions state={state} run={run} busy={busy} onAdd={() => setAdding(true)} />
         </div>
@@ -79,7 +82,7 @@ export function WorkBoard({ state, run, busy, open, onOpen }: Props) {
            style={{ gridTemplateColumns: `repeat(${columns.length}, minmax(220px, 1fr))` }}>
         {columns.map((s) => (
           <section key={s} className={css.column} aria-label={t(`work.status.${s}`)}>
-            <h2>
+            <h2 className={css.columnTitle}>
               <span className={css.dot} data-status={s} aria-hidden="true" />
               {t(`work.status.${s}`)}
               <span className={css.count}>{grouped[s].length}</span>
@@ -89,7 +92,7 @@ export function WorkBoard({ state, run, busy, open, onOpen }: Props) {
                 <Tile key={task.id} task={task} state={state} open={task.id === open} domain={!both || filter === "all"}
                       onOpen={() => onOpen(task.id)} />
               ))}
-              {!grouped[s].length && <p className={css.none}>{t("work.columnEmpty")}</p>}
+              {!grouped[s].length && <Text size="small" tone="muted" className={css.none}>{t("work.columnEmpty")}</Text>}
             </div>
           </section>
         ))}
@@ -128,11 +131,11 @@ function Tile({ task, state, open, domain, onOpen }: { task: WorkTask; state: Wo
   const plan = state.plan!;
   const need = taskNeed(task, plan, state.can);
   return (
-    <button type="button" className={cx(css.tile, open && css.open)} aria-pressed={open} onClick={onOpen}>
+    <Card as="button" type="button" padding="sm" interactive className={cx(css.tile, open && css.open)} aria-pressed={open} onClick={onOpen}>
       <span className={css.tags}>
-        {domain && <span className={css.tag}>{t(`work.domain.${task.domain}`)}</span>}
-        {task.extra && <span className={cx(css.tag, css.extra)}>{t("work.extra")}</span>}
-        {need && <span className={cx(css.tag, css.need)}>{t(`work.need.${need}`)}</span>}
+        {domain && <Tag>{t(`work.domain.${task.domain}`)}</Tag>}
+        {task.extra && <Tag tone="major">{t("work.extra")}</Tag>}
+        {need && <Tag className={css.need}>{t(`work.need.${need}`)}</Tag>}
       </span>
       <b className={css.name}>{task.title}</b>
       {task.waiting.length > 0 && task.status !== "accepted" && (
@@ -149,7 +152,7 @@ function Tile({ task, state, open, domain, onOpen }: { task: WorkTask; state: Wo
         {task.settled && task.total > 0 && <span className={css.paid}>{t("work.paidMark")}</span>}
         {!task.settled && task.paid > 0 && <span>{t("work.paidPart", { paid: money(task.paid, plan.currency, locale()) })}</span>}
       </span>
-    </button>
+    </Card>
   );
 }
 
@@ -167,17 +170,11 @@ function TaskForm({ run, busy, extra, onDone }: { run: WorkRun; busy: boolean; e
     if (ok) onDone();
   };
   return (
-    <form className={css.form} onSubmit={submit}>
-      <h2>{t("work.form.title")}</h2>
-      {extra && <p className={css.note}>{t("work.form.extraNote")}</p>}
-      <label>
-        <span>{t("work.form.name")}</span>
-        <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={200} required autoFocus />
-      </label>
-      <label>
-        <span>{t("work.form.description")}</span>
-        <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} maxLength={4000} />
-      </label>
+    <Card as="form" className={css.form} onSubmit={submit}>
+      <Heading level={2} size="subheading">{t("work.form.title")}</Heading>
+      {extra && <Text size="small" tone="major">{t("work.form.extraNote")}</Text>}
+      <TextField label={t("work.form.name")} value={title} onChange={(e) => setTitle(e.target.value)} maxLength={200} required autoFocus />
+      <TextArea label={t("work.form.description")} value={description} onChange={(e) => setDescription(e.target.value)} rows={2} maxLength={4000} />
       <div className={css.formRow}>
         <label>
           <span>{t("work.form.domain")}</span>
@@ -193,9 +190,9 @@ function TaskForm({ run, busy, extra, onDone }: { run: WorkRun; busy: boolean; e
         </label>
       </div>
       <div className={css.formButtons}>
-        <button type="submit" className={css.primary} disabled={busy || !title.trim()}>{t("work.form.add")}</button>
-        <button type="button" onClick={onDone}>{t("work.form.cancel")}</button>
+        <Button type="submit" variant="primary" disabled={busy || !title.trim()}>{t("work.form.add")}</Button>
+        <Button onClick={onDone}>{t("work.form.cancel")}</Button>
       </div>
-    </form>
+    </Card>
   );
 }

@@ -1,0 +1,15 @@
+@use "@/shared/styles/mixins" as *;
+
+.card {
+  position: relative;
+  display: grid; align-content: start; gap: var(--space-1); padding: var(--space-3);
+  border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--raise);
+  cursor: pointer; transition: border-color .15s ease, box-shadow .15s ease;
+  &:hover { border-color: var(--muted); }
+  &:has(.input:focus-visible) { outline: 2px solid var(--hl); outline-offset: 2px; }
+}
+.input { position: absolute; opacity: 0; pointer-events: none; }
+.on { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.title { @include type(subheading); }
+.description { @include type(small); color: var(--muted); }
+.disabled { opacity: .5; cursor: default; }

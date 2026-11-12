@@ -1,0 +1,6 @@
+.dot {
+  display: inline-block; flex: none; width: 9px; height: 9px; margin-right: 6px; vertical-align: 0;
+  background: var(--muted);
+}
+.round { border-radius: 50%; }
+.square { border-radius: 2px; }

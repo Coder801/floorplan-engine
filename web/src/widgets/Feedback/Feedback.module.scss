@@ -1,60 +1,33 @@
-// "Leave feedback": a veil over everything, a card in the middle — like WorkConfirm and the alpha
-// notice; on a phone the card sits at the bottom with big targets
+// "Leave feedback": a Modal (like WorkConfirm and the alpha notice); here only its content. On a
+// phone the Modal is a sheet at the bottom, the targets are big
 
 @use "@/shared/styles/mixins" as *;
 
-.veil {
-  position: fixed; inset: 0; z-index: 120;
-  display: grid; place-items: center; padding: 16px;
-  background: color-mix(in srgb, var(--bg) 70%, transparent);
+.field { display: grid; gap: var(--space-1); }
+.label {
+  @include type(small);
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; gap: var(--space-2); color: var(--muted);
 }
-.card {
-  display: grid; gap: 12px; width: 100%; max-width: 480px; max-height: calc(100dvh - 32px); overflow: auto;
-  padding: 20px 22px; background: var(--raise); color: var(--text);
-  border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 8px 32px rgb(0 0 0 / .2);
-}
-.title { margin: 0; font-size: 18px; font-weight: 600; line-height: 1.25; }
-.lead { margin: 0; font-size: 13px; line-height: 1.45; color: var(--muted); }
-// Three kinds in one row (over ui.segmented, which is flex)
-.card .kinds {
-  display: grid; grid-template-columns: repeat(3, 1fr);
-  button { min-height: 36px; }
-}
-.field { display: grid; gap: 4px; font-size: 12px; color: var(--muted); }
-.label { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; gap: 8px; }
-.counter { font-size: 11px; font-variant-numeric: tabular-nums; }
-.over { color: var(--critical); }
-.field textarea {
-  font: inherit; font-size: 13px; line-height: 1.45; color: var(--text); background: var(--paper);
-  border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; resize: vertical; min-height: 96px;
-}
+.counter { font-variant-numeric: tabular-nums; }
 // Screenshots: square tiles, the add button is one more tile
-.photos { display: grid; grid-template-columns: repeat(auto-fill, minmax(88px, 1fr)); gap: 8px; }
+.photos { display: grid; grid-template-columns: repeat(auto-fill, minmax(88px, 1fr)); gap: var(--space-2); }
 .photo {
-  position: relative; aspect-ratio: 1; border: 1px solid var(--line); border-radius: 6px; overflow: hidden;
+  position: relative; aspect-ratio: 1; border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden;
   background: var(--paper);
   img { width: 100%; height: 100%; object-fit: cover; display: block; }
 }
-.remove {
-  position: absolute; top: 4px; right: 4px; width: 24px; height: 24px; min-height: 0; padding: 0;
-  display: grid; place-items: center; border-radius: 50%; line-height: 1;
-  background: color-mix(in srgb, var(--raise) 85%, transparent); color: var(--text); border: 1px solid var(--line);
-}
+.remove { position: absolute; top: var(--space-1); right: var(--space-1); }
 .add {
+  @include type(small);
+  @include focus-ring;
   aspect-ratio: 1; display: grid; place-content: center; justify-items: center; gap: 2px; padding: 6px;
-  border: 1px dashed var(--line); border-radius: 6px; background: none; color: var(--muted);
-  font-size: 11px; text-align: center;
-  span:first-child { font-size: 20px; line-height: 1; }
+  border: 1px dashed var(--line); border-radius: var(--radius); color: var(--muted); font-size: 11px; text-align: center;
+  &:hover { color: var(--text); border-color: var(--muted); }
+  span:first-child { font-size: 20px; line-height: 24px; }
 }
-.refused { color: var(--critical); }
-.attached { margin: 0; font-size: 12px; line-height: 1.4; color: var(--muted); }
-.error { margin: 0; font-size: 13px; color: var(--critical); }
-.buttons { display: flex; flex-wrap: wrap; gap: 8px; }
-.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); font-weight: 600; }
+.refused { @include type(small); color: var(--critical); }
 
 @media (max-width: $phone) {
-  .veil { place-items: end stretch; padding: 0; }
-  .card { max-width: none; border-radius: 12px 12px 0 0; padding-bottom: calc(20px + env(safe-area-inset-bottom)); }
-  .card .kinds button { min-height: 44px; }
-  .buttons button { flex: 1 1 auto; min-height: 44px; }
+  .kinds > button { min-height: 40px; }
+  .buttons > * { flex: 1 1 auto; min-height: var(--control-h-lg); }
 }

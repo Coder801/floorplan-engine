@@ -8,6 +8,7 @@ import { basename, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import react from "@vitejs/plugin-react";
 import { defineConfig, type Plugin } from "vite";
+import { uiNames } from "./scripts/uiNames.ts";
 
 const api = { "/api": process.env.API_URL || "http://127.0.0.1:8000" };
 
@@ -36,7 +37,8 @@ const cssTypes = (): Plugin => ({
 });
 
 export default defineConfig({
-  plugins: [react(), version(), cssTypes()],
+  // uiNames: data-ui="Компонент" on the root of every block, for debugging (scripts/uiNames.ts)
+  plugins: [uiNames(), react(), version(), cssTypes()],
   // @/… is relative to src: components by group (pages, widgets, ui), shared code (shared), canvases (engine)
   resolve: { alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) } },
   define: {
@@ -58,6 +60,12 @@ export default defineConfig({
     },
   },  // 3D (three.js) is a separate file, loaded on the button
   // 127.0.0.1, like the API: Node may serve "localhost" only over IPv6 (::1)
-  server: { host: "127.0.0.1", port: 5173, proxy: api },
+  // /admin goes to the admin dev server (admin/, 5174), so both live on one address as behind Caddy
+  // and share the login cookie; `floorplan-engine dev` starts both
+  server: {
+    host: "127.0.0.1",
+    port: 5173,
+    proxy: { ...api, "/admin": process.env.ADMIN_URL || "http://127.0.0.1:5174" },
+  },
   preview: { host: "127.0.0.1", port: 4173, proxy: api },
 });

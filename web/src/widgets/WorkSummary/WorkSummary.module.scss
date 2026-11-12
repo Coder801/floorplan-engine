@@ -2,14 +2,13 @@
 
 @use "@/shared/styles/mixins" as *;
 
-.summary { display: grid; gap: 14px; }
-.pairs { @include pairs(6px 12px); font-size: 13px; }
+.summary { display: grid; gap: var(--space-4); }
+.pairs { @include pairs(var(--space-2) var(--space-3)); }
 .totals {
-  display: grid; grid-template-columns: 1fr auto; gap: 6px 0; margin: 0; font-size: 14px;
+  display: grid; grid-template-columns: 1fr auto; gap: var(--space-2) 0; margin: 0;
   dt { color: var(--muted); }
-  dd { margin: 0; padding-left: 12px; text-align: right; font-weight: 500; font-variant-numeric: tabular-nums; }
-  .grand { padding-top: 6px; border-top: 1px solid var(--line); color: var(--text); font-weight: 600; }
+  dd { margin: 0; padding-left: var(--space-3); text-align: right; font-weight: 500; font-variant-numeric: tabular-nums; }
+  .grand { padding-top: var(--space-2); border-top: 1px solid var(--line); color: var(--text); font-weight: 600; }
 }
-.note { margin: 0; font-size: 12px; color: var(--major); }
 // Approved by the studio for the client: the channel under the date
-.behalf { display: block; font-size: 12px; color: var(--muted); font-style: italic; }
+.behalf { @include type(small); display: block; color: var(--muted); font-style: italic; }

@@ -3,8 +3,11 @@
 
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { cx } from "@/shared/cx";
-import ui from "@/shared/styles/ui.module.scss";
+import { Button } from "@/ui/Button";
+import { Card } from "@/ui/Card";
+import { Heading } from "@/ui/Heading";
+import { SegmentedControl } from "@/ui/SegmentedControl";
+import { Text } from "@/ui/Text";
 import type { PanelSticker, PanelStickers } from "@/shared/types";
 import css from "./StickersStage.module.scss";
 
@@ -23,33 +26,29 @@ export function StickersStage({ stickers, file }: Props) {
   const rails = [...new Set(stickers.items.map((s) => s.row))];
   return (
     <div className={css.stage}>
-      <article className={css.sheet}>
+      <Card as="article" padding="lg" className={css.sheet}>
         <header className={css.head}>
           <div>
-            <h1>{t("panel.stickers")}</h1>
-            <p>{t("panel.stickersNote", { n: stickers.items.length, width: stickers.width, height: stickers.height })}</p>
+            <Heading level={1}>{t("panel.stickers")}</Heading>
+            <Text size="small" tone="muted">{t("panel.stickersNote", { n: stickers.items.length, width: stickers.width, height: stickers.height })}</Text>
           </div>
           <div className={css.actions}>
-            <div className={ui.segmented} role="group" aria-label={t("panel.stickersNumber")}>
-              <button className={cx(!short && ui.on)} aria-pressed={!short} onClick={() => setShort(false)}>{t("panel.stickersFull")}</button>
-              <button className={cx(short && ui.on)} aria-pressed={short} onClick={() => setShort(true)}>{t("panel.stickersShort")}</button>
-            </div>
-            <div className={ui.segmented} role="group" aria-label={t("panel.stickersStyle")}>
-              <button className={cx(!colored && ui.on)} aria-pressed={!colored} onClick={() => setColored(false)}>{t("panel.stickersBlack")}</button>
-              <button className={cx(colored && ui.on)} aria-pressed={colored} onClick={() => setColored(true)}>{t("panel.stickersColor")}</button>
-            </div>
-            {pdf && <a className={css.pdf} href={pdf} download>{t("panel.stickersPdf")}</a>}
+            <SegmentedControl label={t("panel.stickersNumber")} value={short ? "short" : "full"} onChange={(v) => setShort(v === "short")}
+                              options={[{ value: "full", label: t("panel.stickersFull") }, { value: "short", label: t("panel.stickersShort") }]} />
+            <SegmentedControl label={t("panel.stickersStyle")} value={colored ? "color" : "black"} onChange={(v) => setColored(v === "color")}
+                              options={[{ value: "black", label: t("panel.stickersBlack") }, { value: "color", label: t("panel.stickersColor") }]} />
+            {pdf && <Button variant="primary" href={pdf} download>{t("panel.stickersPdf")}</Button>}
           </div>
         </header>
         {rails.map((row, i) => (
-          <section key={row}>
-            <h2>{t("panel.rail", { n: i + 1 })}</h2>
+          <section key={row} className={css.section}>
+            <Heading level={2} size="caps">{t("panel.rail", { n: i + 1 })}</Heading>
             <div className={css.rail}>
               {stickers.items.filter((s) => s.row === row).map((s) => <Sticker key={s.id} item={s} stickers={stickers} colored={colored} short={short} />)}
             </div>
           </section>
         ))}
-      </article>
+      </Card>
     </div>
   );
 }

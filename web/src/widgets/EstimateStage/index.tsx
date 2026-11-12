@@ -10,7 +10,11 @@ import { useTranslation } from "react-i18next";
 import { cx } from "@/shared/cx";
 import { rowKind } from "@/shared/estimate";
 import type { SideTable, WorkScope } from "@/shared/types";
+import { Button } from "@/ui/Button";
+import { Card } from "@/ui/Card";
+import { Heading } from "@/ui/Heading";
 import { HelpTip } from "@/ui/HelpTip";
+import { Text } from "@/ui/Text";
 import css from "./EstimateStage.module.scss";
 
 export interface EstimateItem { table: SideTable; xlsx: string | null }
@@ -34,12 +38,12 @@ function Estimate({ table, xlsx }: EstimateItem) {
     return next;
   });
   return (
-      <article className={css.sheet}>
+      <Card as="article" padding="lg" className={css.sheet}>
         <header className={css.head}>
-          <h1>{table.title}</h1>
-          {xlsx && <a className={css.excel} href={xlsx} download>{t("estimate.excel")}</a>}
+          <Heading level={1}>{table.title}</Heading>
+          {xlsx && <Button variant="primary" href={xlsx} download>{t("estimate.excel")}</Button>}
         </header>
-        {scoped && <p className={css.lead}>{t("estimate.scopeNote")}</p>}
+        {scoped && <Text size="small" tone="muted">{t("estimate.scopeNote")}</Text>}
         <table className={css.table}>
           <thead><tr>{table.columns.map((c, i) => <th key={i} className={al(i)}>{c}</th>)}</tr></thead>
           <tbody>
@@ -82,7 +86,7 @@ function Estimate({ table, xlsx }: EstimateItem) {
           </tbody>
         </table>
         {!!table.notes?.length && <ul className={css.notes}>{table.notes.map((n, i) => <li key={i}>{n}</li>)}</ul>}
-      </article>
+      </Card>
   );
 }
 
@@ -92,12 +96,12 @@ function Scope({ scope }: { scope: WorkScope }) {
   return (
     <div className={css.scopeBody}>
       <section>
-        <h3>{t("estimate.includes")}</h3>
+        <Heading level={3} size="subheading">{t("estimate.includes")}</Heading>
         <ul>{scope.includes.map((x) => <li key={x}>{x}</li>)}</ul>
       </section>
       {scope.excludes.length > 0 && (
         <section className={css.out}>
-          <h3>{t("estimate.excludes")}</h3>
+          <Heading level={3} size="subheading">{t("estimate.excludes")}</Heading>
           <ul>{scope.excludes.map((x) => <li key={x}>{x}</li>)}</ul>
         </section>
       )}

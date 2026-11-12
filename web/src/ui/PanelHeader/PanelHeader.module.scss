@@ -1,0 +1,8 @@
+@use "@/shared/styles/mixins" as *;
+
+.head {
+  display: flex; align-items: center; gap: var(--space-1); min-height: 52px;
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
+  border-bottom: 1px solid var(--line);
+}
+.title { @include type(subheading); flex: 1; min-width: 0; }

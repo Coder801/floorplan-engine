@@ -4,7 +4,10 @@
 import { type FormEvent, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { FIRM_KINDS, registerFirm, type FirmKind } from "@/shared/auth";
-import { cx } from "@/shared/cx";
+import { Button } from "@/ui/Button";
+import { RadioCard } from "@/ui/RadioCard";
+import { Text } from "@/ui/Text";
+import { TextField } from "@/ui/TextField";
 import css from "./FirmForm.module.scss";
 
 export function FirmForm({ onBack, onDone }: { onBack: () => void; onDone: () => void }) {
@@ -31,36 +34,25 @@ export function FirmForm({ onBack, onDone }: { onBack: () => void; onDone: () =>
 
   return (
     <form className={css.form} onSubmit={(e) => void submit(e)}>
-      <label className={css.field}>
-        <span>{t("firm.name")}</span>
-        <input required maxLength={200} autoComplete="organization" autoFocus value={name}
-               placeholder={t("firm.namePlaceholder")} onChange={(e) => setName(e.target.value)} />
-      </label>
+      <TextField label={t("firm.name")} size="lg" required maxLength={200} autoComplete="organization" autoFocus value={name}
+                 placeholder={t("firm.namePlaceholder")} onChange={(e) => setName(e.target.value)} />
       <fieldset className={css.kinds}>
         <legend>{t("firm.kind")}</legend>
         {FIRM_KINDS.map((k) => (
-          <label key={k} className={cx(css.kind, kind === k && css.on)}>
-            <input type="radio" name="business" value={k} checked={kind === k} onChange={() => setKind(k)} />
-            <b>{t(`firm.kinds.${k}`)}</b>
-            <span className="small muted">{t(`firm.kinds.${k}Note`)}</span>
-          </label>
+          <RadioCard key={k} name="business" value={k} checked={kind === k} onChange={() => setKind(k)}
+                     title={t(`firm.kinds.${k}`)} description={t(`firm.kinds.${k}Note`)} />
         ))}
       </fieldset>
       <div className={css.pair}>
-        <label className={css.field}>
-          <span>{t("firm.city")} <i className="muted">{t("firm.optional")}</i></span>
-          <input maxLength={100} autoComplete="address-level2" value={city} onChange={(e) => setCity(e.target.value)} />
-        </label>
-        <label className={css.field}>
-          <span>{t("firm.phone")} <i className="muted">{t("firm.optional")}</i></span>
-          <input type="tel" maxLength={40} autoComplete="tel" value={phone} placeholder="+380…"
-                 onChange={(e) => setPhone(e.target.value)} />
-        </label>
+        <TextField label={<>{t("firm.city")} {t("firm.optional")}</>} size="lg" maxLength={100} autoComplete="address-level2"
+                   value={city} onChange={(e) => setCity(e.target.value)} />
+        <TextField label={<>{t("firm.phone")} {t("firm.optional")}</>} size="lg" type="tel" maxLength={40} autoComplete="tel"
+                   value={phone} placeholder="+380…" onChange={(e) => setPhone(e.target.value)} />
       </div>
-      {error && <p className={css.error} role="alert">{error}</p>}
+      {error && <Text tone="critical" role="alert">{error}</Text>}
       <div className={css.actions}>
-        <button type="button" disabled={busy} onClick={onBack}>{t("firm.back")}</button>
-        <button type="submit" className={css.primary} disabled={busy || !name.trim()}>{t("firm.submit")}</button>
+        <Button size="lg" disabled={busy} onClick={onBack}>{t("firm.back")}</Button>
+        <Button type="submit" variant="primary" size="lg" disabled={busy || !name.trim()}>{t("firm.submit")}</Button>
       </div>
     </form>
   );

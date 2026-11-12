@@ -12,6 +12,17 @@
   color-scheme: dark;
 }
 
+// Theme-independent scales. Spacing is a 4px grid: every gap and padding is one of these, and
+// every line-height in the type scale (_mixins.scss, $type) is a multiple of 4px, so blocks keep
+// one vertical rhythm. Radii: controls, cards and dialogs (tags use --radius-sm).
+:root {
+  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 20px;
+  --space-6: 24px; --space-8: 32px; --space-10: 40px;
+  --radius-sm: 4px; --radius: 6px; --radius-md: 8px; --radius-lg: 10px; --radius-xl: 12px;
+  --shadow-pop: 0 8px 32px rgb(0 0 0 / .2);
+  --control-h: 36px; --control-h-lg: 44px;
+}
+
 :root {
   --bg: #efebe2; --panel: #fbf8f2; --raise: #ffffff; --text: #29251f; --muted: #6b6357;
   --line: #e1dacd; --soft: #f3efe7; --accent: #29251f; --accent-text: #fbf8f2;

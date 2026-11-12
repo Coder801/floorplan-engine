@@ -9,6 +9,8 @@ import { useTranslation } from "react-i18next";
 import { cx } from "@/shared/cx";
 import { briefCard, type PageIndex } from "@/shared/page";
 import { useView, view } from "@/shared/store";
+import { Button } from "@/ui/Button";
+import { IconButton } from "@/ui/IconButton";
 import { PointBlock } from "@/widgets/PointBlock";
 import css from "./Tip.module.scss";
 
@@ -47,14 +49,14 @@ export function Tip({ index, onWall }: { index: PageIndex; onWall?: (key: string
          style={pinned ? undefined : { left: pos?.left ?? -9999, top: pos?.top ?? -9999 }}
          // The canvas keeps focus: losing it would unpin the hint before the click lands (SheetView)
          onMouseDown={(ev) => ev.preventDefault()}>
-      {pinned && <button className={css.close} aria-label={t("tip.close")} onClick={unpin}>×</button>}
+      {pinned && <IconButton variant="close" size="sm" className={css.close} label={t("tip.close")} onClick={unpin} />}
       <b>{card.title}</b>
       {card.rows.length > 0 && (
         <dl>{card.rows.map(([k, v], i) => [<dt key={`t${i}`}>{k}</dt>, <dd key={`d${i}`}>{v}</dd>])}</dl>
       )}
       {pinned && block && <PointBlock block={block} />}
       {pinned && block && onWall && (
-        <button className={css.wall} onClick={() => onWall(block.wall)}>{t("tip.openWall")}</button>
+        <Button size="sm" block className={css.wall} onClick={() => onWall(block.wall)}>{t("tip.openWall")}</Button>
       )}
     </div>
   );

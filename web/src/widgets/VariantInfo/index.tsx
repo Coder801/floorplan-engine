@@ -6,6 +6,8 @@
 import { useTranslation } from "react-i18next";
 import type { Variants } from "@/shared/types";
 import { activeSummary, breakersOf, hasLoopDrops, optionsOf, parseKey } from "./variants";
+import { Button } from "@/ui/Button";
+import { Text } from "@/ui/Text";
 import css from "./VariantInfo.module.scss";
 
 interface Props {
@@ -38,13 +40,13 @@ export function VariantInfo({ variants, canChoose, onEdit }: Props) {
         {rows.map(([k, v]) => [<dt key={`k${k}`}>{k}</dt>, <dd key={`v${k}`}>{v}</dd>])}
       </dl>
       {current && (
-        <p className="small muted">
+        <Text size="small" tone="muted">
           {t("variant.stats", { devices: current.devices, cable: Math.round(current.cable_m), chases: Math.round(current.chases_m) })}
           {current.edited && <> · {t("variant.edited")}</>}
-        </p>
+        </Text>
       )}
-      <p className="small muted">{canChoose ? t("variant.edits") : t("variant.readOnly")}</p>
-      {canChoose && onEdit && <div><button onClick={onEdit}>{t("variant.edit")}</button></div>}
+      <Text size="small" tone="muted">{canChoose ? t("variant.edits") : t("variant.readOnly")}</Text>
+      {canChoose && onEdit && <div><Button onClick={onEdit}>{t("variant.edit")}</Button></div>}
     </section>
   );
 }

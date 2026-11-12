@@ -1,0 +1,8 @@
+@use "@/shared/styles/mixins" as *;
+
+.group {
+  @include raised;
+  display: flex; overflow: hidden;
+  > button, > a { border: 0; border-radius: 0; min-width: 40px; }
+  > * + button, > * + a { border-left: 1px solid var(--line); }
+}

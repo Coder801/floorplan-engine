@@ -3,15 +3,16 @@
 @use "@/shared/styles/mixins" as *;
 
 .card {
-  @include raised(10px);
+  @include raised(var(--radius-lg));
   position: absolute; top: 60px; right: 12px; z-index: 4;
   width: 360px; max-height: calc(100% - 128px); overflow: auto;
-  padding: 12px 14px; font-size: 12px;
+  @include type(small);
+  padding: var(--space-3) var(--space-4);
   box-shadow: 0 10px 32px rgba(0, 0, 0, .2);
   animation: card-in .16s ease-out;
   @include no-motion;
-  dl { @include pairs(4px 12px); }
-  h4 { margin: 14px 0 6px; font-size: 12px; font-weight: 600; }
+  dl { @include pairs(var(--space-1) var(--space-3)); }
+  h4 { margin: var(--space-4) 0 var(--space-1); }
   ul { margin: 0; padding: 0; list-style: none; }
 }
 @media (max-width: $phone) { .card { left: 8px; right: 8px; top: 56px; width: auto; } }
@@ -22,13 +23,10 @@
 
 // Colour | QF | name (stretches) | ×
 .head {
-  display: flex; align-items: baseline; gap: 8px; margin-bottom: 10px;
-  b { font-size: 15px; }
-  button {
-    @include bare-button;
-    font-size: 20px; line-height: 1; min-width: 32px; min-height: 32px; margin: -8px -8px 0 0;
-  }
+  display: flex; align-items: baseline; gap: var(--space-2); margin-bottom: var(--space-3);
+  b { @include type(heading); }
 }
+.close { align-self: start; margin: -4px -8px 0 0; }
 .title { flex: 1; }
 
 // Load: name | room | power

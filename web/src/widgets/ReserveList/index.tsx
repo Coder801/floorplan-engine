@@ -6,7 +6,9 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { cx } from "@/shared/cx";
-import ui from "@/shared/styles/ui.module.scss";
+import { Checkbox } from "@/ui/Checkbox";
+import { SegmentedControl } from "@/ui/SegmentedControl";
+import { Text } from "@/ui/Text";
 import type { OverviewReserve } from "@/shared/types";
 import { lightOnly, mostByPower, presetOf, type ReservePreset, reserveLevel, reservePeak, reservePower, toggleGroup } from "./reserve";
 import css from "./ReserveList.module.scss";
@@ -41,15 +43,10 @@ export function ReserveList({ reserve, value, disabled = false, onChange }: Prop
   const note = preset === "max" && limit === null ? "maxNoLimit" : preset;
   return (
     <>
-      <div className={cx(ui.segmented, css.presets)} role="radiogroup" aria-label={t("reserve.presets.label")}>
-        {picks.map(({ id, groups }) => (
-          <button key={id} role="radio" aria-checked={preset === id} className={cx(preset === id && ui.on)}
-                  disabled={disabled || (id !== "manual" && !groups?.length)} onClick={() => choose(id, groups)}>
-            {t(`reserve.presets.${id}`)}
-          </button>
-        ))}
-      </div>
-      <p className={cx("small muted", css.presetNote)}>{t(`reserve.presets.${note}Note`)}</p>
+      <SegmentedControl<ReservePreset> className={css.presets} label={t("reserve.presets.label")} value={preset}
+        onChange={(id) => choose(id, picks.find((p) => p.id === id)?.groups ?? null)}
+        options={picks.map(({ id, groups }) => ({ value: id, label: t(`reserve.presets.${id}`), disabled: disabled || (id !== "manual" && !groups?.length) }))} />
+      <Text size="small" tone="muted" className={css.presetNote}>{t(`reserve.presets.${note}Note`)}</Text>
       <p className={cx(css.sum, level !== "ok" && css[level])} aria-live="polite">
         {level !== "ok" && <Sign level={level} />}
         <span>
@@ -61,17 +58,17 @@ export function ReserveList({ reserve, value, disabled = false, onChange }: Prop
           {level !== "ok" && <span> · {t(`reserve.${level}`)}</span>}
         </span>
       </p>
-      <p className={cx("small muted", css.peakNote)}>{t("reserve.peakNote")}</p>
+      <Text size="small" tone="muted" className={css.peakNote}>{t("reserve.peakNote")}</Text>
       <ul className={css.list}>
         {reserve.items.map((g) => (
           <li key={g.id}>
-            <label className={css.row}>
-              <input type="checkbox" checked={value.includes(g.id)} disabled={disabled}
-                     onChange={() => { setHand(true); onChange(toggleGroup(reserve, value, g.id)); }} />
-              <span className="mono">{g.id}</span>
-              <span className={css.purpose}>{g.purpose}</span>
-              <span className={css.power}>{kw(g.power)} {t("units.kw")}</span>
-            </label>
+            <Checkbox className={css.row} checked={value.includes(g.id)} disabled={disabled}
+                      onChange={() => { setHand(true); onChange(toggleGroup(reserve, value, g.id)); }}
+                      label={<span className={css.cols}>
+                        <span className="mono">{g.id}</span>
+                        <span className={css.purpose}>{g.purpose}</span>
+                        <span className={css.power}>{kw(g.power)} {t("units.kw")}</span>
+                      </span>} />
           </li>
         ))}
       </ul>

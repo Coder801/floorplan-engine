@@ -1,0 +1,27 @@
+// Button: one base and variants (index.tsx). Heights are --control-h; text is the body role.
+
+@use "@/shared/styles/mixins" as *;
+
+.button { @include button-base; text-align: center; }
+
+.sm { min-height: 32px; padding: 0 var(--space-2); }
+.md { min-height: var(--control-h); }
+.lg { min-height: var(--control-h-lg); padding: 0 var(--space-4); border-radius: var(--radius-md); }
+.block { display: flex; width: 100%; }
+
+.primary, .pressed {
+  background: var(--accent); color: var(--accent-text); border-color: var(--accent); font-weight: 500;
+  &:hover:not(:disabled) { background: var(--accent); filter: brightness(1.15); }
+}
+.bare {
+  border-color: transparent; background: none;
+  &:hover:not(:disabled) { background: var(--soft); }
+}
+.link {
+  min-height: 0; padding: 0; border: 0; background: none; border-radius: 0;
+  color: inherit; text-decoration: underline; text-underline-offset: 2px;
+  &:hover:not(:disabled) { background: none; color: var(--hl); }
+}
+.danger { color: var(--critical); }
+
+.icon { display: inline-flex; flex: none; svg { width: 18px; height: 18px; } }

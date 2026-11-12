@@ -7,6 +7,10 @@ import { wallRooms, type WallPage } from "@/engine/sheet/walls";
 import { useView } from "@/shared/store";
 import type { Page } from "@/shared/types";
 import { drawThumb, THUMB_H, THUMB_W } from "./thumb";
+import { Button } from "@/ui/Button";
+import { Card } from "@/ui/Card";
+import { Heading } from "@/ui/Heading";
+import { Text } from "@/ui/Text";
 import css from "./WallGrid.module.scss";
 
 interface Props {
@@ -49,22 +53,23 @@ export function WallGrid({ walls, pages, at, onPick, onClose }: Props) {
   return (
     <div ref={root} className={css.grid} data-pop="" role="region" aria-label={t("pager.overview")}>
       <header className={css.head}>
-        <h2>{t("pager.overview")}</h2>
-        <span className="small muted">{t("wallGrid.count", { n: walls.length })}</span>
-        <button className={css.back} onClick={onClose}>← {t("wallGrid.back")}</button>
+        <Heading level={2}>{t("pager.overview")}</Heading>
+        <Text as="span" size="small" tone="muted">{t("wallGrid.count", { n: walls.length })}</Text>
+        <Button variant="bare" className={css.back} onClick={onClose}>← {t("wallGrid.back")}</Button>
       </header>
       {rooms.map((r, k) => (
         <section key={k} className={css.room} aria-label={r.room || undefined}>
-          {r.room && <h3>{r.room}</h3>}
+          {r.room && <Heading level={3} size="caps">{r.room}</Heading>}
           <div className={css.cards}>
             {r.items.map(({ index, wall }) => (
-              <button key={index} className={css.card} aria-current={index === at || undefined}
+              <Card as="button" type="button" key={index} padding="sm" interactive selected={index === at} className={css.card}
+                    aria-current={index === at || undefined}
                       aria-label={t("wallGrid.open", { title: walls[index].title })}
                       onClick={() => (index === at ? onClose() : onPick(index))}>
                 <canvas data-wall={index} style={{ aspectRatio: `${THUMB_W} / ${THUMB_H}` }} aria-hidden="true" />
                 <span className={css.name}>{wall}</span>
-                <span className="mono muted small">{index + 1}</span>
-              </button>
+                <Text as="span" size="small" tone="muted" mono>{index + 1}</Text>
+              </Card>
             ))}
           </div>
         </section>

@@ -8,6 +8,9 @@ import { base, getText } from "@/shared/api";
 import { cx } from "@/shared/cx";
 import { label, locale } from "@/shared/i18n";
 import type { ProjectSummary } from "@/shared/types";
+import { Card } from "@/ui/Card";
+import { Tag } from "@/ui/Tag";
+import { Text } from "@/ui/Text";
 import css from "./ProjectCard.module.scss";
 
 // Deterministic generator seeded by the name: a project always gets the same picture
@@ -86,17 +89,17 @@ export function ProjectCard({ p, onOpen, current = false }: {
   const { t } = useTranslation();
   const built = date(p.built);
   return (
-    <button className={cx(css.card, current && css.current)} aria-current={current || undefined}
-            onClick={() => onOpen(p.id)}>
+    <Card as="button" type="button" variant="panel" padding="none" interactive selected={current} className={css.card}
+          aria-current={current || undefined} onClick={() => onOpen(p.id)}>
       <Preview p={p} />
       <div className={css.body}>
-        <div className={css.title}>{p.title}</div>
-        <div className="mono muted">{p.name}</div>
+        <Text as="div" weight="bold" className={css.title}>{p.title}</Text>
+        <Text as="div" size="small" tone="muted" mono>{p.name}</Text>
         <div className={css.stages}>
           {p.stages.filter((s) => s.status !== "absent").map((s) => (
-            <span key={s.stage} className={cx(css.chip, `st-${s.status}`)} title={label("status", s.status)}>
+            <Tag key={s.stage} variant="outline" tone="inherit" className={`st-${s.status}`} title={label("status", s.status)}>
               {label("stage", s.stage)}
-            </span>
+            </Tag>
           ))}
         </div>
         <div className={cx(css.meta, "small")}>
@@ -105,6 +108,6 @@ export function ProjectCard({ p, onOpen, current = false }: {
           {p.stale && <span className="sev-critical">{t("welcome.stale")}</span>}
         </div>
       </div>
-    </button>
+    </Card>
   );
 }

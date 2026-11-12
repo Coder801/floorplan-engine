@@ -1,0 +1,8 @@
+@use "@/shared/styles/mixins" as *;
+
+.display { @include type(display); letter-spacing: -.01em; }
+.title { @include type(title); }
+.heading { @include type(heading); }
+.subheading { @include type(subheading); }
+.caps { @include type(caps); color: var(--muted); }
+.muted { color: var(--muted); }

@@ -12,7 +12,9 @@ import { WATER } from "@/engine/elevation/ElevationView";
 import { cx } from "@/shared/cx";
 import { useView, view, type WallLayers } from "@/shared/store";
 import type { Elevation } from "@/shared/types";
+import { Button } from "@/ui/Button";
 import { EyeToggle } from "@/ui/EyeToggle";
+import { Text } from "@/ui/Text";
 import { type Row, wallRows } from "./rows";
 import css from "./WallItems.module.scss";
 
@@ -56,8 +58,8 @@ export function WallItems({ wall, onWiring }: { wall: Elevation; onWiring?: (key
               </span>
               <span className={cx(css.where, "mono")}>{r.where}</span>
               {wiring && onWiring && r.line && (
-                <button className={css.go} title={t("wall.goTitle")}
-                        onClick={(e) => { e.stopPropagation(); onWiring(r.key); }}>{t("wall.go")}</button>
+                <Button size="sm" className={css.go} title={t("wall.goTitle")}
+                        onClick={(e) => { e.stopPropagation(); onWiring(r.key); }}>{t("wall.go")}</Button>
               )}
             </li>
           ))}
@@ -68,19 +70,19 @@ export function WallItems({ wall, onWiring }: { wall: Elevation; onWiring?: (key
 
   return (
     <div className={css.wall}>
-      <p className="small muted">
+      <Text size="small" tone="muted">
         {t("wall.summary", {
           behind: wall.behind, length: Math.round(wall.length),
           height: `${Math.round(wall.height)}${wall.height_assumed ? "*" : ""}`,
         })}
-      </p>
-      {rows.electrical.length === 0 && rows.water.length === 0 ? <div className="muted">{t("wall.onlyChases")}</div> : (
+      </Text>
+      {rows.electrical.length === 0 && rows.water.length === 0 ? <Text tone="muted">{t("wall.onlyChases")}</Text> : (
         <>
           {(rows.electrical.length > 0 || wall.chases.length > 0) && section("electrical", rows.electrical, true)}
           {rows.water.length > 0 && section("water", rows.water, false)}
         </>
       )}
-      <p className="small muted">{t("wall.note")}</p>
+      <Text size="small" tone="muted">{t("wall.note")}</Text>
     </div>
   );
 }

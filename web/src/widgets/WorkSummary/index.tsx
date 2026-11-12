@@ -5,13 +5,14 @@ import { useTranslation } from "react-i18next";
 import { locale } from "@/shared/i18n";
 import type { WorkState } from "@/shared/types";
 import { behalfText, day, modelChanged, money } from "@/shared/work";
+import { Text } from "@/ui/Text";
 import css from "./WorkSummary.module.scss";
 
 export function WorkSummary({ state }: { state: WorkState | null }) {
   const { t } = useTranslation();
   const plan = state?.plan;
   if (!state || !plan || (plan.state === "draft" && !state.can.work_manage && !state.can.work_do)) {
-    return <p className="muted">{t("work.summary.none")}</p>;
+    return <Text tone="muted">{t("work.summary.none")}</Text>;
   }
   const loc = locale();
   const m = (v: number) => money(v, plan.currency, loc);
@@ -33,7 +34,7 @@ export function WorkSummary({ state }: { state: WorkState | null }) {
         {plan.model_version !== null && <><dt>{t("work.summary.version")}</dt><dd>{plan.model_version}</dd></>}
         <dt>{t("work.accepted")}</dt><dd>{t("work.ofN", { n: tt.accepted, m: tt.tasks })}</dd>
       </dl>
-      {modelChanged(state) && <p className={css.note}>{t("work.modelChanged", { plan: plan.model_version, now: state.model_version })}</p>}
+      {modelChanged(state) && <Text size="small" tone="major">{t("work.modelChanged", { plan: plan.model_version, now: state.model_version })}</Text>}
       <dl className={css.totals}>
         <dt>{t("work.card.work")}</dt><dd>{m(tt.work)}</dd>
         <dt>{t("work.card.materials")}</dt><dd>{m(tt.material)}</dd>
@@ -41,8 +42,8 @@ export function WorkSummary({ state }: { state: WorkState | null }) {
         <dt>{t("work.card.paid")}</dt><dd>{m(tt.paid)}</dd>
         <dt>{t("work.summary.left")}</dt><dd>{m(Math.max(0, tt.total - tt.paid))}</dd>
       </dl>
-      {tt.unpriced > 0 && <p className={css.note}>{t("work.card.unpricedNote", { n: tt.unpriced })}</p>}
-      <p className="muted small">{t("work.summary.lead")}</p>
+      {tt.unpriced > 0 && <Text size="small" tone="major">{t("work.card.unpricedNote", { n: tt.unpriced })}</Text>}
+      <Text size="small" tone="muted">{t("work.summary.lead")}</Text>
     </div>
   );
 }

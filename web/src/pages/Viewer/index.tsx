@@ -24,8 +24,15 @@ import { RESERVE_KEY, type Answer, type QuestionsMemory } from "@/shared/questio
 import { watchRebuild } from "@/shared/rebuild";
 import { BRAND, watchBuild } from "@/shared/version";
 import { Boundary } from "@/ui/Boundary";
+import { Button } from "@/ui/Button";
+import { ButtonGroup } from "@/ui/ButtonGroup";
+import { EmptyState } from "@/ui/EmptyState";
+import { ErrorState } from "@/ui/ErrorState";
+import { IconButton } from "@/ui/IconButton";
 import { Logo } from "@/ui/Logo";
 import { MarkLoader } from "@/ui/MarkLoader";
+import { SegmentedControl } from "@/ui/SegmentedControl";
+import { Text } from "@/ui/Text";
 import { AlphaNotice } from "@/widgets/AlphaNotice";
 import { DownloadMenu } from "@/widgets/DownloadMenu";
 import { Drawer } from "@/widgets/Drawer";
@@ -544,13 +551,13 @@ export function Viewer({ account = null }: { account?: Account | null }) {
   );
   let downloadInStage = false;
   let main: React.ReactNode;
-  if (!current) main = <div className={ui.empty}>{t("app.chooseProject")}</div>;
-  else if (error) main = <div className={ui.error}>{error}</div>;
+  if (!current) main = <EmptyState>{t("app.chooseProject")}</EmptyState>;
+  else if (error) main = <ErrorState>{error}</ErrorState>;
   else if (source && project) main = <SourceView project={project} file={source} onBack={() => setSource(null)} />;
   else if (workTab && project) {
     main = <WorkStage state={work.state} error={work.error} busy={work.busy} run={work.run} open={shownTask?.id ?? null} onOpen={setTask} />;
   }
-  else if (project && !project.artifact) main = <div className={ui.empty}>{t("app.noArtifact")}</div>;
+  else if (project && !project.artifact) main = <EmptyState>{t("app.noArtifact")}</EmptyState>;
   else if (info && project) {
     main = <OverviewStage overview={overview} variants={variants} project={project} openQuestions={openQs}
                           canChoose={project.can?.choose_variant ?? true} refreshing={refreshing || choosing}
@@ -564,7 +571,7 @@ export function Viewer({ account = null }: { account?: Account | null }) {
     const water = [page, ...drawn].find((p) => p.stage === "plumbing" && p.estimate);
     if (wiring?.estimate) items.push({ table: wiring.estimate, xlsx: xlsx("estimate.xlsx") });
     if (water?.estimate) items.push({ table: water.estimate, xlsx: xlsx("plumbing-estimate.xlsx") });
-    main = items.length ? <EstimateStage items={items} /> : <div className={ui.empty}>{t("estimate.none")}</div>;
+    main = items.length ? <EstimateStage items={items} /> : <EmptyState>{t("estimate.none")}</EmptyState>;
   }
   else if (page && project && page.panel) {
     const built = (f: string) => (project.files.includes(f) ? `${base(current)}/out/${f}` : null);
@@ -575,7 +582,7 @@ export function Viewer({ account = null }: { account?: Account | null }) {
                        busy={answering || refreshing}
                        onReserve={async (groups) => { await answerQuestion("panel_reserve", groups); }} />;
   } else if (page && project && !page.items?.length) {
-    main = <div className={ui.error}>{t("app.nothingToDraw", { name: page.name })}</div>;
+    main = <ErrorState>{t("app.nothingToDraw", { name: page.name })}</ErrorState>;
   } else if (page && project && wall?.data && elevSheets.includes(loaded ?? -1)) {
     main = <ElevationStage ref={stage} elevation={wall.data} withMap={!!scene} download={download} />;
     downloadInStage = true;
@@ -628,21 +635,21 @@ export function Viewer({ account = null }: { account?: Account | null }) {
       )}
       <header className={css.header}>
         <Logo />
-        <button className={css.projectSwitch} aria-expanded={menu === "open"} aria-haspopup="dialog"
+        <Button className={css.projectSwitch} aria-expanded={menu === "open"} aria-haspopup="dialog"
                 title={t("app.projects")} onClick={() => setMenu(menu === "open" ? "closing" : "open")}>
           <span className={css.arrow} aria-hidden="true">›</span>
           <span className={css.projectName}>
             {list.find((p) => isProject(p, current))?.title ?? current ?? t("app.projects")}
           </span>
-        </button>
+        </Button>
         {/* Sheet tabs: the active one is underlined, the line slides to the next (shared/underline.ts) */}
         <nav ref={tabBar.ref} className={css.sheets} aria-label={t("app.sheets")}>
           {/* Every built project has this tab: a build without the overview (old code) shows a hint to rebuild */}
           {project?.artifact && pages.length > 0 && (
-            <button aria-current={info ? "page" : undefined} onClick={() => { if (!info) curtain.go(openInfo); }}>{t("overview.tab")}</button>
+            <button aria-current={info ? "page" : undefined} data-label={t("overview.tab")} onClick={() => { if (!info) curtain.go(openInfo); }}>{t("overview.tab")}</button>
           )}
           {tabs.map((tb) => (
-            <button key={tb.pages[0]} aria-current={tb === tab ? "page" : undefined}
+            <button key={tb.pages[0]} aria-current={tb === tab ? "page" : undefined} data-label={tb.stage ? label("stage", tb.stage) : tb.name}
                     title={tb.pages.length > 1 && !tb.views ? t("app.pages", { n: tb.pages.length }) : undefined}
                     onClick={() => {
                       const walls = elevSheets.includes(tb.pages[0]);
@@ -651,29 +658,27 @@ export function Viewer({ account = null }: { account?: Account | null }) {
                     }}>{tb.stage ? label("stage", tb.stage) : tb.name}</button>
           ))}
           {openEstimate && (
-            <button aria-current={estimate ? "page" : undefined} onClick={() => { if (!estimate) curtain.go(openEstimate); }}>{t("estimate.tab")}</button>
+            <button aria-current={estimate ? "page" : undefined} data-label={t("estimate.tab")} onClick={() => { if (!estimate) curtain.go(openEstimate); }}>{t("estimate.tab")}</button>
           )}
           {/* Installation by tasks: only in the database mode (project.work) */}
           {project?.work && (
-            <button aria-current={workTab ? "page" : undefined} onClick={() => { if (!workTab) curtain.go(openWork); }}>{t("work.tab")}</button>
+            <button aria-current={workTab ? "page" : undefined} data-label={t("work.tab")} onClick={() => { if (!workTab) curtain.go(openWork); }}>{t("work.tab")}</button>
           )}
           <span className={css.underline} style={tabBar.style} aria-hidden="true" />
         </nav>
-        <button className={css.more} aria-label={t("app.more")} aria-expanded={more} onClick={() => setMore(!more)}>⋯</button>
+        <IconButton variant="framed" className={css.more} label={t("app.more")} aria-expanded={more} onClick={() => setMore(!more)}>⋯</IconButton>
         {/* On a phone: the "⋯" menu; choosing an action closes it */}
         <div className={cx(css.actions, more && css.open)} onClick={() => setMore(false)}>
           {project && (
-            <div className={ui.segmented} aria-label={t("app.project")}>
-              {drawerTabs.map((k) => {
+            <SegmentedControl label={t("app.project")} value={drawer && !closing ? drawer : null} onChange={toggleDrawer}
+              options={drawerTabs.map((k) => {
                 const n = k === "questions" ? openQs : 0;
-                return (
-                  <button key={k} className={cx(drawer === k && !closing && ui.on)} aria-pressed={drawer === k && !closing}
-                          aria-label={n ? t("app.openCount", { name: t(`drawer.${k}`), n }) : undefined} onClick={() => toggleDrawer(k)}>
-                    <span className={css.tabName}>{t(`drawer.${k}`)}{n > 0 && <span className={css.count} aria-hidden="true">{n}</span>}</span>
-                  </button>
-                );
-              })}
-            </div>
+                return {
+                  value: k,
+                  ariaLabel: n ? t("app.openCount", { name: t(`drawer.${k}`), n }) : undefined,
+                  label: <span className={css.tabName}>{t(`drawer.${k}`)}{n > 0 && <span className={css.count} aria-hidden="true">{n}</span>}</span>,
+                };
+              })} />
           )}
         </div>
         {/* Without a project the welcome screen covers the header and has its own gear */}
@@ -683,7 +688,7 @@ export function Viewer({ account = null }: { account?: Account | null }) {
         {outdated && (
           <div className={css.banner}>
             {t("app.newVersion", { brand: BRAND })}{" "}
-            <button className={css.pill} onClick={() => location.reload()}>{t("common.refresh")}</button>
+            <button type="button" className={css.pill} onClick={() => location.reload()}>{t("common.refresh")}</button>
           </div>
         )}
         {/* Not built, YAML changed: a terminal command for the engineer, not for the simple mode */}
@@ -701,7 +706,7 @@ export function Viewer({ account = null }: { account?: Account | null }) {
         {loading && !info && !workTab && curtain.phase === "idle" && (
           <div className={css.loader} role="status" aria-live="polite">
             <MarkLoader />
-            <span className="small muted">{project ? t("app.loadingSheet") : t("app.loadingProject")}</span>
+            <Text as="span" size="small" tone="muted">{project ? t("app.loadingSheet") : t("app.loadingProject")}</Text>
           </div>
         )}
         {wall && page && !loading && !info && !estimate && !workTab && !source ? (
@@ -718,12 +723,12 @@ export function Viewer({ account = null }: { account?: Account | null }) {
             )}
           </>
         ) : tab && !tab.views && tab.pages.length > 1 && page && (
-          <div className={css.pager} role="group" aria-label={t("app.sheetPages")}>
-            <button aria-label={t("app.prevPage")} title="PageUp" disabled={at <= 0} onClick={() => turn(-1)}>‹</button>
+          <ButtonGroup className={css.pager} label={t("app.sheetPages")}>
+            <Button variant="bare" aria-label={t("app.prevPage")} title="PageUp" disabled={at <= 0} onClick={() => turn(-1)}>‹</Button>
             <span className="mono">{at + 1} / {tab.pages.length}</span>
-            <button aria-label={t("app.nextPage")} title="PageDown" disabled={at >= tab.pages.length - 1}
-                    onClick={() => turn(1)}>›</button>
-          </div>
+            <Button variant="bare" aria-label={t("app.nextPage")} title="PageDown" disabled={at >= tab.pages.length - 1}
+                    onClick={() => turn(1)}>›</Button>
+          </ButtonGroup>
         )}
       </main>
       <SidePanel tab={side} onTab={showSide} page={source ? null : page} drawing={source ? null : drawing}

@@ -4,47 +4,36 @@
 @use "@/shared/styles/mixins" as *;
 
 .page { position: fixed; inset: 0; z-index: 20; overflow: auto; background: var(--bg); }
-.inner { max-width: 1240px; margin: 0 auto; padding: 32px 24px 64px; }
+.inner { display: grid; gap: var(--space-8); max-width: 1240px; margin: 0 auto; padding: var(--space-8) var(--space-6) 64px; }
 
 // Back | mark | title and the firm name
 .head {
-  display: grid; grid-template-columns: auto auto 1fr; align-items: center; gap: 12px; margin-bottom: 28px;
-  h1 { margin: 0; font-size: 26px; font-weight: 500; }
-  p { margin: 2px 0 0; font-size: 14px; }
+  display: grid; grid-template-columns: auto auto 1fr; align-items: center; gap: var(--space-3);
 }
-.back { @include bare-button; min-width: 40px; min-height: 40px; font-size: 20px; line-height: 1; }
 
-.body { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 32px; align-items: start; }
+.body { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: var(--space-8); align-items: start; }
 .nav {
   position: sticky; top: 16px; display: grid; gap: 2px;
   button {
-    @include bare-button; min-height: 36px; padding: 0 12px; text-align: left; border-radius: 6px; color: var(--muted);
+    @include focus-ring;
+    min-height: var(--control-h); padding: 0 var(--space-3); text-align: left; border-radius: var(--radius); color: var(--muted);
+    &:hover:not(.on) { color: var(--text); }
   }
   button.on { background: var(--soft); color: var(--text); font-weight: 500; }
 }
-.soon { padding: 8px 12px; color: var(--muted); opacity: .7; font-size: 14px; i { font-size: 11px; font-style: normal; } }
+.soon { padding: var(--space-2) var(--space-3); color: var(--muted); opacity: .7; font-size: 14px; i { font-size: 11px; font-style: normal; } }
 .main { min-width: 0; }
 
-.profile h2 { margin: 0 0 16px; font-size: 20px; font-weight: 500; }
-.card { @include raised(10px); display: grid; gap: 14px; max-width: 560px; padding: 20px 24px; }
-.logoRow { display: grid; grid-template-columns: auto 1fr; gap: 16px; align-items: center; }
+.card { gap: var(--space-4); max-width: 560px; }
+.logoRow { display: grid; grid-template-columns: auto 1fr; gap: var(--space-4); align-items: center; }
 .logo {
-  display: grid; place-items: center; width: 64px; height: 64px; border-radius: 12px;
+  display: grid; place-items: center; width: 64px; height: 64px; border-radius: var(--radius-xl);
   background: var(--soft); border: 1px solid var(--line); font-size: 28px; font-weight: 600;
-}
-.logoRow button { margin-top: 4px; min-height: 32px; padding: 0 12px; border-radius: 6px; }
-.label { color: var(--muted); font-size: 12px; }
-.field {
-  display: grid; gap: 4px;
-  input {
-    min-height: 36px; padding: 0 10px; font: inherit; border-radius: 6px;
-    border: 1px solid var(--line); background: var(--soft); color: var(--text);
-  }
 }
 
 @media (max-width: $phone) {
-  .inner { padding: 20px 8px 40px; }
-  .body { grid-template-columns: 1fr; gap: 16px; }
+  .inner { gap: var(--space-5); padding: var(--space-5) var(--space-2) var(--space-10); }
+  .body { grid-template-columns: 1fr; gap: var(--space-4); }
   .nav { position: static; grid-auto-flow: column; overflow-x: auto; }
   .soon { white-space: nowrap; }
 }

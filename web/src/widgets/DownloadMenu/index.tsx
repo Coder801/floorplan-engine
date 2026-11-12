@@ -3,7 +3,10 @@
 
 import { useTranslation } from "react-i18next";
 import { usePopover } from "@/shared/popover";
-import menu from "@/shared/styles/menu.module.scss";
+import { Button } from "@/ui/Button";
+import { Menu } from "@/ui/Menu";
+import { MenuItem } from "@/ui/MenuItem";
+import { Tag } from "@/ui/Tag";
 import css from "./DownloadMenu.module.scss";
 
 interface Props {
@@ -17,30 +20,21 @@ export function DownloadMenu({ onPng, dxf, withDxf = true }: Props) {
   const { t } = useTranslation();
   return (
     <div ref={ref} className={css.download}>
-      <button className={css.button} aria-label={t("download.download")} aria-haspopup="menu" aria-expanded={open} onClick={toggle}>
-        <DownloadIcon /> <span className={css.label}>{t("download.download")}</span> <span aria-hidden="true">▾</span>
-      </button>
+      <Button className={css.button} aria-label={t("download.download")} aria-haspopup="menu" aria-expanded={open} onClick={toggle}
+              icon={<DownloadIcon />}>
+        <span className={css.label}>{t("download.download")}</span> <span aria-hidden="true">▾</span>
+      </Button>
       {open && (
-        <div className={menu.panel} data-pop="" data-closing={closing || undefined} role="menu">
-          <button className={menu.item} role="menuitem" disabled={!onPng}
-                  onClick={() => { onPng?.(); setOpen(false); }}>
-            <span className={css.badge}>PNG</span>
-            {t("download.sheet")}
-            <span className={menu.note}>A3, 150 dpi</span>
-          </button>
+        <Menu closing={closing} minWidth={300}>
+          <MenuItem icon={<Tag variant="mono">PNG</Tag>} note="A3, 150 dpi" disabled={!onPng}
+                    onClick={() => { onPng?.(); setOpen(false); }}>{t("download.sheet")}</MenuItem>
           {!withDxf ? null : dxf ? (
-            <a className={menu.item} role="menuitem" href={dxf.href} download={dxf.name} onClick={() => setOpen(false)}>
-              <span className={css.badge}>DXF</span>
-              {t("download.dxf")}
-              <span className={menu.note}>{t("download.allSheets")}</span>
-            </a>
+            <MenuItem icon={<Tag variant="mono">DXF</Tag>} note={t("download.allSheets")} href={dxf.href} download={dxf.name}
+                      onClick={() => setOpen(false)}>{t("download.dxf")}</MenuItem>
           ) : (
-            <button className={menu.item} role="menuitem" disabled>
-              <span className={css.badge}>DXF</span>
-              {t("download.notBuilt")}
-            </button>
+            <MenuItem icon={<Tag variant="mono">DXF</Tag>} disabled>{t("download.notBuilt")}</MenuItem>
           )}
-        </div>
+        </Menu>
       )}
     </div>
   );

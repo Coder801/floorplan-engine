@@ -27,7 +27,7 @@ export function Legend({ entries, language }: { entries: LegendEntry[]; language
   const toggle = () => { setOpen(!open); remember(KEY, open ? "closed" : "open"); };
   return (
     <div className={cx(css.legend, open && css.open)} role="group" aria-label={title}>
-      <button className={css.head} aria-expanded={open} onClick={toggle}>
+      <button type="button" className={css.head} aria-expanded={open} onClick={toggle}>
         <span className={css.chevron} aria-hidden="true">{open ? "▾" : "▸"}</span>
         {title}
       </button>

@@ -5,6 +5,8 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { startTelegramLogin, telegramLoginStatus, type TelegramTicket } from "@/shared/auth";
+import { Button } from "@/ui/Button";
+import { Text } from "@/ui/Text";
 import css from "./TelegramLogin.module.scss";
 
 const POLL_MS = 2000;
@@ -57,7 +59,7 @@ export function TelegramLogin({ onDone, invite }: { onDone: () => void; invite?:
           </svg>
           {t("gate.telegram")}
         </button>
-        {error && <p className={css.error} role="alert">{error}</p>}
+        {error && <Text size="small" tone="critical" role="alert">{error}</Text>}
       </div>
     );
   }
@@ -68,8 +70,8 @@ export function TelegramLogin({ onDone, invite }: { onDone: () => void; invite?:
         {t("gate.telegramWaiting")}
       </p>
       <div className={css.links}>
-        <a className={css.link} href={ticket.url} target="_blank" rel="noopener noreferrer">{t("gate.telegramOpen")}</a>
-        <button type="button" className={css.link} onClick={() => setTicket(null)}>{t("gate.telegramCancel")}</button>
+        <Button variant="link" className={css.link} href={ticket.url} target="_blank" rel="noopener noreferrer">{t("gate.telegramOpen")}</Button>
+        <Button variant="link" className={css.link} onClick={() => setTicket(null)}>{t("gate.telegramCancel")}</Button>
       </div>
     </div>
   );

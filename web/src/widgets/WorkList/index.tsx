@@ -8,6 +8,9 @@ import { cx } from "@/shared/cx";
 import { locale } from "@/shared/i18n";
 import type { WorkState } from "@/shared/types";
 import { behalfText, money, ordered, planNeed, progressOf, taskNeed, type WorkRun } from "@/shared/work";
+import { Card } from "@/ui/Card";
+import { Heading } from "@/ui/Heading";
+import { Text } from "@/ui/Text";
 import { WorkPlanActions } from "@/widgets/WorkPlanActions";
 import { WorkStatusBadge } from "@/widgets/WorkStatusBadge";
 import css from "./WorkList.module.scss";
@@ -31,7 +34,7 @@ export function WorkList({ state, run, busy, open, onOpen }: Props) {
   return (
     <div className={css.list}>
       <header className={css.head}>
-        <h1>{t("work.title")}</h1>
+        <Heading level={1}>{t("work.title")}</Heading>
         <dl className={css.sums}>
           <dt>{t("work.card.total")}</dt><dd>{m(plan.totals.total)}</dd>
           {(plan.state === "approved" || plan.state === "closed") && (
@@ -41,24 +44,24 @@ export function WorkList({ state, run, busy, open, onOpen }: Props) {
             </>
           )}
         </dl>
-        {plan.state === "closed" && <p className={css.lead}>{t("work.plan.closed")}</p>}
+        {plan.state === "closed" && <Text tone="muted">{t("work.plan.closed")}</Text>}
         {plan.approved_on_behalf && <p className={css.behalf}>{behalfText(plan.approved_on_behalf, "plan")}</p>}
         {need && (
-          <div className={css.ask}>
-            <b>{t(`work.need.${need}`)}</b>
-            <p>{t("work.approveLead")}</p>
+          <Card padding="sm" className={css.ask}>
+            <Heading level={2}>{t(`work.need.${need}`)}</Heading>
+            <Text tone="muted">{t("work.approveLead")}</Text>
             <WorkPlanActions state={state} run={run} busy={busy} only={["approve"]} big />
-          </div>
+          </Card>
         )}
-        {asks > 0 && <p className={css.waitingYou}>{t("work.asksN", { n: asks })}</p>}
+        {asks > 0 && <Text weight="medium">{t("work.asksN", { n: asks })}</Text>}
       </header>
       <ol className={css.items}>
         {tasks.map((task, i) => {
           const ask = taskNeed(task, plan, state.can);
           return (
             <li key={task.id}>
-              <button type="button" className={cx(css.item, ask && css.asked, task.id === open && css.open)}
-                      aria-pressed={task.id === open} onClick={() => onOpen(task.id)}>
+              <Card as="button" type="button" padding="sm" interactive className={cx(css.item, ask && css.asked, task.id === open && css.open)}
+                    aria-pressed={task.id === open} onClick={() => onOpen(task.id)}>
                 <span className={css.num}>{i + 1}</span>
                 <span className={css.body}>
                   <b className={css.name}>{task.title}{task.extra && <span className={css.extra}> · {t("work.extra")}</span>}</b>
@@ -69,7 +72,7 @@ export function WorkList({ state, run, busy, open, onOpen }: Props) {
                   {ask && <span className={css.need}>{t(`work.need.${ask}`)} →</span>}
                   {!ask && task.settled && task.total > 0 && <span className={css.paid}>{t("work.paidMark")}</span>}
                 </span>
-              </button>
+              </Card>
             </li>
           );
         })}

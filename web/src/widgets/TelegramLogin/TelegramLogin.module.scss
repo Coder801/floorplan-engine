@@ -2,18 +2,20 @@
 
 @use "@/shared/styles/mixins" as *;
 
-.box { display: grid; gap: 10px; }
+.box { display: grid; gap: var(--space-3); }
 .button {
+  @include focus-ring;
   display: flex; align-items: center; justify-content: center; gap: 10px;
-  width: 100%; min-height: 40px; border: 0; border-radius: 8px;
+  width: 100%; min-height: var(--control-h-lg); border: 0; border-radius: var(--radius-md);
   background: #2aabee; color: #fff; font-weight: 500;
   &:hover { background: #229ed9; }
-  &:disabled { opacity: .6; }
+  &:disabled { opacity: .6; cursor: default; }
 }
 .icon { width: 18px; height: 18px; fill: currentColor; }
 .waiting {
-  display: flex; align-items: flex-start; gap: 10px; margin: 0;
-  padding: 10px 12px; border-radius: 8px; background: var(--soft); font-size: 14px; line-height: 1.4;
+  @include type(body);
+  display: flex; align-items: flex-start; gap: var(--space-3);
+  padding: var(--space-3); border-radius: var(--radius-md); background: var(--soft);
 }
 .spinner {
   flex: none; width: 16px; height: 16px; margin-top: 2px; border-radius: 50%;
@@ -22,7 +24,5 @@
   @include no-motion;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
-.links { display: flex; justify-content: space-between; gap: 12px; }
-.link { @include bare-button; padding: 0; min-height: 0; color: var(--muted); font-size: 13px; text-decoration: underline; cursor: pointer; }
-.link:hover { color: var(--text); }
-.error { margin: 0; color: var(--critical); font-size: 13px; }
+.links { display: flex; justify-content: space-between; gap: var(--space-3); }
+.link { @include type(small); color: var(--muted); }

@@ -1,0 +1,8 @@
+@use "@/shared/styles/mixins" as *;
+
+.empty {
+  @include type(body);
+  display: grid; justify-items: center; gap: var(--space-4);
+  padding: 60px var(--space-6); color: var(--muted); text-align: center;
+}
+.compact { padding: var(--space-6) var(--space-4); }

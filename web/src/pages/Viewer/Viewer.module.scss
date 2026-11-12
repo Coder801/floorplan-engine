@@ -30,8 +30,12 @@
   grid-area: sheets; justify-self: start; position: relative;
   display: flex; flex-wrap: wrap; gap: 2px;
   > button {
-    @include bare-button;
-    min-height: 34px; padding: 0 10px; color: var(--muted); transition: color .15s;
+    @include focus-ring;
+    min-height: 34px; padding: 0 10px; border-radius: var(--radius); color: var(--muted); transition: color .15s;
+    // The width is the bold label's (hidden copy from data-label): the active tab does not grow
+    // and the neighbours and the underline do not jump
+    display: inline-flex; flex-direction: column; align-items: center; justify-content: center;
+    &::after { content: attr(data-label); font-weight: 500; height: 0; overflow: hidden; visibility: hidden; }
     &:hover { color: var(--text); }
     &[aria-current="page"] { color: var(--text); font-weight: 500; }
   }
@@ -49,12 +53,12 @@
 }
 
 // "⋯" puts the header actions into a menu on a phone; not needed when wider
-.more { display: none; grid-area: more; min-width: 40px; padding: 0; font-size: 18px; line-height: 1; }
+.header .more { display: none; grid-area: more; }
 
 // Project menu button: arrow and name
 .projectSwitch {
   grid-area: switch;
-  display: flex; align-items: center; gap: 8px; max-width: 320px;
+  justify-content: flex-start; max-width: 320px;
   &[aria-expanded="true"] .arrow { transform: rotate(180deg); }
 }
 .arrow { font-size: 18px; line-height: 1; transition: transform .18s ease; }
@@ -71,10 +75,12 @@
 
 .banners { grid-area: banners; }
 .banner {
-  padding: 6px 16px; font-size: 12px; color: var(--major);
+  @include type(small);
+  padding: var(--space-1) var(--space-4); color: var(--major);
   background: var(--panel); border-bottom: 1px solid var(--line);
 }
 .pill {
+  @include focus-ring;
   min-height: 28px; padding: 0 10px; border-radius: 14px; font-size: 12px;
   background: none; color: var(--major); border: 1px solid currentColor;
 }
@@ -118,15 +124,9 @@
 
 // Sheet pages (elevations): "‹ 1 / 3 ›" at the top centre of the drawing
 .pager {
-  @include raised;
   position: absolute; top: 12px; left: 50%; transform: translateX(-50%); z-index: 3;
-  display: grid; grid-template-columns: auto auto auto; overflow: hidden;
-  button { @include bare-button; border-radius: 0; min-width: 40px; font-size: 16px; }
-  button:disabled { opacity: .35; }
-  > span {
-    display: flex; align-items: center; min-height: 32px; padding: 0 10px;
-    border-left: 1px solid var(--line); border-right: 1px solid var(--line);
-  }
+  > button { font-size: 16px; }
+  > span { display: flex; align-items: center; padding: 0 10px; border-left: 1px solid var(--line); }
 }
 @media (max-width: $narrow) {
   // Pager on the left, "Download" on the right
@@ -164,7 +164,7 @@
     grid-template-columns: auto minmax(0, 1fr) auto auto;
   }
   .projectSwitch { max-width: none; justify-self: start; min-width: 0; }
-  .more { display: inline-block; }
+  .header .more { display: inline-grid; }
   // .header beats ui.segmented (which wraps buttons)
   .header .sheets {
     justify-self: stretch; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none;
@@ -173,7 +173,7 @@
   .actions {
     @include raised(10px);
     display: none; position: absolute; top: calc(100% - 4px); right: 8px; z-index: 25;
-    flex-direction: column; align-items: stretch; gap: 8px; padding: 10px; min-width: 240px;
+    flex-direction: column; align-items: stretch; gap: var(--space-2); padding: var(--space-3); min-width: 240px;
     box-shadow: 0 10px 32px rgba(0, 0, 0, .2);
     > * { justify-content: center; }
   }

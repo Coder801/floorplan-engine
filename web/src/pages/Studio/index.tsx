@@ -7,7 +7,14 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { cx } from "@/shared/cx";
+import { Button } from "@/ui/Button";
+import { Card } from "@/ui/Card";
+import { Heading } from "@/ui/Heading";
+import { IconButton } from "@/ui/IconButton";
 import { Logo } from "@/ui/Logo";
+import { Stack } from "@/ui/Stack";
+import { Text } from "@/ui/Text";
+import { TextField } from "@/ui/TextField";
 import { PriceList } from "@/widgets/PriceList";
 import type { Account } from "@/widgets/Settings";
 import css from "./Studio.module.scss";
@@ -37,11 +44,11 @@ export function Studio({ account, section, onSection, onBack }: Props) {
     <div className={css.page} role="dialog" aria-modal="true" aria-labelledby="studio-title">
       <div className={css.inner}>
         <header className={css.head}>
-          <button className={css.back} onClick={() => leave(onBack)} aria-label={t("studio.back")} title={t("common.closeEsc")}>←</button>
+          <IconButton size="lg" label={t("studio.back")} title={t("common.closeEsc")} onClick={() => leave(onBack)}>←</IconButton>
           <Logo size={36} />
           <div>
-            <h1 id="studio-title">{t("studio.title")}</h1>
-            {account?.space && <p className="muted">{account.space}</p>}
+            <Heading level={1} id="studio-title">{t("studio.title")}</Heading>
+            {account?.space && <Text tone="muted">{account.space}</Text>}
           </div>
         </header>
         <div className={css.body}>
@@ -67,33 +74,30 @@ function Profile({ account }: { account: Account | null }) {
   const firm = account?.firm ?? null;
   const name = firm?.name || account?.space || "";
   return (
-    <section className={css.profile} aria-labelledby="profile-title">
-      <h2 id="profile-title">{t("studio.sections.profile")}</h2>
-      {!account && <p className="muted">{t("studio.loginOff")}</p>}
-      {account && !firm && <p className="muted">{t("studio.noFirm")}</p>}
-      <div className={css.card}>
+    <Stack as="section" gap={4} aria-labelledby="profile-title">
+      <Heading level={2} size="title" id="profile-title">{t("studio.sections.profile")}</Heading>
+      {!account && <Text tone="muted">{t("studio.loginOff")}</Text>}
+      {account && !firm && <Text tone="muted">{t("studio.noFirm")}</Text>}
+      <Card className={css.card}>
         <div className={css.logoRow}>
           <div className={css.logo} aria-label={t("studio.logo")}>{name.trim().charAt(0).toUpperCase() || "—"}</div>
-          <div>
-            <div className={css.label}>{t("studio.logo")}</div>
-            <button disabled title={t("studio.later")}>{t("studio.uploadLogo")}</button>
-          </div>
+          <Stack gap={1} align="start">
+            <Text size="small" tone="muted" as="div">{t("studio.logo")}</Text>
+            <Button size="sm" disabled title={t("studio.later")}>{t("studio.uploadLogo")}</Button>
+          </Stack>
         </div>
         <Field label={t("studio.name")} value={name} />
         <Field label={t("studio.kind")} value={firm?.business ? t(`firm.kinds.${firm.business}`) : ""} />
         <Field label={t("studio.city")} value={firm?.city ?? ""} />
-        <p className="small muted">{t("studio.later")}</p>
-      </div>
-    </section>
+        <Text size="small" tone="muted">{t("studio.later")}</Text>
+      </Card>
+    </Stack>
   );
 }
 
 function Field({ label, value }: { label: string; value: string }) {
   const { t } = useTranslation();
   return (
-    <label className={css.field}>
-      <span className={css.label}>{label}</span>
-      <input value={value} placeholder={t("studio.empty")} readOnly disabled />
-    </label>
+    <TextField label={label} value={value} placeholder={t("studio.empty")} readOnly disabled />
   );
 }

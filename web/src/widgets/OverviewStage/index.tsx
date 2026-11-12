@@ -10,6 +10,11 @@ import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { cx } from "@/shared/cx";
 import type { Overview, Project, Question, Variants, VariantSummary } from "@/shared/types";
+import { Button } from "@/ui/Button";
+import { Card } from "@/ui/Card";
+import { Heading } from "@/ui/Heading";
+import { Tag } from "@/ui/Tag";
+import { Text } from "@/ui/Text";
 import { VariantInfo } from "@/widgets/VariantInfo";
 import { anyKey } from "@/shared/i18n";
 import { optionKey, type SetupProgress, type StepId } from "@/widgets/Wizard/steps";
@@ -58,7 +63,7 @@ export function OverviewStage({ overview, variants, project, openQuestions, canC
   const num = (n: number, digits = 2) => n.toLocaleString(i18n.language, { maximumFractionDigits: digits });
   const cash = (n: number, currency: string) => `${Math.round(n).toLocaleString(i18n.language)} ${currency}`;
   const money = (s: VariantSummary) => cash(s.total, s.currency);
-  if (!overview) return <div className={css.stage}><p className="muted">{t("overview.noData")}</p></div>;
+  if (!overview) return <div className={css.stage}><Text tone="muted">{t("overview.noData")}</Text></div>;
   const o = overview.object;
   const facts: [string, string][] = [
     [t("overview.object"), o.object],
@@ -82,7 +87,7 @@ export function OverviewStage({ overview, variants, project, openQuestions, canC
   const say = anyKey(t);  // a key built from a step, as in Wizard
   const compareRow = (s: VariantSummary, name: ReactNode, base: VariantSummary | null, key: string) => (
     <tr key={key} className={cx(!base && css.on)}>
-      <td>{name}{s.key === variants?.default && !base && <span className={css.tag}>{t("variant.asProject")}</span>}</td>
+      <td>{name}{s.key === variants?.default && !base && <Tag variant="outline" className={css.tag}>{t("variant.asProject")}</Tag>}</td>
       <td className={css.num}>{money(s)}</td>
       <td className={cx(css.num, base && s.total < base.total && css.cheaper)}>{base ? delta(s, base) : ""}</td>
       <td className={css.num}>{num(s.cable_m, 0)}</td>
@@ -97,20 +102,20 @@ export function OverviewStage({ overview, variants, project, openQuestions, canC
       <article className={css.page}>
         <header className={css.head}>
           <div>
-            <h1>{t("overview.title")}</h1>
-            <p className="muted">{o.name}</p>
+            <Heading level={1}>{t("overview.title")}</Heading>
+            <Text tone="muted">{o.name}</Text>
           </div>
           {onWizard && (
             // On a wide screen the side panel lists what is left and opens the wizard (OverviewSummary)
             <div className={cx(css.setup, css.narrowOnly)}>
               {setup && setup.open.length > 0 && <SetupNote {...setup} />}
-              <button className={css.primary} onClick={onWizard}>{t("wizard.open")}</button>
+              <Button variant="primary" className={css.primary} onClick={onWizard}>{t("wizard.open")}</Button>
             </div>
           )}
         </header>
 
-        <section className={css.card}>
-          <h2>{t("overview.object")}</h2>
+        <Card as="section" className={css.card}>
+          <Heading level={2}>{t("overview.object")}</Heading>
           <dl className={css.pairs}>
             {facts.filter(([, v]) => v).map(([k, v]) => [<dt key={`k${k}`}>{k}</dt>, <dd key={`v${k}`}>{v}</dd>])}
             <dt>{t("overview.area")}</dt><dd>{num(overview.area)} м²</dd>
@@ -126,17 +131,17 @@ export function OverviewStage({ overview, variants, project, openQuestions, canC
               {overview.rooms.map((r, i) => (
                 <tr key={r.id}>
                   <td className="muted">{i + 1}</td>
-                  <td>{r.name}{r.wet && <span className={css.tag}>{t("overview.wet")}</span>}</td>
+                  <td>{r.name}{r.wet && <Tag variant="outline" className={css.tag}>{t("overview.wet")}</Tag>}</td>
                   <td className={css.num}>{num(r.area)}</td>
                 </tr>
               ))}
             </tbody>
           </table>
-        </section>
+        </Card>
 
         {(overview.points || overview.panel) && (
-          <section className={css.card}>
-            <h2>{t("overview.planned")}</h2>
+          <Card as="section" className={css.card}>
+            <Heading level={2}>{t("overview.planned")}</Heading>
             {overview.points && (
               <table className={css.table}>
                 <thead><tr><th>{t("overview.points")}</th><th className={css.num}>{t("overview.qty")}</th></tr></thead>
@@ -159,15 +164,15 @@ export function OverviewStage({ overview, variants, project, openQuestions, canC
                 <span className="muted">{t("overview.load", { installed: kw(overview.panel.installed_w), calculated: kw(overview.panel.calculated_w) })}</span>
               </p>
             )}
-          </section>
+          </Card>
         )}
 
         {overview.plumbing && (() => {
           const pl = overview.plumbing;
           const sewerPipes = pl.sewer.pipes.map((p) => `Ø${p.d} — ${num(p.m, 1)} м`).join(", ");
           return (
-            <section className={css.card}>
-              <h2>{t("overview.plumbing")}</h2>
+            <Card as="section" className={css.card}>
+              <Heading level={2}>{t("overview.plumbing")}</Heading>
               {pl.fixtures.length > 0 && (
                 <table className={css.table}>
                   <thead><tr><th>{t("overview.fixtures")}</th><th className={css.num}>{t("overview.qty")}</th></tr></thead>
@@ -199,19 +204,19 @@ export function OverviewStage({ overview, variants, project, openQuestions, canC
                   {pl.estimate.unpriced > 0 && <span className="muted"> · {t("overview.unpriced", { n: pl.estimate.unpriced })}</span>}
                 </p>
               )}
-              {pl.weak > 0 && <p className="small muted">{t("overview.weak", { n: pl.weak })}</p>}
-            </section>
+              {pl.weak > 0 && <Text size="small" tone="muted">{t("overview.weak", { n: pl.weak })}</Text>}
+            </Card>
           );
         })()}
 
         {variants && (
-          <section className={css.card}>
-            <h2>{t("overview.variant")}</h2>
+          <Card as="section" className={css.card}>
+            <Heading level={2}>{t("overview.variant")}</Heading>
             <VariantInfo variants={variants} canChoose={canChoose} onEdit={onWizard} />
             {current && neighbours(variants).length > 0 && (
               <>
-                <h3>{t("overview.compare")}</h3>
-                <p className="small muted">{t("overview.compareNote")}</p>
+                <Heading level={3}>{t("overview.compare")}</Heading>
+                <Text size="small" tone="muted">{t("overview.compareNote")}</Text>
                 <div className={css.scroll}>
                   <table className={css.table}>
                     <thead>
@@ -234,21 +239,21 @@ export function OverviewStage({ overview, variants, project, openQuestions, canC
                 </div>
               </>
             )}
-          </section>
+          </Card>
         )}
 
         {/* On a wide screen the side panel holds the questions and sources (OverviewSummary) */}
-        <section className={cx(css.card, css.narrowOnly)}>
-          <h2>{t("overview.sources")}</h2>
+        <Card as="section" className={cx(css.card, css.narrowOnly)}>
+          <Heading level={2}>{t("overview.sources")}</Heading>
           <p className={css.line}>
             {t("overview.sourcesLine", { n: project.sources.length, parsed: project.parsed?.length ?? 0 })}{" "}
             {t("overview.questions", { n: openQuestions })}
           </p>
           <div className={css.actions}>
-            <button onClick={() => onDrawer("questions")}>{t("overview.openQuestions")}</button>
-            <button onClick={() => onDrawer("sources")}>{t("overview.openSources")}</button>
+            <Button onClick={() => onDrawer("questions")}>{t("overview.openQuestions")}</Button>
+            <Button onClick={() => onDrawer("sources")}>{t("overview.openSources")}</Button>
           </div>
-        </section>
+        </Card>
 
       </article>
       </div>
@@ -256,9 +261,9 @@ export function OverviewStage({ overview, variants, project, openQuestions, canC
         // The total is pinned to the bottom of the area: it does not scroll away
         <footer className={css.dock}>
           <section className={css.total}>
-            <h2>{t("overview.total")}{parts && <> · {parts}</>}</h2>
+            <Text as="h2" size="small" tone="muted" weight="medium" className={css.totalTitle}>{t("overview.total")}{parts && <> · {parts}</>}</Text>
             <p className={css.sum}>{cash(grand.total, grand.currency)}</p>
-            <button className={css.primary} disabled={!onEstimate} onClick={onEstimate}>{t("overview.openEstimate")}</button>
+            <Button variant="primary" className={css.primary} disabled={!onEstimate} onClick={onEstimate}>{t("overview.openEstimate")}</Button>
           </section>
         </footer>
       )}
@@ -297,7 +302,7 @@ export function OverviewSummary({ setup, questions, onWizard, onDrawer, refreshi
     <div className={cx(css.sideBody, refreshing && css.skeleton)}>
       {setup && setup.total > 0 && (
         <section className={css.block}>
-          <h3>{t("overview.progress.title")}</h3>
+          <Heading level={3}>{t("overview.progress.title")}</Heading>
           <ul className={css.steps}>
             {setup.steps.map((id) => {
               const todo = setup.open.includes(id);
@@ -308,23 +313,23 @@ export function OverviewSummary({ setup, questions, onWizard, onDrawer, refreshi
                     {todo ? <span className={css.dash} /> : <CheckIcon />}
                   </span>
                   {todo && onWizard
-                    ? <button className={css.stepLink} onClick={() => onWizard(id)}>{name}</button>
+                    ? <Button variant="link" className={css.stepLink} onClick={() => onWizard(id)}>{name}</Button>
                     : <span>{name}</span>}
                 </li>
               );
             })}
           </ul>
-          <p className={cx("small muted", css.note)}>
+          <Text size="small" tone="muted">
             {setup.open.length ? t("overview.progress.done", { done, total: setup.total }) : t("overview.progress.all")}
-          </p>
+          </Text>
           {onWizard && (
-            <button className={css.wizardOpen} onClick={() => onWizard()}>{t("wizard.open")}</button>
+            <Button size="lg" block className={css.wizardOpen} onClick={() => onWizard()}>{t("wizard.open")}</Button>
           )}
         </section>
       )}
       <section className={css.block}>
-        <h3>{t("overview.openQuestions")}</h3>
-        {open === 0 ? <p className="small muted">{t("overview.progress.noQuestions")}</p> : (
+        <Heading level={3}>{t("overview.openQuestions")}</Heading>
+        {open === 0 ? <Text size="small" tone="muted">{t("overview.progress.noQuestions")}</Text> : (
           <dl className={css.side}>
             {SEVERITIES.filter((s) => counts[s] > 0).map((s) => [
               <dt key={`k${s}`}><span className={`sev-${s}`} aria-hidden="true">●</span> {t(`severity.${s}`)}</dt>,
@@ -333,8 +338,8 @@ export function OverviewSummary({ setup, questions, onWizard, onDrawer, refreshi
           </dl>
         )}
         <div className={css.actions}>
-          <button onClick={() => onDrawer("questions")}>{t("overview.openQuestions")}</button>
-          <button onClick={() => onDrawer("sources")}>{t("overview.openSources")}</button>
+          <Button onClick={() => onDrawer("questions")}>{t("overview.openQuestions")}</Button>
+          <Button onClick={() => onDrawer("sources")}>{t("overview.openSources")}</Button>
         </div>
       </section>
     </div>

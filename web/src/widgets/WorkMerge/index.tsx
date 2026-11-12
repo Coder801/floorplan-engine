@@ -9,7 +9,10 @@ import { useTranslation } from "react-i18next";
 import { mergeWorkTask } from "@/shared/api";
 import type { WorkState, WorkTask } from "@/shared/types";
 import { mergeBlock, mergeTargets, numberOf, type WorkRun } from "@/shared/work";
+import { Button } from "@/ui/Button";
 import { Select } from "@/ui/Select";
+import { Stack } from "@/ui/Stack";
+import { Text } from "@/ui/Text";
 import css from "./WorkMerge.module.scss";
 
 interface Props {
@@ -39,22 +42,22 @@ export function WorkMerge({ task, state, run, busy, onMerged }: Props) {
   if (!open) {
     return (
       <div className={css.merge}>
-        <button type="button" disabled={busy || !!block} aria-describedby={block ? hint : undefined} onClick={start}>
+        <Button disabled={busy || !!block} aria-describedby={block ? hint : undefined} onClick={start}>
           {t("work.card.merge")}
-        </button>
-        {block && <p id={hint} className={css.hint}>{t(`work.card.mergeBlocked.${block}`)}</p>}
+        </Button>
+        {block && <Text id={hint} size="small" tone="muted">{t(`work.card.mergeBlocked.${block}`)}</Text>}
       </div>
     );
   }
   return (
     <div className={css.form}>
-      <span className={css.label}>{t("work.card.mergeInto")}</span>
+      <Text as="span" size="small" tone="muted">{t("work.card.mergeInto")}</Text>
       <Select label={t("work.card.mergeInto")} value={target?.id ?? ""} onChange={setInto}
               options={targets.map((x) => ({ value: x.id, label: `${numberOf(x, state.tasks)}. ${x.title}` }))} />
-      <div className={css.buttons}>
-        <button type="button" className={css.primary} disabled={busy || !target} onClick={() => void merge()}>{t("work.card.mergeGo")}</button>
-        <button type="button" onClick={() => setOpen(false)}>{t("work.form.cancel")}</button>
-      </div>
+      <Stack direction="row" gap={2}>
+        <Button variant="primary" disabled={busy || !target} onClick={() => void merge()}>{t("work.card.mergeGo")}</Button>
+        <Button onClick={() => setOpen(false)}>{t("work.form.cancel")}</Button>
+      </Stack>
     </div>
   );
 }

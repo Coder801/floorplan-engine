@@ -12,13 +12,12 @@
 
 // Strip: the drawing view as full-width segments and the drawer "▴" (narrow screen only)
 .bar {
-  grid-area: bar; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px;
-  padding: 10px 16px; border-bottom: 1px solid var(--line);
-  > [role="radiogroup"] { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; }
+  grid-area: bar; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--space-2);
+  padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--line);
 }
 .barEmpty { display: none; }
 .title { font-weight: 500; }
-.toggle { display: none; min-width: 44px; padding: 0; font-size: 16px; }
+.bar .toggle { display: none; font-size: 16px; }
 
 // There may be no tabs (the panel has only tables)
 .tabs {
@@ -26,8 +25,8 @@
   display: grid; grid-auto-flow: column; grid-auto-columns: 1fr;
   border-bottom: 1px solid var(--line);
   button {
-    @include bare-button;
-    border-radius: 0; min-height: 44px; padding: 0 6px;
+    @include focus-ring;
+    min-height: 44px; padding: 0 6px;
     color: var(--muted); border-bottom: 2px solid transparent;
   }
   button[aria-selected="true"] { color: var(--text); border-bottom-color: var(--text); font-weight: 500; }
@@ -52,12 +51,12 @@
 }
 // Estimate totals: name, sum
 .totals {
-  display: grid; grid-template-columns: 1fr auto; gap: 8px 12px; margin: 0; font-size: 14px;
+  display: grid; grid-template-columns: 1fr auto; gap: var(--space-2) var(--space-3); margin: 0;
   dt { color: var(--muted); }
   dd { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
   dt:last-of-type, dd:last-of-type { padding-top: 8px; border-top: 1px solid var(--line); color: var(--text); }
 }
-.notes { margin: 6px 0 0; padding-left: 16px; color: var(--muted); font-size: 12px; }
+.notes { @include type(small); margin: var(--space-2) 0 0; padding-left: var(--space-4); color: var(--muted); }
 
 // Layers: eye | colour | name | layer code; a hidden layer is fainter
 .layers { display: block; }
@@ -75,7 +74,7 @@
   .side { border-left: 0; border-top: 1px solid var(--line); }
   .bar { padding: 8px 12px; border-bottom: 0; }
   .barEmpty { display: grid; }
-  .toggle { display: block; }
+  .bar .toggle { display: inline-grid; }
   .tabs, .body { display: none; }
   .side[data-open] {
     // grid-area: auto, otherwise the absolute grid item's frame is its empty side area
@@ -90,11 +89,11 @@
 
 // Wiring variant as a line above the tables: the choice is on the "Overview" tab
 .variant {
-  display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 6px; margin: 0 0 12px;
-  padding: 8px 10px; border-radius: 8px; background: var(--soft); font-size: 12px;
+  @include type(small);
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-1) 6px; margin: 0 0 var(--space-3);
+  padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); background: var(--soft);
 }
-.change { @include bare-button; margin-left: auto; padding: 0; min-height: 0; color: var(--muted); text-decoration: underline; font-size: 12px; }
-.change:hover { color: var(--text); }
+.change { @include type(small); margin-left: auto; color: var(--muted); }
 
 // The eye fits the text line; without hover (touch) it stays big enough for a finger
 .table .rowEye {

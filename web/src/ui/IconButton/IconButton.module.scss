@@ -1,0 +1,24 @@
+@use "@/shared/styles/mixins" as *;
+
+.button {
+  @include focus-ring;
+  display: inline-grid; place-items: center; flex: none; padding: 0;
+  border: 1px solid transparent; border-radius: var(--radius); background: none; color: var(--text);
+  line-height: 1; cursor: pointer;
+  transition: background-color .15s ease, border-color .15s ease, color .15s ease, opacity .15s ease;
+  &:hover:not(:disabled) { background: var(--soft); }
+  &:disabled { opacity: .5; cursor: default; }
+  svg { width: 18px; height: 18px; }
+  @media (prefers-reduced-motion: reduce) { transition: none; }
+}
+.sm { width: 24px; height: 24px; font-size: 14px; }
+.md { width: var(--control-h); height: var(--control-h); font-size: 18px; }
+.lg { width: var(--control-h-lg); height: var(--control-h-lg); font-size: 20px; }
+
+.framed { border-color: var(--line); background: var(--raise); }
+.close { font-size: 20px; color: var(--muted); &:hover:not(:disabled) { color: var(--text); } }
+.round {
+  border-radius: 50%; border-color: var(--line);
+  background: color-mix(in srgb, var(--raise) 85%, transparent);
+}
+.pressed { background: var(--accent); color: var(--accent-text); &:hover:not(:disabled) { background: var(--accent); filter: brightness(1.15); } }

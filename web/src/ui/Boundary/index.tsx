@@ -3,7 +3,7 @@
 
 import { Component, type ReactNode } from "react";
 import i18n from "@/shared/i18n";
-import ui from "@/shared/styles/ui.module.scss";
+import css from "./Boundary.module.scss";
 
 interface State { error: Error | null }
 
@@ -22,10 +22,9 @@ export class Boundary extends Component<{ children: ReactNode }, State> {
     const { error } = this.state;
     if (!error) return this.props.children;
     return (
-      <div className={ui.error}>
-        {i18n.t("boundary.failed", { message: error.message })}
-        {"\n"}{i18n.t("boundary.outdated")}
-        {"\n"}<button onClick={() => location.reload()}>{i18n.t("boundary.reload")}</button>
+      <div className={css.error} role="alert">
+        <div>{i18n.t("boundary.failed", { message: error.message })}{"\n"}{i18n.t("boundary.outdated")}</div>
+        <button type="button" className={css.reload} onClick={() => location.reload()}>{i18n.t("boundary.reload")}</button>
       </div>
     );
   }

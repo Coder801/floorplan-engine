@@ -3,10 +3,11 @@
 
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { cx } from "@/shared/cx";
 import type { ProjectSummary } from "@/shared/types";
 import { BRAND, STAGE } from "@/shared/version";
+import { Heading } from "@/ui/Heading";
 import { Logo } from "@/ui/Logo";
+import { Text } from "@/ui/Text";
 import { ProjectCard } from "@/widgets/ProjectCard";
 import css from "./Welcome.module.scss";
 
@@ -19,13 +20,13 @@ export function Welcome({ list, onOpen, settings }: { list: ProjectSummary[]; on
         <div className={css.head}>
           <Logo size={56} />
           <div>
-            <h1 id="welcome-title" className={css.brand}>{BRAND} <span className={css.stage}>{t(`app.stages.${STAGE}`)}</span></h1>
-            <p className="muted">{t("welcome.tagline")}</p>
+            <Heading level={1} size="display" id="welcome-title" className={css.brand}>{BRAND} <span className={css.stage}>{t(`app.stages.${STAGE}`)}</span></Heading>
+            <Text size="lead" tone="muted">{t("welcome.tagline")}</Text>
           </div>
           {/* Its own cell: the gear's grid-area is the header's */}
           {settings && <div className={css.settings}>{settings}</div>}
         </div>
-        <p className={cx(css.lead, "muted")}>{t("welcome.lead")}</p>
+        <Text size="lead" tone="muted" align="center" className={css.lead}>{t("welcome.lead")}</Text>
         {!list.length && (
           <div className={css.none}>
             <div>{t("welcome.empty")}</div>

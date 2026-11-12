@@ -5,6 +5,9 @@
 import { type FormEvent, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { loginByCode } from "@/shared/auth";
+import { Button } from "@/ui/Button";
+import { Text } from "@/ui/Text";
+import { TextField } from "@/ui/TextField";
 import { ACCESS_CODE_LENGTH, accessCodeChars, formatAccessCode } from "./code";
 import css from "./CodeLogin.module.scss";
 
@@ -30,15 +33,12 @@ export function CodeLogin({ onDone }: { onDone: (project: string | null) => void
 
   return (
     <form className={css.form} onSubmit={(e) => void submit(e)}>
-      <label htmlFor="access-code">{t("gate.accessCodeLabel")}</label>
-      <div className={css.stack}>
-        <input id="access-code" className={css.code} autoComplete="off" autoCapitalize="characters"
-               spellCheck={false} value={code} placeholder="XXXX-XXXX"
-               onChange={(e) => setCode(formatAccessCode(e.target.value))} />
-        <button className={css.primary} type="submit" disabled={busy || !ready}>{t("gate.openByCode")}</button>
-      </div>
-      <p className={css.note}>{t("gate.codeNote")}</p>
-      {error && <p className={css.error} role="alert">{error}</p>}
+      <TextField id="access-code" label={t("gate.accessCodeLabel")} size="lg" mono inputClassName={css.code}
+                 autoComplete="off" autoCapitalize="characters" spellCheck={false} value={code} placeholder="XXXX-XXXX"
+                 onChange={(e) => setCode(formatAccessCode(e.target.value))} />
+      <Button type="submit" variant="primary" size="lg" block disabled={busy || !ready}>{t("gate.openByCode")}</Button>
+      <Text size="small" tone="muted">{t("gate.codeNote")}</Text>
+      {error && <Text tone="critical" role="alert">{error}</Text>}
     </form>
   );
 }

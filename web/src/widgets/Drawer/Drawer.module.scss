@@ -19,20 +19,14 @@
 @keyframes drawer-out { from { transform: none; } to { transform: translateX(100%); } }
 
 // Source, check remark
-.card {
-  @include raised;
-  padding: 10px 12px; margin-bottom: 8px;
-  &.lit { border-color: var(--hl); }
-}
-.sev { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; font-weight: 600; }
-.text { margin: 4px 0; }
-.file { margin: 4px 0; word-break: break-word; }
-.lead { margin-bottom: 10px; }
-.rowBtns { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
+.card { gap: var(--space-1); margin-top: var(--space-2); border-radius: var(--radius-md); }
+.title { margin-bottom: var(--space-1); }
+.file { word-break: break-word; }
+.rowBtns { display: flex; gap: var(--space-3); align-items: center; flex-wrap: wrap; margin-top: var(--space-1); }
 
 // Project stages as tiles in two columns
-.stages { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-.stage { @include raised; padding: 8px 10px; }
+.stages { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); }
+.stage { @include raised; padding: var(--space-2) var(--space-3); }
 
-.files { display: grid; gap: 4px; }
-.models { margin-bottom: 8px; }
+.files { display: grid; gap: var(--space-1); }
+.models { margin-bottom: var(--space-2); }

@@ -10,6 +10,7 @@ import { cx } from "@/shared/cx";
 import { locale } from "@/shared/i18n";
 import type { WorkState } from "@/shared/types";
 import { money, needsBehalf, planActions, type PlanAction, type WorkRun } from "@/shared/work";
+import { Button } from "@/ui/Button";
 import { WorkConfirm } from "@/widgets/WorkConfirm";
 import css from "./WorkPlanActions.module.scss";
 
@@ -43,9 +44,10 @@ export function WorkPlanActions({ state, run, busy, onAdd, only, big }: Props) {
   return (
     <div className={cx(css.actions, big && css.big)}>
       {actions.map((a) => (
-        <button key={a} type="button" className={cx(PRIMARY.has(a) && css.primary)} disabled={busy} onClick={() => press(a)}>
+        <Button key={a} variant={PRIMARY.has(a) ? "primary" : "default"} size={big ? "lg" : "md"} block={big}
+                className={cx(big && css.bigButton)} disabled={busy} onClick={() => press(a)}>
           {name(a)}
-        </button>
+        </Button>
       ))}
       {asking && (
         <WorkConfirm action={t("work.actions.approve")} detail={t("work.approveAsk", { total })} busy={busy}

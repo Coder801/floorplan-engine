@@ -10,10 +10,17 @@ import { cx } from "@/shared/cx";
 import { LANGUAGES, setLanguage } from "@/shared/i18n";
 import { UI_MODES, type UiMode } from "@/shared/mode";
 import { usePopover } from "@/shared/popover";
-import { useTooltip } from "@/ui/Tooltip";
 import { APP_VERSION, BRAND, BUILD_ID, STAGE } from "@/shared/version";
 import menu from "@/shared/styles/menu.module.scss";
-import ui from "@/shared/styles/ui.module.scss";
+import { Button } from "@/ui/Button";
+import { Card } from "@/ui/Card";
+import { Heading } from "@/ui/Heading";
+import { IconButton } from "@/ui/IconButton";
+import { Menu } from "@/ui/Menu";
+import { MenuItem } from "@/ui/MenuItem";
+import { SegmentedControl } from "@/ui/SegmentedControl";
+import { Text } from "@/ui/Text";
+import { useTooltip } from "@/ui/Tooltip";
 import css from "./Settings.module.scss";
 
 // Who is logged in, from Gate; null if login is off (local viewing)
@@ -47,73 +54,63 @@ export function Settings({ account, theme, onTheme, mode, onMode, onStudio, onFe
   const plan = account?.visitor ? "guest" : account?.code ? "code" : account?.plan ?? "none";
   return (
     <div ref={ref} className={cx(menu.wrap, css.settings)}>
-      <button className={css.gear} aria-label={t("settings.title")} title={t("settings.title")} aria-haspopup="dialog"
-              aria-expanded={open} onClick={toggle}>
+      <IconButton variant="framed" label={t("settings.title")} aria-haspopup="dialog" aria-expanded={open} onClick={toggle}>
         <GearIcon />
-      </button>
+      </IconButton>
       {open && (
-        <div className={cx(menu.panel, css.panel)} data-pop="" data-closing={closing || undefined} role="dialog" aria-label={t("settings.title")}>
+        <Menu role="dialog" closing={closing} label={t("settings.title")} className={css.panel}>
           <section>
-            <h3>{t("settings.account")}</h3>
+            <Heading level={3} size="caps">{t("settings.account")}</Heading>
             {account ? (
               <div className={css.row}>
                 <span className={css.name}>{account.name}</span>
-                <button onClick={account.logout}>{t("common.logout")}</button>
+                <Button size="sm" onClick={account.logout}>{t("common.logout")}</Button>
               </div>
-            ) : <p className="small muted">{t("settings.loginOff")}</p>}
+            ) : <Text size="small" tone="muted">{t("settings.loginOff")}</Text>}
           </section>
           {account && (
             <section>
-              <h3>{t("settings.plan")}</h3>
-              <div>{account.space ?? t(`settings.plans.${plan}`)}</div>
-              <div className="small muted">{t(`settings.plans.${plan}Note`)}</div>
+              <Heading level={3} size="caps">{t("settings.plan")}</Heading>
+              <Text as="div">{account.space ?? t(`settings.plans.${plan}`)}</Text>
+              <Text as="div" size="small" tone="muted">{t(`settings.plans.${plan}Note`)}</Text>
             </section>
           )}
           {onStudio && (
             <section>
-              <button className={css.studio} onClick={() => { setOpen(false); onStudio(); }}>
-                <span>{t("settings.studio")}</span>
-                <span className="small muted">{t("settings.studioNote")}</span>
-              </button>
+              <Card as="button" type="button" padding="sm" interactive className={css.studio} onClick={() => { setOpen(false); onStudio(); }}>
+                <Text as="span">{t("settings.studio")}</Text>
+                <Text as="span" size="small" tone="muted">{t("settings.studioNote")}</Text>
+              </Card>
             </section>
           )}
           {onFeedback && (
             <section>
-              <button className={css.studio} onClick={() => { setOpen(false); onFeedback(); }}>
-                <span>{t("settings.feedback")}</span>
-                <span className="small muted">{t("settings.feedbackNote")}</span>
-              </button>
+              <Card as="button" type="button" padding="sm" interactive className={css.studio} onClick={() => { setOpen(false); onFeedback(); }}>
+                <Text as="span">{t("settings.feedback")}</Text>
+                <Text as="span" size="small" tone="muted">{t("settings.feedbackNote")}</Text>
+              </Card>
             </section>
           )}
           <section>
-            <h3>{t("settings.mode")}</h3>
-            <div className={cx(ui.segmented, css.themes)} role="radiogroup" aria-label={t("settings.mode")}>
-              {UI_MODES.map((m) => (
-                <button key={m} role="radio" aria-checked={m === mode} className={cx(m === mode && ui.on)}
-                        {...modeTip.on(t(`settings.modes.${m}Note`))}
-                        onClick={() => onMode(m)}>{t(`settings.modes.${m}`)}</button>
-              ))}
-            </div>
+            <Heading level={3} size="caps">{t("settings.mode")}</Heading>
+            <SegmentedControl fill label={t("settings.mode")} value={mode} onChange={onMode}
+                              options={UI_MODES.map((m) => ({ value: m, label: t(`settings.modes.${m}`), buttonProps: modeTip.on(t(`settings.modes.${m}Note`)) }))} />
             {modeTip.tip}
           </section>
           <section>
-            <h3>{t("settings.theme")}</h3>
-            <div className={cx(ui.segmented, css.themes)} role="radiogroup" aria-label={t("settings.theme")}>
-              {THEMES.map((th) => (
-                <button key={th} role="radio" aria-checked={th === theme} className={cx(th === theme && ui.on)}
-                        onClick={() => onTheme(th)}>{t(`settings.themes.${th}`)}</button>
-              ))}
-            </div>
+            <Heading level={3} size="caps">{t("settings.theme")}</Heading>
+            <SegmentedControl fill label={t("settings.theme")} value={theme} onChange={onTheme}
+                              options={THEMES.map((th) => ({ value: th, label: t(`settings.themes.${th}`) }))} />
           </section>
           <section>
-            <h3>{t("settings.language")}</h3>
+            <Heading level={3} size="caps">{t("settings.language")}</Heading>
             <LanguageSelect />
           </section>
-          <section className={css.about}>
-            <span><b className={css.brand}>{BRAND}</b> {t("settings.version", { version: APP_VERSION, stage: t(`app.stages.${STAGE}`) })}</span>
-            <span className="small muted">{t("settings.build", { build: BUILD_ID })}</span>
+          <section>
+            <Text as="span"><b className={css.brand}>{BRAND}</b> {t("settings.version", { version: APP_VERSION, stage: t(`app.stages.${STAGE}`) })}</Text>
+            <Text as="span" size="small" tone="muted">{t("settings.build", { build: BUILD_ID })}</Text>
           </section>
-        </div>
+        </Menu>
       )}
     </div>
   );
@@ -128,19 +125,16 @@ function LanguageSelect() {
   const pick = (c: (typeof LANGUAGES)[number]["code"]) => { setLanguage(c); setOpen(false); };
   return (
     <div ref={ref} className={menu.wrap}>
-      <button className={css.lang} aria-haspopup="listbox" aria-expanded={open} onClick={toggle}>
+      <Button block className={css.lang} aria-haspopup="listbox" aria-expanded={open} onClick={toggle}>
         <span>{current.name}</span>
         <span aria-hidden="true">▾</span>
-      </button>
+      </Button>
       {open && (
-        <div className={cx(menu.panel, css.langs)} data-pop="" data-closing={closing || undefined} role="listbox" aria-label={t("settings.language")}>
+        <Menu role="listbox" closing={closing} label={t("settings.language")} className={css.langs}>
           {LANGUAGES.map(({ code: c, name }) => (
-            <button key={c} className={menu.item} role="option" aria-selected={c === code} onClick={() => pick(c)}>
-              {name}
-              <span className={menu.note}>{c === code ? "✓" : ""}</span>
-            </button>
+            <MenuItem key={c} role="option" selected={c === code} note={c === code ? "✓" : ""} onClick={() => pick(c)}>{name}</MenuItem>
           ))}
-        </div>
+        </Menu>
       )}
     </div>
   );

@@ -8,11 +8,11 @@ import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "re
 import { useTranslation } from "react-i18next";
 import { PanelView } from "@/engine/panel/PanelView";
 import type { PanelMode } from "@/shared/consts";
-import { cx } from "@/shared/cx";
 import ui from "@/shared/styles/ui.module.scss";
 import type { OverviewReserve, Page, PanelData } from "@/shared/types";
 import type { Zoom } from "@/shared/zoom";
 import { ScaleBar } from "@/ui/ScaleBar";
+import { SegmentedControl } from "@/ui/SegmentedControl";
 import { ZoomRail } from "@/ui/ZoomRail";
 import { DeviceCard } from "@/widgets/DeviceCard";
 import { ReserveStage } from "@/widgets/ReserveStage";
@@ -62,11 +62,13 @@ export const PanelStage = forwardRef<StageHandle, Props>(function PanelStage({ p
   const tot = panel.totals;
   const kw = (w: number) => (w / 1000).toFixed(2).replace(".", ",");
   const modes = (stickers || reserve) && (
-    <div className={cx(ui.segmented, css.mode)} role="group" aria-label={t("panel.mode")}>
-      <button className={cx(front && ui.on)} aria-pressed={front} onClick={() => onMode("front")}>{t("panel.front")}</button>
-      {stickers && <button className={cx(showLabels && ui.on)} aria-pressed={showLabels} onClick={() => onMode("stickers")}>{t("panel.stickers")}</button>}
-      {reserve && <button className={cx(showReserve && ui.on)} aria-pressed={showReserve} onClick={() => onMode("reserve")}>{t("panel.reserve")}</button>}
-    </div>
+    <SegmentedControl<PanelMode> className={css.mode} label={t("panel.mode")} onChange={onMode}
+      value={front ? "front" : showLabels ? "stickers" : showReserve ? "reserve" : null}
+      options={[
+        { value: "front", label: t("panel.front") },
+        ...(stickers ? [{ value: "stickers" as const, label: t("panel.stickers") }] : []),
+        ...(reserve ? [{ value: "reserve" as const, label: t("panel.reserve") }] : []),
+      ]} />
   );
   if (showLabels) {
     return (

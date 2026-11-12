@@ -17,6 +17,15 @@ import {
 import { cx } from "@/shared/cx";
 import { locale } from "@/shared/i18n";
 import ui from "@/shared/styles/ui.module.scss";
+import { Button } from "@/ui/Button";
+import { Checkbox } from "@/ui/Checkbox";
+import { Heading as Title } from "@/ui/Heading";
+import { IconButton } from "@/ui/IconButton";
+import { PanelHeader } from "@/ui/PanelHeader";
+import { Tag } from "@/ui/Tag";
+import { Text } from "@/ui/Text";
+import { TextArea } from "@/ui/TextArea";
+import { TextField } from "@/ui/TextField";
 import type { WorkLine, WorkOnBehalf, WorkPhotoRule, WorkState, WorkTask } from "@/shared/types";
 import {
   behalfText, canDeletePhoto, canMoveLines, cardRights, day, feedOf, fileSize, isPdf, isPicture, mergeTargets, moment,
@@ -66,28 +75,27 @@ export function WorkCard({ task, state, run, busy, error, onError, me, onClose, 
 
   return (
     <section className={css.card} role="dialog" aria-label={task.title}>
-      <header className={ui.panelHead}>
-        <h2>{t("work.card.heading")}</h2>
-        <button type="button" onClick={onClose} aria-label={t("common.closeEsc")} title={t("common.closeEsc")}>×</button>
-      </header>
+      <PanelHeader title={t("work.card.heading")}>
+        <IconButton variant="close" onClick={onClose} label={t("common.closeEsc")} />
+      </PanelHeader>
       <div className={cx(ui.panelBody, css.body)}>
         <div className={css.top}>
           <WorkStatusBadge status={task.status} />
-          <span className={css.tag}>{t(`work.domain.${task.domain}`)}</span>
-          {task.extra && <span className={cx(css.tag, css.extra)}>{t("work.extra")}</span>}
+          <Tag>{t(`work.domain.${task.domain}`)}</Tag>
+          {task.extra && <Tag tone="major">{t("work.extra")}</Tag>}
         </div>
         <Heading task={task} run={run} busy={busy} editable={rights.manage} />
 
         {error && (
           <div className={css.error} role="alert">
             <span>{error}</span>
-            <button type="button" onClick={onError} aria-label={t("common.close")}>×</button>
+            <IconButton variant="close" size="sm" className={css.errorClose} onClick={onError} label={t("common.close")} />
           </div>
         )}
-        {need && <p className={css.need}>{t(`work.need.${need}`)}</p>}
+        {need && <Text weight="bold">{t(`work.need.${need}`)}</Text>}
         <StatusButtons task={task} buttons={statusButtons(task, plan, state.can)} run={run} busy={busy} />
         {task.waiting.length > 0 && task.status !== "accepted" && (
-          <p className={css.waiting}>{t("work.waiting", { list: task.waiting.map((w) => w.title).join(", ") })}</p>
+          <Text tone="major">{t("work.waiting", { list: task.waiting.map((w) => w.title).join(", ") })}</Text>
         )}
 
         <dl className={css.pairs}>
@@ -114,13 +122,13 @@ export function WorkCard({ task, state, run, busy, error, onError, me, onClose, 
 
         {task.result.length > 0 && (
           <>
-            <h3>{t("work.card.result")}</h3>
+            <Title level={3} size="caps">{t("work.card.result")}</Title>
             <Checklist key={task.id} task={task} run={run} busy={busy} editable={rights.tick}
                        later={!rights.tick && (plan?.state === "draft" || plan?.state === "proposed") && (state.can.work_do || state.can.work_accept)} />
           </>
         )}
 
-        <h3>{t("work.card.lines")}</h3>
+        <Title level={3} size="caps">{t("work.card.lines")}</Title>
         <Lines task={task} state={state} currency={cur} run={run} busy={busy} fact={rights.fact} price={rights.money}
                move={rights.money && canMoveLines(task, targets) ? targets : []} />
         {rights.money && <LineForm task={task} run={run} busy={busy} />}
@@ -140,31 +148,28 @@ export function WorkCard({ task, state, run, busy, error, onError, me, onClose, 
             </>
           )}
         </dl>
-        {task.unpriced > 0 && <p className={css.warn}>{t("work.card.unpricedNote", { n: task.unpriced })}</p>}
+        {task.unpriced > 0 && <Text size="small" tone="major">{t("work.card.unpricedNote", { n: task.unpriced })}</Text>}
         {rights.money && (
-          <label className={css.check}>
-            <input type="checkbox" checked={task.materials_included} disabled={busy}
-                   onChange={(e) => void run((key) => editWorkTask(key, task.id, { materials_included: e.target.checked }))} />
-            {t("work.card.materialsIncluded")}
-          </label>
+          <Checkbox checked={task.materials_included} disabled={busy} label={t("work.card.materialsIncluded")}
+                    onChange={(on) => void run((key) => editWorkTask(key, task.id, { materials_included: on }))} />
         )}
 
-        <h3>{t("work.card.photos")}</h3>
+        <Title level={3} size="caps">{t("work.card.photos")}</Title>
         <Photos task={task} state={state} run={run} busy={busy} me={me} upload={rights.photos} onError={onError} />
 
-        <h3>{t("work.card.feed")}</h3>
+        <Title level={3} size="caps">{t("work.card.feed")}</Title>
         <Feed task={task} run={run} busy={busy} write={rights.comment} />
 
         {(task.payments.length > 0 || rights.payments) && (
           <>
-            <h3>{t("work.card.payments")}</h3>
+            <Title level={3} size="caps">{t("work.card.payments")}</Title>
             <Payments task={task} currency={cur} run={run} busy={busy} add={rights.payments} remove={rights.unpay} />
           </>
         )}
 
         {rights.money && <WorkMerge task={task} state={state} run={run} busy={busy} onMerged={(into) => (onOpen ? onOpen(into) : onClose())} />}
         {rights.remove && (
-          <button type="button" className={css.danger} disabled={busy} onClick={remove}>{t("work.card.remove")}</button>
+          <Button variant="danger" className={css.danger} disabled={busy} onClick={remove}>{t("work.card.remove")}</Button>
         )}
       </div>
     </section>
@@ -188,22 +193,20 @@ function Heading({ task, run, busy, editable }: { task: WorkTask; run: WorkRun; 
   if (editing) {
     return (
       <form className={css.edit} onSubmit={save}>
-        <label><span>{t("work.form.name")}</span>
-          <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={200} required autoFocus /></label>
-        <label><span>{t("work.form.description")}</span>
-          <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} maxLength={4000} /></label>
+        <TextField label={t("work.form.name")} value={title} onChange={(e) => setTitle(e.target.value)} maxLength={200} required autoFocus />
+        <TextArea label={t("work.form.description")} value={description} onChange={(e) => setDescription(e.target.value)} rows={3} maxLength={4000} />
         <div className={css.row}>
-          <button type="submit" className={css.primary} disabled={busy || !title.trim()}>{t("work.card.save")}</button>
-          <button type="button" onClick={() => setEditing(false)}>{t("work.form.cancel")}</button>
+          <Button type="submit" variant="primary" disabled={busy || !title.trim()}>{t("work.card.save")}</Button>
+          <Button onClick={() => setEditing(false)}>{t("work.form.cancel")}</Button>
         </div>
       </form>
     );
   }
   return (
     <div className={css.heading}>
-      <h1>{task.title}</h1>
-      {task.description && <p className={css.description}>{task.description}</p>}
-      {editable && <button type="button" className={css.link} onClick={start}>{t("work.card.edit")}</button>}
+      <Title level={1} size="heading">{task.title}</Title>
+      {task.description && <Text className={css.description}>{task.description}</Text>}
+      {editable && <Button variant="link" className={css.link} onClick={start}>{t("work.card.edit")}</Button>}
     </div>
   );
 }
@@ -244,28 +247,25 @@ function StatusButtons({ task, buttons, run, busy }: { task: WorkTask; buttons: 
     <div className={css.status}>
       <div className={css.row}>
         {buttons.map((b) => (
-          <button key={b.to} type="button" className={cx(b.primary && css.primary, b.comment && returning && css.pressed)}
+          <Button key={b.to} variant={b.primary ? "primary" : "default"} className={cx(b.comment && returning && css.pressed)}
                   disabled={busy || !!b.blocked} aria-describedby={b.blocked ? hintId : undefined} onClick={() => press(b)}>
             {t(`work.btn.${b.action}`)}
-          </button>
+          </Button>
         ))}
       </div>
       {blocked && (
-        <p id={hintId} className={css.hint}>
+        <Text id={hintId} size="small" tone="major">
           {blocked.blocked === "photo"
             ? t("work.card.blockedPhoto")
             : t("work.card.blockedWaiting", { list: task.waiting.map((w) => w.title).join(", ") })}
-        </p>
+        </Text>
       )}
       {returning && (
         <form className={css.returnForm} onSubmit={sendBack}>
-          <label>
-            <span>{t("work.card.returnComment")}</span>
-            <textarea value={comment} onChange={(e) => setComment(e.target.value)} rows={3} maxLength={4000} required autoFocus />
-          </label>
+          <TextArea label={t("work.card.returnComment")} value={comment} onChange={(e) => setComment(e.target.value)} rows={3} maxLength={4000} required autoFocus />
           <div className={css.row}>
-            <button type="submit" className={css.primary} disabled={busy || !comment.trim()}>{t("work.card.returnSend")}</button>
-            <button type="button" onClick={() => setReturning(false)}>{t("work.form.cancel")}</button>
+            <Button type="submit" variant="primary" disabled={busy || !comment.trim()}>{t("work.card.returnSend")}</Button>
+            <Button onClick={() => setReturning(false)}>{t("work.form.cancel")}</Button>
           </div>
         </form>
       )}
@@ -296,15 +296,13 @@ function Checklist({ task, run, busy, editable, later }: { task: WorkTask; run: 
           const on = shown.includes(i);
           return (
             <li key={i}>
-              <label className={cx(on && css.ticked, !editable && css.readonly)}>
-                <input type="checkbox" checked={on} disabled={!editable || busy} onChange={(e) => void toggle(i, e.target.checked)} />
-                <span>{x}</span>
-              </label>
+              <Checkbox className={cx(on && css.ticked, !editable && css.readonly)} checked={on} disabled={!editable || busy}
+                        onChange={(v) => void toggle(i, v)} label={x} />
             </li>
           );
         })}
       </ul>
-      {later && <p className={cx(css.later, "muted small")}>{t("work.card.checksLater")}</p>}
+      {later && <Text size="small" tone="muted">{t("work.card.checksLater")}</Text>}
     </>
   );
 }
@@ -321,7 +319,7 @@ function Lines({ task, state, currency, run, busy, fact, price, move }: {
   const [to, setTo] = useState("");
   const ids = task.lines.map((l) => l.id).join(",");
   useEffect(() => setPicked(new Set()), [ids]);  // the lines changed (moved away, merged): nothing is picked
-  if (!task.lines.length) return <p className="muted small">{t("work.card.noLines")}</p>;
+  if (!task.lines.length) return <Text size="small" tone="muted">{t("work.card.noLines")}</Text>;
   const save = (line: WorkLine, edit: { fact_qty?: number | null; price?: number | null }) =>
     run((key) => editWorkLine(key, task.id, line.id, edit));
   const selectable = move.length > 0;
@@ -360,8 +358,8 @@ function Lines({ task, state, currency, run, busy, fact, price, move }: {
                   <tr key={l.id} className={cx(l.price === null && css.unpriced, picked.has(l.id) && css.picked)}>
                     {selectable && (
                       <td className={css.pick}>
-                        <input type="checkbox" checked={picked.has(l.id)} onChange={() => toggle(l.id)}
-                               aria-label={t("work.card.selectLine", { name: l.title })} />
+                        <Checkbox checked={picked.has(l.id)} onChange={() => toggle(l.id)}
+                                  aria-label={t("work.card.selectLine", { name: l.title })} />
                       </td>
                     )}
                     <td>{l.title}</td>
@@ -392,7 +390,7 @@ function Lines({ task, state, currency, run, busy, fact, price, move }: {
           <span className={css.label}>{t("work.card.moveTo")}</span>
           <Select label={t("work.card.moveTo")} value={target?.id ?? ""} onChange={setTo}
                   options={move.map((x) => ({ value: x.id, label: `${numberOf(x, state.tasks)}. ${x.title}` }))} />
-          <button type="button" className={css.primary} disabled={busy || !target} onClick={send}>{t("work.card.moveGo")}</button>
+          <Button variant="primary" disabled={busy || !target} onClick={send}>{t("work.card.moveGo")}</Button>
         </div>
       )}
     </>
@@ -431,7 +429,7 @@ function LineForm({ task, run, busy }: { task: WorkTask; run: WorkRun; busy: boo
   const [price, setPrice] = useState("");
   const n = parseAmount(amount), p = parseAmount(price);
   const valid = !!title.trim() && typeof n === "number" && p !== undefined;
-  if (!open) return <button type="button" className={css.link} onClick={() => setOpen(true)}>+ {t("work.card.addLine")}</button>;
+  if (!open) return <Button variant="link" className={css.link} onClick={() => setOpen(true)}>+ {t("work.card.addLine")}</Button>;
   const submit = async (ev: React.FormEvent) => {
     ev.preventDefault();
     if (!valid) return;
@@ -440,21 +438,20 @@ function LineForm({ task, run, busy }: { task: WorkTask; run: WorkRun; busy: boo
   };
   return (
     <form className={css.lineForm} onSubmit={submit}>
-      <label className={css.wide}><span>{t("work.form.name")}</span>
-        <input value={title} onChange={(e) => setTitle(e.target.value)} required autoFocus /></label>
+      <TextField className={css.wide} label={t("work.form.name")} value={title} onChange={(e) => setTitle(e.target.value)} required autoFocus />
       <label><span>{t("work.card.lineKind")}</span>
         <select value={kind} onChange={(e) => setKind(e.target.value as "work" | "material")}>
           <option value="work">{t("work.card.kind.work")}</option>
           <option value="material">{t("work.card.kind.material")}</option>
         </select></label>
-      <label><span>{t("work.card.lineUnit")}</span><input value={unit} onChange={(e) => setUnit(e.target.value)} maxLength={20} /></label>
-      <label><span>{t("work.card.col.plan")}</span>
-        <input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} aria-invalid={typeof n !== "number"} /></label>
-      <label><span>{t("work.card.col.price")}</span>
-        <input inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} aria-invalid={p === undefined} /></label>
+      <TextField label={t("work.card.lineUnit")} value={unit} onChange={(e) => setUnit(e.target.value)} maxLength={20} />
+      <TextField label={t("work.card.col.plan")} inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)}
+                 aria-invalid={typeof n !== "number"} />
+      <TextField label={t("work.card.col.price")} inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)}
+                 aria-invalid={p === undefined} />
       <div className={cx(css.row, css.wide)}>
-        <button type="submit" className={css.primary} disabled={busy || !valid}>{t("work.card.lineAdd")}</button>
-        <button type="button" onClick={() => setOpen(false)}>{t("work.form.cancel")}</button>
+        <Button type="submit" variant="primary" disabled={busy || !valid}>{t("work.card.lineAdd")}</Button>
+        <Button onClick={() => setOpen(false)}>{t("work.form.cancel")}</Button>
       </div>
     </form>
   );
@@ -516,13 +513,13 @@ function Photos({ task, state, run, busy, me, upload, onError }: {
                 <span className="muted"> · {p.author} · {t("work.card.mb", { size: fileSize(p.size, locale()) })}</span>
               </span>
               {canDeletePhoto(p, task, state.plan, state.can, me) && (
-                <button type="button" className={css.unphoto} disabled={busy} aria-label={t("work.card.deletePhoto")}
-                        title={t("work.card.deletePhoto")} onClick={() => removePhoto(p.id, p.file_name)}>×</button>
+                <IconButton variant="round" size="sm" className={css.unphoto} disabled={busy} label={t("work.card.deletePhoto")}
+                            onClick={() => removePhoto(p.id, p.file_name)}>×</IconButton>
               )}
             </li>
           ))}
         </ul>
-      ) : <p className="muted small">{t("work.card.noPhotos")}</p>}
+      ) : <Text size="small" tone="muted">{t("work.card.noPhotos")}</Text>}
       {upload && (
         <div className={css.row}>
           {phone ? (
@@ -533,7 +530,7 @@ function Photos({ task, state, run, busy, me, upload, onError }: {
           ) : picker(false, t("work.card.upload"))}
         </div>
       )}
-      {sending && <p className="muted small" role="status">{t("work.card.uploading", { name: sending })}</p>}
+      {sending && <Text size="small" tone="muted" role="status">{t("work.card.uploading", { name: sending })}</Text>}
       {problems.length > 0 && <ul className={css.problems} role="alert">{problems.map((x) => <li key={x}>{x}</li>)}</ul>}
     </div>
   );
@@ -567,12 +564,12 @@ function Feed({ task, run, busy, write }: { task: WorkTask; run: WorkRun; busy: 
             </li>
           ))}
         </ol>
-      ) : <p className="muted small">{t("work.card.noFeed")}</p>}
+      ) : <Text size="small" tone="muted">{t("work.card.noFeed")}</Text>}
       {write && (
         <form className={css.comment} onSubmit={submit}>
-          <textarea value={text} onChange={(e) => setText(e.target.value)} rows={2} maxLength={4000}
+          <TextArea value={text} onChange={(e) => setText(e.target.value)} rows={2} maxLength={4000}
                     placeholder={t("work.card.comment")} aria-label={t("work.card.comment")} />
-          <button type="submit" disabled={busy || !text.trim()}>{t("work.card.send")}</button>
+          <Button type="submit" disabled={busy || !text.trim()}>{t("work.card.send")}</Button>
         </form>
       )}
     </div>
@@ -608,25 +605,22 @@ function Payments({ task, currency, run, busy, add, remove }: { task: WorkTask; 
               <b>{money(p.amount, currency, loc)}</b>
               <span className="muted">{p.note}</span>
               {remove && (
-                <button type="button" className={css.unphoto} disabled={busy} aria-label={t("work.card.unpay")}
-                        title={t("work.card.unpay")} onClick={() => unpay(p.id, p.amount)}>×</button>
+                <IconButton variant="round" size="sm" disabled={busy} label={t("work.card.unpay")}
+                            onClick={() => unpay(p.id, p.amount)}>×</IconButton>
               )}
             </li>
           ))}
         </ul>
-      ) : <p className="muted small">{t("work.card.noPayments")}</p>}
+      ) : <Text size="small" tone="muted">{t("work.card.noPayments")}</Text>}
       {add && (
         <form className={css.payForm} onSubmit={submit}>
-          <label><span>{t("work.card.amount")}</span>
-            <input inputMode="decimal" value={amount} placeholder={left > 0 ? String(left) : ""}
-                   onChange={(e) => setAmount(e.target.value)} aria-invalid={n === undefined} /></label>
-          <label><span>{t("work.card.date")}</span>
-            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} required /></label>
-          <label className={css.wide}><span>{t("work.card.note")}</span>
-            <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} /></label>
+          <TextField label={t("work.card.amount")} inputMode="decimal" value={amount} placeholder={left > 0 ? String(left) : ""}
+                     onChange={(e) => setAmount(e.target.value)} aria-invalid={n === undefined} />
+          <TextField label={t("work.card.date")} type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
+          <TextField className={css.wide} label={t("work.card.note")} value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} />
           <div className={cx(css.row, css.wide)}>
-            <button type="submit" className={css.primary} disabled={busy || typeof n !== "number" || n <= 0}>{t("work.card.pay")}</button>
-            {left > 0 && <button type="button" onClick={() => setAmount(String(Math.round(left * 100) / 100))}>{t("work.card.payRest", { amount: money(left, currency, loc) })}</button>}
+            <Button type="submit" variant="primary" disabled={busy || typeof n !== "number" || n <= 0}>{t("work.card.pay")}</Button>
+            {left > 0 && <Button onClick={() => setAmount(String(Math.round(left * 100) / 100))}>{t("work.card.payRest", { amount: money(left, currency, loc) })}</Button>}
           </div>
         </form>
       )}

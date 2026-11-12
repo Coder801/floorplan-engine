@@ -8,12 +8,16 @@ import { type ReactNode, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { acceptInvite, chooseAccountType, devLogin, enterAsVisitor, getInvite, getMe, logout, type Invite, type Me } from "@/shared/auth";
 import { cx } from "@/shared/cx";
-import ui from "@/shared/styles/ui.module.scss";
 import { hideSplash } from "@/shared/splash";
 import { BRAND, STAGE } from "@/shared/version";
+import { Button } from "@/ui/Button";
+import { Card } from "@/ui/Card";
+import { EmptyState } from "@/ui/EmptyState";
 import { GoogleButton } from "@/ui/GoogleButton";
+import { Heading } from "@/ui/Heading";
 import { HelpTip } from "@/ui/HelpTip";
 import { Logo } from "@/ui/Logo";
+import { Text } from "@/ui/Text";
 import { CodeLogin } from "@/widgets/CodeLogin";
 import { EmailLogin } from "@/widgets/EmailLogin";
 import { FirmForm } from "@/widgets/FirmForm";
@@ -63,7 +67,7 @@ export function Gate({ children }: { children: (account: Account | null) => Reac
   // Product mark and name above the form
   const brand = <span className={css.brand}><Logo size={32} /><b>{BRAND}</b><i>{t(`app.stages.${STAGE}`)}</i></span>;
 
-  if (me === null) return <div className={ui.empty}>{error ?? t("common.loading")}</div>;
+  if (me === null) return <EmptyState>{error ?? t("common.loading")}</EmptyState>;
   if (!me.auth) return <>{children(null)}</>;
 
   const run = (f: () => Promise<unknown>) => {
@@ -85,40 +89,42 @@ export function Gate({ children }: { children: (account: Account | null) => Reac
   if (me.user && !me.user.account_type && !token) {
     return (
       <div className={css.gate}>
-       <div className={cx(css.card, css.wide)}>
+       <Card padding="lg" className={cx(css.card, css.wide)}>
         {brand}
         {firm ? (
           <>
             <header className={css.head}>
-              <h1>{t("firm.title")}</h1>
-              <p className="muted">{t("firm.note")}</p>
+              <Heading level={1}>{t("firm.title")}</Heading>
+              <Text tone="muted">{t("firm.note")}</Text>
             </header>
             <FirmForm onBack={() => setFirm(false)} onDone={() => void refresh()} />
           </>
         ) : (
           <>
             <header className={css.head}>
-              <h1>{t("gate.who")}</h1>
-              <p className="muted">{t("gate.whoNote")}</p>
+              <Heading level={1}>{t("gate.who")}</Heading>
+              <Text tone="muted">{t("gate.whoNote")}</Text>
             </header>
             <div className={css.choice}>
-              <button disabled={busy} onClick={() => run(() => chooseAccountType("client"))}>
-                <b>{t("gate.owner")}</b>
-                <span className="muted">{t("gate.ownerNote")}</span>
-              </button>
-              <button disabled={busy} onClick={() => { setError(null); setFirm(true); }}>
-                <b>{t("gate.studio")}</b>
-                <span className="muted">{t("gate.studioNote")}</span>
-              </button>
+              <Card as="button" type="button" padding="sm" interactive className={css.option} disabled={busy}
+                    onClick={() => run(() => chooseAccountType("client"))}>
+                <Heading level={2} size="subheading">{t("gate.owner")}</Heading>
+                <Text size="small" tone="muted" as="span">{t("gate.ownerNote")}</Text>
+              </Card>
+              <Card as="button" type="button" padding="sm" interactive className={css.option} disabled={busy}
+                    onClick={() => { setError(null); setFirm(true); }}>
+                <Heading level={2} size="subheading">{t("gate.studio")}</Heading>
+                <Text size="small" tone="muted" as="span">{t("gate.studioNote")}</Text>
+              </Card>
             </div>
-            {error && <p className={css.error}>{error}</p>}
+            {error && <Text tone="critical" role="alert">{error}</Text>}
           </>
         )}
         <span className={css.account}>
-          <span className="small muted">{account.name}</span>
-          <button onClick={account.logout}>{t("common.logout")}</button>
+          <Text as="span" size="small" tone="muted">{account.name}</Text>
+          <Button size="sm" onClick={account.logout}>{t("common.logout")}</Button>
         </span>
-       </div>
+       </Card>
       </div>
     );
   }
@@ -129,14 +135,14 @@ export function Gate({ children }: { children: (account: Account | null) => Reac
   const or = <span className={css.or}>{t("gate.or")}</span>;
   return (
     <div className={css.gate}>
-     <main className={css.card}>
+     <Card as="main" padding="lg" className={css.card}>
       {brand}
       <header className={css.head}>
         <div className={css.titleRow}>
-          <h1>{t("gate.title")}</h1>
+          <Heading level={1}>{t("gate.title")}</Heading>
           {ways > 0 && <HelpTip label={t("gate.whyNoPasswords")} text={t("gate.noPasswords")} />}
         </div>
-        <p className="muted">{t("gate.subtitle")}</p>
+        <Text tone="muted">{t("gate.subtitle")}</Text>
       </header>
       {invite && (
         <p className={css.invite}>
@@ -152,22 +158,22 @@ export function Gate({ children }: { children: (account: Account | null) => Reac
       {me.google && <GoogleButton href={login} label={t("gate.google")} />}
       {(me.telegram || me.google) && me.email && or}
       {me.email && <EmailLogin onDone={() => void refresh()} />}
-      {ways === 0 && <p className="muted">{t("gate.loginOff")}</p>}
+      {ways === 0 && <Text tone="muted">{t("gate.loginOff")}</Text>}
       <section className={css.byCode}>
-        <h2>{t("gate.code")}</h2>
+        <Heading level={2} size="subheading">{t("gate.code")}</Heading>
         <CodeLogin onDone={(project) => {
           if (project) location.hash = encodeURIComponent(project);  // straight into the code's project
           void refresh();
         }} />
       </section>
       {me.dev && (
-        <button className={css.dev} disabled={busy} onClick={() => run(devLogin)}>{t("gate.dev")}</button>
+        <Button size="lg" block className={css.dev} disabled={busy} onClick={() => run(devLogin)}>{t("gate.dev")}</Button>
       )}
       {me.visitor_allowed && (
-        <button className={css.visitor} disabled={busy} onClick={() => run(enterAsVisitor)}>{t("gate.visitor")}</button>
+        <Button size="lg" block disabled={busy} onClick={() => run(enterAsVisitor)}>{t("gate.visitor")}</Button>
       )}
-      {error && <p className={css.error}>{error}</p>}
-     </main>
+      {error && <Text tone="critical" role="alert">{error}</Text>}
+     </Card>
     </div>
   );
 }

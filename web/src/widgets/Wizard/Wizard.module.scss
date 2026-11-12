@@ -16,19 +16,16 @@
 }
 
 .steps {
-  grid-area: steps; overflow: auto; padding: 16px 12px; display: grid; align-content: start; gap: 12px;
+  grid-area: steps; overflow: auto; padding: var(--space-4) var(--space-3); display: grid; align-content: start; gap: var(--space-3);
   background: var(--soft); border-right: 1px solid var(--line);
-  h2 { margin: 4px 8px; font-size: 15px; font-weight: 600; }
-  h3 {
-    margin: 0 8px 4px; font-size: 11px; font-weight: 600; letter-spacing: .06em;
-    text-transform: uppercase; color: var(--muted);
-  }
   ol { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px; }
 }
+.title { margin: var(--space-1) var(--space-2); }
+.group { margin: 0 var(--space-2) var(--space-1); }
 .step {
-  @include bare-button;
-  display: flex; align-items: center; gap: 8px; width: 100%; min-height: 36px; padding: 0 8px;
-  text-align: left; color: var(--muted);
+  @include focus-ring;
+  display: flex; align-items: center; gap: var(--space-2); width: 100%; min-height: var(--control-h); padding: 0 var(--space-2);
+  border-radius: var(--radius); text-align: left; color: var(--muted);
   &:hover { color: var(--text); }
   &.on { background: var(--raise); color: var(--text); font-weight: 500; box-shadow: 0 1px 2px rgba(0, 0, 0, .12); }
 }
@@ -38,52 +35,38 @@
   &.picked { color: var(--ok); border-color: currentColor; }
 }
 
-.head { grid-area: head; display: flex; align-items: center; justify-content: space-between; padding: 8px 8px 0 24px; }
-.close { @include bare-button; min-width: 36px; font-size: 20px; line-height: 1; padding: 0; }
+.head { grid-area: head; display: flex; align-items: center; justify-content: space-between; padding: var(--space-2) var(--space-2) 0 var(--space-6); }
 .body {
-  --reserve-bleed: 24px; --reserve-top: -4px;  // ReserveList: side and top padding of this block
-  grid-area: body; overflow: auto; padding: 4px 24px 16px; display: grid; align-content: start; gap: 12px;
-  h1 { margin: 0; font-size: 20px; font-weight: 500; }
-  p { margin: 0; }
+  --reserve-bleed: var(--space-6); --reserve-top: calc(-1 * var(--space-1));  // ReserveList: side and top padding of this block
+  grid-area: body; overflow: auto; padding: var(--space-1) var(--space-6) var(--space-4); display: grid; align-content: start; gap: var(--space-3);
 }
 .foot {
-  grid-area: foot; display: flex; justify-content: space-between; gap: 8px; padding: 12px 24px;
+  grid-area: foot; display: flex; justify-content: space-between; gap: var(--space-2); padding: var(--space-3) var(--space-6);
   border-top: 1px solid var(--line);
 }
-.primary { min-width: 168px; border: 0; background: var(--accent); color: var(--accent-text); }
+.primary { min-width: 168px; }
 
-.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }
-.card {
-  @include raised(10px);
-  display: grid; align-content: start; justify-items: start; gap: 6px; height: auto; padding: 12px;
-  text-align: left;
-  &:hover { border-color: var(--muted); }
-}
-.chosen, .card.chosen { border-color: var(--hl); box-shadow: inset 0 0 0 1px var(--hl); }
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: var(--space-3); }
+.card { justify-items: start; gap: var(--space-2); }
 .price { font-weight: 600; font-variant-numeric: tabular-nums; }
-.tag {
-  padding: 1px 6px; border-radius: 10px; font-size: 10px; font-weight: 400;
-  color: var(--muted); border: 1px solid var(--line); white-space: nowrap;
-}
 .current { color: var(--accent-text); background: var(--accent); border-color: var(--accent); }
-dd .tag { margin-left: 6px; }
+.changed { margin-left: 6px; }
 
-.number { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; align-items: center; }
-.picture { @include raised(10px); padding: 16px; }
-.field { display: grid; gap: 10px; label { display: grid; gap: 4px; } }
+.number { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-6); align-items: center; }
+.picture { @include raised(var(--radius-lg)); padding: var(--space-4); }
+.field { display: grid; gap: var(--space-3); label { display: grid; gap: var(--space-1); } }
 .input {
   display: flex; align-items: center; gap: 6px;
   input {
-    width: 112px; min-height: 36px; padding: 0 8px; font: inherit; text-align: right; border-radius: 6px;
+    @include type(body); @include focus-ring;
+    width: 112px; min-height: var(--control-h); padding: 0 var(--space-2); text-align: right; border-radius: var(--radius);
     border: 1px solid var(--line); background: var(--paper); color: var(--text);
     &.bad { border-color: var(--major); }
   }
 }
 .presets { display: flex; flex-wrap: wrap; gap: 6px; }
-.error { color: var(--major); }
-.fact { padding: 8px 12px; border-left: 2px solid var(--line); font-size: 13px; }
-.result { @include pairs(6px 16px); font-size: 14px; }
-.link { @include bare-button; display: inline; min-height: 0; padding: 0; color: inherit; text-decoration: underline; }
+.fact { padding: var(--space-2) var(--space-3); border-left: 2px solid var(--line); }
+.result { @include pairs(var(--space-2) var(--space-4)); }
 
 @media (max-width: $phone) {
   .veil { padding: 0; }
@@ -92,9 +75,9 @@ dd .tag { margin-left: 6px; }
     grid-template: "head" auto "body" minmax(0, 1fr) "foot" auto / minmax(0, 1fr);
   }
   .steps { display: none; }  // on a phone the place in the wizard is "Step 2 of 8"
-  .body, .foot { padding-inline: 16px; }
-  .body { --reserve-bleed: 16px; }
-  .head { padding-left: 16px; }
+  .body, .foot { padding-inline: var(--space-4); }
+  .body { --reserve-bleed: var(--space-4); }
+  .head { padding-left: var(--space-4); }
   .number { grid-template-columns: minmax(0, 1fr); }
   .primary { min-width: 0; flex: 1; }
 }

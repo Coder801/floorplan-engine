@@ -3,20 +3,15 @@
 @use "@/shared/styles/mixins" as *;
 
 .loading {
-  position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 12px; background: var(--bg);
+  position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: var(--space-3); background: var(--bg);
 }
-.empty { position: absolute; inset: 0; overflow: auto; display: grid; place-items: center; padding: 24px 16px; background: var(--bg); }
-.emptyCard {
-  @include raised(12px);
-  display: grid; gap: 12px; justify-items: start; max-width: 480px; padding: 24px;
-  h1 { margin: 0; font-size: 20px; font-weight: 500; }
-  p { margin: 0; color: var(--muted); }
-}
+.empty { position: absolute; inset: 0; overflow: auto; display: grid; place-items: center; padding: var(--space-6) var(--space-4); background: var(--bg); }
+.emptyCard { justify-items: start; max-width: 480px; padding: var(--space-6); }
 .error {
-  padding: 8px 12px; border-radius: 8px; font-size: 13px;
+  padding: var(--space-2) var(--space-3); border-radius: var(--radius-md);
   color: var(--critical); background: color-mix(in srgb, var(--critical) 10%, var(--raise));
 }
 .toast {
-  position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 6;
-  max-width: min(560px, calc(100% - 32px)); box-shadow: 0 8px 24px rgba(0, 0, 0, .15); border-radius: 8px;
+  position: absolute; left: 50%; bottom: var(--space-4); transform: translateX(-50%); z-index: 6;
+  max-width: min(560px, calc(100% - 32px)); box-shadow: 0 8px 24px rgba(0, 0, 0, .15); border-radius: var(--radius-md);
 }

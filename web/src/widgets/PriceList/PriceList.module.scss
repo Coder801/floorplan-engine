@@ -4,22 +4,21 @@
 @use "@/shared/styles/mixins" as *;
 
 .list { min-width: 0; }
-.head {
-  margin-bottom: 16px;
-  h2 { margin: 0; font-size: 20px; font-weight: 500; }
-  p { margin: 4px 0 0; font-size: 14px; }
+.head { display: grid; gap: var(--space-1); margin-bottom: var(--space-4); }
+.issue {
+  margin-bottom: var(--space-3); padding: var(--space-2) var(--space-3); border-radius: var(--radius);
+  background: var(--soft); color: var(--critical);
 }
-.issue { margin-bottom: 12px; padding: 8px 12px; border-radius: 6px; background: var(--soft); color: var(--critical); font-size: 13px; }
 
 .table {
-  @include raised(10px);
-  width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; overflow: hidden;
-  th, td { padding: 8px 10px; border-top: 1px solid var(--line); text-align: left; vertical-align: middle; }
+  @include raised(var(--radius-lg));
+  width: 100%; border-collapse: separate; border-spacing: 0; overflow: hidden;
+  th, td { padding: var(--space-2) var(--space-3); border-top: 1px solid var(--line); text-align: left; vertical-align: middle; }
   th { color: var(--muted); font-weight: 500; border-top: 0; }
 }
 .num { text-align: right !important; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .spreadHead { min-width: 300px; }
-.basis { font-size: 11px; margin-top: 2px; }
+.basis { @include type(small); font-size: 11px; margin-top: 2px; }
 .changed td { background: var(--soft); }
 .far { color: var(--critical); font-weight: 500; }
 .input {
@@ -35,7 +34,7 @@
 // Median: "take" button (sets it as the studio price) and the number in bold
 .medianCell { display: inline-flex; align-items: center; gap: 6px; }
 .take {
-  @include bare-button; min-height: 22px; padding: 0 6px; font-size: 11px; color: var(--muted);
+  @include focus-ring; min-height: 22px; padding: 0 6px; font-size: 11px; color: var(--muted);
   border: 1px solid var(--line); border-radius: 11px; white-space: nowrap;
 }
 .bar { position: relative; height: 14px; }
@@ -49,25 +48,21 @@
   &.below, &.above { background: var(--critical); }
 }
 .quotes {
-  @include bare-button; min-height: 26px; padding: 0 8px; font-size: 12px; color: var(--muted);
+  @include focus-ring; min-height: 26px; padding: 0 8px; font-size: 12px; color: var(--muted);
   border: 1px solid var(--line); border-radius: 13px; white-space: nowrap;
 }
 .quotesRow td { background: var(--soft); padding-top: 4px; }
-.quotesRow ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; font-size: 12px; }
+.quotesRow ul { @include type(small); margin: 0; padding: 0; list-style: none; display: grid; gap: var(--space-1); }
 .quotesRow li { display: grid; grid-template-columns: 56px 1fr auto; gap: 10px; }
 .money { text-align: right; font-variant-numeric: tabular-nums; }
 
-.actions { display: flex; justify-content: flex-end; align-items: center; gap: 10px; margin-top: 16px; }
-.actions button { min-height: 36px; padding: 0 14px; border-radius: 6px; }
-.primary { background: var(--accent); color: var(--accent-text); border: 0; }
-.bad { color: var(--critical); font-size: 13px; }
+.actions { display: flex; justify-content: flex-end; align-items: center; gap: var(--space-3); margin-top: var(--space-4); }
 
-.footnote { margin-top: 28px; color: var(--muted); font-size: 12px; line-height: 1.6; }
-.footnote p { margin: 0 0 8px; }
+.footnote { @include type(small); display: grid; gap: var(--space-2); margin-top: var(--space-8); color: var(--muted); }
 .sources { margin: 0; padding-left: 20px; }
 
 @media (max-width: $phone) {
   .spreadHead { min-width: 0; }
   .spread { grid-template-columns: 28px 80px 36px; }
-  .table { font-size: 12px; th, td { padding: 6px 4px; } }
+  .table { @include type(small); th, td { padding: var(--space-2) var(--space-1); } }
 }

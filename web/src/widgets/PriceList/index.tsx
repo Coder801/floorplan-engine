@@ -8,8 +8,12 @@ import { useTranslation } from "react-i18next";
 import { getPrices, savePrices } from "@/shared/api";
 import { cx } from "@/shared/cx";
 import { deviation, monthText, periodText, place } from "@/shared/market";
-import ui from "@/shared/styles/ui.module.scss";
 import type { MarketSpread, PricePage, PriceRow } from "@/shared/types";
+import { Button } from "@/ui/Button";
+import { EmptyState } from "@/ui/EmptyState";
+import { ErrorState } from "@/ui/ErrorState";
+import { Heading } from "@/ui/Heading";
+import { Text } from "@/ui/Text";
 import css from "./PriceList.module.scss";
 
 const money = (v: number, lng: string) => v.toLocaleString(lng, { maximumFractionDigits: 1 });
@@ -56,12 +60,12 @@ export function PriceList({ onDirty }: { onDirty?: (dirty: boolean) => void }) {
   return (
     <section className={css.list} aria-labelledby="prices-title">
         <header className={css.head}>
-          <h2 id="prices-title">{t("prices.title")}</h2>
-          <p className="muted">{t("prices.lead", { region: market?.region ?? "" })}</p>
+          <Heading level={2} size="title" id="prices-title">{t("prices.title")}</Heading>
+          <Text tone="muted">{t("prices.lead", { region: market?.region ?? "" })}</Text>
         </header>
 
-        {error && <div className={ui.error} role="alert">{error}</div>}
-        {!data && !error && <div className={ui.empty}>{t("common.loading")}</div>}
+        {error && <ErrorState>{error}</ErrorState>}
+        {!data && !error && <EmptyState>{t("common.loading")}</EmptyState>}
         {data && (
           <>
             {data.issues.map((m) => <div key={m} className={css.issue}>{m}</div>)}
@@ -104,7 +108,7 @@ export function PriceList({ onDirty }: { onDirty?: (dirty: boolean) => void }) {
                           {r.market && (
                             <span className={css.medianCell}>
                               {data.editable && current !== r.market.median && (
-                                <button className={css.take} title={t("prices.takeMedianNote")} aria-label={t("prices.takeMedianNote")}
+                                <button type="button" className={css.take} title={t("prices.takeMedianNote")} aria-label={t("prices.takeMedianNote")}
                                         onClick={() => edit(r.key, String(r.market!.median))}>{t("prices.takeMedian")}</button>
                               )}
                               <b>{money(r.market.median, lng)}</b>
@@ -115,7 +119,7 @@ export function PriceList({ onDirty }: { onDirty?: (dirty: boolean) => void }) {
                           {r.market ? (
                             <div className={css.spreadCell}>
                               <Spread s={r.market} price={current} lng={lng} />
-                              <button className={css.quotes} aria-expanded={open === r.key}
+                              <button type="button" className={css.quotes} aria-expanded={open === r.key}
                                       onClick={() => setOpen(open === r.key ? null : r.key)}>
                                 {t("prices.lists", { n: r.market.n })}
                               </button>
@@ -152,14 +156,14 @@ export function PriceList({ onDirty }: { onDirty?: (dirty: boolean) => void }) {
 
             {data.editable && (
               <div className={css.actions}>
-                {invalid && <span className={css.bad}>{t("prices.invalid")}</span>}
-                {saved && !Object.keys(draft).length && <span className="muted small">{t("prices.saved")}</span>}
-                <button disabled={busy || !Object.keys(draft).length} onClick={() => { setDraft({}); setSaved(false); }}>
+                {invalid && <Text as="span" tone="critical">{t("prices.invalid")}</Text>}
+                {saved && !Object.keys(draft).length && <Text as="span" size="small" tone="muted">{t("prices.saved")}</Text>}
+                <Button disabled={busy || !Object.keys(draft).length} onClick={() => { setDraft({}); setSaved(false); }}>
                   {t("prices.reset")}
-                </button>
-                <button className={css.primary} disabled={busy || invalid || !Object.keys(changes).length} onClick={save}>
+                </Button>
+                <Button variant="primary" disabled={busy || invalid || !Object.keys(changes).length} onClick={save}>
                   {busy ? t("prices.saving") : t("prices.save")}
-                </button>
+                </Button>
               </div>
             )}
 

@@ -3,31 +3,29 @@
 @use "@/shared/styles/mixins" as *;
 
 .welcome { position: fixed; inset: 0; z-index: 20; overflow: auto; background: var(--bg); }
-.inner { max-width: 1120px; margin: 0 auto; padding: 56px 24px 64px; }
+.inner { display: grid; gap: var(--space-6); max-width: 1120px; margin: 0 auto; padding: 56px var(--space-6) 64px; }
 
 // Mark | name and tagline
 .head {
-  display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 16px;
-  h1 { margin: 0; font-size: 34px; line-height: 1.1; letter-spacing: .01em; }
-  p { margin: 2px 0 0; font-size: 15px; }
+  display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: var(--space-4);
 }
-.brand { font-family: $brand; font-weight: 600; }
+.brand { font-family: $brand; letter-spacing: .01em; }
 // Product stage next to the name: "alpha", small and light
 .stage { font-family: inherit; font-size: .5em; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); vertical-align: middle; }
-.lead { text-align: center; margin: 40px 0 20px; font-size: 15px; }
+.lead { padding-top: var(--space-4); }
 .none {
-  display: grid; justify-items: center; gap: 10px;
-  max-width: 560px; margin: 0 auto; padding: 20px 24px; text-align: center;
-  border: 1px dashed var(--line); border-radius: 12px; background: var(--panel); color: var(--muted);
+  display: grid; justify-items: center; gap: var(--space-3); justify-self: center;
+  width: 100%; max-width: 560px; padding: var(--space-5) var(--space-6); text-align: center;
+  border: 1px dashed var(--line); border-radius: var(--radius-xl); background: var(--panel); color: var(--muted);
   code {
-    padding: 6px 12px; border-radius: 6px; background: var(--soft);
+    padding: var(--space-1) var(--space-3); border-radius: var(--radius); background: var(--soft);
     border: 1px solid var(--line); color: var(--text);
   }
 }
 @media (max-width: $phone) {
-  .inner { padding: 28px 16px 40px; }
-  .head h1 { font-size: 28px; }
-  .lead { margin: 24px 0 16px; }
+  .inner { gap: var(--space-4); padding: var(--space-6) var(--space-4) var(--space-10); }
+  .head h1 { font-size: 28px; line-height: 36px; }
+  .lead { padding-top: 0; }
 }
-.grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+.grid { display: grid; gap: var(--space-4); grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
 .settings { align-self: start; }

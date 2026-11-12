@@ -1,0 +1,21 @@
+@use "@/shared/styles/mixins" as *;
+
+.segmented {
+  display: flex; flex-wrap: wrap; gap: 2px; padding: 3px; border-radius: var(--radius-md);
+  background: var(--soft);
+}
+.fill { display: grid; }
+.segment {
+  @include type(body);
+  @include focus-ring;
+  min-height: 32px; padding: 0 var(--space-3); border-radius: var(--radius);
+  color: var(--muted); white-space: nowrap; text-align: center;
+  transition: background-color .15s ease, color .15s ease;
+  &:hover:not(:disabled):not(.on) { color: var(--text); }
+  &:disabled { opacity: .5; }
+}
+.lg .segment { min-height: 40px; }
+.on {
+  background: var(--raise); color: var(--text); font-weight: 500;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .12);
+}

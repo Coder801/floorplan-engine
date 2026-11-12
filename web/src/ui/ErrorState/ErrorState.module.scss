@@ -1,0 +1,7 @@
+@use "@/shared/styles/mixins" as *;
+
+.error {
+  @include type(body);
+  display: grid; justify-items: start; gap: var(--space-3);
+  padding: var(--space-6); color: var(--critical); white-space: pre-wrap;
+}

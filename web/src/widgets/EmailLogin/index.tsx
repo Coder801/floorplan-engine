@@ -4,6 +4,9 @@
 import { type FormEvent, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { startEmailLogin, verifyEmailLogin } from "@/shared/auth";
+import { Button } from "@/ui/Button";
+import { Text } from "@/ui/Text";
+import { TextField } from "@/ui/TextField";
 import { CODE_LENGTH, codeDigits, secondsLeft } from "./code";
 import css from "./EmailLogin.module.scss";
 
@@ -59,37 +62,31 @@ export function EmailLogin({ onDone }: { onDone: () => void }) {
     <form className={css.form} onSubmit={submit}>
       {!sent ? (
         <>
-          <label htmlFor="login-email">{t("gate.emailLabel")}</label>
-          <div className={css.stack}>
-            <input id="login-email" type="email" autoComplete="email" required value={email}
-                   placeholder="you@example.com" onChange={(e) => setEmail(e.target.value)} />
-            <button className={css.primary} type="submit" disabled={busy || !email.trim()}>{t("gate.getCode")}</button>
-          </div>
+          <TextField id="login-email" label={t("gate.emailLabel")} size="lg" type="email" autoComplete="email" required value={email}
+                     placeholder="you@example.com" onChange={(e) => setEmail(e.target.value)} />
+          <Button type="submit" variant="primary" size="lg" block disabled={busy || !email.trim()}>{t("gate.getCode")}</Button>
         </>
       ) : (
         <>
-          <p className={css.sent}>{t("gate.codeSent", { email: email.trim() })}</p>
-          <label htmlFor="login-code">{t("gate.codeLabel")}</label>
-          <div className={css.stack}>
-            <input id="login-code" className={css.code} inputMode="numeric" autoComplete="one-time-code"
-                   autoFocus value={code} placeholder="000000"
-                   onChange={(e) => {
-                     const v = codeDigits(e.target.value);
-                     setCode(v);
-                     if (v.length === CODE_LENGTH && !busy) void verify(v);  // a pasted code logs in right away
-                   }} />
-            <button className={css.primary} type="submit" disabled={busy || code.length !== CODE_LENGTH}>{t("gate.signIn")}</button>
-          </div>
+          <Text>{t("gate.codeSent", { email: email.trim() })}</Text>
+          <TextField id="login-code" label={t("gate.codeLabel")} size="lg" mono inputClassName={css.code}
+                     inputMode="numeric" autoComplete="one-time-code" autoFocus value={code} placeholder="000000"
+                     onChange={(e) => {
+                       const v = codeDigits(e.target.value);
+                       setCode(v);
+                       if (v.length === CODE_LENGTH && !busy) void verify(v);  // a pasted code logs in right away
+                     }} />
+          <Button type="submit" variant="primary" size="lg" block disabled={busy || code.length !== CODE_LENGTH}>{t("gate.signIn")}</Button>
           <div className={css.links}>
-            <button type="button" className={css.link} disabled={busy}
-                    onClick={() => { setSent(false); setCode(""); setError(null); }}>{t("gate.changeEmail")}</button>
-            <button type="button" className={css.link} disabled={busy || wait > 0} onClick={() => void send()}>
+            <Button variant="link" className={css.link} disabled={busy}
+                    onClick={() => { setSent(false); setCode(""); setError(null); }}>{t("gate.changeEmail")}</Button>
+            <Button variant="link" className={css.link} disabled={busy || wait > 0} onClick={() => void send()}>
               {wait > 0 ? t("gate.resendIn", { s: wait }) : t("gate.resend")}
-            </button>
+            </Button>
           </div>
         </>
       )}
-      {error && <p className={css.error} role="alert">{error}</p>}
+      {error && <Text tone="critical" role="alert">{error}</Text>}
     </form>
   );
 }

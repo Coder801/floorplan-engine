@@ -5,10 +5,13 @@
 // the page's (useWork.ts): every write replaces the whole state; the card is in the side panel.
 
 import { useTranslation } from "react-i18next";
-import ui from "@/shared/styles/ui.module.scss";
 import type { WorkState } from "@/shared/types";
 import { emptyOf, layoutOf, type WorkRun } from "@/shared/work";
+import { Card } from "@/ui/Card";
+import { ErrorState } from "@/ui/ErrorState";
+import { Heading } from "@/ui/Heading";
 import { MarkLoader } from "@/ui/MarkLoader";
+import { Text } from "@/ui/Text";
 import { WorkBoard } from "@/widgets/WorkBoard";
 import { WorkList } from "@/widgets/WorkList";
 import { WorkPlanActions } from "@/widgets/WorkPlanActions";
@@ -26,8 +29,8 @@ interface Props {
 export function WorkStage({ state, error, busy, run, open, onOpen }: Props) {
   const { t } = useTranslation();
   if (!state) {
-    return error ? <div className={ui.error}>{error}</div> : (
-      <div className={css.loading} role="status"><MarkLoader /><span className="small muted">{t("work.loading")}</span></div>
+    return error ? <ErrorState>{error}</ErrorState> : (
+      <div className={css.loading} role="status"><MarkLoader /><Text as="span" size="small" tone="muted">{t("work.loading")}</Text></div>
     );
   }
   const empty = emptyOf(state);
@@ -36,12 +39,12 @@ export function WorkStage({ state, error, busy, run, open, onOpen }: Props) {
   if (empty) {
     return (
       <div className={css.empty}>
-        <div className={css.emptyCard}>
-          <h1>{t("work.title")}</h1>
-          <p>{t(`work.empty.${empty}`)}</p>
+        <Card padding="md" className={css.emptyCard}>
+          <Heading level={1}>{t("work.title")}</Heading>
+          <Text tone="muted">{t(`work.empty.${empty}`)}</Text>
           {empty === "create" && <WorkPlanActions state={state} run={run} busy={busy} />}
           {shownError}
-        </div>
+        </Card>
       </div>
     );
   }

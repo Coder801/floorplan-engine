@@ -12,6 +12,13 @@ import type { Answer, QuestionsMemory } from "@/shared/questions";
 import ui from "@/shared/styles/ui.module.scss";
 import { sourceRows } from "@/shared/sources";
 import type { Project } from "@/shared/types";
+import { Button } from "@/ui/Button";
+import { Card } from "@/ui/Card";
+import { Heading } from "@/ui/Heading";
+import { IconButton } from "@/ui/IconButton";
+import { PanelHeader } from "@/ui/PanelHeader";
+import { SegmentedControl } from "@/ui/SegmentedControl";
+import { Text } from "@/ui/Text";
 import { Questions } from "@/widgets/Questions";
 import css from "./Drawer.module.scss";
 
@@ -47,10 +54,8 @@ export function Drawer({ tab, project, shownSource, onSource, busy, onAnswer, on
   return (
     <section className={cx(css.drawer, closing && css.out)} role="dialog" aria-label={t(`drawer.${tab}`)}
              onAnimationEnd={(ev) => { if (closing && ev.target === ev.currentTarget) onClosed(); }}>
-      <div className={ui.panelHead}>
-        <button aria-label={t("common.close")} title={t("common.closeEsc")} onClick={onClose}>→</button>
-        <h2>{t(`drawer.${tab}`)}</h2>
-      </div>
+      <PanelHeader title={t(`drawer.${tab}`)}
+                   start={<IconButton label={t("common.close")} title={t("common.closeEsc")} onClick={onClose}>→</IconButton>} />
       <div className={ui.panelBody}>{body}</div>
     </section>
   );
@@ -61,29 +66,29 @@ export function Drawer({ tab, project, shownSource, onSource, busy, onAnswer, on
 function Sources({ project: p, shown, onSource }: { project: Project; shown: string | null; onSource: (f: string) => void }) {
   const { t } = useTranslation();
   const list = sourceRows(p.sources, p.parsed);
-  if (!list.length) return <div className="muted">{t("drawer.noSources")}</div>;
+  if (!list.length) return <Text tone="muted">{t("drawer.noSources")}</Text>;
   const used = list.filter((s) => s.used).length;
   return (
     <>
-      <div className={cx(css.lead, "small muted")}>
+      <Text size="small" tone="muted">
         {p.parsed ? t("drawer.parsed", { used, total: list.length }) : t("drawer.viewerOld")}
-      </div>
+      </Text>
       {list.map((s) => (
-        <div key={s.file} className={cx(css.card, s.file === shown && css.lit)}>
-          <div className={cx(css.sev, s.used ? "st-ready" : "muted")}>
+        <Card key={s.file} padding="sm" selected={s.file === shown} className={css.card}>
+          <Text as="div" size="caps" className={s.used ? "st-ready" : "muted"}>
             {!s.exists ? t("drawer.noFile") : s.used === null ? t("drawer.parseUnknown")
               : s.used ? t("drawer.used") : t("drawer.unused")}
             <span className="muted">{` · ${kindOf(s.file)}`}</span>
-          </div>
+          </Text>
           <div className={css.file}>{s.file}</div>
-          {s.note && <div className="small muted">{s.note}</div>}
+          {s.note && <Text size="small" tone="muted">{s.note}</Text>}
           {s.exists && (
             <div className={css.rowBtns}>
-              <button onClick={() => onSource(s.file)}>{t("common.show")}</button>
+              <Button size="sm" onClick={() => onSource(s.file)}>{t("common.show")}</Button>
               <a href={`${base(p.id)}/source/${enc(s.file)}`} target="_blank" rel="noreferrer">{t("common.openNewTab")}</a>
             </div>
           )}
-        </div>
+        </Card>
       ))}
     </>
   );
@@ -110,7 +115,7 @@ function ProjectInfo({ project: p }: { project: Project }) {
   );
   return (
     <>
-      <h3>{p.title}</h3>
+      <Heading level={3} size="heading" className={css.title}>{p.title}</Heading>
       <div className="small muted"><span className="mono">{`projects/${p.name}`}</span>{` · ${p.built ? t("drawer.built", { when: when(p.built) }) : when(p.built)}`}</div>
       {p.stages.length > 0 && (
         <>
@@ -127,13 +132,13 @@ function ProjectInfo({ project: p }: { project: Project }) {
       )}
       <h3>{t("drawer.issues", { n: issues.length })}</h3>
       {issues.length ? issues.map((i, k) => (
-        <div key={k} className={css.card}>
-          <div className={cx(css.sev, i.severity === "error" ? "sev-critical" : "sev-major")}>
+        <Card key={k} padding="sm" className={css.card}>
+          <Text as="div" size="caps" className={i.severity === "error" ? "sev-critical" : "sev-major"}>
             {i.severity === "error" ? t("drawer.error") : t("drawer.warning")}
-          </div>
+          </Text>
           <div className="mono muted">{`${i.file}: ${i.path}`}</div>
           <div>{i.message}</div>
-        </div>
+        </Card>
       )) : <div className="muted small">{t("drawer.noIssues")}</div>}
       <h3>{t("drawer.results")}</h3>
       {p.files.length ? <div className={cx(css.files, "small")}>{p.files.map((f) => link("out", f))}</div>
@@ -141,11 +146,8 @@ function ProjectInfo({ project: p }: { project: Project }) {
       {file && (
         <>
           <h3>{t("drawer.model")}</h3>
-          <div className={cx(ui.segmented, css.models)}>
-            {p.model.map((f) => (
-              <button key={f} className={cx(f === file && ui.on)} onClick={() => setModelFile(f)}>{f}</button>
-            ))}
-          </div>
+          <SegmentedControl className={css.models} label={t("drawer.model")} value={file} onChange={setModelFile}
+                            options={p.model.map((f) => ({ value: f, label: f }))} />
           <pre>{text}</pre>
         </>
       )}

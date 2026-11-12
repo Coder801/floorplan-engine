@@ -11,7 +11,7 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
-  font: 14px/1.45 "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  font: 14px/20px "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 // React root: one cell exactly the size of the screen (viewer, login or "Loading…"), scrolling
 // happens inside the panels. The row is minmax(0, 1fr), not auto: otherwise a long side panel
@@ -24,23 +24,24 @@ body {
 }
 
 a { color: inherit; }
-button { font: inherit; color: inherit; }
+
+// Typography: tags get the type scale (mixins, $type) and no outer margins. Space between blocks
+// comes from the container (grid/flex gap from --space-*, the Stack component), never from a
+// heading's or paragraph's own margin: that is what keeps the vertical rhythm on a 4px grid.
+// A heading that looks different from its level is the Heading component with size.
+h1, h2, h3, h4, h5, h6, p, figure, blockquote, dl, dd { margin: 0; }
+h1 { @include type(title); }
+h2 { @include type(heading); }
+h3 { @include type(subheading); }
+h4, h5, h6 { @include type(caps); }
+
+// Controls: only a reset. How a button, field or checkbox looks is its ui/ component (Button,
+// IconButton, TextField, Checkbox…); a widget's own button (a tab, a tile) styles itself
+button, input, textarea, select { font: inherit; color: inherit; }
 button {
-  cursor: pointer; border-radius: 6px; min-height: 36px; padding: 0 12px;
-  background: var(--raise); border: 1px solid var(--line);
-  &:disabled { opacity: .5; cursor: default; }
-}
-// Hover is smooth on every button: colours, frame, shadow and a slight brightening of a filled
-// (accent) one ease in. :where() keeps it at zero weight, so a component's own transition or
-// look still wins. A plain button (the tag rule alone) gets the soft fill on hover; a component
-// class over it keeps its own background
-:where(button) {
-  transition: background-color .15s ease, border-color .15s ease, color .15s ease,
-    box-shadow .15s ease, opacity .15s ease, filter .15s ease;
-}
-button:where(:hover:not(:disabled)) { background: var(--soft); }
-:where(button[aria-pressed="true"], button.primary, button[class*="primary"]):where(:hover:not(:disabled)) {
-  filter: brightness(1.15);
+  margin: 0; padding: 0; border: 0; background: none; border-radius: 0;
+  cursor: pointer; text-align: inherit;
+  &:disabled { cursor: default; }
 }
 pre {
   margin: 0; padding: 10px; background: var(--soft); border: 1px solid var(--line);
@@ -51,7 +52,7 @@ pre {
 // Text utilities
 .mono { font-family: $mono; font-size: 12px; }
 .muted { color: var(--muted); }
-.small { font-size: 12px; }
+.small { @include type(small); }
 
 // Colour by question severity (sev-<severity>) and stage status (st-<status>):
 // the names come from data, so the classes are global
@@ -78,5 +79,4 @@ pre {
 @keyframes modal-out { to { opacity: 0; transform: scale(.97); } }
 @media (prefers-reduced-motion: reduce) {
   [data-veil], [data-pop], [data-veil][data-closing], [data-pop][data-closing] { animation: none; }
-  button { transition: none !important; }
 }

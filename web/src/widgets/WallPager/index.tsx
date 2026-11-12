@@ -8,7 +8,10 @@ import { useTranslation } from "react-i18next";
 import { cx } from "@/shared/cx";
 import { usePopover } from "@/shared/popover";
 import menu from "@/shared/styles/menu.module.scss";
+import { Button } from "@/ui/Button";
+import { ButtonGroup } from "@/ui/ButtonGroup";
 import { Icon } from "@/ui/Icon";
+import { MenuItem } from "@/ui/MenuItem";
 import css from "./WallPager.module.scss";
 
 interface Wall { key: string; title: string }
@@ -36,31 +39,28 @@ export function WallPager({ walls, at, onTurn, onPick, onAll }: Props) {
   return (
     <div ref={ref} className={css.at}>
       {onAll && (
-        <button className={css.all} title={t("pager.overview")} onClick={onAll}>
-          <Icon name="grid" /><span className={css.allLabel}>{t("pager.overview")}</span>
-        </button>
+        <Button className={css.all} title={t("pager.overview")} onClick={onAll} icon={<Icon name="grid" />}>
+          <span className={css.allLabel}>{t("pager.overview")}</span>
+        </Button>
       )}
-      <div className={css.pager} role="group" aria-label={t("pager.walls")}>
-        <button aria-label={t("pager.prev")} title="PageUp" disabled={at <= 0} onClick={() => onTurn(-1)}>‹</button>
-        <button className={css.title} aria-haspopup="listbox" aria-expanded={open} title={t("pager.all")} onClick={toggle}>
+      <ButtonGroup className={css.pager} label={t("pager.walls")}>
+        <Button variant="bare" aria-label={t("pager.prev")} title="PageUp" disabled={at <= 0} onClick={() => onTurn(-1)}>‹</Button>
+        <Button variant="bare" className={css.title} aria-haspopup="listbox" aria-expanded={open} title={t("pager.all")} onClick={toggle}>
           <span className={css.name}>{wall.title}</span>
           <span className="mono muted">{` · ${at + 1} / ${walls.length}`}</span>
           <span className={css.caret} aria-hidden="true">▾</span>
-        </button>
-        <button aria-label={t("pager.next")} title="PageDown" disabled={at >= walls.length - 1}
-                onClick={() => onTurn(1)}>›</button>
-      </div>
+        </Button>
+        <Button variant="bare" aria-label={t("pager.next")} title="PageDown" disabled={at >= walls.length - 1}
+                onClick={() => onTurn(1)}>›</Button>
+      </ButtonGroup>
       {open && (
         <div ref={list} className={cx(menu.panel, css.list)} data-pop="" data-closing={closing || undefined} role="listbox" aria-label={t("pager.list")}>
           {rooms.map((r, k) => (
             <div key={k} className={css.room} role="group" aria-label={r.room || undefined}>
               {r.room && <div className={css.roomName}>{r.room}</div>}
               {r.items.map(({ index, wall: name }) => (
-                <button key={index} className={menu.item} role="option" aria-selected={index === at}
-                        onClick={() => { setOpen(false); if (index !== at) onPick(index); }}>
-                  <span>{name}</span>
-                  <span className={cx(menu.note, "mono")}>{index + 1}</span>
-                </button>
+                <MenuItem key={index} role="option" selected={index === at} note={<span className="mono">{index + 1}</span>}
+                          onClick={() => { setOpen(false); if (index !== at) onPick(index); }}>{name}</MenuItem>
               ))}
             </div>
           ))}

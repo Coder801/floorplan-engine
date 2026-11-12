@@ -13,6 +13,12 @@ import { anyKey } from "@/shared/i18n";
 import { FADE_MS } from "@/shared/popover";
 import { plainNumber } from "@/shared/questions";
 import type { OverviewMaster, OverviewReserve, Project, Scene, Variants, VariantSummary } from "@/shared/types";
+import { Button } from "@/ui/Button";
+import { Card } from "@/ui/Card";
+import { Heading } from "@/ui/Heading";
+import { IconButton } from "@/ui/IconButton";
+import { Tag } from "@/ui/Tag";
+import { Text } from "@/ui/Text";
 import { FlatCut } from "@/widgets/FlatCut";
 import { CEILING_MAX, CEILING_MIN, parseCeiling } from "./ceiling";
 import { ReserveList } from "@/widgets/ReserveList";
@@ -151,16 +157,16 @@ export function Wizard({ project, variants, ceiling, scene = null, reserve, mast
       <div ref={box} className={css.dialog} data-pop="modal" data-closing={closing || undefined} role="dialog" aria-modal="true" aria-labelledby="wizard-title"
            tabIndex={-1} onKeyDown={onKey}>
         <nav className={css.steps} aria-label={t("wizard.stepsLabel")}>
-          <h2 id="wizard-title">{t("wizard.title")}</h2>
+          <Heading level={2} size="subheading" id="wizard-title" className={css.title}>{t("wizard.title")}</Heading>
           {groups.map((g) => (
             <div key={g}>
-              <h3>{t(`wizard.groups.${g}`)}</h3>
+              <Heading level={3} size="caps" className={css.group}>{t(`wizard.groups.${g}`)}</Heading>
               <ol>
                 {steps.filter((s) => s.group === g).map((s) => {
                   const on = s.id === at;
                   return (
                     <li key={s.id}>
-                      <button className={cx(css.step, on && css.on)} aria-current={on ? "step" : undefined} onClick={() => setAt(s.id)}>
+                      <button type="button" className={cx(css.step, on && css.on)} aria-current={on ? "step" : undefined} onClick={() => setAt(s.id)}>
                         <span className={cx(css.mark, isPicked(picks[s.id]) && css.picked)} aria-hidden="true">
                           {isPicked(picks[s.id]) ? "✓" : ""}
                         </span>
@@ -172,39 +178,39 @@ export function Wizard({ project, variants, ceiling, scene = null, reserve, mast
               </ol>
             </div>
           ))}
-          <button className={cx(css.step, at === DONE && css.on)} aria-current={at === DONE ? "step" : undefined} onClick={() => setAt(DONE)}>
+          <button type="button" className={cx(css.step, at === DONE && css.on)} aria-current={at === DONE ? "step" : undefined} onClick={() => setAt(DONE)}>
             {t("wizard.groups.done")}
           </button>
         </nav>
 
         <div className={css.head}>
-          <span className="small muted">
+          <Text as="span" size="small" tone="muted">
             {t("wizard.stepOf", { n: position, total: steps.length + 1 })}
-            {restored && <> · {t("wizard.restored")} <button className={css.link} onClick={reset}>{t("wizard.reset")}</button></>}
-          </span>
-          <button className={css.close} aria-label={t("common.close")} onClick={close}>×</button>
+            {restored && <> · {t("wizard.restored")} <Button variant="link" onClick={reset}>{t("wizard.reset")}</Button></>}
+          </Text>
+          <IconButton variant="close" label={t("common.close")} onClick={close} />
         </div>
 
         <section className={css.body}>
-          <h1>{shownTitle}</h1>
+          <Heading level={1}>{shownTitle}</Heading>
           {step ? (
             <>
-              <p className="muted">{say(`wizard.steps.${step.id}.why`)}</p>
+              <Text tone="muted">{say(`wizard.steps.${step.id}.why`)}</Text>
               {step.kind === "cards" ? (
                 <div className={css.cards} role="radiogroup" aria-label={shownTitle}>
                   {step.options.map((value) => {
                     const s = priced ? summary(step.id, value) : undefined;
                     return (
-                      <button key={value} role="radio" aria-checked={picks[step.id] === value}
-                              className={cx(css.card, picks[step.id] === value && css.chosen)}
-                              onClick={() => pick(step.id, value)}>
+                      <Card as="button" type="button" key={value} role="radio" aria-checked={picks[step.id] === value}
+                            padding="sm" interactive selected={picks[step.id] === value} className={css.card}
+                            onClick={() => pick(step.id, value)}>
                         <WizardArt name={value === UNKNOWN ? UNKNOWN : `${step.id}-${value}`} />
                         <b>{optionName(step, value)}</b>
                         {s && <span className={css.price}>{money(s)}</span>}
-                        <span className="small muted">{optionNote(step, value)}</span>
-                        {s && <span className="small muted">{t("wizard.routeFacts", { cable: Math.round(s.cable_m), chases: Math.round(s.chases_m) })}</span>}
-                        {inModel(step, value) && <span className={cx(css.tag, css.current)}>{t("wizard.current")}</span>}
-                      </button>
+                        <Text as="span" size="small" tone="muted">{optionNote(step, value)}</Text>
+                        {s && <Text as="span" size="small" tone="muted">{t("wizard.routeFacts", { cable: Math.round(s.cable_m), chases: Math.round(s.chases_m) })}</Text>}
+                        {inModel(step, value) && <Tag variant="outline" tone="inherit" className={css.current}>{t("wizard.current")}</Tag>}
+                      </Card>
                     );
                   })}
                 </div>
@@ -219,10 +225,9 @@ export function Wizard({ project, variants, ceiling, scene = null, reserve, mast
                   <ReserveList reserve={reserve!} value={picks.reserve && picks.reserve !== UNKNOWN ? picks.reserve.split(",") : reserveOn(reserve!)}
                                onChange={(groups) => pick("reserve", groups.join())} />
                   <div className={css.presets}>
-                    <button aria-pressed={picks.reserve === UNKNOWN} className={cx(picks.reserve === UNKNOWN && css.chosen)}
-                            onClick={() => pick("reserve", UNKNOWN)}>{t("wizard.unknown")}</button>
+                    <Button size="sm" pressed={picks.reserve === UNKNOWN} onClick={() => pick("reserve", UNKNOWN)}>{t("wizard.unknown")}</Button>
                   </div>
-                  {picks.reserve === UNKNOWN && <p className="small muted">{unknownNote(step)}</p>}
+                  {picks.reserve === UNKNOWN && <Text size="small" tone="muted">{unknownNote(step)}</Text>}
                 </>
               ) : (
                 <div className={css.number}>
@@ -233,7 +238,7 @@ export function Wizard({ project, variants, ceiling, scene = null, reserve, mast
                   </div>
                   <div className={css.field}>
                     <label>
-                      <span className="small muted">{say(`wizard.steps.${step.id}.field`)}</span>
+                      <Text as="span" size="small" tone="muted">{say(`wizard.steps.${step.id}.field`)}</Text>
                       <span className={css.input}>
                         <input type="text" inputMode="numeric" aria-invalid={invalid(step, picks[step.id])}
                                className={cx(invalid(step, picks[step.id]) && css.bad)}
@@ -244,27 +249,25 @@ export function Wizard({ project, variants, ceiling, scene = null, reserve, mast
                     </label>
                     <div className={css.presets}>
                       {step.options.map((value) => (
-                        <button key={value} aria-pressed={picks[step.id] === value} className={cx(picks[step.id] === value && css.chosen)}
-                                onClick={() => pick(step.id, value)}>{value}</button>
+                        <Button key={value} size="sm" pressed={picks[step.id] === value} onClick={() => pick(step.id, value)}>{value}</Button>
                       ))}
                       {step.question && (
-                        <button aria-pressed={picks[step.id] === UNKNOWN} className={cx(picks[step.id] === UNKNOWN && css.chosen)}
-                                onClick={() => pick(step.id, UNKNOWN)}>{t("wizard.unknown")}</button>
+                        <Button size="sm" pressed={picks[step.id] === UNKNOWN} onClick={() => pick(step.id, UNKNOWN)}>{t("wizard.unknown")}</Button>
                       )}
                     </div>
-                    {picks[step.id] === UNKNOWN && <p className="small muted">{unknownNote(step)}</p>}
+                    {picks[step.id] === UNKNOWN && <Text size="small" tone="muted">{unknownNote(step)}</Text>}
                     {invalid(step, picks[step.id]) && (
-                      <p className={css.error}>
+                      <Text tone="major">
                         {step.id === "ceiling"
                           ? t("overview.ceilingRange", { min: CEILING_MIN, max: CEILING_MAX })
                           : t("wizard.badInput")}
-                      </p>
+                      </Text>
                     )}
-                    {step.id === "ceiling" && ceiling?.assumed && <p className="small muted">{t("overview.assumed")}</p>}
+                    {step.id === "ceiling" && ceiling?.assumed && <Text size="small" tone="muted">{t("overview.assumed")}</Text>}
                   </div>
                 </div>
               )}
-              {VARIANT_STEPS.has(step.id) && !priced && <p className="small muted">{t("wizard.noPrices")}</p>}
+              {VARIANT_STEPS.has(step.id) && !priced && <Text size="small" tone="muted">{t("wizard.noPrices")}</Text>}
               {step.id === "plaster" && kept && <p className={css.fact}>{t(`wizard.chasesKept.${kept}`)}</p>}
               {step.question && WITH_FACTS.has(step.id) && (
                 <p className={css.fact}><b>{t("wizard.inProject")}</b> {step.question.text}</p>
@@ -272,7 +275,7 @@ export function Wizard({ project, variants, ceiling, scene = null, reserve, mast
             </>
           ) : (
             <>
-              <p className="muted">{changed ? t("wizard.done.note") : t("wizard.done.empty")}</p>
+              <Text tone="muted">{changed ? t("wizard.done.note") : t("wizard.done.empty")}</Text>
               <dl className={css.result}>
                 {steps.map((s) => {
                   const value = picks[s.id];
@@ -281,39 +284,39 @@ export function Wizard({ project, variants, ceiling, scene = null, reserve, mast
                     <dt key={`k${s.id}`}>{t(`wizard.steps.${s.id}.short`)}</dt>,
                     <dd key={`v${s.id}`} className={cx(!isPicked(value) && "muted")}>
                       {isPicked(value) ? optionName(s, value!) : t("wizard.done.unset")}
-                      {moved && <span className={css.tag}>{t("wizard.done.changed")}</span>}
+                      {moved && <Tag variant="outline" className={css.changed}>{t("wizard.done.changed")}</Tag>}
                     </dd>,
                   ];
                 })}
               </dl>
               {estimate ? (
-                <p className="small">
+                <Text size="small">
                   {t("wizard.done.total", { total: money(estimate) })}
                   <span className="muted"> · {t("wizard.done.totalNote")}</span>
-                </p>
-              ) : variants && changed && <p className="small muted">{t("wizard.done.totalLater")}</p>}
+                </Text>
+              ) : variants && changed && <Text size="small" tone="muted">{t("wizard.done.totalLater")}</Text>}
               {others > 0 && (
-                <p className="small">
+                <Text size="small">
                   {t("wizard.done.others", { n: others })}{" "}
-                  <button className={css.link} onClick={onQuestions}>{t("overview.openQuestions")}</button>
-                </p>
+                  <Button variant="link" onClick={onQuestions}>{t("overview.openQuestions")}</Button>
+                </Text>
               )}
-              {wrong && <p className={css.error}>{t("wizard.done.wrong", { step: t(`wizard.steps.${wrong.id}.short`) })}</p>}
-              {error && <p className={css.error} role="alert">{error}</p>}
+              {wrong && <Text tone="major">{t("wizard.done.wrong", { step: t(`wizard.steps.${wrong.id}.short`) })}</Text>}
+              {error && <Text tone="major" role="alert">{error}</Text>}
             </>
           )}
         </section>
 
         <footer className={css.foot}>
-          <button disabled={at === steps[0]?.id} onClick={() => go(at === DONE ? steps.length - 1 - index : -1)}>{t("wizard.back")}</button>
+          <Button disabled={at === steps[0]?.id} onClick={() => go(at === DONE ? steps.length - 1 - index : -1)}>{t("wizard.back")}</Button>
           {step ? (
-            <button className={css.primary} disabled={invalid(step, picks[step.id])} onClick={() => next(step)}>
+            <Button variant="primary" className={css.primary} disabled={invalid(step, picks[step.id])} onClick={() => next(step)}>
               {isPicked(picks[step.id]) || shownGroups(step) !== undefined ? t("wizard.next") : t("wizard.skip")}
-            </button>
+            </Button>
           ) : changed ? (
-            <button className={css.primary} disabled={!!wrong} onClick={apply}>{t("wizard.done.apply")}</button>
+            <Button variant="primary" className={css.primary} disabled={!!wrong} onClick={apply}>{t("wizard.done.apply")}</Button>
           ) : (
-            <button className={css.primary} onClick={close}>{t("common.close")}</button>
+            <Button variant="primary" className={css.primary} onClick={close}>{t("common.close")}</Button>
           )}
         </footer>
       </div>

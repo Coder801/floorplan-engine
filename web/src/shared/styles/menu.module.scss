@@ -7,7 +7,7 @@
 .panel {
   @include raised(10px);
   position: absolute; top: calc(100% + 6px); right: 0; z-index: 25;
-  min-width: 220px; padding: 6px;
+  min-width: 220px; padding: var(--space-1);
   display: grid; gap: 2px;
   box-shadow: 0 10px 32px rgba(0, 0, 0, .18);
   animation: menu-in .12s ease-out;
@@ -19,10 +19,11 @@
 .item {
   @include bare-button;
   display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 10px;
-  min-height: 40px; padding: 0 10px; border-radius: 6px;
+  @include type(body);
+  min-height: 40px; padding: 0 var(--space-3); border-radius: var(--radius);
   text-align: left; text-decoration: none; color: var(--text); cursor: pointer;
   &:hover:not(:disabled), &:focus-visible { background: var(--soft); outline: none; }
   &:disabled { opacity: .45; cursor: default; }
 }
-.note { color: var(--muted); font-size: 12px; }
+.note { @include type(small); color: var(--muted); }
 .icon { width: 18px; height: 18px; flex: none; }

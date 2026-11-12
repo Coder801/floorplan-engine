@@ -8,22 +8,15 @@
 }
 
 // "All walls": a button of its own, with its name, like "Isometry"
-.all {
-  @include bare-button; @include raised;
-  display: flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 12px;
-  white-space: nowrap; font-size: 14px;
-}
+.all { min-height: 32px; }
 
 .pager {
-  @include raised;
-  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; overflow: hidden;
-  > button { @include bare-button; border-radius: 0; min-width: 40px; font-size: 16px; }
-  > button:disabled { opacity: .35; }
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto;
+  > button { min-height: 32px; font-size: 16px; }
   // The wall name is the list button: the name is truncated, the number and "▾" are always visible
   > .title {
-    display: flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 10px;
-    max-width: min(56vw, 480px); white-space: nowrap; font-size: 14px;
-    border-left: 1px solid var(--line); border-right: 1px solid var(--line);
+    justify-content: flex-start; gap: 6px; padding: 0 10px; min-width: 0;
+    max-width: min(56vw, 480px); font-size: 14px;
     &[aria-expanded="true"] { background: var(--soft); }
   }
 }
@@ -35,12 +28,12 @@
   left: 50%; right: auto; transform: translateX(-50%);
   width: max(100%, 280px); max-height: min(60vh, 520px); overflow-y: auto;
   animation: none;
-  > .room + .room { border-top: 1px solid var(--line); padding-top: 4px; margin-top: 2px; }
+  > .room + .room { border-top: 1px solid var(--line); padding-top: var(--space-1); margin-top: 2px; }
   button { grid-template-columns: minmax(0, 1fr) auto; min-height: 34px; }
   button[aria-selected="true"] { background: var(--hl-row); box-shadow: inset 3px 0 var(--hl); }
 }
 .room { display: grid; gap: 2px; }
-.roomName { padding: 6px 10px 2px; font-size: 12px; font-weight: 600; color: var(--muted); }
+.roomName { @include type(caps); padding: var(--space-2) var(--space-3) 2px; color: var(--muted); }
 
 @media (max-width: $narrow) {
   // Pager on the left, "Download" on the right

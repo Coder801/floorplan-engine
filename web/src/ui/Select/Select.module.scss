@@ -1,12 +1,15 @@
+@use "@/shared/styles/mixins" as *;
+
 // Select: the box of a button with an arrow, the list is the shared menu (menu.module.scss)
 
 .select { display: grid; }
 
 .button {
+  @include button-base;
   display: inline-grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 8px;
   white-space: nowrap; text-align: left;
 }
-.flat { border: 0; border-right: 1px solid var(--line); border-radius: 0; background: none; }
+.flat { min-height: 0; border: 0; border-right: 1px solid var(--line); border-radius: 0; background: none; }
 
 // All faces share one cell: the hidden ones hold the width of the widest option
 .face { grid-area: 1 / 1; display: flex; align-items: center; gap: 8px; svg { margin: 0; } }

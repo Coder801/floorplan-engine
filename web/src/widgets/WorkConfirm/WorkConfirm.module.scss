@@ -1,38 +1,9 @@
-// The channel dialog: a veil over everything (over the task card, which is fixed on a phone), a
-// card in the middle — like the alpha notice
+// The channel dialog is a Modal (over the task card, which is fixed on a phone); here only its content
 
 @use "@/shared/styles/mixins" as *;
 
-.veil {
-  position: fixed; inset: 0; z-index: 120;
-  display: grid; place-items: center; padding: 16px;
-  background: color-mix(in srgb, var(--bg) 70%, transparent);
-}
-.card {
-  display: grid; gap: 12px; width: 100%; max-width: 420px; max-height: calc(100dvh - 32px); overflow: auto;
-  padding: 20px 22px; background: var(--raise); color: var(--text);
-  border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 8px 32px rgb(0 0 0 / .2);
-}
-.title { margin: 0; font-size: 18px; font-weight: 600; line-height: 1.25; }
-.lead { margin: 0; font-size: 13px; line-height: 1.45; color: var(--muted); b { color: var(--text); } }
-// Three channels in one row (over ui.segmented, which is flex); on a phone each is a big target
-.card .channels {
-  display: grid; grid-template-columns: repeat(3, 1fr);
-  button { min-height: 40px; }
-}
-.note {
-  display: grid; gap: 4px; font-size: 12px; color: var(--muted);
-  textarea {
-    font: inherit; font-size: 13px; color: var(--text); background: var(--paper);
-    border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; resize: vertical;
-  }
-}
-.buttons { display: flex; flex-wrap: wrap; gap: 8px; }
-.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); font-weight: 600; }
+.lead b { color: var(--text); }
 
 @media (max-width: $phone) {
-  .veil { place-items: end stretch; padding: 0; }
-  .card { max-width: none; border-radius: 12px 12px 0 0; padding-bottom: calc(20px + env(safe-area-inset-bottom)); }
-  .card .channels button { min-height: 48px; }
-  .buttons button { flex: 1 1 auto; min-height: 44px; }
+  .buttons > * { flex: 1 1 auto; min-height: var(--control-h-lg); }
 }

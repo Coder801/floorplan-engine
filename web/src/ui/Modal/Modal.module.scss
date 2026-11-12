@@ -1,0 +1,27 @@
+@use "@/shared/styles/mixins" as *;
+
+.veil {
+  position: fixed; inset: 0; z-index: 120;
+  display: grid; place-items: center; padding: var(--space-4);
+  background: color-mix(in srgb, var(--bg) 70%, transparent);
+}
+.locked { cursor: progress; }
+.card {
+  display: grid; align-content: start; gap: var(--space-4);
+  width: 100%; max-height: calc(100dvh - 2 * var(--space-4)); overflow: auto;
+  padding: var(--space-6); background: var(--raise); color: var(--text);
+  border: 1px solid var(--line); border-radius: var(--radius-xl); box-shadow: var(--shadow-pop);
+  outline: none;
+}
+.sm { max-width: 340px; }
+.md { max-width: 480px; }
+.lg { max-width: 720px; }
+
+// Phone: a sheet at the bottom with the safe area under it
+@media (max-width: $phone) {
+  .veil { place-items: end stretch; padding: 0; }
+  .card {
+    max-width: none; max-height: 92dvh; border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+    padding: var(--space-5) var(--space-5) calc(var(--space-5) + env(safe-area-inset-bottom));
+  }
+}

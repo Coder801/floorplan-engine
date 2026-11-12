@@ -2,28 +2,18 @@
 // modal with an icon until the server returns the new build. Clicks are blocked by the veil,
 // Tab and Esc are intercepted.
 
-import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
+import { Modal } from "@/ui/Modal";
+import { Text } from "@/ui/Text";
 import css from "./RebuildModal.module.scss";
 
 const KEYS = [0, 1, 2, 3, 4, 5, 6, 7, 8];
 
 export function RebuildModal() {
   const { t } = useTranslation();
-  const box = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const prev = document.activeElement as HTMLElement | null;
-    box.current?.focus();
-    const lock = (ev: KeyboardEvent) => {
-      if (ev.key === "Tab" || ev.key === "Escape") { ev.preventDefault(); ev.stopPropagation(); }
-    };
-    window.addEventListener("keydown", lock, true);
-    return () => { window.removeEventListener("keydown", lock, true); prev?.focus?.(); };
-  }, []);
+  // No onClose: Esc does nothing, the veil does not close, Tab stays on the card (nothing to focus)
   return (
-    <div className={css.veil} data-veil="">
-      <div ref={box} className={css.modal} data-pop="modal" role="alertdialog" aria-modal="true" aria-busy="true"
-           aria-labelledby="rebuild-title" tabIndex={-1}>
+    <Modal size="sm" role="alertdialog" busy labelledBy="rebuild-title" className={css.modal}>
         {/* Calculator: body, screen and 3×3 buttons pulsing in a diagonal wave */}
         <svg className={css.icon} viewBox="0 0 80 100" width="64" height="80" fill="none" stroke="currentColor"
              strokeWidth="2.5" aria-hidden="true">
@@ -34,8 +24,7 @@ export function RebuildModal() {
           ))}
         </svg>
         <b id="rebuild-title">{t("rebuild.title")}</b>
-        <span className="small muted">{t("rebuild.note")}</span>
-      </div>
-    </div>
+        <Text size="small" tone="muted">{t("rebuild.note")}</Text>
+    </Modal>
   );
 }

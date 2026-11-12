@@ -1,0 +1,21 @@
+@use "@/shared/styles/mixins" as *;
+
+.tag {
+  @include type(small);
+  display: inline-flex; align-items: center; gap: var(--space-1); flex: none;
+  padding: 0 6px; font-size: 11px; white-space: nowrap; vertical-align: 1px;
+}
+.soft { background: var(--soft); border-radius: var(--radius-sm); line-height: 18px; }
+.outline { border: 1px solid currentColor; border-radius: 10px; line-height: 16px; }
+.mono {
+  font: 600 10px/16px $mono; letter-spacing: .04em; padding: 1px 5px;
+  border: 1px solid var(--line); border-radius: var(--radius-sm);
+}
+
+.muted { color: var(--muted); }
+.outline.muted { border-color: var(--line); }
+.default { color: var(--text); }
+.major { color: var(--major); }
+.critical { color: var(--critical); }
+.ok { color: var(--ok); }
+.accent { color: var(--hl); }

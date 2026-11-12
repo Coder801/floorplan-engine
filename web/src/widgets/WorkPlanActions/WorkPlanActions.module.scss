@@ -1,11 +1,8 @@
-// Plan buttons in one row; the main one is filled with the accent
+// Plan buttons in one row; the main one is filled with the accent (Button primary)
 
 @use "@/shared/styles/mixins" as *;
 
-.actions { display: flex; flex-wrap: wrap; gap: 8px; }
-.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+.actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 // The client on a phone: one wide, tall button
-.big {
-  display: grid;
-  button { min-height: 48px; font-size: 16px; font-weight: 500; }
-}
+.big { display: grid; }
+.bigButton { min-height: 48px; @include type(heading); font-weight: 500; }

@@ -9,6 +9,10 @@ import { useTranslation } from "react-i18next";
 import { editWorkTask } from "@/shared/api";
 import type { WorkState, WorkTask } from "@/shared/types";
 import { afterOf, numberOf, ordered, shiftTo, type WorkRun } from "@/shared/work";
+import { Button } from "@/ui/Button";
+import { Checkbox } from "@/ui/Checkbox";
+import { IconButton } from "@/ui/IconButton";
+import { Text } from "@/ui/Text";
 import css from "./WorkOrder.module.scss";
 
 interface Props {
@@ -55,10 +59,8 @@ export function WorkOrder({ task, state, run, busy, editable }: Props) {
           <span className={css.label}>{t("work.card.order")}</span>
           <span className={css.number}>{t("work.card.orderN", { n, m: state.tasks.length })}</span>
           <span className={css.arrows}>
-            <button type="button" disabled={busy || up === null} onClick={() => move(up)}
-                    aria-label={t("work.card.up")} title={t("work.card.up")}>↑</button>
-            <button type="button" disabled={busy || down === null} onClick={() => move(down)}
-                    aria-label={t("work.card.down")} title={t("work.card.down")}>↓</button>
+            <IconButton variant="framed" disabled={busy || up === null} onClick={() => move(up)} label={t("work.card.up")}>↑</IconButton>
+            <IconButton variant="framed" disabled={busy || down === null} onClick={() => move(down)} label={t("work.card.down")}>↓</IconButton>
           </span>
         </div>
       )}
@@ -68,7 +70,7 @@ export function WorkOrder({ task, state, run, busy, editable }: Props) {
           <span>
             {after.length ? after.map(label).join(", ") : <span className="muted">{t("work.card.afterNone")}</span>}
             {editable && others.length > 0 && (
-              <> <button type="button" className={css.link} onClick={start}>{t("work.card.afterEdit")}</button></>
+              <> <Button variant="link" className={css.link} onClick={start}>{t("work.card.afterEdit")}</Button></>
             )}
           </span>
         </div>
@@ -77,21 +79,18 @@ export function WorkOrder({ task, state, run, busy, editable }: Props) {
         <form className={css.form} onSubmit={save}>
           <fieldset>
             <legend>{t("work.card.after")}</legend>
-            <p className="muted small">{t("work.card.afterLead")}</p>
+            <Text size="small" tone="muted">{t("work.card.afterLead")}</Text>
             <ul className={css.choices}>
               {others.map((x) => (
                 <li key={x.id}>
-                  <label>
-                    <input type="checkbox" checked={picked.has(x.id)} onChange={() => toggle(x.id)} />
-                    <span>{label(x)}</span>
-                  </label>
+                  <Checkbox checked={picked.has(x.id)} onChange={() => toggle(x.id)} label={label(x)} className={css.choice} />
                 </li>
               ))}
             </ul>
           </fieldset>
           <div className={css.buttons}>
-            <button type="submit" className={css.primary} disabled={busy}>{t("work.card.afterSave")}</button>
-            <button type="button" onClick={() => setEditing(false)}>{t("work.form.cancel")}</button>
+            <Button type="submit" variant="primary" disabled={busy}>{t("work.card.afterSave")}</Button>
+            <Button onClick={() => setEditing(false)}>{t("work.form.cancel")}</Button>
           </div>
         </form>
       )}

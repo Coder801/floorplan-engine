@@ -1,55 +1,16 @@
-// Shared interface parts used in several components
+// Shared layout parts used in several components: where the drawing options and hints sit,
+// the panel body. Controls themselves (buttons, segments, groups, dots, empty states) are ui/ components
 
 @use "./mixins" as *;
 
-// In place of a drawing or panel content: empty, loading, error
-.empty { color: var(--muted); padding: 60px 24px; text-align: center; }
-.error { color: var(--critical); white-space: pre-wrap; padding: 24px; }
-
-// A link styled as a button (download DXF, log in)
-.btnLink {
-  display: inline-flex; align-items: center; min-height: 36px; padding: 0 12px;
-  border-radius: 6px; text-decoration: none;
-  background: var(--accent); color: var(--accent-text);
-}
-
-// Panel group colour dot, like the lines on the drawing
-.dot {
-  display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px;
-  vertical-align: 0;
-}
-// A panel device not on a group line: a square in the muted text colour
-.square {
-  display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 6px;
-  vertical-align: 0; background: var(--muted);
-}
-
-// Segments: sheets in the header, model files
-.segmented {
-  display: flex; flex-wrap: wrap; gap: 2px; padding: 3px; border-radius: 8px;
-  background: var(--soft);
-  > button { @include bare-button; color: var(--muted); min-height: 32px; }
-  > button.on {
-    background: var(--raise); color: var(--text); font-weight: 500;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, .12);
-  }
-}
-
-// Heading of the slide-out panel and the project menu
-.panelHead {
-  display: flex; align-items: center; gap: 4px; padding: 8px 16px 8px 8px;
-  border-bottom: 1px solid var(--line);
-  h2 { flex: 1; margin: 0; font-size: 14px; font-weight: 600; }
-  button { @include bare-button; min-width: 36px; min-height: 36px; font-size: 18px; line-height: 1; }
-}
-
-// Panel body: its own scrolling, section headings
+// Panel body: its own scrolling; a flow of tables and notes under section labels (caps). The
+// labels carry the rhythm here: a section starts --space-5 below the previous one
 .panelBody {
-  min-height: 0; overflow: auto; padding: 12px 16px 24px;
+  min-height: 0; overflow: auto; padding: var(--space-3) var(--space-4) var(--space-6);
   h3 {
-    font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
-    color: var(--muted); margin: 18px 0 8px; font-weight: 600;
-    &:first-child { margin-top: 4px; }
+    @include type(caps); color: var(--muted);
+    margin: var(--space-5) 0 var(--space-2);
+    &:first-child { margin-top: var(--space-1); }
   }
 }
 
@@ -71,20 +32,10 @@
 }
 .optionsRow, .strip { display: grid; grid-auto-flow: column; gap: 8px; }
 .strip { overflow-x: auto; scrollbar-width: none; }
-.toolbar, .options {
-  button[aria-pressed="true"], button.primary { background: var(--accent); color: var(--accent-text); }
-}
-.group {
-  @include raised;
-  display: flex; overflow: hidden;
-  // Only our own buttons: the 3D filter popup inside the group styles itself
-  > button { @include bare-button; border-radius: 0; min-width: 40px; }
-  > button + button, > span + button { border-left: 1px solid var(--line); }
-}
 // "Back to the isometry" in 3D: grey at home, the text colour once the view moved
-.home:disabled { color: var(--muted); opacity: 1; }
+.home.home:disabled { color: var(--muted); opacity: 1; }
 .zoomValue { display: flex; align-items: center; padding: 0 8px; }
-.hint { flex: 1 1 0; min-width: 0; font-size: 12px; color: var(--muted); }  // shrinks: the scale bar is on the right
+.hint { @include type(small); flex: 1 1 0; min-width: 0; color: var(--muted); }  // shrinks: the scale bar is on the right
 
 // Narrow screen: buttons in one scrolling strip, the mouse hint is not needed
 @media (max-width: $narrow) {

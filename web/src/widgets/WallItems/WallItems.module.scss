@@ -1,18 +1,21 @@
 // "On the wall": "Electrical" and "Water" sections with a visibility eye; a row is number | what
 // (plus the wiring line, or the network and Ø) | offset × height; "On wiring →" under the row
 
-.wall { display: grid; gap: 10px; }
+@use "@/shared/styles/mixins" as *;
+
+.wall { display: grid; gap: var(--space-3); }
 
 .section { display: grid; gap: 2px; }
 .title {
-  display: flex; align-items: center; gap: 6px; margin: 4px 0 0; font-size: 13px; font-weight: 600;
+  display: flex; align-items: center; gap: 6px; margin: var(--space-1) 0 0;
 }
 .count { color: var(--muted); font-weight: 400; }
 // The layer is hidden on the elevation: rows are faint
 .off .list { opacity: .45; }
 
 .list {
-  list-style: none; margin: 0; padding: 0; font-size: 12px;
+  @include type(small);
+  list-style: none; margin: 0; padding: 0;
   li {
     display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; align-items: center;
     column-gap: 8px; padding: 6px 6px; border-top: 1px solid var(--line); cursor: pointer;
@@ -35,8 +38,8 @@
 .where { color: var(--muted); white-space: nowrap; }
 
 .go {
-  grid-column: 2 / -1; justify-self: start; margin-top: 4px;
-  font-size: 12px; min-height: 26px; padding: 0 8px;
-  display: none;
+  grid-column: 2 / -1; justify-self: start; margin-top: var(--space-1);
+  min-height: 26px; font-size: 12px;
+  &.go { display: none; }
 }
-li:hover .go, li.lit .go { display: inline-flex; align-items: center; }
+li:hover .go.go, li.lit .go.go { display: inline-flex; }

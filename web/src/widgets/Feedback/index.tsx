@@ -6,13 +6,18 @@
 // Tab stays inside the card; the focus returns where it was.
 
 import { useEffect, useId, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { FeedbackError, sendFeedback } from "@/shared/api";
-import { cx } from "@/shared/cx";
-import ui from "@/shared/styles/ui.module.scss";
 import type { FeedbackBody, FeedbackKind } from "@/shared/types";
 import { APP_VERSION, BUILD_ID } from "@/shared/version";
+import { Button } from "@/ui/Button";
+import { Heading } from "@/ui/Heading";
+import { IconButton } from "@/ui/IconButton";
+import { Modal } from "@/ui/Modal";
+import { SegmentedControl } from "@/ui/SegmentedControl";
+import { Stack } from "@/ui/Stack";
+import { Text } from "@/ui/Text";
+import { TextArea } from "@/ui/TextArea";
 import {
   addPhotos, browserWhere, contextOf, failureOf, FEEDBACK_KINDS, PHOTO_TYPES, PHOTOS_MAX, TEXT_MAX, textOk, type Where,
 } from "./feedback";
@@ -27,8 +32,6 @@ interface Props {
   where?: () => Where;
 }
 
-const FOCUSABLE = "button:not(:disabled), textarea, input:not([type=file]), [href]";
-
 export function Feedback({ project = null, sheet = null, sheetTitle = null, onClose, send = sendFeedback, where = browserWhere }: Props) {
   const { t } = useTranslation();
   const [kind, setKind] = useState<FeedbackKind>("bug");
@@ -38,7 +41,6 @@ export function Feedback({ project = null, sheet = null, sheetTitle = null, onCl
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
-  const card = useRef<HTMLFormElement>(null);
   const area = useRef<HTMLTextAreaElement>(null);
   const closeBtn = useRef<HTMLButtonElement>(null);
   const picker = useRef<HTMLInputElement>(null);
@@ -50,28 +52,9 @@ export function Feedback({ project = null, sheet = null, sheetTitle = null, onCl
   const previews = useMemo(() => photos.map((f) => URL.createObjectURL(f)), [photos]);
   useEffect(() => () => previews.forEach((u) => URL.revokeObjectURL(u)), [previews]);
 
-  // Focus: the text on open, "Close" after the thanks; back to where it was on close
-  useEffect(() => {
-    const before = document.activeElement as HTMLElement | null;
-    area.current?.focus();
-    return () => before?.focus?.();
-  }, []);
+  // Focus: the text on open, "Close" after the thanks (Modal traps Tab and gives the focus back)
+  useEffect(() => { area.current?.focus(); }, []);
   useEffect(() => { if (done) closeBtn.current?.focus(); }, [done]);
-
-  useEffect(() => {
-    const onKey = (ev: KeyboardEvent) => {
-      if (ev.key === "Escape") { ev.stopPropagation(); onClose(); return; }
-      if (ev.key !== "Tab" || !card.current) return;
-      const all = [...card.current.querySelectorAll<HTMLElement>(FOCUSABLE)];
-      if (!all.length) return;
-      const first = all[0], last = all[all.length - 1];
-      const inside = card.current.contains(document.activeElement);
-      if (ev.shiftKey && (document.activeElement === first || !inside)) { ev.preventDefault(); last.focus(); }
-      else if (!ev.shiftKey && (document.activeElement === last || !inside)) { ev.preventDefault(); first.focus(); }
-    };
-    window.addEventListener("keydown", onKey, true);
-    return () => window.removeEventListener("keydown", onKey, true);
-  }, [onClose]);
 
   const add = (files: File[]) => {
     if (!files.length) return;
@@ -110,46 +93,34 @@ export function Feedback({ project = null, sheet = null, sheetTitle = null, onCl
 
   const empty = !text.trim() && !photos.length;
   const count = text.trim().length;
-  return createPortal(
-    <div className={css.veil} data-veil="" onClick={() => { if (empty || done) onClose(); }}>
-      <form ref={card} className={css.card} data-pop="modal" role="dialog" aria-modal="true" aria-labelledby={title} aria-describedby={lead}
-            onClick={(ev) => ev.stopPropagation()} onSubmit={submit} onPaste={done ? undefined : onPaste}>
+  return (
+    <Modal as="form" onClose={onClose} closeOnVeil={empty || done} labelledBy={title} describedBy={lead}
+           onSubmit={submit} onPaste={done ? undefined : onPaste}>
         {done ? (
           <>
-            <h2 id={title} className={css.title}>{t("feedback.thanks")}</h2>
-            <p id={lead} className={css.lead}>{t("feedback.thanksNote")}</p>
-            <div className={css.buttons}>
-              <button ref={closeBtn} type="button" className={css.primary} onClick={onClose}>{t("feedback.close")}</button>
-            </div>
+            <Heading level={2} id={title}>{t("feedback.thanks")}</Heading>
+            <Text id={lead} tone="muted">{t("feedback.thanksNote")}</Text>
+            <Stack direction="row" gap={2} className={css.buttons}>
+              <Button ref={closeBtn} variant="primary" onClick={onClose}>{t("feedback.close")}</Button>
+            </Stack>
           </>
         ) : (
           <>
-            <h2 id={title} className={css.title}>{t("feedback.title")}</h2>
-            <p id={lead} className={css.lead}>{t("feedback.lead")}</p>
-            <div className={cx(ui.segmented, css.kinds)} role="radiogroup" aria-label={t("feedback.kind")}>
-              {FEEDBACK_KINDS.map((k) => (
-                <button key={k} type="button" role="radio" aria-checked={kind === k} className={cx(kind === k && ui.on)}
-                        onClick={() => setKind(k)}>{t(`feedback.kinds.${k}`)}</button>
-              ))}
-            </div>
-            <label className={css.field}>
-              <span className={css.label}>
-                {t("feedback.text")}
-                <span className={cx(css.counter, count > TEXT_MAX && css.over)} aria-live="polite">
-                  {t("feedback.counter", { n: count, max: TEXT_MAX })}
-                </span>
-              </span>
-              <textarea ref={area} value={text} rows={5} maxLength={TEXT_MAX + 200} placeholder={t(`feedback.placeholder.${kind}`)}
-                        onChange={(e) => setText(e.target.value)} />
-            </label>
+            <Heading level={2} id={title}>{t("feedback.title")}</Heading>
+            <Text id={lead} tone="muted">{t("feedback.lead")}</Text>
+            <SegmentedControl fill label={t("feedback.kind")} value={kind} onChange={setKind} className={css.kinds}
+                              options={FEEDBACK_KINDS.map((k) => ({ value: k, label: t(`feedback.kinds.${k}`) }))} />
+            <TextArea ref={area} label={t("feedback.text")} value={text} rows={5} maxLength={TEXT_MAX + 200}
+                      placeholder={t(`feedback.placeholder.${kind}`)} onChange={(e) => setText(e.target.value)}
+                      counter={t("feedback.counter", { n: count, max: TEXT_MAX })} over={count > TEXT_MAX} />
             <div className={css.field}>
               <span className={css.label}>{t("feedback.photos")}<span className={css.counter}>{t("feedback.photosNote", { n: PHOTOS_MAX })}</span></span>
               <div className={css.photos}>
                 {photos.map((f, i) => (
                   <div key={previews[i]} className={css.photo}>
                     <img src={previews[i]} alt={f.name} />
-                    <button type="button" className={css.remove} aria-label={t("feedback.removePhoto", { name: f.name })}
-                            title={t("feedback.removePhoto", { name: f.name })} onClick={() => remove(i)}>×</button>
+                    <IconButton variant="round" size="sm" className={css.remove} label={t("feedback.removePhoto", { name: f.name })}
+                                onClick={() => remove(i)}>×</IconButton>
                   </div>
                 ))}
                 {photos.length < PHOTOS_MAX && (
@@ -163,22 +134,20 @@ export function Feedback({ project = null, sheet = null, sheetTitle = null, onCl
                      onChange={(e) => { add([...(e.target.files ?? [])]); e.target.value = ""; }} />
               {refused.map((r) => <span key={r} className={css.refused}>{r}</span>)}
             </div>
-            <p className={css.attached}>
+            <Text size="small" tone="muted">
               {project
                 ? t("feedback.attached", { project: project.title, sheet: sheetTitle ?? sheet ?? "—", version })
                 : t("feedback.attachedNoProject", { version })}
-            </p>
-            {error && <p className={css.error} role="alert">{error}</p>}
-            <div className={css.buttons}>
-              <button type="submit" className={css.primary} disabled={busy || !textOk(text)}>
+            </Text>
+            {error && <Text tone="critical" role="alert">{error}</Text>}
+            <Stack direction="row" gap={2} className={css.buttons}>
+              <Button type="submit" variant="primary" disabled={busy || !textOk(text)}>
                 {busy ? t("feedback.sending") : t("feedback.send")}
-              </button>
-              <button type="button" onClick={onClose}>{t("feedback.cancel")}</button>
-            </div>
+              </Button>
+              <Button onClick={onClose}>{t("feedback.cancel")}</Button>
+            </Stack>
           </>
         )}
-      </form>
-    </div>,
-    document.body,
+    </Modal>
   );
 }

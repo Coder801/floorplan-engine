@@ -1,0 +1,17 @@
+@use "@/shared/styles/mixins" as *;
+
+.lead { font-size: 16px; line-height: 24px; }
+.body { @include type(body); }
+.small { @include type(small); }
+.caps { @include type(caps); }
+
+.muted { color: var(--muted); }
+.critical { color: var(--critical); }
+.major { color: var(--major); }
+.ok { color: var(--ok); }
+
+.regular { font-weight: 400; }
+.medium { font-weight: 500; }
+.bold { font-weight: 600; }
+.mono { font-family: $mono; font-variant-numeric: tabular-nums; }
+.center { text-align: center; }

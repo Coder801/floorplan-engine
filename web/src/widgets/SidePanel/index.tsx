@@ -19,6 +19,10 @@ import { expand, rowPicked, rowSelection } from "@/shared/page";
 import { refreshPalette, screenColor } from "@/shared/palette";
 import { toggledGroups, useView, view } from "@/shared/store";
 import ui from "@/shared/styles/ui.module.scss";
+import { Button } from "@/ui/Button";
+import { Dot } from "@/ui/Dot";
+import { IconButton } from "@/ui/IconButton";
+import { SegmentedControl } from "@/ui/SegmentedControl";
 import type { TabView } from "@/shared/tabs";
 import type { Elevation, Page, SideTable } from "@/shared/types";
 import { EyeToggle } from "@/ui/EyeToggle";
@@ -63,20 +67,17 @@ export function SidePanel({ tab, onTab, page, drawing, views, view: current, onV
     <aside className={css.side} data-open={open || undefined}>
       <div className={cx(css.bar, !hasViews && css.barEmpty)}>
         {hasViews ? (
-          <div className={ui.segmented} role="radiogroup" aria-label={t("side.view")}>
-            {views!.map((v) => (
-              <button key={v.key} role="radio" aria-checked={v.key === current}
-                      className={cx(v.key === current && ui.on)} onClick={() => onView?.(v)}>{v.label}</button>
-            ))}
-          </div>
+          <SegmentedControl fill label={t("side.view")} value={current ?? null}
+                            onChange={(k) => { const v = views!.find((x) => x.key === k); if (v) onView?.(v); }}
+                            options={views!.map((v) => ({ value: v.key, label: v.label }))} />
         ) : <span className={css.title}>{wall ? t("side.onWall") : summary ? (summaryTitle ?? t("overview.side")) : estimate ? t("estimate.totals") : tabs.length > 1 ? t("side.tablesAndLayers") : t(`side.${shown}`)}</span>}
-        <button className={css.toggle} aria-expanded={open} aria-label={open ? t("side.collapse") : t("side.tablesAndLayers")}
-                onClick={() => setOpen(!open)}>{open ? "▾" : "▴"}</button>
+        <IconButton variant="framed" size="lg" className={css.toggle} aria-expanded={open} label={open ? t("side.collapse") : t("side.tablesAndLayers")}
+                    onClick={() => setOpen(!open)}>{open ? "▾" : "▴"}</IconButton>
       </div>
       {tabs.length > 1 && (
         <div className={css.tabs} role="tablist">
           {tabs.map((k) => (
-            <button key={k} role="tab" aria-selected={k === shown}
+            <button key={k} type="button" role="tab" aria-selected={k === shown}
                     onClick={() => onTab(k)}>{t(`side.${k}`)}</button>
           ))}
         </div>
@@ -85,7 +86,7 @@ export function SidePanel({ tab, onTab, page, drawing, views, view: current, onV
         {!wall && !summary && variant && (estimate || (VARIANT_STAGES.has(page?.stage ?? "") && shown === "tables")) && (
           <p className={css.variant}>
             <span className="muted">{t("variant.current")}</span> {variant.label}
-            <button className={css.change} onClick={variant.onOpen}>{t("variant.change")}</button>
+            <Button variant="link" className={css.change} onClick={variant.onOpen}>{t("variant.change")}</Button>
           </p>
         )}
         {summary ? summary
@@ -184,8 +185,8 @@ function TableView({ t, id, rowHover, hoverKeys, shown, onGroup, selected, onRow
                     {i === 0 && r.group && <EyeToggle on={on} what={r.group} onToggle={() => onGroup(r.group!)} className={css.rowEye} />}
                     {/* A panel group gets a dot in its colour, like the lines on the drawing; a device not on a
                         line (main switch, relay, backup, battery box) gets a square */}
-                    {i === 0 && r.color && <span className={ui.dot} style={{ background: r.color }} aria-hidden="true" />}
-                    {i === 0 && !r.color && r.marker === "square" && <span className={ui.square} aria-hidden="true" />}
+                    {i === 0 && r.color && <Dot color={r.color} />}
+                    {i === 0 && !r.color && r.marker === "square" && <Dot shape="square" />}
                     {c}
                   </td>
                 ))}

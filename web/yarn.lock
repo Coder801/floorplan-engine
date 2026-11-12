@@ -1267,7 +1267,7 @@ maath@^0.10.8:
   resolved "https://registry.npmjs.org/maath/-/maath-0.10.8.tgz"
   integrity sha512-tRvbDF0Pgqz+9XUa4jjfgAQ8/aPKmQdWXilFu2tMy4GWj4NOsx99HlULO4IeREfbO3a0sA145DZYyvXPkybm0g==
 
-magic-string@^0.30.21:
+magic-string@^0.30.21, magic-string@0.30.21:
   version "0.30.21"
   resolved "https://registry.npmjs.org/magic-string/-/magic-string-0.30.21.tgz"
   integrity sha512-vd2F4YUyEXKGcLHoq+TEyCjxueSeHnFxyyjNp80yg0XV4vUhnDer/lvvlqM/arB5bXQN5K2/3oinyCRyx8T2CQ==
@@ -1364,7 +1364,7 @@ open@^10.2.0:
     is-inside-container "^1.0.0"
     wsl-utils "^0.1.0"
 
-oxc-parser@^0.127.0:
+oxc-parser@^0.127.0, oxc-parser@0.127.0:
   version "0.127.0"
   resolved "https://registry.npmjs.org/oxc-parser/-/oxc-parser-0.127.0.tgz"
   integrity sha512-bkgD4qHlN7WxLdX8bLXdaU54TtQtAIg/ZBAfm0aje/mo3MRDo3P0hZSgr4U7O3xfX+fQmR5AP04JS/TGcZLcFA==

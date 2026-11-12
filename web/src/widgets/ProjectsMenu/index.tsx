@@ -6,8 +6,10 @@ import { useTranslation } from "react-i18next";
 import { isProject } from "@/shared/api";
 import { REDUCED_MOTION } from "@/shared/consts";
 import { cx } from "@/shared/cx";
-import ui from "@/shared/styles/ui.module.scss";
 import type { ProjectSummary } from "@/shared/types";
+import { IconButton } from "@/ui/IconButton";
+import { PanelHeader } from "@/ui/PanelHeader";
+import { Text } from "@/ui/Text";
 import { ProjectCard } from "@/widgets/ProjectCard";
 import css from "./ProjectsMenu.module.scss";
 
@@ -35,12 +37,11 @@ export function ProjectsMenu({ list, current, closing, onOpen, onClose, onClosed
       <div className={cx(css.backdrop, closing && css.out)} onClick={onClose} aria-hidden="true" />
       <nav className={cx(css.menu, closing && css.out)} aria-label={t("projects.title")}
            onAnimationEnd={(ev) => { if (closing && ev.target === ev.currentTarget) onClosed(); }}>
-        <div className={cx(ui.panelHead, css.head)}>
-          <h2>{t("projects.title")}</h2>
-          <button aria-label={t("common.close")} title={t("common.closeEsc")} onClick={onClose}>←</button>
-        </div>
+        <PanelHeader title={t("projects.title")}>
+          <IconButton label={t("common.close")} title={t("common.closeEsc")} onClick={onClose}>←</IconButton>
+        </PanelHeader>
         <div className={css.list}>
-          {!list.length && <p className="muted small">{t("projects.empty")}</p>}
+          {!list.length && <Text size="small" tone="muted">{t("projects.empty")}</Text>}
           {list.map((p) => (
             <ProjectCard key={p.id} p={p} current={isProject(p, current)} onOpen={onOpen} />
           ))}

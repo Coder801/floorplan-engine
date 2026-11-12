@@ -5,6 +5,10 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { OverviewReserve } from "@/shared/types";
+import { Button } from "@/ui/Button";
+import { Card } from "@/ui/Card";
+import { Heading } from "@/ui/Heading";
+import { Text } from "@/ui/Text";
 import { ReserveList } from "@/widgets/ReserveList";
 import { reserveOn } from "@/widgets/ReserveList/reserve";
 import css from "./ReserveStage.module.scss";
@@ -29,16 +33,16 @@ export function ReserveStage({ reserve, editable, busy, onSave }: Props) {
   };
   return (
     <div className={css.stage}>
-      <div className={css.sheet}>
-        <h1>{t("reserve.title")}</h1>
-        <p className="muted">{t("reserve.why")}</p>
+      <Card variant="panel" padding="none" className={css.sheet}>
+        <Heading level={1} className={css.title}>{t("reserve.title")}</Heading>
+        <Text tone="muted">{t("reserve.why")}</Text>
         <ReserveList reserve={reserve} value={value} disabled={!editable || busy} onChange={setValue} />
-        {!value.length && <p className={css.error}>{t("reserve.empty")}</p>}
-        {error && <p className={css.error} role="alert">{error}</p>}
+        {!value.length && <Text tone="major">{t("reserve.empty")}</Text>}
+        {error && <Text tone="major" role="alert">{error}</Text>}
         {editable
-          ? <button className={css.primary} disabled={!dirty || !value.length || busy} onClick={save}>{t("reserve.save")}</button>
-          : <p className="small muted">{t("reserve.readOnly")}</p>}
-      </div>
+          ? <Button variant="primary" className={css.save} disabled={!dirty || !value.length || busy} onClick={save}>{t("reserve.save")}</Button>
+          : <Text size="small" tone="muted">{t("reserve.readOnly")}</Text>}
+      </Card>
     </div>
   );
 }

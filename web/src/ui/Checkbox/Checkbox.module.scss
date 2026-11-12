@@ -1,0 +1,16 @@
+@use "@/shared/styles/mixins" as *;
+
+.check {
+  @include type(body);
+  display: inline-grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: var(--space-2);
+  cursor: pointer;
+}
+.bare { display: inline-grid; grid-template-columns: auto; }
+.box {
+  width: 16px; height: 16px; margin: 2px 0 0; flex: none;
+  accent-color: var(--hl); cursor: inherit;
+  @include focus-ring;
+}
+.text { display: grid; }
+.note { @include type(small); color: var(--muted); }
+.disabled { opacity: .5; cursor: default; }

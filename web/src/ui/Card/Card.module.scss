@@ -1,0 +1,23 @@
+@use "@/shared/styles/mixins" as *;
+
+.card {
+  display: grid; align-content: start; gap: var(--space-3); min-width: 0;
+  border: 1px solid var(--line); border-radius: var(--radius-lg); color: var(--text);
+  text-align: left;
+}
+.surface { background: var(--raise); }
+.panel { background: var(--panel); }
+
+.pad-none { padding: 0; overflow: hidden; }
+.pad-sm { padding: var(--space-3); }
+.pad-md { padding: var(--space-5); }
+.pad-lg { padding: var(--space-8); }
+@media (max-width: $phone) { .pad-lg { padding: var(--space-6) var(--space-5); } }
+
+.interactive {
+  @include focus-ring;
+  cursor: pointer; transition: border-color .15s ease, box-shadow .15s ease;
+  &:hover:not(:disabled) { border-color: var(--muted); }
+  &:disabled { opacity: .5; cursor: default; }
+}
+.selected { border-color: var(--hl); box-shadow: inset 0 0 0 1px var(--hl); }
