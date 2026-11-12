@@ -64,7 +64,9 @@ Postgres (`TEST_REQUIRE_DB=1`) и покрытием (`--cov`, ниже 90 % —
   ветка удаляется (`--keep` — оставить). История `develop` линейная. Конфликт при rebase
   скрипт не решает: `git rebase --continue` или `--abort`, потом снова `integrate`.
   Пуш: `git push origin develop`.
-- **Релиз** (`/release`): на чистом `develop` → `uv run python scripts/flow.py release`
+- **Релиз** (`/release` — агент `releaser`: сам вливает чистую `feature/…`, гоняет проверки,
+  перечисляет риски выкладки с прошлого тега и что сделать после пуша): на чистом `develop` →
+  `uv run python scripts/flow.py release`
   (сначала `--dry-run`): `main` fast-forward до `develop`, `cz bump` на `main`, `develop`
   fast-forward до `main`. В `main` коммитов мимо `develop` быть не должно — скрипт откажет,
   пока не сделан `git merge main` в `develop`. Пуш: `git push origin main develop --follow-tags`.
