@@ -1,3 +1,10 @@
+## v0.6.0 (2026-11-12)
+
+### Feat
+
+- **electrical,drawing,viewer**: route drops beside openings, drop conduit entries
+- **service,db,viewer,admin**: add product feedback from the viewer
+
 ## v0.5.1 (2026-11-12)
 
 ### Feat
