@@ -41,15 +41,18 @@
       "status": "questions",
       "builds": true,
       "reason": "",
-      "weight": 15,
+      "weight": 18,
       "questions": [
         "panel_backup",
+        "panel_phases",
         "panel_input",
+        "panel_backup_power",
         "panel_npe",
         "panel_inverter",
         "panel_battery",
         "panel_pv",
         "panel_dc_place",
+        "panel_master",
         "panel_split_QF8",
         "panel_cable_QF13"
       ]
@@ -59,6 +62,7 @@
     {
       "id": "q1",
       "stage": "plan",
+      "audience": "studio",
       "text": "Окно 2400 в гостиной: высота подоконника не указана",
       "target": "rooms.living.openings.living_window_1.sill",
       "also": [],
@@ -72,6 +76,7 @@
     {
       "id": "q2",
       "stage": "plan",
+      "audience": "studio",
       "text": "Окно 2400 на балконе: высота подоконника не указана",
       "target": "rooms.balcony.openings.balcony_window_1.sill",
       "also": [],
@@ -85,6 +90,7 @@
     {
       "id": "q3",
       "stage": "plan",
+      "audience": "studio",
       "text": "Ширина кладовки на плане не подписана: 1783 — расчёт 7245 − 5462",
       "target": "rooms.storage.walls.w2.length",
       "also": [
@@ -102,6 +108,7 @@
     {
       "id": "q4",
       "stage": "electrical",
+      "audience": "studio",
       "text": "Кондиционер в зале, нижняя стена, справа окно: сколько мм от правого угла (у окна) до середины розетки кондиционера?",
       "target": "points.living_socket_14.offset",
       "also": [],
@@ -116,6 +123,7 @@
     {
       "id": "q5",
       "stage": "electrical",
+      "audience": "studio",
       "text": "Кондиционер в зале: на какой высоте от пола розетка или вывод кабеля?",
       "target": "points.living_socket_14.height",
       "also": [],
@@ -130,6 +138,7 @@
     {
       "id": "q6",
       "stage": "electrical",
+      "audience": "studio",
       "text": "Кондиционер — отдельная группа от щита (QF14, кабель 3×2,5, автомат 16 А)? Так сейчас в модели.",
       "also": [],
       "answer": "text",
@@ -141,6 +150,7 @@
     {
       "id": "q7",
       "stage": "electrical",
+      "audience": "studio",
       "text": "Тёплый пол в коридоре: где регулятор? Сейчас — на стене у входа, рядом с выключателем коридора (мм от угла с санвузлом до середины)",
       "target": "points.living_floor_reg_1.offset",
       "also": [],
@@ -155,6 +165,7 @@
     {
       "id": "q8",
       "stage": "electrical",
+      "audience": "studio",
       "text": "Тёплый пол в санвузле: где регулятор? Сейчас — в коридоре снаружи санвузла, слева от его выключателя (мм от начала стены у выступа)",
       "target": "points.living_floor_reg_2.offset",
       "also": [],
@@ -169,6 +180,7 @@
     {
       "id": "q9",
       "stage": "electrical",
+      "audience": "studio",
       "text": "Регуляторы тёплого пола: на какой высоте от пола?",
       "target": "points.living_floor_reg_1.height",
       "also": [
@@ -185,6 +197,7 @@
     {
       "id": "q10",
       "stage": "plumbing",
+      "audience": "studio",
       "text": "Стояків на листах немає. Стояк каналізації і води поставлено в кут біля вентканалу поруч з унітазом (допущення). Де стояки? Квадрат із хрестом у правому верхньому куті санвузла на плані електрики — шахта зі стояками? Місця приладів зняті за масштабом PDF — підтвердіть.",
       "also": [],
       "answer": "text",
@@ -196,6 +209,7 @@
     {
       "id": "q11",
       "stage": "plumbing",
+      "audience": "studio",
       "text": "На якій висоті від чистої підлоги вісь врізки в стояк каналізації?",
       "target": "risers.riser_1.sewer_inlet",
       "also": [],
@@ -210,6 +224,7 @@
     {
       "id": "q12",
       "stage": "plumbing",
+      "audience": "studio",
       "text": "Ванна: випуск (≈100 мм від підлоги) не дотягує до стояка — 2,9 м по трубах, потрібен подіум близько 65 мм. Ставимо ванну на подіум чи стояк інде (див. q10)?",
       "also": [],
       "answer": "text",
@@ -221,6 +236,7 @@
     {
       "id": "q13",
       "stage": "plumbing",
+      "audience": "studio",
       "text": "Гаряча вода — від бойлера (він є на плані), централізованої ГВП немає? Висоти водорозеток, бойлера і випусків — типові («*» у таблиці «Сантехприлади»): моделі приладів?",
       "also": [],
       "answer": "text",
@@ -232,27 +248,45 @@
     {
       "id": "panel_backup",
       "stage": "panel",
-      "text": "Чи потрібен резерв живлення? Зараз — гібридний інвертор з АКБ (припущення): none — без резерву, inverter — інвертор, plug — генератор через силову вилку",
+      "audience": "studio",
+      "text": "Чи потрібен резерв живлення? Зараз — гібридний інвертор з АКБ (припущення): none — без резерву, inverter — інвертор, plug — генератор через силову вилку, station — зарядна станція",
       "target": "panel.backup",
       "also": [],
       "answer": "choice",
       "options": [
         "none",
         "inverter",
-        "plug"
+        "plug",
+        "station"
       ],
       "option_labels": {
         "none": "Без резерву",
         "inverter": "Інвертор з АКБ",
-        "plug": "Генератор через силову вилку"
+        "plug": "Генератор через силову вилку",
+        "station": "Зарядна станція"
       },
       "assumption": "inverter",
       "severity": "minor",
       "state": "open"
     },
     {
+      "id": "panel_phases",
+      "stage": "panel",
+      "audience": "studio",
+      "text": "Скільки фаз на вводі за техумовами? Зараз 1 фаза, 230 В (припущення). На трьох фазах групи розкладаються по фазах, варильна панель і електрокотел — на три фази",
+      "target": "panel.phases",
+      "also": [],
+      "answer": "value",
+      "options": [],
+      "option_labels": {},
+      "assumption": 1.0,
+      "severity": "minor",
+      "state": "open"
+    },
+    {
       "id": "panel_input",
       "stage": "panel",
+      "audience": "studio",
       "text": "Вступний автомат за техумовами? Зараз 63 А (припущення); розрахунковий струм квартири 59,0 А",
       "target": "panel.input",
       "also": [],
@@ -265,8 +299,24 @@
       "state": "open"
     },
     {
+      "id": "panel_backup_power",
+      "stage": "panel",
+      "audience": "studio",
+      "text": "Потужність інвертора, кВт? Зараз 5 кВт (припущення): від неї струм розряду, автомат і кабель АКБ. Пік резервної шини — 3,28 кВт",
+      "target": "panel.backup_power",
+      "also": [],
+      "answer": "value",
+      "unit": "кВт",
+      "options": [],
+      "option_labels": {},
+      "assumption": 5.0,
+      "severity": "minor",
+      "state": "open"
+    },
+    {
       "id": "panel_npe",
       "stage": "panel",
+      "audience": "studio",
       "text": "Чи з'єднує інвертор N з PE в резервному режимі (вбудоване реле N–PE, вмикається в налаштуваннях)? Без цього з'єднання ПЗВ і дифавтомати на резерві не спрацюють: no — поставимо контактор N–PE",
       "target": "panel.npe_relay",
       "also": [],
@@ -286,6 +336,7 @@
     {
       "id": "panel_inverter",
       "stage": "panel",
+      "audience": "studio",
       "text": "Який інвертор? Зараз гібридний (припущення) — сам перемикає мережу і АКБ, у щиті обвідний SA1. basic — без власного перемикання: резерв через АВР",
       "target": "panel.inverter",
       "also": [],
@@ -305,6 +356,7 @@
     {
       "id": "panel_battery",
       "stage": "panel",
+      "audience": "studio",
       "text": "Напруга АКБ інвертора? Зараз 48 В (припущення): струм розряду 104,2 А при 5,00 кВт — автомат АКБ 125 А, кабель 2×35 мм²",
       "target": "panel.battery_voltage",
       "also": [],
@@ -319,6 +371,7 @@
     {
       "id": "panel_pv",
       "stage": "panel",
+      "audience": "studio",
       "text": "Чи є сонячні панелі? Зараз немає (припущення). Кількість рядків панелей на інвертор (0–2): у кожного — DC-автомат і ПЗІП у щиті АКБ",
       "target": "panel.pv_strings",
       "also": [],
@@ -332,6 +385,7 @@
     {
       "id": "panel_dc_place",
       "stage": "panel",
+      "audience": "studio",
       "text": "Де стоять інвертор, щит АКБ і АКБ? Зараз — поруч з основним щитом (припущення): від цього — довжина кабелів GRID, LOAD і АКБ",
       "also": [],
       "answer": "text",
@@ -341,8 +395,29 @@
       "state": "open"
     },
     {
+      "id": "panel_master",
+      "stage": "panel",
+      "audience": "studio",
+      "text": "Чи потрібен майстер-вимикач біля входу — однією клавішею знеструмити світло й розетки, коли йдете? Холодильник, котел, роутер, насос і сигналізація залишаються під напругою",
+      "target": "panel.master",
+      "also": [],
+      "answer": "choice",
+      "options": [
+        "yes",
+        "no"
+      ],
+      "option_labels": {
+        "yes": "Так, біля входу",
+        "no": "Не потрібен"
+      },
+      "assumption": "no",
+      "severity": "minor",
+      "state": "open"
+    },
+    {
       "id": "panel_split_QF8",
       "stage": "panel",
+      "audience": "studio",
       "text": "QF8: 19,1 А на автоматі 16 А — на щиті розділена на 2 лінії: QF8 — Розетка, Пральна + сушильна (2,40 кВт); QF8.2 — Бойлер (2,00 кВт). Мокра зона — кожна лінія через дифавтомат 30 мА. Підтвердьте — другий кабель від щита перенесемо в electrical.yaml",
       "also": [],
       "answer": "text",
@@ -354,6 +429,7 @@
     {
       "id": "panel_cable_QF13",
       "stage": "panel",
+      "audience": "studio",
       "text": "QF13: Варильна поверхня (кабель) 7,20 кВт — 31,3 А, а кабель 3x4 і автомат 25 А. Потрібен кабель 3x6 і автомат 32 А — або вкажіть потужність приладу (power у точки)",
       "also": [],
       "answer": "text",
@@ -365,6 +441,7 @@
     {
       "id": "panel_reserve",
       "stage": "panel",
+      "audience": "studio",
       "text": "Що тримати на резерві? Зараз: QF1, QF2, QF3, QF4, QF5, QF18 — світло, холодильник, роутер, котел, насос, ворота, розетки кухні (припущення)",
       "also": [],
       "answer": "groups",
@@ -424,7 +501,7 @@
       "file": "electrical.yaml",
       "path": "panel",
       "severity": "warning",
-      "message": "Мощность инвертора или генератора не задана (panel.backup_power) — резервная шина 4,96 кВт не проверена"
+      "message": "Мощность инвертора или генератора не задана (panel.backup_power) — резервная шина (пик 3,28 кВт) не проверена"
     },
     {
       "file": "electrical.yaml",

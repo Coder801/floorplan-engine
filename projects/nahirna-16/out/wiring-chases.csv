@@ -38,6 +38,7 @@ point,living,w4,350,1.90,1,narrow,ceiling,power,kitchen_socket_4
 point,living,w4,2570,2.70,3,wide,ceiling,power,kitchen_socket_7 kitchen_socket_5 kitchen_socket_6
 point,living,w4,3570,2.75,1,narrow,ceiling,power,kitchen_ac
 point,living,w5,5970,2.70,1,narrow,ceiling,power,living_socket_1
+point,living,w6,1940,1.80,1,narrow,ceiling,low,living_data_1
 point,living,w6,1140,2.89,1,narrow,ceiling,power,living_socket_2
 point,living,w6,1920,2.60,2,narrow,ceiling,power,living_socket_3 living_socket_4
 point,living,w6,2600,2.40,1,narrow,ceiling,power,living_socket_5
@@ -49,6 +50,7 @@ point,study,w2,1460,1.70,1,narrow,ceiling,power,study_led_1
 point,study,w2,2750,2.15,1,narrow,ceiling,power,study_socket_2
 point,study,w4,1000,2.10,1,narrow,ceiling,power,study_switch_2
 point,study,w4,2800,2.10,2,narrow,ceiling,power,study_sconce_1 study_switch_1
+board,bath2,w4,240,1.30,1,narrow,ceiling,low,
 board,bath2,w4,240,1.30,4,wide,ceiling,power,
 board,bath2,w4,240,1.30,4,wide,ceiling,power,
 board,bath2,w4,240,1.30,4,wide,ceiling,power,
@@ -56,3 +58,4 @@ board,bath2,w4,240,1.30,4,wide,ceiling,power,
 board,bath2,w4,240,1.30,4,wide,ceiling,power,
 board,bath2,w4,240,1.30,4,wide,ceiling,power,
 board,bath2,w4,240,1.30,4,wide,ceiling,power,
+board,bath2,w4,240,1.30,1,narrow,ceiling,power,
