@@ -4,7 +4,9 @@ route: ceiling
 distribution: loop
 path: right
 conduit: walls
+light_wiring: chain
 led_supply: room
 plaster: before
 rough_light: false
+loop_conduit: separate
 ceiling_height: 2700.0
