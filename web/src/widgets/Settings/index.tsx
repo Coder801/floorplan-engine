@@ -17,6 +17,7 @@ import css from "./Settings.module.scss";
 
 // Who is logged in, from Gate; null if login is off (local viewing)
 export interface Account {
+  id?: string | null;     // the user id (none for a code or the guest): own task photos are deleted by their author
   name: string;
   plan: "client" | "pro" | null;
   space?: string | null;  // firm name ("Мой ремонт" has none)

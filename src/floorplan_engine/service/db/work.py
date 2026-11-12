@@ -1,5 +1,6 @@
 """Installation by tasks (docs/work-tasks.md): the work plan of a project, its tasks and lines, with
-the rules of who may do what and when; photos, comments and payments — db/work_records.py.
+the rules of who may do what and when; adding, editing, ordering, merging and deleting tasks —
+db/work_tasks.py; photos, comments and payments — db/work_records.py.
 
 The plan is made from the .epd `work_plan` draft of the latest build (pipeline/work_plan.py); the
 service does not recount it. Plan: draft → proposed → approved → closed, one plan that is not
@@ -8,8 +9,10 @@ returned → in_progress | review; a task added after approval is extra and star
 until the client agrees to it. Sums are not stored: totals() counts them from the lines.
 
 Rights are the actions of access.py (work_do, work_accept, work_manage) by the caller's project
-role. Functions take an open Session and do not commit, like repositories.py; a broken rule is a
-WorkError with a message for the user in Russian and an HTTP status.
+role; the studio does what is the client's (work_accept) only for the client, with the channel of
+the client's confirmation (on_behalf). Functions take an open Session and do not commit, like
+repositories.py; a broken rule is a WorkError with a message for the user in Russian and an HTTP
+status.
 """
 
 from __future__ import annotations
@@ -68,6 +71,10 @@ PLAN_ACTIONS: dict[str, tuple[tuple[str, ...], str | None, acc.Action]] = {
     "close": (("approved",), "closed", "work_manage"),
     "discard": (("draft", "proposed"), None, "work_manage"),  # remove a plan not yet approved
 }
+# The studio acts for the client (decision 2026-11-12): how the client confirmed it
+CHANNELS = ("phone", "telegram", "other")
+CLIENT_ROLES = frozenset({"client", "client_code"})  # act for themselves, never "for the client"
+NOTE_MAX = 500
 TEXT_MAX = 4000  # a comment, a description
 TITLE_MAX = 200
 _Row = TypeVar("_Row", WorkTask, WorkLine, WorkPhoto, WorkPayment)
@@ -186,7 +193,7 @@ def totals(task: WorkTask) -> Totals:
     )
 
 
-def _refers(task: WorkTask, ref: str) -> bool:
+def refers(task: WorkTask, ref: str) -> bool:
     return ref in (task.key, str(task.id))
 
 
@@ -194,7 +201,7 @@ def waiting(task: WorkTask, tasks: Iterable[WorkTask]) -> list[WorkTask]:
     """Tasks this one comes after that are not accepted yet (a soft dependency)."""
     others = [t for t in tasks if t.id != task.id]
     return [
-        t for ref in task.after for t in others if _refers(t, str(ref)) and t.status != "accepted"
+        t for ref in task.after for t in others if refers(t, str(ref)) and t.status != "accepted"
     ]
 
 
@@ -245,7 +252,7 @@ def number_field(value: object, field: str, nullable: bool = True) -> float | No
     return float(value)
 
 
-def _line(position: int, data: Mapping[str, Any], where: str) -> WorkLine:
+def parse_line(position: int, data: Mapping[str, Any], where: str) -> WorkLine:
     kind = data.get("kind", "work")
     if kind not in KINDS:
         raise WorkError(f"{where}.kind: work или material", 422)
@@ -296,18 +303,59 @@ def create_plan(
         )
         plan.tasks.append(task)
         for j, ln in enumerate(item.get("lines", [])):
-            task.lines.append(_line(j, ln, f"tasks[{k}].lines[{j}]"))
+            task.lines.append(parse_line(j, ln, f"tasks[{k}].lines[{j}]"))
     session.flush()
     audit(session, actor, project, "work_plan_create", {"plan": str(plan.id), "tasks": len(tasks)})
     return plan
 
 
+@dataclass(frozen=True)
+class OnBehalf:
+    """The studio acted for the client: channel — how the client confirmed (phone | telegram |
+    other), note — when, who, what was said."""
+
+    channel: str
+    note: str = ""
+
+    def payload(self) -> dict[str, str]:
+        return {"on_behalf": self.channel, "note": self.note}
+
+
+def on_behalf(actor: Actor, right: acc.Action, body: Mapping[str, Any] | None) -> OnBehalf | None:
+    """The confirmation channel of an action from the body {on_behalf?, note?}. A work_accept
+    action (approve the plan, agree, accept, return) by anyone but the client side needs it — the
+    studio acts for the client and says how the client confirmed; the client never sends it."""
+    body = body or {}
+    value, note = body.get("on_behalf"), body.get("note")
+    if right != "work_accept" or actor.role in CLIENT_ROLES:
+        if value is not None or note is not None:
+            whom = (
+                "заказчик действует сам" if right == "work_accept" else "это не действие заказчика"
+            )
+            raise WorkError(f"on_behalf: {whom} — поле не нужно", 422)
+        return None
+    if value is None:
+        raise WorkError(
+            "on_behalf: за заказчика — только с его подтверждением: "
+            f"укажите, как он подтвердил ({', '.join(CHANNELS)})",
+            422,
+        )
+    if value not in CHANNELS:
+        raise WorkError(f"on_behalf: одно из {', '.join(CHANNELS)}", 422)
+    return OnBehalf(value, text_field("" if note is None else note, "note", NOTE_MAX))
+
+
 def plan_action(
-    session: Session, project: Project, plan: WorkPlan | None, action: str, actor: Actor
+    session: Session,
+    project: Project,
+    plan: WorkPlan | None,
+    action: str,
+    actor: Actor,
+    body: Mapping[str, Any] | None = None,
 ) -> WorkPlan | None:
-    """propose (studio), approve (client: tasks go to todo, who and when is kept), close (studio:
-    every task accepted and paid), discard (studio: a plan not approved yet is removed). The plan,
-    None after discard."""
+    """propose (studio), approve (client: tasks go to todo, who and when is kept; the studio — only
+    for the client, with on_behalf in body), close (studio: every task accepted and paid), discard
+    (studio: a plan not approved yet is removed). The plan, None after discard."""
     if action not in PLAN_ACTIONS:
         raise WorkError(f"действие плана — одно из: {', '.join(PLAN_ACTIONS)}", 404)
     states, to, right = PLAN_ACTIONS[action]
@@ -320,7 +368,10 @@ def plan_action(
         open_ = [t.title for t in plan.tasks if t.status != "accepted" or not totals(t).settled]
         if open_:
             raise WorkError(f"не приняты или не оплачены: {', '.join(open_)}")
-    payload = {"plan": str(plan.id), "from": plan.state, "to": to}
+    confirm = on_behalf(actor, right, body)
+    payload: dict[str, Any] = {"plan": str(plan.id), "from": plan.state, "to": to}
+    if confirm is not None:
+        payload |= confirm.payload()
     audit(session, actor, project, f"work_plan_{action}", payload)
     if to is None:
         session.delete(plan)
@@ -330,6 +381,8 @@ def plan_action(
     if action == "approve":
         plan.approved_by, plan.approved_label = actor.user_id, actor.label
         plan.approved_at = acc.now()
+        plan.approved_on_behalf = confirm.channel if confirm is not None else None
+        plan.approved_note = confirm.note if confirm is not None else ""
         for task in plan.tasks:
             if task.status == "proposed":
                 task.status = "todo"
@@ -353,140 +406,19 @@ def money_editable(plan: WorkPlan, task: WorkTask) -> bool:
     return plan.state in ("draft", "proposed") or (task.extra and task.status == "proposed")
 
 
-def _money(plan: WorkPlan, task: WorkTask) -> None:
+def need_money(plan: WorkPlan, task: WorkTask) -> None:
     if not money_editable(plan, task):
         raise WorkError("сумма задачи согласована с заказчиком — добавьте доп. работу")
 
 
-def add_task(
-    session: Session, project: Project, plan: WorkPlan | None, data: Mapping[str, Any], actor: Actor
-) -> WorkTask:
-    """The studio's own task, at the end; after approval it is extra work and starts proposed.
-    data: title, description?, domain?, photo?, materials_included?, lines? (as add_line)."""
-    actor.need("work_manage")
-    if plan is None:
-        raise WorkError("плана работ ещё нет", 404)
-    check_open(plan)
-    domain = data.get("domain", "other")
-    if domain not in DOMAINS:
-        raise WorkError(f"domain: одно из {', '.join(DOMAINS)}", 422)
-    photo = data.get("photo", "optional")
-    if photo not in PHOTO:
-        raise WorkError(f"photo: одно из {', '.join(PHOTO)}", 422)
-    lines = data.get("lines", [])
-    if not isinstance(lines, list):
-        raise WorkError("lines: нужен список строк", 422)
-    task = WorkTask(
-        domain=domain,
-        position=len(plan.tasks),
-        title=text_field(data.get("title"), "title", TITLE_MAX, required=True),
-        description=text_field(data.get("description", ""), "description", TEXT_MAX),
-        status="proposed",
-        extra=plan.state == "approved",
-        photo=photo,
-        result=[],
-        after=[],
-        materials_included=bool(data.get("materials_included", True)),
-    )
-    for j, ln in enumerate(lines):
-        if not isinstance(ln, dict):
-            raise WorkError(f"lines[{j}]: нужен объект", 422)
-        task.lines.append(_line(j, ln, f"lines[{j}]"))
-    plan.tasks.append(task)
-    session.flush()
-    payload = {"task": str(task.id), "title": task.title, "extra": task.extra}
-    audit(session, actor, project, "work_task_add", payload)
-    return task
-
-
-def _after_refs(plan: WorkPlan, task: WorkTask, value: object) -> list[str]:
-    if not isinstance(value, list) or not all(isinstance(v, str) for v in value):
-        raise WorkError("after: нужен список id или ключей задач", 422)
-    for k, ref in enumerate(value):
-        if not any(_refers(t, ref) for t in plan.tasks if t.id != task.id):
-            raise WorkError(f"after[{k}]: нет задачи {ref} в плане", 422)
-    return list(value)
-
-
-def edit_task(
-    session: Session,
-    project: Project,
-    plan: WorkPlan,
+def feed(
     task: WorkTask,
-    data: Mapping[str, Any],
     actor: Actor,
-) -> WorkTask:
-    """The studio edits a task: title, description, position (place in the list, from 0),
-    assignee_id (null — nobody), materials_included (money: until approved), photo, after."""
-    actor.need("work_manage")
-    check_open(plan)
-    unknown = set(data) - {
-        "title",
-        "description",
-        "position",
-        "assignee_id",
-        "materials_included",
-        "photo",
-        "after",
-    }
-    if unknown:
-        raise WorkError(f"{sorted(unknown)[0]}: это поле задачи не меняется", 422)
-    if "title" in data:
-        task.title = text_field(data["title"], "title", TITLE_MAX, required=True)
-    if "description" in data:
-        task.description = text_field(data["description"], "description", TEXT_MAX)
-    if "photo" in data:
-        if data["photo"] not in PHOTO:
-            raise WorkError(f"photo: одно из {', '.join(PHOTO)}", 422)
-        task.photo = data["photo"]
-    if "materials_included" in data:
-        if not isinstance(data["materials_included"], bool):
-            raise WorkError("materials_included: true или false", 422)
-        if data["materials_included"] != task.materials_included:
-            _money(plan, task)
-        task.materials_included = data["materials_included"]
-    if "after" in data:
-        task.after = _after_refs(plan, task, data["after"])
-    if "assignee_id" in data:
-        task.assignee_id = _assignee(session, project, data["assignee_id"])
-    if "position" in data:
-        at = data["position"]
-        if isinstance(at, bool) or not isinstance(at, int) or not 0 <= at < len(plan.tasks):
-            raise WorkError(f"position: от 0 до {len(plan.tasks) - 1}", 422)
-        order = [t for t in plan.tasks if t.id != task.id]
-        order.insert(at, task)
-        for k, t in enumerate(order):
-            t.position = k
-    session.flush()
-    session.refresh(plan)
-    return task
-
-
-def _assignee(session: Session, project: Project, value: object) -> uuid.UUID | None:
-    if value is None:
-        return None
-    people = {str(u.id): u.id for u in assignees(session, project)}
-    if not isinstance(value, str) or value not in people:
-        raise WorkError("assignee_id: этого человека нет в студии или среди монтажников", 422)
-    return people[value]
-
-
-def delete_task(
-    session: Session, project: Project, plan: WorkPlan, task: WorkTask, actor: Actor
+    kind: str,
+    text: str,
+    status: str | None = None,
+    confirm: OnBehalf | None = None,
 ) -> None:
-    """Only a task not started, without photos and payments."""
-    actor.need("work_manage")
-    check_open(plan)
-    if task.status not in ("proposed", "todo") or task.photos or task.payments:
-        raise WorkError("удалить можно задачу, которую ещё не начали, без фото и оплат")
-    audit(session, actor, project, "work_task_delete", {"task": str(task.id), "title": task.title})
-    plan.tasks.remove(task)
-    for k, t in enumerate(plan.tasks):
-        t.position = k
-    session.flush()
-
-
-def feed(task: WorkTask, actor: Actor, kind: str, text: str, status: str | None = None) -> None:
     task.comments.append(
         WorkComment(
             user_id=actor.user_id,
@@ -494,6 +426,8 @@ def feed(task: WorkTask, actor: Actor, kind: str, text: str, status: str | None 
             kind=kind,
             status=status,
             text=text,
+            on_behalf=confirm.channel if confirm is not None else None,
+            on_behalf_note=confirm.note if confirm is not None else "",
         )
     )
 
@@ -506,10 +440,12 @@ def change_status(
     to: object,
     comment: object,
     actor: Actor,
+    body: Mapping[str, Any] | None = None,
 ) -> WorkTask:
     """A status change by the rules of docs/work-tasks.md: only in an approved plan; a task with
     photo: required is handed in only with a photo; returned only with a comment; a task waiting
-    for others is started only by the studio. Goes to the task feed and the journal."""
+    for others is started only by the studio; the studio agrees, accepts or returns only for the
+    client, with on_behalf in body. Goes to the task feed and the journal."""
     if to not in STATUSES:
         raise WorkError(f"to: одно из {', '.join(STATUSES)}", 422)
     if comment is not None and not isinstance(comment, str):
@@ -534,10 +470,13 @@ def change_status(
         raise WorkError(f"сдать задачу «{task.title}» можно только с фото")
     if to == "returned" and not text:
         raise WorkError("comment: вернуть задачу можно только с комментарием", 422)
+    confirm = on_behalf(actor, right, body)
     before_status, task.status = task.status, to
-    feed(task, actor, "return" if to == "returned" else "status", text, to)
+    feed(task, actor, "return" if to == "returned" else "status", text, to, confirm)
     session.flush()
-    payload = {"task": str(task.id), "from": before_status, "to": to}
+    payload: dict[str, Any] = {"task": str(task.id), "from": before_status, "to": to}
+    if confirm is not None:
+        payload |= confirm.payload()
     audit(session, actor, project, "work_status", payload)
     return task
 
@@ -561,7 +500,7 @@ def edit_line(
         line.fact_qty = number_field(data["fact_qty"], "fact_qty")
     if "price" in data:
         actor.need("work_manage")
-        _money(plan, task)
+        need_money(plan, task)
         line.price = number_field(data["price"], "price")
     return line
 
@@ -570,7 +509,41 @@ def add_line(plan: WorkPlan, task: WorkTask, data: Mapping[str, Any], actor: Act
     """The studio's own line: {title, kind: work | material, unit?, qty, price?, key?}."""
     actor.need("work_manage")
     check_open(plan)
-    _money(plan, task)
-    line = _line(len(task.lines), data, "line")
+    need_money(plan, task)
+    line = parse_line(len(task.lines), data, "line")
     task.lines.append(line)
     return line
+
+
+# --- Acceptance ticks -------------------------------------------------------------------
+
+
+def set_check(
+    session: Session,
+    project: Project,
+    plan: WorkPlan,
+    task: WorkTask,
+    data: Mapping[str, Any],
+    actor: Actor,
+) -> WorkTask:
+    """Tick or untick an item of the acceptance criterion: {index, checked}. The installer and the
+    client (work_do, work_accept), in an approved plan; ticks are kept, each change is journaled."""
+    if not (actor.can("work_do") or actor.can("work_accept")):
+        raise WorkError("нет права на это действие", 403)
+    check_open(plan)
+    if plan.state != "approved":
+        raise WorkError("критерий приёмки отмечается после утверждения плана")
+    index, ticked = data.get("index"), data.get("checked")
+    if isinstance(index, bool) or not isinstance(index, int) or not 0 <= index < len(task.result):
+        top = len(task.result) - 1
+        raise WorkError(
+            f"index: от 0 до {top}" if top >= 0 else "index: у задачи нет критерия приёмки", 422
+        )
+    if not isinstance(ticked, bool):
+        raise WorkError("checked: true или false", 422)
+    marks = {int(k) for k in task.checked} - {index}
+    task.checked = sorted(marks | {index} if ticked else marks)
+    session.flush()
+    payload = {"task": str(task.id), "index": index, "checked": ticked}
+    audit(session, actor, project, "work_check", payload)
+    return task

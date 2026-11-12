@@ -1,0 +1,15 @@
+// The plan in numbers: "name: value" pairs, then the money with the total in bold
+
+@use "@/shared/styles/mixins" as *;
+
+.summary { display: grid; gap: 14px; }
+.pairs { @include pairs(6px 12px); font-size: 13px; }
+.totals {
+  display: grid; grid-template-columns: 1fr auto; gap: 6px 0; margin: 0; font-size: 14px;
+  dt { color: var(--muted); }
+  dd { margin: 0; padding-left: 12px; text-align: right; font-weight: 500; font-variant-numeric: tabular-nums; }
+  .grand { padding-top: 6px; border-top: 1px solid var(--line); color: var(--text); font-weight: 600; }
+}
+.note { margin: 0; font-size: 12px; color: var(--major); }
+// Approved by the studio for the client: the channel under the date
+.behalf { display: block; font-size: 12px; color: var(--muted); font-style: italic; }

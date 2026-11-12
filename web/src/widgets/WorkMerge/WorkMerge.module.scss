@@ -1,0 +1,8 @@
+// "Merge with…": a button with the reason it is disabled, or the target picker on a soft plate
+
+.merge { display: grid; gap: 4px; justify-items: start; }
+.hint { margin: 0; font-size: 12px; color: var(--muted); }
+.form { display: grid; gap: 8px; padding: 10px; border-radius: 8px; background: var(--soft); justify-items: start; }
+.label { font-size: 12px; color: var(--muted); }
+.buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }

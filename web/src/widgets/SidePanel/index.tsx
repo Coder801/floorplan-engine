@@ -40,7 +40,8 @@ interface Props {
   // Wiring variant as a line above the tables of the "Electrical" views and "Estimate"; the
   // choice is on the "Overview" tab (onOpen)
   variant?: { label: string; onOpen: () => void } | null;
-  summary?: React.ReactNode;    // "Overview" tab: totals instead of tables and layers
+  summary?: React.ReactNode;    // "Overview" and "Tasks" tabs: their own content instead of tables and layers
+  summaryTitle?: string;        // the strip title for summary ("Overview" by default)
   layers?: boolean;             // the "Layers" tab (the simple interface mode has only tables)
   children?: React.ReactNode;  // the header slide-out panel, on top of the side panel
 }
@@ -52,7 +53,7 @@ const VARIANT_STAGES = new Set(["electrical", "lighting", "wiring"]);
 export const hasLayers = (page: Page | null) =>
   !!page && !page.panel && page.items.some((it) => !SHEET_ONLY.has(it.l));
 
-export function SidePanel({ tab, onTab, page, drawing, views, view: current, onView, wall, estimate, onWiring, variant, summary, layers = true, children }: Props) {
+export function SidePanel({ tab, onTab, page, drawing, views, view: current, onView, wall, estimate, onWiring, variant, summary, summaryTitle, layers = true, children }: Props) {
   const { t } = useTranslation();
   const tabs: SideTab[] = wall || estimate || summary ? [] : SIDE_TABS.filter((k) => k !== "layers" || (layers && hasLayers(page)));
   const shown = tabs.includes(tab) ? tab : "tables";
@@ -68,7 +69,7 @@ export function SidePanel({ tab, onTab, page, drawing, views, view: current, onV
                       className={cx(v.key === current && ui.on)} onClick={() => onView?.(v)}>{v.label}</button>
             ))}
           </div>
-        ) : <span className={css.title}>{wall ? t("side.onWall") : summary ? t("overview.side") : estimate ? t("estimate.totals") : tabs.length > 1 ? t("side.tablesAndLayers") : t(`side.${shown}`)}</span>}
+        ) : <span className={css.title}>{wall ? t("side.onWall") : summary ? (summaryTitle ?? t("overview.side")) : estimate ? t("estimate.totals") : tabs.length > 1 ? t("side.tablesAndLayers") : t(`side.${shown}`)}</span>}
         <button className={css.toggle} aria-expanded={open} aria-label={open ? t("side.collapse") : t("side.tablesAndLayers")}
                 onClick={() => setOpen(!open)}>{open ? "▾" : "▴"}</button>
       </div>
@@ -162,7 +163,8 @@ function TableView({ t, id, rowHover, hoverKeys, shown, onGroup, selected, onRow
   return (
     <>
       <h3>{t.title}</h3>
-      <table className={css.table}>
+      {/* A table without columns is a list of notes (the installer notes on "Mounting") */}
+      {t.columns.length > 0 && <table className={css.table}>
         <thead><tr>{t.columns.map((c, i) => <th key={i} className={al(i)}>{c}</th>)}</tr></thead>
         <tbody>
           {t.rows.map((r, ri) => {
@@ -192,8 +194,8 @@ function TableView({ t, id, rowHover, hoverKeys, shown, onGroup, selected, onRow
           })}
           {t.total && <tr className={css.total}>{t.total.map((c, i) => <td key={i} className={al(i)}>{c}</td>)}</tr>}
         </tbody>
-      </table>
-      {t.notes && <ul className={css.notes}>{t.notes.map((n, i) => <li key={i}>{n}</li>)}</ul>}
+      </table>}
+      {t.notes &&<ul className={css.notes}>{t.notes.map((n, i) => <li key={i}>{n}</li>)}</ul>}
       {hold.tip}
     </>
   );

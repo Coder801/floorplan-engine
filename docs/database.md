@@ -29,7 +29,7 @@ uv run alembic revision --autogenerate -m "что изменилось"
 | `service/db/session.py` | Подключение: `DATABASE_URL`, `make_engine`, `make_sessions`. База — только Postgres (решение 2026-11-01): схему строят миграции, `create_tables` и SQLite убраны |
 | `tests/service/conftest.py` | Тесты базы — на Postgres из `docker-compose.yml`, своя база `floorplan_engine_test` (`TEST_DATABASE_URL`, имя обязано кончаться на `_test` — она пересоздаётся): миграции вверх, вниз до нуля и снова вверх, после теста таблицы очищаются; `test_db.test_migrations_match_models` сверяет схему миграций с моделями. Postgres не запущен — пропуск, `TEST_REQUIRE_DB=1` — ошибка |
 | `service/db/repositories.py` | Проекты, источники (без повторов по sha256), кэш выжимок по версии алгоритма, версии модели, расход LLM. Функции не делают commit — транзакцией управляет вызывающий |
-| `service/db/work.py`, `service/db/work_records.py` | Монтаж по задачам (`docs/work-tasks.md`): план из черновика `.epd`, его жизнь, задачи, строки, статусы и права на них, суммы (`totals`); фото в хранилище, комментарии, оплаты. Без commit, как `repositories.py` |
+| `service/db/work.py`, `service/db/work_tasks.py`, `service/db/work_records.py` | Монтаж по задачам (`docs/work-tasks.md`): план из черновика `.epd`, его жизнь, статусы и права на них, действия студии за заказчика (`on_behalf`), галочки приёмки, строки, суммы (`totals`) — `work.py`; задачи: добавить, править, порядок, `after` без круга, объединить, перенести строки, удалить — `work_tasks.py`; фото в хранилище, комментарии, оплаты — `work_records.py`. Без commit, как `repositories.py` |
 | `migrations/` | Alembic: `env.py`, `versions/0001_initial.py` |
 
 ## Схема
@@ -262,7 +262,7 @@ erDiagram
   APP_USER ||--o{ AUDIT_EVENT : "кто"
 ```
 
-### Монтаж по задачам (решение 2026-11-11, миграция `0013`)
+### Монтаж по задачам (решение 2026-11-11, миграции `0013`, `0014`)
 
 Состояние работ — только здесь, в папке проекта и в YAML его нет; черновик задач — ключ
 `work_plan` в `.epd` последней сборки (его считает ядро, `pipeline/work_plan.py`). Правила —
@@ -286,6 +286,8 @@ erDiagram
     uuid created_by FK
     uuid approved_by FK "у кода доступа пусто"
     string approved_label "кто утвердил: имя или «код: …»"
+    string approved_on_behalf "студия за заказчика: phone | telegram | other; пусто — сам (0014)"
+    text approved_note "как подтвердил заказчик (0014)"
     timestamp approved_at
     timestamp closed_at
   }
@@ -301,6 +303,7 @@ erDiagram
     bool extra "доп. работа после утверждения"
     string photo "required | optional | none"
     jsonb result "критерий приёмки, строки"
+    jsonb checked "номера отмеченных пунктов result (0014)"
     jsonb after "ключи или id задач"
     uuid assignee_id FK
     bool materials_included
@@ -336,6 +339,8 @@ erDiagram
     string author_label "у кода доступа — «код: подпись»"
     string kind "comment | return | status"
     string status "новый статус у return и status"
+    string on_behalf "студия за заказчика: phone | telegram | other (0014)"
+    text on_behalf_note "как подтвердил заказчик (0014)"
     text text
   }
   WORK_PAYMENT {
@@ -349,7 +354,11 @@ erDiagram
 ```
 
 Суммы не хранятся: сумма строки — `(fact_qty ?? plan_qty) × price`, задачи — по строкам, работы
-и материалы отдельно (`db/work.py`, `totals`). Удаление проекта (`project_store.delete_project`)
+и материалы отдельно (`db/work.py`, `totals`); поэтому перенос строк и объединение задач
+(`db/work_tasks.py`) суммы не пересчитывают. Миграция `0014` (решения 2026-11-12): галочки
+приёмки `work_task.checked` (у старых задач — `[]`) и канал подтверждения заказчика, когда студия
+действует за него: `work_plan.approved_on_behalf`/`approved_note`,
+`work_comment.on_behalf`/`on_behalf_note`. Удаление проекта (`project_store.delete_project`)
 снимает его строки каскадом и все файлы под `projects/<id>/`, фото задач тоже.
 
 ### Доступ (решения пользователя 2026-10-28, схема — черновик)

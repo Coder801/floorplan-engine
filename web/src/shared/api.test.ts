@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { AnswerRefused, base, isProject, saveAnswer } from "./api";
+import {
+  AnswerRefused, base, behalfBody, deleteWorkPayment, editWorkLine, editWorkTask, getWork, isProject, mergeWorkTask, moveWorkLines,
+  saveAnswer, setWorkCheck, setWorkStatus, uploadWorkPhoto, WorkError, workPlanAction,
+} from "./api";
 
 describe("project key", () => {
   const p = { id: "6f1c0b2e-0000-4000-8000-000000000001", name: "kv42" };
@@ -31,5 +34,97 @@ describe("ответ на вопрос", () => {
     await expect(saveAnswer("kv", "", 5)).rejects.toThrow("422: id: нужен");
     reply(200, { built: false, rebuilt: false });
     await expect(saveAnswer("kv", "q1", { text: "т" })).resolves.toEqual({ built: false, rebuilt: false });
+  });
+});
+
+describe("монтаж по задачам", () => {
+  const STATE = { plan: null, tasks: [], draft_available: true, model_version: 1, assignees: [], can: { work_do: true, work_accept: true, work_manage: true } };
+  const calls: { url: string; init?: RequestInit }[] = [];
+  const reply = (status: number, body: unknown) => {
+    calls.length = 0;
+    vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
+      calls.push({ url, init });
+      return new Response(JSON.stringify(body), { status });
+    });
+  };
+  const last = () => calls[calls.length - 1];
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("запись отвечает всем состоянием; адрес и тело — по контракту", async () => {
+    reply(200, STATE);
+    await expect(setWorkStatus("kv 1", "t/1", "returned", "переделать")).resolves.toEqual(STATE);
+    expect(last().url).toBe("/api/projects/kv%201/work/tasks/t%2F1/status");
+    expect(last().init?.method).toBe("POST");
+    expect(JSON.parse(last().init?.body as string)).toEqual({ to: "returned", comment: "переделать" });
+
+    await setWorkStatus("kv", "t1", "in_progress");
+    expect(JSON.parse(last().init?.body as string)).toEqual({ to: "in_progress" });
+    await workPlanAction("kv", "approve");
+    expect(last().url).toBe("/api/projects/kv/work/plan/approve");
+    await editWorkLine("kv", "t1", "l1", { fact_qty: null });
+    expect(last().init?.method).toBe("PATCH");
+    expect(JSON.parse(last().init?.body as string)).toEqual({ fact_qty: null });
+    await deleteWorkPayment("kv", "p1");
+    expect([last().url, last().init?.method]).toEqual(["/api/projects/kv/work/payments/p1", "DELETE"]);
+    await getWork("kv");
+    expect(last().url).toBe("/api/projects/kv/work");
+  });
+
+  it("за заказчика: канал и примечание в теле; заказчик и пустое примечание — без полей", async () => {
+    reply(200, STATE);
+    await workPlanAction("kv", "approve", { channel: "phone", note: " звонок 12.11 " });
+    expect(JSON.parse(last().init?.body as string)).toEqual({ on_behalf: "phone", note: "звонок 12.11" });
+    await workPlanAction("kv", "approve");
+    expect(last().init?.body).toBeUndefined();
+    await setWorkStatus("kv", "t1", "returned", "переделать", { channel: "telegram", note: "" });
+    expect(JSON.parse(last().init?.body as string)).toEqual({ to: "returned", comment: "переделать", on_behalf: "telegram" });
+    await setWorkStatus("kv", "t1", "accepted", undefined, { channel: "other", note: "на объекте" });
+    expect(JSON.parse(last().init?.body as string)).toEqual({ to: "accepted", on_behalf: "other", note: "на объекте" });
+    expect(behalfBody(null)).toEqual({});
+  });
+
+  it("галочка, объединение, перенос строк, порядок и after — адрес, метод и тело по контракту", async () => {
+    reply(200, STATE);
+    await setWorkCheck("kv", "t1", 2, true);
+    expect([last().url, last().init?.method]).toEqual(["/api/projects/kv/work/tasks/t1/checks", "PATCH"]);
+    expect(JSON.parse(last().init?.body as string)).toEqual({ index: 2, checked: true });
+    await mergeWorkTask("kv", "t1", "t2");
+    expect([last().url, last().init?.method]).toEqual(["/api/projects/kv/work/tasks/t1/merge", "POST"]);
+    expect(JSON.parse(last().init?.body as string)).toEqual({ into: "t2" });
+    await moveWorkLines("kv", "t1", ["l1", "l2"], "t3");
+    expect([last().url, last().init?.method]).toEqual(["/api/projects/kv/work/tasks/t1/lines/move", "POST"]);
+    expect(JSON.parse(last().init?.body as string)).toEqual({ line_ids: ["l1", "l2"], to_task: "t3" });
+    await editWorkTask("kv", "t1", { position: 0 });
+    expect(JSON.parse(last().init?.body as string)).toEqual({ position: 0 });
+    await editWorkTask("kv", "t1", { after: ["t2"] });
+    expect([last().url, last().init?.method]).toEqual(["/api/projects/kv/work/tasks/t1", "PATCH"]);
+    expect(JSON.parse(last().init?.body as string)).toEqual({ after: ["t2"] });
+  });
+
+  it("круг в after и закрытые деньги — WorkError с текстом сервера", async () => {
+    reply(422, { detail: "after: зависимость по кругу: «А» → «Б» → «А»" });
+    const e = await editWorkTask("kv", "t1", { after: ["t2"] }).catch((x: unknown) => x);
+    expect((e as WorkError).status).toBe(422);
+    expect((e as WorkError).message).toBe("after: зависимость по кругу: «А» → «Б» → «А»");
+    reply(409, { detail: "сумма задачи согласована с заказчиком" });
+    await expect(mergeWorkTask("kv", "t1", "t2")).rejects.toMatchObject({ status: 409 });
+  });
+
+  it("фото — multipart с полем file, без своего Content-Type", async () => {
+    reply(200, STATE);
+    await uploadWorkPhoto("kv", "t1", new File(["x"], "IMG_1.HEIC", { type: "image/heic" }), "штроба");
+    const body = last().init?.body as FormData;
+    expect(body).toBeInstanceOf(FormData);
+    expect((body.get("file") as File).name).toBe("IMG_1.HEIC");
+    expect(body.get("caption")).toBe("штроба");
+    expect(last().init?.headers).toBeUndefined();
+  });
+
+  it("отказ — WorkError со статусом и текстом сервера", async () => {
+    reply(413, { detail: "файл больше 15 МБ" });
+    const e = await uploadWorkPhoto("kv", "t1", new File(["x"], "a.jpg")).catch((x: unknown) => x);
+    expect(e).toBeInstanceOf(WorkError);
+    expect((e as WorkError).status).toBe(413);
+    expect((e as WorkError).message).toBe("файл больше 15 МБ");
   });
 });

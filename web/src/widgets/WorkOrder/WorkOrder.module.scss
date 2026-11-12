@@ -1,0 +1,36 @@
+// Order and "after" in the task card: label | value rows, a checklist of tasks while editing
+
+@use "@/shared/styles/mixins" as *;
+
+.order { display: grid; gap: 6px; font-size: 13px; }
+.place, .after { display: grid; grid-template-columns: minmax(96px, auto) 1fr; gap: 12px; align-items: center; }
+.place { grid-template-columns: minmax(96px, auto) auto 1fr; }
+.label { color: var(--muted); }
+.number { font-variant-numeric: tabular-nums; }
+.arrows {
+  display: flex; gap: 4px;
+  button { min-width: 36px; padding: 0 8px; font-size: 15px; }
+}
+.link {
+  @include bare-button;
+  min-height: 0; padding: 0; color: var(--muted); text-decoration: underline; font-size: 12px;
+  &:hover:not(:disabled) { background: none; color: var(--text); }
+}
+.form {
+  display: grid; gap: 8px; padding: 10px; border-radius: 8px; background: var(--soft);
+  fieldset { display: grid; gap: 6px; margin: 0; padding: 0; border: 0; min-width: 0; }
+  legend { padding: 0; font-weight: 600; }
+  p { margin: 0; }
+}
+.choices {
+  display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; max-height: 260px; overflow: auto;
+  label { display: grid; grid-template-columns: auto 1fr; gap: 8px; align-items: start; cursor: pointer; padding: 2px 0; }
+  input { margin: 3px 0 0; }
+}
+.buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+
+@media (max-width: $phone) {
+  .arrows button { min-width: 44px; min-height: 40px; }
+  .choices label { padding: 6px 0; }
+}

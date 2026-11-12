@@ -2,7 +2,9 @@
 
 import i18n from "@/shared/i18n";
 import type { Answer } from "./questions";
-import type { Manifest, Page, PricePage, Project, ProjectSummary } from "./types";
+import type {
+  Manifest, Page, PricePage, Project, ProjectSummary, WorkDomain, WorkOnBehalf, WorkPhotoRule, WorkState, WorkStatus,
+} from "./types";
 import { FORMAT_VERSION } from "./version";
 
 async function get<T>(path: string): Promise<T> {
@@ -111,4 +113,68 @@ export async function savePrices(items: Record<string, number | null>): Promise<
   });
   if (!r.ok) throw new Error(`${r.status}: ${await detail(r)}`);
   return (await r.json()) as PricePage;
+}
+
+// --- Installation by tasks (docs/service-api.md, "Просмотр: монтаж по задачам") ---------------
+// Every write answers with the whole work state, as GET /work does: the page replaces its own.
+// A broken rule is WorkError with the HTTP status and the server text (in Russian)
+
+export class WorkError extends Error {
+  constructor(readonly status: number, message: string) { super(message); }
+}
+
+async function workCall(path: string, init?: RequestInit): Promise<WorkState> {
+  const r = await fetch(path, init);
+  if (!r.ok) throw new WorkError(r.status, await detail(r));
+  return (await r.json()) as WorkState;
+}
+const json = (method: string, body?: unknown): RequestInit => ({
+  method, headers: { "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body),
+});
+const work = (key: string) => `${base(key)}/work`;
+const id = encodeURIComponent;
+
+export type WorkPlanAction = "propose" | "approve" | "close" | "discard";
+export interface NewWorkLine { title: string; kind: "work" | "material"; unit?: string; qty: number; price?: number | null }
+export interface NewWorkTask { title: string; description?: string; domain?: WorkDomain; photo?: WorkPhotoRule; lines?: NewWorkLine[] }
+export interface WorkTaskEdit {
+  title?: string; description?: string; position?: number; assignee_id?: string | null;
+  materials_included?: boolean; photo?: WorkPhotoRule; after?: string[];
+}
+
+// The studio acting for the client sends how the client confirmed: {on_behalf, note?}; the client
+// sends nothing (docs/service-api.md, "За заказчика")
+export const behalfBody = (ob?: WorkOnBehalf | null) =>
+  (ob ? { on_behalf: ob.channel, ...(ob.note.trim() ? { note: ob.note.trim() } : {}) } : {});
+
+export const getWork = (key: string) => workCall(work(key));
+export const createWorkPlan = (key: string) => workCall(`${work(key)}/plan`, json("POST"));
+export const workPlanAction = (key: string, action: WorkPlanAction, onBehalf?: WorkOnBehalf | null) =>
+  workCall(`${work(key)}/plan/${action}`, json("POST", onBehalf ? behalfBody(onBehalf) : undefined));
+export const addWorkTask = (key: string, task: NewWorkTask) => workCall(`${work(key)}/tasks`, json("POST", task));
+export const editWorkTask = (key: string, task: string, edit: WorkTaskEdit) => workCall(`${work(key)}/tasks/${id(task)}`, json("PATCH", edit));
+export const deleteWorkTask = (key: string, task: string) => workCall(`${work(key)}/tasks/${id(task)}`, json("DELETE"));
+export const setWorkStatus = (key: string, task: string, to: WorkStatus, comment?: string, onBehalf?: WorkOnBehalf | null) =>
+  workCall(`${work(key)}/tasks/${id(task)}/status`, json("POST", { to, ...(comment ? { comment } : {}), ...behalfBody(onBehalf) }));
+export const setWorkCheck = (key: string, task: string, index: number, checked: boolean) =>
+  workCall(`${work(key)}/tasks/${id(task)}/checks`, json("PATCH", { index, checked }));
+export const mergeWorkTask = (key: string, task: string, into: string) =>
+  workCall(`${work(key)}/tasks/${id(task)}/merge`, json("POST", { into }));
+export const moveWorkLines = (key: string, task: string, lineIds: string[], toTask: string) =>
+  workCall(`${work(key)}/tasks/${id(task)}/lines/move`, json("POST", { line_ids: lineIds, to_task: toTask }));
+export const editWorkLine = (key: string, task: string, line: string, edit: { fact_qty?: number | null; price?: number | null }) =>
+  workCall(`${work(key)}/tasks/${id(task)}/lines/${id(line)}`, json("PATCH", edit));
+export const addWorkLine = (key: string, task: string, line: NewWorkLine) => workCall(`${work(key)}/tasks/${id(task)}/lines`, json("POST", line));
+export const addWorkComment = (key: string, task: string, text: string) => workCall(`${work(key)}/tasks/${id(task)}/comments`, json("POST", { text }));
+export const addWorkPayment = (key: string, task: string, payment: { amount: number; paid_on: string; note?: string }) =>
+  workCall(`${work(key)}/tasks/${id(task)}/payments`, json("POST", payment));
+export const deleteWorkPayment = (key: string, payment: string) => workCall(`${work(key)}/payments/${id(payment)}`, json("DELETE"));
+export const deleteWorkPhoto = (key: string, photo: string) => workCall(`${work(key)}/photos/${id(photo)}`, json("DELETE"));
+
+// A photo or a PDF report: multipart, one file per request (the server takes one)
+export function uploadWorkPhoto(key: string, task: string, file: File, caption = ""): Promise<WorkState> {
+  const form = new FormData();
+  form.append("file", file);
+  if (caption) form.append("caption", caption);
+  return workCall(`${work(key)}/tasks/${id(task)}/photos`, { method: "POST", body: form });
 }

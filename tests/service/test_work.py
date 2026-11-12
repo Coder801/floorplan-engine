@@ -16,7 +16,7 @@ from floorplan_engine.service import sync
 from floorplan_engine.service.api.auth import COOKIE, Auth, AuthConfig
 from floorplan_engine.service.api.viewer import create_viewer
 from floorplan_engine.service.db import access as acc
-from floorplan_engine.service.db import access_codes, work
+from floorplan_engine.service.db import access_codes, work, work_tasks
 from floorplan_engine.service.db import work_records as records
 from floorplan_engine.service.db.models import (
     AuditEvent,
@@ -25,7 +25,7 @@ from floorplan_engine.service.db.models import (
 from floorplan_engine.service.db.session import make_sessions
 from floorplan_engine.service.objects import LocalObjectStore
 from tests.electrical.test_variants import _project
-from tests.service.conftest import DRAFT, PNG, World, draft_line, fails
+from tests.service.conftest import DRAFT, PNG, World, fails
 
 
 def test_plan_from_the_draft(world: World) -> None:
@@ -191,74 +191,116 @@ def test_sums_follow_fact_and_materials(world: World) -> None:
     work.edit_line(plan, chases, chase, {"fact_qty": None}, world.installer)  # back to the plan
     assert work.totals(chases).total == 1260.0
     with fails(409, "согласована"):
-        work.edit_task(
+        work_tasks.edit_task(
             world.db, world.project, plan, chases, {"materials_included": False}, world.owner
         )
     t = work.Totals(100.0, 50.0, 100.0, 0, False)
     assert t.total == 100.0 and t.settled
 
 
-def test_extra_work_after_approval(world: World) -> None:
-    plan, chases, _ = world.approved()
-    data = {"title": "Перенос розетки", "lines": [draft_line("", "work", 1.0, 400.0)]}
-    with fails(403):
-        work.add_task(world.db, world.project, plan, data, world.installer)
-    with fails(422, "title"):
-        work.add_task(world.db, world.project, plan, {"title": " "}, world.owner)
-    with fails(422, "lines[0].kind"):
-        work.add_task(
-            world.db, world.project, plan, {"title": "x", "lines": [{"kind": "x"}]}, world.owner
+def test_studio_acts_for_the_client_only_with_a_channel(world: World) -> None:
+    """Decision 2026-11-12: a work_accept action by the studio needs on_behalf (how the client
+    confirmed); the client never sends it; other actions do not take it."""
+    work.create_plan(world.db, world.project, world.build, DRAFT, world.owner)
+    plan = world.plan()
+    work.plan_action(world.db, world.project, plan, "propose", world.owner)
+    with fails(422, "on_behalf: за заказчика — только с его подтверждением"):
+        work.plan_action(world.db, world.project, plan, "approve", world.owner)
+    with fails(422, "on_behalf: одно из phone, telegram, other"):
+        work.plan_action(world.db, world.project, plan, "approve", world.owner, {"on_behalf": "x"})
+    with fails(422, "note: нужна строка"):
+        body = {"on_behalf": "phone", "note": 5}
+        work.plan_action(world.db, world.project, plan, "approve", world.owner, body)
+    with fails(422, "on_behalf: заказчик действует сам"):
+        work.plan_action(
+            world.db, world.project, plan, "approve", world.client, {"on_behalf": "phone"}
         )
-    extra = work.add_task(world.db, world.project, plan, data, world.owner)
-    assert (extra.extra, extra.status, extra.domain, extra.position) == (
-        True,
-        "proposed",
-        "other",
-        2,
+    with fails(422, "on_behalf: заказчик действует сам"):
+        work.plan_action(world.db, world.project, plan, "approve", world.code, {"note": "я"})
+    assert plan.state == "proposed"
+    body = {"on_behalf": "phone", "note": " звонок 12.11 "}
+    work.plan_action(world.db, world.project, plan, "approve", world.owner, body)
+    assert (plan.state, plan.approved_by, plan.approved_label) == (
+        "approved",
+        world.users["a"].id,
+        "A",
     )
-    assert work.money_editable(plan, extra) and not work.money_editable(plan, chases)
-    line = work.add_line(plan, extra, draft_line("", "material", 1.0, 60.0), world.owner)
-    work.edit_line(plan, extra, line, {"price": 80.0}, world.owner)
-    assert work.totals(extra).total == 480.0
-    with fails(409, "согласована"):
-        work.add_line(plan, chases, draft_line("", "work", 1.0, 1.0), world.owner)
-    with fails(403):
-        world.status(extra, "todo", world.installer)
-    world.status(extra, "todo", world.client)  # the client agrees to the price
-    with fails(409, "согласована"):
-        work.edit_line(plan, extra, line, {"price": 1.0}, world.owner)
+    assert (plan.approved_on_behalf, plan.approved_note) == ("phone", "звонок 12.11")
+    event = world.db.scalars(
+        select(AuditEvent).where(AuditEvent.action == "work_plan_approve")
+    ).one()
+    assert event.payload["on_behalf"] == "phone" and event.payload["note"] == "звонок 12.11"
+
+    chases, cable = plan.tasks
+    world.status(chases, "in_progress", world.owner)  # work_do: nothing to confirm
+    with fails(422, "это не действие заказчика"):
+        world.status(chases, "review", world.installer, body={"on_behalf": "phone"})
+    world.status(chases, "review", world.installer)
+    with fails(422, "on_behalf"):
+        world.status(chases, "accepted", world.owner)
+    with fails(422, "on_behalf"):  # the reason is checked first
+        world.status(chases, "returned", world.owner, "криво", {})
+    world.status(chases, "returned", world.owner, "криво", {"on_behalf": "telegram"})
+    world.status(chases, "review", world.installer)
+    superuser = work.Actor("superuser", world.users["a"], "A")
+    with fails(422, "on_behalf"):
+        world.status(chases, "accepted", superuser)
+    world.status(chases, "accepted", world.owner, None, {"on_behalf": "other", "note": "в чате"})
+    assert [(c.kind, c.on_behalf, c.on_behalf_note) for c in chases.comments] == [
+        ("status", None, ""),
+        ("status", None, ""),
+        ("return", "telegram", ""),
+        ("status", None, ""),
+        ("status", "other", "в чате"),
+    ]
+    extra = work_tasks.add_task(world.db, world.project, plan, {"title": "Доп"}, world.owner)
+    with fails(422, "on_behalf"):
+        world.status(extra, "todo", world.owner)
+    world.status(extra, "todo", world.client)  # the client agrees by themselves
+    assert extra.comments[-1].on_behalf is None
+    statuses = world.db.scalars(select(AuditEvent).where(AuditEvent.action == "work_status"))
+    assert [e.payload.get("on_behalf") for e in statuses][-4:] == ["telegram", None, "other", None]
+    assert cable.status == "todo"
 
 
-def test_edit_order_after_assignee_and_delete(world: World) -> None:
-    plan, chases, cable = world.approved()
-    data = {"title": "Новое", "description": "у окна", "photo": "none", "after": [str(cable.id)]}
-    work.edit_task(world.db, world.project, plan, chases, data, world.owner)
-    assert (chases.title, chases.description, chases.photo) == ("Новое", "у окна", "none")
-    with fails(422, "after[0]: нет задачи"):
-        work.edit_task(world.db, world.project, plan, chases, {"after": ["x"]}, world.owner)
-    with fails(422, "это поле"):
-        work.edit_task(world.db, world.project, plan, chases, {"status": "todo"}, world.owner)
-    with fails(422, "position"):
-        work.edit_task(world.db, world.project, plan, chases, {"position": 5}, world.owner)
-    work.edit_task(world.db, world.project, plan, cable, {"position": 0}, world.owner)
-    assert [t.key for t in world.plan().tasks] == ["electrical.cable", "electrical.chases"]
-    people = {u.email for u in work.assignees(world.db, world.project)}
-    assert people == {"a@example.com", "i@example.com"}  # the studio and invited installers
-    installer = str(world.users["i"].id)
-    work.edit_task(world.db, world.project, plan, cable, {"assignee_id": installer}, world.owner)
-    assert cable.assignee_id == world.users["i"].id
-    client = str(world.users["c"].id)
-    with fails(422, "assignee_id"):
-        work.edit_task(world.db, world.project, plan, cable, {"assignee_id": client}, world.owner)
-    work.edit_task(world.db, world.project, plan, cable, {"assignee_id": None}, world.owner)
-    assert cable.assignee_id is None
-    world.photo(cable, world.owner)
-    with fails(409, "без фото и оплат"):
-        work.delete_task(world.db, world.project, plan, cable, world.owner)
+def test_acceptance_ticks_are_kept(world: World) -> None:
+    work.create_plan(world.db, world.project, world.build, DRAFT, world.owner)
+    plan = world.plan()
+    chases = plan.tasks[0]
+    chases.result = ["штроба выбрана", "мусор убран", "глубина 25 мм"]
+    tick = {"index": 1, "checked": True}
+    with fails(409, "после утверждения"):
+        work.set_check(world.db, world.project, plan, chases, tick, world.owner)
+    work.plan_action(world.db, world.project, plan, "propose", world.owner)
+    work.plan_action(world.db, world.project, plan, "approve", world.client)
     with fails(403):
-        work.delete_task(world.db, world.project, plan, chases, world.installer)
-    work.delete_task(world.db, world.project, plan, chases, world.owner)
-    assert [(t.key, t.position) for t in world.plan().tasks] == [("electrical.cable", 0)]
+        work.set_check(world.db, world.project, plan, chases, tick, world.viewer)
+    for bad, message in (
+        ({"index": 3, "checked": True}, "index: от 0 до 2"),
+        ({"index": True, "checked": True}, "index:"),
+        ({"index": "1", "checked": True}, "index:"),
+        ({"index": 1, "checked": 1}, "checked: true или false"),
+    ):
+        with fails(422, message):
+            work.set_check(world.db, world.project, plan, chases, bad, world.installer)
+    work.set_check(world.db, world.project, plan, chases, tick, world.installer)
+    work.set_check(world.db, world.project, plan, chases, {"index": 0, "checked": True}, world.code)
+    work.set_check(world.db, world.project, plan, chases, tick, world.client)  # twice — once
+    assert chases.checked == [0, 1]
+    work.set_check(
+        world.db, world.project, plan, chases, {"index": 0, "checked": False}, world.owner
+    )
+    world.db.expire_all()
+    assert world.plan().tasks[0].checked == [1]  # kept in the database
+    events = world.db.scalars(select(AuditEvent).where(AuditEvent.action == "work_check")).all()
+    assert len(events) == 4 and events[-1].payload["checked"] is False
+    empty = world.plan().tasks[1]
+    empty.result = []
+    with fails(422, "у задачи нет критерия"):
+        work.set_check(world.db, world.project, world.plan(), empty, tick, world.installer)
+    world.plan().state = "closed"
+    with fails(409, "закрыт"):
+        work.set_check(world.db, world.project, world.plan(), chases, tick, world.installer)
 
 
 def test_actor_of_principal(world: World) -> None:
@@ -482,3 +524,66 @@ def test_api_without_a_draft(
     assert state["draft_available"] is False
     refused = owner.post(f"/api/projects/{pid}/work/plan")
     assert refused.status_code == 409 and "пересоберите" in refused.json()["detail"]
+
+
+def test_api_ticks_merge_and_acting_for_the_client(
+    api: tuple[Auth, LocalObjectStore, dict[str, Any]], tmp_path: Path
+) -> None:
+    """The routes of 2026-11-12: merge and move lines (studio, before approval), approval for the
+    client with on_behalf, acceptance ticks (installer and client)."""
+    pid = api[2]["id"]
+    url = f"/api/projects/{pid}/work"
+    owner, inst, client, view = (_client(api, tmp_path, w) for w in ("a", "inst", "client", "view"))
+    tasks = owner.post(f"{url}/plan").json()["tasks"]
+    first, second, third = tasks[0], tasks[1], tasks[2]
+    move = {"line_ids": [first["lines"][0]["id"]], "to_task": second["id"]}
+    assert inst.post(f"{url}/tasks/{first['id']}/lines/move", json=move).status_code == 403
+    moved = owner.post(f"{url}/tasks/{first['id']}/lines/move", json=move).json()["tasks"]
+    assert moved[1]["lines"][-1]["id"] == first["lines"][0]["id"]
+    assert len(moved[0]["lines"]) == len(first["lines"]) - 1
+    total = moved[1]["total"] + moved[2]["total"]
+    bad = owner.post(f"{url}/tasks/{third['id']}/merge", json={"into": third["id"]})
+    assert bad.status_code == 422 and bad.json()["detail"].startswith("into:")
+    assert (
+        client.post(f"{url}/tasks/{third['id']}/merge", json={"into": second["id"]}).status_code
+        == 403
+    )
+    merged = owner.post(f"{url}/tasks/{third['id']}/merge", json={"into": second["id"]}).json()
+    assert len(merged["tasks"]) == len(tasks) - 1
+    assert merged["tasks"][1]["total"] == total
+    assert [t["position"] for t in merged["tasks"]] == list(range(len(tasks) - 1))
+    gone = {third["id"], third["key"]}
+    assert all(not gone & set(t["after"]) for t in merged["tasks"])  # links lead to the target
+
+    assert owner.post(f"{url}/plan/propose").status_code == 200
+    refused = owner.post(f"{url}/plan/approve")
+    assert refused.status_code == 422 and refused.json()["detail"].startswith("on_behalf:")
+    sent = client.post(f"{url}/plan/approve", json={"on_behalf": "phone"})
+    assert sent.status_code == 422 and "заказчик действует сам" in sent.json()["detail"]
+    approved = owner.post(f"{url}/plan/approve", json={"on_behalf": "phone", "note": "звонок"})
+    plan = approved.json()["plan"]
+    assert plan["approved_on_behalf"] == {"channel": "phone", "note": "звонок"}
+    assert plan["approved_by"] == "a"
+    assert (
+        owner.post(f"{url}/tasks/{first['id']}/merge", json={"into": second["id"]}).status_code
+        == 409
+    )
+
+    task = approved.json()["tasks"][0]
+    checks = f"{url}/tasks/{task['id']}/checks"
+    assert task["checked"] == [] and task["result"]
+    assert view.patch(checks, json={"index": 0, "checked": True}).status_code == 403
+    assert inst.patch(checks, json={"index": 99, "checked": True}).status_code == 422
+    ticked = inst.patch(checks, json={"index": 0, "checked": True}).json()["tasks"][0]
+    assert ticked["checked"] == [0]
+    assert client.get(url).json()["tasks"][0]["checked"] == [0]  # kept
+
+    status = f"{url}/tasks/{task['id']}/status"
+    assert owner.post(status, json={"to": "in_progress"}).status_code == 200
+    assert inst.post(status, json={"to": "review"}).status_code == 200
+    assert owner.post(status, json={"to": "accepted"}).status_code == 422
+    done = owner.post(status, json={"to": "accepted", "on_behalf": "telegram"}).json()
+    feed = done["tasks"][0]["comments"]
+    assert feed[-1]["on_behalf"] == {"channel": "telegram", "note": ""}
+    assert feed[0]["on_behalf"] is None
+    assert approved.json()["plan"] and client.get(url).json()["plan"]["approved_by"] == "a"

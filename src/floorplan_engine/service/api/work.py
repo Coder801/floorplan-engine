@@ -31,11 +31,13 @@ from floorplan_engine.service.api.auth import Auth
 from floorplan_engine.service.db import repositories as repo
 from floorplan_engine.service.db import work
 from floorplan_engine.service.db import work_records as records
+from floorplan_engine.service.db import work_tasks as tasks_
 from floorplan_engine.service.db.models import (
     AppUser,
     Build,
     ModelVersion,
     Project,
+    WorkComment,
     WorkLine,
     WorkPlan,
     WorkTask,
@@ -81,6 +83,24 @@ def _person(user: AppUser | None) -> dict[str, str] | None:
     return {"id": str(user.id), "name": user.name or user.email or user.phone or ""}
 
 
+def _on_behalf(channel: str | None, note: str) -> dict[str, str] | None:
+    """How the client confirmed what the studio did for them; None — they did it themselves."""
+    return {"channel": channel, "note": note} if channel else None
+
+
+def _comment_json(c: WorkComment) -> dict[str, Any]:
+    return {
+        "id": str(c.id),
+        "kind": c.kind,
+        "status": c.status,
+        "text": c.text,
+        "author": c.author_label,
+        "user_id": str(c.user_id) if c.user_id else None,
+        "on_behalf": _on_behalf(c.on_behalf, c.on_behalf_note),
+        "created_at": _at(c.created_at),
+    }
+
+
 def _line_json(line: WorkLine) -> dict[str, Any]:
     return {
         "id": str(line.id),
@@ -109,6 +129,7 @@ def task_json(session: Session, project: Project, plan: WorkPlan, task: WorkTask
         "extra": task.extra,
         "photo": task.photo,
         "result": task.result,
+        "checked": task.checked,
         "after": task.after,
         "waiting": [{"id": str(w.id), "title": w.title} for w in work.waiting(task, plan.tasks)],
         "assignee": _person(session.get(AppUser, task.assignee_id) if task.assignee_id else None),
@@ -135,18 +156,7 @@ def task_json(session: Session, project: Project, plan: WorkPlan, task: WorkTask
             }
             for p in task.photos
         ],
-        "comments": [
-            {
-                "id": str(c.id),
-                "kind": c.kind,
-                "status": c.status,
-                "text": c.text,
-                "author": c.author_label,
-                "user_id": str(c.user_id) if c.user_id else None,
-                "created_at": _at(c.created_at),
-            }
-            for c in task.comments
-        ],
+        "comments": [_comment_json(c) for c in task.comments],
         "payments": [
             {
                 "id": str(p.id),
@@ -198,6 +208,7 @@ def work_state(
         "created_at": _at(plan.created_at),
         "approved_at": _at(plan.approved_at),
         "approved_by": (approver.name or approver.email) if approver else plan.approved_label,
+        "approved_on_behalf": _on_behalf(plan.approved_on_behalf, plan.approved_note),
         "closed_at": _at(plan.closed_at),
         "totals": {
             "work": round(sum(t["work_total"] for t in tasks), 2),
@@ -262,10 +273,15 @@ def install_work_routes(
             return work_state(db, store, project, actor)
 
     @app.post("/api/projects/{key}/work/plan/{action}")
-    def plan_action(request: Request, key: str, action: str) -> dict[str, Any]:
-        """propose | approve | close | discard."""
+    def plan_action(
+        request: Request,
+        key: str,
+        action: str,
+        data: Annotated[dict[str, Any] | None, Body()] = None,
+    ) -> dict[str, Any]:
+        """propose | approve | close | discard; approve by the studio — {on_behalf, note?}."""
         with acting(request, key) as (db, project, plan, actor):
-            work.plan_action(db, project, plan, action, actor)
+            work.plan_action(db, project, plan, action, actor, data)
             return work_state(db, store, project, actor)
 
     @app.post("/api/projects/{key}/work/tasks")
@@ -273,7 +289,7 @@ def install_work_routes(
         request: Request, key: str, data: Annotated[dict[str, Any], Body()]
     ) -> dict[str, Any]:
         with acting(request, key) as (db, project, plan, actor):
-            work.add_task(db, project, plan, data, actor)
+            tasks_.add_task(db, project, plan, data, actor)
             return work_state(db, store, project, actor)
 
     @app.patch("/api/projects/{key}/work/tasks/{task_id}")
@@ -282,25 +298,55 @@ def install_work_routes(
     ) -> dict[str, Any]:
         with acting(request, key) as (db, project, plan, actor):
             task = work.task_of(db, plan, task_id)
-            work.edit_task(db, project, plan_of(plan), task, data, actor)
+            tasks_.edit_task(db, project, plan_of(plan), task, data, actor)
             return work_state(db, store, project, actor)
 
     @app.delete("/api/projects/{key}/work/tasks/{task_id}")
     def delete_task(request: Request, key: str, task_id: str) -> dict[str, Any]:
         with acting(request, key) as (db, project, plan, actor):
             task = work.task_of(db, plan, task_id)
-            work.delete_task(db, project, plan_of(plan), task, actor)
+            tasks_.delete_task(db, project, plan_of(plan), task, actor)
+            return work_state(db, store, project, actor)
+
+    @app.post("/api/projects/{key}/work/tasks/{task_id}/merge")
+    def merge_task(
+        request: Request, key: str, task_id: str, data: Annotated[dict[str, Any], Body()]
+    ) -> dict[str, Any]:
+        """{into}: the task goes into another one and is deleted."""
+        with acting(request, key) as (db, project, plan, actor):
+            task = work.task_of(db, plan, task_id)
+            tasks_.merge_task(db, project, plan_of(plan), task, data, actor)
+            return work_state(db, store, project, actor)
+
+    @app.post("/api/projects/{key}/work/tasks/{task_id}/lines/move")
+    def move_lines(
+        request: Request, key: str, task_id: str, data: Annotated[dict[str, Any], Body()]
+    ) -> dict[str, Any]:
+        """{line_ids, to_task}."""
+        with acting(request, key) as (db, project, plan, actor):
+            task = work.task_of(db, plan, task_id)
+            tasks_.move_lines(db, project, plan_of(plan), task, data, actor)
+            return work_state(db, store, project, actor)
+
+    @app.patch("/api/projects/{key}/work/tasks/{task_id}/checks")
+    def set_check(
+        request: Request, key: str, task_id: str, data: Annotated[dict[str, Any], Body()]
+    ) -> dict[str, Any]:
+        """{index, checked}: an item of the acceptance criterion."""
+        with acting(request, key) as (db, project, plan, actor):
+            task = work.task_of(db, plan, task_id)
+            work.set_check(db, project, plan_of(plan), task, data, actor)
             return work_state(db, store, project, actor)
 
     @app.post("/api/projects/{key}/work/tasks/{task_id}/status")
     def change_status(
         request: Request, key: str, task_id: str, data: Annotated[dict[str, Any], Body()]
     ) -> dict[str, Any]:
-        """{to, comment?}."""
+        """{to, comment?, on_behalf?, note?}."""
         with acting(request, key) as (db, project, plan, actor):
             task = work.task_of(db, plan, task_id)
             to, comment = data.get("to"), data.get("comment")
-            work.change_status(db, project, plan_of(plan), task, to, comment, actor)
+            work.change_status(db, project, plan_of(plan), task, to, comment, actor, data)
             return work_state(db, store, project, actor)
 
     @app.patch("/api/projects/{key}/work/tasks/{task_id}/lines/{line_id}")

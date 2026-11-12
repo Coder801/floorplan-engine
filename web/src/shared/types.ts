@@ -67,6 +67,9 @@ export interface Project extends ProjectSummary {
   sources: string[];
   parsed?: { file: string; note: string }[];
   model: string[];
+  // Installation by tasks (the "Tasks" tab, GET /work): only in the database mode; missing or
+  // false in the folder viewer
+  work?: boolean;
 }
 
 export interface ManifestPage {
@@ -349,6 +352,7 @@ export interface PanelGroup {
   purpose: string;
   purpose_assumed: boolean;
   cable: string;
+  cable_assumed?: boolean;  // cable type not in the model: by the point kinds (absent in old .epd)
   power: number;        // W
   current: number;      // A
   assumed: boolean;
@@ -477,7 +481,10 @@ export interface ElevWall {
   length: number;
   openings: { kind: string; x0: number; x1: number; y0: number; y1: number; assumed: boolean; hinge?: "start" | "end" }[];
   chases: { x: number; y0: number; y1: number; wide: boolean; low: boolean }[];
-  fixings?: { x: number; y: number }[];  // fixings on the cable drops (older .epd: none)
+  // Fixings on the cable drops (older .epd: none); n is how many clips or pads stand there in one line
+  fixings?: { x: number; y: number; n?: number }[];
+  // Cables along the wall from the ceiling (floor) to their point (older .epd: none), line key wire:<id>
+  cables?: { key: string; x: number; y0: number; y1: number; color: string | null }[];
   boxes: ElevBox[];
   points: ElevPoint[];
   board?: { key: string; name: string; x: number; y: number; width: number; height: number };
@@ -536,4 +543,111 @@ export interface PricePage {
   market: { region: string; collected: string; currency: string; period: MarketPeriod; sources: MarketSource[] } | null;
   issues: string[];
   editable: boolean;
+}
+
+// Installation by tasks: GET /api/projects/{key}/work and the answer of every write
+// (docs/service-api.md, "Просмотр: монтаж по задачам"). Money is numbers, the page formats it
+export type WorkStatus = "proposed" | "todo" | "in_progress" | "review" | "returned" | "accepted";
+export type WorkPlanState = "draft" | "proposed" | "approved" | "closed";
+export type WorkDomain = "electrical" | "plumbing" | "other";
+export type WorkPhotoRule = "required" | "optional" | "none";
+export type WorkRight = "work_do" | "work_accept" | "work_manage";
+export type WorkCan = Record<WorkRight, boolean>;
+export interface WorkPerson { id: string; name: string }
+// The studio acted for the client (decision 2026-11-12): how the client confirmed it
+export type WorkChannel = "phone" | "telegram" | "other";
+export interface WorkOnBehalf { channel: WorkChannel; note: string }
+
+export interface WorkLine {
+  id: string;
+  key: string;
+  kind: "work" | "material";
+  title: string;
+  unit: string;
+  plan_qty: number;
+  fact_qty: number | null;  // null: as planned
+  price: number | null;     // null: no price ("price to be agreed")
+  sum: number | null;       // (fact_qty ?? plan_qty) × price; null without a price
+}
+
+export interface WorkPhoto {
+  id: string;
+  url: string;
+  file_name: string;
+  content_type: string;
+  size: number;
+  caption: string;
+  author: string;           // an access code: "код: <label>"
+  user_id: string | null;   // null: uploaded with an access code (only the studio deletes it)
+  created_at: string | null;
+}
+
+// kind status: a status change; return: sent back with a comment (status "returned")
+export interface WorkComment {
+  id: string;
+  kind: "comment" | "status" | "return";
+  status: WorkStatus | null;
+  text: string;
+  author: string;
+  user_id: string | null;
+  on_behalf: WorkOnBehalf | null;  // the studio did it for the client, with the client's channel
+  created_at: string | null;
+}
+
+export interface WorkPayment { id: string; amount: number; paid_on: string; note: string; created_at: string | null }
+
+export interface WorkTask {
+  id: string;
+  key: string | null;         // electrical.cable; null for a task the studio added
+  domain: WorkDomain;
+  position: number;
+  title: string;              // project language
+  description: string;
+  status: WorkStatus;
+  extra: boolean;             // extra work outside the approved plan
+  photo: WorkPhotoRule;
+  result: string[];           // acceptance criterion, project language
+  checked: number[];          // ticked points of result, ascending (PATCH …/checks)
+  after: string[];            // ids or keys of tasks of the plan it goes after
+  waiting: { id: string; title: string }[];  // tasks before it not accepted yet
+  assignee: WorkPerson | null;
+  materials_included: boolean;
+  money_editable: boolean;    // prices, own lines and materials_included may change
+  lines: WorkLine[];
+  work_total: number;
+  material_total: number;
+  total: number;
+  paid: number;
+  settled: boolean;           // paid ≥ total
+  unpriced: number;           // lines without a price
+  photos: WorkPhoto[];
+  comments: WorkComment[];
+  payments: WorkPayment[];
+}
+
+export interface WorkTotals {
+  work: number; material: number; total: number; paid: number;
+  tasks: number; accepted: number; settled: number; unpriced: number;
+}
+
+export interface WorkPlan {
+  id: string;
+  state: WorkPlanState;
+  currency: string;               // of the estimates: "грн"
+  model_version: number | null;   // the model the plan was made and approved from
+  created_at: string | null;
+  approved_at: string | null;
+  approved_by: string | null;
+  approved_on_behalf: WorkOnBehalf | null;  // approved by the studio for the client
+  closed_at: string | null;
+  totals: WorkTotals;
+}
+
+export interface WorkState {
+  plan: WorkPlan | null;          // null: no plan yet
+  tasks: WorkTask[];
+  draft_available: boolean;       // the latest build has a work_plan draft
+  model_version: number | null;   // the latest model version of the project
+  assignees: WorkPerson[];        // only for work_manage
+  can: WorkCan;
 }

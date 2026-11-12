@@ -189,9 +189,14 @@ class World:
         return plan, plan.tasks[0], plan.tasks[1]
 
     def status(
-        self, task: WorkTask, to: str, actor: work.Actor, comment: str | None = None
+        self,
+        task: WorkTask,
+        to: str,
+        actor: work.Actor,
+        comment: str | None = None,
+        body: dict[str, Any] | None = None,
     ) -> None:
-        work.change_status(self.db, self.project, self.plan(), task, to, comment, actor)
+        work.change_status(self.db, self.project, self.plan(), task, to, comment, actor, body)
 
     def photo(self, task: WorkTask, actor: work.Actor, data: bytes = PNG) -> None:
         records.add_photo(

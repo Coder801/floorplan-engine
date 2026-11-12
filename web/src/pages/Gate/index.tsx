@@ -71,6 +71,7 @@ export function Gate({ children }: { children: (account: Account | null) => Reac
     f().then(refresh).catch((e: Error) => setError(e.message)).finally(() => setBusy(false));
   };
   const account: Account = {
+    id: me.user?.id ?? null,
     name: me.user?.name || me.user?.email || me.user?.phone || me.code?.name || (me.visitor ? t("gate.guest") : ""),
     plan: me.user?.account_type ?? null,
     space: me.user?.space?.kind === "studio" ? me.user.space.name : null,

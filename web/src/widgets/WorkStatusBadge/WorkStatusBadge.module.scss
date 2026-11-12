@@ -1,0 +1,15 @@
+// Status pill: a tinted background of the status colour, the text in that colour
+
+.badge {
+  --c: var(--muted);
+  display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
+  padding: 1px 8px; border-radius: 10px; font-size: 12px; font-weight: 500; line-height: 18px;
+  color: var(--c); background: color-mix(in srgb, var(--c) 14%, transparent);
+  &::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+  &[data-status="todo"] { --c: var(--text); }
+  &[data-status="in_progress"] { --c: var(--pin); }
+  &[data-status="review"] { --c: var(--major); }
+  &[data-status="returned"] { --c: var(--critical); }
+  &[data-status="accepted"] { --c: var(--ok); }
+}
+.big { padding: 4px 12px; border-radius: 14px; font-size: 15px; line-height: 20px; }

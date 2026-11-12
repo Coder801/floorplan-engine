@@ -531,6 +531,9 @@ class WorkPlan(Base):
     )
     approved_label: Mapped[str] = mapped_column(String(200), default="")  # a code has no user
     approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # The studio approved for the client: how the client confirmed (phone | telegram | other)
+    approved_on_behalf: Mapped[str | None] = mapped_column(String(10))
+    approved_note: Mapped[str] = mapped_column(Text, default="")
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     tasks: Mapped[list[WorkTask]] = relationship(
         back_populates="plan", order_by="WorkTask.position", cascade="all, delete-orphan"
@@ -555,6 +558,7 @@ class WorkTask(Base):
     extra: Mapped[bool] = mapped_column(Boolean, default=False)  # outside the approved plan
     photo: Mapped[str] = mapped_column(String(10), default="optional")  # required | optional | none
     result: Mapped[list[Any]] = mapped_column(default=list)  # acceptance criterion, lines
+    checked: Mapped[list[Any]] = mapped_column(default=list)  # ticked result items, indexes
     after: Mapped[list[Any]] = mapped_column(default=list)  # task keys or ids
     assignee_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("app_user.id", ondelete="SET NULL")
@@ -629,6 +633,9 @@ class WorkComment(Base):
     author_label: Mapped[str] = mapped_column(String(200), default="")  # a code: its label
     kind: Mapped[str] = mapped_column(String(10), default="comment")  # comment | return | status
     status: Mapped[str | None] = mapped_column(String(20))
+    # The studio acted for the client: how the client confirmed (phone | telegram | other)
+    on_behalf: Mapped[str | None] = mapped_column(String(10))
+    on_behalf_note: Mapped[str] = mapped_column(Text, default="")
     text: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = _created()
 

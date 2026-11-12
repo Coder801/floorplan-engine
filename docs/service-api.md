@@ -227,11 +227,14 @@ GET  /projects/{id}                  ждать, пока state не analyzing /
 | --- | --- | --- | --- | --- |
 | GET | `/work` | view | — | состояние (ниже) |
 | POST | `/work/plan` | work_manage | — | план `draft` из черновика `work_plan` последней сборки; `409` — уже есть незакрытый план или в сборке нет черновика |
-| POST | `/work/plan/{action}` | по действию | — | `propose` (manage): `draft` → `proposed`; `approve` (accept): `proposed` → `approved`, задачи `proposed` → `todo`, кто и когда — в плане; `close` (manage): `approved` → `closed`, только когда все задачи приняты и оплачены; `discard` (manage): удалить план `draft` или `proposed` |
+| POST | `/work/plan/{action}` | по действию | `approve` студией — `{on_behalf, note?}`, иначе без тела | `propose` (manage): `draft` → `proposed`; `approve` (accept): `proposed` → `approved`, задачи `proposed` → `todo`, кто, когда и (за заказчика) канал подтверждения — в плане; `close` (manage): `approved` → `closed`, только когда все задачи приняты и оплачены; `discard` (manage): удалить план `draft` или `proposed` |
 | POST | `/work/tasks` | work_manage | `{title, description?, domain?: electrical\|plumbing\|other, photo?, materials_included?, lines?: [строка]}` | своя задача в конец списка; после утверждения — `extra: true`, статус `proposed`, пока заказчик не согласует |
-| PATCH | `/work/tasks/{id}` | work_manage | `{title?, description?, position?, assignee_id?, materials_included?, photo?, after?}` | `position` — место в списке с 0 (остальные сдвигаются); `assignee_id` — id из `assignees` или `null`; `after` — id или ключи задач плана; `materials_included` — пока сумма не согласована |
-| DELETE | `/work/tasks/{id}` | work_manage | — | только `proposed` / `todo` без фото и оплат |
-| POST | `/work/tasks/{id}/status` | по переходу | `{to, comment?}` | переходы ниже; только в утверждённом плане |
+| PATCH | `/work/tasks/{id}` | work_manage | `{title?, description?, position?, assignee_id?, materials_included?, photo?, after?}` | `position` — место в списке с 0 до числа задач − 1 (остальные сдвигаются, номера всегда 0…n−1 без пропусков и повторов); `assignee_id` — id из `assignees` или `null`; `after` — id или ключи других задач плана: не сама задача (`422 after[i]: задача не может идти после самой себя`), не по кругу (`422 after: зависимость по кругу: «А» → «Б» → «А»`), повтор одной задачи убирается; `materials_included` — пока сумма не согласована |
+| DELETE | `/work/tasks/{id}` | work_manage | — | только `proposed` / `todo` без фото и оплат; ссылки `after` на неё у других задач убираются |
+| POST | `/work/tasks/{id}/merge` | work_manage | `{into: id задачи}` | влить задачу в другую: строки (в конец, по порядку), лента, пункты критерия приёмки с их галочками (повтор не дублируется), описание (дописывается) переходят в `into`, исполнитель — если у `into` нет; ссылки `after` на неё ведут на `into`, задача удаляется, номера сдвигаются. Только пока деньги обеих задач открыты (`money_editable`: план не утверждён или доп. работа не согласована, иначе `409`), у вливаемой — ни фото, ни оплат (`409`); `into` — та же задача, чужая или не id — `422`; если ссылки замкнутся по кругу — `422 into: зависимость по кругу…`, ничего не меняется |
+| POST | `/work/tasks/{id}/lines/move` | work_manage | `{line_ids: [id строки, …], to_task: id задачи}` | перенести строки в другую задачу (в конец, в порядке исходной); пустая задача остаётся. Только пока деньги обеих задач открыты (`409`); строка не этой задачи — `422 line_ids[i]: …`, `to_task` — та же или не из плана — `422` |
+| PATCH | `/work/tasks/{id}/checks` | work_do или work_accept | `{index, checked: true\|false}` | отметить пункт критерия приёмки (`result[index]`); галочки хранятся (`checked` задачи), каждая отметка — в журнале (`work_check`). Только в утверждённом и не закрытом плане (`409`); `index` вне `result` — `422` |
+| POST | `/work/tasks/{id}/status` | по переходу | `{to, comment?, on_behalf?, note?}` | переходы ниже; только в утверждённом плане; `on_behalf` — ниже |
 | PATCH | `/work/tasks/{id}/lines/{line}` | work_do — `fact_qty`, work_manage — `price` | `{fact_qty?, price?}` | `null` — как в плане / без цены; факт — пока задача не принята, цена — пока сумма не согласована |
 | POST | `/work/tasks/{id}/lines` | work_manage | `{title, kind: work\|material, unit?, qty, price?, key?}` | своя строка, пока сумма не согласована |
 | POST | `/work/tasks/{id}/photos` | work_do или work_accept | multipart: `file`, `caption?` | JPEG, PNG, WebP, HEIC/HEIF, PDF (протокол), до 15 МБ; только в утверждённом плане |
@@ -249,8 +252,20 @@ work_manage; `in_progress → review`, `returned → review` — work_do, при
 хотя бы одно фото; `review → accepted` — work_accept; `review → returned` — work_accept, только с
 `comment`; `returned → in_progress` — work_do. Каждый переход — запись в ленте задачи
 (`comments`, `kind: status` или `return`) и в журнале (`audit_event`: `work_status`; ещё
-`work_plan_<action>`, `work_plan_create`, `work_task_add`, `work_task_delete`, `work_photo`,
-`work_photo_delete`, `work_payment`, `work_payment_delete`).
+`work_plan_<action>`, `work_plan_create`, `work_task_add`, `work_task_delete`,
+`work_task_merge`, `work_lines_move`, `work_check`, `work_photo`, `work_photo_delete`,
+`work_payment`, `work_payment_delete`).
+
+**За заказчика** (решение 2026-11-12). Действия права work_accept — утвердить план (`approve`),
+согласовать доп. работу (`proposed → todo`), принять (`review → accepted`), вернуть
+(`review → returned`) — студия (`owner`, `designer`, `superuser`) делает только за заказчика и
+только с каналом его подтверждения: `on_behalf: "phone" | "telegram" | "other"` и необязательная
+`note` (до 500 знаков: когда, кто, что сказал). Без `on_behalf` — `422 on_behalf: за заказчика —
+только с его подтверждением…`, другое значение — `422 on_behalf: одно из …`. Заказчик (`client`,
+`client_code`) действует сам и поля не шлёт: `on_behalf` или `note` от него — `422 on_behalf:
+заказчик действует сам — поле не нужно`; в переходах work_do — `422 on_behalf: это не действие
+заказчика…`. Канал пишется в запись ленты (`comments[].on_behalf`), в план при утверждении
+(`plan.approved_on_behalf`, кто — `approved_by`) и в журнал (`on_behalf`, `note` в `payload`).
 
 Ответ `GET /work` и любой записи — всё состояние, страница его просто заменяет:
 
@@ -258,7 +273,8 @@ work_manage; `in_progress → review`, `returned → review` — work_do, при
 {
   "plan": {
     "id": "…", "state": "approved", "currency": "грн", "model_version": 3,
-    "created_at": "2026-11-11T10:00:00+00:00", "approved_at": "…", "approved_by": "Иван",
+    "created_at": "2026-11-11T10:00:00+00:00", "approved_at": "…", "approved_by": "Ольга",
+    "approved_on_behalf": {"channel": "phone", "note": "звонок 12.11"},
     "closed_at": null,
     "totals": {"work": 52000.0, "material": 91000.0, "total": 143000.0, "paid": 20000.0,
                "tasks": 9, "accepted": 2, "settled": 1, "unpriced": 0}
@@ -266,7 +282,7 @@ work_manage; `in_progress → review`, `returned → review` — work_do, при
   "tasks": [{
     "id": "…", "key": "electrical.cable", "domain": "electrical", "position": 1,
     "title": "Прокладка кабеля", "description": "", "status": "todo", "extra": false,
-    "photo": "required", "result": ["кабель лежит по трассе и закреплён, …"],
+    "photo": "required", "result": ["кабель лежит по трассе и закреплён, …"], "checked": [0],
     "after": ["electrical.chases"], "waiting": [{"id": "…", "title": "Штробы, проходы, подрозетники"}],
     "assignee": {"id": "…", "name": "Петро"}, "materials_included": true, "money_editable": false,
     "lines": [{"id": "…", "key": "work.cable", "kind": "work", "title": "Прокладка кабеля",
@@ -277,7 +293,10 @@ work_manage; `in_progress → review`, `returned → review` — work_do, при
                 "content_type": "image/heic", "size": 812345, "caption": "", "author": "Петро",
                 "user_id": "…", "created_at": "…"}],
     "comments": [{"id": "…", "kind": "status", "status": "in_progress", "text": "",
-                  "author": "Петро", "user_id": "…", "created_at": "…"}],
+                  "author": "Петро", "user_id": "…", "on_behalf": null, "created_at": "…"},
+                 {"id": "…", "kind": "status", "status": "accepted", "text": "",
+                  "author": "Ольга", "user_id": "…",
+                  "on_behalf": {"channel": "telegram", "note": ""}, "created_at": "…"}],
     "payments": [{"id": "…", "amount": 10000.0, "paid_on": "2026-11-11", "note": "аванс",
                   "created_at": "…"}]
   }],
@@ -300,3 +319,7 @@ work_manage; `in_progress → review`, `returned → review` — work_do, при
   или это доп. работа, которую заказчик ещё не согласовал.
 - `assignees` — только для `work_manage` (люди студии проекта и приглашённые монтажники), у
   остальных пусто. `author` у кода доступа — «код: <подпись>».
+- `checked` — номера отмеченных пунктов `result` по возрастанию (`PATCH …/checks`), `[]` — ничего.
+- `on_behalf` у записи ленты и `approved_on_behalf` у плана — `{channel: phone|telegram|other,
+  note}`, если это сделала студия за заказчика («принято студией за заказчика — по звонку»),
+  иначе `null`.
