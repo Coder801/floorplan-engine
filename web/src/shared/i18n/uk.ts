@@ -563,7 +563,7 @@ export const uk: Messages = {
     },
     card: {
       heading: "Задача", photoRuleLabel: "Фото при здачі", result: "Критерій приймання", lines: "Позиції",
-      noLines: "Позицій немає", work: "Роботи", materials: "Матеріали", notIncluded: "не входять", total: "Разом", paid: "Оплачено",
+      noLines: "Позицій немає", work: "Роботи", materials: "Матеріали", notIncluded: "не входять", materialsMock: "ціни поки що імітація", total: "Разом", paid: "Оплачено",
       unpricedNote: "Рядків без ціни: {{n}} — ціна уточнюється, до суми не ввійшла.",
       materialsIncluded: "Матеріали в ціні задачі",
       col: { name: "Позиція", plan: "План", fact: "Факт", price: "Ціна", sum: "Сума" },

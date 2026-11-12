@@ -563,7 +563,7 @@ export const en: Messages = {
     },
     card: {
       heading: "Task", photoRuleLabel: "Photo on hand-in", result: "Acceptance criteria", lines: "Lines",
-      noLines: "No lines", work: "Work", materials: "Materials", notIncluded: "not included", total: "Total", paid: "Paid",
+      noLines: "No lines", work: "Work", materials: "Materials", notIncluded: "not included", materialsMock: "prices are a placeholder for now", total: "Total", paid: "Paid",
       unpricedNote: "Lines without a price: {{n}} — price to be agreed, not in the sum.",
       materialsIncluded: "Materials included in the task price",
       col: { name: "Item", plan: "Plan", fact: "Actual", price: "Price", sum: "Sum" },

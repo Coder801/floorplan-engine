@@ -225,7 +225,9 @@ def test_estimate_table_with_and_without_prices() -> None:
     table = estimate_table(priced, "uk", priced=True)
     assert table.title == "Кошторис електрики" and len(table.columns) == 6
     names = [r[1] for r in table.rows]
-    assert names[0] == "Матеріали" and "Чорнові роботи" in names and "Чистові роботи" in names
+    # Material prices are a placeholder for now (decision 2026-11-12): the section says so
+    assert names[0] == "Матеріали — ціни поки що імітація"
+    assert "Чорнові роботи" in names and "Чистові роботи" in names
     assert "Разом: матеріали" in names and "Разом: чорнові роботи" in names
     assert "Разом: чистові роботи" in names
     assert table.total is not None and table.total[1] == "Усього"
@@ -238,6 +240,24 @@ def test_estimate_table_with_and_without_prices() -> None:
     assert volumes.title == "Відомість обсягів електрики"
     assert len(volumes.columns) == 4 and volumes.total is None  # no prices and no totals
     assert not any(str(r[1]).startswith("Разом") for r in volumes.rows)
+    assert volumes.rows[0][1] == "Матеріали"  # no prices, nothing to mark
+
+
+def test_section_title_marks_material_prices_as_placeholder(tmp_path: Path) -> None:
+    from floorplan_engine.electrical.estimate import section_title, write_markdown
+
+    assert section_title("material", "ru") == "Материалы — цены пока имитация"
+    assert section_title("material", "ru", priced=False) == "Материалы"
+    assert section_title("rough", "ru") == "Черновые работы"
+    wiring, elec = _wiring()
+    priced = build_estimate(
+        wiring, elec, PriceList.model_validate({"items": {"socket_box": 20}}), "ru"
+    )
+    md = write_markdown(priced, tmp_path / "e.md", "Смета", [], "ru").read_text(encoding="utf-8")
+    assert "## Материалы — цены пока имитация" in md
+    volumes = build_estimate(wiring, elec, PriceList(), "ru")
+    md = write_markdown(volumes, tmp_path / "v.md", "Смета", [], "ru").read_text(encoding="utf-8")
+    assert "## Материалы\n" in md
 
 
 def test_estimate_on_wiring_sheet(tmp_path: Path) -> None:

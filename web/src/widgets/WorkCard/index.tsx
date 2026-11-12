@@ -128,6 +128,7 @@ export function WorkCard({ task, state, run, busy, error, onError, me, onClose, 
           <dt>{t("work.card.work")}</dt><dd>{m(task.work_total)}</dd>
           <dt>
             {t("work.card.materials")}
+            {task.material_total > 0 && <span className="muted"> · {t("work.card.materialsMock")}</span>}
             {!task.materials_included && <span className="muted"> · {t("work.card.notIncluded")}</span>}
           </dt>
           <dd className={cx(!task.materials_included && "muted")}>{m(task.material_total)}</dd>

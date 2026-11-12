@@ -9,7 +9,7 @@ from collections.abc import Sequence
 from floorplan_engine.drawing.layers import TEXT_DIM_MM, text_width
 from floorplan_engine.drawing.tables import CELL_PAD, TEXT_GAP, Column, Mark, Table, name_width
 from floorplan_engine.electrical.colors import group_colors
-from floorplan_engine.electrical.estimate import SECTIONS, Estimate, format_number
+from floorplan_engine.electrical.estimate import SECTIONS, Estimate, format_number, section_title
 from floorplan_engine.electrical.estimate import text as estimate_text
 from floorplan_engine.electrical.groups import ASSUMED, GroupRow, group_rows
 from floorplan_engine.electrical.groups import text as groups_text
@@ -158,6 +158,7 @@ def estimate_table(
 
     names = [ln.name for ln in est.lines]
     names += [t("section_total", s=t(sec).lower()) for sec in SECTIONS]
+    names += [section_title(sec, language, priced) for sec in SECTIONS]
     # Name column width from font metrics: the table column on the sheet is as wide as the title
     # block
     name_w = max(text_width(n, TEXT_DIM_MM) for n in names) + 2 * CELL_PAD + TEXT_GAP
@@ -177,7 +178,8 @@ def estimate_table(
         lines = [ln for ln in est.lines if ln.section == section]
         if not lines:
             continue
-        rows.append(("", t(section), "", "", *(("", "") if priced else ())))
+        heading = section_title(section, language, priced)
+        rows.append(("", heading, "", "", *(("", "") if priced else ())))
         for k, ln in enumerate(lines, 1):
             qty = format_number(ln.qty, 1).removesuffix(",0")
             money = (

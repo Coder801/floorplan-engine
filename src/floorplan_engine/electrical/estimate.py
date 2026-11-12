@@ -100,6 +100,9 @@ MOUNTED = frozenset(
 
 Section = Literal["material", "rough", "finish"]
 SECTIONS: tuple[Section, ...] = ("material", "rough", "finish")  # order in the estimate
+# Decision 2026-11-12: material prices are not market prices yet (price lists and the price
+# service are a placeholder), so the materials section says so everywhere the estimate is shown
+MATERIAL_PRICES_MOCK = True
 WORK_PREFIX = "work."  # work items (services); the rest of LINES are materials
 
 # Estimate items: key → section, unit, name (ru, uk). Keys with a parameter:
@@ -318,6 +321,10 @@ FIXTURES = {
 }
 TEXT: dict[str, dict[str, str]] = {
     "material": {"ru": "Материалы", "uk": "Матеріали"},
+    "material_mock": {
+        "ru": "Материалы — цены пока имитация",
+        "uk": "Матеріали — ціни поки що імітація",
+    },
     "rough": {"ru": "Черновые работы", "uk": "Чорнові роботи"},
     "finish": {"ru": "Чистовые работы", "uk": "Чистові роботи"},
     "work": {"ru": "Работы", "uk": "Роботи"},
@@ -445,6 +452,13 @@ TEXT: dict[str, dict[str, str]] = {
         "uk": "Відкриті питання з електрики: {ids} — обсяги можуть змінитися",
     },
 }
+
+
+def section_title(section: Section, language: Language, priced: bool = True) -> str:
+    """Section heading in the estimate; material prices are marked as a placeholder while
+    MATERIAL_PRICES_MOCK is on (a bill of quantities without prices gets no mark)."""
+    key = "material_mock" if section == "material" and priced and MATERIAL_PRICES_MOCK else section
+    return text(key, language)
 
 
 def text(key: str, language: Language, **values: object) -> str:
@@ -670,6 +684,11 @@ class Estimate:
     @property
     def unpriced(self) -> int:
         return sum(1 for ln in self.lines if ln.price is None)
+
+    @property
+    def has_prices(self) -> bool:
+        """At least one item has a price: an estimate, not a bill of quantities."""
+        return any(ln.price is not None for ln in self.lines)
 
     @property
     def from_service(self) -> int:
@@ -906,7 +925,12 @@ def write_markdown(
         rows = [ln for ln in est.lines if ln.section == section]
         if not rows:
             continue
-        out += [f"## {t(section)}", "", t("head", c=est.currency), "|---|---|---|---|---:|---:|"]
+        out += [
+            f"## {section_title(section, language, est.has_prices)}",
+            "",
+            t("head", c=est.currency),
+            "|---|---|---|---|---:|---:|",
+        ]
         for k, ln in enumerate(rows, 1):
             price = format_number(ln.price) if ln.price is not None else t("no_price")
             total = format_number(ln.total) if ln.total is not None else "—"
@@ -992,7 +1016,7 @@ def write_xlsx(
         rows = [ln for ln in est.lines if ln.section == section]
         if not rows:
             continue
-        ws.append(["", t(section)])
+        ws.append(["", section_title(section, language, est.has_prices)])
         ws.cell(ws.max_row, 2).font = Font(bold=True)
         first = ws.max_row + 1
         for k, ln in enumerate(rows, 1):

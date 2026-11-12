@@ -563,7 +563,7 @@ export const ru = {
     },
     card: {
       heading: "Задача", photoRuleLabel: "Фото при сдаче", result: "Критерий приёмки", lines: "Позиции",
-      noLines: "Позиций нет", work: "Работы", materials: "Материалы", notIncluded: "не входят", total: "Итого", paid: "Оплачено",
+      noLines: "Позиций нет", work: "Работы", materials: "Материалы", notIncluded: "не входят", materialsMock: "цены пока имитация", total: "Итого", paid: "Оплачено",
       unpricedNote: "Строк без цены: {{n}} — цена уточняется, в сумму не вошла.",
       materialsIncluded: "Материалы в цене задачи",
       col: { name: "Позиция", plan: "План", fact: "Факт", price: "Цена", sum: "Сумма" },
