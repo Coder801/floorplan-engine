@@ -30,7 +30,7 @@ from floorplan_engine.electrical.panel import (
     din_rows,
     panel_title,
 )
-from floorplan_engine.electrical.panel_text import amps, kw
+from floorplan_engine.electrical.panel_text import DEVICE_LEGEND, amps, kw
 from floorplan_engine.electrical.panel_text import text as panel_text
 from floorplan_engine.model.geometry import Vec
 from floorplan_engine.model.panel_catalog import DeviceKind
@@ -79,10 +79,10 @@ TEXT: dict[str, dict[str, str]] = {
         "uk": "Розрахункова: Кп {k} → {p} кВт, {i} А; введення {inp}",
     },
     "assumed": {
-        "ru": "* — допущение: мощность типовая по виду точки, автомат подобран по группе; "
-        "уточните (power у точки, groups в electrical.yaml)",
-        "uk": "* — припущення: потужність типова за видом точки, автомат підібрано за групою; "
-        "уточніть (power у точки, groups в electrical.yaml)",
+        "ru": "* — допущение: мощность типовая по виду точки, автомат подобран по группе, "
+        "кабель — по виду точек; уточните (power у точки, groups и cables в electrical.yaml)",
+        "uk": "* — припущення: потужність типова за видом точки, автомат підібрано за групою, "
+        "кабель — за видом точок; уточніть (power у точки, groups і cables в electrical.yaml)",
     },
     "weak": {"ru": "Слабые места:", "uk": "Слабкі місця:"},
     "none": {"ru": "Слабых мест не найдено", "uk": "Слабких місць не знайдено"},
@@ -241,7 +241,8 @@ def _gutter_labels(
     room = (GUTTER - 1.0) * m
     star = ASSUMED if g.assumed else ""
     left = clip(g.purpose, room, th)
-    right = clip(f"{g.cable or '—'} · {kw(g.power)} кВт{star}", room, th)
+    cable = g.cable + (ASSUMED if g.cable_assumed else "")
+    right = clip(f"{cable} · {kw(g.power)} кВт{star}", room, th)
     _text(layout, left, Vec(x - 0.28 * m, bottom + 0.3 * m), th, angle=90, align=LEFT)
     _text(layout, right, Vec(x + 0.28 * m, bottom + 0.3 * m), th, color=color, angle=90, align=LEFT)
 
@@ -442,8 +443,9 @@ def device_rows(panel: BoardPanel, language: Language) -> list[tuple[Device, tup
         if g is not None:
             purpose = g.purpose + (ASSUMED if g.purpose_assumed else "")
             p = kw(g.power) + (ASSUMED if g.assumed else "")
-            name = device_name(d, language) + star  # "Автомат 3P C16": as in the estimate
-            out.append((d, (d.id, purpose, name, g.cable, p, amps(g.current))))
+            name = device_name(d, language, short=True) + star  # "АВ 3P C16", legend under it
+            cable = g.cable + (ASSUMED if g.cable_assumed else "")
+            out.append((d, (d.id, purpose, name, cable, p, amps(g.current))))
         elif dc is not None and d.kind is DeviceKind.DC_BATTERY:  # battery cable and current
             v = f"{dc.voltage} В" + (ASSUMED if dc.voltage_assumed else "")
             cable = f"2×{dc.cable:g} мм²"
@@ -497,6 +499,7 @@ def panel_notes(panel: BoardPanel, language: Language) -> list[str]:
             i=amps(current(calc)),
             inp=inp,
         ),
+        DEVICE_LEGEND[language],
         text("assumed", language),
     ]
     if panel.warnings:

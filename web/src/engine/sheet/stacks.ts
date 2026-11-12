@@ -1,9 +1,10 @@
 // Symbols on screen: a little larger than on the printed sheet (SYMBOL_GROW), and a stack of
-// sockets at one place of a wall as one symbol. The sheet draws such a stack from the wall
-// into the room, one socket after another, with one shared label past the last one
-// (drawing/electrical.py, label_clusters). The screen shows only the socket at the wall and a
-// count; on hover, selection or a lit table row the stack opens: the sockets slide out to their
-// places (SheetView). Pure functions: the paths are moved by SheetView.
+// sockets (or of switches) at one place of a wall as one symbol. The sheet draws such a stack
+// from the wall into the room, one symbol after another, with one shared label past the last one
+// (drawing/electrical.py, label_clusters). The screen shows only the symbol nearest the wall and
+// a count; on hover, selection or a lit table row the stack opens: the symbols slide out to
+// their places (SheetView). Sockets and switches of one place are two stacks under one label,
+// they open together. Pure functions: the paths are moved by SheetView.
 
 import { expand } from "@/shared/page";
 import type { Box } from "@/shared/types";
@@ -38,24 +39,34 @@ export const symbolCenters = (items: readonly Placed[]): Map<string, XY> =>
 export const grownBox = ([x0, y0, x1, y1]: Box, [cx, cy]: XY, f: number): Box =>
   [cx + (x0 - cx) * f, cy + (y0 - cy) * f, cx + (x1 - cx) * f, cy + (y1 - cy) * f];
 
+// Layers whose symbols close into stacks
+export const STACK_LAYERS = ["E-SOCKET", "E-SWITCH"] as const;
+
 export interface Stack {
-  key: string;                  // the shared label (label:a,b,c)
-  anchor: string;               // the socket at the wall: shown while the stack is closed
+  key: string;                  // the stack: label and layer (label:a,b,c|E-SOCKET)
+  label: string;                // the shared label (label:a,b,c): one per place of a wall
+  layer: string;                // what it stacks: sockets or switches
+  anchor: string;               // the symbol nearest the wall: shown while the stack is closed
   count: XY;                    // where the count stands: the corner of the anchor on the room side
   rest: string[];               // the sockets after it, from the wall into the room
   shift: Record<string, XY>;    // from a socket of rest to the anchor: where it hides
   box: Box;                     // all its sockets: the pointer inside keeps the stack open
 }
 
-// Socket stacks of the sheet. The label stands past the socket farthest from the wall, so the
-// socket at the wall is the one farthest from the label; the stack is the sockets on the line
-// from it to the label. Sockets side by side along the wall stay apart: they are other places
-export function socketStacks(items: readonly Placed[], layer = "E-SOCKET"): Stack[] {
+// Stacks of the sheet, sockets and switches apart. The label stands past the symbol farthest
+// from the wall, so the symbol at the wall is the one farthest from the label; the stack is the
+// symbols of the layer on the line from it to the label. Symbols side by side along the wall
+// stay apart: they are other places
+export function pointStacks(items: readonly Placed[], layers: readonly string[] = STACK_LAYERS): Stack[] {
+  return layers.flatMap((layer) => layerStacks(items, layer));
+}
+
+function layerStacks(items: readonly Placed[], layer: string): Stack[] {
   const sockets = boxesOf(items, (it) => it.l === layer && !!it.o?.startsWith("point:"));
   const labels = boxesOf(items, (it) => !!it.o?.startsWith("label:") && it.o.includes(","));
   const out: Stack[] = [];
-  for (const [key, labelBox] of labels) {
-    const members = expand(key).filter((k) => sockets.has(k));
+  for (const [label, labelBox] of labels) {
+    const members = expand(label).filter((k) => sockets.has(k));
     if (members.length < 2) continue;
     const [lx, ly] = centerOf(labelBox);
     const at = (k: string) => centerOf(sockets.get(k)!);
@@ -79,15 +90,17 @@ export function socketStacks(items: readonly Placed[], layer = "E-SOCKET"): Stac
     }
     // The corner towards the room (the stack goes there); along the wall, the upper or left one
     const count: XY = [ux < -0.3 ? ab[0] : ab[2], uy > 0.3 ? ab[3] : ab[1]];
-    out.push({ key, anchor, count, rest, shift, box });
+    out.push({ key: `${label}|${layer}`, label, layer, anchor, count, rest, shift, box });
   }
   return out;
 }
 
-// Stack keys to open: the pointer holds one, or one of its sockets (or its label) is under the
-// cursor, selected or lit by a table row
+// Stack keys to open: the pointer holds a place (its label), or a symbol of the place (or its
+// label) is under the cursor, selected or lit by a table row; the stacks of one place open together
 export function openStacks(stacks: readonly Stack[], held: string | null,
                            marked: readonly (ReadonlySet<string> | string | null | undefined)[]): Set<string> {
   const has = (k: string) => marked.some((m) => (typeof m === "string" ? m === k : !!m?.has(k)));
-  return new Set(stacks.filter((s) => s.key === held || has(s.key) || has(s.anchor) || s.rest.some(has)).map((s) => s.key));
+  const hit = (s: Stack) => has(s.label) || has(s.anchor) || s.rest.some(has);
+  const places = new Set(stacks.filter((s) => s.label === held || hit(s)).map((s) => s.label));
+  return new Set(stacks.filter((s) => places.has(s.label)).map((s) => s.key));
 }

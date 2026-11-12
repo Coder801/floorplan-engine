@@ -621,3 +621,37 @@ def test_reserve_groups_gather_the_lines_of_a_model_group() -> None:
         "QF2": ["QF2"],
         "QF8.2": ["QF8.2", "QF8.2.2"],  # a dot in the model's own group name stays
     }
+
+
+def test_group_without_cable_gets_the_wiring_assumption() -> None:
+    """No cable in the model: the panel takes the type the wiring lays (light 3x1.5, sockets
+    3x2.5, a heavy load by its breaker) and marks it as assumed; the breaker check stays off."""
+    points = [
+        _pt("l1", "light", "QF1", ceiling=[500, 500], height=None, wall=None, offset=None),
+        _pt("s1", "socket", "QF2"),
+        _pt("o1", "outlet", "QF3", note="духовой шкаф", power=3500),
+        _pt("s2", "socket", "QF4"),
+    ]
+    panel = build_panel(_plan(), _elec(points, {"QF4": "ВВГнг 3x2.5"}))
+    assert panel is not None
+    groups = {g.group: g for g in panel.groups}
+    assert [(groups[g].cable, groups[g].cable_assumed) for g in ("QF1", "QF2", "QF4")] == [
+        ("3x1.5", True),
+        ("3x2.5", True),
+        ("ВВГнг 3x2.5", False),
+    ]
+    assert groups["QF3"].cable == heavy_cable(
+        _elec(points, {}), "QF3", [p for p in _elec(points, {}).points if p.group == "QF3"]
+    )
+    assert groups["QF2"].section is None  # the breaker is not checked against an assumption
+
+
+def test_short_device_names_for_the_panel_table() -> None:
+    """The panel table writes АВ / АВДТ, the estimate keeps the full names."""
+    points = [_pt("s1", "socket", "QF1"), _pt("w1", "socket", "QF2", room="b")]
+    panel = build_panel(_plan(), _elec(points, {}))
+    assert panel is not None
+    by_group = {d.group: d for d in panel.devices if d.group}
+    assert device_name(by_group["QF1"], "ru", short=True) == "АВ 1P C16"
+    assert device_name(by_group["QF1"], "ru") == "Автомат 1P C16"
+    assert device_name(by_group["QF2"], "uk", short=True).startswith("АВДТ 1P+N C16")

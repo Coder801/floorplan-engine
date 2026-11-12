@@ -19,7 +19,7 @@ import { followsObject, linkEnds, objectVisible, ownLayers, repeatsNumbers, scop
 import { FLOOR_ALPHA, FLOOR_FADE_MS, floorPath, stepFades } from "./floors";
 import { inBox, paint, type DrawItem } from "./paint";
 import { Pinch } from "./pinch";
-import { grownBox, isSymbol, openStacks, socketStacks, symbolCenters, type Stack } from "./stacks";
+import { grownBox, isSymbol, openStacks, pointStacks, symbolCenters, type Stack } from "./stacks";
 
 const TIP_WIDTH = 320;  // pinned hint (max-width in CSS): room on the right when they overlap
 
@@ -92,7 +92,7 @@ export class SheetView {
       const c = isSymbol(it) ? centers.get(it.o!) : undefined;
       return c ? { ...it, path: movedPath(it.path, SYMBOL_GROW, c[0], c[1]), box: grownBox(it.box, c, SYMBOL_GROW) } : it;
     });
-    this.allStacks = socketStacks(this.items);
+    this.allStacks = pointStacks(this.items);
     this.has3d = !!sceneOf(drawing);
     this.layerOf = objectLayers(drawing);
     this.lines = wiringChains(drawing);
@@ -129,10 +129,11 @@ export class SheetView {
   private applyView() {
     const st = view.get();
     this.own = ownLayers(this.drawing, this.page, st.electricalView, st.cables, st.systemsOff) ?? new Set(this.items.map((i) => i.l));
-    // Sockets close into stacks on the electrical views; the wiring sheet keeps every socket, a line runs to each
-    this.stacks = this.page.stage === "electrical" && this.shown("E-SOCKET") ? this.allStacks : [];
+    // Sockets and switches close into stacks on the electrical views; the wiring and lighting
+    // sheets keep every symbol, a line runs to each
+    this.stacks = this.page.stage === "electrical" ? this.allStacks.filter((s) => this.shown(s.layer)) : [];
     this.stackOf = new Map(this.stacks.flatMap((s) => s.rest.map((k) => [k, s] as const)));
-    if (this.held && !this.stacks.some((s) => s.key === this.held)) this.held = null;
+    if (this.held && !this.stacks.some((s) => s.label === this.held)) this.held = null;
   }
 
   // Stacks open: towards the wanted ones, smoothly; while one moves, the next frame is requested
@@ -557,13 +558,14 @@ export class SheetView {
     view.set({ tip: { key: o, x, y } });
   }
 
-  // The pointer keeps a stack open while it is on its sockets or in the gaps between them
+  // The pointer keeps a place open (its label: sockets and switches together) while it is on
+  // its symbols or in the gaps between them
   private hold(o: string | null, ev: MouseEvent | null) {
     let held: string | null = null;
-    if (o) held = this.stacks.find((s) => s.key === o || s.anchor === o || s.rest.includes(o))?.key ?? null;
+    if (o) held = this.stacks.find((s) => s.label === o || s.anchor === o || s.rest.includes(o))?.label ?? null;
     if (!held && this.held && ev) {
-      const st = this.stacks.find((s) => s.key === this.held), { mx, my } = this.toSheet(ev);
-      if (st && inBox(st.box, mx, my, 4 / this.scale)) held = st.key;
+      const { mx, my } = this.toSheet(ev);
+      if (this.stacks.some((s) => s.label === this.held && inBox(s.box, mx, my, 4 / this.scale))) held = this.held;
     }
     if (held !== this.held) { this.held = held; this.draw(); }
   }

@@ -59,7 +59,7 @@ from floorplan_engine.electrical.loads import (
     rating_for,
 )
 from floorplan_engine.electrical.master import CONTACTOR_A, CONTROL_A, CONTROL_ID
-from floorplan_engine.electrical.panel_text import KIND_NAME, amps, kw, text
+from floorplan_engine.electrical.panel_text import KIND_NAME, SHORT_NAME, amps, kw, text
 from floorplan_engine.electrical.phases import (
     PHASES,
     UNBALANCE,
@@ -724,10 +724,11 @@ def reserve_groups(panel: BoardPanel, model: Electrical) -> dict[str, list[Panel
     return out
 
 
-def device_name(d: Device, language: Language) -> str:
+def device_name(d: Device, language: Language, short: bool = False) -> str:
     """Device for purchase: "Автомат 1P C16", "Вводной автомат, C63 2P"; the same in the estimate
-    and in the purchase device table."""
-    kind = KIND_NAME.get((d.kind, d.poles)) or KIND_NAME.get(d.kind)
+    and in the purchase device table. Short, for the panel device table: "АВ 1P C16"."""
+    names = SHORT_NAME if short else KIND_NAME
+    kind = names.get((d.kind, d.poles)) or names.get(d.kind)
     if kind is None:
         return f"{d.title}, {d.label}"
     return f"{kind[language]} {d.label.removesuffix(f' {d.poles}P')}"

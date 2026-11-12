@@ -60,7 +60,6 @@ def symbol_key(pt: ElectricalPoint) -> str:
     return str(pt.type)
 
 
-STACK_GAP_MM = 1.0  # between symbols standing at one wall spot
 STACK_TOLERANCE = 30.0  # mm: wall points closer than this are drawn as a stack
 
 
@@ -140,13 +139,17 @@ def stacks(points: Sequence[ElectricalPoint]) -> list[list[int]]:
 
 
 def stack_shifts(points: Sequence[ElectricalPoint]) -> list[float]:
-    """Offset of each point from the wall: the next in a stack goes behind the previous one."""
+    """Offset of each point from the wall on the plan: the next in a stack goes behind the
+    previous one, smaller symbols nearer the wall (a cable outlet before three switches, not 0.8 m
+    into the room behind them). The step is the symbol depth, whose WALL_GAP is the gap between
+    symbols. Drawing only: the route reaches the point at the wall (wiring takes no shift).
+    """
     shifts = [0.0] * len(points)
     for group in stacks(points):
         acc = 0.0
-        for k in group:
+        for k in sorted(group, key=lambda k: SYMBOL_DEPTH[symbol_key(points[k])]):
             shifts[k] = acc
-            acc += sheet(SYMBOL_DEPTH[symbol_key(points[k])] + STACK_GAP_MM)
+            acc += sheet(SYMBOL_DEPTH[symbol_key(points[k])])
     return shifts
 
 

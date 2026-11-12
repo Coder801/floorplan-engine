@@ -210,8 +210,8 @@ class PanelGroup:
     purpose: str
     purpose_assumed: bool
     loads: tuple[Load, ...]
-    cable: str  # group cable types, comma-separated
-    section: float | None  # smallest cross-section
+    cable: str  # group cable types, comma-separated; without one in the model the assumed type
+    section: float | None  # smallest cross-section from the model; None for an assumed cable
     breaker: Breaker
     rcd: str | None  # "30 мА": RCBO or behind an RCD
     wet: bool
@@ -219,6 +219,7 @@ class PanelGroup:
     split_of: str | None = None  # line of an overloaded group split on the panel
     phase: str | None = None  # L1, L2, L3 or 3P on a three-phase panel (phases.py); None on one
     master: bool = False  # cut by the master switch (behind its contactor)
+    cable_assumed: bool = False  # cable type not in the model: assumed_mark, as the wiring lays it
 
     @property
     def three_phase(self) -> bool:
@@ -294,6 +295,22 @@ def heavy_cable(elec: Electrical, group: str, points: Sequence[ElectricalPoint])
     if is_three_phase(elec, group, loads):
         return cable_for(rating_for(amps_ / 3), cores=5)
     return cable_for(rating_for(amps_))
+
+
+# Cable type for a group without one in the model (assumption): the wiring lays it and the panel
+# table shows it with "*"
+POWER_TYPES = frozenset({PointType.SOCKET, PointType.OUTLET})
+LOW_TYPES = frozenset({PointType.DATA, PointType.TV})  # low-voltage
+DEFAULT_MARK = {"power": "3x2.5", "light": "3x1.5", "data": "UTP cat.6", "tv": "RG-6"}
+
+
+def assumed_mark(elec: Electrical, group: str, points: Sequence[ElectricalPoint]) -> str:
+    """Cable type of a group by its points: low-voltage, light, sockets, or a heavy load."""
+    if all(p.type in LOW_TYPES for p in points):
+        return DEFAULT_MARK["tv" if all(p.type is PointType.TV for p in points) else "data"]
+    if not any(p.type in POWER_TYPES for p in points):
+        return DEFAULT_MARK["light"]
+    return heavy_cable(elec, group, points) or DEFAULT_MARK["power"]
 
 
 def _kind(points: Sequence[ElectricalPoint], loads: Sequence[Load], section: float | None) -> Kind:
@@ -404,13 +421,14 @@ def panel_groups(
             purpose or composed_purpose(points, places, lang),
             purpose is None,
             tuple(loads),
-            ", ".join(marks),
+            ", ".join(marks) or assumed_mark(elec, g, points),
             section,
             breaker,
             rcd,
             wet,
             reserved,
             phase="3P" if three else None,
+            cable_assumed=not marks,
             master=master
             and (
                 g in master_off

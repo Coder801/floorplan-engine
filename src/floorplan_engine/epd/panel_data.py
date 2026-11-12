@@ -43,6 +43,7 @@ def panel_data(
             "purpose": g.purpose,
             "purpose_assumed": g.purpose_assumed,
             "cable": g.cable,
+            "cable_assumed": g.cable_assumed,
             "power": round(g.power),
             "current": round(g.current, 1),
             "assumed": g.assumed,

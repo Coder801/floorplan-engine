@@ -16,6 +16,20 @@ KIND_NAME: dict[DeviceKind | tuple[DeviceKind, int], dict[str, str]] = {
     DeviceKind.CONTACTOR: {"ru": "Контактор модульный", "uk": "Контактор модульний"},
     (DeviceKind.CONTACTOR, 4): {"ru": "Контактор модульный", "uk": "Контактор модульний"},
 }
+# The same in the panel device table: the usual abbreviations, explained under the table
+# (DEVICE_LEGEND); the estimate and the purchase list keep the full names
+SHORT_NAME: dict[DeviceKind | tuple[DeviceKind, int], dict[str, str]] = {
+    DeviceKind.BREAKER: {"ru": "АВ 1P", "uk": "АВ 1P"},
+    DeviceKind.DIFF: {"ru": "АВДТ 1P+N", "uk": "АВДТ 1P+N"},
+    (DeviceKind.BREAKER, 3): {"ru": "АВ 3P", "uk": "АВ 3P"},
+    (DeviceKind.DIFF, 4): {"ru": "АВДТ 3P+N", "uk": "АВДТ 3P+N"},
+    DeviceKind.CONTACTOR: {"ru": "Контактор", "uk": "Контактор"},
+    (DeviceKind.CONTACTOR, 4): {"ru": "Контактор", "uk": "Контактор"},
+}
+DEVICE_LEGEND = {
+    "ru": "АВ — автоматический выключатель, АВДТ — дифавтомат (автомат с защитой от утечки тока)",
+    "uk": "АВ — автоматичний вимикач, АВДТ — дифавтомат (автомат із захистом від витоку струму)",
+}
 
 TEXT: dict[str, dict[str, str]] = {
     "socket_generic": {"ru": "Розетка", "uk": "Розетка"},

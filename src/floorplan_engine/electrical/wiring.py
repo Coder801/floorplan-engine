@@ -87,7 +87,7 @@ import shapely
 from shapely.geometry import LineString, Polygon
 from shapely.geometry.base import BaseGeometry
 
-from floorplan_engine.electrical.anchors import Anchor, board_anchor, point_anchor, stack_shifts
+from floorplan_engine.electrical.anchors import Anchor, board_anchor, point_anchor
 from floorplan_engine.electrical.boxes import (
     BOX_BRANCHES,
     BOX_SIZE_MM,
@@ -111,7 +111,7 @@ from floorplan_engine.electrical.chases import (
 )
 from floorplan_engine.electrical.groups import group_key
 from floorplan_engine.electrical.groups import text as group_text
-from floorplan_engine.electrical.loads import heavy_cable
+from floorplan_engine.electrical.loads import DEFAULT_MARK, LOW_TYPES, POWER_TYPES, assumed_mark
 from floorplan_engine.electrical.master import CONTROL_ID, CONTROL_MARK, master_point
 from floorplan_engine.electrical.routing import (
     Router,
@@ -146,8 +146,6 @@ from floorplan_engine.model.schema import (
 END_ALLOWANCE = 200.0  # mm: cable tail at every connection except the panel
 RESERVE = 0.15  # margin on the total per cable type
 HEAVY_SECTION = 4.0  # mm²: from this cross-section a line goes from the panel without boxes
-POWER_TYPES = frozenset({PointType.SOCKET, PointType.OUTLET})
-LOW_TYPES = frozenset({PointType.DATA, PointType.TV})  # low-voltage
 SWITCH_TYPES = frozenset({PointType.SWITCH, PointType.PASS_SWITCH})
 # Lighting in a room goes through a box (decision 2026-10-21), unless in a chain (light_wiring)
 LIGHT_TYPES = frozenset(
@@ -161,7 +159,6 @@ LIGHT_TYPES = frozenset(
         PointType.LED_OUTPUT,
     }
 )
-DEFAULT_MARK = {"power": "3x2.5", "light": "3x1.5", "data": "UTP cat.6", "tv": "RG-6"}
 LED_MARK = "2x1.5"  # 12 V line from a LED supply in the panel to its output (assumption)
 # Light in a chain without boxes (Electrical.light_wiring "chain")
 LAMP_TYPES = LIGHT_TYPES - SWITCH_TYPES  # lights and LED outputs, without switches
@@ -179,12 +176,7 @@ def _mark(
 ) -> tuple[str, bool]:
     if cable is not None:
         return cable.cable, False
-    if all(p.type in LOW_TYPES for p in points):
-        kind = "tv" if all(p.type is PointType.TV for p in points) else "data"
-    else:
-        kind = "power" if any(p.type in POWER_TYPES for p in points) else "light"
-    heavy = heavy_cable(elec, group, points) if kind == "power" else None
-    return heavy or DEFAULT_MARK[kind], True
+    return assumed_mark(elec, group, points), True
 
 
 def section(mark: str) -> float:
@@ -290,7 +282,6 @@ def box_wiring(
     if not grouped and not low:
         return None
     geoms = {g.room.id: g for g in room_geometries(plan, contours)}
-    shifts = stack_shifts(elec.points)
     free = free_area(list(geoms.values()))
     walls = drillable_walls(list(geoms.values()))
     # On ceiling and floor along the shortest path, economy by default (docs/wiring-variants.md)
@@ -298,7 +289,8 @@ def box_wiring(
     ctx = _Context(
         plan,
         geoms,
-        {p.id: point_anchor(p, geoms, shifts[k]) for k, p in enumerate(elec.points)},
+        # At the wall, not at the stacked symbol: the cable ends where the point really is
+        {p.id: point_anchor(p, geoms) for p in elec.points},
         elec.board,
         Router(free, anchor_end(board_anchor(elec.board, geoms)), any_angle, walls),
         free,

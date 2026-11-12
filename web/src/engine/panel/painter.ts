@@ -154,7 +154,7 @@ export class PanelPainter {
     // "QF6 Освітлення — Санвузол · 3x1.5 · 0,50 кВт* · L2": the purpose in ink, cable, power and
     // the phase (three phases) in the group colour
     const phase = g.phase ? ` · ${g.phase}` : "";
-    const tail = ` · ${g.cable || "—"} · ${(g.power / 1000).toFixed(2).replace(".", ",")} кВт${g.assumed ? "*" : ""}${phase}`;
+    const tail = ` · ${g.cable || "—"}${g.cable_assumed ? "*" : ""} · ${(g.power / 1000).toFixed(2).replace(".", ",")} кВт${g.assumed ? "*" : ""}${phase}`;
     ctx.font = `${LABEL}px ${pen.font}`;
     const room = LABELS - 8 - ctx.measureText(tail).width;
     const lead = clip(pen, `${p.dev.id}  ${g.purpose}`, room, LABEL);
