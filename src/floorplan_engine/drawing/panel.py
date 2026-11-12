@@ -117,12 +117,17 @@ class PanelDrawing:
 
 
 def fit_panel(panel: BoardPanel, width: float, height: float) -> PanelDrawing | None:
-    """Rail width (12, 18 or 24 modules) that gives the largest module; None if it does not fit
-    even with M_MIN."""
+    """Panel at the largest module that fits; None if it does not fit even with M_MIN. With an
+    enclosure chosen (choose_enclosure) the sheet shows its rails as they are: its rail width and
+    the devices by its rails (panel.rows), as the viewer and the estimate do. Without one the
+    rail width (12, 18 or 24 modules) is the one that gives the largest module."""
     external = panel.backup is not None
+    if panel.enclosure is not None and panel.rows:
+        options = [(panel.enclosure.per_row, [list(r) for r in panel.rows])]
+    else:
+        options = [(n, din_rows(panel.devices, n)) for n in (12, 18, 24)]
     best: PanelDrawing | None = None
-    for per_row in (12, 18, 24):
-        rows = din_rows(panel.devices, per_row)
+    for per_row, rows in options:
         a = per_row + 2 * PAD + (SIDE if external else 0.0)
         b = LEAD + 2 * PAD + len(rows) * ROW
         m = min(M_MAX, width / a, height / b)
