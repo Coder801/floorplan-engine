@@ -9,10 +9,12 @@
 .lg { min-height: var(--control-h-lg); padding: 0 var(--space-4); border-radius: var(--radius-md); }
 .block { display: flex; width: 100%; }
 
-.primary, .pressed {
+@mixin accent-fill {
   background: var(--accent); color: var(--accent-text); border-color: var(--accent); font-weight: 500;
   &:hover:not(:disabled) { background: var(--accent); filter: brightness(1.15); }
 }
+
+.primary { @include accent-fill; }
 .bare {
   border-color: transparent; background: none;
   &:hover:not(:disabled) { background: var(--soft); }
@@ -23,5 +25,8 @@
   &:hover:not(:disabled) { background: none; color: var(--hl); }
 }
 .danger { color: var(--critical); }
+// A pressed toggle goes after the variants: its fill must win over bare's "background: none"
+// (otherwise the accent text is left on no background: white on white in the light theme)
+.pressed { @include accent-fill; }
 
 .icon { display: inline-flex; flex: none; svg { width: 18px; height: 18px; } }
