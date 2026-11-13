@@ -11,6 +11,7 @@ import { Welcome } from "@/pages/Welcome";
 import { base, enc, getManifest, getPage, getProject, isProject, listProjects, reviewAnswer, saveAnswer, saveWizard, type ReviewOutcome, type WizardBody } from "@/shared/api";
 import { NARROW_PX, SIDE_TABS, stickersPdf, type DrawerTab, type PanelMode, type SideTab, type Theme } from "@/shared/consts";
 import { cx } from "@/shared/cx";
+import { sectionOf, sections, wallLayersOf, type Section } from "@/shared/domains";
 import { label, pageTitle } from "@/shared/i18n";
 import { modeDrawerTabs, modeTabs, rememberMode, savedMode, stageShown, type UiMode } from "@/shared/mode";
 import { applyTheme, remember, remembered, savedTheme } from "@/shared/palette";
@@ -18,7 +19,7 @@ import { hideSplash } from "@/shared/splash";
 import { useUnderline } from "@/shared/underline";
 import { resetSelection, useView, view } from "@/shared/store";
 import ui from "@/shared/styles/ui.module.scss";
-import { ELECTRICAL_VIEW, sheetTabs, shownView as viewShown, tabOf, tabViews, viewSheet, type TabView } from "@/shared/tabs";
+import { ELECTRICAL_VIEW, sheetTabs, shownView as viewShown, tabOf, tabViews, viewSheet, type SheetTab, type TabView } from "@/shared/tabs";
 import type { ManifestPage, Overview, Page, Project, ProjectSummary, Scene, Variants } from "@/shared/types";
 import { RESERVE_KEY, type Answer, type QuestionsMemory } from "@/shared/questions";
 import { watchRebuild } from "@/shared/rebuild";
@@ -123,6 +124,9 @@ export function Viewer({ account = null }: { account?: Account | null }) {
   const [estimate, setEstimate] = useState(false);  // "Estimate" tab (wiring page, key estimate)
   const [info, setInfo] = useState(false);  // "Overview" tab (manifest: overview, variants)
   const [workTab, setWorkTab] = useState(false);  // "Tasks" tab: installation by tasks (database mode, project.work)
+  // The section a shared tab (elevations) was opened from: a domain key (shared/domains.ts)
+  const [domain, setDomain] = useState<string | null>(null);
+  const [hasLow, setHasLow] = useState(false);  // the project has low voltage: known once its drawing is loaded
   const [task, setTask] = useState<string | null>(null);  // the task whose card is open
   const [feedback, setFeedback] = useState(false);  // "Leave feedback" is open (widgets/Feedback)
   const [overview, setOverview] = useState<Overview | null>(null);
@@ -197,8 +201,8 @@ export function Viewer({ account = null }: { account?: Account | null }) {
   const placed = useRef<string | null>(null);
   useEffect(() => {
     if (!current || sheet === null || placed.current !== current) return;
-    remember(`place:${current}`, JSON.stringify({ sheet, estimate, info, work: workTab }));
-  }, [current, sheet, estimate, info, workTab]);
+    remember(`place:${current}`, JSON.stringify({ sheet, estimate, info, work: workTab, domain }));
+  }, [current, sheet, estimate, info, workTab, domain]);
 
   // Project: list, report, sheets; reloads re-reads after saving edits or a rebuild
   useEffect(() => {
@@ -212,7 +216,7 @@ export function Viewer({ account = null }: { account?: Account | null }) {
       placed.current = null;
       setProject(null); setPages([]); setPage(null); setLoaded(null); setDrawn([]); setElevs([]); setScene(null);
       setError(null); setSource(null); setEstimate(false); setInfo(false); setOverview(null); setWorkTab(false); setTask(null);
-      setRefreshing(false); setShown(reloadsRef.current); setWizard(false); setPanelMode("front");
+      setRefreshing(false); setShown(reloadsRef.current); setWizard(false); setPanelMode("front"); setDomain(null); setHasLow(false);
       questionsMemory.current = { drafts: {} };
     }
     cache.current = new Map();
@@ -238,6 +242,7 @@ export function Viewer({ account = null }: { account?: Account | null }) {
         setEstimate(!!saved?.estimate && shown.some((pg) => (pg.stage === "wiring" || pg.stage === "plumbing") && pg.index === saved.sheet));
         // The first visit to a project opens "Overview"; after that, where you were
         setInfo(saved === null || saved.info);
+        if (!again) setDomain(saved?.domain ?? null);
         placed.current = current;
       } catch (e) {
         if (alive) { setError((e as Error).message); setRefreshing(false); }
@@ -426,16 +431,25 @@ export function Viewer({ account = null }: { account?: Account | null }) {
   // The "Electrical" tab by system: lighting, sockets, low voltage (if the project has it) and wiring
   // with everything (shared/tabs.ts). Lighting is its lines or its links, remembered; the simple
   // mode has no lines on the point views, so its lighting is the links
-  const hasLow = !!sheetDrawing?.items.some((it) => it.l === "E-DATA" || it.l.startsWith("W-CABLE-LOW"));
+  // Sections are the first menu level: a domain with its tabs, or a tab of its own (shared/domains.ts)
+  const navSections = sections(tabs);
+  const section = sectionOf(navSections, tab, domain);
+  // Low voltage is seen on the drawing, and its view stays in the menu on the other sheets of the section
+  const lowDrawn = sheet !== null && drawingSheets.includes(sheet) && sheetDrawing
+    ? sheetDrawing.items.some((it) => it.l === "E-DATA" || it.l.startsWith("W-CABLE-LOW")) : null;
+  useEffect(() => { if (lowDrawn !== null) setHasLow(lowDrawn); }, [lowDrawn]);
   const [lightMode, setLightMode] = useState<LightMode>(() => (remembered("light-mode") === "links" ? "links" : "wiring"));
   const links = lightMode === "links" || mode !== "engineering";
-  const views: TabView[] | null = tab?.views
-    ? tabViews(tab, stageOf, hasLow, links).map((v) => ({ ...v, label: label("views", v.key) }))
-    : null;
+  const viewsOf = (tb: SheetTab): TabView[] =>
+    tabViews(tb, stageOf, hasLow, links).map((v) => ({ ...v, label: label("views", v.key) }));
+  // A view from the second menu level; from another tab of the section it is another drawing
   const pickView = (v: TabView) => {
-    const ev = ELECTRICAL_VIEW[v.key];
-    view.set({ ...(ev ? { electricalView: ev } : {}), selected: null, neighbors: null, pinned: null, tip: null });
-    if (v.index !== sheet) openSheet(v.index);  // another view of the same sheet keeps 3D
+    const go = () => {
+      const ev = ELECTRICAL_VIEW[v.key];
+      view.set({ ...(ev ? { electricalView: ev } : {}), selected: null, neighbors: null, pinned: null, tip: null });
+      if (v.index !== sheet) openSheet(v.index);  // another view of the same sheet keeps 3D
+    };
+    if (tab?.views) go(); else curtain.go(go);
   };
   const shownView = viewShown(stageOf(sheet ?? -1), electricalView);
   // "Wiring | Links" over the drawing: only where lighting has both sheets
@@ -463,6 +477,26 @@ export function Viewer({ account = null }: { account?: Account | null }) {
   const tabTarget = (tb: (typeof tabs)[number]) =>
     (tb === tab && sheet !== null ? sheet : tb.views ? viewSheet(tb, stageOf, lastView, links) ?? tb.pages[0] : tb.pages[0]);
   const at = tab && sheet !== null ? tab.pages.indexOf(sheet) : -1;
+  const tabLabel = (tb: SheetTab) => (tb.stage ? label("stage", tb.stage) : tb.name);
+  // A tab of a section; the elevations tab opens on "All walls" and remembers its domain
+  const openTab = (tb: SheetTab, s: Section) => {
+    const onWall = elevSheets.includes(tb.pages[0]);
+    const go = () => {
+      if (!openSheet(tabTarget(tb))) return;
+      if (s.domain) setDomain(s.key);
+      if (onWall) setAllWalls(true);
+    };
+    if (tb === tab && !info && !estimate) go(); else curtain.go(go);
+  };
+  // A section opens where it was left (the open tab), else on its first tab
+  const openSection = (s: Section) => openTab(s === section && tab ? tab : s.tabs[0], s);
+  // The second level: the sheets of the open domain, a tab with views — view by view
+  const subItems = !section?.domain ? [] : section.tabs.flatMap((tb) => (tb.views
+    ? viewsOf(tb).map((v) => ({ key: `view:${v.key}`, label: v.label, current: tb === tab && shownView === v.key, onClick: () => pickView(v) }))
+    : [{
+        key: `tab:${tb.pages[0]}`, current: tb === tab, onClick: () => openTab(tb, section),
+        label: tb.stage === section.key ? t("app.domainSheet") : tabLabel(tb),
+      }]));
   // The simple mode was switched on over a sheet it hides (wiring, panel): to the first tab it shows
   const hidden = !source && !estimate && !info && !workTab && sheet !== null && !stageShown(mode, stageOf(sheet));
   useEffect(() => {
@@ -482,6 +516,10 @@ export function Viewer({ account = null }: { account?: Account | null }) {
   const closeAllWalls = useCallback(() => setAllWalls(false), []);
   const onWalls = sheet !== null && elevSheets.includes(sheet) && !info && !estimate && !workTab && !source;
   useEffect(() => { if (!onWalls) setAllWalls(false); }, [onWalls]);
+  // One wall engine for every domain: the domain the walls were opened from picks the layers
+  const wallLayers = onWalls ? wallLayersOf(navSections, section) : null;
+  const wallLayersKey = wallLayers ? section!.key : null;
+  useEffect(() => { if (wallLayers) view.set({ wallLayers }); }, [wallLayersKey]);  // eslint-disable-line react-hooks/exhaustive-deps
   const openWall = (index: number) => {
     const next = walls[index];
     if (!next) return;
@@ -518,7 +556,8 @@ export function Viewer({ account = null }: { account?: Account | null }) {
   }, []);
 
   const openQs = unresolved(project);
-  const tabBar = useUnderline<HTMLElement>(`${info ? "info" : estimate ? "estimate" : workTab ? "work" : tab?.pages[0] ?? "-"}|${tabs.length}|${t("overview.tab")}|${!!openEstimate}|${!!project?.work}`);
+  const tabBar = useUnderline<HTMLElement>(`${info ? "info" : estimate ? "estimate" : workTab ? "work" : section?.key ?? "-"}|${navSections.length}|${t("overview.tab")}|${!!openEstimate}|${!!project?.work}`);
+  const subBar = useUnderline<HTMLElement>(`${subItems.findIndex((it) => it.current)}|${subItems.map((it) => it.label).join("|")}`);
   // Wiring variant as a line in the sheet side panel: "По группам проекта · По потолку · Через коробки"
   const activeVariant = variants ? parseKey(variants.active) : null;
   const variantLabel = activeVariant
@@ -531,7 +570,7 @@ export function Viewer({ account = null }: { account?: Account | null }) {
   // Tab title follows the open page: studio settings, or project · sheet (shared/i18n pageTitle)
   const projectTitle = list.find((p) => isProject(p, current))?.title ?? project?.title ?? current;
   const sheetTitle = source ?? (info ? t("overview.tab") : estimate ? t("estimate.tab") : workTab ? t("work.tab")
-    : tab?.views ? label("views", shownView) : tab ? (tab.stage ? label("stage", tab.stage) : tab.name) : null);
+    : tab?.views ? label("views", shownView) : tab ? tabLabel(tab) : null);
   useEffect(() => {
     document.title = studio ? pageTitle(t("studio.title")) : current ? pageTitle(projectTitle, sheetTitle) : pageTitle(t("app.projects"));
   }, [studio, current, projectTitle, sheetTitle, i18n.language]);
@@ -648,15 +687,15 @@ export function Viewer({ account = null }: { account?: Account | null }) {
           {project?.artifact && pages.length > 0 && (
             <button aria-current={info ? "page" : undefined} data-label={t("overview.tab")} onClick={() => { if (!info) curtain.go(openInfo); }}>{t("overview.tab")}</button>
           )}
-          {tabs.map((tb) => (
-            <button key={tb.pages[0]} aria-current={tb === tab ? "page" : undefined} data-label={tb.stage ? label("stage", tb.stage) : tb.name}
-                    title={tb.pages.length > 1 && !tb.views ? t("app.pages", { n: tb.pages.length }) : undefined}
-                    onClick={() => {
-                      const walls = elevSheets.includes(tb.pages[0]);
-                      if (tb === tab && !info && !estimate) { openSheet(tabTarget(tb)); if (walls) setAllWalls(true); return; }
-                      curtain.go(() => { if (openSheet(tabTarget(tb)) && walls) setAllWalls(true); });
-                    }}>{tb.stage ? label("stage", tb.stage) : tb.name}</button>
-          ))}
+          {navSections.map((s) => {
+            const name = s.domain ? label("stage", s.key) : tabLabel(s.tabs[0]);
+            const only = s.domain ? null : s.tabs[0];
+            return (
+              <button key={s.key} aria-current={s === section ? "page" : undefined} data-label={name}
+                      title={only && only.pages.length > 1 ? t("app.pages", { n: only.pages.length }) : undefined}
+                      onClick={() => openSection(s)}>{name}</button>
+            );
+          })}
           {openEstimate && (
             <button aria-current={estimate ? "page" : undefined} data-label={t("estimate.tab")} onClick={() => { if (!estimate) curtain.go(openEstimate); }}>{t("estimate.tab")}</button>
           )}
@@ -684,6 +723,15 @@ export function Viewer({ account = null }: { account?: Account | null }) {
         {/* Without a project the welcome screen covers the header and has its own gear */}
         {current && settings}
       </header>
+      {/* The second menu level: the sheets of the open section (shared/domains.ts) */}
+      {subItems.length > 1 && (
+        <nav ref={subBar.ref} className={css.sub} aria-label={t("app.sectionSheets", { name: label("stage", section!.key) })}>
+          {subItems.map((it) => (
+            <button key={it.key} aria-current={it.current ? "page" : undefined} data-label={it.label} onClick={it.onClick}>{it.label}</button>
+          ))}
+          <span className={css.underline} style={subBar.style} aria-hidden="true" />
+        </nav>
+      )}
       <div className={css.banners}>
         {outdated && (
           <div className={css.banner}>
@@ -733,7 +781,6 @@ export function Viewer({ account = null }: { account?: Account | null }) {
       </main>
       <SidePanel tab={side} onTab={showSide} page={source ? null : page} drawing={source ? null : drawing}
                  estimate={estimate && !source ? page?.estimate ?? null : null}
-                 views={views} view={shownView} onView={pickView}
                  wall={!source && !loading ? wall?.data ?? null : null} onWiring={toWiring}
                  layers={mode === "engineering"}
                  variant={variantLabel ? { label: variantLabel, onOpen: openInfo } : null}
@@ -757,10 +804,12 @@ export function Viewer({ account = null }: { account?: Account | null }) {
 }
 
 // Where the project was open in this browser: a sheet, the "Estimate", "Overview" or "Tasks" tab (place:<project>)
-function savedPlace(name: string): { sheet: number; estimate: boolean; info: boolean; work: boolean } | null {
+function savedPlace(name: string): { sheet: number; estimate: boolean; info: boolean; work: boolean; domain: string | null } | null {
   try {
-    const v = JSON.parse(remembered(`place:${name}`) || "null") as { sheet?: unknown; estimate?: unknown; info?: unknown; work?: unknown } | null;
-    return v && typeof v.sheet === "number" ? { sheet: v.sheet, estimate: v.estimate === true, info: v.info === true, work: v.work === true } : null;
+    const v = JSON.parse(remembered(`place:${name}`) || "null") as { sheet?: unknown; estimate?: unknown; info?: unknown; work?: unknown; domain?: unknown } | null;
+    return v && typeof v.sheet === "number"
+      ? { sheet: v.sheet, estimate: v.estimate === true, info: v.info === true, work: v.work === true, domain: typeof v.domain === "string" ? v.domain : null }
+      : null;
   } catch {
     return null;
   }

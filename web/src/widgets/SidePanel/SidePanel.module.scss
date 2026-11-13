@@ -10,12 +10,12 @@
   background: var(--panel); border-left: 1px solid var(--line);
 }
 
-// Strip: the drawing view as full-width segments and the drawer "▴" (narrow screen only)
+// Strip of the bottom drawer: its title and "▴" (narrow screen only; the views of a section are
+// the second level of the header)
 .bar {
-  grid-area: bar; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--space-2);
+  grid-area: bar; display: none; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--space-2);
   padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--line);
 }
-.barEmpty { display: none; }
 .title { font-weight: 500; }
 .bar .toggle { display: none; font-size: 16px; }
 
@@ -26,7 +26,7 @@
   border-bottom: 1px solid var(--line);
   button {
     @include focus-ring;
-    min-height: 44px; padding: 0 6px;
+    min-height: 44px; padding: 0 6px; text-align: center;
     color: var(--muted); border-bottom: 2px solid transparent;
   }
   button[aria-selected="true"] { color: var(--text); border-bottom-color: var(--text); font-weight: 500; }
@@ -72,8 +72,7 @@
 // the drawing from below (Viewer is position: relative), with tabs and tables
 @media (max-width: $narrow) {
   .side { border-left: 0; border-top: 1px solid var(--line); }
-  .bar { padding: 8px 12px; border-bottom: 0; }
-  .barEmpty { display: grid; }
+  .bar { display: grid; padding: 8px 12px; border-bottom: 0; }
   .bar .toggle { display: inline-grid; }
   .tabs, .body { display: none; }
   .side[data-open] {

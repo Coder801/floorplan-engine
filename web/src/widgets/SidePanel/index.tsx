@@ -22,8 +22,6 @@ import ui from "@/shared/styles/ui.module.scss";
 import { Button } from "@/ui/Button";
 import { Dot } from "@/ui/Dot";
 import { IconButton } from "@/ui/IconButton";
-import { SegmentedControl } from "@/ui/SegmentedControl";
-import type { TabView } from "@/shared/tabs";
 import type { Elevation, Page, SideTable } from "@/shared/types";
 import { EyeToggle } from "@/ui/EyeToggle";
 import { useHoldTip } from "@/ui/HoldTip";
@@ -35,9 +33,6 @@ interface Props {
   onTab: (tab: SideTab) => void;
   page: Page | null;
   drawing: Drawing | null;     // the drawing the sheet belongs to
-  views?: TabView[] | null;     // tab views (tabs.ts)
-  view?: string | null;
-  onView?: (view: TabView) => void;
   wall?: Elevation | null;      // elevation: what is on the wall, instead of tables and layers
   estimate?: SideTable | null;  // "Estimate" tab: totals and notes instead of tables and layers
   onWiring?: (key: string) => void;  // from an elevation to the wiring sheet, to the object's line
@@ -57,20 +52,15 @@ const VARIANT_STAGES = new Set(["electrical", "lighting", "wiring"]);
 export const hasLayers = (page: Page | null) =>
   !!page && !page.panel && page.items.some((it) => !SHEET_ONLY.has(it.l));
 
-export function SidePanel({ tab, onTab, page, drawing, views, view: current, onView, wall, estimate, onWiring, variant, summary, summaryTitle, layers = true, children }: Props) {
+export function SidePanel({ tab, onTab, page, drawing, wall, estimate, onWiring, variant, summary, summaryTitle, layers = true, children }: Props) {
   const { t } = useTranslation();
   const tabs: SideTab[] = wall || estimate || summary ? [] : SIDE_TABS.filter((k) => k !== "layers" || (layers && hasLayers(page)));
   const shown = tabs.includes(tab) ? tab : "tables";
   const [open, setOpen] = useState(false);  // narrow screen: the drawer is expanded
-  const hasViews = !estimate && !summary && !!views && views.length > 1;
   return (
     <aside className={css.side} data-open={open || undefined}>
-      <div className={cx(css.bar, !hasViews && css.barEmpty)}>
-        {hasViews ? (
-          <SegmentedControl fill label={t("side.view")} value={current ?? null}
-                            onChange={(k) => { const v = views!.find((x) => x.key === k); if (v) onView?.(v); }}
-                            options={views!.map((v) => ({ value: v.key, label: v.label }))} />
-        ) : <span className={css.title}>{wall ? t("side.onWall") : summary ? (summaryTitle ?? t("overview.side")) : estimate ? t("estimate.totals") : tabs.length > 1 ? t("side.tablesAndLayers") : t(`side.${shown}`)}</span>}
+      <div className={css.bar}>
+        <span className={css.title}>{wall ? t("side.onWall") : summary ? (summaryTitle ?? t("overview.side")) : estimate ? t("estimate.totals") : tabs.length > 1 ? t("side.tablesAndLayers") : t(`side.${shown}`)}</span>
         <IconButton variant="framed" size="lg" className={css.toggle} aria-expanded={open} label={open ? t("side.collapse") : t("side.tablesAndLayers")}
                     onClick={() => setOpen(!open)}>{open ? "▾" : "▴"}</IconButton>
       </div>
