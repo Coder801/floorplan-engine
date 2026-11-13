@@ -12,7 +12,7 @@ const meta = {
   title: "Widgets/Feedback",
   component: Feedback,
   args: {
-    project: { key: "kv42", title: "Квартира на Вавилова" },
+    project: { key: "kv42", title: "Квартира на Садовой" },
     sheet: "electrical",
     sheetTitle: "Электрика",
     onClose: () => {},
@@ -33,4 +33,4 @@ export const SignedOut: Story = {
   args: { send: async () => { await wait(300); throw new FeedbackError(401, "Unauthorized"); } },
 };
 export const Dark: Story = { globals: { theme: "dark" } };
-export const English: Story = { globals: { lang: "en" }, args: { project: { key: "kv42", title: "Vavilova flat" }, sheetTitle: "Electrical" } };
+export const English: Story = { globals: { lang: "en" }, args: { project: { key: "kv42", title: "Sadova flat" }, sheetTitle: "Electrical" } };
