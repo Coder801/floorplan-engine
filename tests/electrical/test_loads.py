@@ -12,7 +12,7 @@ from floorplan_engine.electrical.loads import (
     backup_share,
     point_load,
 )
-from floorplan_engine.model.schema import ElectricalPoint
+from floorplan_engine.model.schema import Electrical, ElectricalPoint
 
 
 def _load(title: str, power: float, *, post: bool = False) -> Load:
@@ -64,3 +64,25 @@ def test_backup_peak_counts_posts_partly_and_one_occasional_appliance() -> None:
 
 def test_backup_peak_of_nothing_is_zero() -> None:
     assert backup_share([]) == (0.0, 0.0)
+
+
+def test_lights_with_a_fan_stay_a_lighting_group() -> None:
+    """Decision 2026-11-13: a fan or a hood output on a lighting line does not turn the group
+    into a socket group (light cable and breaker); a socket or a big output does."""
+    from floorplan_engine.electrical.loads import Kind, assumed_mark, group_kind
+
+    def elec(extra: dict[str, object]) -> Electrical:
+        lamp = {"id": "l1", "room": "r", "type": "downlight", "ceiling": [500, 500], "group": "QF1"}
+        key = {"id": "k1", "room": "r", "wall": "w1", "offset": 500, "height": 900,
+               "type": "switch", "group": "QF1", "note": "свет + вентилятор"}  # fmt: skip
+        point = {"room": "r", "wall": "w1", "offset": 900, "height": 2400, "group": "QF1", **extra}
+        return Electrical.model_validate({"points": [lamp, key, point]})
+
+    fan = elec({"id": "f1", "type": "outlet", "note": "эл. вентилятор"})
+    assert group_kind(fan, "QF1") is Kind.LIGHT
+    assert assumed_mark(fan, "QF1", fan.points) == "3x1.5"
+    socket = elec({"id": "s1", "type": "socket"})
+    assert group_kind(socket, "QF1") is Kind.SOCKETS
+    assert assumed_mark(socket, "QF1", socket.points) == "3x2.5"
+    big = elec({"id": "o1", "type": "outlet", "power": 1500})
+    assert group_kind(big, "QF1") is Kind.SOCKETS

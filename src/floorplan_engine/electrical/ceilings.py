@@ -39,7 +39,7 @@ END_TOL_MM = 50.0  # a line end this close to the inner outline is in the room (
 
 @dataclass(frozen=True)
 class CeilingWall:
-    """A wall of the room on the view: its id, code (2.Б) and the inner face, mm of the model."""
+    """A wall of the room on the view: its id, code (2.B) and the inner face, mm of the model."""
 
     id: str
     code: str

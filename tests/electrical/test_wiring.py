@@ -126,6 +126,19 @@ def test_topology_board_box_point_only() -> None:
     assert w.skipped == ()
 
 
+def test_internet_runs_apart_from_power() -> None:
+    """Decision 2026-11-13: the internet line leaves the panel with the power lines, then goes
+    beside them no closer than 150 mm and comes close again only at its own end."""
+    from floorplan_engine.electrical.routing import APART, beside_mm, is_ortho, length
+
+    w = _wiring(make_plan(RECT, [DOOR]), _elec())
+    power = [r.path for r in w.runs if r.circuit == "power"]
+    lan = next(r for r in w.runs if r.target == "d1")
+    assert is_ortho(lan.path) and lan.plan_mm == pytest.approx(length(lan.path))
+    assert beside_mm(lan.path, power) <= 2 * APART  # the first step from the panel and the last
+    assert lan.id == "wire_9" and [r.id for r in w.runs] == [f"wire_{k}" for k in range(1, 10)]
+
+
 def test_low_voltage_without_group_from_media_cabinet() -> None:
     """Internet and TV without a group: a line of their own each, from the low-voltage cabinet
     if there is one, with the assumed cable by type; a grouped socket is unaffected."""
@@ -705,9 +718,25 @@ def test_box_lines_never_exceed_largest_regular_box() -> None:
         {"points": pts, "board": {"room": "r", "wall": "w4", "offset": 500, "height": 1700}}
     )
     w = _wiring(plan, elec)
+    ids = {b.id for b in w.boxes}
     branches = [sum(1 for r in w.runs if r.source == b.id) for b in w.boxes]
-    assert len(w.boxes) >= 2 and max(branches) <= BOX_BRANCHES
-    assert sum(branches) == 14
+    assert len(w.boxes) >= 2 and max(branches) <= BOX_BRANCHES  # the feeds to boxes count too
+    assert sum(1 for r in w.runs if r.source in ids and r.target not in ids) == 14
+    # One cable of the group into the room (decision 2026-11-13): the other boxes from a box
+    feeds = {r.target: r.source for r in w.runs if r.target in ids}
+    assert sorted(feeds) == sorted(ids)
+    assert sum(src == "board" for src in feeds.values()) == 1
+    assert all(src == "board" or src in ids for src in feeds.values())
+
+
+def test_proper_keeps_a_panel_line_for_every_box() -> None:
+    """Where each line from the panel has its own breaker the cable is not shared."""
+    plan = make_plan([{"length": 4000}, {"length": 6000}, {"length": 4000}, {"length": 6000}], [])
+    pts = [_wall(f"d{k}", "sconce", "w1", 300 + 250 * k, 2000, "QF1") for k in range(14)]
+    board = {"room": "r", "wall": "w4", "offset": 500, "height": 1700}
+    elec = Electrical.model_validate({"points": pts, "board": board, "mode": "proper"})
+    w = _wiring(plan, elec)
+    assert len(w.boxes) == 2
     assert all(any(r.target == b.id and r.source == "board" for r in w.runs) for b in w.boxes)
 
 
@@ -1208,6 +1237,68 @@ def test_light_chain_pass_and_two_key_switches() -> None:
     assert by_target["l3"].source in ("p1", "p2") and by_target["l3"].source != between.source
     assert by_target["l4"].source == "k2" and by_target["l4"].mark == TWO_KEY_MARK
     assert len({r.target for r in w.runs}) == len(w.runs)  # each point fed once
+
+
+def test_light_chain_brings_one_cable_into_the_room() -> None:
+    """Decision 2026-11-13: one cable of the group from the panel to the nearest switch, the
+    other switches are fed from its flush box; a mechanism in the same frame by a jumper that
+    stays in the wall."""
+    pts = [
+        _wall("k2", "switch", "w1", 2500, 900, "QF1"),  # in one frame with k1
+        {"id": "l3", "room": "r", "type": "downlight", "ceiling": [2000, 3000], "group": "QF1"},
+        _wall("k3", "switch", "w3", 1500, 900, "QF1"),
+        {"id": "l4", "room": "r", "type": "downlight", "ceiling": [500, 3500], "group": "QF1"},
+    ]
+    links = [
+        {"switch": "k1", "targets": ["l1", "l2"]},
+        {"switch": "k2", "targets": ["l3"]},
+        {"switch": "k3", "targets": ["l4"]},
+    ]
+    base = _elec().model_dump(mode="json", by_alias=True, exclude_none=True)
+    data = {**base, "points": [*base["points"], *pts], "light_wiring": "chain"}
+    for lk in links:
+        for p in data["points"]:
+            if p["id"] == lk["switch"]:
+                p["controls"] = lk["targets"]
+    plan = make_plan(RECT, [DOOR])
+    w = _wiring(plan, Electrical.model_validate(data))
+    lit = {r.target: r for r in w.runs if r.group == "QF1"}
+    switches = {"k1", "k2", "k3"}
+    fed = {k: lit[k].source for k in switches}
+    assert sum(src == "board" for src in fed.values()) == 1  # one cable from the panel
+    assert all(src == "board" or src in switches for src in fed.values())
+    jumper = lit["k2"] if fed["k2"] == "k1" else lit["k1"]
+    assert jumper.source in ("k1", "k2") and jumper.vertical_mm == 0  # inside the frame
+    assert jumper.plan_mm < 100  # no route across the ceiling
+    assert lit["k3"].vertical_mm > 0  # to the other wall: up to the ceiling and down
+    assert all(lit[k].mark == "3x1.5" for k in switches)
+    assert len(lit) == 7  # each point fed once
+
+    premium = _wiring(plan, Electrical.model_validate({**data, "mode": "proper"}))
+    own = {r.target: r.source for r in premium.runs if r.target in switches}
+    assert set(own.values()) == {"board"}  # a breaker per line: a panel line per switch
+
+
+def test_fan_of_a_lighting_line_is_fed_from_its_switch() -> None:
+    """Decision 2026-11-13: an appliance output in a lighting group of a light chain gets no
+    panel line of its own, it is fed from the flush box of the group's switch."""
+    fan = _wall("f1", "outlet", "w3", 3000, 2400, "QF1")
+    w = _chain([fan])
+    lit = {r.target: r.source for r in w.runs if r.group == "QF1"}
+    assert lit["k1"] == "board" and lit["f1"] == "k1"
+    assert list(lit.values()).count("board") == 1
+
+
+def test_loop_sockets_of_one_frame_are_joined_in_the_wall() -> None:
+    """Sockets side by side in one frame: the cable between them does not go up to the ceiling."""
+    base = _elec().model_dump(mode="json", by_alias=True, exclude_none=True)
+    twin = _wall("s4", "socket", "w3", 2500, 300, "QF3")  # in one frame with s3
+    data = {**base, "points": [*base["points"], twin], "distribution": "loop"}
+    w = _wiring(make_plan(RECT, [DOOR]), Electrical.model_validate(data))
+    runs = {r.target: r for r in w.runs if r.group == "QF3"}
+    jumper = runs["s4"] if runs["s4"].source == "s3" else runs["s3"]
+    assert jumper.source in ("s3", "s4") and jumper.vertical_mm == 0 and jumper.plan_mm < 500
+    assert sum(r.source == "board" for r in runs.values()) == 1
 
 
 def test_stacked_point_is_wired_at_the_wall_not_at_its_symbol() -> None:

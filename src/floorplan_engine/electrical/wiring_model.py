@@ -84,6 +84,13 @@ class Run:
     led: bool = False
 
     @property
+    def lay(self) -> Circuit:
+        """Which cables the line lies with, in a chase, a wall hole and a conduit: a 12 V LED line
+        from the panel goes with the power cables (decision 2026-11-13: its cable has 230 V
+        insulation), internet and TV stay apart."""
+        return "power" if self.led else self.circuit
+
+    @property
     def vertical_mm(self) -> float:
         return self.rise_start_mm + self.rise_end_mm
 

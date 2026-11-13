@@ -44,7 +44,7 @@ from floorplan_engine.drawing.plan import add_text
 from floorplan_engine.electrical.boxes import BOX_SIZE_MM
 from floorplan_engine.electrical.bundles import Bundle, Segment, bundles, by_line, segments
 from floorplan_engine.electrical.chases import CHASE_CABLES, CHASE_SHARE
-from floorplan_engine.electrical.colors import group_colors
+from floorplan_engine.electrical.colors import LED_LINE, group_colors, rgb
 from floorplan_engine.electrical.panel import OTHER_LINE, LineClass
 from floorplan_engine.electrical.routing import CLEARANCE
 from floorplan_engine.electrical.wiring_model import (
@@ -135,8 +135,10 @@ def _draw_runs(
     for k, run in enumerate(wiring.runs):
         floor = run.route == "floor"
         attribs: dict[str, object] = {"layer": layers[k]}
-        if run.group in colors:
-            attribs["true_color"] = colors[run.group]
+        # A 12 V LED line from the panel: its own colour, not the group's (decision 2026-11-13)
+        color = rgb(LED_LINE) if run.led else colors.get(run.group)
+        if color is not None:
+            attribs["true_color"] = color
         with tagged(msp, "wire", run.id):
             msp.add_lwpolyline(fillet(paths[k], sheet(FILLET_MM)), format="xyb", dxfattribs=attribs)
             if run.rise_end_mm > 0 and not run.target.startswith("box_"):
@@ -146,9 +148,7 @@ def _draw_runs(
                 )
                 if placed is not None:
                     text, at, angle = placed
-                    add_text(
-                        msp, text, at, LENGTH_MM, layers[k], angle, color=colors.get(run.group)
-                    )
+                    add_text(msp, text, at, LENGTH_MM, layers[k], angle, color=color)
 
 
 def _draw_bundle_lengths(

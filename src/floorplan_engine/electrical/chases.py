@@ -64,7 +64,7 @@ def wall_chases(
             if rise <= 0 or p is None or p.wall is None or p.offset is None:
                 continue
             bend = None if at is None or p.height is None else (p.offset, p.height)
-            drops[(p.room, p.wall, r.route, r.circuit)].append(
+            drops[(p.room, p.wall, r.route, r.lay)].append(
                 (p.offset if at is None else at, rise, p.id, bend)
             )
     out: list[Chase] = []
@@ -80,23 +80,15 @@ def wall_chases(
             group.append(item)
         out.append(_shared(key, group))
 
-    def bundle(kind: str, room: str, wall: str, offset: float, rs: Sequence[Run]) -> None:
-        by_kind: dict[tuple[Route, Circuit], list[Run]] = defaultdict(list)
-        for r in rs:
-            by_kind[(r.route, r.circuit)].append(r)
-        for (route, circuit), same in sorted(by_kind.items()):
-            n = len(same)
-            for k in range(math.ceil(n / CHASE_CABLES)):
-                cables = min(CHASE_CABLES, n - k * CHASE_CABLES)
-                rise = same[0].rise_start_mm
-                out.append(Chase(kind, room, wall, offset, rise, cables, (), route, circuit))
+    def bundle(kind: str, room: str, wall: str, offset: float, source: str) -> None:
+        for same in source_rises(runs, source):
+            rise, route, circuit = same[0].rise_start_mm, same[0].route, same[0].circuit
+            out.append(Chase(kind, room, wall, offset, rise, len(same), (), route, circuit))
 
-    from_board = [r for r in runs if r.source == "board" and r.rise_start_mm > 0]
-    if board is not None and from_board:
-        bundle("board", board.room, board.wall, board.offset, from_board)
-    from_media = [r for r in runs if r.source == "media" and r.rise_start_mm > 0]
-    if media is not None and from_media:
-        bundle("media", media.room, media.wall, media.offset, from_media)
+    if board is not None:
+        bundle("board", board.room, board.wall, board.offset, "board")
+    if media is not None:
+        bundle("media", media.room, media.wall, media.offset, "media")
     for b in boxes:
         if b.on_ceiling:  # on the ceiling: no chase in the wall
             continue
@@ -105,6 +97,20 @@ def wall_chases(
             cables = min(CHASE_CABLES, n - k * CHASE_CABLES)
             out.append(Chase("box", b.room, "", 0.0, b.rise_mm, cables, (), b.route))
     return tuple(out)
+
+
+def source_rises(runs: Sequence[Run], source: str) -> list[list[Run]]:
+    """Lines going up (down) the wall from the panel or the low-voltage cabinet (source "board",
+    "media"), by chase: the same route and circuit together, CHASE_CABLES per chase."""
+    by_kind: dict[tuple[Route, Circuit], list[Run]] = defaultdict(list)
+    for r in runs:
+        if r.source == source and r.rise_start_mm > 0:
+            by_kind[(r.route, r.lay)].append(r)
+    return [
+        same[k : k + CHASE_CABLES]
+        for _, same in sorted(by_kind.items())
+        for k in range(0, len(same), CHASE_CABLES)
+    ]
 
 
 def channel_chases(channels: Sequence[CableChannel]) -> tuple[Chase, ...]:
@@ -242,7 +248,7 @@ def wall_holes(
         through: dict[Circuit, list[str]] = defaultdict(list)
         for r, line in lines:
             if r.route == "ceiling" and line.intersection(strip).length > 1.0:
-                through[r.circuit].append(r.id)
+                through[r.lay].append(r.id)
         for circuit, ids in sorted(through.items()):
             out.append(Hole(pid, len(ids), circuit, tuple(ids)))
     for k, strip in enumerate(walls):
@@ -253,7 +259,7 @@ def wall_holes(
                 if piece.is_empty or piece.length <= 1.0:
                     continue
                 at = piece.centroid
-                near = spots[(r.route, r.circuit)]
+                near = spots[(r.route, r.lay)]
                 hit = next((ids for p, ids in near if p.distance(at) < WALL_HOLE_SHARE), None)
                 if hit is None:
                     near.append((at, [r.id]))

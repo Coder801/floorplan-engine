@@ -777,8 +777,15 @@ def test_conduit_floor_always_ceiling_only_premium() -> None:
     assert floor is not None and any(r.route == "floor" for r in floor.runs)
     q = quantities(floor, floor_elec)
     total = sum(v for k, v in q.items() if k.startswith("conduit."))
-    # on the floor the whole line with margin; lighting runs on the ceiling (no conduit in standard)
-    expected = sum(r.length_mm for r in floor.runs if r.route == "floor") / 1000 * (1 + RESERVE)
+    # on the floor the whole line with margin; lighting runs on the ceiling (no conduit in
+    # standard). Lines lying together share a conduit (2026-11-13): their stretch counts once
+    from floorplan_engine.electrical.mounting import plan_conduits, source_conduits
+
+    on_floor = [r for r in floor.runs if r.route == "floor"]
+    shared = [*plan_conduits(floor, "none"), *source_conduits(floor, "none")]
+    saved = sum(p.length * (len(p.runs) - 1) for p in shared)
+    assert saved > 0
+    expected = (sum(r.length_mm for r in on_floor) - saved) / 1000 * (1 + RESERVE)
     assert total == pytest.approx(expected, abs=0.3)
 
 

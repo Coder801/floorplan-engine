@@ -22,7 +22,13 @@ from floorplan_engine.electrical.estimate import (
 )
 from floorplan_engine.electrical.estimate import text as estimate_text
 from floorplan_engine.electrical.groups import group_key
-from floorplan_engine.electrical.mounting import PRACTICE
+from floorplan_engine.electrical.mounting import (
+    CONDUIT_FILL,
+    CONDUIT_INNER,
+    PRACTICE,
+    plan_conduits,
+    source_conduits,
+)
 from floorplan_engine.electrical.panel import BoardPanel, build_panel
 from floorplan_engine.electrical.pricing import Prices, price_notes
 from floorplan_engine.electrical.terms import (
@@ -240,6 +246,19 @@ def _estimate_notes(
         notes.append(
             estimate_text("note_conduit_fittings", lang, m=f"{CONDUIT_JOINT_EVERY / 1000:g}")
         )
+        shared = [
+            *plan_conduits(wiring, elec.conduit_level),
+            *source_conduits(wiring, elec.conduit_level),
+        ]
+        if any(len(piece.runs) > 1 for piece in shared):
+            notes.append(
+                estimate_text(
+                    "note_shared_conduit",
+                    lang,
+                    pct=f"{CONDUIT_FILL * 100:g}",
+                    d=max(CONDUIT_INNER),
+                )
+            )
     if wiring.shared_rises:
         notes.append(estimate_text("note_loop_conduit", lang, n=len(wiring.shared_rises)))
     if elec.board is not None:

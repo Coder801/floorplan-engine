@@ -5,7 +5,16 @@ from __future__ import annotations
 import pytest
 from shapely.geometry import box
 
-from floorplan_engine.electrical.routing import Grid, length, simplify
+from floorplan_engine.electrical.routing import (
+    APART,
+    End,
+    Grid,
+    Router,
+    apart_cells,
+    beside_mm,
+    length,
+    simplify,
+)
 from floorplan_engine.model.geometry import Vec
 
 
@@ -140,3 +149,41 @@ def test_search45_prune_by_length_from_start() -> None:
     far = grid.nearest_free(Vec(1500, 1500))  # ≈ 1.8 m straight: past the limit
     near = grid.nearest_free(Vec(700, 700))  # ≈ 0.7 m plus 100 to the start: within the limit
     assert far not in reached and near in reached
+
+
+def test_low_voltage_route_keeps_apart_from_power_and_crosses_at_right_angle() -> None:
+    """Decision 2026-11-13: beside a power cable no closer than APART, across it at 90°."""
+    area = box(0, 0, 4000, 3000)
+    power = _v((250, 1550), (3750, 1550))  # across the room, along x
+    plain = Router(area, End(Vec(250, 1550), False))
+    same = plain.route(End(Vec(3750, 1550), False))
+    assert beside_mm(same, [power]) == pytest.approx(3500)  # the shortest way lies on the cable
+    apart = plain.apart_from([power])
+    assert apart is not plain and plain.apart_from([]) is plain
+    moved = apart.route(End(Vec(3750, 1550), False))
+    # only the ends, which are on the cable itself, stay close
+    assert beside_mm(moved, [power]) <= 2 * APART
+    assert any(abs(p.y - 1550) >= APART for p in moved)
+    across = apart.route(End(Vec(250, 2750), False))  # straight across the power cable
+    assert length(across) == pytest.approx(1200) and beside_mm(across, [power]) == 0
+    assert (
+        Router(area, End(Vec(250, 1550), False), any_angle=True).apart_from([power]).grid.apart
+        is None
+    )
+
+
+def test_apart_cells_by_direction() -> None:
+    grid = Grid.of(box(0, 0, 2000, 2000))
+    along_x, along_y = apart_cells(grid, [_v((250, 1050), (1550, 1050), (1550, 250))])
+    ys = {grid.center(k).y for k in along_x}
+    assert ys == {950.0, 1050.0, 1150.0}  # the row of the cable and one row each side
+    xs = {grid.center(k).x for k in along_y}
+    assert xs == {1450.0, 1550.0, 1650.0}
+    assert apart_cells(grid, [_v((250, 250), (1750, 1750))]) == (frozenset(), frozenset())
+
+
+def test_beside_mm_counts_overlap_once() -> None:
+    path = _v((0, 100), (1000, 100))
+    others = [_v((0, 0), (600, 0)), _v((400, 200), (800, 200)), _v((900, 300), (1000, 300))]
+    assert beside_mm(path, others) == pytest.approx(800)  # 0–600 and 400–800 overlap; 300 is far
+    assert beside_mm(_v((500, -500), (500, 500)), others) == 0  # across

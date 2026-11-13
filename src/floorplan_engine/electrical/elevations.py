@@ -196,7 +196,7 @@ class WallElevation:
 
     @property
     def title(self) -> str:
-        """ "Спальня — 1.В · Кабинет за стеной, дверь": room, then the wall for people."""
+        """ "Спальня — 1.C · Кабинет за стеной, дверь": room, then the wall for people."""
         return f"{self.room_name} — {self.name.full if self.name else self.wall}"
 
     @property
@@ -677,7 +677,7 @@ def elevation_data(
 
 
 def behind_text(e: WallElevation, language: Language) -> str:
-    """What is behind the wall, in words: "Спальня (1.Б); Балкон" or "вне квартиры"."""
+    """What is behind the wall, in words: "Спальня (1.B); Балкон" or "вне квартиры"."""
     names = [f"{room} ({code})" if code is not None else room for room, code in e.behind]
     return "; ".join(names) if names else tr("elev_outside", language)  # names may contain commas
 

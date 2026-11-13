@@ -1,8 +1,14 @@
 """Wiring through junction boxes: topology, routes and cable lengths, all from the model.
 
 Variant rules:
-- cable runs only from the panel to a box, from the panel to a load or from a box to a load;
-  never from a load to a box or from box to box. With the loop distribution wall sockets are
+- one cable of a group comes into a room (decision 2026-11-13, _one_feed): the group's box
+  nearest to the panel is fed from the panel, its other boxes in the room from the nearest box
+  already fed; with light in a chain, the switch nearest to the panel is fed from the panel and
+  the cable branches in its flush box to the group's other switches, in the room and behind a
+  door (see _light_chains). Where every panel line has its own breaker (premium panel, proper
+  layout: lines.per_line) each box and each switch keeps a panel line of its own, as before;
+- otherwise cable runs only from the panel to a box, from the panel to a load or from a box to a
+  load; never from a load to a box. With the loop distribution wall sockets are
   the exception: in a room, two or more sockets of a group go in a daisy chain through their
   flush boxes, nearest to the panel first, with no junction box and at most BOX_BRANCHES on a
   chain, each chain on its own panel line. Light, switches and direct lines stay as they are;
@@ -15,14 +21,15 @@ Variant rules:
 - a box per group per room if the group has any light there, or two points or more; a single
   socket of a group in a room is fed directly from the panel; lines in a box (feed +
   branches) are at most the entries of a 150×110 (BOX_SIZES, low end); with more points the
-  boxes are split by zone (split_points), each with its own panel line; box size is the
-  smallest for the number of lines (box_size), 190×140 only as a last resort;
+  boxes are split by zone (split_points); box size is the smallest for the number of lines
+  (box_size, the feeds to the next boxes count), 190×140 only as a last resort;
 - direct lines run from the panel to each point without boxes: cross-section from
   HEAVY_SECTION mm² (hob, oven, boiler), a group made only of appliance outputs (air
   conditioner, towel rail) and low-voltage; in the model, Cable.direct;
 - light in a chain without boxes (Electrical.light_wiring "chain", decision 2026-11-11, see
   _light_chains): panel → switch → its lights one after another; pass switches panel → first →
   second (PASS_MARK) → lights; a LIGHT_LOOP loop at each ceiling light for its future output.
+  The group's other switches in the room are fed from a switch flush box, not from the panel;
   Otherwise light goes through a box, as below;
 - LED supplies in the panel (Electrical.led_supply "board", decision 2026-11-11): each LED
   output gets a 12 V line of its own from the panel (Run.led, low-voltage chases), in the
@@ -52,6 +59,13 @@ Points without a group are not counted, except low-voltage (decision 2026-11-11)
 TV without a group get a line of their own each (group "Связь" by language) from the
 low-voltage cabinet `media`, without it from the panel (assumption); the cabinet tail is like
 the panel's.
+
+Internet and TV apart from power (decision 2026-11-13, _apart, routing.apart_cells): on the
+ceiling and on the floor such a cable runs no closer than routing.APART (150 mm) beside a power
+cable and crosses it at 90°. It is routed after the power lines (with their manual routes), so it
+goes round them; it comes closer only where there is no other way: at the panel and at a socket
+block. A 12 V LED line is not held apart; a manual route of the cable itself stays as drawn; at
+any angle (economy) the rule is not applied.
 
 Chases (wall_chases) are vertical: from the ceiling down (or the floor up) to a wall point,
 at the panel and at a box. A drop never crosses an opening: to a point under a window it goes
@@ -121,6 +135,7 @@ from floorplan_engine.electrical.groups import text as group_text
 from floorplan_engine.electrical.led_supply import led_loads, led_mark, section_for
 from floorplan_engine.electrical.loads import DEFAULT_MARK, LOW_TYPES, POWER_TYPES, assumed_mark
 from floorplan_engine.electrical.master import CONTROL_ID, CONTROL_MARK, master_point
+from floorplan_engine.electrical.panel import scheme_of
 from floorplan_engine.electrical.routing import (
     Router,
     drillable_walls,
@@ -173,6 +188,23 @@ LAMP_TYPES = LIGHT_TYPES - SWITCH_TYPES  # lights and LED outputs, without switc
 LIGHT_LOOP = 600.0  # mm: cable loop at each ceiling light of a chain, 30 cm each way
 PASS_MARK = "4x1.5"  # between pass switches without a box: two travellers, N, PE (assumption)
 TWO_KEY_MARK = "4x1.5"  # from a two-key switch to its lights: two switched lines (assumption)
+# One cable of a group into a room (decision 2026-11-13): it branches in a switch flush box
+BACK_BOX_FEEDS = 3  # feeds to the next switches from one flush box (assumption: a deep box)
+FRAME_SPAN = 100.0  # mm along the wall: mechanisms this close at one height share a frame
+BOX_LINES_MAX = BOX_BRANCHES + 1  # lines in a 150×110 box: no more feeds from a full one
+
+
+def _one_feed(elec: Electrical) -> bool:
+    """One cable of a group into a room, branching there; False where every line from the panel
+    has its own breaker (premium panel or proper layout, as lines.per_line)."""
+    return not (elec.mode == "proper" or scheme_of(elec) == "premium")
+
+
+def _same_frame(a: ElectricalPoint, b: ElectricalPoint) -> bool:
+    """Two wall points side by side in one frame: the cable between them does not leave the wall."""
+    if a.room != b.room or a.wall != b.wall or a.offset is None or b.offset is None:
+        return False
+    return a.height == b.height and abs(a.offset - b.offset) <= FRAME_SPAN
 
 
 def _cable(elec: Electrical, group: str) -> Cable | None:
@@ -343,6 +375,7 @@ def box_wiring(
     if edits is not None:
         passable = shapely.unary_union([free, *walls]) if walls else free
         runs = _manual_runs(runs, edits.wires, passable, edited, notes, any_angle)
+    runs = _apart(ctx, links, boxes, runs, edited)
     if led:
         runs = _led_sections(runs, elec)
     height_assumed = "ceiling_height" not in plan.model_fields_set
@@ -505,13 +538,41 @@ def _group_links(
             p = min(left, key=lambda q: ((ctx.anchors[q.id].node - at).length(), q.id))
             left.remove(p)
             assert prev.height is not None  # only wall points go in a chain
-            to_point(prev.id, prev.height, _rise(prev, ctx.ceiling, route), p)
+            if _same_frame(prev, p):  # a jumper inside the frame: the cable stays in the wall
+                link(prev.id, p.id, ctx.anchors[p.id], 0.0, 0.0)
+            else:
+                to_point(prev.id, prev.height, _rise(prev, ctx.ceiling, route), p)
             prev = p
 
     if elec.light_wiring == "chain" and not no_boxes:
-        chained, done = _light_chains(ctx, elec, pts, [], group, mark, assumed, route)
+        chained, done = _light_chains(
+            ctx, elec, pts, [], group, mark, assumed, route, _one_feed(elec)
+        )
         links += chained
         pts = [p for p in pts if p.id not in done]
+        if _one_feed(elec):
+            # An appliance output of a lighting line (a fan) is fed from the flush box of the
+            # line's nearest switch that has the feed, not by a cable of its own from the panel
+            by_id = {p.id: p for p in ctx.points.values()}
+            heads = {ln.source for ln in chained} | {"board"}
+            taps = [
+                by_id[ln.target]
+                for ln in chained
+                if ln.mark == mark and ln.source in heads and by_id[ln.target].type in SWITCH_TYPES
+            ]
+            for p in [p for p in pts if p.type is PointType.OUTLET and taps]:
+                node = ctx.anchors[p.id].node
+                tap = min(
+                    taps,
+                    key=lambda t: (
+                        t.room != p.room,
+                        (ctx.anchors[t.id].node - node).length(),
+                        t.id,
+                    ),
+                )
+                up, down = _rise(tap, ctx.ceiling, route), _rise(p, ctx.ceiling, route)
+                link(tap.id, p.id, ctx.anchors[p.id], up, down, cross=tap.room != p.room)
+                pts = [q for q in pts if q is not p]
     # A switch is tapped into the box of its light: in a room where the group has only
     # switches (by the door outside) they get no box or panel line of their own
     lit = {p.room for p in pts if p.type not in SWITCH_TYPES}
@@ -532,7 +593,11 @@ def _group_links(
                 direct(p)
             continue
         # At most BOX_BRANCHES branches per box: more points means boxes by zone
-        zones = split_points([ctx.anchors[p.id].node for p in here], BOX_BRANCHES)
+        # With one cable into the room a box keeps an entry for the feed to the next box
+        one_feed = _one_feed(elec)
+        cap = BOX_BRANCHES - 1 if one_feed and len(here) > BOX_BRANCHES else BOX_BRANCHES
+        zones = split_points([ctx.anchors[p.id].node for p in here], cap)
+        made: list[tuple[JunctionBox, list[ElectricalPoint]]] = []
         for zone in zones:
             part = [here[i] for i in zone]
             spot = _box_spot(ctx, room.id, part, boxes, route)
@@ -544,7 +609,14 @@ def _group_links(
             size = box_size(len(part) + 1)
             box = JunctionBox(f"box_{n}", f"К{n}", room.id, group, spot, route, room.wet, size)
             boxes.append(box)
-            link("board", box.id, spot, board_rise, box.rise_mm)
+            made.append((box, part))
+        feeder = _box_feeders(ctx, made) if one_feed else {}
+        for box, part in made:
+            src = feeder.get(box.id)
+            if src is None:
+                link("board", box.id, box.anchor, board_rise, box.rise_mm)
+            else:  # the group's cable is already in the room: from the box it came to
+                link(src.id, box.id, box.anchor, src.rise_mm, box.rise_mm)
             for p in part:
                 to_point(box.id, _box_height(box, ctx.ceiling), box.rise_mm, p)
     own = [b for b in boxes if b.group == group]
@@ -557,6 +629,31 @@ def _group_links(
     return links
 
 
+def _box_feeders(
+    ctx: _Context, made: Sequence[tuple[JunctionBox, Sequence[ElectricalPoint]]]
+) -> dict[str, JunctionBox]:
+    """Which box feeds each box of a group in a room: the one nearest to the panel is fed from
+    the panel (it is not in the result), every next one from the nearest box already fed that
+    still has a free entry (BOX_LINES_MAX)."""
+    if len(made) < 2:
+        return {}
+    lines = {b.id: len(part) + 1 for b, part in made}
+    left = sorted((b for b, _ in made), key=lambda b: (ctx.from_board.cost(b.anchor.node), b.id))
+    fed = [left.pop(0)]
+    out: dict[str, JunctionBox] = {}
+    while left:
+        free = [a for a in fed if lines[a.id] < BOX_LINES_MAX] or fed
+        a, b = min(
+            ((a, b) for a in free for b in left),
+            key=lambda ab: ((ab[0].anchor.node - ab[1].anchor.node).length(), ab[0].id, ab[1].id),
+        )
+        out[b.id] = a
+        lines[a.id] += 1
+        left.remove(b)
+        fed.append(b)
+    return out
+
+
 def _light_chains(
     ctx: _Context,
     elec: Electrical,
@@ -566,6 +663,7 @@ def _light_chains(
     mark: str,
     assumed: bool,
     route: Route,
+    one_feed: bool = False,
 ) -> tuple[list[_Link], set[str]]:
     """Light of a group in a chain without boxes (decision 2026-11-11): panel → switch, from it
     its lights one after another, nearest first (switch_links: what it turns on). Pass switches
@@ -573,7 +671,12 @@ def _light_chains(
     its lights with TWO_KEY_MARK. Lights no switch takes go in a chain from the panel; a switch
     with no light of the group gets a line of its own. At each ceiling light the cable leaves a
     LIGHT_LOOP loop, the reserve for the light output; the cable is on the ceiling wherever a
-    ceiling point is at either end. Returns the links and the ids of the points they took."""
+    ceiling point is at either end. With one_feed (decision 2026-11-13) only one cable of the
+    group comes into a room from the panel, to the switch nearest to the panel; there it branches
+    in the flush box: every other line start of the group, in this room or behind a door, is fed
+    from the nearest switch already fed, at most BACK_BOX_FEEDS feeds from a flush box, and
+    between mechanisms of one frame the cable stays in the wall. Returns the links and the ids
+    of the points they took."""
     lamps = {p.id: p for p in pts if p.type in LAMP_TYPES}
     switches = [p for p in pts if p.type in SWITCH_TYPES]
     on: dict[str, list[str]] = {s.id: [] for s in switches}
@@ -595,14 +698,68 @@ def _light_chains(
                      "power", False, ends)  # fmt: skip
         out.append(line)
 
-    def point_link(a: ElectricalPoint, b: ElectricalPoint, cable: str, cable_assumed: bool) -> None:
+    def point_link(
+        a: ElectricalPoint, b: ElectricalPoint, cable: str, cable_assumed: bool, wall: bool = False
+    ) -> None:
         on_ceiling = route == "ceiling" or a.ceiling is not None or b.ceiling is not None
         way: Route = "ceiling" if on_ceiling else "floor"
         ends = (0.0 if loop(a) else END_ALLOWANCE) + (LIGHT_LOOP if loop(b) else END_ALLOWANCE)
+        # wall: a jumper inside one frame, it does not go up to the ceiling or down to the floor
+        up, down = (0.0, 0.0) if wall else (_rise(a, ceiling, way), _rise(b, ceiling, way))
         line = _Link(group, cable, cable_assumed, a.id, b.id, ctx.anchors[b.id],
-                     _rise(a, ceiling, way), _rise(b, ceiling, way), way, "power",
-                     a.room != b.room, ends)  # fmt: skip
+                     up, down, way, "power", a.room != b.room, ends)  # fmt: skip
         out.append(line)
+
+    starts: list[ElectricalPoint] = []  # with one_feed: where the group's lines begin
+
+    def start(p: ElectricalPoint) -> None:
+        if one_feed:
+            starts.append(p)
+        else:
+            board_link(p, mark, assumed)
+
+    def feed(part: Sequence[ElectricalPoint]) -> None:
+        """One panel line for the line starts of the group, the rest from switch flush boxes.
+        Into another room the feed goes through the opening; a start there that is closer to
+        the panel than to any switch already fed gets a panel line of its own."""
+        reach: dict[str, Router] = {}
+
+        def near(p: ElectricalPoint) -> tuple[float, str]:
+            return ctx.from_board.cost(ctx.anchors[p.id].node), p.id
+
+        def gap(a: ElectricalPoint, b: ElectricalPoint) -> float:
+            if a.room == b.room:
+                return (ctx.anchors[a.id].node - ctx.anchors[b.id].node).length()
+            if a.id not in reach:
+                end = anchor_end(ctx.anchors[a.id])
+                reach[a.id] = Router(ctx.free, end, ctx.any_angle, ctx.walls)
+            return reach[a.id].cost(ctx.anchors[b.id].node)
+
+        root = min([p for p in part if p.type in SWITCH_TYPES] or part, key=near)
+        board_link(root, mark, assumed)
+        fed, left = [root], [p for p in part if p is not root]
+        feeds: dict[str, int] = {}
+        while left:
+            # Only flush boxes of this lighting line's switches: not sockets, not lights
+            boxes = [a for a in fed if a.type in SWITCH_TYPES]
+            free = [a for a in boxes if feeds.get(a.id, 0) < BACK_BOX_FEEDS] or boxes
+            if not free:
+                b = min(left, key=near)
+                board_link(b, mark, assumed)
+                left.remove(b)
+                fed.append(b)
+                continue
+            a, b = min(
+                ((a, b) for a in free for b in left),
+                key=lambda ab: (gap(ab[0], ab[1]), ab[0].id, ab[1].id),
+            )
+            if a.room != b.room and near(b)[0] < gap(a, b):
+                board_link(b, mark, assumed)
+            else:
+                point_link(a, b, mark, assumed, wall=_same_frame(a, b))
+                feeds[a.id] = feeds.get(a.id, 0) + 1
+            left.remove(b)
+            fed.append(b)
 
     def chain(start: ElectricalPoint, ids: Sequence[str], cable: str, cable_assumed: bool) -> None:
         left = [lamps[i] for i in dict.fromkeys(ids) if i not in taken]  # pass switches share
@@ -624,20 +781,22 @@ def _light_chains(
         sets = [g for g in sets if g not in joined] + [merged]
     for g in sets:
         g.sort(key=lambda x: (ctx.from_board.cost(ctx.anchors[x.id].node), x.id))
-        board_link(g[0], mark, assumed)
+        start(g[0])
         for a, b in itertools.pairwise(g):
             point_link(a, b, PASS_MARK, True)
         chain(g[-1], [t for x in g for t in on[x.id]], mark, assumed)
     for s in (s for s in switches if s.type is not PointType.PASS_SWITCH):
-        board_link(s, mark, assumed)
+        start(s)
         two = s.keys == 2
         chain(s, on[s.id], TWO_KEY_MARK if two else mark, two or assumed)
     free = [p for p in lamps.values() if p.id not in taken]
     if free:
         first = min(free, key=lambda p: (ctx.from_board.cost(ctx.anchors[p.id].node), p.id))
         taken.add(first.id)
-        board_link(first, mark, assumed)
+        start(first)
         chain(first, [p.id for p in free], mark, assumed)
+    if starts:
+        feed(starts)
     return out, {*lamps, *(s.id for s in switches)}
 
 
@@ -722,10 +881,44 @@ def _box_spot(
     return place_ceiling_box(g, reach, targets, taken, sheet(BOX_SIZE_MM))
 
 
-def _route_runs(ctx: _Context, links: Sequence[_Link], boxes: Sequence[JunctionBox]) -> list[Run]:
+def _comms(circuit: Circuit, led: bool) -> bool:
+    """Internet and TV: low voltage, but not a 12 V LED line."""
+    return circuit == "low" and not led
+
+
+def _apart(
+    ctx: _Context,
+    links: Sequence[_Link],
+    boxes: Sequence[JunctionBox],
+    runs: Sequence[Run],
+    edited: set[str],
+) -> list[Run]:
+    """Internet and TV lines routed again, apart from the final power routes (decision
+    2026-11-13, routing.apart_cells); a line with a manual route stays as it is."""
+    power = [r for r in runs if r.circuit == "power"]
+    if ctx.any_angle or not power or not any(_comms(r.circuit, r.led) for r in runs):
+        return list(runs)
+    again = {r.id: r for r in _route_runs(ctx, links, boxes, power)}
+    return [r if f"wire:{r.id}" in edited else again.get(r.id, r) for r in runs]
+
+
+def _route_runs(
+    ctx: _Context,
+    links: Sequence[_Link],
+    boxes: Sequence[JunctionBox],
+    beside: Sequence[Run] | None = None,
+) -> list[Run]:
     """Line routes: from the panel through the whole flat, from a box or a socket of a daisy chain
     only inside its room. A wall point past an opening is reached where its drop goes down
-    beside the opening (_Context.drop); the turn to the point adds to the rise."""
+    beside the opening (_Context.drop); the turn to the point adds to the rise. With beside (the
+    power lines already routed) only the internet and TV lines are routed, apart from the power
+    routes of their plane (_apart); the line ids are the same."""
+    todo = [(k, ln) for k, ln in enumerate(links) if beside is None or _comms(ln.circuit, ln.led)]
+    sources = {ln.source for _, ln in todo}
+    beside_paths: dict[Route, list[tuple[Vec, ...]]] = {"ceiling": [], "floor": []}
+    for r in beside or ():
+        beside_paths[r.route].append(r.path)
+    apart: dict[tuple[int, Route], Router] = {}
     routes = {ln.source: ln.route for ln in links}
     drops = {
         (pid, route): spot
@@ -744,6 +937,7 @@ def _route_runs(ctx: _Context, links: Sequence[_Link], boxes: Sequence[JunctionB
     routers = {
         b.id: Router(room_area(ctx.geoms[b.room]), anchor_end(b.anchor), ctx.any_angle)
         for b in boxes
+        if b.id in sources
     }
     # Branch to a switch behind a door, and a light chain into the next room: through the whole
     # flat via the opening
@@ -755,19 +949,24 @@ def _route_runs(ctx: _Context, links: Sequence[_Link], boxes: Sequence[JunctionB
             ctx.any_angle,
             ctx.walls,
         )
-        for src in {ln.source for ln in links if ln.cross}
+        for src in {ln.source for _, ln in todo if ln.cross}
     }
-    for src in {ln.source for ln in links} - set(routers) - {"board", "media"}:  # a daisy chain
+    for src in sorted(sources - set(routers) - {"board", "media"}):  # a daisy chain
         area = room_area(ctx.geoms[ctx.rooms[src]])
         routers[src] = Router(area, anchor_end(source_anchor(src)), ctx.any_angle)
     runs: list[Run] = []
-    for k, ln in enumerate(links):
+    for k, ln in todo:
         if ln.source == "board":
             router = ctx.from_board
         elif ln.source == "media" and ctx.from_media is not None:
             router = ctx.from_media
         else:
             router = wide[ln.source] if ln.cross else routers[ln.source]
+        if beside is not None:
+            key = (id(router), ln.route)
+            if key not in apart:
+                apart[key] = router.apart_from(beside_paths[ln.route])
+            router = apart[key]
         end = drops.get((ln.target, ln.route)) if ln.target_rise > 0 else None
         start = drops.get((ln.source, ln.route)) if ln.source_rise > 0 else None
         path = tuple(router.route(anchor_end(end[0] if end else ln.target_anchor)))

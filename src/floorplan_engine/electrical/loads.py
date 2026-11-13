@@ -308,9 +308,27 @@ def assumed_mark(elec: Electrical, group: str, points: Sequence[ElectricalPoint]
     """Cable type of a group by its points: low-voltage, light, sockets, or a heavy load."""
     if all(p.type in LOW_TYPES for p in points):
         return DEFAULT_MARK["tv" if all(p.type is PointType.TV for p in points) else "data"]
-    if not any(p.type in POWER_TYPES for p in points):
+    if not any(p.type in POWER_TYPES for p in points) or lighting_line(points):
         return DEFAULT_MARK["light"]
     return heavy_cable(elec, group, points) or DEFAULT_MARK["power"]
+
+
+MINOR_W = 200.0  # W: a fan or a hood on a lighting line does not make it a socket line
+_MINOR_TYPES = frozenset({PointType.OUTLET, PointType.SWITCH, PointType.PASS_SWITCH})
+
+
+def lighting_line(points: Sequence[ElectricalPoint]) -> bool:
+    """A lighting group with small appliance outputs on it (decision 2026-11-13): it has lights,
+    and everything else that draws power is an output or a switch of at most MINOR_W (a bathroom
+    fan, a hood). It stays lighting: light cable, light breaker, light colour. A socket never
+    counts: what gets plugged into it is unknown."""
+    loads = {p.id: ld for p in points if (ld := point_load(p, p.room, "ru")) is not None}
+    lit = [p for p in points if p.id in loads and p.type in LIGHT]
+    rest = [p for p in points if p.id in loads and p.type not in LIGHT]
+    return bool(lit) and all(
+        p.type in _MINOR_TYPES and loads[p.id].power <= MINOR_W and not loads[p.id].heavy
+        for p in rest
+    )
 
 
 def _kind(points: Sequence[ElectricalPoint], loads: Sequence[Load], section: float | None) -> Kind:
@@ -318,6 +336,8 @@ def _kind(points: Sequence[ElectricalPoint], loads: Sequence[Load], section: flo
         return Kind.HEAVY
     powered = {p.id for p in points} & {ld.point for ld in loads}
     if powered and all(p.type in LIGHT for p in points if p.id in powered):
+        return Kind.LIGHT
+    if lighting_line(points):  # lights with a fan or a hood on the line
         return Kind.LIGHT
     return Kind.SOCKETS
 

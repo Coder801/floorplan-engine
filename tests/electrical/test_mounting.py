@@ -25,16 +25,21 @@ from floorplan_engine.electrical.mounting import (
     bend_rows,
     bend_size,
     bundle_radii,
+    cable_area,
     conduit_diameter,
+    conduits,
     fixing_counts,
     fixing_rows,
     fixing_spans,
     fixings,
     mounting_notes,
     pair_diameter,
+    plan_conduits,
     plan_fixings,
     run_fixings,
+    shared_diameter,
     shared_pairs,
+    source_conduits,
     spots,
 )
 from floorplan_engine.electrical.wiring_model import Run, Wiring
@@ -245,7 +250,10 @@ def test_shared_chain_drop_is_one_conduit_with_one_row_of_clips() -> None:
     d = pair_diameter(out.mark, out.mark)
     assert shared[(f"conduit_clip.{d}", "wall")] == 3 * per_rise
     lengths = conduit_lengths(one, "none")
-    assert lengths[d] == pytest.approx(sum(r.rise_end_mm for r in one.runs if r.id in pairs))
+    # besides the pair drops, the stretches lines share on the floor may take the same diameter
+    along = sum(p.length for p in plan_conduits(one, "none") if p.diameter == d)
+    drops = sum(r.rise_end_mm for r in one.runs if r.id in pairs)
+    assert lengths[d] == pytest.approx(drops + along)
     saved = sum(r.rise_start_mm for r in one.runs if r.id in one.shared_rises)
     assert sum(lengths.values()) == pytest.approx(
         sum(conduit_lengths(two, "none").values()) - saved
@@ -314,3 +322,75 @@ def test_conduit_is_fixed_wider_apart_than_bare_cable() -> None:
     assert len(piped) < len(bare)
     wiring = Wiring(2700.0, False, (), (run,))
     assert len(plan_fixings(wiring, "ceiling")) < len(plan_fixings(wiring, "none"))
+
+
+def test_shared_diameter_by_fill_matches_the_size_tables() -> None:
+    """40 % of the inner cross-section (decision 2026-11-13) gives the sizes the studio named
+    for one cable and for a chain pair, and at most three cables in a Ø32."""
+    assert cable_area("3x1.5") == pytest.approx(math.pi / 4 * 5.5 * 11.5)
+    assert cable_area("5x2.5") == pytest.approx(math.pi / 4 * 6.0 * 13.0 * 5 / 3)
+    assert cable_area("UTP") is None and cable_area("3x10") is None
+    for mark in ("3x1.5", "3x2.5", "3x4", "3x6"):
+        assert shared_diameter([mark]) == conduit_diameter(mark)
+    for a, b in (("3x1.5", "3x1.5"), ("3x1.5", "3x2.5"), ("3x2.5", "3x2.5"), ("3x4", "3x6")):
+        assert shared_diameter([a, b]) == pair_diameter(a, b)
+    assert shared_diameter(["3x1.5"] * 3) == 32 and shared_diameter(["3x2.5"] * 3) == 32
+    assert shared_diameter(["3x1.5"] * 4) is None  # more than a Ø32 takes
+    assert shared_diameter(["3x1.5", "UTP"]) is None and shared_diameter([]) is None
+
+
+def test_conduits_pack_power_together_and_internet_alone() -> None:
+    way = [Vec(0, 0), Vec(1000, 0)]
+    power = [replace(_run(way), id=f"p{k}", mark="3x2.5") for k in range(4)]
+    light = replace(_run(way), id="l1", mark="3x1.5")
+    lan = replace(_run(way), id="lan", mark="UTP", circuit="low")
+    led = [replace(_run(way), id=f"d{k}", mark="2x1.5", circuit="low", led=True) for k in range(2)]
+    assert conduits([power[0]]) == [(20, ("p0",))]
+    assert conduits(power[:3]) == [(32, ("p0", "p1", "p2"))]
+    # the fourth 3x2.5 does not fit: a conduit of its own, where the thinner 3x1.5 joins it
+    assert conduits([*power, light]) == [(32, ("p0", "p1", "p2")), (32, ("p3", "l1"))]
+    # internet never shares; 12 V LED lines from the panel lie with the power cables
+    # (decision 2026-11-13)
+    assert conduits([power[0], lan, *led]) == [(32, ("p0", "d0", "d1")), (20, ("lan",))]
+    assert led[0].lay == "power" and lan.lay == "low"
+
+
+def test_plan_conduits_share_on_the_common_stretch_only() -> None:
+    """Two lines together for 2 m, then one goes on alone: a Ø32 for the common stretch, a Ø20
+    for the rest; without conduit on the ceiling there is none; the clips follow the conduits."""
+    a = replace(_run([Vec(0, 0), Vec(2000, 0)]), id="a")
+    b = replace(_run([Vec(0, 0), Vec(3000, 0), Vec(3000, 1000)]), id="b")
+    w = Wiring(2700.0, False, (), (a, b))
+    assert plan_conduits(w, "none") == []
+    pieces = sorted(plan_conduits(w, "ceiling"), key=lambda p: (-p.length, p.diameter))
+    assert [(p.diameter, p.length, p.runs) for p in pieces] == [
+        (32, 2000.0, ("a", "b")),
+        (20, 1000.0, ("b",)),
+        (20, 1000.0, ("b",)),
+    ]
+    assert conduit_lengths(w, "ceiling") == {32: 2000.0, 20: 2000.0}
+    counts = fixing_counts(w, "ceiling")
+    step, offset = PRACTICE.step("ceiling", True), PRACTICE.offset
+    assert counts[("conduit_clip.32", "ceiling")] == len(spots(2000.0, step, offset))
+    assert counts[("conduit_clip.20", "ceiling")] == 2 * len(spots(1000.0, step, offset))
+    first = next(f for f in plan_fixings(w, "ceiling") if set(f.runs) == {"a", "b"})
+    assert first.keys == ("conduit_clip.32",)  # one clip holds both lines
+    bare = next(f for f in plan_fixings(w, "none") if set(f.runs) == {"a", "b"})
+    assert bare.keys == (PAD, PAD)
+
+
+def test_rise_from_the_panel_shares_conduit_with_conduit_in_the_walls() -> None:
+    way = [Vec(0, 0), Vec(1000, 0)]
+    runs = tuple(replace(_run(way, rise_start=1000.0), id=f"r{k}") for k in range(3))
+    w = Wiring(2700.0, False, (), runs)
+    assert source_conduits(w, "ceiling") == []  # the rise is bare
+    (piece,) = source_conduits(w, "walls")
+    assert (piece.diameter, piece.length, piece.surface) == (32, 1000.0, "wall")
+    step, offset = PRACTICE.step("wall", True), PRACTICE.offset
+    assert fixing_counts(w, "walls")[("conduit_clip.32", "wall")] == len(
+        spots(1000.0, step, offset)
+    )
+    lengths = conduit_lengths(w, "walls")
+    # one Ø32 up the wall and along the ceiling; each cable's end in its own Ø20, as before
+    assert lengths[32] == pytest.approx(2000.0)
+    assert lengths[20] == pytest.approx(sum(r.ends_mm for r in runs))

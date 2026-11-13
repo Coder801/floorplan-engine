@@ -184,8 +184,8 @@ def test_elevation_side_line() -> None:
     elec = _elec([{"id": "s1", "offset": 1000, "height": 300, **SOCKETS}])
     w2 = next(e for e in wall_elevations(plan, contours, elec, None) if e.wall == "w2")
     assert _side(w2, "ru") == "вид изнутри · за стеной: вне квартиры"
-    neighbours = replace(w2, behind=(("Кухня, коридор", "2.Б"), ("Спальня", None)))
-    assert _side(neighbours, "ru") == "вид изнутри · за стеной: Кухня, коридор (2.Б); Спальня"
+    neighbours = replace(w2, behind=(("Кухня, коридор", "2.B"), ("Спальня", None)))
+    assert _side(neighbours, "ru") == "вид изнутри · за стеной: Кухня, коридор (2.B); Спальня"
 
 
 def test_back_side_points_mirrored_onto_this_wall() -> None:

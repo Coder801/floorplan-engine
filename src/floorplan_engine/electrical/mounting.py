@@ -23,9 +23,11 @@ from dataclasses import dataclass
 from typing import Literal
 
 from floorplan_engine.electrical.bundles import bundles, segments
+from floorplan_engine.electrical.chases import source_rises
+from floorplan_engine.electrical.routing import APART
 from floorplan_engine.electrical.wiring_model import Route, Run, Wiring
 from floorplan_engine.model.geometry import Vec
-from floorplan_engine.model.schema import Conduit, Electrical
+from floorplan_engine.model.schema import Conduit, Electrical, PointType
 from floorplan_engine.model.texts import Language
 
 Surface = Literal["ceiling", "wall", "floor"]
@@ -37,6 +39,12 @@ CONDUIT_SIZES = ((2.5, 20), (6.0, 25), (1e9, 32))
 # the larger cross-section, two cables fill a conduit to about 40 % up to Ø25 for 2×1.5 and Ø32
 # for 2×2.5 (decision 2026-11-11)
 PAIR_SIZES = ((1.5, 25), (1e9, 32))
+# Inner Ø of a light PVC corrugated conduit by its outer Ø, mm (typical DKC, IEK), and how much of
+# its inner cross-section cables may fill (decision 2026-11-13). Lines lying together on a
+# stretch share a conduit up to that fill (conduits); the largest shared conduit is the largest
+# size here. CONDUIT_SIZES and PAIR_SIZES give the same sizes as this fill
+CONDUIT_INNER: dict[int, float] = {16: 10.7, 20: 14.1, 25: 18.3, 32: 24.3}
+CONDUIT_FILL = 0.4
 # Flat ВВГ-Пнг(А) by cross-section: thickness × width, mm, the upper bound of the studio sizes
 # (docs/mounting.md, internal: not shown to clients)
 FLAT_CABLE: dict[float, tuple[float, float]] = {
@@ -104,6 +112,109 @@ def pair_diameter(a: str, b: str) -> int:
     types; an unreadable type counts as 2.5 mm²."""
     section = max(cable_section(a) or 2.5, cable_section(b) or 2.5)
     return next(d for limit, d in PAIR_SIZES if section <= limit)
+
+
+def cable_area(mark: str) -> float | None:
+    """Cross-section a cable takes in a conduit, mm²: the ellipse of a flat cable (FLAT_CABLE,
+    three cores), more cores in proportion; None for a cable without sizes."""
+    section = cable_section(mark)
+    size = FLAT_CABLE.get(section) if section is not None else None
+    if size is None:
+        return None
+    cores = re.match(r"\s*(\d+)", mark)
+    return math.pi / 4 * size[0] * size[1] * max(int(cores.group(1)) if cores else 3, 3) / 3
+
+
+def shared_diameter(marks: Sequence[str]) -> int | None:
+    """The smallest conduit the cables together fill to at most CONDUIT_FILL of its inner
+    cross-section, mm; None if the largest one is not enough or a cable has no sizes."""
+    areas = [cable_area(m) for m in marks]
+    if not areas or any(a is None for a in areas):
+        return None
+    total = sum(a for a in areas if a is not None)
+    for d, inner in sorted(CONDUIT_INNER.items()):
+        if total <= CONDUIT_FILL * math.pi / 4 * inner**2 + 1e-9:
+            return d
+    return None
+
+
+def conduits(runs: Sequence[Run]) -> list[tuple[int, tuple[str, ...]]]:
+    """Conduits of lines lying together on one stretch, (Ø, line ids), decision 2026-11-13:
+    power cables share a conduit while they fill it to at most CONDUIT_FILL (shared_diameter),
+    the thickest first, each into the first conduit it fits; a 12 V LED line from the panel lies
+    with the power cables (Run.lay). An internet or TV cable and a cable without sizes go in a
+    conduit of their own (conduit_diameter)."""
+    bins: list[tuple[str, list[int]]] = []  # kind of the lines and their indices in runs
+    alone: list[int] = []
+    areas = [cable_area(r.mark) for r in runs]
+    order = sorted(range(len(runs)), key=lambda k: (-(areas[k] or 0.0), k))
+    for k in order:
+        r = runs[k]
+        if areas[k] is None or (r.circuit == "low" and not r.led):
+            alone.append(k)
+            continue
+        kind = r.lay
+        for other, inside in bins:
+            marks = [runs[j].mark for j in (*inside, k)]
+            if other == kind and shared_diameter(marks) is not None:
+                inside.append(k)
+                break
+        else:
+            bins.append((kind, [k]))
+    groups = [sorted(inside) for _, inside in bins] + [[k] for k in alone]
+    out: list[tuple[int, tuple[str, ...]]] = []
+    for group in sorted(groups):
+        marks = [runs[k].mark for k in group]
+        d = shared_diameter(marks) if len(group) > 1 else None
+        out.append((d or conduit_diameter(marks[0]), tuple(runs[k].id for k in group)))
+    return out
+
+
+@dataclass(frozen=True)
+class ConduitPiece:
+    """A stretch of conduit that lines share (or one line has): on the ceiling or the floor a
+    bundle piece, on a wall the rise from the panel or the low-voltage cabinet."""
+
+    diameter: int
+    length: float  # mm
+    runs: tuple[str, ...]
+    surface: Surface
+
+
+def plan_conduits(wiring: Wiring, conduit: Conduit) -> list[ConduitPiece]:
+    """Conduit on the ceiling and on the floor (on the floor always, on the ceiling as chosen):
+    on each bundle piece (a piece of a line where the set of cables does not change,
+    electrical/bundles.bundles) the lines are packed into conduits; what a line has outside the
+    bundles (a slanted piece) is in a conduit of its own."""
+    out: list[ConduitPiece] = []
+    for route in ("ceiling", "floor"):
+        if not (route == "floor" or conduit in ("ceiling", "walls")):
+            continue
+        runs = [r for r in wiring.runs if r.route == route]
+        surface: Surface = "floor" if route == "floor" else "ceiling"
+        covered = [0.0] * len(runs)
+        for b in bundles(segments([r.path for r in runs]), {}):
+            for k in b.runs:
+                covered[k] += b.length
+            for d, ids in conduits([runs[k] for k in b.runs]):
+                out.append(ConduitPiece(d, b.length, ids, surface))
+        for r, mm in zip(runs, covered, strict=True):
+            if r.plan_mm - mm > AXIS_TOL_MM:
+                out.append(ConduitPiece(conduit_diameter(r.mark), r.plan_mm - mm, (r.id,), surface))
+    return out
+
+
+def source_conduits(wiring: Wiring, conduit: Conduit) -> list[ConduitPiece]:
+    """Conduit on the rise from the panel and from the low-voltage cabinet (floor routes always,
+    ceiling routes with conduit in the walls): the lines of one chase (chases.source_rises) are
+    packed into conduits."""
+    out: list[ConduitPiece] = []
+    for source in ("board", "media"):
+        for same in source_rises(wiring.runs, source):
+            if same[0].route == "floor" or conduit == "walls":
+                for d, ids in conduits(same):
+                    out.append(ConduitPiece(d, same[0].rise_start_mm, ids, "wall"))
+    return out
 
 
 def shared_pairs(wiring: Wiring) -> dict[str, Run]:
@@ -247,6 +358,9 @@ class PlanFixing:
     axis: str | None = None  # "h" / "v": the bundle line; fixed is its coordinate across
     fixed: float = 0.0
     first: bool = True  # the first spot of its bundle piece: the number of fixings is signed here
+    # Fixings at the spot by estimate item: a pad per bare cable, a clip per conduit (lines that
+    # share a conduit have one, conduits)
+    keys: tuple[str, ...] = ()
 
 
 def plan_fixings(
@@ -255,19 +369,27 @@ def plan_fixings(
     """Fixing spots of the plan routes: along each bundle piece (a piece of a line where the set
     of cables does not change, electrical/bundles.bundles) `offset` from its ends and evenly
     between, no farther apart than the step of the surface (in conduit or bare: on the floor
-    always in conduit, on the ceiling as chosen); the same along a slanted piece."""
+    always in conduit, on the ceiling as chosen); the same along a slanted piece. In conduit the
+    lines of a piece share conduits (conduits): a clip per conduit, by its diameter."""
     out: list[PlanFixing] = []
     for route in ("ceiling", "floor"):
         idx = [k for k, r in enumerate(wiring.runs) if r.route == route]
         surface: Surface = "floor" if route == "floor" else "ceiling"
-        step = norms.step(surface, route == "floor" or conduit in ("ceiling", "walls"))
+        in_conduit = route == "floor" or conduit in ("ceiling", "walls")
+        step = norms.step(surface, in_conduit)
         for b in bundles(segments([wiring.runs[k].path for k in idx]), {}):
-            ids = tuple(wiring.runs[idx[j]].id for j in b.runs)
+            lines = [wiring.runs[idx[j]] for j in b.runs]
+            ids = tuple(r.id for r in lines)
+            keys = (
+                tuple(f"{CLIP}.{d}" for d, _ in conduits(lines))
+                if in_conduit
+                else (PAD,) * len(lines)
+            )
             along = Vec(1.0, 0.0) if b.axis == "h" else Vec(0.0, 1.0)
             for n, t in enumerate(spots(b.length, step, norms.offset)):
                 pos = b.lo + t
                 at = Vec(pos, b.fixed) if b.axis == "h" else Vec(b.fixed, pos)
-                out.append(PlanFixing(route, at, along, ids, b.axis, b.fixed, n == 0))
+                out.append(PlanFixing(route, at, along, ids, b.axis, b.fixed, n == 0, keys))
         for k in idx:
             r = wiring.runs[k]
             for a, c in itertools.pairwise(r.path):
@@ -276,8 +398,9 @@ def plan_fixings(
                     continue  # along an axis: in a bundle (or a zero piece)
                 length = d.length()
                 u = d * (1 / length)
+                key = fixing_key(r, in_conduit)
                 out += [
-                    PlanFixing(route, a + u * t, u, (r.id,))
+                    PlanFixing(route, a + u * t, u, (r.id,), keys=(key,))
                     for t in spots(length, step, norms.offset)
                 ]
     return out
@@ -287,24 +410,28 @@ def fixing_counts(
     wiring: Wiring, conduit: Conduit, norms: MountingNorms = PRACTICE
 ) -> Counter[tuple[str, Surface]]:
     """Fixings by (estimate item, surface), as drawn, without the reserve: on the plan routes a
-    clip or a pad per line at each bundle spot (plan_fixings), on the rises along each rise; a
-    chain pair in one conduit by its clips of pair_diameter."""
+    pad per bare cable or a clip per conduit at each bundle spot (plan_fixings), on the rises
+    along each rise; a chain pair in one conduit by its clips of pair_diameter; the rise from the
+    panel or the cabinet in conduit by the conduits its lines share (source_conduits)."""
     count: Counter[tuple[str, Surface]] = Counter()
-    runs = {r.id: r for r in wiring.runs}
     for spot in plan_fixings(wiring, conduit, norms):
-        for rid in spot.runs:
-            r = runs[rid]
-            plan_in, surface, _ = fixing_spans(r, conduit)[0]
-            count[(fixing_key(r, plan_in), surface)] += 1
+        surface: Surface = "floor" if spot.route == "floor" else "ceiling"
+        for key in spot.keys:
+            count[(key, surface)] += 1
+    from_source: set[str] = set()
+    for piece in source_conduits(wiring, conduit):
+        from_source.update(piece.runs)
+        n = len(spots(piece.length, norms.step("wall", True), norms.offset))
+        count[(f"{CLIP}.{piece.diameter}", "wall")] += n
     pairs = shared_pairs(wiring)
     for r in wiring.runs:
         out = pairs.get(r.id)
-        inside = r.id in wiring.shared_rises
+        inside = r.id in wiring.shared_rises or r.id in from_source
         for f in run_fixings(r, conduit, norms, inside=inside, pair=out is not None):
             if f.piece is not None:
                 continue  # the plan part: by bundle spots above
-            key = f"{CLIP}.{pair_diameter(r.mark, out.mark)}" if f.pair and out else None
-            count[(key or fixing_key(r, f.in_conduit), f.surface)] += 1
+            paired = f"{CLIP}.{pair_diameter(r.mark, out.mark)}" if f.pair and out else None
+            count[(paired or fixing_key(r, f.in_conduit), f.surface)] += 1
     return count
 
 
@@ -370,9 +497,21 @@ TEXT: dict[str, dict[str, str]] = {
     },
     "one_line": {
         "ru": "Крепления косы — в одну линию: клипсы гофры соединяются пазом, площадки кабеля "
-        "без гофры ставятся рядом; на одном месте — по креплению на каждый кабель.",
+        "без гофры ставятся рядом; на одном месте — по креплению на каждую гофру и на каждый "
+        "кабель без гофры.",
         "uk": "Кріплення коси — в одну лінію: кліпси гофри з'єднуються пазом, площадки кабелю "
-        "без гофри ставляться поруч; на одному місці — по кріпленню на кожен кабель.",
+        "без гофри ставляться поруч; на одному місці — по кріпленню на кожну гофру і на кожен "
+        "кабель без гофри.",
+    },
+    "shared": {
+        "ru": "Общая гофра: кабели, которые идут рядом, — в одной гофре, заполнение не больше "
+        "{pct} % внутреннего сечения (до Ø{d}); интернет и ТВ — в своей гофре.",
+        "uk": "Спільна гофра: кабелі, що йдуть поруч, — в одній гофрі, заповнення не більше "
+        "{pct} % внутрішнього перерізу (до Ø{d}); інтернет і ТБ — у своїй гофрі.",
+    },
+    "apart": {
+        "ru": "Интернет и ТВ — не ближе {mm} мм от силового кабеля, пересечение — под 90°.",
+        "uk": "Інтернет і ТБ — не ближче {mm} мм від силового кабелю, перетин — під 90°.",
     },
     "sheet": {
         "ru": "На развёртке: линия поперёк косы — место крепления, на потолке и на спусках по "
@@ -437,6 +576,12 @@ def mounting_notes(
         text("bend", language, k=f"{norms.bend_factor:g}"),
         text("bundle", language, n=norms.bend_reserve),
         text(f"conduit_{elec.conduit_level}", language),
+        text("shared", language, pct=f"{CONDUIT_FILL * 100:g}", d=max(CONDUIT_INNER)),
+        *(
+            [text("apart", language, mm=f"{APART:g}")]
+            if any(p.type in (PointType.DATA, PointType.TV) for p in elec.points)
+            else []
+        ),
         text("sheet", language),
         text("source", language, s=norms.source[language]),
     ]

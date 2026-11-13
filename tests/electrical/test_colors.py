@@ -77,3 +77,18 @@ def test_family_colors_only_present_families_and_used_shades() -> None:
         Kind.LIGHT: (rgb(FAMILIES[Kind.LIGHT][0]),),
         Kind.SOCKETS: (rgb(sockets[0]), rgb(sockets[1])),
     }
+
+
+def test_led_lines_from_the_panel_get_a_family_of_their_own() -> None:
+    """12 V lines from the LED supplies in the panel: one colour, a legend row of their own."""
+    from floorplan_engine.electrical.colors import LED_FAMILY, LED_LINE, rgb
+
+    points = [
+        {"id": "o1", "room": "r", "wall": "w1", "offset": 500, "height": 1400,
+         "type": "led_output", "group": "QF1"},
+    ]  # fmt: skip
+    room = Electrical.model_validate({"points": points})
+    board = Electrical.model_validate({"points": points, "led_supply": "board"})
+    assert LED_FAMILY not in family_colors(room)
+    assert family_colors(board)[LED_FAMILY] == (rgb(LED_LINE),)
+    assert LED_LINE not in {c for shades in FAMILIES.values() for c in shades}

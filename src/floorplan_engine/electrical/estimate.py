@@ -78,7 +78,9 @@ from floorplan_engine.electrical.mounting import (
     conduit_diameter,
     fixings,
     pair_diameter,
+    plan_conduits,
     shared_pairs,
+    source_conduits,
 )
 from floorplan_engine.electrical.panel import BoardPanel, busbars, device_name
 from floorplan_engine.electrical.terms import TermDecision
@@ -473,6 +475,14 @@ TEXT: dict[str, dict[str, str]] = {
         "введення — на кожен кінець гофри біля розподільчої коробки і щита, у підрозетник гофра "
         "заходить без введення",
     },
+    "note_shared_conduit": {
+        "ru": "Общая гофра: линии, которые идут рядом по потолку, по полу и на подъёме от щита, — "
+        "в одной гофре, пока заполняют не больше {pct} % её внутреннего сечения (до Ø{d}); "
+        "интернет и ТВ — в своей гофре",
+        "uk": "Спільна гофра: лінії, що йдуть поруч по стелі, по підлозі й на підйомі від щита, — "
+        "в одній гофрі, доки заповнюють не більше {pct} % її внутрішнього перерізу (до Ø{d}); "
+        "інтернет і ТБ — у своїй гофрі",
+    },
     "note_loop_conduit": {
         "ru": "Шлейф розеток: на спуске к точке приход и уход — в одной гофре (Ø25 для 3×1,5, "
         "Ø32 для 3×2,5), штроба узкая, клипсы — один ряд: {n} точ.",
@@ -773,15 +783,25 @@ def conduit_mm(run: Run, conduit: Conduit) -> float:
 
 
 def conduit_lengths(wiring: Wiring, conduit: Conduit) -> dict[int, float]:
-    """Conduit by diameter, mm, without margin: each line's conduit_mm in the conduit of its
+    """Conduit by diameter, mm, without margin. On the ceiling and on the floor lines lying
+    together share a conduit up to its fill (decision 2026-11-13, mounting.plan_conduits), so do
+    the lines of a chase on the rise from the panel or the cabinet (mounting.source_conduits).
+    The rest of a line's conduit_mm (drops to the points, cable ends) is in the conduit of its
     cable; a chain pair in one conduit (mounting.shared_pairs) — the drop once, in a conduit of
     pair_diameter."""
     out: dict[int, float] = {}
+    shared = [*plan_conduits(wiring, conduit), *source_conduits(wiring, conduit)]
+    for piece in shared:
+        out[piece.diameter] = out.get(piece.diameter, 0.0) + piece.length
+    from_source = {rid for piece in shared if piece.surface == "wall" for rid in piece.runs}
     pairs = shared_pairs(wiring)
     for r in wiring.runs:
         mm = conduit_mm(r, conduit)
-        if r.id in wiring.shared_rises:  # its rise is in the conduit of the cable coming in
-            mm -= r.rise_start_mm
+        if mm <= 0:
+            continue
+        mm -= r.plan_mm  # the plan part: in the shared conduits above
+        if r.id in wiring.shared_rises or r.id in from_source:
+            mm -= r.rise_start_mm  # in the conduit of the cable coming in, or a shared one
         if (out_run := pairs.get(r.id)) is not None:
             mm -= r.rise_end_mm
             d = pair_diameter(r.mark, out_run.mark)

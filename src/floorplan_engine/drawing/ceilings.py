@@ -266,8 +266,8 @@ def _draw(
         pad = STROKE_HALF * scale
         p0, p1 = at(fx.at + across * (lo - pad)), at(fx.at + across * (hi + pad))
         pen.line(p0, p1, LW_WALL, DARK)
-        if len(fx.runs) > 1 and fx.first:
-            s = f"×{len(fx.runs)}"
+        if len(fx.keys) > 1 and fx.first:
+            s = f"×{len(fx.keys)}"
             where = p1 + across * (0.4 + text_width(s, LABEL_MM) / 2)
             pen.label(s, where, align=TextEntityAlignment.MIDDLE_CENTER)
     for bend in bends:

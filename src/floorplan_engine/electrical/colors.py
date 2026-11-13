@@ -14,7 +14,7 @@ from collections import Counter
 
 from floorplan_engine.electrical.groups import group_key
 from floorplan_engine.electrical.loads import Kind, group_kind
-from floorplan_engine.model.schema import Electrical
+from floorplan_engine.model.schema import Electrical, PointType
 
 LOW_VOLTAGE = "low"  # family of groups that are not in the panel (data, TV)
 
@@ -46,6 +46,10 @@ FAMILIES: dict[str, tuple[str, ...]] = {
         "#8cbf5f",  # lime
     ),
 }
+
+
+LED_FAMILY = "led"  # 12 V lines from the LED supplies in the panel: one colour for all
+LED_LINE = "#9b59d0"  # violet: no group family uses it
 
 
 def rgb(hex_color: str) -> int:
@@ -83,8 +87,19 @@ def family_colors(elec: Electrical) -> dict[str, tuple[int, ...]]:
     """Families present in the project, in FAMILIES order, with the shades their groups use (for
     the wiring legend)."""
     count = Counter(group_families(elec).values())
-    return {
+    out = {
         name: tuple(rgb(c) for c in shades[: count[name]])
         for name, shades in FAMILIES.items()
         if count[name]
     }
+    if led_lines_drawn(elec):
+        out[LED_FAMILY] = (rgb(LED_LINE),)
+    return out
+
+
+def led_lines_drawn(elec: Electrical) -> bool:
+    """The project has 12 V lines from the panel: LED supplies in the panel and a grouped LED
+    output (wiring.box_wiring)."""
+    return elec.led_supply == "board" and any(
+        p.group and p.type is PointType.LED_OUTPUT for p in elec.points
+    )

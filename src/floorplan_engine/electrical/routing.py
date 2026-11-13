@@ -19,6 +19,12 @@ without a turn penalty, then the path is pulled tight (pull): corners are cut wh
 segment lies fully in the free area at least CLEARANCE from walls. The approach to a wall
 point is as usual, perpendicular to the wall. This is only for ceiling and floor: on walls a
 route is always vertical (chases in chases.py).
+
+Low-voltage apart from power (decision 2026-11-13, apart_cells): an internet or TV cable keeps
+APART from a power cable running the same way and crosses it at 90°. A step along a power piece
+closer than APART costs APART_COST more, a step across it costs nothing extra, so the route goes
+beside the power bundle and comes close only where there is no other way (at the panel, at a
+socket block). Only for routes at right angles: at any angle there is no "the same way".
 """
 
 from __future__ import annotations
@@ -48,6 +54,8 @@ DIRS8 = ((1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0), (-1, -1), (0, -1), (1, -1))
 BEND_COST = TURN_COST / 2  # mm: penalty for a 45° bend
 WALL_DRILL_MAX = 300.0  # mm: thicker non-bearing walls (shafts, pylons, boxes) are not drilled
 WALL_PASS_COST = 1000.0  # mm: one pass through a drillable wall weighs as this much cable
+APART = 150.0  # mm: a low-voltage cable runs no closer than this beside a power cable
+APART_COST = 3000.0  # mm: one grid step beside a power cable closer than APART weighs this much
 
 
 def free_area(geoms: Sequence[RoomGeometry]) -> BaseGeometry:
@@ -152,6 +160,9 @@ class Grid:
     penalty: dict[int, float] | None = None  # extra cost to enter a cell, mm (plumbing)
     mult: list[float] | None = None  # cost per mm of a step into the cell (sewer: cheaper by walls)
     tag: list[int] | None = None  # cell kind for pruning in the search (sewer, network)
+    # Cells closer than APART to a power cable going along x and along y (apart_cells): a step
+    # the same way there costs APART_COST more
+    apart: tuple[frozenset[int], frozenset[int]] | None = None
 
     @classmethod
     def of(cls, area: BaseGeometry) -> Grid:
@@ -282,6 +293,10 @@ class Grid:
                 c = cost + STEP + (TURN_COST if nd != d else 0.0)
                 if self.penalty is not None:
                     c += self.penalty.get(nxt, 0.0)
+                if self.apart is not None:
+                    beside = self.apart[0 if dy == 0 else 1]
+                    if nxt in beside or cell in beside:
+                        c += APART_COST
                 ns = nxt * 4 + nd
                 if c < dist.get(ns, float("inf")):
                     dist[ns] = c
@@ -433,7 +448,9 @@ class Router:
     """Routes from one source to many targets in a given area. any_angle allows any angle
     (economy): the shortest path is pulled tight instead of running at 90°. walls are bands of
     drillable walls (drillable_walls): open, but a pass costs WALL_PASS_COST per cell; the pull
-    stays in the area itself, so it does not cut through a wall where the search did not."""
+    stays in the area itself, so it does not cut through a wall where the search did not.
+    beside are the routes of power cables a low-voltage route keeps APART from (apart_cells);
+    at any angle they are not looked at."""
 
     def __init__(
         self,
@@ -441,6 +458,7 @@ class Router:
         source: End,
         any_angle: bool = False,
         walls: Sequence[Polygon] = (),
+        beside: Sequence[Sequence[Vec]] = (),
     ) -> None:
         if walls:
             self.grid = Grid.of(shapely.unary_union([area, *walls]))
@@ -448,11 +466,22 @@ class Router:
             self.grid.penalty = _wall_penalty(self.grid, walls)
         else:
             self.grid = Grid.of(area)
+        if beside and not any_angle:
+            self.grid.apart = apart_cells(self.grid, beside)
+        self.area = area
+        self.walls = walls
         self.source = source
         self.any_angle = any_angle
         self.start = self.grid.nearest_free(source.node, open_only=True)
         search = self.grid.search_any if any_angle else self.grid.search
         self.prev, self.dist = search(self.start)
+
+    def apart_from(self, beside: Sequence[Sequence[Vec]]) -> Router:
+        """The same router for a low-voltage cable that keeps APART from the given power
+        routes; itself when there is nothing to keep from (or at any angle)."""
+        if not beside or self.any_angle:
+            return self
+        return Router(self.area, self.source, self.any_angle, self.walls, beside)
 
     def cost(self, node: Vec) -> float:
         """Route cost to the point (with turns); infinity if unreachable."""
@@ -485,6 +514,67 @@ def _wall_penalty(grid: Grid, walls: Sequence[Polygon]) -> dict[int, float]:
             if hit:
                 out[k] = max(out.get(k, 0.0), cost)
     return out
+
+
+def apart_cells(
+    grid: Grid, paths: Sequence[Sequence[Vec]]
+) -> tuple[frozenset[int], frozenset[int]]:
+    """Free cells closer than APART to a piece of the routes: beside a piece along x (first set)
+    and beside a piece along y (second). Slanted pieces are skipped."""
+    along_x: set[int] = set()
+    along_y: set[int] = set()
+    reach = APART - 1e-6
+
+    def cells(lo_x: float, hi_x: float, lo_y: float, hi_y: float) -> list[int]:
+        ix0 = max(math.ceil((lo_x - reach - grid.x0) / STEP), 0)
+        ix1 = min(math.floor((hi_x + reach - grid.x0) / STEP), grid.nx - 1)
+        iy0 = max(math.ceil((lo_y - reach - grid.y0) / STEP), 0)
+        iy1 = min(math.floor((hi_y + reach - grid.y0) / STEP), grid.ny - 1)
+        return [
+            iy * grid.nx + ix
+            for iy in range(iy0, iy1 + 1)
+            for ix in range(ix0, ix1 + 1)
+            if grid.free[iy * grid.nx + ix]
+        ]
+
+    for path in paths:
+        for a, b in itertools.pairwise(path):
+            lo_x, hi_x = min(a.x, b.x), max(a.x, b.x)
+            lo_y, hi_y = min(a.y, b.y), max(a.y, b.y)
+            if hi_y - lo_y <= 0.5 < hi_x - lo_x:
+                along_x.update(cells(lo_x, hi_x, lo_y, hi_y))
+            elif hi_x - lo_x <= 0.5 < hi_y - lo_y:
+                along_y.update(cells(lo_x, hi_x, lo_y, hi_y))
+    return frozenset(along_x), frozenset(along_y)
+
+
+def beside_mm(path: Sequence[Vec], others: Sequence[Sequence[Vec]]) -> float:
+    """How much of a route at right angles runs the same way as the other routes closer than
+    APART, mm: what a low-voltage cable could not keep apart from power."""
+    total = 0.0
+    spans: dict[bool, list[tuple[float, float, float]]] = {True: [], False: []}
+    for other in others:
+        for a, b in itertools.pairwise(other):
+            if abs(a.y - b.y) <= 0.5 < abs(a.x - b.x):
+                spans[True].append((a.y, min(a.x, b.x), max(a.x, b.x)))
+            elif abs(a.x - b.x) <= 0.5 < abs(a.y - b.y):
+                spans[False].append((a.x, min(a.y, b.y), max(a.y, b.y)))
+    for a, b in itertools.pairwise(path):
+        horizontal = abs(a.y - b.y) <= 0.5 < abs(a.x - b.x)
+        if not horizontal and not (abs(a.x - b.x) <= 0.5 < abs(a.y - b.y)):
+            continue
+        fixed = a.y if horizontal else a.x
+        lo, hi = (min(a.x, b.x), max(a.x, b.x)) if horizontal else (min(a.y, b.y), max(a.y, b.y))
+        near = sorted(
+            (max(lo, s_lo), min(hi, s_hi))
+            for s_fixed, s_lo, s_hi in spans[horizontal]
+            if abs(s_fixed - fixed) < APART - 1e-6 and min(hi, s_hi) > max(lo, s_lo)
+        )
+        end = lo
+        for s_lo, s_hi in near:
+            total += max(s_hi - max(s_lo, end), 0.0)
+            end = max(end, s_hi)
+    return total
 
 
 def length(path: Sequence[Vec]) -> float:
