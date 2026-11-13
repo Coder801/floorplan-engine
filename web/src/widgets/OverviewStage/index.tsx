@@ -305,7 +305,7 @@ export function OverviewSummary({ setup, questions, onWizard, onDrawer, refreshi
                   <StepMark done={!todo} label={t(todo ? "overview.progress.open" : "overview.progress.decided")} />
                   {todo && onWizard
                     ? <Button variant="link" className={css.stepLink} onClick={() => onWizard(id)}>{name}</Button>
-                    : <span>{name}</span>}
+                    : <span className={cx(setup.declined.includes(id) && css.declined)}>{name}</span>}
                 </li>
               );
             })}

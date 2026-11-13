@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { OverviewMaster, Question, Variants, VariantSummary } from "@/shared/types";
 import { ART } from "@/widgets/WizardArt";
-import { UNKNOWN, applyPick, chasesKept, initialPicks, invalid, isRequired, missingSteps, optionKey, otherQuestions, setupProgress, variantOf, wizardBody, wizardSteps, type Picks, type Setup, type Step } from "./steps";
+import { UNKNOWN, applyPick, chasesKept, initialPicks, invalid, isDeclined, isRequired, missingSteps, optionKey, otherQuestions, setupProgress, variantOf, wizardBody, wizardSteps, type Picks, type Setup, type Step } from "./steps";
 
 const q = (id: string, assumption: unknown, state = "open"): Question =>
   ({ id, stage: "panel", severity: "major", state, text: id, answer: "choice", assumption });
@@ -375,6 +375,10 @@ describe("сколько осталось решить", () => {
     expect(setupProgress(setup({ answers })).open).toEqual([]);
     expect(setupProgress(setup({ answers: { ...answers, panel_input: { accept: true } } })).open).toEqual([]);
   });
+  it("шаги с ответом «не будет» — отдельным списком", () => {
+    expect(setupProgress(setup()).declined).not.toContain("standby");
+    expect(setupProgress(setup({ answers: { panel_input: 40, panel_backup: "none" } })).declined).toContain("standby");
+  });
 });
 
 describe("проверки", () => {
@@ -444,6 +448,21 @@ describe("название карточки", () => {
   it("трасса — как у варианта, остальные шаги — свои варианты", () => {
     expect(optionKey("route", "floor")).toBe("variant.routes.floor");
     expect(optionKey("breakers", "lines")).toBe("wizard.steps.breakers.options.lines.name");
+  });
+});
+
+describe("шаг с ответом «не будет»", () => {
+  it("отказ от самой вещи — да; другой ответ, «не знаю» и пустой шаг — нет", () => {
+    expect(isDeclined("rough", "no")).toBe(true);
+    expect(isDeclined("conduit", "none")).toBe(true);
+    expect(isDeclined("pv", "0")).toBe(true);
+    expect(isDeclined("master", "no")).toBe(true);
+    expect(isDeclined("rough", "yes")).toBe(false);
+    expect(isDeclined("conduit", UNKNOWN)).toBe(false);
+    expect(isDeclined("standby", undefined)).toBe(false);
+  });
+  it("«нет» про связь N–PE — факт об инверторе, а не отказ", () => {
+    expect(isDeclined("npe", "no")).toBe(false);
   });
 });
 

@@ -56,6 +56,7 @@
   display: grid; gap: var(--space-2); margin: 0; padding: 0; list-style: none;
   li { display: grid; grid-template-columns: 16px 1fr; align-items: center; gap: var(--space-2); color: var(--muted); }
   .todo { color: var(--text); }
+  .declined { text-decoration: line-through; }  // decided as "there will be none": a check, the name struck
 }
 // The way into the wizard is the main action of the side panel: the full width, a frame in the
 // text colour so it stands out from the ordinary buttons

@@ -277,6 +277,14 @@ export const optionKey = (step: StepId, value: string): string =>
 
 export const isPicked = (pick: string | undefined) => pick !== undefined && pick !== "";
 
+// The answer "there will be none" of a step that asks whether to have a thing at all: the step is
+// decided, and its name in "What is decided" on the overview is struck through. The N-PE step is not here: its
+// "no" is a fact about the inverter, and it adds a contactor to the panel
+const DECLINED: Partial<Record<StepId, string>> = {
+  conduit: "none", rough: "no", labels: "no", insulation: "no", protection: "no", standby: "no", pv: "0", master: "no",
+};
+export const isDeclined = (id: StepId, pick: string | undefined) => pick !== undefined && DECLINED[id] === pick;
+
 // Steps that may stay without an answer: they only move groups inside the panel the model has
 // already put together. Every other step changes the price (cable, work, panel devices), so it
 // is required: with one of them unanswered nothing is recalculated. "Don't know" is an answer
@@ -331,7 +339,7 @@ export function wizardBody(setup: Setup, picks: Picks): WizardBody {
 
 // How far the setup is: steps of the project and those still without a decision. A step of the
 // variant always holds a value, and an unchanged one writes nothing, so only questions stay open
-export interface SetupProgress { total: number; open: StepId[]; steps: StepId[] }
+export interface SetupProgress { total: number; open: StepId[]; steps: StepId[]; declined: StepId[] }
 
 export function setupProgress(setup: Setup): SetupProgress {
   const picks = initialPicks(setup);
@@ -340,6 +348,7 @@ export function setupProgress(setup: Setup): SetupProgress {
     total: steps.length,
     open: steps.filter((s) => !isPicked(picks[s.id])).map((s) => s.id),
     steps: steps.map((s) => s.id),
+    declined: steps.filter((s) => isDeclined(s.id, picks[s.id])).map((s) => s.id),
   };
 }
 
