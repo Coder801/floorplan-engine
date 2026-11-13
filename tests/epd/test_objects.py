@@ -18,7 +18,7 @@ from floorplan_engine.epd.objects import (
     plan_chains,
     wire_titles,
 )
-from floorplan_engine.model.schema import Electrical, Plan
+from floorplan_engine.model.schema import Electrical, ElectricalPoint, Plan
 from floorplan_engine.sheets.document import build_project_document
 from floorplan_engine.validation.plan import validate_plan
 from tests.conftest import make_plan
@@ -89,12 +89,15 @@ def test_socket_card_names_the_block_and_carries_its_scheme() -> None:
     s1 = cards["point:s1"]
     point = next(p for p in elec.points if p.id == "s1")
     assert "2-постовая" in s1.title
+    # the number from the sheet, not the model id
+    assert "№" in s1.title and "s1" not in s1.title
     assert (
         s1.block is not None
         and s1.block["posts"] == 2
         and s1.block["y"] == round(point.height or 0)
     )
     assert s1.block["wall"] in cards
+    assert s1.block["items"] == [{"type": "socket", "posts": 2, "own": True}]
     assert s1.as_dict()["block"] == s1.block
     assert "block" not in cards["room:r"].as_dict()
 
@@ -331,3 +334,30 @@ def test_light_chains_bundle_switches_that_share_a_light() -> None:
     ]  # fmt: skip
     assert all(chains[k] == both for k in both)  # a click on any of them shows all of it
     assert chains["switch_link:sw3"] == ["point:sw3", "switch_link:sw3", "point:d3"]
+
+
+def test_frame_card_shows_every_point_of_the_frame() -> None:
+    """Decision 2026-11-13: the hint of a point draws the whole frame it stands in (sockets,
+    a switch, internet at one spot), with the point itself marked."""
+    plan, contours, elec, _ = _model()
+    s1 = next(p for p in elec.points if p.id == "s1")
+    spot = {"room": s1.room, "wall": s1.wall, "offset": s1.offset, "height": s1.height}
+    extra = [
+        ElectricalPoint.model_validate({**spot, "id": "kx", "type": "switch", "group": s1.group}),
+        ElectricalPoint.model_validate({**spot, "id": "ix", "type": "data"}),
+    ]
+    elec = elec.model_copy(update={"points": [*elec.points, *extra]})
+    cards = describe_objects(plan, contours, elec, None)
+    frame = cards["point:ix"].block
+    assert frame is not None and frame["posts"] == 4
+    items: Any = frame["items"]
+    assert [(i["type"], i["posts"], i["own"]) for i in items] == [
+        ("socket", 2, False),
+        ("switch", 1, False),
+        ("data", 1, True),  # low voltage stands last, to the right
+    ]
+    switch = cards["point:kx"].block
+    assert switch is not None
+    keys: Any = switch["items"]
+    assert [i["own"] for i in keys] == [False, True, False]
+    assert switch["x"] == frame["x"] and switch["wall"] == frame["wall"]

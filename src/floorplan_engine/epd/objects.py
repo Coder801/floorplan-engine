@@ -26,11 +26,16 @@ from floorplan_engine.electrical.ceilings import (
     dimension_key,
     dimension_spots,
 )
-from floorplan_engine.electrical.elevations import WaterMap, behind_text, wall_elevations
+from floorplan_engine.electrical.elevations import (
+    PointView,
+    WaterMap,
+    behind_text,
+    wall_elevations,
+)
 from floorplan_engine.electrical.mounting import text as mounting_text
 from floorplan_engine.electrical.panel import BoardPanel, build_panel
 from floorplan_engine.electrical.panel_text import amps, kw
-from floorplan_engine.electrical.point_numbers import BLOCK_TYPES, block_name
+from floorplan_engine.electrical.point_numbers import BLOCK_TYPES, block_name, number_points
 from floorplan_engine.electrical.routing import opening_strip
 from floorplan_engine.electrical.switch_links import SwitchLink, switch_links
 from floorplan_engine.electrical.wiring import RESERVE
@@ -48,6 +53,7 @@ from floorplan_engine.model.schema import (
     Opening,
     OpeningType,
     Plan,
+    PointType,
 )
 from floorplan_engine.model.texts import Language, tr
 from floorplan_engine.model.wall_names import wall_names
@@ -142,6 +148,8 @@ TEXT: dict[str, dict[str, str]] = {
     "water_on_wall": {"ru": "Подводов воды и выпусков", "uk": "Підводів води і випусків"},
 }
 CARD_LOADS = 8  # loads shown on a device card; the rest as "N more"
+# Points whose pinned hint draws the frame they stand in, even when alone in it
+FRAME_TYPES = (*BLOCK_TYPES, PointType.SWITCH, PointType.PASS_SWITCH)
 
 
 def text(key: str, language: Language, **values: object) -> str:
@@ -253,15 +261,25 @@ def describe_objects(
             if e.water:
                 rows.append((text("water_on_wall", lang), str(len(e.water))))
             out[f"elevation:{e.key}"] = ObjectInfo(e.title, tuple(rows))
+            # The whole frame in the hint of each of its points (decision 2026-11-13): sockets,
+            # switches, internet and TV at one spot, left to right; own marks the point itself
+            frames: dict[tuple[int, int], list[PointView]] = {}
             for pv in e.points:
-                if pv.type in BLOCK_TYPES:
-                    block = {
-                        "posts": pv.posts,
-                        "x": round(pv.x),
-                        "y": round(pv.y),
-                        "wall": f"elevation:{e.key}",
-                    }
-                    out[f"point:{pv.id}"] = replace(out[f"point:{pv.id}"], block=block)
+                frames.setdefault((round(pv.x), round(pv.y)), []).append(pv)
+            for pv in e.points:
+                same = sorted(frames[(round(pv.x), round(pv.y))], key=lambda q: q.slot)
+                if pv.type not in FRAME_TYPES and len(same) == 1:
+                    continue
+                block = {
+                    "posts": sum(q.posts for q in same),
+                    "x": round(pv.x),
+                    "y": round(pv.y),
+                    "wall": f"elevation:{e.key}",
+                    "items": [
+                        {"type": q.type.value, "posts": q.posts, "own": q.id == pv.id} for q in same
+                    ],
+                }
+                out[f"point:{pv.id}"] = replace(out[f"point:{pv.id}"], block=block)
         panel = build_panel(plan, elec)
         if panel is not None:
             out.update(device_cards(panel, lang))
@@ -319,7 +337,7 @@ def _electrical(
     wiring: Wiring | None,
     codes: Mapping[tuple[str, str], str] | None = None,
 ) -> dict[str, ObjectInfo]:
-    """Cards of electrical objects; codes are wall codes ("2.В") by (room, wall), else the id."""
+    """Cards of electrical objects; codes are wall codes ("2.C") by (room, wall), else the id."""
     lang = plan.language
 
     def wall(room: str, wall_id: str | None) -> str:
@@ -351,6 +369,9 @@ def _electrical(
         pt = points[end]
         return f"{_point_name(pt, lang)}, {places[pt.id]}"
 
+    # The title carries the point's number from the electrical sheet and the "Points" table, not
+    # its model id (hall_socket_9): the id is a key for the files, a person does not need it
+    numbers = number_points(plan, elec)
     for pt in elec.points:
         rows = [(text("room", lang), places[pt.id])]
         if pt.ceiling is None:
@@ -380,7 +401,9 @@ def _electrical(
                 (text("feed", lang), src),
                 (text("length", lang), f"{_m(run.length_mm)} м"),
             ]
-        out[f"point:{pt.id}"] = ObjectInfo(f"{block_name(pt, lang)} · {pt.id}", tuple(rows))
+        out[f"point:{pt.id}"] = ObjectInfo(
+            f"{block_name(pt, lang)} · № {numbers[pt.id]}", tuple(rows)
+        )
 
     if wiring is not None:
         for run in wiring.runs:
@@ -480,7 +503,7 @@ def wire_titles(plan: Plan, elec: Electrical, wiring: Wiring) -> dict[str, str]:
 
 
 def _dimension_cards(view: CeilingView, wiring: Wiring, lang: Language) -> dict[str, ObjectInfo]:
-    """Ceiling scale values (decision 2026-11-12): "1450 мм от стены 1.А" and how many spots it
+    """Ceiling scale values (decision 2026-11-12): "1450 мм от стены 1.A" and how many spots it
     measures; hovering one lights its leaders and spots."""
     out: dict[str, ObjectInfo] = {}
     lows, rights = dimension_spots(view, wiring)
