@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
@@ -22,6 +23,8 @@ from floorplan_engine.electrical.panel import (
     BoardPanel,
     Device,
     build_panel,
+    busbar_runs,
+    busbars,
     choose_enclosure,
     device_name,
     din_rows,
@@ -675,3 +678,39 @@ def test_short_device_names_for_the_panel_table() -> None:
     assert device_name(by_group["QF1"], "ru", short=True) == "АВ 1P C16"
     assert device_name(by_group["QF1"], "ru") == "Автомат 1P C16"
     assert device_name(by_group["QF2"], "uk", short=True).startswith("АВДТ 1P+N C16")
+
+
+def _rails(*rows: list[Device], phases: int = 1) -> BoardPanel:
+    devices = tuple(d for r in rows for d in r)
+    return cast(BoardPanel, SimpleNamespace(devices=devices, rows=rows, phases=phases))
+
+
+def test_busbar_runs_follow_how_the_rails_are_fed() -> None:
+    """A comb busbar piece per run of neighbours fed together: shared devices are joined by
+    jumpers, a lone device is wired, backup and the groups under a shared RCD get their own
+    pieces; RCBO rails take a double comb (L + N)."""
+    common = [
+        Device("QS1", DeviceKind.INPUT, "C63 2P", ""),
+        Device("KV1", DeviceKind.RELAY, "", ""),
+    ]
+    main = _breakers(5)
+    backup = [replace(d, id=f"QF{k}", group=f"QF{k}", reserve=True) for k, d in enumerate(main, 6)]
+    rcd = Device("QD1", DeviceKind.RCD, "40 А 30 мА", "", feeds=("QF11", "QF12"))
+    wet = [Device(f"QF{k}", DeviceKind.BREAKER, "C16", "", group=f"QF{k}") for k in (11, 12)]
+    diffs = _breakers(3, DeviceKind.DIFF)
+    lone = [Device("QF20", DeviceKind.DIFF, "C16", "", group="QF20", reserve=True)]
+    panel = _rails(common, main + backup[:2], [*main[:1], rcd, *wet], diffs + lone)
+    # 5 main + 2 backup; a breaker with the RCD (1 + 2 modules), two under the RCD; 3 RCBOs
+    assert busbar_runs(panel) == [(1, 5), (1, 2), (1, 3), (1, 2), (2, 6)]
+    assert busbars(panel) == {1: 1, 2: 1}  # all pieces are cut from one 1 m bar per kind
+    assert busbar_runs(_rails(common)) == [] and busbars(_rails(common)) == {}
+
+
+def test_busbars_three_phase_and_bars_by_length() -> None:
+    main, backup = _breakers(12), [replace(d, reserve=True) for d in _breakers(4)]
+    three = _rails(main, backup, _breakers(2, DeviceKind.DIFF), phases=3)
+    # Main bus on three phases (RCBOs with N), the backup bus on one
+    assert busbar_runs(three) == [(3, 12), (1, 4), (4, 4)]
+    assert busbars(three) == {1: 1, 3: 1, 4: 1}
+    # 5 rails of 12 modules: 60 modules do not fit a 54-module bar
+    assert busbars(_rails(*[_breakers(12) for _ in range(5)])) == {1: 2}

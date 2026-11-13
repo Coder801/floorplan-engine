@@ -40,7 +40,7 @@
 | 4 | Установка корпуса щита (`board`) | `work.board_install` | `board_enclosure`, `dc_enclosure` (щит АКБ) | `optional` | — |
 | 5 | Замер изоляции (`insulation`) | `work.insulation_test` | — | `required`: протокол, фото или PDF | 2, 3 |
 | 6 | Черновой свет (`rough_light`) | `work.rough_light`, `work.rough_switch` | `rough_holder`, `rough_lamp`, `rough_switch` | `none` | 2 |
-| 7 | Сборка щита (`assembly`) | `work.board_module`, `work.panel_labels` (маркировка, с 2026-11-13 — своя позиция) | `breaker`, `diff`, `rcd`, `input`, `relay`, `spd`, `changeover`, `ats`, `contactor`, `feed`, `output`, `dc_battery`, `dc_breaker`, `dc_spd` | `optional` | 4, 5 |
+| 7 | Сборка щита (`assembly`) | `work.board_module`, `work.panel_labels` (маркировка, с 2026-11-13 — своя позиция) | `breaker`, `diff`, `rcd`, `input`, `relay`, `spd`, `changeover`, `ats`, `contactor`, `feed`, `output`, `busbar`, `dc_battery`, `dc_breaker`, `dc_spd` | `optional` | 4, 5 |
 | 8 | Механизмы и светильники (`devices`) | `work.mechanism`, `work.led_psu`, `work.led_psu_din` | `socket`, `switch1`, `switch2`, `pass_switch`, `data`, `tv`, `frame`, `light`, `downlight`, `pendant`, `sconce`, `led_output`, `outlet`, `led_strip`, `led_psu`, `led_psu_din` | `optional` | 7 |
 | 9 | Проверка защиты прибором (`protection`) | `work.protection_test` | — | `required`: протокол, фото или PDF | 7, 8 |
 

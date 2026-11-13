@@ -50,7 +50,7 @@ stages:
   - key: assembly
     title: { ru: "Сборка щита", uk: "Збирання щита" }
     lines: [work.board_module, work.panel_labels, breaker, diff, rcd, input, relay, spd, changeover, ats, contactor,
-            feed, output, dc_battery, dc_breaker, dc_spd]
+            feed, output, busbar, dc_battery, dc_breaker, dc_spd]
     photo: optional
     after: [board, insulation]
 

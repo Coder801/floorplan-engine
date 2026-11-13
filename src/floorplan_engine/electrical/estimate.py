@@ -23,6 +23,8 @@ separate product specification: the estimate without prices is the bill of quant
   in the purchase device table), assembly by the modules of that set; no panel means one
   breaker per group; device prices by kind (breaker, diff, rcd, input…), with the rating as a
   key refinement (breaker.C16);
+- comb busbars over the group rails instead of wire jumpers (panel.busbars): 1 m bars by
+  poles (busbar.1P), only with a panel set;
 - lights, lighting outputs and appliance outputs by point, LED strip in metres;
 - a LED power supply per LED output and its fitting (decision 2026-11-11): at the strip, or on
   a DIN rail in the panel (Electrical.led_supply), with its own prices; in the panel the
@@ -42,8 +44,11 @@ Work comes in two sections with their own totals (decision 2026-11-03): rough (`
 before plaster and screed: chases, passes, laying cable and conduit, flush boxes, boxes with
 crimping, panel recess and enclosure, labelling, insulation test; finishing (`finish`), after
 the finish: filling the panel with devices, panel labels, fitting the devices, protection
-test. An item's
-section is in LINES.
+test. Materials are split the same way (decision 2026-11-13), by the work they are bought
+for: rough (`material_rough`: cable, conduit and fixings, flush and junction boxes, crimps,
+enclosures, rough light) and finish (`material_finish`: panel devices and comb busbars, wiring
+devices and frames, lights, outputs, LED strip and supplies); Estimate.materials is both. An
+item's section is in LINES.
 
 Prices are never invented: items with no price in the list stay in the estimate marked
 "no price" and are left out of the total. LED profiles are not described in the model and are
@@ -75,7 +80,7 @@ from floorplan_engine.electrical.mounting import (
     pair_diameter,
     shared_pairs,
 )
-from floorplan_engine.electrical.panel import BoardPanel, device_name
+from floorplan_engine.electrical.panel import BoardPanel, busbars, device_name
 from floorplan_engine.electrical.terms import TermDecision
 from floorplan_engine.electrical.wiring import RESERVE
 from floorplan_engine.electrical.wiring_model import Run, Wiring
@@ -107,8 +112,13 @@ MOUNTED = frozenset(
     {PointType.SOCKET, PointType.SWITCH, PointType.PASS_SWITCH, PointType.DATA, PointType.TV}
 )
 
-Section = Literal["material", "rough", "finish"]
-SECTIONS: tuple[Section, ...] = ("material", "rough", "finish")  # order in the estimate
+# Materials follow the work they are bought for (decision 2026-11-13): rough ones go in before
+# the finishing of the room (cable, conduit, boxes, enclosures), finish ones after it (panel
+# devices and busbars, wiring devices, lights). "material" is an estimate that is not split
+# (plumbing)
+Section = Literal["material", "material_rough", "material_finish", "rough", "finish"]
+MATERIAL_SECTIONS: tuple[Section, ...] = ("material", "material_rough", "material_finish")
+SECTIONS: tuple[Section, ...] = (*MATERIAL_SECTIONS, "rough", "finish")  # order in the estimate
 # Decision 2026-11-12: material prices are not market prices yet (price lists and the price
 # service are a placeholder), so the materials section says so everywhere the estimate is shown
 MATERIAL_PRICES_MOCK = True
@@ -118,88 +128,105 @@ WORK_PREFIX = "work."  # work items (services); the rest of LINES are materials
 # cable.<type>, frame.<posts>, junction_box.<size>, junction_box_ip.<size>, panel devices
 # <kind>.<rating> (breaker.C16); if there is no price with the parameter, the plain key is used
 LINES: dict[str, tuple[Section, str, str, str]] = {
-    "cable": ("material", "м", "Кабель {mark}", "Кабель {mark}"),
-    "conduit": ("material", "м", "Гофротруба ПВХ Ø{n}", "Гофротруба ПВХ Ø{n}"),
+    "cable": ("material_rough", "м", "Кабель {mark}", "Кабель {mark}"),
+    "conduit": ("material_rough", "м", "Гофротруба ПВХ Ø{n}", "Гофротруба ПВХ Ø{n}"),
     "conduit_joint": (
-        "material",
+        "material_rough",
         "шт",
         "Муфта соединительная для гофры Ø{n}",
         "Муфта з'єднувальна для гофри Ø{n}",
     ),
-    "socket_box": ("material", "шт", "Подрозетник", "Підрозетник"),
-    "junction_box": ("material", "шт", "Коробка распаечная {mark}", "Коробка розподільча {mark}"),
+    "socket_box": ("material_rough", "шт", "Подрозетник", "Підрозетник"),
+    "junction_box": (
+        "material_rough",
+        "шт",
+        "Коробка распаечная {mark}",
+        "Коробка розподільча {mark}",
+    ),
     "junction_box_ip": (
-        "material",
+        "material_rough",
         "шт",
         "Коробка распаечная IP44 {mark}",
         "Коробка розподільча IP44 {mark}",
     ),
     "crimp": (
-        "material",
+        "material_rough",
         "шт",
         "Гильза и термоусадка (опрессовка)",
         "Гільза і термоусадка (опресування)",
     ),
     "conduit_clip": (
-        "material",
+        "material_rough",
         "шт",
         "Клипса для гофры Ø{n} с дюбель-гвоздём под монтажный пистолет",
         "Кліпса для гофри Ø{n} з дюбель-цвяхом під монтажний пістолет",
     ),
     "cable_pad": (
-        "material",
+        "material_rough",
         "шт",
         "Площадка под монтажный пистолет с дюбель-гвоздём и стяжкой",
         "Площадка під монтажний пістолет з дюбель-цвяхом і стяжкою",
     ),
-    "board_enclosure": ("material", "шт", "Корпус щита", "Корпус щита"),
+    "board_enclosure": ("material_rough", "шт", "Корпус щита", "Корпус щита"),
     # Panel devices by kind (DeviceKind); the row has the name and rating from the panel set
-    "breaker": ("material", "шт", "Автомат 1P (на группу)", "Автомат 1P (на групу)"),
-    "diff": ("material", "шт", "Дифавтомат 1P+N", "Дифавтомат 1P+N"),
-    "rcd": ("material", "шт", "УЗО", "ПЗВ"),
-    "input": ("material", "шт", "Вводной автомат", "Вступний автомат"),
-    "relay": ("material", "шт", "Реле напряжения", "Реле напруги"),
-    "spd": ("material", "шт", "УЗИП", "ПЗІП"),
-    "changeover": ("material", "шт", "Переключатель резерва", "Перемикач резерву"),
-    "ats": ("material", "шт", "АВР", "АВР"),
-    "contactor": ("material", "шт", "Контактор модульный", "Контактор модульний"),
-    "feed": ("material", "шт", "Автомат питания инвертора", "Автомат живлення інвертора"),
-    "output": ("material", "шт", "Автомат выхода инвертора", "Автомат виходу інвертора"),
-    "dc_battery": ("material", "шт", "Автомат АКБ DC", "Автомат АКБ DC"),
-    "dc_breaker": ("material", "шт", "Автомат строки панелей DC", "Автомат рядка панелей DC"),
-    "dc_spd": ("material", "шт", "УЗИП DC", "ПЗІП DC"),
-    "dc_enclosure": ("material", "шт", "Корпус щита АКБ", "Корпус щита АКБ"),
+    "breaker": ("material_finish", "шт", "Автомат 1P (на группу)", "Автомат 1P (на групу)"),
+    "diff": ("material_finish", "шт", "Дифавтомат 1P+N", "Дифавтомат 1P+N"),
+    "rcd": ("material_finish", "шт", "УЗО", "ПЗВ"),
+    "input": ("material_finish", "шт", "Вводной автомат", "Вступний автомат"),
+    "relay": ("material_finish", "шт", "Реле напряжения", "Реле напруги"),
+    "spd": ("material_finish", "шт", "УЗИП", "ПЗІП"),
+    "changeover": ("material_finish", "шт", "Переключатель резерва", "Перемикач резерву"),
+    "ats": ("material_finish", "шт", "АВР", "АВР"),
+    "contactor": ("material_finish", "шт", "Контактор модульный", "Контактор модульний"),
+    "feed": ("material_finish", "шт", "Автомат питания инвертора", "Автомат живлення інвертора"),
+    "output": ("material_finish", "шт", "Автомат выхода инвертора", "Автомат виходу інвертора"),
+    "dc_battery": ("material_finish", "шт", "Автомат АКБ DC", "Автомат АКБ DC"),
+    "dc_breaker": (
+        "material_finish",
+        "шт",
+        "Автомат строки панелей DC",
+        "Автомат рядка панелей DC",
+    ),
+    "dc_spd": ("material_finish", "шт", "УЗИП DC", "ПЗІП DC"),
+    # Comb busbar over a group rail, by poles (busbar.1P); a 1 m bar (panel.busbars)
+    "busbar": (
+        "material_finish",
+        "шт",
+        "Шина гребенчатая {mark}, 1 м",
+        "Шина гребінчаста {mark}, 1 м",
+    ),
+    "dc_enclosure": ("material_rough", "шт", "Корпус щита АКБ", "Корпус щита АКБ"),
     "led_enclosure": (
-        "material",
+        "material_rough",
         "шт",
         "Корпус щита блоков питания LED",
         "Корпус щита блоків живлення LED",
     ),
-    "socket": ("material", "шт", "Розетка с заземлением", "Розетка із заземленням"),
-    "switch1": ("material", "шт", "Выключатель одноклавишный", "Вимикач одноклавішний"),
-    "switch2": ("material", "шт", "Выключатель двухклавишный", "Вимикач двоклавішний"),
-    "pass_switch": ("material", "шт", "Выключатель проходной", "Вимикач прохідний"),
-    "data": ("material", "шт", "Розетка интернет", "Розетка інтернет"),
-    "tv": ("material", "шт", "Розетка TV", "Розетка TV"),
-    "frame": ("material", "шт", "Рамка {n}-постовая", "Рамка {n}-постова"),
+    "socket": ("material_finish", "шт", "Розетка с заземлением", "Розетка із заземленням"),
+    "switch1": ("material_finish", "шт", "Выключатель одноклавишный", "Вимикач одноклавішний"),
+    "switch2": ("material_finish", "шт", "Выключатель двухклавишный", "Вимикач двоклавішний"),
+    "pass_switch": ("material_finish", "шт", "Выключатель проходной", "Вимикач прохідний"),
+    "data": ("material_finish", "шт", "Розетка интернет", "Розетка інтернет"),
+    "tv": ("material_finish", "шт", "Розетка TV", "Розетка TV"),
+    "frame": ("material_finish", "шт", "Рамка {n}-постовая", "Рамка {n}-постова"),
     # Lights and outputs: names as in the legend (texts.symbol_*)
-    "light": ("material", "шт", "", ""),
-    "downlight": ("material", "шт", "", ""),
-    "pendant": ("material", "шт", "", ""),
-    "sconce": ("material", "шт", "", ""),
-    "led_output": ("material", "шт", "", ""),
-    "outlet": ("material", "шт", "", ""),
-    "led_strip": ("material", "м", "", ""),
-    "led_psu": ("material", "шт", "Блок питания LED 12 В", "Блок живлення LED 12 В"),
+    "light": ("material_finish", "шт", "", ""),
+    "downlight": ("material_finish", "шт", "", ""),
+    "pendant": ("material_finish", "шт", "", ""),
+    "sconce": ("material_finish", "шт", "", ""),
+    "led_output": ("material_finish", "шт", "", ""),
+    "outlet": ("material_finish", "шт", "", ""),
+    "led_strip": ("material_finish", "м", "", ""),
+    "led_psu": ("material_finish", "шт", "Блок питания LED 12 В", "Блок живлення LED 12 В"),
     "led_psu_din": (
-        "material",
+        "material_finish",
         "шт",
         "Блок питания LED 12 В на DIN-рейку",
         "Блок живлення LED 12 В на DIN-рейку",
     ),
-    "rough_holder": ("material", "шт", "Патрон E27 черновой", "Патрон E27 чорновий"),
-    "rough_lamp": ("material", "шт", "Лампа LED E27 черновая", "Лампа LED E27 чорнова"),
-    "rough_switch": ("material", "шт", "Выключатель черновой", "Вимикач чорновий"),
+    "rough_holder": ("material_rough", "шт", "Патрон E27 черновой", "Патрон E27 чорновий"),
+    "rough_lamp": ("material_rough", "шт", "Лампа LED E27 черновая", "Лампа LED E27 чорнова"),
+    "rough_switch": ("material_rough", "шт", "Выключатель черновой", "Вимикач чорновий"),
     "work.cable": ("rough", "м", "Прокладка кабеля", "Прокладання кабелю"),
     "work.conduit": ("rough", "м", "Укладка кабеля в гофротрубу", "Укладання кабелю в гофротрубу"),
     "work.chase": (
@@ -299,6 +326,10 @@ HINTS: dict[str, dict[str, str]] = {
         "ru": "Крепление кабеля без гофры к потолку и стенам монтажным пистолетом",
         "uk": "Кріплення кабелю без гофри до стелі та стін монтажним пістолетом",
     },
+    "busbar": {
+        "ru": "Соединяет автоматы на рейке вместо перемычек; режется по месту",
+        "uk": "З'єднує автомати на рейці замість перемичок; ріжеться за місцем",
+    },
 }
 PRICE_TBD = {"ru": "Цена уточняется", "uk": "Ціна уточнюється"}
 PRICE_SERVICE = {
@@ -306,6 +337,7 @@ PRICE_SERVICE = {
     "uk": "Ціна — із сервісу цін (поки імітація, не ринкова)",
 }
 PARAM_KEYS = (
+    "busbar",
     "cable",
     "conduit",
     "conduit_clip",
@@ -344,6 +376,16 @@ TEXT: dict[str, dict[str, str]] = {
     "material_mock": {
         "ru": "Материалы — цены пока имитация",
         "uk": "Матеріали — ціни поки що імітація",
+    },
+    "material_rough": {"ru": "Черновые материалы", "uk": "Чорнові матеріали"},
+    "material_rough_mock": {
+        "ru": "Черновые материалы — цены пока имитация",
+        "uk": "Чорнові матеріали — ціни поки що імітація",
+    },
+    "material_finish": {"ru": "Чистовые материалы", "uk": "Чистові матеріали"},
+    "material_finish_mock": {
+        "ru": "Чистовые материалы — цены пока имитация",
+        "uk": "Чистові матеріали — ціни поки що імітація",
     },
     "rough": {"ru": "Черновые работы", "uk": "Чорнові роботи"},
     "finish": {"ru": "Чистовые работы", "uk": "Чистові роботи"},
@@ -477,8 +519,8 @@ TEXT: dict[str, dict[str, str]] = {
 def section_title(section: Section, language: Language, priced: bool = True) -> str:
     """Section heading in the estimate; material prices are marked as a placeholder while
     MATERIAL_PRICES_MOCK is on (a bill of quantities without prices gets no mark)."""
-    key = "material_mock" if section == "material" and priced and MATERIAL_PRICES_MOCK else section
-    return text(key, language)
+    mock = section in MATERIAL_SECTIONS and priced and MATERIAL_PRICES_MOCK
+    return text(f"{section}_mock" if mock else section, language)
 
 
 def text(key: str, language: Language, **values: object) -> str:
@@ -693,6 +735,11 @@ class Estimate:
         return sum(ln.total or 0.0 for ln in self.lines if ln.section == section)
 
     @property
+    def materials(self) -> float:
+        """All materials: rough and finish (and the ones of an estimate that is not split)."""
+        return sum(self.subtotal(s) for s in MATERIAL_SECTIONS)
+
+    @property
     def work(self) -> float:
         """All work: rough and finishing."""
         return self.subtotal("rough") + self.subtotal("finish")
@@ -899,6 +946,8 @@ def build_estimate(
             name, n = counts.get((key, d.label), (device_name(d, language), 0))
             counts[(key, d.label)] = (name, n + 1)
         devices = [line(key, n, name) for (key, _), (name, n) in counts.items()]
+        # Comb busbars of the group rails, right after the devices they join
+        devices += [line(f"busbar.{poles}P", n) for poles, n in busbars(panel).items()]
         if panel.dc is not None:  # battery box enclosure after the devices
             enc = panel.dc.enclosure
             base = LINES["dc_enclosure"][2 if language == "ru" else 3]
@@ -960,7 +1009,7 @@ def write_markdown(
 
 def write_csv(est: Estimate, path: Path) -> Path:
     """CSV for Excel: UTF-8 with BOM, ";" separator, decimal comma; section is the section
-    (material, rough, finish)."""
+    (material_rough, material_finish, rough, finish; material in an estimate that is not split)."""
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8-sig", newline="") as fh:
         w = csv.writer(fh, delimiter=";")
@@ -1066,7 +1115,12 @@ def write_xlsx(
         ws.cell(grand, col).font = Font(bold=True, size=12)
     ws.cell(grand, 6).number_format = XLSX_MONEY
     if tail is not None:
-        tail(ws, {**subtotals, "total": f"F{grand}"})
+        # "material" for the tail is all materials, whatever sections they are split into
+        parts = [subtotals[s] for s in MATERIAL_SECTIONS if s in subtotals]
+        cells = {**subtotals, "total": f"F{grand}"}
+        if parts:
+            cells["material"] = parts[0] if len(parts) == 1 else f"({'+'.join(parts)})"
+        tail(ws, cells)
     ws.append([])
     if est.unpriced:
         ws.append(["", t("unpriced", n=est.unpriced, f=PRICES_FILE)])

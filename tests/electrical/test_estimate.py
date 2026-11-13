@@ -36,7 +36,7 @@ from floorplan_engine.electrical.led_supply import (
     led_mark,
     section_for,
 )
-from floorplan_engine.electrical.panel import build_panel, device_name
+from floorplan_engine.electrical.panel import build_panel, busbars, device_name
 from floorplan_engine.electrical.pricing import MockPriceService, Prices, mock_price
 from floorplan_engine.electrical.wiring import LED_MARK, RESERVE, box_wiring
 from floorplan_engine.model.schema import Electrical, Plan
@@ -233,9 +233,11 @@ def test_estimate_table_with_and_without_prices() -> None:
     assert table.title == "Кошторис електрики" and len(table.columns) == 6
     names = [r[1] for r in table.rows]
     # Material prices are a placeholder for now (decision 2026-11-12): the section says so
-    assert names[0] == "Матеріали — ціни поки що імітація"
+    assert names[0] == "Чорнові матеріали — ціни поки що імітація"
+    assert "Чистові матеріали — ціни поки що імітація" in names
     assert "Чорнові роботи" in names and "Чистові роботи" in names
-    assert "Разом: матеріали" in names and "Разом: чорнові роботи" in names
+    assert "Разом: чорнові матеріали" in names and "Разом: чистові матеріали" in names
+    assert "Разом: чорнові роботи" in names
     assert "Разом: чистові роботи" in names
     assert table.total is not None and table.total[1] == "Усього"
     socket_box = next(r for r in table.rows if r[1] == "Підрозетник")
@@ -247,7 +249,7 @@ def test_estimate_table_with_and_without_prices() -> None:
     assert volumes.title == "Відомість обсягів електрики"
     assert len(volumes.columns) == 4 and volumes.total is None  # no prices and no totals
     assert not any(str(r[1]).startswith("Разом") for r in volumes.rows)
-    assert volumes.rows[0][1] == "Матеріали"  # no prices, nothing to mark
+    assert volumes.rows[0][1] == "Чорнові матеріали"  # no prices, nothing to mark
 
 
 def test_section_title_marks_material_prices_as_placeholder(tmp_path: Path) -> None:
@@ -255,16 +257,18 @@ def test_section_title_marks_material_prices_as_placeholder(tmp_path: Path) -> N
 
     assert section_title("material", "ru") == "Материалы — цены пока имитация"
     assert section_title("material", "ru", priced=False) == "Материалы"
+    assert section_title("material_finish", "ru") == "Чистовые материалы — цены пока имитация"
+    assert section_title("material_rough", "uk", priced=False) == "Чорнові матеріали"
     assert section_title("rough", "ru") == "Черновые работы"
     wiring, elec = _wiring()
     priced = build_estimate(
         wiring, elec, PriceList.model_validate({"items": {"socket_box": 20}}), "ru"
     )
     md = write_markdown(priced, tmp_path / "e.md", "Смета", [], "ru").read_text(encoding="utf-8")
-    assert "## Материалы — цены пока имитация" in md
+    assert "## Черновые материалы — цены пока имитация" in md
     volumes = build_estimate(wiring, elec, PriceList(), "ru")
     md = write_markdown(volumes, tmp_path / "v.md", "Смета", [], "ru").read_text(encoding="utf-8")
-    assert "## Материалы\n" in md
+    assert "## Черновые материалы\n" in md
 
 
 def test_estimate_on_wiring_sheet(tmp_path: Path) -> None:
@@ -449,7 +453,8 @@ def test_estimate_subtotals_skip_unpriced_lines() -> None:
 
 def test_works_split_into_rough_and_finish() -> None:
     """Rough work is before finishing (chases, cable, boxes, panel enclosure, test); finishing is
-    after (filling the panel with devices, fitting devices). Materials are one section."""
+    after (filling the panel with devices, fitting devices). Materials follow the work they are
+    bought for: rough (cable, boxes, enclosures), finish (panel and wiring devices, lights)."""
     works = {k: v[0] for k, v in LINES.items() if k.startswith("work.")}
     finish = {
         "work.board_module",
@@ -461,11 +466,35 @@ def test_works_split_into_rough_and_finish() -> None:
     }
     assert {k for k, s in works.items() if s == "finish"} == finish
     assert all(s == "rough" for k, s in works.items() if s != "finish")
-    assert all(v[0] == "material" for k, v in LINES.items() if not k.startswith("work."))
+    materials = {k: v[0] for k, v in LINES.items() if not k.startswith("work.")}
+    rough = {
+        "cable",
+        "conduit",
+        "conduit_joint",
+        "socket_box",
+        "junction_box",
+        "junction_box_ip",
+        "crimp",
+        "conduit_clip",
+        "cable_pad",
+        "board_enclosure",
+        "dc_enclosure",
+        "led_enclosure",
+        "rough_holder",
+        "rough_lamp",
+        "rough_switch",
+    }
+    assert {k for k, s in materials.items() if s == "material_rough"} == rough
+    assert all(s == "material_finish" for k, s in materials.items() if k not in rough)
     wiring, elec = _wiring()
     est = build_estimate(wiring, elec, PriceList(), "ru")
     by_key = {ln.key: ln.section for ln in est.lines}
     assert by_key["work.chase"] == "rough" and by_key["work.mechanism"] == "finish"
+    assert by_key["socket_box"] == "material_rough" and by_key["socket"] == "material_finish"
+    sections = [ln.section for ln in est.lines]  # rough materials, finish ones, then the work
+    assert sections == sorted(sections, key=SECTIONS.index)
+    assert est.materials == est.subtotal("material_rough") + est.subtotal("material_finish")
+    assert est.total == est.materials + est.work
 
 
 def test_empty_estimate_is_zero() -> None:
@@ -523,11 +552,42 @@ def test_panel_from_board_sheet_priced_by_kind() -> None:
     keys = [ln.key for ln in est.lines]
     assert "breaker" not in keys  # "per group" breaker only without a panel
     assert keys.index("board_enclosure") < keys.index(devices[0].key)  # devices after the enclosure
+    assert not any(k.startswith("busbar") for k in keys)  # lone devices are wired, not combed
+
+
+def test_comb_busbars_after_the_panel_devices() -> None:
+    """Comb busbars of the group rails (instead of wire jumpers): 1 m bars by poles, as counted
+    by panel.busbars, in the materials right after the panel devices; priced as any item."""
+    plan = make_plan(RECT, [DOOR])
+    _, contours = validate_plan(plan)
+    more = [_pt(f"x{k}", "socket", 400 + 300 * k, 300, f"QF{k}") for k in range(3, 7)]
+    elec = Electrical.model_validate({**ELEC, "points": [*ELEC["points"], *more]})
+    wiring = box_wiring(plan, contours, elec)
+    panel = build_panel(plan, elec)
+    assert wiring is not None and panel is not None
+    counted = {f"busbar.{p}P": n for p, n in busbars(panel).items()}
+    assert counted
+    prices = PriceList.model_validate({"items": {"busbar": 180, "busbar.2P": 390}})
+    est = build_estimate(wiring, elec, prices, "ru", panel)
+    combs = [ln for ln in est.lines if split_key(ln.key)[0] == "busbar"]
+    assert {ln.key: ln.qty for ln in combs} == counted
+    assert all(ln.section == "material_finish" and ln.unit == "шт" for ln in combs)
+    assert all(ln.price == (390 if ln.key == "busbar.2P" else 180) for ln in combs)
+    assert combs[0].name.startswith("Шина гребенчатая") and "перемычек" in (combs[0].hint or "")
+    keys = [ln.key for ln in est.lines]
+    kinds = {d.kind.value for d in panel.all_devices}
+    last = max(k for k, key in enumerate(keys) if split_key(key)[0] in kinds)
+    # Right after the devices (the battery box ones too); the box enclosures are rough materials
+    assert keys.index(combs[0].key) == last + 1 and keys.index("dc_enclosure") < last
+    assert build_estimate(wiring, elec, PriceList(), "ru").lines  # no panel set: no busbars
+    assert not any(
+        ln.key.startswith("busbar") for ln in build_estimate(wiring, elec, PriceList()).lines
+    )
 
 
 def test_battery_box_in_estimate() -> None:
-    """The inverter battery box is in the estimate after the panel devices: battery breaker and an
-    enclosure with an article number.
+    """The inverter battery box is in the estimate: a battery breaker with the panel devices and an
+    enclosure with an article number next to the panel one.
     """
     plan = make_plan(RECT, [DOOR])
     _, contours = validate_plan(plan)
@@ -541,7 +601,10 @@ def test_battery_box_in_estimate() -> None:
     assert "dc_battery.125 А DC 2P" in keys
     box = next(ln for ln in est.lines if ln.key == "dc_enclosure")
     assert box.name == "Корпус щита АКБ Hager Golf VS112PD, 12 мод."
-    assert keys.index("dc_battery.125 А DC 2P") < keys.index("dc_enclosure")
+    # The enclosure is a rough material next to the panel one, the devices are finish ones
+    assert keys.index("board_enclosure") + 1 == keys.index("dc_enclosure")
+    assert box.section == "material_rough"
+    assert keys.index("dc_enclosure") < keys.index("dc_battery.125 А DC 2P")
 
 
 def test_fixtures_and_led_in_estimate() -> None:

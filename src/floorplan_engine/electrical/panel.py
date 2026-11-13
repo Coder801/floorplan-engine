@@ -47,6 +47,7 @@ from __future__ import annotations
 import csv
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
+from itertools import groupby
 from pathlib import Path
 from typing import Literal
 
@@ -652,6 +653,59 @@ def panel_rows(devices: Sequence[Device], per_row: int) -> list[list[Device]] | 
             rows[-1].append(d)
             used += d.modules
     return rows
+
+
+BUSBAR_MODULES = 54  # a comb busbar is bought as a 1 m bar and cut on site
+
+
+def busbar_runs(panel: BoardPanel) -> list[tuple[int, int]]:
+    """Comb busbar pieces of the group rails as (poles, modules): they join the devices from
+    above instead of wire jumpers. A piece is a run of neighbours on one rail fed together: main
+    and backup apart, the groups behind the master switch contactor apart, the breakers under a
+    shared RCD on a piece of their own (fed from its output). Breaker rails take a phase comb,
+    RCBO rails a double one (L + N); on a three-phase panel the main bus takes all three phases,
+    the backup bus and a shared RCD stay on one. A lone device is wired, not combed; shared
+    devices (input, relay, ATS…) are joined by jumpers."""
+    under = {g: d.id for d in panel.devices if d.kind is DeviceKind.RCD for g in d.feeds}
+
+    def fed(d: Device) -> tuple[bool, bool, str | None]:
+        rcd = under.get(d.group or "") if d.kind is DeviceKind.BREAKER else None
+        return d.reserve, d.master, rcd
+
+    out: list[tuple[int, int]] = []
+    for row in panel.rows:
+        if not row or row_kind(row[0]) == "common":
+            continue
+        double = row_kind(row[0]) == "double"
+        for (reserve, _, rcd), run in groupby(row, key=fed):
+            devices = list(run)
+            if len(devices) < 2:
+                continue
+            three = panel.phases == 3 and not reserve and rcd is None
+            poles = (3 if three else 1) + (1 if double else 0)
+            out.append((poles, sum(d.modules for d in devices)))
+    return out
+
+
+def busbars(panel: BoardPanel) -> dict[int, int]:
+    """1 m comb busbars to buy, by poles: the pieces (busbar_runs) are cut from as few bars as
+    they fit in, longest first; an offcut goes to the next piece."""
+    out: dict[int, int] = {}
+    for poles in sorted({p for p, _ in busbar_runs(panel)}):
+        left: list[int] = []  # modules left in each bar
+        for modules in sorted((m for p, m in busbar_runs(panel) if p == poles), reverse=True):
+            while modules > 0:  # a piece longer than a bar takes whole bars first
+                k = next(
+                    (k for k, free in enumerate(left) if free >= min(modules, BUSBAR_MODULES)), None
+                )
+                if k is None:
+                    left.append(BUSBAR_MODULES)
+                    k = len(left) - 1
+                cut = min(modules, left[k])
+                left[k] -= cut
+                modules -= cut
+        out[poles] = len(left)
+    return out
 
 
 def choose_enclosure(

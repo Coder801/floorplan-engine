@@ -232,7 +232,7 @@ def variant_summary(
     return VariantSummary(
         variant=variant,
         total=est.total,
-        material=est.subtotal("material"),
+        material=est.materials,
         work=est.work,
         currency=prices.currency,
         unpriced=est.unpriced,

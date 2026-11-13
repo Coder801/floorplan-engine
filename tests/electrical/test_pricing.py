@@ -20,6 +20,7 @@ def test_mock_knows_every_line_and_is_deterministic() -> None:
     assert mock_covers_all_lines() == []
     assert len(LINES) > 30
     assert mock_price("socket") == mock_price("socket") == 180
+    assert mock_price("busbar.1P") == 200 and mock_price("busbar.4P") == 750  # 1 m comb
     assert mock_price("нет такого") is None
 
 

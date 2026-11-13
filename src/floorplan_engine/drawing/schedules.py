@@ -148,9 +148,9 @@ ESTIMATE_HEADER_H = 8.0
 def estimate_table(
     est: Estimate, language: Language, priced: bool, title: str | None = None
 ) -> Table:
-    """Estimate on the sheet: sections (materials, rough and finishing work), their totals and
-    "Total"; without a price list, a bill of quantities (quantities only). title is a custom
-    title (plumbing estimate); none means electrical."""
+    """Estimate on the sheet: sections (rough and finish materials, rough and finishing work), their
+    totals and "Total"; without a price list, a bill of quantities (quantities only). title is a
+    custom title (plumbing estimate); none means electrical."""
 
     def t(key: str, **values: object) -> str:
         return estimate_text(key, language, **values)

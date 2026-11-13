@@ -162,7 +162,7 @@ def write_estimate(
     est = build_estimate(wiring, elec, prices, lang, panel)
     notes = _estimate_notes(assessment, est, wiring, elec, prices, source)
     decisions = prices.own.terms if prices.own is not None else {}
-    terms = term_rows(decisions, est.subtotal("material"), est.currency, lang)
+    terms = term_rows(decisions, est.materials, est.currency, lang)
     note = open_note(terms, source.name if source else PRICES_FILE, lang)
     if note is not None:
         notes.append(note)

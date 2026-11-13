@@ -159,7 +159,7 @@ def estimate(
         raise typer.Exit(code=1)
     est = result.estimate
     cur = est.currency
-    typer.echo(f"Материалы:        {est.subtotal('material'):,.0f} {cur}".replace(",", " "))
+    typer.echo(f"Материалы:        {est.materials:,.0f} {cur}".replace(",", " "))
     typer.echo(f"Черновые работы:  {est.subtotal('rough'):,.0f} {cur}".replace(",", " "))
     typer.echo(f"Чистовые работы:  {est.subtotal('finish'):,.0f} {cur}".replace(",", " "))
     typer.echo(f"Всего:            {est.total:,.0f} {cur}".replace(",", " "))

@@ -172,7 +172,8 @@ def test_scope_section_tells_what_each_item_is_about() -> None:
 
 def test_excel_percent_of_materials_is_a_formula_and_totals_follow(tmp_path: Path) -> None:
     lines = (
-        Line("material", "socket_box", LINES["socket_box"][2], "шт", 10, 20.0),
+        Line("material_rough", "socket_box", LINES["socket_box"][2], "шт", 10, 20.0),
+        Line("material_finish", "socket", LINES["socket"][2], "шт", 10, 180.0),
         Line("rough", "work.cable", LINES["work.cable"][2], "м", 10, 30.0),
     )
     est = Estimate(lines, "грн")
@@ -182,7 +183,7 @@ def test_excel_percent_of_materials_is_a_formula_and_totals_follow(tmp_path: Pat
             "purchase": {"who": "studio", "pay": "percent", "percent": 10},
         }
     )
-    rows = term_rows(decisions, est.subtotal("material"), "грн", "ru")
+    rows = term_rows(decisions, est.materials, "грн", "ru")
     path = write_xlsx(
         est, tmp_path / "e.xlsx", "Смета", [], "ru", tail=terms_sheet_tail(rows, "ru")
     )
@@ -190,8 +191,10 @@ def test_excel_percent_of_materials_is_a_formula_and_totals_follow(tmp_path: Pat
     values = {row[1].value: row for row in ws.iter_rows() if row[1].value}
     assert values["Доставка материалов"][5].value == 1500
     purchase = values["Закупка материалов бригадой"][5].value
-    material_total = values["Итого: Материалы"][5].coordinate
-    assert purchase == f"=ROUND({material_total}*10/100,2)"
+    # The percent is taken from all materials: rough and finish
+    rough = values["Итого: Черновые материалы"][5].coordinate
+    finish = values["Итого: Чистовые материалы"][5].coordinate
+    assert purchase == f"=ROUND(({rough}+{finish})*10/100,2)"
     assert str(values["Итого обговорено"][5].value).startswith("=SUM(F")
     grand = values["Всего со сопутствующими"][5].value
     total = values["Всего, грн"][5].coordinate
