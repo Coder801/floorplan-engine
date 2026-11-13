@@ -1,3 +1,13 @@
+## v0.8.0 (2026-11-13)
+
+### Feat
+
+- **viewer,deploy,docs**: add a What's new window from CHANGELOG.md
+
+### Fix
+
+- **electrical,drawing,viewer**: name section totals plainly
+
 ## v0.7.0 (2026-11-13)
 
 ### Feat
