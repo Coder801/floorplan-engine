@@ -64,11 +64,13 @@ export function splitTitle(title: string): [string, string] {
 export interface WallRoom { room: string; items: { index: number; wall: string }[] }
 
 // Walls by room in sheet order (the pager list and the "All walls" overview); a room met again
-// later is a new group, as on the sheets
+// later is a new group, as on the sheets. Under the room heading a name stands on its own, so it
+// starts with a capital: "Потолок" ("Спальня — потолок" in the title keeps the small letter)
 export function wallRooms(walls: readonly { title: string }[]): WallRoom[] {
   const out: WallRoom[] = [];
   walls.forEach((w, index) => {
-    const [room, wall] = splitTitle(w.title);
+    const [room, name] = splitTitle(w.title);
+    const wall = room ? name.charAt(0).toLocaleUpperCase() + name.slice(1) : name;
     const last = out[out.length - 1];
     if (last && last.room === room) last.items.push({ index, wall });
     else out.push({ room, items: [{ index, wall }] });

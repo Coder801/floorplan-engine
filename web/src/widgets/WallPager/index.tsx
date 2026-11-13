@@ -11,7 +11,6 @@ import menu from "@/shared/styles/menu.module.scss";
 import { Button } from "@/ui/Button";
 import { ButtonGroup } from "@/ui/ButtonGroup";
 import { Icon } from "@/ui/Icon";
-import { MenuItem } from "@/ui/MenuItem";
 import css from "./WallPager.module.scss";
 
 interface Wall { key: string; title: string }
@@ -59,8 +58,12 @@ export function WallPager({ walls, at, onTurn, onPick, onAll }: Props) {
             <div key={k} className={css.room} role="group" aria-label={r.room || undefined}>
               {r.room && <div className={css.roomName}>{r.room}</div>}
               {r.items.map(({ index, wall: name }) => (
-                <MenuItem key={index} role="option" selected={index === at} note={<span className="mono">{index + 1}</span>}
-                          onClick={() => { setOpen(false); if (index !== at) onPick(index); }}>{name}</MenuItem>
+                // Its own row, not MenuItem: a wall has no icon, so the row is "name | number", as in Select
+                <button key={index} type="button" className={menu.item} role="option" aria-selected={index === at}
+                        onClick={() => { setOpen(false); if (index !== at) onPick(index); }}>
+                  <span className={css.wall}>{name}</span>
+                  <span className={cx(menu.note, "mono")}>{index + 1}</span>
+                </button>
               ))}
             </div>
           ))}

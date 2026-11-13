@@ -48,9 +48,16 @@ describe("wallRooms", () => {
       { title: "Кухня — стена 1" }, { title: "Кухня — стена 2" }, { title: "Ванная — стена 1" }, { title: "Кухня — стена 3" },
     ]);
     expect(rooms).toEqual([
-      { room: "Кухня", items: [{ index: 0, wall: "стена 1" }, { index: 1, wall: "стена 2" }] },
-      { room: "Ванная", items: [{ index: 2, wall: "стена 1" }] },
-      { room: "Кухня", items: [{ index: 3, wall: "стена 3" }] },
+      { room: "Кухня", items: [{ index: 0, wall: "Стена 1" }, { index: 1, wall: "Стена 2" }] },
+      { room: "Ванная", items: [{ index: 2, wall: "Стена 1" }] },
+      { room: "Кухня", items: [{ index: 3, wall: "Стена 3" }] },
+    ]);
+  });
+
+  it("под названием помещения имя — с большой буквы; имя без помещения не меняется", () => {
+    expect(wallRooms([{ title: "Спальня — потолок" }, { title: "w3" }])).toEqual([
+      { room: "Спальня", items: [{ index: 0, wall: "Потолок" }] },
+      { room: "", items: [{ index: 1, wall: "w3" }] },
     ]);
   });
 });
