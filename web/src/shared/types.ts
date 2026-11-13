@@ -521,8 +521,9 @@ export interface ElevWall {
   // Fixings on the cable drops (older .epd: none); n is how many clips or pads stand there in one line
   fixings?: { x: number; y: number; n?: number }[];
   // Cables along the wall from the ceiling (floor) to their point (older .epd: none), line key wire:<id>
-  // x1: the turn past an opening, horizontal at height y0 from the drop at x to the point at x1
-  cables?: { key: string; x: number; y0: number; y1: number; x1?: number; color: string | null }[];
+  // x1: the turn past an opening, horizontal at height y0 from the drop at x to the point at x1;
+  // r: its bend radius on the cable axis, mm (none: a cable without sizes, a sharp corner)
+  cables?: { key: string; x: number; y0: number; y1: number; x1?: number; r?: number; color: string | null }[];
   boxes: ElevBox[];
   points: ElevPoint[];
   board?: { key: string; name: string; x: number; y: number; width: number; height: number };

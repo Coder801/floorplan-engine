@@ -27,7 +27,7 @@ from typing import Any
 from shapely.geometry import Polygon
 
 from floorplan_engine.electrical.boxes import box_wall
-from floorplan_engine.electrical.mounting import PRACTICE, spots
+from floorplan_engine.electrical.mounting import PRACTICE, BendSize, bend_size, bundle_radii, spots
 from floorplan_engine.electrical.point_numbers import number_points, point_name
 from floorplan_engine.electrical.routing import opening_strip
 from floorplan_engine.electrical.wiring_model import Chase, Route, Run, Wiring
@@ -132,7 +132,9 @@ class FixingView:
 class CableView:
     """A cable along the wall (decision 2026-11-12): line `run` of `group` at x, from height y0
     to y1, mm — from the route plane (ceiling or floor) down or up to its point, panel or box.
-    With x1 it is horizontal at height y0 (= y1) from x to x1: the turn past an opening."""
+    With x1 it is horizontal at height y0 (= y1) from x to x1: the turn past an opening, and
+    radius is its bend radius on the cable axis, mm (turn_radii; None for a cable without sizes:
+    low voltage, LED)."""
 
     run: str
     group: str
@@ -140,6 +142,7 @@ class CableView:
     y0: float
     y1: float
     x1: float | None = None
+    radius: float | None = None
 
 
 @dataclass(frozen=True)
@@ -306,6 +309,16 @@ def wall_elevations(
         for r in wiring.runs:
             for wall_key, cable in _cables(r, elec, box_at, ceiling):
                 walls[wall_key].cables.append(cable)
+        by_id = {run.id: run for run in wiring.runs}
+        for wall_view in walls.values():
+            wall_view.cables = turn_radii(
+                wall_view.cables,
+                {
+                    run.id: (run.route != "floor", bend_size(run.mark, walls_in(run.route)))
+                    for c in wall_view.cables
+                    if (run := by_id.get(c.run)) is not None
+                },
+            )
         for c in wiring.chases:
             if not c.wall:
                 continue  # at a box: drawn higher up
@@ -436,6 +449,31 @@ def _cables(
     return out
 
 
+def turn_radii(
+    cables: Sequence[CableView], sizes: Mapping[str, tuple[bool, BendSize | None]]
+) -> list[CableView]:
+    """Bend radii of the turns past an opening (decision 2026-11-13): the cables turning at one
+    corner the same way bend as a bundle (bundle_radii, the inner one is the reference). sizes:
+    run → (route on the ceiling, its bend size). The drop lanes go by run, left to right (as the
+    elevations draw them); the inner lane is the one nearest the side the turn goes to."""
+    corners: dict[tuple[float, float, bool, bool], list[CableView]] = defaultdict(list)
+    for c in cables:
+        if c.x1 is not None and c.run in sizes:
+            corners[(c.x, c.y0, c.x1 > c.x, sizes[c.run][0])].append(c)
+    radius: dict[tuple[str, float], float] = {}
+    for (_, _, right, _), turning in corners.items():
+        lanes = sorted(turning, key=lambda c: c.run, reverse=right)  # inner first
+        sized = [(c, size) for c in lanes if (size := sizes[c.run][1]) is not None]
+        for (c, _), r in zip(sized, bundle_radii([size for _, size in sized]), strict=True):
+            radius[(c.run, c.x)] = r
+    return [
+        replace(c, radius=radius[(c.run, c.x)])
+        if c.x1 is not None and (c.run, c.x) in radius
+        else c
+        for c in cables
+    ]
+
+
 def elevation_data(
     plan: Plan,
     contours: dict[str, Contour],
@@ -530,6 +568,7 @@ def elevation_data(
                     "y0": r(c.y0),
                     "y1": r(c.y1),
                     **({"x1": r(c.x1)} if c.x1 is not None else {}),
+                    **({"r": r(c.radius)} if c.radius is not None else {}),
                     "color": color(c.group),
                 }
                 for c in e.cables

@@ -6,6 +6,7 @@ leader points to the place).
 
 from __future__ import annotations
 
+import math
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 
@@ -22,7 +23,12 @@ from floorplan_engine.drawing.layers import (
     text_width,
 )
 from floorplan_engine.drawing.plan import add_text
-from floorplan_engine.electrical.elevations import POST_PITCH_MM, WallElevation, behind_text
+from floorplan_engine.electrical.elevations import (
+    POST_PITCH_MM,
+    CableView,
+    WallElevation,
+    behind_text,
+)
 from floorplan_engine.electrical.point_numbers import ranges
 from floorplan_engine.model.geometry import Vec
 from floorplan_engine.model.schema import PointType
@@ -48,6 +54,8 @@ FIXING_HALF_MM = 1.6  # half the fixing stroke across a cable drop, sheet mm
 CABLE_PITCH_SHEET = 0.9  # cables of one drop side by side on the sheet, mm
 LW_CABLE = 15  # cables along the wall, 1/100 mm
 CABLE_OUT = 2.0  # a cable from the ceiling or floor goes on past the wall edge, sheet mm
+FIXING_ALPHA = 0.5  # fixings are half transparent: the cables show through them
+CABLE_ROOM = 0.5  # either side of a cable that labels keep off, sheet mm
 
 TITLE_H = TEXT_DIM_MM
 SIDE_H = TEXT_SMALL_MM  # line under the heading: view from inside, what is behind the wall
@@ -216,37 +224,69 @@ def _draw(
             continue
         rect((a.x - half, a.y, a.x + half, b.y), LW_THIN, GREY, fill)
     # Cables along the wall (decision 2026-11-12), those of one drop side by side, in the group
-    # colour; a fixing is one line across the cables of its drop, their number at the top one
+    # colour; a fixing is one line across the cables of its drop, their number at the top one.
+    # A turn past an opening is an arc of its bend radius, one centre for the bundle, signed
+    # "R130–160" (decision 2026-11-13). Labels keep off the cables: a moved one gets a dashed
+    # leader to what it names
     pitch = CABLE_PITCH_SHEET
     by_x: dict[float, list[str]] = {}
     for cable in e.cables:
         if cable.x1 is None:
             by_x.setdefault(cable.x, []).append(cable.run)
+    turns = _turns(e, by_x, pitch, scale, at)
+    cable_boxes: list[Box] = []
     for cable in e.cables:
         color = colors.get(cable.group, DARK)
-        if cable.x1 is not None:  # the turn past an opening: from the drop along the wall
-            runs = by_x.get(cable.x, [cable.run])
-            k = runs.index(cable.run) if cable.run in runs else 0
-            dx = (k - (len(runs) - 1) / 2) * pitch
-            a, b = at(cable.x, cable.y0), at(cable.x1, cable.y0)
-            line(Vec(a.x + dx, a.y), Vec(a.x + dx, a.y + dx), LW_CABLE, color)  # the corner
-            line(Vec(a.x + dx, a.y + dx), Vec(b.x, b.y + dx), LW_CABLE, color)
+        turn = turns.get((cable.run, cable.x))
+        if cable.x1 is not None:
+            if turn is None:
+                continue
+            centre, radius, corner, end = turn
+            psp.add_arc(
+                centre.as_tuple(),
+                radius,
+                *_quarter(corner - centre),
+                dxfattribs={"layer": E_ELEV.name, "lineweight": LW_CABLE, "true_color": color},
+            )
+            line(Vec(centre.x, corner.y), end, LW_CABLE, color)
+            room = CABLE_ROOM
+            cable_boxes += [
+                (
+                    min(corner.x, centre.x) - room,
+                    min(corner.y, centre.y) - room,
+                    max(corner.x, centre.x) + room,
+                    max(corner.y, centre.y) + room,
+                ),
+                (min(centre.x, end.x), end.y - room, max(centre.x, end.x), end.y + room),
+            ]
             continue
-        runs = by_x[cable.x]
-        dx = (runs.index(cable.run) - (len(runs) - 1) / 2) * pitch
+        dx = (by_x[cable.x].index(cable.run) - (len(by_x[cable.x]) - 1) / 2) * pitch
         a, b = at(cable.x, cable.y0), at(cable.x, cable.y1)
         # The end on the route plane goes on past the wall: the cable runs on in the floor or
-        # ceiling
+        # ceiling; the end at a turn stops where its arc starts
         lo = a.y - CABLE_OUT if cable.y0 <= 0.5 else a.y
         hi = b.y + CABLE_OUT if cable.y1 >= e.height - 0.5 else b.y
+        if turn is not None:
+            if turn[0].y > turn[2].y:
+                lo = turn[0].y
+            else:
+                hi = turn[0].y
         line(Vec(a.x + dx, lo), Vec(b.x + dx, hi), LW_CABLE, color)
+        cable_boxes.append((a.x + dx - CABLE_ROOM, lo, a.x + dx + CABLE_ROOM, hi))
+    bends = _bend_labels(e, turns)
+    counts: list[tuple[str, Vec, float]] = []  # fixing counts: label, stroke middle, half
     tops = {f.x: max(g.y for g in e.fixings if g.x == f.x) for f in e.fixings}
     for f in e.fixings:
         spot = at(f.x, f.y)
         half = FIXING_HALF_MM + (max(f.count, len(by_x.get(f.x, ()))) - 1) / 2 * pitch
-        line(Vec(spot.x - half, spot.y), Vec(spot.x + half, spot.y), LW_WALL)
+        stroke = psp.add_line(
+            (spot.x - half, spot.y),
+            (spot.x + half, spot.y),
+            dxfattribs={"layer": E_ELEV.name, "lineweight": LW_WALL, "true_color": DARK},
+        )
+        stroke.transparency = FIXING_ALPHA
         if f.count > 1 and f.y == tops[f.x]:
-            text(f"×{f.count}", Vec(spot.x + half + 0.4, spot.y))
+            counts.append((f"×{f.count}", spot, half))
 
     # Wall: floor and ceiling lines are thicker, the ends are room corners
     line(Vec(x0, floor), Vec(x0 + w, floor), LW_FLOOR)
@@ -275,7 +315,14 @@ def _draw(
     taken: list[Box] = [
         (x0 + w, floor - 1.0, x0 + w + TICK + JOG + 12.0, top + 1.0),
         (x0 - 1.0, floor - TICK - JOG - 12.0, x0 + w + 1.0, floor),
+        *cable_boxes,
     ]
+
+    def lead(a: Vec, b: Vec) -> None:
+        dashed(a, b, GREY)
+
+    wall = (x0, floor, x0 + w, top)
+
     if e.board is not None:
         bd = e.board
         a = at(bd.x - bd.width / 2, bd.y - bd.height / 2)
@@ -290,7 +337,7 @@ def _draw(
         half = max(bx.size / 2 / scale, 0.8)
         rect((c.x - half, c.y - half, c.x + half, c.y + half), LW_WALL, BOX, 0xFFFFFF)
         taken.append((c.x - half, c.y - half, c.x + half, c.y + half))
-        _label(bx.label, c, half, taken, text, BOX)
+        _label(bx.label, c, half, taken, text, BOX, lead)
 
     # Outlets on the far side of the wall are faint, below their own, without dimensions
     # (those are on the elevation of that side)
@@ -335,7 +382,7 @@ def _draw(
         nums, half = labels.get(key, ([], 0.0))
         labels[key] = ([*nums, p.number], max(half, half_block))
     for (cx, cy), (nums, half) in labels.items():
-        _label(ranges(nums), Vec(cx, cy), half, taken, text, DARK)
+        _label(ranges(nums), Vec(cx, cy), half, taken, text, DARK, lead)
     # Plumbing: pipe rise from the floor in the network colour, a water outlet is a filled circle,
     # a drain is a circle of the pipe diameter; fixture number as on the "Plumbing" sheet (* =
     # typical height)
@@ -362,7 +409,12 @@ def _draw(
             top_c, top_r = c, rr
         fixtures[v.fixture] = (top_c, top_r, v.number, assumed or v.assumed)
     for c, rr, number, assumed in fixtures.values():
-        _label(f"{number}{'*' if assumed else ''}", c, rr, taken, text, WATER["sewer"])
+        _label(f"{number}{'*' if assumed else ''}", c, rr, taken, text, WATER["sewer"], lead)
+    # Fixing counts and turn radii after the numbers, where there is room
+    for note, spot, half in counts:
+        _label(note, spot, half, taken, text, DARK, lead, wall)
+    for note, arc_mid in bends:
+        _label(note, arc_mid, 0.3, taken, text, DARK, lead, wall)
     # Numbers of the far side's outlets come after our own: the spot by the symbol goes to ours
     # first
     for p in e.back:
@@ -373,6 +425,99 @@ def _draw(
     _ordinates_y(e, scale, x0 + w, floor, top, line, text)
 
 
+Turn = tuple[Vec, float, Vec, Vec]  # arc centre, radius, lane corner, end at the point
+
+
+def _turns(
+    e: WallElevation,
+    by_x: Mapping[float, Sequence[str]],
+    pitch: float,
+    scale: float,
+    at: Callable[[float, float], Vec],
+) -> dict[tuple[str, float], Turn]:
+    """Turns past an opening on the sheet, by (run, drop x): the lanes of one corner bend round
+    one centre, the inner lane (nearest the side the turn goes to) at its bend radius, each
+    outer one a lane further (concentric, like the bundle); the radius never takes more than
+    the arms have. A cable without a radius turns at a sharp corner."""
+    verticals = {(c.run, c.x): c for c in e.cables if c.x1 is None}
+    corners: dict[tuple[float, float, bool, bool], list[CableView]] = {}
+    for c in e.cables:
+        v = verticals.get((c.run, c.x))
+        if c.x1 is None or v is None or c.run not in by_x.get(c.x, ()):
+            continue
+        up = v.y1 > c.y0 + 0.5  # the drop goes up from the turn: a ceiling route
+        corners.setdefault((c.x, c.y0, c.x1 > c.x, up), []).append(c)
+    out: dict[tuple[str, float], Turn] = {}
+    for (x, y, right, up), turning in corners.items():
+        sx, sy = (1.0 if right else -1.0), (1.0 if up else -1.0)
+        runs = by_x[x]
+
+        def lane(c: CableView, runs: Sequence[str] = runs) -> float:
+            return (runs.index(c.run) - (len(runs) - 1) / 2) * pitch
+
+        inner = max(turning, key=lambda c: lane(c) * sx)
+        corner = at(x, y)
+        ix, iy = corner.x + lane(inner), corner.y + lane(inner) * sx * sy
+        reach = min(
+            abs(at(c.x1, y).x - ix) for c in turning if c.x1 is not None
+        )  # the horizontal arm
+        rise = min(
+            abs(at(x, verticals[(c.run, x)].y1 if up else verticals[(c.run, x)].y0).y - iy)
+            for c in turning
+        )
+        r0 = min((inner.radius or 0.0) / scale, reach, rise)
+        centre = Vec(ix + sx * r0, iy + sy * r0)
+        for c in turning:
+            t = (lane(inner) - lane(c)) * sx
+            k = Vec(corner.x + lane(c), iy - sy * t)
+            end = at(c.x1 if c.x1 is not None else x, y).x
+            out[(c.run, x)] = (centre, r0 + t, k, Vec(end, k.y))
+    return out
+
+
+def _quarter(v: Vec) -> tuple[float, float]:
+    """Start and end angle, degrees, of the quarter arc round a centre: the lane corner lies at
+    v from the centre, the arc runs between the two tangent points either side of it."""
+    a = 180.0 if v.x < 0 else 0.0  # the tangent point on the drop
+    b = 270.0 if v.y < 0 else 90.0  # the tangent point on the arm along the wall
+    return (a, b) if (b - a) % 360 == 90 else (b, a)
+
+
+def _bend_labels(
+    e: WallElevation, turns: Mapping[tuple[str, float], Turn]
+) -> list[tuple[str, Vec]]:
+    """One radius label per turning bundle: "R130–160" inner to outer, "R138" for one cable;
+    with the middle of the outer lane's arc it names."""
+    groups: dict[tuple[float, float], list[tuple[float, Vec, Vec]]] = {}
+    for c in e.cables:
+        turn = turns.get((c.run, c.x))
+        if c.x1 is None or turn is None or c.radius is None:
+            continue
+        centre, radius, corner, _ = turn
+        groups.setdefault((centre.x, centre.y), []).append((radius, corner, centre))
+    out: list[tuple[str, Vec]] = []
+    radii_by = {
+        key: sorted(
+            c.radius
+            for c in e.cables
+            if c.x1 is not None
+            and c.radius is not None
+            and (t := turns.get((c.run, c.x))) is not None
+            and (t[0].x, t[0].y) == key
+        )
+        for key in groups
+    }
+    for key, members in groups.items():
+        _, corner, centre = max(members, key=lambda m: m[0])  # the outer lane
+        lo, hi = radii_by[key][0], radii_by[key][-1]
+        label = f"R{lo:.0f}" if round(lo) == round(hi) else f"R{lo:.0f}–{hi:.0f}"
+        out.append((label, centre + (corner - centre) * math.sqrt(0.5)))
+    return out
+
+
+LABEL_RINGS = 6  # how far a label may go from its symbol, in label heights
+
+
 def _label(
     s: str,
     c: Vec,
@@ -380,17 +525,50 @@ def _label(
     taken: list[Box],
     text: Callable[..., None],
     color: int,
+    lead: Callable[[Vec, Vec], None] | None = None,
+    bounds: Box | None = None,
 ) -> None:
-    """Label next to a symbol: right, left, above or below, wherever is free."""
+    """Label next to a symbol: right, left, above or below, wherever is free; if none is, further
+    out ring by ring (also the corners), with a dashed leader to the symbol. With bounds (the
+    wall) a moved label stays within them."""
     tw, th = text_width(s, ORD_TEXT), max(ORD_TEXT, MIN_TEXT_MM)
     gap = 0.6
-    options = [
-        ((c.x + half + gap, c.y - th / 2, c.x + half + gap + tw, c.y + th / 2), "left"),
-        ((c.x - half - gap - tw, c.y - th / 2, c.x - half - gap, c.y + th / 2), "left"),
-        ((c.x - tw / 2, c.y + half + gap, c.x + tw / 2, c.y + half + gap + th), "left"),
-        ((c.x - tw / 2, c.y - half - gap - th, c.x + tw / 2, c.y - half - gap), "left"),
-    ]
-    choice = next((b for b, _ in options if not any(_hit(b, t) for t in taken)), options[0][0])
+
+    def ring(d: float) -> list[Box]:
+        r = half + d
+        return [
+            (c.x + r, c.y - th / 2, c.x + r + tw, c.y + th / 2),
+            (c.x - r - tw, c.y - th / 2, c.x - r, c.y + th / 2),
+            (c.x - tw / 2, c.y + r, c.x + tw / 2, c.y + r + th),
+            (c.x - tw / 2, c.y - r - th, c.x + tw / 2, c.y - r),
+            (c.x + r, c.y + r, c.x + r + tw, c.y + r + th),
+            (c.x - r - tw, c.y + r, c.x - r, c.y + r + th),
+            (c.x + r, c.y - r - th, c.x + r + tw, c.y - r),
+            (c.x - r - tw, c.y - r - th, c.x - r, c.y - r),
+        ]
+
+    def free(b: Box) -> bool:
+        return not any(_hit(b, t) for t in taken)
+
+    def inside(b: Box) -> bool:
+        return bounds is None or (
+            b[0] >= bounds[0] and b[1] >= bounds[1] and b[2] <= bounds[2] and b[3] <= bounds[3]
+        )
+
+    near = ring(gap)[:4]
+    choice = next((b for b in near if free(b) and inside(b)), None)
+    if choice is None:
+        far = (b for k in range(1, LABEL_RINGS + 1) for b in ring(gap + k * th))
+        choice = next((b for b in far if free(b) and inside(b)), None)
+        if choice is not None and lead is not None:
+            # From the nearest point of the label box to the symbol's edge
+            px = min(max(c.x, choice[0]), choice[2])
+            py = min(max(c.y, choice[1]), choice[3])
+            to = Vec(px, py) - c
+            if to.length() > half:
+                lead(Vec(px, py), c + to * (half / to.length()))
+    if choice is None:
+        choice = near[0]
     taken.append(choice)
     text(s, Vec(choice[0], (choice[1] + choice[3]) / 2), color=color)
 

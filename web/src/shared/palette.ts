@@ -19,7 +19,8 @@ export function screenColor(c: string): string {
   if (!ink || ink === "none" || !c) return c;
   const n = parseInt(c.slice(1, 7), 16), r = n >> 16, g = (n >> 8) & 255, b = n & 255;
   const grey = Math.max(r, g, b) - Math.min(r, g, b) < 24;
-  if (grey && r < 128) return ink;
+  const alpha = c.length === 9 && /^#[0-9a-f]{6}$/i.test(ink) ? c.slice(7) : "";  // #rrggbbaa from the sheet
+  if (grey && r < 128) return ink + alpha;
   if (grey && r > 230) return palette.paper;
   return c;
 }

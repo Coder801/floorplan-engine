@@ -414,3 +414,29 @@ def test_socket_under_a_window_is_reached_beside_it() -> None:
     )
     assert [c.get("x1") for c in data["chases"]].count(1000) == 1
     assert next(c for c in data["cables"] if "x1" in c)["x1"] == 1000
+
+
+def test_turn_radii_bundle_inner_first_by_turn_side() -> None:
+    """Cables turning at one corner bend as a bundle: the inner lane (nearest the side the turn
+    goes to) is the reference, the next ones go out; a cable without sizes keeps no radius."""
+    from floorplan_engine.electrical.elevations import CableView, turn_radii
+    from floorplan_engine.electrical.mounting import BendSize, bundle_radii
+
+    flat = BendSize(11.5, 115.0)
+    turning = [
+        CableView("a", "QF1", 300.0, 300.0, 300.0, 900.0),
+        CableView("b", "QF1", 300.0, 300.0, 300.0, 900.0),
+        CableView("c", "QF2", 300.0, 300.0, 300.0, 900.0),
+    ]
+    drop = CableView("a", "QF1", 300.0, 300.0, 2700.0)
+    sizes = {"a": (True, flat), "b": (True, flat), "c": (True, None)}
+    out = turn_radii([drop, *turning], sizes)
+    assert out[0] == drop  # the drop itself has no radius
+    r_inner, r_next = bundle_radii([flat, flat])
+    # Turning right: the rightmost lane (last run) is inner; "c" has no sizes
+    radius = {c.run: c.radius for c in out[1:]}
+    assert radius == {"a": r_next, "b": r_inner, "c": None}
+    # Turning left: the leftmost lane is inner
+    left = [CableView(c.run, c.group, c.x, c.y0, c.y1, 0.0) for c in turning]
+    radius = {c.run: c.radius for c in turn_radii(left, sizes)}
+    assert radius == {"a": r_inner, "b": r_next, "c": None}

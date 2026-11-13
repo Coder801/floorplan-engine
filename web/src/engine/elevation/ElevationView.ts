@@ -18,7 +18,7 @@ import { view } from "@/shared/store";
 import type { ElevWall, Elevation, PipeKind, XY } from "@/shared/types";
 import { clampStep, Glide, LAST_STEP, PinchSteps, RAIL_PX, WheelSteps, type Zoom, ZOOM_STEPS, zoomLabel } from "@/shared/zoom";
 import { apply, flatToIso, invert, isoBounds, isoScene, wallOutline, type Affine, type IsoScene, type Mat } from "./iso";
-import { badgePlaces, handleSpan, HANDLE, spread, type Rect } from "./layout";
+import { badgePlaces, handleSpan, HANDLE, leader, spread, type Rect } from "./layout";
 
 const PAD = 20;            // px around the elevation
 const RULER_X = 64;        // px below the floor: offsets
@@ -34,6 +34,9 @@ const FIXING_MM = 40;      // half the fixing stroke across a cable drop
 const CABLE_PITCH_MM = 15;  // cables of one drop side by side, wall mm
 const CABLE_OUT = 8;       // px: a cable from the ceiling or floor goes on past the wall edge
 const CABLE_W = 0.6;       // px: cable line width
+const FIXING_ALPHA = 0.5;  // fixings are half transparent: the cables show through them
+const CABLE_ROOM = 3;      // px either side of a cable that labels keep off
+const LEADER = "#9a9288";   // dashed leader from a moved label to its anchor
 const MIN_R = 5;           // px: symbol no smaller than this
 const ISO_PAD = 28;        // px around the isometry: number badges
 const SIDE_ALPHA = 0.45;   // neighbouring wall in isometry is translucent
@@ -49,6 +52,12 @@ export const WATER: Record<PipeKind, string> = { cold: "#1f77b4", hot: "#d62728"
 interface Hit { key: string; r: Rect; inv: Affine | null }  // inv: screen → flat wall view
 
 export type ElevMode = "flat" | "iso";
+
+// A cable's turn past an opening, flat view px (ElevationView.turns)
+interface Turn {
+  cx: number; cy: number; r: number; kx: number; ky: number;
+  group: string; label: string | null; ox: number; oy: number;
+}
 
 // How to draw a wall: visible part from…to (mm), outline (mm; the neighbour has the wavy cut)
 // and whether to clip by it, dimension scales and which side heights go on (null means no
@@ -260,6 +269,41 @@ export class ElevationView {
     ctx.restore();
   }
 
+  // Turns past an opening in flat view px, by `${key}@${x}`: arc centre, radius, the lane corner,
+  // and per bundle (group) the outer corner and the radius label
+  private turns(cables: NonNullable<ElevWall["cables"]>, lanes: Map<string, number>) {
+    const out = new Map<string, Turn>();
+    const verticals = new Map(cables.filter((c) => c.x1 === undefined).map((c) => [`${c.key}@${c.x}`, c]));
+    const corners = new Map<string, { x: number; y: number; vx: number; vy: number; cs: typeof cables }>();
+    for (const c of cables) {
+      const v = verticals.get(`${c.key}@${c.x}`);
+      if (c.x1 === undefined || !v) continue;
+      const up = v.y1 > c.y0 + 0.5, vx = c.x1 > c.x ? 1 : -1, vy = up ? -1 : 1;  // screen y down
+      const id = `${c.x}|${c.y0}|${vx}|${vy}`;
+      const g = corners.get(id) ?? { x: c.x, y: c.y0, vx, vy, cs: [] };
+      g.cs.push(c); corners.set(id, g);
+    }
+    for (const [id, { x, y, vx, vy, cs }] of corners) {
+      const lane = (c: (typeof cs)[number]) => lanes.get(`${c.key}@${x}`) ?? 0;
+      const inner = cs.reduce((a, c) => (lane(c) * vx > lane(a) * vx ? c : a));
+      const X = this.sx(x), Y = this.sy(y), ix = X + lane(inner), iy = Y + lane(inner) * vx * vy;
+      const reach = Math.min(...cs.map((c) => Math.abs(this.sx(c.x1!) - ix)));
+      const rise = Math.min(...cs.map((c) => { const v = verticals.get(`${c.key}@${x}`)!; return Math.abs(this.sy(vy < 0 ? v.y1 : v.y0) - iy); }));
+      const r0 = Math.min((inner.r ?? 0) * this.scale, reach, rise);
+      const cx = ix + vx * r0, cy = iy + vy * r0;
+      const radii = cs.map((c) => c.r).filter((r): r is number => r !== undefined).sort((a, b) => a - b);
+      const lo = radii.length ? Math.round(radii[0]) : null, hi = radii.length ? Math.round(radii[radii.length - 1]) : null;
+      const label = lo === null ? null : lo === hi ? `R${lo}` : `R${lo}–${hi}`;
+      const outer = cs.reduce((a, c) => (lane(c) * vx < lane(a) * vx ? c : a));
+      const ot = (lane(inner) - lane(outer)) * vx, ox = X + lane(outer), oy = iy - vy * ot;
+      for (const c of cs) {
+        const t = (lane(inner) - lane(c)) * vx;
+        out.set(`${c.key}@${x}`, { cx, cy, r: r0 + t, kx: X + lane(c), ky: iy - vy * t, group: id, label, ox, oy });
+      }
+    }
+    return out;
+  }
+
   private hit(key: string, r: Rect) { this.hits.push({ key, r, inv: this.inv }); }
 
   // The wall in flat view px (in isometry, under the plane matrix): chases, edges, openings,
@@ -319,21 +363,43 @@ export class ElevationView {
       placed.set(c.x, k + 1);
       lanes.set(`${c.key}@${c.x}`, (k - (n - 1) / 2) * lane);
     }
+    // A turn past an opening is an arc of its bend radius round one centre for the bundle: the
+    // inner lane (nearest the side it turns to) at its radius, each outer one a lane further;
+    // the radius never takes more than the arms have. "R130–160" outside the corner
+    const turns = this.turns(cables, lanes);
     placed.clear();
     for (const c of cables) {
+      const turn = turns.get(`${c.key}@${c.x}`);
       if (c.x1 !== undefined) {
-        const d = lanes.get(`${c.key}@${c.x}`) ?? 0, y = this.sy(c.y0) - d, x = this.sx(c.x) + d;
-        this.line(x, this.sy(c.y0), x, y, c.color ?? INK, CABLE_W);  // the corner: lanes stay nested
-        this.line(x, y, this.sx(c.x1), y, c.color ?? INK, CABLE_W);
+        if (!turn) continue;
+        const { cx, cy, kx, ky, r: rr } = turn;
+        ctx.save();
+        ctx.strokeStyle = screenColor(c.color ?? INK); ctx.lineWidth = CABLE_W;
+        ctx.beginPath(); ctx.moveTo(kx, cy); ctx.arcTo(kx, ky, cx, ky, Math.max(rr, 0.01)); ctx.lineTo(this.sx(c.x1), ky); ctx.stroke();
+        ctx.restore();
+        const ex = this.sx(c.x1);
+        taken.push([Math.min(kx, cx) - CABLE_ROOM, Math.min(cy, ky) - CABLE_ROOM, Math.max(kx, cx) + CABLE_ROOM, Math.max(cy, ky) + CABLE_ROOM]);
+        taken.push([Math.min(cx, ex), ky - CABLE_ROOM, Math.max(cx, ex), ky + CABLE_ROOM]);
         continue;
       }
       const n = drops.get(c.x)!, k = placed.get(c.x) ?? 0;
       placed.set(c.x, k + 1);
       const x = this.sx(c.x) + (k - (n - 1) / 2) * lane;
-      // The end on the route plane goes on past the wall: the cable runs on in the floor or ceiling
-      const lo = this.sy(c.y0) + (c.y0 <= 0.5 ? CABLE_OUT : 0);
-      const hi = this.sy(c.y1) - (c.y1 >= d.height - 0.5 ? CABLE_OUT : 0);
+      // The end on the route plane goes on past the wall: the cable runs on in the floor or
+      // ceiling; the end at a turn stops where its arc starts
+      let lo = this.sy(c.y0) + (c.y0 <= 0.5 ? CABLE_OUT : 0);
+      let hi = this.sy(c.y1) - (c.y1 >= d.height - 0.5 ? CABLE_OUT : 0);
+      if (turn) { if (turn.cy < turn.ky) lo = turn.cy; else hi = turn.cy; }
       this.line(x, lo, x, hi, c.color ?? INK, CABLE_W);
+      taken.push([x - CABLE_ROOM, Math.min(lo, hi), x + CABLE_ROOM, Math.max(lo, hi)]);
+    }
+    // Plain labels (fixing counts, turn radii) go after the numbers, where there is room
+    const notes: { key: string; text: string; anchor: Rect }[] = [];
+    for (const b of new Map([...turns.values()].map((t) => [t.group, t])).values()) {
+      if (!b.label) continue;
+      // Anchor: the middle of the outer lane's arc
+      const k = Math.abs(b.cx - b.ox) * Math.SQRT1_2, mx = b.cx - Math.sign(b.cx - b.ox) * k, my = b.cy - Math.sign(b.cy - b.oy) * k;
+      notes.push({ key: `bend:${b.group}`, text: b.label, anchor: [mx - 1, my - 1, mx + 1, my + 1] });
     }
     const fixings = elec ? e.fixings ?? [] : [];
     const tops = new Map<number, number>();
@@ -341,8 +407,10 @@ export class ElevationView {
     for (const f of fixings) {
       const spread = (Math.max(f.n ?? 1, drops.get(f.x) ?? 1) - 1) / 2 * lane;
       const half = Math.max(FIXING_MM * s, 3) + spread, x = this.sx(f.x), y = this.sy(f.y);
+      ctx.save(); ctx.globalAlpha *= FIXING_ALPHA;
       this.line(x - half, y, x + half, y, INK, 1.2);
-      if ((f.n ?? 1) > 1 && f.y === tops.get(f.x)) this.text(`×${f.n}`, x + half + 3, y, LABEL_PX, INK, "left");
+      ctx.restore();
+      if ((f.n ?? 1) > 1 && f.y === tops.get(f.x)) notes.push({ key: `fix:${f.x}`, text: `×${f.n}`, anchor: [x - half, y - 1, x + half, y + 1] });
     }
 
     // Wall: floor and ceiling lines thicker, ends are the room corners
@@ -473,8 +541,15 @@ export class ElevationView {
       ...[...fixtures.values()].map((f) => ({ key: f.key, text: `${f.n}${f.assumed ? "*" : ""}`, color: WATER.sewer, box: false, anchor: f.rect })),
     ].map((l) => ({ ...l, w: ctx.measureText(l.text).width + 10 }));
     const places = badgePlaces(labels, BADGE_PX + 6, taken);
-    for (const l of last(labels.map((l, k) => ({ ...l, at: places[k] })))) {
+    ctx.font = `${LABEL_PX}px ${this.font}`;
+    const plain = notes.map((n) => ({ ...n, w: ctx.measureText(n.text).width + 2 }));
+    badgePlaces(plain, LABEL_PX + 2, taken, [x0, top, x1, floor]).forEach((p, k) => {
+      if (p.far) this.line(...leader(p.at, plain[k].anchor), LEADER, 0.8, [3, 3]);
+      this.text(plain[k].text, p.at[0] + 1, (p.at[1] + p.at[3]) / 2, LABEL_PX, INK, "left");
+    });
+    for (const l of last(labels.map((l, k) => ({ ...l, at: places[k].at, far: places[k].far })))) {
       const on = lit.has(l.key);
+      if (l.far) this.line(...leader(l.at, l.anchor), LEADER, 0.8, [3, 3]);
       if (l.box) this.text(l.text, (l.at[0] + l.at[2]) / 2, (l.at[1] + l.at[3]) / 2, BADGE_PX, on ? palette.hl : BOX, "center");
       else this.badge(l.text, l.at, on ? palette.hl : l.color, on);
       this.hit(l.key, l.at);
