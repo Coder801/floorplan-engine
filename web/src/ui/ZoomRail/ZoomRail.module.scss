@@ -6,7 +6,8 @@
   @include raised;
   position: absolute; right: 12px; top: 50%; transform: translateY(-50%); z-index: 3;
   display: grid; justify-items: center; width: 30px; overflow: visible;
-  > button { @include bare-button; width: 30px; min-width: 0; min-height: 32px; padding: 0; border-radius: 0; font-size: 16px;
+  // The global button reset inherits text-align, so the sign and the icon are centred here
+  > button { @include bare-button; display: grid; place-items: center; width: 30px; min-width: 0; min-height: 32px; padding: 0; border-radius: 0; font-size: 16px;
     &:hover:not(:disabled) { background: var(--soft); } @include focus-ring; }
   > button:first-child { border-radius: 8px 8px 0 0; }
   > button:disabled { opacity: .35; }
