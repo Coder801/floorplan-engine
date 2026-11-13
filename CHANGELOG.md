@@ -1,3 +1,29 @@
+## v0.7.0 (2026-11-13)
+
+### Feat
+
+- **viewer**: draw the whole frame of points in the pinned hint
+- **viewer**: draw an engineering grid under the sheets
+- **viewer**: group the layers panel into sections with their own eye
+- **epd**: show the whole frame of points in the pinned hint
+- **electrical,drawing**: share conduits, route LED lines and one feed per group
+- **model,drawing**: name walls with Latin letters in wall codes
+- **viewer**: strike through declined steps in the overview list
+- **viewer**: rework wizard footer, required steps and backup later
+- **electrical,drawing,viewer**: draw cable turns as bend-radius arcs
+- **electrical**: add comb busbars and split materials by stage
+- **viewer**: add a two-level header menu by domains
+- **electrical,viewer**: add LED supply box and extra work options
+- **service,deploy,admin,docs**: run locally as on the server
+- **viewer,agents**: add ui atoms, type scale and debug block names
+
+### Fix
+
+- **viewer**: keep wall pager rows square and capitalise wall names
+- **viewer**: centre the zoom rail buttons again
+- **viewer**: keep the accent fill on a pressed bare button
+- **electrical**: use 4x1.5 between pass switches without a box
+
 ## v0.6.0 (2026-11-12)
 
 ### Feat

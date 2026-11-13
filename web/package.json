@@ -1,7 +1,7 @@
 {
   "name": "floorplan-engine-web",
   "private": true,
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Просмотр собранных проектов Штроба: листы .epd, правка трасс, 3D проводки",
   "type": "module",
   "scripts": {
