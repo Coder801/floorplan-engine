@@ -16,17 +16,18 @@ def _names(plan: Plan) -> dict[tuple[str, str], Any]:
 
 
 def test_letters_skip_lookalikes_and_repeat_with_a_number() -> None:
-    assert not set("ЗОЧЁЙЪЬЫЭЄІЇ") & set(LETTERS)
-    assert [letter(k) for k in range(3)] == ["А", "Б", "В"]
-    assert letter(len(LETTERS)) == "А2"
+    assert not set("IOQZ") & set(LETTERS)
+    assert LETTERS.isascii() and LETTERS.isupper() and len(set(LETTERS)) == len(LETTERS)
+    assert [letter(k) for k in range(3)] == ["A", "B", "C"]
+    assert letter(len(LETTERS)) == "A2"
 
 
 def test_codes_are_unique_in_the_flat_by_schedule_number() -> None:
     plan = make_flat()
     _, contours = validate_plan(plan)
     codes = wall_codes(plan, contours)
-    assert codes[("bath", "w1")] == "1.А" and codes[("bath", "w3")] == "1.В"
-    assert codes[("kitchen", "w1")] == "2.А"
+    assert codes[("bath", "w1")] == "1.A" and codes[("bath", "w3")] == "1.C"
+    assert codes[("kitchen", "w1")] == "2.A"
     assert len(set(codes.values())) == len(codes)
 
 
@@ -52,14 +53,14 @@ def test_zones_that_split_the_floor_get_numbers_of_their_own() -> None:
     )
     _, contours = validate_plan(plan)
     codes = wall_codes(plan, contours)
-    assert [codes[("hall", w)] for w in ("w1", "w2", "w3", "w4")] == ["1.А", "1.Б", "2.А", "2.Б"]
+    assert [codes[("hall", w)] for w in ("w1", "w2", "w3", "w4")] == ["1.A", "1.B", "2.A", "2.B"]
 
 
 def test_description_says_what_is_behind_and_in_the_wall() -> None:
     names = _names(make_flat())
     assert names[("bath", "w3")].text == "Кухня за стеной, дверь"
     assert names[("bath", "w1")].text == "наружная"
-    assert names[("bath", "w3")].full == "1.В · Кухня за стеной, дверь"
+    assert names[("bath", "w3")].full == "1.C · Кухня за стеной, дверь"
 
 
 def test_openings_are_counted_in_ukrainian() -> None:
@@ -77,4 +78,4 @@ def test_openings_are_counted_in_ukrainian() -> None:
 def test_name_from_yaml_replaces_the_description_but_not_the_code() -> None:
     walls = [{**w, "name": "стена с телевизором"} if k == 1 else w for k, w in enumerate(SQUARE)]
     names = _names(make_plan(walls))
-    assert names[("r", "w2")].full == "1.Б · стена с телевизором"
+    assert names[("r", "w2")].full == "1.B · стена с телевизором"

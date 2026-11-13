@@ -225,8 +225,8 @@ def test_every_wall_has_its_code_inside_the_room_off_the_door_swing() -> None:
         for e in msp.query("TEXT")
         if isinstance(e, Text) and e.dxf.layer == A_TEXT.name and "." in e.dxf.text
     }
-    assert sorted(codes) == ["1.А", "1.Б", "1.В", "1.Г", "1.Д", "1.Е"]
-    assert codes["1.Е"][0] == ("wall", "r.w6")
+    assert sorted(codes) == ["1.A", "1.B", "1.C", "1.D", "1.E", "1.F"]
+    assert codes["1.F"][0] == ("wall", "r.w6")
     g = room_geometries(plan, contours)[0]
     room = shapely.Polygon([(v.x, v.y) for v in g.contour.vertices])
     swing = door_swing(g, g.room.openings[0])

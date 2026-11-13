@@ -5,7 +5,7 @@ is drawn once, and where a partition meets an exterior wall there are no inner l
 The silhouette boundary is drawn as segments by coordinates, openings are gaps with reveals.
 Hatching: load-bearing (monolithic) walls are dense, partitions are sparse. Where a
 load-bearing wall meets a partition, a material boundary line remains.
-Every wall gets its code ("2.В", model/wall_names.py) inside the room along the wall, on a spot
+Every wall gets its code ("2.C", model/wall_names.py) inside the room along the wall, on a spot
 free of dimensions, labels and door swings: the same code as on the elevations and in the viewer.
 """
 

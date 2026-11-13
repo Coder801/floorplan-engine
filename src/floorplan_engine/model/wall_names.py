@@ -2,9 +2,10 @@
 nothing, so every wall gets a code unique in the flat and a description.
 
 Code: the floor number from the room schedule and a letter by the walk (clockwise from the
-room's first wall): "2.В". A zone that splits the floor is a floor of its own, with its own
-number, as in the schedule. Letters are Cyrillic without the ones easily confused with digits or
-with each other; past the last letter they repeat with a number ("А2").
+room's first wall): "2.C". A zone that splits the floor is a floor of its own, with its own
+number, as in the schedule. Letters are Latin (decision 2026-11-13: the same in any
+language of the project, as the axes of a drawing), without the ones easily confused with digits
+or with each other; past the last letter they repeat with a number ("A2").
 
 Description: `name` of the wall in room.yaml, if given; otherwise built from geometry — what is
 behind the wall (neighbouring rooms, or "наружная" when no room of the flat is there) and what is
@@ -29,8 +30,8 @@ from floorplan_engine.model.schema import OpeningType, Plan, Room
 from floorplan_engine.model.texts import Language
 from floorplan_engine.model.zones import plan_floors
 
-# Same in ru and uk; no З (3), О (0), Ч (4), Ё/Й/Ъ/Ь/Ы and no letters of one language only
-LETTERS = "АБВГДЕЖИКЛМНПРСТУФХЦШ"
+# Latin, as drawing axes: no I (1), O and Q (0), Z (2)
+LETTERS = "ABCDEFGHJKLMNPRSTUVWXY"
 BEHIND_PROBE_MM = 50.0  # how far past the outer wall face to look for a neighbouring room
 FACE_TOLERANCE_MM = 30.0  # neighbour face no farther than this from this wall's outer face
 BEHIND_STEP_MM = 500.0  # probe step along the wall (neighbour behind part of a wall)
@@ -47,7 +48,7 @@ OPENING_ORDER = (OpeningType.WINDOW, OpeningType.DOOR, OpeningType.OPENING)
 
 @dataclass(frozen=True)
 class WallName:
-    code: str  # "2.В": unique in the flat
+    code: str  # "2.C": unique in the flat
     text: str  # "Кухня за стеной, дверь" or the wall's name from room.yaml
 
     @property
