@@ -207,12 +207,21 @@ export interface LegendEntry {
   items: Item[];
 }
 
-// Socket block on a wall: posts, mm from the wall start and the floor, key of the wall elevation
+// One point of a frame: its kind (socket, switch, pass_switch, data, tv…), its posts and whether
+// it is the point the hint is about
+export interface BlockItem {
+  type: string;
+  posts: number;
+  own: boolean;
+}
+
+// Frame on a wall: posts in all, mm from the wall start and the floor, key of the wall elevation
 export interface PointBlock {
   posts: number;
   x: number;
   y: number;
   wall: string;
+  items?: BlockItem[];  // every point of the frame, left to right; absent in older builds
 }
 
 export interface ObjectCard {

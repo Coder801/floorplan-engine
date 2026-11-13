@@ -1,4 +1,5 @@
-// Scheme of a socket block: lines take the theme colours, the text is the size of the hint
+// Scheme of a frame: lines take the theme colours, the text is the size of the hint. Posts of the
+// other points of the frame are dimmed, the chosen point stays bright
 
 .block {
   display: block; width: 100%; margin-top: 10px;
@@ -9,3 +10,5 @@
 .frame { stroke: var(--text); stroke-width: 1.2; }
 .post { stroke: var(--text); stroke-width: 1.2; }
 .dim { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 3 3; }
+.mark { fill: var(--text) !important; font-weight: 600; }
+.other { opacity: 0.28; }
