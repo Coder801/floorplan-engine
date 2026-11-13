@@ -1,6 +1,8 @@
 // Setup wizard: a popup with the steps on the left and one question in the middle, cards with
 // pictures or a field. What it asks depends on the project (steps.ts). Nothing is written until
-// "Apply": the choices go together, with one rebuild (api.saveWizard). Until then they are a draft
+// "Recalculate" (on every step, off until something changes and while a required step, one that
+// changes the price, has no answer): the choices go together, with one rebuild (api.saveWizard).
+// Until then they are a draft
 // that survives a reload (draft.ts). An unanswered step stays an open question; the assumption of
 // the model is only marked on its card.
 
@@ -17,6 +19,7 @@ import { Button } from "@/ui/Button";
 import { Card } from "@/ui/Card";
 import { Heading } from "@/ui/Heading";
 import { IconButton } from "@/ui/IconButton";
+import { StepMark } from "@/ui/StepMark";
 import { Tag } from "@/ui/Tag";
 import { Text } from "@/ui/Text";
 import { FlatCut } from "@/widgets/FlatCut";
@@ -28,7 +31,7 @@ import { masterOn } from "@/widgets/MasterList/master";
 import { findChoice } from "@/widgets/VariantInfo/variants";
 import { WizardArt } from "@/widgets/WizardArt";
 import { clearDraft, loadDraft, samePicks, saveDraft } from "./draft";
-import { UNKNOWN, VARIANT_STEPS, applyPick, chasesKept, initialPicks, invalid, isPicked, optionKey, otherQuestions, setupOf, variantOf, wizardBody, wizardSteps, type Picks, type Step, type StepId } from "./steps";
+import { UNKNOWN, VARIANT_STEPS, applyPick, chasesKept, initialPicks, invalid, isPicked, isRequired, missingSteps, optionKey, otherQuestions, setupOf, variantOf, wizardBody, wizardSteps, type Picks, type Step, type StepId } from "./steps";
 import css from "./Wizard.module.scss";
 
 const DONE = "done";
@@ -78,6 +81,8 @@ export function Wizard({ project, variants, ceiling, scene = null, reserve, mast
   const wrong = steps.find((s) => invalid(s, picks[s.id]));
   const body = wizardBody(setup, picks);
   const changed = !!body.variant || !!body.answers;
+  // Required steps (those that change the price) with no answer: nothing is recalculated without them
+  const missing = missingSteps(steps, picks);
   const pick = (id: StepId, value: string) => { setPicks((p) => applyPick(p, id, value)); setError(null); };
   const go = (delta: number) => setAt(steps[index + delta]?.id ?? DONE);
   // A list of groups always shows a set (the project's one until changed): "next" agrees with it,
@@ -151,6 +156,7 @@ export function Wizard({ project, variants, ceiling, scene = null, reserve, mast
   const groups = (["wiring", "panel", "reserve", "extra"] as const).filter((g) => steps.some((s) => s.group === g));
   const shownTitle = step ? say(`wizard.steps.${step.id}.title`) : t("wizard.done.title");
   const position = step ? index + 1 : steps.length + 1;
+  const first = step ? index === 0 : steps.length === 0;
 
   return (
     <div className={css.veil} data-veil="" data-closing={closing || undefined}>
@@ -167,9 +173,7 @@ export function Wizard({ project, variants, ceiling, scene = null, reserve, mast
                   return (
                     <li key={s.id}>
                       <button type="button" className={cx(css.step, on && css.on)} aria-current={on ? "step" : undefined} onClick={() => setAt(s.id)}>
-                        <span className={cx(css.mark, isPicked(picks[s.id]) && css.picked)} aria-hidden="true">
-                          {isPicked(picks[s.id]) ? "✓" : ""}
-                        </span>
+                        <StepMark done={isPicked(picks[s.id])} />
                         <span>{t(`wizard.steps.${s.id}.short`)}</span>
                       </button>
                     </li>
@@ -195,6 +199,11 @@ export function Wizard({ project, variants, ceiling, scene = null, reserve, mast
           <Heading level={1}>{shownTitle}</Heading>
           {step ? (
             <>
+              <div>
+                {isRequired(step.id)
+                  ? <Tag variant="outline" tone="major">{t("wizard.required")}</Tag>
+                  : <Tag variant="outline">{t("wizard.optional")}</Tag>}
+              </div>
               <Text tone="muted">{say(`wizard.steps.${step.id}.why`)}</Text>
               {step.kind === "cards" ? (
                 <div className={css.cards} role="radiogroup" aria-label={shownTitle}>
@@ -283,7 +292,7 @@ export function Wizard({ project, variants, ceiling, scene = null, reserve, mast
                   return [
                     <dt key={`k${s.id}`}>{t(`wizard.steps.${s.id}.short`)}</dt>,
                     <dd key={`v${s.id}`} className={cx(!isPicked(value) && "muted")}>
-                      {isPicked(value) ? optionName(s, value!) : t("wizard.done.unset")}
+                      {isPicked(value) ? optionName(s, value!) : isRequired(s.id) ? t("wizard.done.unsetRequired") : t("wizard.done.unset")}
                       {moved && <Tag variant="outline" className={css.changed}>{t("wizard.done.changed")}</Tag>}
                     </dd>,
                   ];
@@ -301,23 +310,27 @@ export function Wizard({ project, variants, ceiling, scene = null, reserve, mast
                   <Button variant="link" onClick={onQuestions}>{t("overview.openQuestions")}</Button>
                 </Text>
               )}
-              {wrong && <Text tone="major">{t("wizard.done.wrong", { step: t(`wizard.steps.${wrong.id}.short`) })}</Text>}
-              {error && <Text tone="major" role="alert">{error}</Text>}
             </>
           )}
+          {/* "Recalculate" is on every step: why it is off or what the server refused shows here too */}
+          {missing.length > 0 && (changed || !step) && (
+            <Text tone="major">{t("wizard.missing", { steps: missing.map((s) => t(`wizard.steps.${s.id}.short`)).join(", ") })}</Text>
+          )}
+          {wrong && wrong.id !== step?.id && <Text tone="major">{t("wizard.done.wrong", { step: t(`wizard.steps.${wrong.id}.short`) })}</Text>}
+          {error && <Text tone="major" role="alert">{error}</Text>}
         </section>
 
         <footer className={css.foot}>
-          <Button disabled={at === steps[0]?.id} onClick={() => go(at === DONE ? steps.length - 1 - index : -1)}>{t("wizard.back")}</Button>
-          {step ? (
-            <Button variant="primary" className={css.primary} disabled={invalid(step, picks[step.id])} onClick={() => next(step)}>
-              {isPicked(picks[step.id]) || shownGroups(step) !== undefined ? t("wizard.next") : t("wizard.skip")}
-            </Button>
-          ) : changed ? (
-            <Button variant="primary" className={css.primary} disabled={!!wrong} onClick={apply}>{t("wizard.done.apply")}</Button>
-          ) : (
-            <Button variant="primary" className={css.primary} onClick={close}>{t("common.close")}</Button>
-          )}
+          {/* Back is gone on the first step and "next" on the last; the empty cell keeps the other in place */}
+          <div className={css.nav}>
+            {first ? <span /> : <Button onClick={() => go(at === DONE ? steps.length - 1 - index : -1)}>{t("wizard.back")}</Button>}
+            {step ? (
+              <Button disabled={invalid(step, picks[step.id])} onClick={() => next(step)}>
+                {isPicked(picks[step.id]) || shownGroups(step) !== undefined || isRequired(step.id) ? t("wizard.next") : t("wizard.skip")}
+              </Button>
+            ) : <span />}
+          </div>
+          <Button variant="primary" className={css.primary} disabled={!changed || !!wrong || missing.length > 0} onClick={apply}>{t("wizard.recalc")}</Button>
         </footer>
       </div>
     </div>

@@ -107,17 +107,23 @@ export function initialPicks(setup: Setup): Picks {
     const value = typeof a === "object" && a !== null && "accept" in a ? UNKNOWN : answered(setup, q);
     if (value !== undefined) picks[s.id] = value;
   }
-  if (picks.backup !== undefined) picks.standby = picks.backup === "none" ? "no" : "yes";
+  if (picks.backup !== undefined) picks.standby = picks.backup === "none" ? "no" : picks.backup === UNKNOWN ? LATER : "yes";
   return picks;
 }
 
-// The choice "a provision for backup" decides the backup: "no" is the answer "none", and "yes"
-// after it leaves the kind of backup to choose
+// "A provision for backup: provide and skip": the panel gets the backup the model assumes (the
+// question closes with {accept}), and the backup steps are not asked; they can be answered later
+export const LATER = "later";
+
+// The choice "a provision for backup" decides the backup: "no" is the answer "none", "provide
+// and skip" keeps the assumption of the model, and "calculate now" leaves the kind of backup to
+// choose (a kind chosen before stays)
 export function applyPick(picks: Picks, id: StepId, value: string): Picks {
   if (id !== "standby") return { ...picks, [id]: value };
   const { backup, ...rest } = picks;
   if (value === "no") return { ...rest, standby: "no", backup: "none" };
-  return { ...rest, standby: "yes", ...(backup === undefined || backup === "none" ? {} : { backup }) };
+  if (value === LATER) return { ...rest, standby: LATER, backup: UNKNOWN };
+  return { ...rest, standby: "yes", ...(backup === undefined || backup === "none" || backup === UNKNOWN ? {} : { backup }) };
 }
 
 // The wiring variant the choices lead to
@@ -187,8 +193,8 @@ function masterShown(step: PanelStep, setup: Setup, picks: Picks): boolean {
   return !!question(setup, step.qid) || masterNow(setup) !== "yes";
 }
 
-// All of the backup waits for "a provision for backup: yes"; a backup fixed in YAML has no such
-// question. With a backup other than the inverter the report has no inverter questions: they
+// All of the backup waits for "a provision for backup: calculate now" ("provide and skip" asks
+// none of it); a backup fixed in YAML has no such question. With a backup other than the inverter the report has no inverter questions: they
 // appear with the answer. With the inverter in the model the report is exact: a missing one is
 // fixed in YAML
 function shown(step: PanelStep, setup: Setup, picks: Picks): boolean {
@@ -244,7 +250,7 @@ export function wizardSteps(setup: Setup, picks: Picks): Step[] {
   if (choosing) steps.push({ id: "breakers", group: "panel", kind: "cards", options: ["simple", "groups", "lines"] });
   steps.push(...master);
   if (setup.canAnswer && question(setup, "panel_backup")) {
-    steps.push({ id: "standby", group: "reserve", kind: "cards", options: ["no", "yes"], question: question(setup, "panel_backup") });
+    steps.push({ id: "standby", group: "reserve", kind: "cards", options: ["no", LATER, "yes"], question: question(setup, "panel_backup") });
   }
   steps.push(...rest);
   // Extra options: work beyond the wiring itself, they change only the estimate
@@ -271,6 +277,17 @@ export const optionKey = (step: StepId, value: string): string =>
 
 export const isPicked = (pick: string | undefined) => pick !== undefined && pick !== "";
 
+// Steps that may stay without an answer: they only move groups inside the panel the model has
+// already put together. Every other step changes the price (cable, work, panel devices), so it
+// is required: with one of them unanswered nothing is recalculated. "Don't know" is an answer
+const OPTIONAL: ReadonlySet<StepId> = new Set(["reserve", "masterOff"]);
+export const isRequired = (id: StepId) => !OPTIONAL.has(id);
+
+// Required steps of the wizard still without an answer
+export function missingSteps(steps: Step[], picks: Picks): Step[] {
+  return steps.filter((s) => isRequired(s.id) && !isPicked(picks[s.id]));
+}
+
 function asAnswer(s: PanelStep, pick: string): Answer {
   if (pick === UNKNOWN) return { accept: true };
   if (s.kind === "groups") return pick.split(",");
@@ -285,7 +302,8 @@ function goesWithBackup(s: PanelStep, setup: Setup, picks: Picks): boolean {
 
 // What changes: the variant if any of its parts differs, the answers that differ. Answers of a
 // backup that is gone go away with it: the model refuses them together. "A provision: no" is the
-// answer "none" with its step hidden; "yes" with no kind chosen takes that answer back
+// answer "none" with its step hidden, "provide and skip" is "keep the assumption" the same way;
+// "calculate now" with no kind chosen takes that answer back
 export function wizardBody(setup: Setup, picks: Picks): WizardBody {
   const before = initialPicks(setup);
   const body: WizardBody = {};
@@ -300,7 +318,7 @@ export function wizardBody(setup: Setup, picks: Picks): WizardBody {
   const answers: Record<string, Answer | null> = {};
   for (const s of PANEL_STEPS) {
     const pick = picks[s.id];
-    const asked = step(s.id) || (s.id === "backup" && picks.standby === "no");
+    const asked = step(s.id) || (s.id === "backup" && (picks.standby === "no" || picks.standby === LATER));
     if (asked && isPicked(pick) && pick !== before[s.id]) answers[s.qid] = asAnswer(s, pick!);
     if (s.id === "backup" && picks.standby === "yes" && !isPicked(pick) && setup.answers[s.qid] !== undefined) answers[s.qid] = null;
     if (setup.canAnswer && goesWithBackup(s, setup, picks) && setup.answers[s.qid] !== undefined) answers[s.qid] = null;
@@ -326,10 +344,11 @@ export function setupProgress(setup: Setup): SetupProgress {
 }
 
 // Open questions the wizard does not ask: they stay in the "Questions" panel. Those behind a
-// closed "provision for backup" are not counted: its answer decides if they exist at all
+// closed "provision for backup" are not counted: its answer decides if they exist at all, and
+// "provide and skip" puts them off on purpose
 export function otherQuestions(setup: Setup, steps: Step[]): number {
   const asked = new Set(steps.flatMap((s) => (s.question ? [s.question.id] : [])));
   const closed = steps.some((s) => s.id === "standby") && !steps.some((s) => s.id === "backup");
-  if (closed) PANEL_STEPS.filter((s) => s.dc || s.id === "reserve").forEach((s) => asked.add(s.qid));
+  if (closed) PANEL_STEPS.filter((s) => s.dc || s.id === "reserve" || s.id === "power").forEach((s) => asked.add(s.qid));
   return setup.questions.filter((q) => (q.state === "open" || q.state === "text") && !asked.has(q.id)).length;
 }

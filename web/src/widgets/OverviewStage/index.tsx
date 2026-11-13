@@ -13,6 +13,7 @@ import type { Overview, Project, Question, Variants, VariantSummary } from "@/sh
 import { Button } from "@/ui/Button";
 import { Card } from "@/ui/Card";
 import { Heading } from "@/ui/Heading";
+import { StepMark } from "@/ui/StepMark";
 import { Tag } from "@/ui/Tag";
 import { Text } from "@/ui/Text";
 import { useTooltip } from "@/ui/Tooltip";
@@ -284,15 +285,6 @@ interface SummaryProps {
   refreshing?: boolean;
 }
 
-// A decided step: a plain check, not a ring (a ring reads as a radio button)
-function CheckIcon() {
-  return (
-    <svg className={css.check} viewBox="0 0 16 16" aria-hidden="true">
-      <path d="M3.5 8.5l3 3 6-7" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
 export function OverviewSummary({ setup, questions, onWizard, onDrawer, refreshing = false }: SummaryProps) {
   const { t } = useTranslation();
   const say = anyKey(t);  // a key built from a step, as in Wizard
@@ -310,9 +302,7 @@ export function OverviewSummary({ setup, questions, onWizard, onDrawer, refreshi
               const name = say(`wizard.steps.${id}.short`);
               return (
                 <li key={id} className={cx(todo && css.todo)}>
-                  <span className={css.mark} role="img" aria-label={t(todo ? "overview.progress.open" : "overview.progress.decided")}>
-                    {todo ? <span className={css.dash} /> : <CheckIcon />}
-                  </span>
+                  <StepMark done={!todo} label={t(todo ? "overview.progress.open" : "overview.progress.decided")} />
                   {todo && onWizard
                     ? <Button variant="link" className={css.stepLink} onClick={() => onWizard(id)}>{name}</Button>
                     : <span>{name}</span>}

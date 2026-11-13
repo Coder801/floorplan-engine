@@ -57,9 +57,6 @@
   li { display: grid; grid-template-columns: 16px 1fr; align-items: center; gap: var(--space-2); color: var(--muted); }
   .todo { color: var(--text); }
 }
-.mark { display: flex; align-items: center; justify-content: center; height: 20px; color: var(--ok); }
-.check { width: 14px; height: 14px; }
-.dash { display: block; width: 8px; height: 2px; border-radius: 1px; background: var(--major); }
 // The way into the wizard is the main action of the side panel: the full width, a frame in the
 // text colour so it stands out from the ordinary buttons
 .wizardOpen { margin-top: var(--space-1); border-color: var(--text); font-weight: 600; box-shadow: 0 1px 2px rgba(0, 0, 0, .12); }

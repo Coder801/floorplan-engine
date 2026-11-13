@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { OverviewMaster, Question, Variants, VariantSummary } from "@/shared/types";
 import { ART } from "@/widgets/WizardArt";
-import { UNKNOWN, applyPick, chasesKept, initialPicks, invalid, optionKey, otherQuestions, setupProgress, variantOf, wizardBody, wizardSteps, type Picks, type Setup, type Step } from "./steps";
+import { UNKNOWN, applyPick, chasesKept, initialPicks, invalid, isRequired, missingSteps, optionKey, otherQuestions, setupProgress, variantOf, wizardBody, wizardSteps, type Picks, type Setup, type Step } from "./steps";
 
 const q = (id: string, assumption: unknown, state = "open"): Question =>
   ({ id, stage: "panel", severity: "major", state, text: id, answer: "choice", assumption });
@@ -88,7 +88,7 @@ describe("шаги мастера", () => {
   it("в выборе резерва нет «без резерва»: это ответ на закладку", () => {
     const steps = wizardSteps(setup(), yes({}));
     expect(steps.find((x) => x.id === "backup")?.options).toEqual(["inverter", "plug", "station", UNKNOWN]);
-    expect(steps.find((x) => x.id === "standby")?.options).toEqual(["no", "yes"]);
+    expect(steps.find((x) => x.id === "standby")?.options).toEqual(["no", "later", "yes"]);
   });
   it("резерв «нет» в ответах: вопросов инвертора нет в отчёте, но выбор их открывает", () => {
     const s = setup({ questions: [q("panel_backup", "inverter", "answered")], answers: { panel_backup: "none" } });
@@ -202,7 +202,7 @@ describe("начальный выбор", () => {
     expect(initialPicks(setup()).standby).toBeUndefined();
     expect(initialPicks(setup({ answers: { panel_backup: "none" } })).standby).toBe("no");
     expect(initialPicks(setup({ answers: { panel_backup: "plug" } })).standby).toBe("yes");
-    expect(initialPicks(setup({ answers: { panel_backup: { accept: true } } })).standby).toBe("yes");
+    expect(initialPicks(setup({ answers: { panel_backup: { accept: true } } })).standby).toBe("later");
   });
 });
 
@@ -262,6 +262,26 @@ describe("что уходит на сервер", () => {
     expect(wizardBody(was, back).answers).toEqual({ panel_backup: null });
     expect(wizardBody(was, { ...back, backup: "plug" }).answers).toEqual({ panel_backup: "plug" });
   });
+  it("«заложить и пропустить» — резерв по допущению модели, шагов резерва нет", () => {
+    const s = setup();
+    const later = applyPick(initialPicks(s), "standby", "later");
+    expect(later).toMatchObject({ standby: "later", backup: UNKNOWN });
+    const shown = ids(s, later);
+    expect(shown).toContain("standby");
+    expect(shown.some((id) => ["backup", "power", "inverter", "battery", "pv", "npe", "reserve"].includes(id))).toBe(false);
+    expect(wizardBody(s, later).answers).toEqual({ panel_backup: { accept: true } });
+    expect(missingSteps(wizardSteps(s, later), later).map((x) => x.id)).not.toContain("standby");
+    expect(otherQuestions(s, wizardSteps(s, later))).toBe(0);
+    // Already answered so: nothing to write; ответы шагов резерва не снимаются
+    const was = setup({ answers: { panel_backup: { accept: true }, panel_battery: 24 } });
+    expect(initialPicks(was).standby).toBe("later");
+    expect(wizardBody(was, initialPicks(was)).answers).toBeUndefined();
+    // «Просчитать сейчас» после него: вид резерва выбирается заново, шаги открываются
+    const now = applyPick(initialPicks(was), "standby", "yes");
+    expect(now.backup).toBeUndefined();
+    expect(ids(was, now)).toContain("backup");
+    expect(wizardBody(was, { ...now, backup: "plug" }).answers).toMatchObject({ panel_backup: "plug" });
+  });
   it("«да» не сбрасывает уже выбранный резерв", () => {
     expect(applyPick({ backup: "plug" }, "standby", "yes")).toEqual({ standby: "yes", backup: "plug" });
   });
@@ -290,8 +310,11 @@ describe("не знаю", () => {
   it("«не знаю» про резерв — допущение: шаги инвертора остаются, сохранённый ответ не дублируется", () => {
     const s = setup({ answers: { panel_backup: { accept: true } } });
     expect(initialPicks(s).backup).toBe(UNKNOWN);
-    expect(ids(s)).toContain("battery");
+    // Saved so, the wizard opens on "provide and skip"; with "calculate now" the steps are back
+    expect(ids(s)).not.toContain("battery");
+    expect(ids(s, { ...initialPicks(s), standby: "yes" })).toContain("battery");
     expect(wizardBody(s, initialPicks(s))).toEqual({});
+    expect(wizardBody(s, { ...initialPicks(s), standby: "yes" })).toEqual({});
   });
   it("«не знаю» после «без резерва» возвращает шаги инвертора", () => {
     const s = setup({ questions: [q("panel_backup", "inverter", "answered")], answers: { panel_backup: "none" } });
@@ -421,5 +444,29 @@ describe("название карточки", () => {
   it("трасса — как у варианта, остальные шаги — свои варианты", () => {
     expect(optionKey("route", "floor")).toBe("variant.routes.floor");
     expect(optionKey("breakers", "lines")).toBe("wizard.steps.breakers.options.lines.name");
+  });
+});
+
+describe("обязательные шаги", () => {
+  const missing = (s: Setup, picks = initialPicks(s)) => missingSteps(wizardSteps(s, picks), picks).map((x) => x.id);
+  it("обязателен каждый шаг, который меняет цену; списки групп щита — нет", () => {
+    expect(["route", "ceiling", "input", "standby", "battery", "master", "labels"].every((id) => isRequired(id as Step["id"]))).toBe(true);
+    expect(isRequired("reserve")).toBe(false);
+    expect(isRequired("masterOff")).toBe(false);
+  });
+  it("без ответа — открытые вопросы щита; у пунктов проводки значение есть всегда", () => {
+    expect(missing(setup())).toEqual(["input", "standby"]);
+  });
+  it("ответ и «не знаю» закрывают шаг, стёртое число — открывает", () => {
+    const s = setup();
+    const picks = { ...initialPicks(s), input: UNKNOWN, standby: "no" };
+    expect(missing(s, picks)).toEqual([]);
+    expect(missing(s, { ...picks, ceiling: "" })).toEqual(["ceiling"]);
+  });
+  it("закладка под резерв без вида резерва — нет ответа на вид и на шаги за ним", () => {
+    const s = setup();
+    const open = missing(s, { ...initialPicks(s), input: "40", standby: "yes" });
+    expect(open).toContain("backup");
+    expect(open).not.toContain("standby");
   });
 });

@@ -29,11 +29,6 @@
   &:hover { color: var(--text); }
   &.on { background: var(--raise); color: var(--text); font-weight: 500; box-shadow: 0 1px 2px rgba(0, 0, 0, .12); }
 }
-.mark {
-  display: inline-grid; place-items: center; flex: none; width: 18px; height: 18px;
-  border: 1px solid var(--line); border-radius: 50%; font-size: 11px; background: var(--raise);
-  &.picked { color: var(--ok); border-color: currentColor; }
-}
 
 .head { grid-area: head; display: flex; align-items: center; justify-content: space-between; padding: var(--space-2) var(--space-2) 0 var(--space-6); }
 .body {
@@ -44,6 +39,8 @@
   grid-area: foot; display: flex; justify-content: space-between; gap: var(--space-2); padding: var(--space-3) var(--space-6);
   border-top: 1px solid var(--line);
 }
+// Back and "next" are the same size ("next" and "skip" too), and one stays put when the other is gone
+.nav { display: grid; grid-template-columns: repeat(2, minmax(128px, 1fr)); gap: var(--space-2); }
 .primary { min-width: 168px; }
 
 .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: var(--space-3); }
@@ -79,5 +76,6 @@
   .body { --reserve-bleed: var(--space-4); }
   .head { padding-left: var(--space-4); }
   .number { grid-template-columns: minmax(0, 1fr); }
+  .nav { grid-template-columns: 1fr 1fr; }
   .primary { min-width: 0; flex: 1; }
 }

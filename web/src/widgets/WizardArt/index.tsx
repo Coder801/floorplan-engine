@@ -270,7 +270,9 @@ export const ART: Record<string, ReactNode> = {
   "breakers-groups": <>{breaker(37)}<path className={css.hot} d="M36 45H70M70 45L148 18M70 45H148M70 45L148 72" /></>,
   "breakers-lines": <>{breaker(10)}{breaker(37)}{breaker(64)}<path className={css.hot} d="M36 18H148M36 45H148M36 72H148" /></>,
   "standby-no": <>{HOUSE}<path className={css.hot} d="M14 56H100" /><path d="M22 34V72M14 42H30" /></>,
-  "standby-yes": <>{HOUSE}<path className={css.hot} d="M14 56H100" /><rect x="14" y="14" width="44" height="28" rx="2" strokeDasharray="3 4" /></>,
+  // Provided for and left for later: a dashed place for the source; calculated now: the source itself
+  "standby-later": <>{HOUSE}<path className={css.hot} d="M14 56H100" /><rect x="14" y="14" width="44" height="28" rx="2" strokeDasharray="3 4" /></>,
+  "standby-yes": <>{HOUSE}<path className={css.hot} d="M14 56H100M36 42V56" /><rect x="14" y="14" width="44" height="28" rx="2" /><path d="M24 28H32M40 28H48M44 24V32" /></>,
   "route-ceiling": <>{ROOM}<path className={css.hot} d="M29 36V18H117V52" /></>,
   "route-floor": <>{ROOM}<path className={css.hot} d="M29 56V77H117V62" /></>,
   // A living room between the ceiling and the floor: a plant, a sofa under a pendant lamp, a coffee

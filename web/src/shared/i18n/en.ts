@@ -379,7 +379,9 @@ export const en: Messages = {
     restored: "Restored the choice you had not applied.", reset: "Reset",
     notice: { title: "Setup is not finished.", body: "The estimate and the panel rest on assumptions. Undecided, {{n}} of {{total}}: {{list}}", more: "and {{n}} more" },
     open: "Set up the project", title: "Project setup", stepsLabel: "Setup steps",
-    stepOf: "Step {{n}} of {{total}}", back: "Back", next: "Next", skip: "Skip",
+    stepOf: "Step {{n}} of {{total}}", back: "Back", recalc: "Recalculate", next: "Next", skip: "Skip",
+    required: "Required step: it changes the price", optional: "Optional step",
+    missing: "Nothing is calculated until the required steps are answered. Left: {{steps}}.",
     groups: { wiring: "Wiring", panel: "Panel", reserve: "Backup", extra: "Extra options", done: "Summary" },
     noPrices: "We'll show the price of this choice after the recalculation: only the modes and the current option are calculated in advance.",
     current: "in the project now", inProject: "As calculated for this project:",
@@ -390,9 +392,9 @@ export const en: Messages = {
     routeFacts: "{{cable}} m of cable · {{chases}} m of chases",
     badInput: "Enter a whole number of amperes above zero", failed: "Not saved — {{message}}",
     done: {
-      title: "Review and apply", note: "Nothing is saved yet: the project is rebuilt once, with all the answers.",
-      empty: "Nothing changed.", unset: "not chosen — the question stays open", changed: "will change",
-      apply: "Apply and recalculate", total: "Electrical estimate for the chosen option: {{total}}",
+      title: "Review and recalculate", note: "Nothing is saved yet: the project is rebuilt once, with all the answers.",
+      empty: "Nothing changed.", unset: "not chosen — the question stays open", unsetRequired: "no answer — a required step", changed: "will change",
+      total: "Electrical estimate for the chosen option: {{total}}",
       totalNote: "before the recalculation, without new panel decisions", others: "Other open questions: {{n}}.",
       totalLater: "The estimate is recalculated once you apply.",
       wrong: "Check the “{{step}}” step: the value does not fit.",
@@ -501,10 +503,11 @@ export const en: Messages = {
         },
       },
       standby: {
-        short: "Backup provision", title: "Provide for an ATS or inverter in the panel?", why: "If yes, you'll choose the backup source next. If no, the panel runs from the grid only.",
+        short: "Backup provision", title: "Provide for an ATS or inverter in the panel?", why: "You can provide for backup in the panel and come back to it later, or calculate it for your source right away. If no, the panel runs from the grid only.",
         options: {
           no: { name: "No", note: "Grid only, no backup steps." },
-          yes: { name: "Yes, provide", note: "The panel gets a backup bus and a changeover to it." },
+          later: { name: "Provide and skip the steps", note: "The panel gets a backup bus and a changeover to it for a typical backup. The backup steps are skipped: you can come back to them later." },
+          yes: { name: "Calculate the backup now", note: "In the next steps you'll choose the backup source, its power and what to keep on it." },
         },
       },
       backup: {
