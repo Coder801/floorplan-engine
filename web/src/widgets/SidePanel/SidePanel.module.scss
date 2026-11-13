@@ -65,6 +65,12 @@
   align-items: center; gap: 10px; min-height: 34px; cursor: pointer;
 }
 .hiddenLayer > :not(:first-child) { opacity: .45; }
+// A section of layers (points, cables, labels…): its eye switches all its rows; the rows are indented
+.layerGroup {
+  display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 10px;
+  min-height: 34px; margin-top: var(--space-2); font-weight: 600; cursor: pointer;
+}
+.grouped { padding-left: 14px; }
 .swatch { height: 4px; }
 .code { color: var(--muted); }
 

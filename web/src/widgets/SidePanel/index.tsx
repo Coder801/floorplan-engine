@@ -9,7 +9,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { CABLE_ROWS, drawingLayers, layerRows, objectLayers, type Drawing } from "@/engine/sheet/drawing";
+import { CABLE_ROWS, LAYER_GROUPS, drawingLayers, layerGroup, layerRows, objectLayers, type Drawing } from "@/engine/sheet/drawing";
 import { ownLayers, viewTables } from "@/engine/sheet/views";
 import { SHEET_ONLY, SIDE_TABS, type SideTab } from "@/shared/consts";
 import { cx } from "@/shared/cx";
@@ -227,17 +227,21 @@ function Layers({ page, drawing }: { page: Page | null; drawing: Drawing | null 
   }
   for (const [l, color] of colors) if (!ownOfView.has(l) && !rows.has(layerRows(l)[0])) rows.set(layerRows(l)[0], color);
   // Own layer: switch it off on all sheets; from another sheet: add it to the drawing
-  const toggle = (l: string, on: boolean) => {
-    const set = new Set(own.has(l) ? hidden : extra);
-    if (own.has(l) === on) set.delete(l); else set.add(l);
-    view.set(own.has(l) ? { hidden: set } : { extra: set });
+  const isShown = (l: string) => (own.has(l) ? !hidden.has(l) : extra.has(l));
+  const setShown = (ls: string[], on: boolean) => {
+    const h = new Set(hidden), x = new Set(extra);
+    for (const l of ls) {
+      const set = own.has(l) ? h : x;
+      if (own.has(l) === on) set.delete(l); else set.add(l);
+    }
+    view.set({ hidden: h, extra: x });
   };
   // Layer row: eye (as in Photoshop) | colour | name | code; a click on the row works too
-  const row = (l: string) => {
-    const shown = own.has(l) ? !hidden.has(l) : extra.has(l);
+  const row = (l: string, grouped: boolean) => {
+    const shown = isShown(l);
     return (
-      <div key={l} className={cx(css.layer, !shown && css.hiddenLayer)} onClick={() => toggle(l, !shown)}>
-        <EyeToggle on={shown} what={label("layer", l)} onToggle={() => toggle(l, !shown)} />
+      <div key={l} className={cx(css.layer, grouped && css.grouped, !shown && css.hiddenLayer)} onClick={() => setShown([l], !shown)}>
+        <EyeToggle on={shown} what={label("layer", l)} onToggle={() => setShown([l], !shown)} />
         <span className={css.swatch} aria-hidden="true" style={{ background: screenColor(rows.get(l)!) }} />
         {label("layer", l)}
         <span className={cx(css.code, "mono")}>{l}</span>
@@ -247,17 +251,35 @@ function Layers({ page, drawing }: { page: Page | null; drawing: Drawing | null 
   // Cable rows in their own order, where W-CABLE stands in the alphabet
   const key = (l: string) => (CABLE_ROWS.includes(l) ? `W-CABLE ${CABLE_ROWS.indexOf(l)}` : l);
   const sorted = (ls: string[]) => ls.sort((a, b) => key(a).localeCompare(key(b)));
+  // Rows by section (points, cables, labels…): the section eye is on while any of its rows is,
+  // and switches them all; a list of one section has no section rows
+  const sections = (ls: string[]) => {
+    const groups = LAYER_GROUPS.map((g) => [g, ls.filter((l) => layerGroup(l) === g)] as const).filter(([, of]) => of.length);
+    if (groups.length < 2) return ls.map((l) => row(l, false));
+    return groups.map(([g, of]) => {
+      const on = of.some(isShown);
+      return (
+        <div key={g}>
+          <div className={cx(css.layerGroup, !on && css.hiddenLayer)} onClick={() => setShown([...of], !on)}>
+            <EyeToggle on={on} what={t(`layerGroup.${g}`)} onToggle={() => setShown([...of], !on)} />
+            {t(`layerGroup.${g}`)}
+          </div>
+          {of.map((l) => row(l, true))}
+        </div>
+      );
+    });
+  };
   const mine = sorted([...rows.keys()].filter((l) => own.has(l)));
   const rest = sorted([...rows.keys()].filter((l) => !own.has(l)));
   return (
     <div className={css.layers}>
       {rest.length > 0 && <h3>{t("side.ownLayers")}</h3>}
-      {mine.map(row)}
+      {sections(mine)}
       {rest.length > 0 && (
         <>
           <h3>{t("side.otherLayers")}</h3>
           <p className="small muted">{t("side.otherNote")}</p>
-          {rest.map(row)}
+          {sections(rest)}
         </>
       )}
     </div>

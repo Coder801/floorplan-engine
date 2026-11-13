@@ -39,6 +39,7 @@ export const ru = {
     "P-RISER": "стояки и коллекторы", "P-OBST": "препятствия", "P-TEXT": "подписи сантехники",
     "0": "прочее",
   },
+  layerGroup: { points: "Точки и выводы", cables: "Кабели и коробки", plumbing: "Сантехника", labels: "Подписи и размеры", building: "Помещение", other: "Прочее" },
   object: {
     room: "Помещение", zone: "Зона помещения", wall: "Стена", dimension: "Размеры стены", opening: "Проём",
     point: "Точка", label: "Подпись точек", board: "Щит", cable: "Кабель", led_strip: "LED-лента",

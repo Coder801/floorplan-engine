@@ -121,3 +121,17 @@ export function layerShown(own: Set<string>, hidden: Set<string>, extra: Set<str
   const rows = layerRows(l);
   return rows.every((r) => !hidden.has(r)) && (own.has(l) || extra.has(rows[0]));
 }
+
+// Sections of "Layers", in panel order: what the rows are about. A section has an eye of its own
+export const LAYER_GROUPS = ["points", "cables", "plumbing", "labels", "building", "other"] as const;
+export type LayerGroup = typeof LAYER_GROUPS[number];
+
+// The section of a "Layers" row (a layer, or a cable row of layerRows)
+export function layerGroup(row: string): LayerGroup {
+  if (row.endsWith("-TEXT") || row === "A-DIMS") return "labels";
+  if (row.startsWith("W-") || row === "E-LINK") return "cables";
+  if (row.startsWith("E-")) return "points";
+  if (row.startsWith("P-")) return "plumbing";
+  if (row.startsWith("A-")) return "building";
+  return "other";
+}

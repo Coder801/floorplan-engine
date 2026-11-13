@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Item, Page } from "@/shared/types";
-import { buildDrawing, drawingLayers, layerRows, layerShown, objectLayers, shiftOf } from "./drawing";
+import { buildDrawing, drawingLayers, layerGroup, layerRows, layerShown, objectLayers, shiftOf } from "./drawing";
 
 const item = (l: string, d: string, o?: string): Item => ({ k: "s", c: "#000000", l, d, o });
 
@@ -108,5 +108,16 @@ describe("layerShown", () => {
     expect(layerRows("W-CABLE-FLOOR")).toEqual(["W-CABLE-FLOOR"]);
     expect(layerRows("W-CABLE-LOW")).toEqual(["W-CABLE-LOW", "W-CABLE-CEILING"]);
     expect(layerRows("A-WALL")).toEqual(["A-WALL"]);
+  });
+});
+
+describe("layerGroup", () => {
+  it("раскладывает строки «Слоёв» по разделам", () => {
+    expect(["E-SOCKET", "E-SWITCH", "E-LIGHT", "E-DATA", "E-LED", "E-BOARD"].map(layerGroup)).toEqual(Array(6).fill("points"));
+    expect(["W-CABLE-SOCKET", "W-CABLE-RCD", "W-CABLE-FLOOR", "W-BOX", "E-LINK"].map(layerGroup)).toEqual(Array(5).fill("cables"));
+    expect(["E-TEXT", "W-TEXT", "L-TEXT", "A-TEXT", "P-TEXT", "A-DIMS"].map(layerGroup)).toEqual(Array(6).fill("labels"));
+    expect(["A-WALL", "A-DOOR", "A-WIND"].map(layerGroup)).toEqual(Array(3).fill("building"));
+    expect(["P-COLD", "P-FIXT"].map(layerGroup)).toEqual(["plumbing", "plumbing"]);
+    expect(["0", "M-FIX"].map(layerGroup)).toEqual(["other", "other"]);
   });
 });

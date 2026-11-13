@@ -39,6 +39,7 @@ export const en: Messages = {
     "P-RISER": "risers and manifolds", "P-OBST": "obstacles", "P-TEXT": "plumbing labels",
     "0": "other",
   },
+  layerGroup: { points: "Points and outlets", cables: "Cables and boxes", plumbing: "Plumbing", labels: "Labels and dimensions", building: "Room", other: "Other" },
   object: {
     room: "Room", zone: "Room zone", wall: "Wall", dimension: "Wall dimensions", opening: "Opening",
     point: "Point", label: "Point label", board: "Panel", cable: "Cable", led_strip: "LED strip",

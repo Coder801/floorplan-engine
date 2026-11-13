@@ -39,6 +39,7 @@ export const uk: Messages = {
     "P-RISER": "стояки і колектори", "P-OBST": "перешкоди", "P-TEXT": "підписи сантехніки",
     "0": "інше",
   },
+  layerGroup: { points: "Точки та виводи", cables: "Кабелі та коробки", plumbing: "Сантехніка", labels: "Підписи та розміри", building: "Приміщення", other: "Інше" },
   object: {
     room: "Приміщення", zone: "Зона приміщення", wall: "Стіна", dimension: "Розміри стіни", opening: "Проріз",
     point: "Точка", label: "Підпис точок", board: "Щит", cable: "Кабель", led_strip: "LED-стрічка",
