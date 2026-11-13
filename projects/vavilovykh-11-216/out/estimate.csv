@@ -1,6 +1,6 @@
 ﻿section;key;name;unit;qty;price;total
-material_rough;cable.3x1.5;Кабель ВВГнг 3×1,5;м;197,8;45;8901,00
-material_rough;cable.3x2.5;Кабель ВВГнг 3×2,5;м;402,7;70;28189,00
+material_rough;cable.3x1.5;Кабель ВВГнг 3×1,5;м;232,5;45;10462,50
+material_rough;cable.3x2.5;Кабель ВВГнг 3×2,5;м;368;70;25760,00
 material_rough;cable.3x6;Кабель ВВГнг 3×6;м;11,3;180;2034,00
 material_rough;cable.4x1.5;Кабель ВВГнг 4×1,5;м;71,8;60;4308,00
 material_rough;cable.UTP cat.6;Кабель UTP cat.6;м;46,3;;
@@ -19,13 +19,14 @@ material_rough;board_enclosure;Корпус щита вбудований, 5 р�
 material_finish;input.C63 2P;Вступний автомат, C63 2P;шт;1;850;850,00
 material_finish;relay.63 А;Реле напруги, 63 А;шт;1;1900;1900,00
 material_finish;contactor.63 А 2P;Контактор модульний 63 А 2P;шт;1;1200;1200,00
-material_finish;breaker.C16;Автомат 1P C16;шт;18;140;2520,00
+material_finish;breaker.C16;Автомат 1P C16;шт;17;140;2380,00
 material_finish;breaker.C32;Автомат 1P C32;шт;1;140;140,00
-material_finish;diff.C16 30 мА;Дифавтомат 1P+N C16 30 мА;шт;4;950;3800,00
+material_finish;diff.C16 30 мА;Дифавтомат 1P+N C16 30 мА;шт;3;950;2850,00
 material_finish;changeover.I-0-II;Перекидний рубильник I-0-II, I-0-II;шт;1;900;900,00
 material_finish;breaker.B6;Автомат 1P B6;шт;1;140;140,00
 material_finish;contactor.25 А 2P;Контактор модульний 25 А 2P;шт;1;1200;1200,00
-material_finish;breaker.C10;Автомат 1P C10;шт;4;140;560,00
+material_finish;breaker.C10;Автомат 1P C10;шт;5;140;700,00
+material_finish;diff.C10 30 мА;Дифавтомат 1P+N C10 30 мА;шт;1;950;950,00
 material_finish;busbar.1P;Шина гребінчаста 1P, 1 м;шт;1;200;200,00
 material_finish;busbar.2P;Шина гребінчаста 2P, 1 м;шт;1;400;400,00
 material_finish;socket;Розетка із заземленням;шт;56;180;10080,00

@@ -474,6 +474,24 @@
   ],
   "issues": [
     {
+      "file": "wiring.yaml",
+      "path": "wires.wire_27",
+      "severity": "warning",
+      "message": "линия board → box_5 не найдена (это линия box_5 → bedroom_downlight_4) — автотрасса"
+    },
+    {
+      "file": "wiring.yaml",
+      "path": "wires.wire_29",
+      "severity": "warning",
+      "message": "линия box_5 → bedroom_switch_4 не найдена (это линия box_5 → bedroom_pass_switch_1) — автотрасса"
+    },
+    {
+      "file": "wiring.yaml",
+      "path": "wires.wire_31",
+      "severity": "warning",
+      "message": "линия box_5 → bedroom_downlight_4 не найдена (это линия box_6 → bedroom_switch_1) — автотрасса"
+    },
+    {
       "file": "electrical.yaml",
       "path": "groups.QF8",
       "severity": "warning",

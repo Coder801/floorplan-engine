@@ -1,17 +1,17 @@
 ﻿section;key;name;unit;qty;price;total
-material_rough;cable.3x1.5;Кабель ВВГнг 3×1,5;м;186,8;45;8406,00
+material_rough;cable.3x1.5;Кабель ВВГнг 3×1,5;м;165,7;45;7456,50
 material_rough;cable.3x2.5;Кабель ВВГнг 3×2,5;м;214,6;70;15022,00
 material_rough;cable.3x4;Кабель ВВГнг 3×4;м;12,8;120;1536,00
-material_rough;cable.RG-6;Кабель RG-6;м;11,1;;
-material_rough;cable.UTP cat.6;Кабель UTP cat.6;м;39;;
+material_rough;cable.RG-6;Кабель RG-6;м;11,2;;
+material_rough;cable.UTP cat.6;Кабель UTP cat.6;м;39,9;;
 material_rough;socket_box;Підрозетник;шт;63;20;1260,00
 material_rough;junction_box.80;Коробка розподільча Ø80;шт;2;60;120,00
-material_rough;junction_box.100x100;Коробка розподільча 100×100;шт;6;60;360,00
+material_rough;junction_box.100x100;Коробка розподільча 100×100;шт;8;60;480,00
 material_rough;junction_box_ip.100x100;Коробка розподільча IP44 100×100;шт;1;120;120,00
-material_rough;junction_box.150x110;Коробка розподільча 150×110;шт;3;60;180,00
+material_rough;junction_box.150x110;Коробка розподільча 150×110;шт;2;60;120,00
 material_rough;junction_box_ip.150x110;Коробка розподільча IP44 150×110;шт;1;120;120,00
-material_rough;crimp;Гільза і термоусадка (опресування);шт;55;8;440,00
-material_rough;cable_pad;Площадка під монтажний пістолет з дюбель-цвяхом і стяжкою;шт;1631;5;8155,00
+material_rough;crimp;Гільза і термоусадка (опресування);шт;58;8;464,00
+material_rough;cable_pad;Площадка під монтажний пістолет з дюбель-цвяхом і стяжкою;шт;1534;5;7670,00
 material_rough;board_enclosure;Корпус щита вбудований, 5 рядів, 60 мод.;шт;1;6000;6000,00
 material_rough;dc_enclosure;Корпус щита АКБ Hager Golf VS112PD, 12 мод.;шт;1;1500;1500,00
 material_finish;input.C63 2P;Вступний автомат, C63 2P;шт;1;850;850,00
@@ -42,12 +42,12 @@ material_finish;sconce;Бра;шт;2;1200;2400,00
 material_finish;led_output;Вивід для підсвітки;шт;4;150;600,00
 material_finish;led_strip;LED-підсвітка;м;7,84;250;1960,00
 material_finish;led_psu;Блок живлення LED 12 В;шт;4;450;1800,00
-rough;work.cable;Прокладання кабелю;м;403,8;34;13729,20
-rough;work.chase;Штроба вузька, 1–2 кабелі;м;53,9;120;6468,00
-rough;work.chase_wide;Штроба широка, 3–4 кабелі;м;16;180;2880,00
-rough;work.wall_hole;Свердління проходу крізь стіну;шт;10;100;1000,00
+rough;work.cable;Прокладання кабелю;м;386,2;34;13130,80
+rough;work.chase;Штроба вузька, 1–2 кабелі;м;54,9;120;6588,00
+rough;work.chase_wide;Штроба широка, 3–4 кабелі;м;15;180;2700,00
+rough;work.wall_hole;Свердління проходу крізь стіну;шт;11;100;1100,00
 rough;work.socket_box;Свердління і встановлення підрозетника;шт;63;140;8820,00
-rough;work.junction_box;Монтаж коробки з опресуванням;шт;13;250;3250,00
+rough;work.junction_box;Монтаж коробки з опресуванням;шт;14;250;3500,00
 rough;work.board_install;Встановлення щита;шт;1;1500;1500,00
 rough;work.insulation_test;Вимірювання опору ізоляції з протоколом;гр.;20;150;3000,00
 finish;work.board_module;Збирання щита;мод.;37;100;3700,00

@@ -27,11 +27,11 @@ QF5,C10,3x1.5,loggia_downlight_3,Лоджія,Гр.7,1,10,typical
 QF6,C16,3x2.5,loggia_socket_1,Лоджія,В торці шафи,2,200,typical
 QF6,C16,3x2.5,loggia_socket_2,Лоджія,Робоче місце,4,400,typical
 QF6,C16,3x2.5,loggia_socket_3,Лоджія,Розетка,1,100,typical
-QF7,C16,3x2.5,wardrobe_outlet_1,Гардеробна,"Ел. вентилятор на стелі: 980 від цієї стіни, 680 від низу",1,50,typical
-QF7,C16,3x2.5,wardrobe_downlight_1,Гардеробна,Гр.13,1,10,typical
-QF7,C16,3x2.5,wardrobe_downlight_2,Гардеробна,Гр.13,1,10,typical
-QF7,C16,3x2.5,wardrobe_downlight_3,Гардеробна,Гр.13,1,10,typical
-QF7,C16,3x2.5,hall_switch_1,Передпокій,13+В: гардеробна + вентилятор,1,50,typical
+QF7,C10,3x1.5,wardrobe_outlet_1,Гардеробна,"Ел. вентилятор на стелі: 980 від цієї стіни, 680 від низу",1,50,typical
+QF7,C10,3x1.5,wardrobe_downlight_1,Гардеробна,Гр.13,1,10,typical
+QF7,C10,3x1.5,wardrobe_downlight_2,Гардеробна,Гр.13,1,10,typical
+QF7,C10,3x1.5,wardrobe_downlight_3,Гардеробна,Гр.13,1,10,typical
+QF7,C10,3x1.5,hall_switch_1,Передпокій,13+В: гардеробна + вентилятор,1,50,typical
 QF8,C16,3x2.5,wardrobe_socket_1,Гардеробна,Розетка,2,200,typical
 QF9,C16,3x2.5,wardrobe_socket_2,Гардеробна,Пральна машина,1,2200,typical
 QF10,C16,3x2.5,wardrobe_socket_3,Гардеробна,Сушильна машина,1,2500,typical
@@ -68,14 +68,14 @@ QF16,C16,3x2.5,hall_socket_10,Кухня-вітальня,Посудомийна
 QF17,C16,3x2.5,bedroom_outlet_1,Спальня,Кондиціонер,1,1500,typical
 QF18,C16,3x2.5,cabinet_outlet_1,Кімната (кабінет),Кондиціонер,1,1500,typical
 QF19,C16,3x2.5,hall_outlet_2,Кухня-вітальня,Кондиціонер,1,1500,typical
-QF20,C16 30 мА,3x2.5,bath_outlet_1,Санвузол,Ел. вентилятор,1,50,typical
-QF20,C16 30 мА,3x2.5,bath_switch_1,Санвузол,16+В: дзеркало + вентилятор,1,50,typical
-QF20,C16 30 мА,3x2.5,bath_led_output_1,Санвузол,"Підсвітка дзеркала, 12 В",1,50,typical
-QF20,C16 30 мА,3x2.5,bath_led_output_2,Санвузол,"Підсвітка ніші вздовж ванни, 12 В",1,50,typical
-QF20,C16 30 мА,3x2.5,bath_downlight_1,Санвузол,Гр.14,1,10,typical
-QF20,C16 30 мА,3x2.5,bath_downlight_2,Санвузол,Гр.14,1,10,typical
-QF20,C16 30 мА,3x2.5,bath_downlight_3,Санвузол,Гр.14,1,10,typical
-QF20,C16 30 мА,3x2.5,bath_downlight_4,Санвузол,Гр.14,1,10,typical
+QF20,C10 30 мА,3x1.5,bath_outlet_1,Санвузол,Ел. вентилятор,1,50,typical
+QF20,C10 30 мА,3x1.5,bath_switch_1,Санвузол,16+В: дзеркало + вентилятор,1,50,typical
+QF20,C10 30 мА,3x1.5,bath_led_output_1,Санвузол,"Підсвітка дзеркала, 12 В",1,50,typical
+QF20,C10 30 мА,3x1.5,bath_led_output_2,Санвузол,"Підсвітка ніші вздовж ванни, 12 В",1,50,typical
+QF20,C10 30 мА,3x1.5,bath_downlight_1,Санвузол,Гр.14,1,10,typical
+QF20,C10 30 мА,3x1.5,bath_downlight_2,Санвузол,Гр.14,1,10,typical
+QF20,C10 30 мА,3x1.5,bath_downlight_3,Санвузол,Гр.14,1,10,typical
+QF20,C10 30 мА,3x1.5,bath_downlight_4,Санвузол,Гр.14,1,10,typical
 QF21,C16 30 мА,3x2.5,bath_socket_2,Санвузол,Фен,1,100,typical
 QF21,C16 30 мА,3x2.5,bath_socket_3,Санвузол,Зубна щітка,1,100,typical
 QF21,C16 30 мА,3x2.5,bath_socket_5,Санвузол,Фільтри очистки води,1,100,typical

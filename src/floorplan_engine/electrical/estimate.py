@@ -412,7 +412,6 @@ TEXT: dict[str, dict[str, str]] = {
     "col_qty": {"ru": "Кол.", "uk": "Кільк."},
     "col_price": {"ru": "Цена, {c}", "uk": "Ціна, {c}"},
     "col_sum": {"ru": "Сумма, {c}", "uk": "Сума, {c}"},
-    "section_total": {"ru": "Итого: {s}", "uk": "Разом: {s}"},
     "sheet_prices": {"ru": "Цены: {f}{date}", "uk": "Ціни: {f}{date}"},
     "note_prices": {"ru": "Цены: {f}{date}{note}", "uk": "Ціни: {f}{date}{note}"},
     "note_no_prices": {
@@ -1113,7 +1112,7 @@ def write_xlsx(
             if ln.price is None:
                 ws.cell(r, 5).comment = Comment(t("no_price"), "Shtroba")
         last = ws.max_row
-        ws.append(["", t("section_total", s=t(section)), "", "", "", f"=SUM(F{first}:F{last})"])
+        ws.append(["", t("subtotal"), "", "", "", f"=SUM(F{first}:F{last})"])
         total_row = ws.max_row
         ws.cell(total_row, 2).font = Font(bold=True)
         ws.cell(total_row, 6).font = Font(bold=True)

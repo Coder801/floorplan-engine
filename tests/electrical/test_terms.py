@@ -192,8 +192,8 @@ def test_excel_percent_of_materials_is_a_formula_and_totals_follow(tmp_path: Pat
     assert values["Доставка материалов"][5].value == 1500
     purchase = values["Закупка материалов бригадой"][5].value
     # The percent is taken from all materials: rough and finish
-    rough = values["Итого: Черновые материалы"][5].coordinate
-    finish = values["Итого: Чистовые материалы"][5].coordinate
+    # Section totals are a plain "Итого", in section order: rough materials, then finish ones
+    rough, finish = [r[5].coordinate for r in ws.iter_rows() if r[1].value == "Итого"][:2]
     assert purchase == f"=ROUND(({rough}+{finish})*10/100,2)"
     assert str(values["Итого обговорено"][5].value).startswith("=SUM(F")
     grand = values["Всего со сопутствующими"][5].value

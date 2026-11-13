@@ -236,9 +236,9 @@ def test_estimate_table_with_and_without_prices() -> None:
     assert names[0] == "Чорнові матеріали — ціни поки що імітація"
     assert "Чистові матеріали — ціни поки що імітація" in names
     assert "Чорнові роботи" in names and "Чистові роботи" in names
-    assert "Разом: чорнові матеріали" in names and "Разом: чистові матеріали" in names
-    assert "Разом: чорнові роботи" in names
-    assert "Разом: чистові роботи" in names
+    # A section total is a plain "Total": the section name is in the heading right above it
+    assert names.count("Разом") == 4
+    assert not any(str(n).startswith("Разом:") for n in names)
     assert table.total is not None and table.total[1] == "Усього"
     socket_box = next(r for r in table.rows if r[1] == "Підрозетник")
     assert socket_box[4] == "20" and socket_box[5] == "80"  # 4 posts × 20

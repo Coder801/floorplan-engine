@@ -156,7 +156,6 @@ def estimate_table(
         return estimate_text(key, language, **values)
 
     names = [ln.name for ln in est.lines]
-    names += [t("section_total", s=t(sec).lower()) for sec in SECTIONS]
     names += [section_title(sec, language, priced) for sec in SECTIONS]
     # Name column width from font metrics: the table column on the sheet is as wide as the title
     # block
@@ -191,8 +190,8 @@ def estimate_table(
             )
             rows.append((str(k), ln.name, ln.unit, qty, *money))
         if priced:
-            subtotal = t("section_total", s=t(section).lower())
-            rows.append(("", subtotal, "", "", "", format_number(est.subtotal(section))))
+            # Plain "Total": the section heading is right above, its name is not repeated
+            rows.append(("", t("subtotal"), "", "", "", format_number(est.subtotal(section))))
     total = ("", t("total"), "", "", "", format_number(est.total)) if priced else None
     if title is None:
         title = t("sheet_title") if priced else t("sheet_volumes")
