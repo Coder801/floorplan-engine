@@ -15,6 +15,7 @@ import { Card } from "@/ui/Card";
 import { Heading } from "@/ui/Heading";
 import { Tag } from "@/ui/Tag";
 import { Text } from "@/ui/Text";
+import { useTooltip } from "@/ui/Tooltip";
 import { VariantInfo } from "@/widgets/VariantInfo";
 import { anyKey } from "@/shared/i18n";
 import { optionKey, type SetupProgress, type StepId } from "@/widgets/Wizard/steps";
@@ -60,6 +61,7 @@ const kw = (w: number) => (w / 1000).toLocaleString(undefined, { maximumFraction
 
 export function OverviewStage({ overview, variants, project, openQuestions, canChoose, refreshing = false, onEstimate, onDrawer, onWizard, setup }: Props) {
   const { t, i18n } = useTranslation();
+  const { on, tip } = useTooltip();
   const num = (n: number, digits = 2) => n.toLocaleString(i18n.language, { maximumFractionDigits: digits });
   const cash = (n: number, currency: string) => `${Math.round(n).toLocaleString(i18n.language)} ${currency}`;
   const money = (s: VariantSummary) => cash(s.total, s.currency);
@@ -87,13 +89,11 @@ export function OverviewStage({ overview, variants, project, openQuestions, canC
   const say = anyKey(t);  // a key built from a step, as in Wizard
   const compareRow = (s: VariantSummary, name: ReactNode, base: VariantSummary | null, key: string) => (
     <tr key={key} className={cx(!base && css.on)}>
-      <td>{name}{s.key === variants?.default && !base && <Tag variant="outline" className={css.tag}>{t("variant.asProject")}</Tag>}</td>
-      <td className={css.num}>{money(s)}</td>
+      <td tabIndex={0} {...on(t("overview.rowTip", { cable: num(s.cable_m, 0), devices: s.devices, chases: num(s.chases_m, 0) }))}>{name}{s.key === variants?.default && !base && <Tag variant="outline" className={css.tag}>{t("variant.asProject")}</Tag>}</td>
       <td className={cx(css.num, base && s.total < base.total && css.cheaper)}>{base ? delta(s, base) : ""}</td>
-      <td className={css.num}>{num(s.cable_m, 0)}</td>
-      <td className={css.num}>{num(s.conduit_m, 0)}</td>
-      <td className={css.num}>{s.devices}</td>
-      <td className={css.num}>{num(s.chases_m, 0)}</td>
+      <td className={css.num}>{s.material === undefined ? "—" : cash(s.material, s.currency)}</td>
+      <td className={css.num}>{s.work === undefined ? "—" : cash(s.work, s.currency)}</td>
+      <td className={css.num}>{money(s)}</td>
     </tr>
   );
   return (
@@ -222,9 +222,9 @@ export function OverviewStage({ overview, variants, project, openQuestions, canC
                     <thead>
                       <tr>
                         <th>{t("overview.col.change")}</th>
-                        <th className={css.num}>{t("overview.col.total")}</th><th className={css.num}>{t("overview.col.delta")}</th>
-                        <th className={css.num}>{t("overview.col.cable")}</th><th className={css.num}>{t("overview.col.conduit")}</th>
-                        <th className={css.num}>{t("overview.col.devices")}</th><th className={css.num}>{t("overview.col.chases")}</th>
+                        <th className={css.num}>{t("overview.col.delta")}</th>
+                        <th className={css.num}>{t("overview.col.material")}</th><th className={css.num}>{t("overview.col.work")}</th>
+                        <th className={css.num}>{t("overview.col.total")}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -236,6 +236,7 @@ export function OverviewStage({ overview, variants, project, openQuestions, canC
                       ))}
                     </tbody>
                   </table>
+                  {tip}
                 </div>
               </>
             )}

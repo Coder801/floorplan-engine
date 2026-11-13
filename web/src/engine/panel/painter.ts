@@ -7,16 +7,18 @@
 // as a bundle to the right wall, and past the enclosure at an angle to its label; L, N, PE input
 // from the top, PE terminal block at the top and N at the bottom of the enclosure. A hybrid
 // inverter gets a battery box: battery and solar string wires go up into the inverter's BAT and
-// PV inputs, the battery sits under the box.
+// PV inputs, the battery sits under the box. LED supplies in the panel stand in a box of their
+// own under it: the feed from the group breaker comes from the top (a tag in the group colour),
+// the 12 V line goes from the bottom terminal in the group colour to its label.
 // Three phases (data.phases 3): L1, L2, L3 and N from the top into the 3P+N main switch, a jumper
 // per phase into its relay (KV1–KV3), from each relay a trunk of its own along the left wall;
 // above every rail three thin phase busbars, a device takes the one of its phase (a 3P device
 // all three); the backup bus keeps one phase.
 
 import { palette } from "@/shared/palette";
-import type { PanelData } from "@/shared/types";
+import type { PanelData, PanelLedLine } from "@/shared/types";
 import { clip, plate, rendererFor, SCREW, text, type Pen } from "./catalog";
-import { BACKUP, behindMaster, busSegments, CHAIN, groupPath, LABELS, MODULE, termX,
+import { BACKUP, behindMaster, busSegments, CHAIN, groupPath, LABELS, MODULE, STUB, termX,
          type PanelLayout, type Placed, type Row } from "./layout";
 import { batteryCabinet, enclosureBox, inverterBody, LABEL, rail, terminalBlock } from "./parts";
 
@@ -61,6 +63,7 @@ const CORE = 2.5;
 const PE_TRUNK = 8;
 const GROUP_WIRE = 1.4;    // group wire, panel mm: no thicker than the bundle step
 const DC_PLUS = "#c62828", DC_MINUS = "#1e1e1e";  // DC wires: "+" red, "−" black
+const DROP_BAD = "#c62828";  // a 12 V voltage drop above the limit
 
 export class PanelPainter {
   constructor(private readonly ctx: CanvasRenderingContext2D, private readonly lay: PanelLayout,
@@ -108,13 +111,72 @@ export class PanelPainter {
       text(pen, d.texts.grid, nx + 6, 12, LABEL, pen.ink, "left");
     }
     if (l.external && d.external) this.external(pen, byId);
+    if (l.led && d.led) this.ledBox(pen);
+  }
+
+  // LED supplies box under the panel: the title, the enclosure and the supplies; from the top
+  // terminal a feed wire out of the box to the tag of its group breaker, from the bottom one the
+  // 12 V line into the bundle, through the right wall and on to its label
+  private ledBox(pen: Pen) {
+    const led = this.lay.led!, data = this.data.led!;
+    const enc = led.enclosure, right = led.box.x + led.box.w;
+    const used = data.devices.reduce((s, d) => s + d.model.modules, 0);
+    text(pen, `${data.texts.title} · ${enc.title} · ${used}/${enc.rows * enc.per_row} DIN`,
+         led.box.x, led.title, TITLE, pen.ink, "left");
+    enclosureBox(pen, led.box, enc);
+    for (const y of led.rails) rail(pen, led.box.x + 12, right - 12, y);
+    for (const p of led.placed) {
+      this.device(pen, p);
+      const ln = this.ledLine(p.dev.id);
+      if (!ln || p.lane === null) continue;
+      const color = ln.color || pen.ink, cx = p.x + MODULE / 2;
+      this.wire(color, [[cx, p.y + SCREW], [cx, led.feed + 4]], undefined, GROUP_WIRE);
+      text(pen, ln.group, cx, led.feed, 5, color);
+      const pts: [number, number][] = [[cx, p.y + p.h - SCREW], [cx, p.lane], [right + STUB, p.lane]];
+      if (p.label !== null) pts.push([this.lay.labelX - 3, p.label]);
+      this.wire(color, pts, undefined, GROUP_WIRE);
+      if (p.label !== null) this.ledLabel(pen, p, ln, color);
+    }
+  }
+
+  private ledLine(id: string): PanelLedLine | undefined {
+    return this.data.led?.lines.find((ln) => ln.device === id);
+  }
+
+  // "G1  Подсветка кухни — Кухня · лента 5 м* · 72 Вт* · 2×2,5 · 12,4 м · ΔU 3,2 %": what it lights in ink,
+  // the rest in the group colour, a voltage drop above the limit in red
+  private ledLabel(pen: Pen, p: Placed, ln: PanelLedLine, color: string) {
+    const { ctx } = pen, texts = this.data.led!.texts;
+    const dec = (x: number) => String(x).replace(".", ",");
+    const star = (b: boolean) => (b ? "*" : "");
+    const parts = [
+      texts.strip.replace("{m}", dec(ln.metres)) + star(ln.metres_assumed),
+      `${dec(ln.power)} Вт${star(ln.power_assumed)}`,
+      ...(ln.cable ? [ln.cable.replace("x", "×").replace(".", ",")] : []),
+      ...(ln.length !== undefined ? [`${dec(ln.length)} м`] : []),
+    ];
+    const tail = ` · ${parts.join(" · ")}`;
+    const drop = ln.drop !== undefined ? ` · ΔU ${dec(ln.drop)} %` : "";
+    ctx.font = `${LABEL}px ${pen.font}`;
+    const room = LABELS - 8 - ctx.measureText(tail + drop).width;
+    const lead = clip(pen, `${p.dev.id}  ${ln.title ?? ln.point}`, room, LABEL);
+    const x = this.lay.labelX + 1;
+    ctx.fillStyle = color;
+    ctx.beginPath(); ctx.arc(this.lay.labelX - 3, p.label!, 1.4, 0, 2 * Math.PI); ctx.fill();
+    text(pen, lead, x, p.label!, LABEL, pen.ink, "left");
+    ctx.font = `${LABEL}px ${pen.font}`;
+    const at = x + ctx.measureText(lead).width;
+    text(pen, tail, at, p.label!, LABEL, color, "left");
+    ctx.font = `${LABEL}px ${pen.font}`;
+    if (drop) text(pen, drop, at + ctx.measureText(tail).width, p.label!, LABEL, ln.drop_ok === false ? DROP_BAD : color, "left");
   }
 
   private device(pen: Pen, p: Placed) {
     const { ctx } = pen, dev = p.dev;
     rendererFor(dev)(pen, dev, p);
-    // Marking on the cover plate: the designation on the group colour, like its lines on the sheets
-    const color = (dev.group && this.data.groups[dev.group]?.color) || null;
+    // Marking on the cover plate: the designation on the group colour, like its lines on the
+    // sheets; an LED supply takes the colour of the group that feeds it
+    const color = (dev.group && this.data.groups[dev.group]?.color) || this.ledLine(dev.id)?.color || null;
     const t = plate(p);
     if (color) { ctx.fillStyle = color; ctx.fillRect(t.x, t.y, t.w, t.h); }
     // Narrow plate: first drop the "*" (the assumption shows in the group label), then go smaller
@@ -236,7 +298,7 @@ export class PanelPainter {
   // the enclosure the underlay is light (the interior is light in any theme), outside it is the
   // paper colour; stripe adds stripes of a second colour (PE)
   private wire(color: string, pts: [number, number][], stripe?: string, width = WIRE) {
-    const { ctx } = this, boxes = [this.lay.box, ...(this.lay.dc ? [this.lay.dc.box] : [])];
+    const { ctx } = this, boxes = [this.lay.box, ...[this.lay.dc, this.lay.led].flatMap((b) => (b ? [b.box] : []))];
     ctx.lineJoin = "round"; ctx.lineCap = "round";
     ctx.beginPath();
     tracePath(ctx, pts);

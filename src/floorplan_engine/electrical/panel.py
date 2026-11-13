@@ -32,9 +32,14 @@ electrical/panel_questions.py, labels in electrical/panel_text.py.
   bus (KM2 on the main one, KM3 behind the ATS or switch) with the groups it cuts after the
   ones it does not, a control breaker SF1 (on the backup bus if there is one, so the switch
   works on backup); contactor rating by the design current of its groups.
-- Enclosure is a real catalogue panel (`panel.enclosure`, or the smallest that fits the
-  devices): rails by device kind (`panel_rows`), a device is never split between rails and
-  never sticks out of the enclosure; if nothing fits, an on-site enclosure and a remark.
+- LED supplies in the panel (`led_supply: board`, decision 2026-11-13; electrical/led_supply.py)
+  stand in a box of their own under it (`LedBox`): a DIN supply per LED output by its strip
+  power (strip not described — STRIP_DEFAULT_M, an assumption and a remark), fed by the
+  breaker of the output's group; the 12 V line to the output is sized by the voltage drop.
+- Enclosure is a real catalogue panel (`panel.enclosure`, or the smallest with 12-module
+  rails that fits the devices; 18-module rails only when asked, decision 2026-11-13): rails by
+  device kind (`panel_rows`), a device is never split between rails and never sticks out of
+  the enclosure; if nothing fits, an on-site enclosure with 12-module rails and a remark.
 """
 
 from __future__ import annotations
@@ -45,6 +50,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Literal
 
+from floorplan_engine.electrical.led_supply import STRIP_DEFAULT_M, LedLoad, led_loads
 from floorplan_engine.electrical.loads import (
     CABLE_LIMITS,
     SOCKETS_A,
@@ -74,6 +80,7 @@ from floorplan_engine.model.panel_catalog import (
     DeviceKind,
     Enclosure,
     fitted_enclosure,
+    led_psu_model,
     model_for,
 )
 from floorplan_engine.model.schema import (
@@ -105,9 +112,13 @@ class Device:
     poles: int = 0  # three-phase variant: 4 — 3P+N, 3 — 3P; 0 — the usual one of the kind
     phase: str | None = None  # L1, L2, L3 or 3P on a three-phase panel
     master: bool = False  # a group cut by the master switch (behind its contactor)
+    watts: int = 0  # LED supply rating, W
+    point: str | None = None  # LED supply: the output it feeds
 
     @property
     def model(self) -> CatalogModel:
+        if self.kind is DeviceKind.LED_PSU:
+            return led_psu_model(self.watts)
         return model_for(self.kind, self.brand, self.poles)
 
     @property
@@ -159,6 +170,7 @@ class BoardPanel:
     enclosure: Enclosure | None = None  # panel enclosure; None until chosen
     rows: tuple[tuple[Device, ...], ...] = ()  # devices by enclosure rail, top to bottom
     dc: DcBox | None = None  # battery box for the inverter; None without an inverter
+    led: LedBox | None = None  # LED supplies box under the panel; None with supplies at the strip
     phases: int = 1  # 1 — 230 V, 3 — 400 V
     phases_assumed: bool = True  # not set in the model
 
@@ -200,8 +212,10 @@ class BoardPanel:
 
     @property
     def all_devices(self) -> tuple[Device, ...]:
-        """Devices of the panel and the battery box, for the device table and the estimate."""
-        return self.devices + (self.dc.devices if self.dc is not None else ())
+        """Devices of the panel, the battery box and the LED box, for the device table and the
+        estimate."""
+        dc = self.dc.devices if self.dc is not None else ()
+        return self.devices + dc + (self.led.devices if self.led is not None else ())
 
 
 INVERTER_KW = 5.0  # inverter power without data (assumption)
@@ -262,6 +276,66 @@ def build_dc(elec: Electrical, lang: Language) -> DcBox:
         BATTERY_CABLE[rating],
         strings,
     )
+
+
+@dataclass(frozen=True)
+class LedBox:
+    """LED supplies in a box of their own under the panel (led_supply "board", decision
+    2026-11-13): a supply per LED output, fed by the breaker of the output's group."""
+
+    devices: tuple[Device, ...]
+    enclosure: Enclosure
+    rows: tuple[tuple[Device, ...], ...]
+    loads: tuple[LedLoad, ...]  # in device order
+
+
+def build_led_box(plan: Plan, elec: Electrical) -> LedBox | None:
+    """LED box: supplies G1, G2… in model order of the outputs, titled by what they light
+    (led_title); None without outputs fed from the panel."""
+    loads = led_loads(elec)
+    if not loads:
+        return None
+    lang = plan.language
+    rooms = {r.id: r.name for r in plan.rooms}
+    points = {p.id: p for p in elec.points}
+    devices = [
+        Device(
+            f"G{k}",
+            DeviceKind.LED_PSU,
+            f"{ld.supply} Вт 12 В",
+            led_title(points[ld.point], rooms.get(ld.room, ld.room), lang),
+            assumed=ld.power_assumed,
+            brand=elec.panel.brand,
+            watts=ld.supply,
+            point=ld.point,
+        )
+        for k, ld in enumerate(loads, 1)
+    ]
+    enclosure, rows, _ = choose_enclosure(devices)
+    return LedBox(tuple(devices), enclosure, tuple(tuple(r) for r in rows), tuple(loads))
+
+
+def led_title(point: ElectricalPoint, room: str, lang: Language) -> str:
+    """LED supply line, like a group purpose: what it lights — room ("Подсветка шкафа —
+    Спальня"); what comes from the output note, without one "Подсветка LED"."""
+    note = (point.note or "").strip()
+    what = note[:1].upper() + note[1:] if note else text("led_what", lang)
+    return text("led_psu", lang, what=what, room=room)
+
+
+def _led_spots(led: LedBox) -> list[Warning]:
+    """LED box weak spots: strips the model does not describe (STRIP_DEFAULT_M assumed) and a
+    strip above the largest supply."""
+    out: list[Warning] = []
+    guessed = [ld.point for ld in led.loads if ld.metres_assumed and ld.power_assumed]
+    if guessed:
+        m = f"{STRIP_DEFAULT_M:g}"
+        out.append(Warning("minor", _both("w_led_strip", p=", ".join(guessed), m=m)))
+    for ld in led.loads:
+        if ld.oversize:
+            warn = _both("w_led_big", p=ld.point, w=f"{ld.power:g}", s=ld.supply)
+            out.append(Warning("major", warn, ld.group))
+    return out
 
 
 MODE_SCHEME: dict[str, PanelScheme] = {
@@ -499,7 +573,8 @@ def build_panel(plan: Plan, elec: Electrical) -> BoardPanel | None:
     )
     enclosure, rows, fit_note = choose_enclosure(panel.devices, setup.enclosure)
     dc = build_dc(elec, lang) if backup == "inverter" else None
-    panel = replace(panel, enclosure=enclosure, rows=tuple(tuple(r) for r in rows), dc=dc)
+    led = build_led_box(plan, elec)
+    panel = replace(panel, enclosure=enclosure, rows=tuple(tuple(r) for r in rows), dc=dc, led=led)
     warnings = weak_spots(panel, relay, setup.npe_relay)
     if three:
         # A three-phase appliance listed for the backup bus: the backup source has one phase
@@ -507,6 +582,8 @@ def build_panel(plan: Plan, elec: Electrical) -> BoardPanel | None:
             if g.three_phase and (g.split_of or g.group) in setup.reserve:
                 warnings.append(Warning("major", _both("w_reserve_3p", g=g.group), g.group))
     warnings += _master_spots(panel, elec)
+    if led is not None:
+        warnings += _led_spots(led)
     if fit_note is not None:
         warnings.append(fit_note)
     return replace(panel, warnings=tuple(warnings))
@@ -581,10 +658,15 @@ def choose_enclosure(
     devices: Sequence[Device], article: str | None = None
 ) -> tuple[Enclosure, list[list[Device]], Warning | None]:
     """Enclosure and devices by its rails. If an article is given and the devices fit, use it;
-    otherwise the smallest catalogue panel they fit in (fewer modules, then lower), with a
-    remark if the given one did not fit; if nothing fits, an on-site enclosure and a remark."""
+    otherwise the smallest catalogue panel with 12-module rails they fit in (fewer modules, then
+    lower; an 18-module one only when asked), with a remark if the given one did not fit; if
+    nothing fits, an on-site enclosure with 12-module rails and a remark."""
     asked = ENCLOSURE_BY_ARTICLE.get(article) if article else None
-    order = sorted(ENCLOSURES, key=lambda e: (e.modules, e.height))
+    # Chosen by itself: rails of at most 12 modules (the narrowest catalogue ones); a wider
+    # panel only when it is asked for (panel.enclosure)
+    narrow = min(e.per_row for e in ENCLOSURES)
+    fits = [e for e in ENCLOSURES if e.per_row == narrow]
+    order = sorted(fits, key=lambda e: (e.modules, e.height))
     if asked is not None:
         order.insert(0, asked)
     for enc in order:
@@ -594,7 +676,9 @@ def choose_enclosure(
             if asked is not None and enc is not asked:
                 note = Warning("major", _both("w_enclosure", a=asked.article, b=enc.article))
             return enc, rows, note
-    per_row = max(24, *(d.modules for d in devices))
+    # On-site enclosure: rails of 12 modules too, more rails instead of wider ones; wider only
+    # for a device that does not fit such a rail
+    per_row = max(narrow, *(d.modules for d in devices))
     rows = panel_rows(devices, per_row) or [list(devices)]
     total = sum(d.modules for d in devices)
     note = Warning("major", _both("w_enclosure_none", m=total))

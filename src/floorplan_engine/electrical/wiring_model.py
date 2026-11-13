@@ -79,6 +79,9 @@ class Run:
     # along the wall at the point height
     end_drop: float | None = None
     start_drop: float | None = None
+    # 12 V line from an LED supply in the panel (led_supply "board"): low voltage, but lighting;
+    # its cross-section goes by the voltage drop (led_supply.section_for)
+    led: bool = False
 
     @property
     def vertical_mm(self) -> float:

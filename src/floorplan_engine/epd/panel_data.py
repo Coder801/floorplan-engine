@@ -8,6 +8,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from floorplan_engine.electrical.groups import LIGHT
+from floorplan_engine.electrical.led_supply import DROP_MAX, LED_V, LedLine, led_lines
 from floorplan_engine.electrical.loads import (
     Kind,
     PanelGroup,
@@ -17,12 +18,14 @@ from floorplan_engine.electrical.panel import (
     BoardPanel,
     DcBox,
     Device,
+    LedBox,
     color_of,
     grid_text,
     panel_title,
     reserve_groups,
 )
 from floorplan_engine.electrical.panel_text import text
+from floorplan_engine.electrical.wiring_model import Wiring
 from floorplan_engine.model.schema import Electrical, PointType
 from floorplan_engine.model.texts import Language
 from floorplan_engine.sheets.stickers import stickers_data
@@ -32,11 +35,21 @@ EXTERNAL = {"inverter": "U1", "plug": "XP1", "station": "XP1"}
 
 
 def panel_data(
-    panel: BoardPanel, colors: dict[str, int], name: str, language: Language
+    panel: BoardPanel,
+    colors: dict[str, int],
+    name: str,
+    language: Language,
+    wiring: Wiring | None = None,
 ) -> dict[str, object]:
     """Panel for the viewer (key `panel` of an .epd page): devices in order with their catalogue
     model, groups with load, totals and weak spots, in the project language. The viewer does the
-    rail layout and the drawing."""
+    rail layout and the drawing. wiring gives the LED box its 12 V lines (length, cable, drop)."""
+    lines = led_lines(wiring, panel.led.loads) if panel.led is not None else {}
+    drops = [
+        {"severity": "major", "text": _drop_text(line, language), "group": ld.group}
+        for ld in (panel.led.loads if panel.led is not None else ())
+        if (line := lines.get(ld.point)) is not None and not line.ok
+    ]
     groups = {}
     for g in panel.groups:
         groups[g.group] = {
@@ -81,7 +94,8 @@ def panel_data(
                 **({"group": w.group} if w.group else {}),
             }
             for w in panel.warnings
-        ],
+        ]
+        + drops,
         "texts": {
             "title": panel_title(panel, name, language),
             "grid": grid_text(panel, language),
@@ -92,6 +106,8 @@ def panel_data(
     }
     if panel.dc is not None:
         out["dc"] = dc_data(panel.dc, language)
+    if panel.led is not None:
+        out["led"] = led_data(panel.led, lines, colors, language)
     if panel.backup is not None:
         switch = "KM1" if any(d.id == "KM1" for d in panel.devices) else "SA1"
         out["external"] = {
@@ -161,6 +177,66 @@ def dc_data(dc: DcBox, language: Language) -> dict[str, object]:
             "battery": text("battery", language),
             "kwh": text("kwh", language),
             "pv": text("pv_in", language),
+        },
+    }
+
+
+def _drop_text(line: LedLine, language: Language) -> str:
+    return text(
+        "w_led_drop",
+        language,
+        p=line.point,
+        l=_dec(line.length_mm / 1000),
+        d=_dec(line.drop * 100),
+        s=f"{line.section:g}".replace(".", ","),
+    )
+
+
+def _dec(x: float) -> str:
+    return f"{x:.1f}".replace(".", ",")
+
+
+def led_data(
+    led: LedBox, lines: dict[str, LedLine], colors: dict[str, int], language: Language
+) -> dict[str, object]:
+    """LED supplies box under the panel (key `panel.led`): enclosure, supplies on its rails and
+    a 12 V line per supply: output, strip, power, cable, length and voltage drop (no wiring — no
+    line fields)."""
+    out_lines = []
+    for d, ld in zip(led.devices, led.loads, strict=True):
+        c = color_of(ld.group, colors)
+        item: dict[str, object] = {
+            "device": d.id,
+            "point": ld.point,
+            "title": d.title,
+            "group": ld.group,
+            "color": f"#{c:06x}" if c is not None else None,
+            "metres": ld.metres,
+            "metres_assumed": ld.metres_assumed,
+            "power": ld.power,
+            "power_assumed": ld.power_assumed,
+            "supply": ld.supply,
+            "current": round(ld.current, 1),
+        }
+        line = lines.get(ld.point)
+        if line is not None:
+            item |= {
+                "length": round(line.length_mm / 1000, 1),
+                "cable": line.mark,
+                "drop": round(line.drop * 100, 1),
+                "drop_ok": line.ok,
+            }
+        out_lines.append(item)
+    return {
+        "enclosure": led.enclosure.as_dict(),
+        "devices": _devices(led.devices, led.rows),
+        "voltage": LED_V,
+        "drop_max": round(DROP_MAX * 100, 1),
+        "lines": out_lines,
+        "texts": {
+            "title": text("led_title", language),
+            "strip": text("led_strip_m", language, m="{m}"),
+            "from": text("led_from", language, g="{g}"),
         },
     }
 

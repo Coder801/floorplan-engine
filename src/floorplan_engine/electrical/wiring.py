@@ -25,9 +25,12 @@ Variant rules:
   second (PASS_MARK) → lights; a LIGHT_LOOP loop at each ceiling light for its future output.
   Otherwise light goes through a box, as below;
 - LED supplies in the panel (Electrical.led_supply "board", decision 2026-11-11): each LED
-  output gets a 12 V line of its own from the panel (LED_MARK, low-voltage chases), in the
-  group of the output; its switch stays in the group as before. With supplies at the strip
-  ("room") the output is a light point of the group, through its box;
+  output gets a 12 V line of its own from the panel (Run.led, low-voltage chases), in the
+  group of the output; its switch stays in the group as before. The supplies stand in a box
+  under the panel (decision 2026-11-13), the line starts at the panel; its cross-section goes
+  by the voltage drop over its final length (led_supply.section_for), LED_MARK at least.
+  With supplies at the strip ("room") the output is a light point of the group, through its
+  box;
 - a box for a ceiling route is always on the ceiling, at least routing.CLEARANCE from walls,
   at the centre of its points: among spots where the route branches to the points around
   walls (branch_reach) are nearly the shortest, the one closest to their middle (decision
@@ -115,6 +118,7 @@ from floorplan_engine.electrical.chases import (
 from floorplan_engine.electrical.detours import drop_offset
 from floorplan_engine.electrical.groups import group_key
 from floorplan_engine.electrical.groups import text as group_text
+from floorplan_engine.electrical.led_supply import led_loads, led_mark, section_for
 from floorplan_engine.electrical.loads import DEFAULT_MARK, LOW_TYPES, POWER_TYPES, assumed_mark
 from floorplan_engine.electrical.master import CONTROL_ID, CONTROL_MARK, master_point
 from floorplan_engine.electrical.routing import (
@@ -225,6 +229,7 @@ class _Link:
     circuit: Circuit
     cross: bool = False  # box branch into a neighbouring room: a switch by the door outside
     ends: float | None = None  # cable at both ends, mm; None: END_ALLOWANCE and the source tail
+    led: bool = False  # 12 V line from an LED supply in the panel
 
 
 @dataclass(frozen=True)
@@ -338,6 +343,8 @@ def box_wiring(
     if edits is not None:
         passable = shapely.unary_union([free, *walls]) if walls else free
         runs = _manual_runs(runs, edits.wires, passable, edited, notes, any_angle)
+    if led:
+        runs = _led_sections(runs, elec)
     height_assumed = "ceiling_height" not in plan.model_fields_set
     skipped = tuple(p.id for p in elec.points if not p.group and p is not master and p not in low)
     drops = with_conduit(
@@ -665,7 +672,8 @@ def _led_link(ctx: _Context, elec: Electrical, p: ElectricalPoint) -> _Link:
     height = ctx.board.height
     up = height if route == "floor" else max(ctx.ceiling - height, 0.0)
     down = _rise(p, ctx.ceiling, route)
-    return _Link(p.group, LED_MARK, True, "board", p.id, ctx.anchors[p.id], up, down, route, "low")
+    anchor = ctx.anchors[p.id]
+    return _Link(p.group, LED_MARK, True, "board", p.id, anchor, up, down, route, "low", led=True)
 
 
 def _looped(points: Sequence[ElectricalPoint]) -> list[ElectricalPoint]:
@@ -780,9 +788,23 @@ def _route_runs(ctx: _Context, links: Sequence[_Link], boxes: Sequence[JunctionB
                 circuit=ln.circuit,
                 end_drop=end[1] if end else None,
                 start_drop=start[1] if start else None,
+                led=ln.led,
             )
         )
     return runs
+
+
+def _led_sections(runs: Sequence[Run], elec: Electrical) -> list[Run]:
+    """12 V LED lines get their cross-section by length and strip current (led_supply), after
+    the manual routes: the final length counts."""
+    loads = {ld.point: ld for ld in led_loads(elec)}
+    out = []
+    for r in runs:
+        ld = loads.get(r.target) if r.led else None
+        if ld is not None:
+            r = replace(r, mark=led_mark(section_for(r.length_mm, ld.current)))
+        out.append(r)
+    return out
 
 
 def _turn(ctx: _Context, pid: str, spot: tuple[Anchor, float] | None) -> float:

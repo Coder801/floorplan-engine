@@ -64,8 +64,10 @@ export class PanelView {
     return out;
   }
 
-  // Devices of the panel and the battery box, for clicks and highlighting
-  private allPlaced(): Placed[] { return [...this.lay.placed, ...(this.lay.dc?.placed || [])]; }
+  // Devices of the panel, the battery box and the LED box, for clicks and highlighting
+  private allPlaced(): Placed[] {
+    return [...this.lay.placed, ...(this.lay.dc?.placed || []), ...(this.lay.led?.placed || [])];
+  }
 
   destroy() { cancelAnimationFrame(this.pulse); for (const f of this.cleanup) f(); }
 

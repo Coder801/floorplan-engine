@@ -440,6 +440,25 @@ def test_smallest_enclosure_that_fits() -> None:
     assert all(sum(d.modules for d in r) <= enc.per_row for r in rows)
 
 
+def test_enclosure_rails_stay_at_12_modules_unless_asked() -> None:
+    # 16 modules of shared devices and 26 breakers fit 4 × 18 but not 4 × 12: not 18 by itself
+    common = [
+        Device("QS1", DeviceKind.INPUT, "C63 2P", ""),
+        Device("KV1", DeviceKind.RELAY, "63 А", ""),
+        Device("QS2", DeviceKind.FEED, "C32 2P", ""),
+        Device("SA1", DeviceKind.CHANGEOVER, "I-0-II", ""),
+        Device("QS3", DeviceKind.OUTPUT, "C32 2P", ""),
+        Device("KM2", DeviceKind.CONTACTOR, "63 А 2P", ""),
+        Device("KM3", DeviceKind.CONTACTOR, "25 А 2P", ""),
+    ]
+    devices = [*common, *_breakers(26)]
+    enc, rows, note = choose_enclosure(devices)
+    assert enc.per_row == 12 and note is not None  # on-site enclosure, more rails
+    assert all(sum(d.modules for d in r) <= 12 for r in rows)
+    enc, _, note = choose_enclosure(devices, "VS418PD")  # asked: an 18-module panel stays
+    assert enc.article == "VS418PD" and note is None
+
+
 def test_asked_enclosure_and_fallbacks() -> None:
     devices = [Device("QS1", DeviceKind.INPUT, "C63 2P", ""), *_breakers(10)]
     enc, _, note = choose_enclosure(devices, "VS418PD")
@@ -449,6 +468,7 @@ def test_asked_enclosure_and_fallbacks() -> None:
     many = [*devices, *_breakers(80)]
     enc, rows, note = choose_enclosure(many)  # fits nowhere: on-site enclosure
     assert not enc.article and enc.rows == len(rows) and note is not None
+    assert enc.per_row == 12  # as narrow as the catalogue: more rails, not wider ones
     assert all(sum(d.modules for d in r) <= enc.per_row for r in rows)
 
 
@@ -499,7 +519,7 @@ def test_battery_box_from_source_with_pv_strings() -> None:
     dc = panel.dc
     assert dc.rating == 200 and dc.cable == 70  # 8 kW / 48 V ≈ 167 A
     assert [d.id for d in dc.devices] == ["QB1", "QP1", "FP1", "QP2", "FP2"]
-    assert dc.enclosure.per_row == 18  # 13 modules
+    assert (dc.enclosure.rows, dc.enclosure.per_row) == (2, 12)  # 13 modules: two rails of 12
     ids = {q.id for q in panel_questions(elec, panel, "ru")}
     assert "panel_battery" not in ids and "panel_pv" not in ids
     assert "panel_backup_power" not in ids  # given in the source

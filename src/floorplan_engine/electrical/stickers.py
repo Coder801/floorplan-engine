@@ -68,6 +68,7 @@ DEVICE_ICONS = {
     DeviceKind.DC_BATTERY: "battery-charging",
     DeviceKind.DC_BREAKER: "solar-panel",
     DeviceKind.DC_SPD: "shield-bolt",
+    DeviceKind.LED_PSU: "bulb",
 }
 FALLBACK_ICON = "bolt"
 
@@ -122,7 +123,11 @@ def _device_sticker(d: Device, row: int, groups: dict[str, PanelGroup]) -> Stick
 def build_stickers(panel: BoardPanel) -> list[Sticker]:
     """Stickers in the order of the devices: rail by rail, left to right, then the battery box."""
     groups = {g.group: g for g in panel.groups}
-    rails = [*panel.rows, *(panel.dc.rows if panel.dc is not None else ())]
+    rails = [
+        *panel.rows,
+        *(panel.dc.rows if panel.dc is not None else ()),
+        *(panel.led.rows if panel.led is not None else ()),
+    ]
     placed = {d.id for rail in rails for d in rail}
     extra = tuple(d for d in panel.all_devices if d.id not in placed)
     if extra:

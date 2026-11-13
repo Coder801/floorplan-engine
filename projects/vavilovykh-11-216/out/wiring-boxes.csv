@@ -1,7 +1,7 @@
 id,label,group,mark,from,to,route,plan_m,vertical_m,ends_m,length_m
 wire_1,"QF1: ЩР → Вимикач прохідний, Спальня",QF1,3x1.5,board,bedroom_pass_switch_1,ceiling,4.76,2.80,1.90,9.46
-wire_2,"QF1: Вимикач прохідний, Спальня → Вимикач прохідний, Спальня",QF1,5x1.5,bedroom_pass_switch_1,bedroom_pass_switch_2,ceiling,1.99,3.90,0.40,6.29
-wire_3,"QF1: Вимикач прохідний, Спальня → Вимикач прохідний, Спальня",QF1,5x1.5,bedroom_pass_switch_2,bedroom_pass_switch_3,ceiling,2.93,4.20,0.40,7.53
+wire_2,"QF1: Вимикач прохідний, Спальня → Вимикач прохідний, Спальня",QF1,4x1.5,bedroom_pass_switch_1,bedroom_pass_switch_2,ceiling,1.99,3.90,0.40,6.29
+wire_3,"QF1: Вимикач прохідний, Спальня → Вимикач прохідний, Спальня",QF1,4x1.5,bedroom_pass_switch_2,bedroom_pass_switch_3,ceiling,2.93,4.20,0.40,7.53
 wire_4,"QF1: Вимикач прохідний, Спальня → Бра, Спальня",QF1,3x1.5,bedroom_pass_switch_3,bedroom_sconce_2,ceiling,3.01,3.60,0.40,7.01
 wire_5,"QF1: ЩР → Вимикач, Спальня",QF1,3x1.5,board,bedroom_switch_1,ceiling,7.14,2.75,1.90,11.79
 wire_6,"QF1: Вимикач, Спальня → Вивід для підсвітки, Спальня",QF1,3x1.5,bedroom_switch_1,bedroom_led_output_1,ceiling,0.48,3.05,0.40,3.93
@@ -19,8 +19,8 @@ wire_17,"QF2: Розетка із заземленням, Спальня → Р�
 wire_18,"QF2: Розетка із заземленням, Спальня → Розетка із заземленням, Спальня",QF2,3x2.5,bedroom_socket_2,bedroom_socket_1,ceiling,3.12,4.15,0.40,7.67
 wire_19,"QF2: Розетка із заземленням, Спальня → Розетка із заземленням, Спальня",QF2,3x2.5,bedroom_socket_1,bedroom_socket_5,ceiling,3.99,4.50,0.40,8.89
 wire_20,"QF3: ЩР → Вимикач прохідний, Передпокій",QF3,3x1.5,board,hall_pass_switch_1,ceiling,2.97,2.80,1.90,7.67
-wire_21,"QF3: Вимикач прохідний, Передпокій → Вимикач прохідний, Кімната (кабінет)",QF3,5x1.5,hall_pass_switch_1,cabinet_pass_switch_1,ceiling,4.41,3.90,0.40,8.71
-wire_22,"QF3: Вимикач прохідний, Кімната (кабінет) → Вимикач прохідний, Лоджія",QF3,5x1.5,cabinet_pass_switch_1,loggia_pass_switch_1,ceiling,3.76,3.92,0.40,8.08
+wire_21,"QF3: Вимикач прохідний, Передпокій → Вимикач прохідний, Кімната (кабінет)",QF3,4x1.5,hall_pass_switch_1,cabinet_pass_switch_1,ceiling,4.41,3.90,0.40,8.71
+wire_22,"QF3: Вимикач прохідний, Кімната (кабінет) → Вимикач прохідний, Лоджія",QF3,4x1.5,cabinet_pass_switch_1,loggia_pass_switch_1,ceiling,3.76,3.92,0.40,8.08
 wire_23,"QF3: Вимикач прохідний, Лоджія → Світильник точковий, Кімната (кабінет)",QF3,3x1.5,loggia_pass_switch_1,cabinet_downlight_3,ceiling,2.52,1.82,0.80,5.14
 wire_24,"QF3: Світильник точковий, Кімната (кабінет) → Світильник точковий, Кімната (кабінет)",QF3,3x1.5,cabinet_downlight_3,cabinet_downlight_4,ceiling,1.34,0.00,0.60,1.94
 wire_25,"QF3: Світильник точковий, Кімната (кабінет) → Світильник точковий, Кімната (кабінет)",QF3,3x1.5,cabinet_downlight_4,cabinet_downlight_2,ceiling,1.64,0.00,0.60,2.24
@@ -48,7 +48,7 @@ wire_46,"QF8: ЩР → Розетка із заземленням, Гардер�
 wire_47,"QF9: ЩР → Розетка із заземленням, Гардеробна",QF9,3x2.5,board,wardrobe_socket_2,ceiling,6.85,1.80,1.90,10.55
 wire_48,"QF10: ЩР → Розетка із заземленням, Гардеробна",QF10,3x2.5,board,wardrobe_socket_3,ceiling,6.85,1.80,1.90,10.55
 wire_49,"QF11: ЩР → Вимикач прохідний, Передпокій",QF11,3x1.5,board,hall_pass_switch_3,ceiling,1.56,2.20,1.90,5.66
-wire_50,"QF11: Вимикач прохідний, Передпокій → Вимикач прохідний, Передпокій",QF11,5x1.5,hall_pass_switch_3,hall_pass_switch_2,ceiling,2.06,3.00,0.40,5.46
+wire_50,"QF11: Вимикач прохідний, Передпокій → Вимикач прохідний, Передпокій",QF11,4x1.5,hall_pass_switch_3,hall_pass_switch_2,ceiling,2.06,3.00,0.40,5.46
 wire_51,"QF11: Вимикач прохідний, Передпокій → Світильник точковий, Передпокій",QF11,3x1.5,hall_pass_switch_2,hall_downlight_2,ceiling,0.76,1.80,0.80,3.36
 wire_52,"QF11: Світильник точковий, Передпокій → Світильник точковий, Передпокій",QF11,3x1.5,hall_downlight_2,hall_downlight_1,ceiling,1.16,0.00,0.60,1.76
 wire_53,"QF11: Світильник точковий, Передпокій → Світильник точковий, Передпокій",QF11,3x1.5,hall_downlight_1,hall_downlight_3,ceiling,2.16,0.00,0.60,2.76

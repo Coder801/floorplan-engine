@@ -57,6 +57,7 @@ MOCK_PRICES: dict[str, float] = {
     "dc_breaker": 650,
     "dc_spd": 1400,
     "dc_enclosure": 1500,
+    "led_enclosure": 1500,
     "socket": 180,
     "switch1": 150,
     "switch2": 190,
@@ -83,12 +84,14 @@ MOCK_PRICES: dict[str, float] = {
     "work.junction_box": 250,
     "work.board_install": 1500,
     "work.board_module": 100,
+    "work.panel_labels": 600,  # printing and sticking, fixed per panel (decision 2026-11-13)
     "work.mechanism": 100,
     "work.led_psu": 220,
     "work.led_psu_din": 250,
     "work.rough_light": 100,
     "work.rough_switch": 100,
     "work.insulation_test": 150,
+    "work.protection_test": 150,  # as the insulation test: per power group, with a report
 }
 # Narrow chase by wall material, UAH per metre (Kyiv 2026-11); a wide one is × 1.5 (DERIVED_PRICES)
 CHASE_PRICES = {"concrete": 200.0, "claydite": 150.0, "brick": 120.0, "aerated": 90.0}

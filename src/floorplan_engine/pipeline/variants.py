@@ -24,7 +24,15 @@ from floorplan_engine.validation.issues import (
 from floorplan_engine.validation.validate import Report
 
 # Not part of the wiring variant: changing the variant keeps them
-KEPT = {"ceiling_height", "plaster", "rough_light", "loop_conduit"}
+KEPT = {
+    "ceiling_height",
+    "plaster",
+    "rough_light",
+    "panel_labels",
+    "insulation_test",
+    "protection_test",
+    "loop_conduit",
+}
 
 
 def variant_block(report: Report, prices: Prices) -> dict[str, Any] | None:
@@ -54,7 +62,8 @@ def variant_block(report: Report, prices: Prices) -> dict[str, Any] | None:
 
 def save_variant(project: Path, data: dict[str, Any]) -> list[Issue]:
     """Save the wiring variant from the viewer to variant.yaml: {mode, route, distribution, path?,
-    conduit?, led_supply?, plaster?, rough_light?, loop_conduit?, ceiling_height?}. What is not in
+    conduit?, led_supply?, plaster?, rough_light?, panel_labels?, insulation_test?,
+    protection_test?, loop_conduit?, ceiling_height?}. What is not in
     data of KEPT stays as it was. Errors come with a field path, and the file is left unchanged."""
     path = project / VARIANT_FILE
     old, _ = load_optional(path, Variant)

@@ -82,7 +82,7 @@ export async function reviewAnswer(name: string, id: string, outcome: ReviewOutc
 
 // What the setup wizard writes: everything or nothing, with one rebuild
 export interface WizardBody {
-  variant?: { mode: string; route: string; distribution: string; path: string; conduit: string | null; light_wiring: string; led_supply: string; plaster: string; rough_light: boolean; loop_conduit: string; ceiling_height?: number };
+  variant?: { mode: string; route: string; distribution: string; path: string; conduit: string | null; light_wiring: string; led_supply: string; plaster: string; rough_light: boolean; panel_labels: boolean; insulation_test: boolean; protection_test: boolean; loop_conduit: string; ceiling_height?: number };
   answers?: Record<string, Answer | null>;
 }
 

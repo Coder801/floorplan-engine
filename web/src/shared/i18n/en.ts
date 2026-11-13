@@ -46,7 +46,7 @@ export const en: Messages = {
   },
   side: {
     tables: "Tables", layers: "Layers", tablesAndLayers: "Tables and layers", onWall: "On the wall",
-    collapse: "Collapse", view: "Drawing view", noSheet: "No sheet open",
+    collapse: "Collapse", noSheet: "No sheet open",
     noTables: "This sheet has no tables", wiringBrief: "The lines show where the cable will run: from the panel to the boxes and from the boxes to the points. Hover a line to see where it runs from and to.", ownLayers: "View layers", otherLayers: "Other layers",
     otherNote: "Add to the drawing: dimensions on wiring, point numbers on lighting — from other views and the plan.",
   },
@@ -94,6 +94,7 @@ export const en: Messages = {
     nothingToDraw: "Nothing to draw on sheet {{name}} — rebuild the project or refresh the page",
     projects: "Projects", sheets: "Sheets", more: "More", project: "Project",
     openCount: "{{name}}: {{n}} open", pages: "Pages: {{n}}",
+    domainSheet: "Layout", sectionSheets: "Sheets of \"{{name}}\"",
     newVersion: "A new version of {{brand}} is available — this tab was opened before the update and may show sheets incorrectly.",
     loadingSheet: "Loading sheet…", loadingProject: "Loading project…",
     sheetPages: "Sheet pages", prevPage: "Previous page", nextPage: "Next page",
@@ -319,7 +320,8 @@ export const en: Messages = {
     supply1: "single phase", supply3: "three phases", panelLine: "breakers — {{scheme}}, {{supply}}, input {{input}}, {{devices}} devices, {{groups}} circuits",
     load: "load: installed {{installed}} kW, calculated {{calculated}} kW",
     variant: "Wiring option", compare: "What if one item changes", compareNote: "The same set with only one setup answer changed. “Difference” is how much the electrical estimate changes.",
-    col: { change: "What changes", total: "Electrical estimate", delta: "Difference", cable: "Cable, m", conduit: "Conduit, m", devices: "Devices", chases: "Chases, m" },
+    rowTip: "Cable {{cable}} m · panel devices {{devices}} · chases {{chases}} m",
+    col: { change: "What changes", total: "Electrical estimate", delta: "Difference", material: "Materials", work: "Work" },
     sources: "Source data", sourcesLine: "Files: {{n}}, parsed: {{parsed}}.",
     questions: "Open questions: {{n}}", openQuestions: "Questions", openSources: "Sources",
     yourSet: "Your set", ceilingRange: "from {{min}} to {{max}} mm",
@@ -378,7 +380,7 @@ export const en: Messages = {
     notice: { title: "Setup is not finished.", body: "The estimate and the panel rest on assumptions. Undecided, {{n}} of {{total}}: {{list}}", more: "and {{n}} more" },
     open: "Set up the project", title: "Project setup", stepsLabel: "Setup steps",
     stepOf: "Step {{n}} of {{total}}", back: "Back", next: "Next", skip: "Skip",
-    groups: { wiring: "Wiring", panel: "Panel", reserve: "Backup", done: "Summary" },
+    groups: { wiring: "Wiring", panel: "Panel", reserve: "Backup", extra: "Extra options", done: "Summary" },
     noPrices: "We'll show the price of this choice after the recalculation: only the modes and the current option are calculated in advance.",
     current: "in the project now", inProject: "As calculated for this project:",
     chasesKept: {
@@ -458,6 +460,27 @@ export const en: Messages = {
         options: {
           no: { name: "No", note: "Only the project fixtures." },
           yes: { name: "Yes, add it", note: "In the estimate for each room with lights: a lamp holder, a bulb, a temporary switch and fitting them." },
+        },
+      },
+      labels: {
+        short: "Panel labels", title: "Label the panel devices?", why: "A sticker on each device: the line number, what it feeds, an icon. Years later you or any electrician find the right breaker without tracing.",
+        options: {
+          yes: { name: "Label them", note: "Stickers printed from the “Labels” view of the panel sheet, one on each device: a fixed price per panel in the estimate." },
+          no: { name: "No labels", note: "A panel without stickers: which breaker feeds what is only on the panel sheet." },
+        },
+      },
+      insulation: {
+        short: "Insulation test", title: "Test the wiring insulation?", why: "A megohmmeter test before the panel is connected finds a cable pierced by a dowel or pinched while fitting, while the walls are still open.",
+        options: {
+          yes: { name: "Test with a report", note: "Each power group with a megohmmeter, a report with the insulation resistance: in the estimate by the number of groups." },
+          no: { name: "No test", note: "The wiring is not tested: hidden cable damage shows up after the finish." },
+        },
+      },
+      protection: {
+        short: "Protection test", title: "Test the RCBOs and the short-circuit current with a tester?", why: "The “Test” button only shows the mechanism is alive. A tester measures at what leakage current and how fast an RCBO trips, and what short-circuit current reaches the breaker: whether it will cut the line off in time.",
+        options: {
+          yes: { name: "Test with a report", note: "Each RCD and RCBO and the short-circuit current on each power group, a report: in the estimate by the number of groups." },
+          no: { name: "No test", note: "The devices are checked with the “Test” button only: a faulty RCBO or a line that is too long goes unnoticed." },
         },
       },
       ceiling: { short: "Ceiling height", title: "What is the ceiling height?", why: "It sets the drops to points and the cable length.", field: "Height from the finished floor" },

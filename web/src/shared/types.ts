@@ -137,7 +137,7 @@ export interface OverviewPlumbing {
 }
 
 // Wiring variants (docs/wiring-variants.md): mode, route, distribution, path, conduit;
-// when the cable goes in and rough light are alike in every variant
+// when the cable goes in, rough light and the extra options are alike in every variant
 export type VariantMode = "economy" | "standard" | "proper";
 export type VariantRoute = "ceiling" | "floor";
 export type VariantDistribution = "boxes" | "loop";
@@ -162,10 +162,15 @@ export interface VariantSummary {
   conduit?: VariantConduit | boolean;  // boolean: an older build, yes or no on the ceiling
   plaster?: VariantPlaster;  // no key: an older build, after the plaster (optionsOf)
   rough_light?: boolean;  // lamp holders, bulbs and rough switches in the estimate
+  panel_labels?: boolean;  // a sticker on each panel device; no key: an older build, yes
+  insulation_test?: boolean;  // insulation test with a report; no key: an older build, yes
+  protection_test?: boolean;  // RCD tripping and short-circuit current test with a report; no key: an older build, no
   led_supply?: VariantLedSupply;  // no key: an older build, at the strip (optionsOf)
   light_wiring?: VariantLightWiring;  // no key: an older build, through boxes (optionsOf)
   loop_conduit?: VariantLoopConduit;  // no key: an older build, separate conduits (optionsOf)
   total: number;          // estimate total
+  material?: number;      // materials section; no key: an older build
+  work?: number;          // rough and finish work; no key: an older build
   currency: string;
   unpriced: number;
   cable_m: number;
@@ -318,7 +323,7 @@ export interface PanelModel {
 
 // Panel enclosure from the catalogue (panel_catalog.Enclosure): a real panel, mm
 export interface PanelEnclosure {
-  id: string;           // "hager.VS212PD"; an on-site one is "fitted.3x24"
+  id: string;           // "hager.VS212PD"; an on-site one is "fitted.7x12"
   brand: string;
   series: string;
   article: string;      // article; empty for an on-site enclosure
@@ -397,6 +402,36 @@ export interface PanelDc {
   texts: { title: string; battery: string; pv: string; kwh?: string };  // kwh is missing in an old .epd
 }
 
+// 12 V line from an LED supply in the LED box to its output (key panel.led.lines); length,
+// cable and drop come from the wiring and are missing without it
+export interface PanelLedLine {
+  device: string;       // G1
+  point: string;        // LED output id
+  title?: string;       // what it lights — room: "Підсвітка кухні — Зал-вітальня" (absent in an older .epd)
+  group: string;        // breaker that feeds the supply
+  color: string | null; // group colour
+  metres: number;       // strip, m
+  metres_assumed: boolean;  // strip not described: the default length
+  power: number;        // W
+  power_assumed: boolean;
+  supply: number;       // supply rating, W
+  current: number;      // strip current at 12 V, A
+  length?: number;      // line, m
+  cable?: string;       // "2x2.5"
+  drop?: number;        // voltage drop, %
+  drop_ok?: boolean;
+}
+
+// LED supplies box under the panel (key panel.led, led_supply "board"): a supply per LED output
+export interface PanelLed {
+  enclosure: PanelEnclosure;
+  devices: PanelDevice[];
+  voltage: number;
+  drop_max: number;     // %
+  lines: PanelLedLine[];  // in device order
+  texts: { title: string; strip: string; from: string };  // strip "лента {m} м", from "питание от {g}"
+}
+
 export interface PanelData {
   name: string;
   phases: number;
@@ -414,6 +449,7 @@ export interface PanelData {
   // KM1 or the switch SA1: from QS3 into its input II
   external?: { id: string; kind: string; title: string; to: string; switch?: string; feed: string | null };
   dc?: PanelDc;
+  led?: PanelLed;       // an older .epd has none
 }
 
 export interface Page {

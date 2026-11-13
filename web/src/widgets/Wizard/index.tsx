@@ -148,7 +148,7 @@ export function Wizard({ project, variants, ceiling, scene = null, reserve, mast
   const others = otherQuestions(setup, steps);
   const kept = chasesKept(picks);
   const estimate = variants && picks.route ? findChoice(variants, variantOf(setup, picks)) : undefined;
-  const groups = (["wiring", "panel", "reserve"] as const).filter((g) => steps.some((s) => s.group === g));
+  const groups = (["wiring", "panel", "reserve", "extra"] as const).filter((g) => steps.some((s) => s.group === g));
   const shownTitle = step ? say(`wizard.steps.${step.id}.title`) : t("wizard.done.title");
   const position = step ? index + 1 : steps.length + 1;
 

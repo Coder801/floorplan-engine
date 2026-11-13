@@ -29,6 +29,7 @@ from floorplan_engine.electrical.estimate import build_estimate
 from floorplan_engine.electrical.estimate import text as estimate_text
 from floorplan_engine.electrical.groups import group_rows
 from floorplan_engine.electrical.groups import text as groups_text
+from floorplan_engine.electrical.led_supply import led_lines
 from floorplan_engine.electrical.mounting import PRACTICE, mounting_notes
 from floorplan_engine.electrical.mounting import text as mounting_text
 from floorplan_engine.electrical.panel import BoardPanel, build_panel, color_of
@@ -62,6 +63,7 @@ TEXT: dict[str, dict[str, str]] = {
     "common": {"ru": "Ввод и резерв", "uk": "Введення і резерв"},
     "lines": {"ru": "Линии групп", "uk": "Лінії груп"},
     "dc": {"ru": "Щит АКБ", "uk": "Щит АКБ"},
+    "led": {"ru": "Щит блоков питания LED", "uk": "Щит блоків живлення LED"},
 }
 
 
@@ -338,7 +340,7 @@ def side_tables(
             # The elevations carry the installer notes for the side panel (on a ceiling page)
             out["elevations"] = mounting_side_tables(elec, wiring, lang)
         if panel is not None:
-            out["panel"] = panel_tables(panel, elec, lang)
+            out["panel"] = panel_tables(panel, elec, lang, wiring)
     return out
 
 
@@ -366,11 +368,15 @@ def mounting_side_tables(elec: Electrical, wiring: Wiring, language: Language) -
     return out
 
 
-def panel_tables(panel: BoardPanel, elec: Electrical, language: Language) -> list[SideTable]:
+def panel_tables(
+    panel: BoardPanel, elec: Electrical, language: Language, wiring: Wiring | None = None
+) -> list[SideTable]:
     """The "Panel" sheet: devices with load and weak spots (row → device) and the load list by
-    group. Device purchase is in the estimate ("Estimate" tab)."""
+    group. Device purchase is in the estimate ("Estimate" tab). LED supplies get their 12 V
+    line from the wiring."""
     colors = group_colors(elec)
-    table = devices_table(panel, language, colors)
+    led = led_lines(wiring, panel.led.loads) if panel.led is not None else {}
+    table = devices_table(panel, language, colors, led)
     keys = [(d.key,) for d in panel.all_devices]
     # The purpose does not fit in the panel: it is in the device card shown on row click
     devices = drop_column(from_table(table, keys, panel_notes(panel, language)), 1)
@@ -406,14 +412,16 @@ def _device_sections(
     panel: BoardPanel, rows: Sequence[SideRow], language: Language
 ) -> tuple[SideRow, ...]:
     """Panel devices by section: supply and backup (not on a line, square icon), group lines
-    (dot in the group colour), battery box (square icon). One row per device in
+    (dot in the group colour), battery box and LED supplies box (square icon). One row per device in
     panel.all_devices order."""
     by_id = dict(zip((d.id for d in panel.all_devices), rows, strict=True))
     dc = {d.id for d in panel.dc.devices} if panel.dc is not None else set()
+    led = {d.id for d in panel.led.devices} if panel.led is not None else set()
     parts = (
         ("common", [d for d in panel.devices if d.group is None]),
         ("lines", [d for d in panel.devices if d.group is not None]),
         ("dc", [d for d in panel.all_devices if d.id in dc]),
+        ("led", [d for d in panel.all_devices if d.id in led]),
     )
     width = len(rows[0].cells) if rows else 0
     out: list[SideRow] = []

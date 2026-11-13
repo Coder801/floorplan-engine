@@ -77,6 +77,27 @@ def test_job_options_apply_to_any_variant_and_stay_out_of_the_key() -> None:
     assert default_variant(elec).plaster == "before" and default_variant(elec).rough_light
 
 
+def test_extra_options_are_job_options_without_neighbours() -> None:
+    """Panel labels and the insulation test: on by default, out of the key, kept by any variant;
+    no neighbours (each would be one more variant to calculate)."""
+    assert _elec().panel_labels and _elec().insulation_test
+    job = Variant(panel_labels=False, insulation_test=False)
+    assert job.key == Variant().key
+    elec = apply_variant(_elec(), job)
+    assert (elec.panel_labels, elec.insulation_test) == (False, False)
+    kept = apply_variant(_elec(panel_labels=False), Variant(mode="proper"))
+    assert kept.panel_labels is False and kept.insulation_test is True
+    for v in neighbour_variants(_elec(), Variant()):
+        assert (v.panel_labels, v.insulation_test) == (True, True)
+    # The protection test is off unless chosen, and is a job option too
+    assert _elec().protection_test is False
+    tested = Variant(protection_test=True)
+    assert tested.key == Variant().key
+    assert apply_variant(_elec(), tested).protection_test is True
+    assert apply_variant(_elec(protection_test=True), Variant(mode="proper")).protection_test
+    assert all(v.protection_test is False for v in neighbour_variants(_elec(), Variant()))
+
+
 def test_loop_conduit_is_a_job_option_and_a_neighbour_only_with_chain_drops_in_conduit() -> None:
     job = Variant(distribution="loop", conduit="walls", loop_conduit="shared")
     assert job.key == Variant(distribution="loop", conduit="walls").key  # route edits stay
@@ -163,7 +184,14 @@ def test_default_variant_keeps_project_as_is() -> None:
     elec = _elec(mode="economy")
     default = default_variant(elec)
     expected = Variant(
-        mode="economy", route="ceiling", plaster="after", rough_light=False, loop_conduit="separate"
+        mode="economy",
+        route="ceiling",
+        plaster="after",
+        rough_light=False,
+        panel_labels=True,
+        insulation_test=True,
+        protection_test=False,
+        loop_conduit="separate",
     )
     assert default == expected
     assert apply_variant(elec, default) is elec  # "as in project": no changes

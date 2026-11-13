@@ -46,7 +46,8 @@ HANDLE_INSET_MM, HANDLE_END_MM = 60.0, 180.0  # handle from the free edge of the
 LW_THIN = 13
 FIXING_HALF_MM = 1.6  # half the fixing stroke across a cable drop, sheet mm
 CABLE_PITCH_SHEET = 0.9  # cables of one drop side by side on the sheet, mm
-LW_CABLE = 20  # cables along the wall, 1/100 mm
+LW_CABLE = 15  # cables along the wall, 1/100 mm
+CABLE_OUT = 2.0  # a cable from the ceiling or floor goes on past the wall edge, sheet mm
 
 TITLE_H = TEXT_DIM_MM
 SIDE_H = TEXT_SMALL_MM  # line under the heading: view from inside, what is behind the wall
@@ -234,7 +235,11 @@ def _draw(
         runs = by_x[cable.x]
         dx = (runs.index(cable.run) - (len(runs) - 1) / 2) * pitch
         a, b = at(cable.x, cable.y0), at(cable.x, cable.y1)
-        line(Vec(a.x + dx, a.y), Vec(b.x + dx, b.y), LW_CABLE, color)
+        # The end on the route plane goes on past the wall: the cable runs on in the floor or
+        # ceiling
+        lo = a.y - CABLE_OUT if cable.y0 <= 0.5 else a.y
+        hi = b.y + CABLE_OUT if cable.y1 >= e.height - 0.5 else b.y
+        line(Vec(a.x + dx, lo), Vec(b.x + dx, hi), LW_CABLE, color)
     tops = {f.x: max(g.y for g in e.fixings if g.x == f.x) for f in e.fixings}
     for f in e.fixings:
         spot = at(f.x, f.y)

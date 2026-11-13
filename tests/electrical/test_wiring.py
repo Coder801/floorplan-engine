@@ -27,7 +27,6 @@ from floorplan_engine.electrical.estimate import PriceList, build_estimate
 from floorplan_engine.electrical.panel import LineClass
 from floorplan_engine.electrical.wiring import (
     END_ALLOWANCE,
-    LED_MARK,
     LIGHT_LOOP,
     PASS_MARK,
     TWO_KEY_MARK,
@@ -381,7 +380,7 @@ def testcable_layer_by_purpose_protection_and_route() -> None:
     )
     assert cable_layer(run, {run.group: LineClass("light", False)}) == "W-CABLE-LIGHT"
     assert cable_layer(replace(run, circuit="low"), {}) == "W-CABLE-LOW"
-    led = replace(run, circuit="low", mark=LED_MARK)  # 12 V from a LED supply in the panel
+    led = replace(run, circuit="low", mark="2x4", led=True)  # 12 V from a LED supply in the panel
     assert cable_layer(led, {run.group: LineClass("light", False)}) == "W-CABLE-LIGHT"
     assert cable_layer(run, {}) == "W-CABLE-SOCKET"  # a group the panel does not know
     doc = new_document()

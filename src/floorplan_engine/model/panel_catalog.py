@@ -36,6 +36,9 @@ class DeviceKind(StrEnum):
     DC_BATTERY = "dc_battery"  # battery breaker, DC 2P (battery box at the inverter)
     DC_BREAKER = "dc_breaker"  # solar string breaker, DC 2P
     DC_SPD = "dc_spd"  # solar string surge protector, DC (+, −, PE)
+    # LED power supply 230 → 12 V on a DIN rail (LED box under the panel, led_supply "board");
+    # the value is the estimate item of a DIN supply
+    LED_PSU = "led_psu_din"
 
 
 MODULE_MM = 17.5  # DIN module width, mm
@@ -98,8 +101,32 @@ GENERIC: dict[DeviceKind, CatalogModel] = {
         _generic(DeviceKind.DC_BATTERY, 3, 90.0, accent="#c62828"),
         _generic(DeviceKind.DC_BREAKER, 2, accent="#c62828"),
         _generic(DeviceKind.DC_SPD, 3, 90.0),
+        _generic(DeviceKind.LED_PSU, 3, 90.0, body="#e9ecef", accent="#f2b705"),
     )
 }
+# DIN-rail 12 V LED supplies by rated power, W → modules (a typical series: 17.5 mm per
+# module, wider with power); a supply is drawn and laid out by its own width
+LED_PSU_MODULES: dict[int, int] = {15: 1, 30: 2, 60: 3, 100: 4, 150: 6}
+
+
+def led_psu_model(watts: int) -> CatalogModel:
+    """Typical DIN-rail LED supply of this power: width by LED_PSU_MODULES."""
+    modules = LED_PSU_MODULES.get(watts, GENERIC[DeviceKind.LED_PSU].modules)
+    base = GENERIC[DeviceKind.LED_PSU]
+    return CatalogModel(
+        f"{base.id}.{watts}",
+        base.brand,
+        base.series,
+        base.kind,
+        modules,
+        base.height,
+        base.style,
+        base.body,
+        base.lever,
+        base.accent,
+    )
+
+
 # Three-phase panel: a module per pole, N too (a typical modular device)
 GENERIC_POLES: dict[tuple[DeviceKind, int], CatalogModel] = {
     (m.kind, poles): m

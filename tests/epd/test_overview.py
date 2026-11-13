@@ -38,7 +38,9 @@ def test_build_writes_overview_to_manifest(tmp_path: Path) -> None:
     with zipfile.ZipFile(result.artifact) as zf:
         manifest = json.loads(zf.read("manifest.json"))
     assert manifest["overview"]["rooms"][0]["name"] == "К"
-    assert all("conduit_m" in i for i in manifest["variants"]["items"])
+    items = manifest["variants"]["items"]
+    assert all("conduit_m" in i for i in items)
+    assert all(abs(i["material"] + i["work"] - i["total"]) < 0.05 for i in items)
 
 
 def test_overview_plumbing_water_and_sewer() -> None:

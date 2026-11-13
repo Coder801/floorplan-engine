@@ -84,6 +84,7 @@ def test_draft_groups_lines_by_stage_with_parameters() -> None:
         ("breaker.C16", 3.0, None),
         ("work.board_module", 6.0, 150.0),
         ("work.insulation_test", 3.0, 300.0),
+        ("work.protection_test", 3.0, 150.0),
     )
     tasks = electrical_draft(est, "ru")
     keys = [t.key for t in tasks]
@@ -92,16 +93,19 @@ def test_draft_groups_lines_by_stage_with_parameters() -> None:
         "electrical.cable",
         "electrical.insulation",
         "electrical.assembly",
+        "electrical.protection",
     ]
-    chases, cable, insulation, assembly = tasks
+    chases, cable, insulation, assembly, protection = tasks
     assert [ln.key for ln in chases.lines] == ["work.chase.brick", "socket_box"]
     assert (chases.work_total, chases.material_total) == (1200.0, 60.0)
-    assert [t.order for t in tasks] == [1, 2, 5, 7]
+    assert [t.order for t in tasks] == [1, 2, 5, 7, 9]
     assert cable.after == ("electrical.chases",) and cable.photo == "required"
     # No boxes stage in this estimate: insulation comes after the cable only
     assert insulation.after == ("electrical.cable",)
     # No panel enclosure stage: assembly after the insulation only
     assert assembly.after == ("electrical.insulation",)
+    # No devices stage: the protection test after the assembly only, handed over with a report
+    assert protection.after == ("electrical.assembly",) and protection.photo == "required"
     assert assembly.unpriced == 1 and assembly.material_total == 0.0
     assert assembly.lines[0].sum is None and assembly.as_dict()["lines"][0]["price"] is None
     scope = load_scope()

@@ -1,6 +1,7 @@
 """Wiring variants (docs/wiring-variants.md): mode (economy, standard, premium), route (ceiling,
 floor), distribution (through boxes or a daisy chain through flush boxes), path and ceiling
-conduit, and for every variant alike when the cable goes in (plaster) and rough light. Points
+conduit, and for every variant alike when the cable goes in (plaster), rough light and the
+extra options (panel labels, insulation test, protection test: the estimate only). Points
 come from the project; a variant only changes how cable is run. The modes are presets of the
 options; the person chooses each option in the setup wizard. The chosen set is built as sheets,
 and it and its neighbours (neighbour_variants: the set with one option changed, without routes
@@ -63,11 +64,18 @@ def has_loop_drops(variant: Variant) -> bool:
 
 
 def _job(elec: Electrical, variant: Variant) -> dict[str, object]:
-    """Plaster, rough light and the chain drop conduit of the variant; None: as in
-    electrical.yaml."""
+    """Plaster, rough light, the extra options and the chain drop conduit of the variant; None:
+    as in electrical.yaml."""
     return {
         "plaster": variant.plaster or elec.plaster,
         "rough_light": elec.rough_light if variant.rough_light is None else variant.rough_light,
+        "panel_labels": elec.panel_labels if variant.panel_labels is None else variant.panel_labels,
+        "insulation_test": (
+            elec.insulation_test if variant.insulation_test is None else variant.insulation_test
+        ),
+        "protection_test": (
+            elec.protection_test if variant.protection_test is None else variant.protection_test
+        ),
         "loop_conduit": variant.loop_conduit or elec.loop_conduit,
     }
 
@@ -82,8 +90,11 @@ def neighbour_variants(elec: Electrical, chosen: Variant) -> list[Variant]:
     """The chosen set with one option changed, each other value of each wizard step: route (only
     those the project has), distribution, path, conduit, light wiring, LED supplies (only with
     LED outputs), breakers (the mode), plaster, rough light and the chain drop conduit (only with
-    chain drops in conduit, has_loop_drops). conduit "don't know" (None) stays
-    with another mode, as in the wizard: then the conduit of that mode comes with it."""
+    chain drops in conduit, has_loop_drops). The extra options (panel labels, insulation test,
+    protection test) have no neighbours: each would be one more variant to calculate, and they
+    only add an estimate line; their cards are priced after the recalculation. conduit "don't
+    know" (None) stays with another mode, as in the wizard: then the conduit of that mode comes
+    with it."""
     base = chosen_job(elec, chosen)
     others: list[tuple[str, tuple[object, ...], object]] = [
         ("route", project_routes(elec), base.route),
@@ -122,21 +133,20 @@ def default_variant(elec: Electrical) -> Variant:
         led_supply=elec.led_supply,
         plaster=elec.plaster,
         rough_light=elec.rough_light,
+        panel_labels=elec.panel_labels,
+        insulation_test=elec.insulation_test,
+        protection_test=elec.protection_test,
         loop_conduit=elec.loop_conduit,
     )
 
 
 def apply_variant(elec: Electrical, variant: Variant) -> Electrical:
     """Variant electrical model: same points; the variant's options; one route for all cables (the
-    "as in project" variant leaves cable routes untouched). plaster, rough_light and loop_conduit
-    are not in the key: they apply to any variant."""
+    "as in project" variant leaves cable routes untouched). plaster, rough_light, the extra
+    options and loop_conduit are not in the key: they apply to any variant."""
     job = _job(elec, variant)
     if variant.key == default_variant(elec).key:
-        same = job == {
-            "plaster": elec.plaster,
-            "rough_light": elec.rough_light,
-            "loop_conduit": elec.loop_conduit,
-        }
+        same = job == {k: getattr(elec, k) for k in job}
         return elec if same else elec.model_copy(update=job)
     cables = [c.model_copy(update={"route": variant.route}) for c in elec.cables]
     update = {
@@ -168,6 +178,8 @@ class VariantSummary:
 
     variant: Variant
     total: float  # estimate total, in the price list currency
+    material: float  # materials section of the estimate
+    work: float  # rough and finish work sections
     currency: str
     unpriced: int  # items without a price
     cable_m: float  # cable along routes, without margin
@@ -177,6 +189,9 @@ class VariantSummary:
     edited: bool  # has manual route edits
     plaster: Plaster = "after"
     rough_light: bool = False
+    panel_labels: bool = True
+    insulation_test: bool = True
+    protection_test: bool = False
     loop_conduit: LoopConduit = "separate"
 
     def as_dict(self) -> dict[str, object]:
@@ -186,8 +201,11 @@ class VariantSummary:
             "path": v.wire_path, "conduit": v.conduit_level,
             "light_wiring": v.light_wiring, "led_supply": v.led_supply,
             "plaster": self.plaster, "rough_light": self.rough_light,
+            "panel_labels": self.panel_labels, "insulation_test": self.insulation_test,
+            "protection_test": self.protection_test,
             "loop_conduit": self.loop_conduit,
-            "total": round(self.total, 2), "currency": self.currency, "unpriced": self.unpriced,
+            "total": round(self.total, 2), "material": round(self.material, 2),
+            "work": round(self.work, 2), "currency": self.currency, "unpriced": self.unpriced,
             "cable_m": round(self.cable_m, 1), "devices": self.devices,
             "chases_m": round(self.chases_m, 1), "conduit_m": round(self.conduit_m, 1),
             "edited": self.edited,
@@ -214,6 +232,8 @@ def variant_summary(
     return VariantSummary(
         variant=variant,
         total=est.total,
+        material=est.subtotal("material"),
+        work=est.work,
         currency=prices.currency,
         unpriced=est.unpriced,
         cable_m=sum(r.length_mm for r in wiring.runs) / 1000,
@@ -223,5 +243,8 @@ def variant_summary(
         edited=edits is not None,
         plaster=elec.plaster,
         rough_light=elec.rough_light,
+        panel_labels=elec.panel_labels,
+        insulation_test=elec.insulation_test,
+        protection_test=elec.protection_test,
         loop_conduit=elec.loop_conduit,
     )

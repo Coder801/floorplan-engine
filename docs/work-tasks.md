@@ -40,8 +40,9 @@
 | 4 | Установка корпуса щита (`board`) | `work.board_install` | `board_enclosure`, `dc_enclosure` (щит АКБ) | `optional` | — |
 | 5 | Замер изоляции (`insulation`) | `work.insulation_test` | — | `required`: протокол, фото или PDF | 2, 3 |
 | 6 | Черновой свет (`rough_light`) | `work.rough_light`, `work.rough_switch` | `rough_holder`, `rough_lamp`, `rough_switch` | `none` | 2 |
-| 7 | Сборка щита (`assembly`) | `work.board_module` | `breaker`, `diff`, `rcd`, `input`, `relay`, `spd`, `changeover`, `ats`, `contactor`, `feed`, `output`, `dc_battery`, `dc_breaker`, `dc_spd` | `optional` | 4, 5 |
+| 7 | Сборка щита (`assembly`) | `work.board_module`, `work.panel_labels` (маркировка, с 2026-11-13 — своя позиция) | `breaker`, `diff`, `rcd`, `input`, `relay`, `spd`, `changeover`, `ats`, `contactor`, `feed`, `output`, `dc_battery`, `dc_breaker`, `dc_spd` | `optional` | 4, 5 |
 | 8 | Механизмы и светильники (`devices`) | `work.mechanism`, `work.led_psu`, `work.led_psu_din` | `socket`, `switch1`, `switch2`, `pass_switch`, `data`, `tv`, `frame`, `light`, `downlight`, `pendant`, `sconce`, `led_output`, `outlet`, `led_strip`, `led_psu`, `led_psu_din` | `optional` | 7 |
+| 9 | Проверка защиты прибором (`protection`) | `work.protection_test` | — | `required`: протокол, фото или PDF | 7, 8 |
 
 Сантехника (`plumbing/stages.yaml`):
 
@@ -59,11 +60,11 @@
 после прокладки кабеля, нет корпуса щита — сборка щита после замера.
 
 Правда — `stages.yaml` и тест полноты (`tests/electrical/test_stages.py`,
-`tests/plumbing/test_stages.py`); таблица выше — их копия на 2026-11-11. Этапы двух разделов в плане идут одним списком, у каждой задачи
+`tests/plumbing/test_stages.py`); таблица выше — их копия на 2026-11-13. Этапы двух разделов в плане идут одним списком, у каждой задачи
 `domain`: `electrical` | `plumbing`. Электрика и сантехника друг от друга не зависят.
 
 Вариант проводки (`variant.yaml`) черновик меняет только через смету: нет гофры — нет
-`work.conduit`, нет чернового света — нет этапа 6. Порядок «до или после штукатурки»
+`work.conduit`, нет чернового света — нет этапа 6, без замера изоляции (`insulation_test: false`) — нет этапа 5, без проверки защиты прибором (`protection_test: false`, так по умолчанию) — нет этапа 9. Порядок «до или после штукатурки»
 (`plaster`) в MVP не меняет этапы; штукатурка — не наша работа и задачей не бывает.
 
 ### Ключ `.epd` `work_plan`

@@ -25,16 +25,25 @@ separate product specification: the estimate without prices is the bill of quant
   key refinement (breaker.C16);
 - lights, lighting outputs and appliance outputs by point, LED strip in metres;
 - a LED power supply per LED output and its fitting (decision 2026-11-11): at the strip, or on
-  a DIN rail in the panel (Electrical.led_supply), with its own prices;
-- labelling: a tag at each end of each line; insulation resistance test with a report for each
-  power group;
+  a DIN rail in the panel (Electrical.led_supply), with its own prices; in the panel the
+  supplies stand in a box of their own (decision 2026-11-13): by power as its devices, its
+  enclosure, and a second panel installation;
+- labelling: a tag at each end of each line (in the cable laying);
+- extra options of the wizard (decision 2026-11-13), the first two on unless the variant says
+  no: panel labels (Electrical.panel_labels) — a sticker on each panel device, by the "Labels"
+  view of the panel, one item at a fixed price per panel whatever its size (decision
+  2026-11-13); insulation resistance test with a report (Electrical.insulation_test) for each
+  power group; protection test with a tester and a report (Electrical.protection_test, off
+  unless chosen): RCD and RCBO tripping and the short-circuit current, for each power group;
 - rough light, if chosen (Electrical.rough_light): a lamp holder, a bulb and a rough switch per
   room with lights.
 
 Work comes in two sections with their own totals (decision 2026-11-03): rough (`rough`),
 before plaster and screed: chases, passes, laying cable and conduit, flush boxes, boxes with
 crimping, panel recess and enclosure, labelling, insulation test; finishing (`finish`), after
-the finish: filling the panel with devices, fitting the devices. An item's section is in LINES.
+the finish: filling the panel with devices, panel labels, fitting the devices, protection
+test. An item's
+section is in LINES.
 
 Prices are never invented: items with no price in the list stay in the estimate marked
 "no price" and are left out of the total. LED profiles are not described in the model and are
@@ -59,6 +68,7 @@ from openpyxl.worksheet.worksheet import Worksheet
 from pydantic import Field
 
 from floorplan_engine.electrical.boxes import BOX_ORDER, BOX_TITLES
+from floorplan_engine.electrical.led_supply import led_outputs as led_outputs_of
 from floorplan_engine.electrical.mounting import (
     conduit_diameter,
     fixings,
@@ -159,6 +169,12 @@ LINES: dict[str, tuple[Section, str, str, str]] = {
     "dc_breaker": ("material", "шт", "Автомат строки панелей DC", "Автомат рядка панелей DC"),
     "dc_spd": ("material", "шт", "УЗИП DC", "ПЗІП DC"),
     "dc_enclosure": ("material", "шт", "Корпус щита АКБ", "Корпус щита АКБ"),
+    "led_enclosure": (
+        "material",
+        "шт",
+        "Корпус щита блоков питания LED",
+        "Корпус щита блоків живлення LED",
+    ),
     "socket": ("material", "шт", "Розетка с заземлением", "Розетка із заземленням"),
     "switch1": ("material", "шт", "Выключатель одноклавишный", "Вимикач одноклавішний"),
     "switch2": ("material", "шт", "Выключатель двухклавишный", "Вимикач двоклавішний"),
@@ -224,6 +240,12 @@ LINES: dict[str, tuple[Section, str, str, str]] = {
     ),
     "work.board_install": ("rough", "шт", "Установка щита", "Встановлення щита"),
     "work.board_module": ("finish", "мод.", "Сборка щита", "Збирання щита"),
+    "work.panel_labels": (
+        "finish",
+        "щит",
+        "Маркировка аппаратов щита наклейками",
+        "Маркування апаратів щита наліпками",
+    ),
     "work.mechanism": ("finish", "шт", "Установка механизмов", "Встановлення механізмів"),
     "work.led_psu": (
         "finish",
@@ -254,6 +276,12 @@ LINES: dict[str, tuple[Section, str, str, str]] = {
         "гр.",
         "Замер сопротивления изоляции с протоколом",
         "Вимірювання опору ізоляції з протоколом",
+    ),
+    "work.protection_test": (
+        "finish",
+        "гр.",
+        "Проверка прибором дифавтоматов, УЗО и тока короткого замыкания с протоколом",
+        "Перевірка приладом дифавтоматів, ПЗВ і струму короткого замикання з протоколом",
     ),
 }
 # Item notes: an "i" icon next to the name in the viewer, a comment in Excel; without a price
@@ -781,13 +809,17 @@ def quantities(wiring: Wiring, elec: Electrical) -> dict[str, float]:
     q["work.wall_hole_large"] = sum(1 for h in wiring.holes if h.large)
     q["work.socket_box"] = posts
     q["work.junction_box"] = len(wiring.boxes)
-    if elec.board is not None:
-        q["work.board_install"] = 1
+    if elec.board is not None:  # the LED supplies box is a second panel to mount
+        q["work.board_install"] = 1 + (1 if led_outputs_of(elec) else 0)
     q["work.mechanism"] = sum(pieces.values())
     q[f"work.{led_psu}"] = led_outputs
     if elec.rough_light and rough_rooms:
         q["work.rough_light"] = q["work.rough_switch"] = rough_rooms
-    q["work.insulation_test"] = len({r.group for r in wiring.runs if r.circuit == "power"})
+    power_groups = len({r.group for r in wiring.runs if r.circuit == "power"})
+    if elec.insulation_test:
+        q["work.insulation_test"] = power_groups
+    if elec.protection_test:
+        q["work.protection_test"] = power_groups
     return {k: v for k, v in q.items() if v}
 
 
@@ -817,11 +849,15 @@ def build_estimate(
     q = quantities(wiring, elec)
     if panel is not None:
         q.pop("breaker", None)
+    if panel is not None and panel.led is not None:  # supplies by power, as LED box devices
+        q.pop("led_psu_din", None)
     if "work.board_install" in q:  # assembly right after the panel installation
         modules = panel.modules if panel is not None else q.get("breaker", 0.0)
         items = list(q.items())
         at = next(k for k, (key, _) in enumerate(items) if key == "work.board_install") + 1
         items.insert(at, ("work.board_module", modules))
+        if elec.panel_labels and panel is not None:  # fixed price per panel (stickers.py)
+            items.insert(at + 1, ("work.panel_labels", 1))
         q = dict(items)
 
     def line(key: str, qty: float, name: str | None = None) -> Line:
@@ -867,6 +903,10 @@ def build_estimate(
             enc = panel.dc.enclosure
             base = LINES["dc_enclosure"][2 if language == "ru" else 3]
             devices.append(line("dc_enclosure", 1, f"{base} {enc.title}, {enc.modules} мод."))
+        if panel.led is not None:  # LED supplies box enclosure after the devices
+            enc = panel.led.enclosure
+            base = LINES["led_enclosure"][2 if language == "ru" else 3]
+            devices.append(line("led_enclosure", 1, f"{base} {enc.title}, {enc.modules} мод."))
         at = next((k + 1 for k, ln in enumerate(lines) if ln.key == "board_enclosure"), len(lines))
         lines[at:at] = devices
     lines.sort(key=lambda ln: SECTIONS.index(ln.section))

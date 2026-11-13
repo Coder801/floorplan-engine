@@ -15,6 +15,10 @@ KIND_NAME: dict[DeviceKind | tuple[DeviceKind, int], dict[str, str]] = {
     (DeviceKind.DIFF, 4): {"ru": "Дифавтомат 3P+N", "uk": "Дифавтомат 3P+N"},
     DeviceKind.CONTACTOR: {"ru": "Контактор модульный", "uk": "Контактор модульний"},
     (DeviceKind.CONTACTOR, 4): {"ru": "Контактор модульный", "uk": "Контактор модульний"},
+    DeviceKind.LED_PSU: {
+        "ru": "Блок питания LED на DIN-рейку",
+        "uk": "Блок живлення LED на DIN-рейку",
+    },
 }
 # The same in the panel device table: the usual abbreviations, explained under the table
 # (DEVICE_LEGEND); the estimate and the purchase list keep the full names
@@ -25,6 +29,7 @@ SHORT_NAME: dict[DeviceKind | tuple[DeviceKind, int], dict[str, str]] = {
     (DeviceKind.DIFF, 4): {"ru": "АВДТ 3P+N", "uk": "АВДТ 3P+N"},
     DeviceKind.CONTACTOR: {"ru": "Контактор", "uk": "Контактор"},
     (DeviceKind.CONTACTOR, 4): {"ru": "Контактор", "uk": "Контактор"},
+    DeviceKind.LED_PSU: {"ru": "БП LED", "uk": "БЖ LED"},
 }
 DEVICE_LEGEND = {
     "ru": "АВ — автоматический выключатель, АВДТ — дифавтомат (автомат с защитой от утечки тока)",
@@ -55,6 +60,12 @@ TEXT: dict[str, dict[str, str]] = {
     "dc_pv": {"ru": "Автомат строки панелей PV{n}", "uk": "Автомат рядка панелей PV{n}"},
     "dc_spd": {"ru": "УЗИП DC строки PV{n}", "uk": "ПЗІП DC рядка PV{n}"},
     "dc_title": {"ru": "Щит АКБ", "uk": "Щит АКБ"},
+    "led_title": {"ru": "Щит блоков питания LED", "uk": "Щит блоків живлення LED"},
+    "led_psu": {"ru": "{what} — {room}", "uk": "{what} — {room}"},
+    "led_what": {"ru": "Подсветка LED", "uk": "Підсвітка LED"},
+    "led_strip_m": {"ru": "лента {m} м", "uk": "стрічка {m} м"},
+    "led_drop": {"ru": "ΔU {d} %", "uk": "ΔU {d} %"},
+    "led_from": {"ru": "питание от {g}", "uk": "живлення від {g}"},
     "stickers_title": {"ru": "Маркировка щита {name}", "uk": "Маркування щита {name}"},
     "stickers_note": {
         "ru": "{size} мм. Печатать в масштабе 100 %, без подгонки под страницу",
@@ -202,6 +213,24 @@ TEXT: dict[str, dict[str, str]] = {
         "уточните (panel.battery_voltage)",
         "uk": "АКБ {v} В — припущення: струм розряду {a} А, автомат і кабель АКБ — за ним; "
         "уточніть (panel.battery_voltage)",
+    },
+    "w_led_strip": {
+        "ru": "LED: длина ленты не описана у {p} — принято {m} м на вывод, блок питания по ней; "
+        "уточните ленту (led_strips) или мощность вывода (power)",
+        "uk": "LED: довжину стрічки не описано в {p} — прийнято {m} м на вивід, блок живлення за "
+        "нею; уточніть стрічку (led_strips) або потужність виводу (power)",
+    },
+    "w_led_big": {
+        "ru": "LED {p}: лента {w} Вт — больше блока {s} Вт; разделите ленту на участки, у каждого "
+        "свой блок и своя линия 12 В",
+        "uk": "LED {p}: стрічка {w} Вт — більше блока {s} Вт; розділіть стрічку на ділянки, у "
+        "кожної свій блок і своя лінія 12 В",
+    },
+    "w_led_drop": {
+        "ru": "LED {p}: линия 12 В {l} м, падение напряжения {d} % даже при 2×{s} мм² — лента "
+        "на 24 В или блок питания у ленты",
+        "uk": "LED {p}: лінія 12 В {l} м, спад напруги {d} % навіть при 2×{s} мм² — стрічка "
+        "на 24 В або блок живлення біля стрічки",
     },
     "w_enclosure": {
         "ru": "Аппараты не помещаются в щит {a} (panel.enclosure) — взят {b}",

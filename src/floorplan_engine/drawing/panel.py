@@ -10,7 +10,7 @@ vertical labels next to it: purpose, cable and power. All sizes are fractions of
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
 from ezdxf.colors import RGB
@@ -21,6 +21,7 @@ from floorplan_engine.drawing.ids import tagged
 from floorplan_engine.drawing.layers import E_PANEL, E_PANEL_WIRE, MIN_TEXT_MM, text_width
 from floorplan_engine.drawing.plan import add_text
 from floorplan_engine.drawing.tables import Column, Mark, Table, name_width
+from floorplan_engine.electrical.led_supply import LedLine
 from floorplan_engine.electrical.loads import PanelGroup, current
 from floorplan_engine.electrical.panel import (
     BoardPanel,
@@ -437,11 +438,15 @@ def _draw_external(
 # --- Device table and notes ---------------------------------------------------
 
 
-def device_rows(panel: BoardPanel, language: Language) -> list[tuple[Device, tuple[str, ...]]]:
-    """Table rows: device → (pos., purpose, device, cable, P, I)."""
+def device_rows(
+    panel: BoardPanel, language: Language, led_lines: Mapping[str, LedLine] | None = None
+) -> list[tuple[Device, tuple[str, ...]]]:
+    """Table rows: device → (pos., purpose, device, cable, P, I). An LED supply: its output and
+    strip, the 12 V line (led_lines, from the wiring; without it no cable), the strip current."""
     groups = {g.group: g for g in panel.groups}
     out: list[tuple[Device, tuple[str, ...]]] = []
     dc = panel.dc
+    leds = {ld.point: ld for ld in panel.led.loads} if panel.led is not None else {}
     for d in panel.all_devices:
         g = groups.get(d.group or "")
         star = ASSUMED if d.assumed else ""
@@ -455,6 +460,15 @@ def device_rows(panel: BoardPanel, language: Language) -> list[tuple[Device, tup
             v = f"{dc.voltage} В" + (ASSUMED if dc.voltage_assumed else "")
             cable = f"2×{dc.cable:g} мм²"
             out.append((d, (d.id, f"{d.title}, {v}", d.label + star, cable, "", amps(dc.current))))
+        elif d.point is not None and d.point in leds:
+            ld = leds[d.point]
+            m = f"{ld.metres:g}".replace(".", ",") + (ASSUMED if ld.metres_assumed else "")
+            purpose = f"{d.title}, {panel_text('led_strip_m', language, m=m)}"
+            line = (led_lines or {}).get(d.point)
+            cable = line.mark.replace("x", "×") if line is not None else ""
+            name = device_name(d, language, short=True) + star
+            p = kw(ld.power) + (ASSUMED if ld.power_assumed else "")
+            out.append((d, (d.id, purpose, name, cable, p, amps(ld.current))))
         else:
             out.append((d, (d.id, d.title, d.label + star, "", "", "")))
     return out
@@ -463,8 +477,13 @@ def device_rows(panel: BoardPanel, language: Language) -> list[tuple[Device, tup
 PURPOSE_MAX = 80.0  # sheet mm: a long purpose is cut
 
 
-def devices_table(panel: BoardPanel, language: Language, colors: dict[str, int]) -> Table:
-    rows = device_rows(panel, language)
+def devices_table(
+    panel: BoardPanel,
+    language: Language,
+    colors: dict[str, int],
+    led_lines: Mapping[str, LedLine] | None = None,
+) -> Table:
+    rows = device_rows(panel, language, led_lines)
     purposes = [clip(r[1], PURPOSE_MAX, 2.5) for _, r in rows]
     devices = [r[2] for _, r in rows]
     columns = (

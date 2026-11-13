@@ -10,7 +10,7 @@ import type { OverviewMaster, OverviewReserve, Project, Question, VariantConduit
 import { parseCeiling } from "./ceiling";
 import { activeSummary, availableRoutes, breakersOf, hasLoopDrops, modeConduit, modeOfBreakers, optionsOf, parseKey, type VariantChoice } from "@/widgets/VariantInfo/variants";
 
-export type StepId = "route" | "distribution" | "lights" | "path" | "conduit" | "loopConduit" | "led" | "plaster" | "ceiling" | "rough" | "phases" | "input" | "breakers" | "standby" | "backup" | "power" | "inverter" | "battery" | "pv" | "npe" | "reserve" | "master" | "masterOff";
+export type StepId = "route" | "distribution" | "lights" | "path" | "conduit" | "loopConduit" | "led" | "plaster" | "ceiling" | "rough" | "phases" | "input" | "breakers" | "standby" | "backup" | "power" | "inverter" | "battery" | "pv" | "npe" | "reserve" | "master" | "masterOff" | "labels" | "insulation" | "protection";
 export type Picks = Partial<Record<StepId, string>>;
 // "I don't know": the question closes with {accept}, the model keeps its typical value, and the
 // person can come back to it later; the project is not held up by a device not chosen yet
@@ -18,7 +18,7 @@ export const UNKNOWN = "unknown";
 
 export interface Step {
   id: StepId;
-  group: "wiring" | "panel" | "reserve";
+  group: "wiring" | "panel" | "reserve" | "extra";  // extra: work beyond the wiring, the estimate only
   kind: "cards" | "number" | "groups";  // cards with pictures, a field with presets, a list of panel groups
   options: string[];          // card values or field presets
   question?: Question;        // the report question behind the step; none yet if it needs another answer
@@ -57,7 +57,7 @@ const MASTER: ReadonlySet<StepId> = new Set(["master", "masterOff"]);
 const CEILINGS = ["2500", "2700", "3000"];
 const SUPPLY: ReadonlySet<StepId> = new Set(["phases", "input"]);  // the supply: the "Panel" group, first
 // Options of the wiring variant; each changes the calculation (docs/wiring-variants.md)
-export const VARIANT_STEPS: ReadonlySet<StepId> = new Set(["route", "distribution", "lights", "path", "conduit", "loopConduit", "led", "plaster", "rough", "breakers"]);
+export const VARIANT_STEPS: ReadonlySet<StepId> = new Set(["route", "distribution", "lights", "path", "conduit", "loopConduit", "led", "plaster", "rough", "breakers", "labels", "insulation", "protection"]);
 
 export function setupOf(project: Project, variants: Variants | null, ceiling: number | null, reserve: OverviewReserve | null,
                         master: OverviewMaster | null = null): Setup {
@@ -90,12 +90,14 @@ export function initialPicks(setup: Setup): Picks {
   if (setup.variants) {
     const { mode, route } = parseKey(setup.variants.active);
     const item = activeSummary(setup.variants);
-    const { path, conduit, light_wiring, led_supply, plaster, rough_light, loop_conduit } = optionsOf(item, mode);
+    const { path, conduit, light_wiring, led_supply, plaster, rough_light, panel_labels, insulation_test, protection_test, loop_conduit } = optionsOf(item, mode);
     Object.assign(picks, {
       route, distribution: item?.distribution ?? "boxes", lights: light_wiring, path,
       // "don't know" is the conduit not chosen: the mode gives it; an older build has no choice to show
       conduit: setup.variants.conduit === null ? UNKNOWN : conduit, led: led_supply, plaster, rough: rough_light ? "yes" : "no", loopConduit: loop_conduit,
       breakers: breakersOf(mode),
+      labels: panel_labels ? "yes" : "no", insulation: insulation_test ? "yes" : "no",
+      protection: protection_test ? "yes" : "no",
     });
   }
   if (setup.ceiling !== null) picks.ceiling = plainNumber(setup.ceiling);
@@ -130,6 +132,9 @@ export function variantOf(setup: Setup, picks: Picks): VariantChoice {
     led_supply: (picks.led ?? "room") as VariantLedSupply,
     plaster: picks.plaster as VariantPlaster,
     rough_light: picks.rough === "yes",
+    panel_labels: picks.labels !== "no",
+    insulation_test: picks.insulation !== "no",
+    protection_test: picks.protection === "yes",
     loop_conduit: (picks.loopConduit ?? "separate") as VariantLoopConduit,
   };
 }
@@ -242,6 +247,12 @@ export function wizardSteps(setup: Setup, picks: Picks): Step[] {
     steps.push({ id: "standby", group: "reserve", kind: "cards", options: ["no", "yes"], question: question(setup, "panel_backup") });
   }
   steps.push(...rest);
+  // Extra options: work beyond the wiring itself, they change only the estimate
+  if (choosing) {
+    steps.push({ id: "labels", group: "extra", kind: "cards", options: ["yes", "no"] });
+    steps.push({ id: "insulation", group: "extra", kind: "cards", options: ["yes", "no"] });
+    steps.push({ id: "protection", group: "extra", kind: "cards", options: ["yes", "no"] });
+  }
   return steps;
 }
 

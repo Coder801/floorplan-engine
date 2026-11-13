@@ -47,7 +47,6 @@ from floorplan_engine.electrical.chases import CHASE_CABLES, CHASE_SHARE
 from floorplan_engine.electrical.colors import group_colors
 from floorplan_engine.electrical.panel import OTHER_LINE, LineClass
 from floorplan_engine.electrical.routing import CLEARANCE
-from floorplan_engine.electrical.wiring import LED_MARK
 from floorplan_engine.electrical.wiring_model import (
     CHASE_NARROW,
     HOLE_CABLES,
@@ -118,7 +117,7 @@ def lay_out(wiring: Wiring) -> tuple[list[list[Vec]], list[Bundle]]:
 def cable_layer(run: Run, classes: dict[str, LineClass]) -> str:
     """Layer of a line: low-voltage by its circuit, the rest by what its group is; a 12 V LED line
     from the panel is low voltage, but lighting, so it goes by its group."""
-    low = run.circuit == "low" and run.mark != LED_MARK
+    low = run.circuit == "low" and not run.led
     line = LineClass("low", False) if low else classes.get(run.group, OTHER_LINE)
     return W_CABLES[(line.purpose, line.rcd, run.route == "floor")].name
 

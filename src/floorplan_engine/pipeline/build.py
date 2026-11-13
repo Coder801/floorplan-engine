@@ -294,7 +294,7 @@ def _export(
     if panel is not None:
         assert elec is not None
         board = elec.board.name if elec.board is not None else "ЩР"
-        panel_view = panel_data(panel, group_colors(elec), board, plan.language)
+        panel_view = panel_data(panel, group_colors(elec), board, plan.language, wiring)
     water = water_views(*pipes) if pipes is not None else None
     objects = describe_objects(plan, contours, elec, wiring, water)
     if pipes is not None:

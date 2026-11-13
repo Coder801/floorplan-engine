@@ -32,6 +32,8 @@ const SYMBOL_MM = 34;      // Ø68 flush box radius
 const PITCH_MM = 71;       // post step in a frame
 const FIXING_MM = 40;      // half the fixing stroke across a cable drop
 const CABLE_PITCH_MM = 15;  // cables of one drop side by side, wall mm
+const CABLE_OUT = 8;       // px: a cable from the ceiling or floor goes on past the wall edge
+const CABLE_W = 0.6;       // px: cable line width
 const MIN_R = 5;           // px: symbol no smaller than this
 const ISO_PAD = 28;        // px around the isometry: number badges
 const SIDE_ALPHA = 0.45;   // neighbouring wall in isometry is translucent
@@ -321,14 +323,17 @@ export class ElevationView {
     for (const c of cables) {
       if (c.x1 !== undefined) {
         const d = lanes.get(`${c.key}@${c.x}`) ?? 0, y = this.sy(c.y0) - d, x = this.sx(c.x) + d;
-        this.line(x, this.sy(c.y0), x, y, c.color ?? INK, 0.8);  // the corner: lanes stay nested
-        this.line(x, y, this.sx(c.x1), y, c.color ?? INK, 0.8);
+        this.line(x, this.sy(c.y0), x, y, c.color ?? INK, CABLE_W);  // the corner: lanes stay nested
+        this.line(x, y, this.sx(c.x1), y, c.color ?? INK, CABLE_W);
         continue;
       }
       const n = drops.get(c.x)!, k = placed.get(c.x) ?? 0;
       placed.set(c.x, k + 1);
       const x = this.sx(c.x) + (k - (n - 1) / 2) * lane;
-      this.line(x, this.sy(c.y0), x, this.sy(c.y1), c.color ?? INK, 0.8);
+      // The end on the route plane goes on past the wall: the cable runs on in the floor or ceiling
+      const lo = this.sy(c.y0) + (c.y0 <= 0.5 ? CABLE_OUT : 0);
+      const hi = this.sy(c.y1) - (c.y1 >= d.height - 0.5 ? CABLE_OUT : 0);
+      this.line(x, lo, x, hi, c.color ?? INK, CABLE_W);
     }
     const fixings = elec ? e.fixings ?? [] : [];
     const tops = new Map<number, number>();

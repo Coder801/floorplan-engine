@@ -48,7 +48,7 @@ describe("варианты проводки", () => {
 
   it("сводка точного набора; чего нет — не подставляем похожее", () => {
     const v: Variants = { active: "standard-ceiling-boxes", default: "standard-ceiling-boxes", items: [item("standard", "ceiling", 100)] };
-    const base = { mode: "standard", route: "ceiling", distribution: "boxes", path: "right", conduit: "none", light_wiring: "boxes", led_supply: "room", plaster: "after", rough_light: false, loop_conduit: "separate" } as const;
+    const base = { mode: "standard", route: "ceiling", distribution: "boxes", path: "right", conduit: "none", light_wiring: "boxes", led_supply: "room", plaster: "after", rough_light: false, panel_labels: true, insulation_test: true, protection_test: false, loop_conduit: "separate" } as const;
     expect(findChoice(v, base)?.total).toBe(100);
     expect(findChoice(v, { ...base, path: "shortest" })).toBeUndefined();
     expect(findChoice(v, { ...base, distribution: "loop" })).toBeUndefined();
@@ -60,8 +60,8 @@ describe("варианты проводки", () => {
   });
 
   it("опции старой сборки — по режиму", () => {
-    expect(optionsOf(undefined, "economy")).toEqual({ path: "shortest", conduit: "none", light_wiring: "boxes", led_supply: "room", plaster: "after", rough_light: false, loop_conduit: "separate" });
-    expect(optionsOf(undefined, "proper")).toEqual({ path: "right", conduit: "ceiling", light_wiring: "boxes", led_supply: "room", plaster: "after", rough_light: false, loop_conduit: "separate" });
+    expect(optionsOf(undefined, "economy")).toEqual({ path: "shortest", conduit: "none", light_wiring: "boxes", led_supply: "room", plaster: "after", rough_light: false, panel_labels: true, insulation_test: true, protection_test: false, loop_conduit: "separate" });
+    expect(optionsOf(undefined, "proper")).toEqual({ path: "right", conduit: "ceiling", light_wiring: "boxes", led_supply: "room", plaster: "after", rough_light: false, panel_labels: true, insulation_test: true, protection_test: false, loop_conduit: "separate" });
     expect(optionsOf({ ...item("standard", "ceiling", 1), conduit: true }, "standard").conduit).toBe("ceiling");  // an older build
     expect(optionsOf({ ...item("standard", "ceiling", 1), conduit: "walls" }, "standard").conduit).toBe("walls");
   });

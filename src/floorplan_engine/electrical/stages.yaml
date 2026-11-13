@@ -32,7 +32,7 @@ stages:
 
   - key: board
     title: { ru: "Установка корпуса щита", uk: "Встановлення корпусу щита" }
-    lines: [work.board_install, board_enclosure, dc_enclosure]
+    lines: [work.board_install, board_enclosure, dc_enclosure, led_enclosure]
     photo: optional
 
   - key: insulation
@@ -49,7 +49,7 @@ stages:
 
   - key: assembly
     title: { ru: "Сборка щита", uk: "Збирання щита" }
-    lines: [work.board_module, breaker, diff, rcd, input, relay, spd, changeover, ats, contactor,
+    lines: [work.board_module, work.panel_labels, breaker, diff, rcd, input, relay, spd, changeover, ats, contactor,
             feed, output, dc_battery, dc_breaker, dc_spd]
     photo: optional
     after: [board, insulation]
@@ -61,3 +61,9 @@ stages:
             led_psu, led_psu_din]
     photo: optional
     after: [assembly]
+
+  - key: protection
+    title: { ru: "Проверка защиты прибором", uk: "Перевірка захисту приладом" }
+    lines: [work.protection_test]
+    photo: required  # протокол проверки: фото или PDF
+    after: [assembly, devices]

@@ -238,6 +238,19 @@ RENDERERS.dc_battery = dc(levers(2));
 RENDERERS.dc_breaker = dc(levers(2));
 RENDERERS.dc_spd = RENDERERS.spd;
 
+// LED supply 230 → 12 V on a DIN rail (LED box under the panel): a dark window with the output
+// voltage, a green power light, the rating ("100 Вт 12 В") and a yellow strip along the bottom
+RENDERERS.led_psu_din = (pen, d, r) => {
+  body(pen, d, r);
+  const { ctx } = pen, y = mid(r) - FRONT / 2;
+  display(pen, r.x + 2.5, y + 10, r.w - 5, 9, r.w > 30 ? "12V DC" : "12V", "#ffd54f");
+  ctx.fillStyle = "#2e9e44";
+  ctx.beginPath(); ctx.arc(r.x + r.w - 5, y + 24, 1.4, 0, 2 * Math.PI); ctx.fill();
+  rating(pen, d, r);
+  ctx.fillStyle = d.model.accent || "#f2b705";
+  ctx.fillRect(r.x + 2, mid(r) + FRONT / 2 - 1.8, r.w - 4, 1.4);
+};
+
 const fallback: Renderer = (pen, d, r) => { body(pen, d, r); rating(pen, d, r); };
 
 export function rendererFor(d: PanelDevice): Renderer {

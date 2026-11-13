@@ -17,7 +17,6 @@ from floorplan_engine.electrical.panel import BoardPanel
 from floorplan_engine.electrical.panel_text import kw
 from floorplan_engine.electrical.point_numbers import point_rows
 from floorplan_engine.electrical.point_numbers import text as points_text
-from floorplan_engine.electrical.wiring import LED_MARK
 from floorplan_engine.electrical.wiring_model import Wiring
 from floorplan_engine.model.schema import Electrical, Plan
 from floorplan_engine.model.texts import Language
@@ -68,7 +67,7 @@ def groups_table(
     marks: dict[str, str] = {}
     for run in wiring.runs if wiring is not None else ():
         lengths[run.group] = lengths.get(run.group, 0.0) + run.length_mm
-        if run.mark != LED_MARK or run.group not in marks:  # 12 V LED lines: not the group's cable
+        if not run.led or run.group not in marks:  # 12 V LED lines: not the group's cable
             marks[run.group] = run.mark + (ASSUMED if run.mark_assumed else "")
     devices = {
         d.group: d.label + (ASSUMED if d.assumed else "")

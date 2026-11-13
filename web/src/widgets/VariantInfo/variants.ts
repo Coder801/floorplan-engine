@@ -40,10 +40,13 @@ export interface VariantChoice {
   led_supply: VariantLedSupply;
   plaster: VariantPlaster;
   rough_light: boolean;
+  panel_labels: boolean;
+  insulation_test: boolean;
+  protection_test: boolean;
   loop_conduit: VariantLoopConduit;
 }
 
-type Options = Pick<VariantChoice, "path" | "light_wiring" | "led_supply" | "plaster" | "rough_light" | "loop_conduit"> & { conduit: VariantConduit };
+type Options = Pick<VariantChoice, "path" | "light_wiring" | "led_supply" | "plaster" | "rough_light" | "panel_labels" | "insulation_test" | "protection_test" | "loop_conduit"> & { conduit: VariantConduit };
 
 // Conduit of a mode without its own choice (schema.mode_conduit): premium, on the ceiling
 export const modeConduit = (mode: VariantMode): VariantConduit => (mode === "proper" ? "ceiling" : "none");
@@ -53,7 +56,8 @@ const conduitOf = (c: VariantSummary["conduit"], mode: VariantMode): VariantCond
   (typeof c === "boolean" ? (c ? "ceiling" : "none") : c ?? modeConduit(mode));
 
 // Options of a summary; an older build has path and conduit by the mode (schema.mode_path) and
-// light through boxes and LED supplies at the strip
+// light through boxes and LED supplies at the strip; labels and the insulation test were always
+// in its estimate, the protection test never
 export const optionsOf = (s: VariantSummary | undefined, mode: VariantMode): Options => ({
   path: s?.path ?? (mode === "economy" ? "shortest" : "right"),
   conduit: conduitOf(s?.conduit, mode),
@@ -61,6 +65,9 @@ export const optionsOf = (s: VariantSummary | undefined, mode: VariantMode): Opt
   led_supply: s?.led_supply ?? "room",
   plaster: s?.plaster ?? "after",
   rough_light: s?.rough_light ?? false,
+  panel_labels: s?.panel_labels ?? true,
+  insulation_test: s?.insulation_test ?? true,
+  protection_test: s?.protection_test ?? false,
   loop_conduit: s?.loop_conduit ?? "separate",
 });
 
@@ -76,7 +83,9 @@ export const findChoice = (v: Variants, c: VariantChoice): VariantSummary | unde
     return s.mode === c.mode && s.route === c.route && s.distribution === c.distribution && o.path === c.path
       && o.conduit === (c.conduit ?? modeConduit(c.mode)) && o.led_supply === c.led_supply
       && o.light_wiring === c.light_wiring
-      && o.plaster === c.plaster && o.rough_light === c.rough_light && o.loop_conduit === c.loop_conduit;
+      && o.plaster === c.plaster && o.rough_light === c.rough_light && o.loop_conduit === c.loop_conduit
+      && o.panel_labels === c.panel_labels && o.insulation_test === c.insulation_test
+      && o.protection_test === c.protection_test;
   });
 
 // Routes the project has: the summary is built only for them (electrical.yaml routes).

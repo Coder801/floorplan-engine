@@ -572,6 +572,24 @@ class Electrical(StrictModel):
         description="Черновой свет на время ремонта: в смете патрон, лампа и черновой выключатель "
         "на помещение. Ставит вариант проводки",
     )
+    panel_labels: bool = Field(
+        default=True,
+        description="Маркировка щита: наклейка с номером и назначением на каждый аппарат, в "
+        "смете — одна позиция по фиксированной цене. Нет — щит без наклеек. Ставит вариант "
+        "проводки",
+    )
+    insulation_test: bool = Field(
+        default=True,
+        description="Замер сопротивления изоляции мегаомметром с протоколом, в смете — по "
+        "числу силовых групп. Нет — без замера. Ставит вариант проводки",
+    )
+    protection_test: bool = Field(
+        default=False,
+        description="Проверка защиты прибором с протоколом: срабатывание УЗО и дифавтоматов "
+        "(ток и время отключения) и ток короткого замыкания (петля «фаза — ноль») на каждой "
+        "силовой группе, в смете — по числу силовых групп. Нет — без проверки. Ставит вариант "
+        "проводки",
+    )
     loop_conduit: LoopConduit = Field(
         default="separate",
         description="Шлейф в гофре на спуске к точке: separate — приход и уход в двух гофрах; "
@@ -664,9 +682,10 @@ class Variant(StrictModel):
     and distribution, and from the setup wizard the path and the conduit, on top of what
     the mode gives (None: as in the mode). Points come from the project and do not change between
     variants. Ceiling height (mm) is an edit from the "Overview" page: it is applied on top of
-    room.yaml, the original is not changed. plaster, rough_light and loop_conduit are how the job
-    is done, not how the cable runs: they apply to every variant and are not in the key, so route
-    edits stay (None: as in electrical.yaml)."""
+    room.yaml, the original is not changed. plaster, rough_light, panel_labels, insulation_test,
+    protection_test and loop_conduit are how the job is done, not how the cable runs: they apply
+    to every variant and are not in the key, so route edits stay (None: as in
+    electrical.yaml)."""
 
     mode: ElectricalMode = "standard"
     route: WireRoute = "ceiling"
@@ -677,6 +696,9 @@ class Variant(StrictModel):
     led_supply: LedSupply = "room"
     plaster: Plaster | None = None
     rough_light: bool | None = None
+    panel_labels: bool | None = None
+    insulation_test: bool | None = None
+    protection_test: bool | None = None
     loop_conduit: LoopConduit | None = None
     ceiling_height: float | None = Field(default=None, ge=CEILING_MIN, le=CEILING_MAX)
 

@@ -20,7 +20,7 @@ export function VariantInfo({ variants, canChoose, onEdit }: Props) {
   const { t } = useTranslation();
   const { mode, route } = parseKey(variants.active);
   const current = activeSummary(variants);
-  const { path, conduit, light_wiring, led_supply, plaster, rough_light, loop_conduit } = optionsOf(current, mode);
+  const { path, conduit, light_wiring, led_supply, plaster, rough_light, panel_labels, insulation_test, protection_test, loop_conduit } = optionsOf(current, mode);
   const loopDrops = hasLoopDrops({ distribution: current?.distribution ?? "boxes", route, conduit, mode });
   const rows: [string, string][] = [
     [t("wizard.steps.route.short"), t(`variant.routes.${route}`)],
@@ -33,6 +33,9 @@ export function VariantInfo({ variants, canChoose, onEdit }: Props) {
     [t("wizard.steps.plaster.short"), t(`wizard.steps.plaster.options.${plaster}.name`)],
     [t("wizard.steps.rough.short"), t(`wizard.steps.rough.options.${rough_light ? "yes" : "no"}.name`)],
     [t("wizard.steps.breakers.short"), t(`wizard.steps.breakers.options.${breakersOf(mode)}.name`)],
+    [t("wizard.steps.labels.short"), t(`wizard.steps.labels.options.${panel_labels ? "yes" : "no"}.name`)],
+    [t("wizard.steps.insulation.short"), t(`wizard.steps.insulation.options.${insulation_test ? "yes" : "no"}.name`)],
+    [t("wizard.steps.protection.short"), t(`wizard.steps.protection.options.${protection_test ? "yes" : "no"}.name`)],
   ];
   return (
     <section className={css.info}>

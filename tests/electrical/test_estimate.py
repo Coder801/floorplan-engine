@@ -29,6 +29,13 @@ from floorplan_engine.electrical.estimate import (
     split_key,
     unknown_keys,
 )
+from floorplan_engine.electrical.led_supply import (
+    LED_V,
+    STRIP_DEFAULT_M,
+    STRIP_W_PER_M,
+    led_mark,
+    section_for,
+)
 from floorplan_engine.electrical.panel import build_panel, device_name
 from floorplan_engine.electrical.pricing import MockPriceService, Prices, mock_price
 from floorplan_engine.electrical.wiring import LED_MARK, RESERVE, box_wiring
@@ -444,7 +451,14 @@ def test_works_split_into_rough_and_finish() -> None:
     """Rough work is before finishing (chases, cable, boxes, panel enclosure, test); finishing is
     after (filling the panel with devices, fitting devices). Materials are one section."""
     works = {k: v[0] for k, v in LINES.items() if k.startswith("work.")}
-    finish = {"work.board_module", "work.mechanism", "work.led_psu", "work.led_psu_din"}
+    finish = {
+        "work.board_module",
+        "work.panel_labels",
+        "work.mechanism",
+        "work.led_psu",
+        "work.led_psu_din",
+        "work.protection_test",
+    }
     assert {k for k, s in works.items() if s == "finish"} == finish
     assert all(s == "rough" for k, s in works.items() if s != "finish")
     assert all(v[0] == "material" for k, v in LINES.items() if not k.startswith("work."))
@@ -588,6 +602,36 @@ def test_rough_light_without_lights_is_not_in_the_estimate() -> None:
     assert "rough_holder" not in q and "work.rough_switch" not in q
 
 
+def test_extra_options_panel_labels_and_insulation_test() -> None:
+    """Both on by default: panel labels at a fixed price right after the assembly, an insulation
+    test per power group; the variant can drop each of them."""
+    plan = make_plan(RECT, [DOOR])
+    _, contours = validate_plan(plan)
+    elec = Electrical.model_validate(ELEC)
+    wiring = box_wiring(plan, contours, elec)
+    panel = build_panel(plan, elec)
+    assert wiring is not None and panel is not None
+    keys = [ln.key for ln in build_estimate(wiring, elec, PriceList(), "ru", panel).lines]
+    at = keys.index("work.board_module")
+    assert keys[at + 1] == "work.panel_labels" and "work.insulation_test" in keys
+    by_key = {ln.key: ln for ln in build_estimate(wiring, elec, PriceList(), "ru", panel).lines}
+    assert by_key["work.panel_labels"].qty == 1  # a fixed price per panel, whatever its size
+    assert by_key["work.panel_labels"].unit == "щит"
+    off = elec.model_copy(update={"panel_labels": False, "insulation_test": False})
+    keys = [ln.key for ln in build_estimate(wiring, off, PriceList(), "ru", panel).lines]
+    assert "work.panel_labels" not in keys and "work.insulation_test" not in keys
+    no_panel = [ln.key for ln in build_estimate(wiring, elec, PriceList(), "ru").lines]
+    assert "work.panel_labels" not in no_panel  # nothing to label without the panel sheet
+    # The protection test (RCD tripping, short-circuit current): off unless chosen, per power
+    # group as the insulation test, in the finishing work
+    assert "work.protection_test" not in by_key
+    on = elec.model_copy(update={"protection_test": True})
+    by_key = {ln.key: ln for ln in build_estimate(wiring, on, PriceList(), "ru", panel).lines}
+    test = by_key["work.protection_test"]
+    assert test.qty == by_key["work.insulation_test"].qty and test.unit == "гр."
+    assert LINES["work.protection_test"][0] == "finish"
+
+
 LED = _pt("led1", "led_output", 2000, 1500, "QF1")
 
 
@@ -613,10 +657,14 @@ def test_led_supply_at_the_strip_is_fed_from_the_room_box() -> None:
 def test_led_supply_in_the_panel_gives_a_12v_line_of_its_own() -> None:
     wiring, elec = _led_wiring("board")
     run = next(r for r in wiring.runs if r.target == "led1")
-    assert (run.source, run.mark, run.circuit, run.group) == ("board", LED_MARK, "low", "QF1")
+    assert (run.source, run.circuit, run.group, run.led) == ("board", "low", "QF1", True)
+    # The 12 V line goes by the voltage drop: the default 5 m strip draws 6 A
+    current = STRIP_DEFAULT_M * STRIP_W_PER_M / LED_V
+    assert run.mark == led_mark(section_for(run.length_mm, current)) != LED_MARK
     q = quantities(wiring, elec)
     assert q["led_psu_din"] == q["work.led_psu_din"] == 1 and "led_psu" not in q
-    assert q[f"cable.{LED_MARK}"] > 0
+    assert q[f"cable.{run.mark}"] > 0
+    assert q["work.board_install"] == 2  # the LED supplies box is a second panel
     assert q["work.insulation_test"] == 2  # the 12 V line is no power group of its own
     assert mock_price("led_psu_din") and mock_price("work.led_psu_din")
 

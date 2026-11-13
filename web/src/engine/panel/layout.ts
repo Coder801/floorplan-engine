@@ -10,9 +10,12 @@
 // bottom. A hybrid inverter gets a battery box (dc): right of the label column, under the
 // inverter; its wires go up into the inverter's BAT and PV inputs along their own lanes (the
 // right-hand wire higher, no crossings), the battery under it, solar strings exit down and
-// right to their label. Pure functions, no canvas, with tests.
+// right to their label. LED supplies in the panel get a box of their own under it (led): the
+// feed from its group breaker comes from the top, the 12 V line from the bottom terminals into a
+// bundle under the rail and out through the right wall to its label in the same column, below
+// the group labels. Pure functions, no canvas, with tests.
 
-import type { PanelDc, PanelData, PanelDevice, PanelEnclosure } from "@/shared/types";
+import type { PanelDc, PanelData, PanelDevice, PanelEnclosure, PanelLed } from "@/shared/types";
 import { SCREW } from "./catalog";
 
 export const MODULE = 17.5;     // DIN module width, mm
@@ -84,6 +87,15 @@ export interface DcLayout {
   battery: Rect;
 }
 
+export interface LedLayout {
+  box: Rect;
+  enclosure: PanelEnclosure;
+  rails: number[];
+  placed: Placed[];     // lane — y of the 12 V line in the bundle, label — y of its label
+  title: number;        // y of the box title
+  feed: number;         // y of the feed tags above the supplies
+}
+
 export interface PanelLayout {
   enclosure: PanelEnclosure;
   perRow: number;
@@ -100,6 +112,7 @@ export interface PanelLayout {
   n: Rect;              // N terminal block
   terminals: number;    // small terminals in the block
   dc: DcLayout | null;  // battery box at the inverter
+  led: LedLayout | null;  // LED supplies box under the panel
 }
 
 // Rails by kind: shared, breakers, RCBOs; within a kind in data order (main first, then
@@ -218,11 +231,50 @@ export function layout(data: PanelData): PanelLayout {
     : external ? external.y + external.h + LABEL_STEP : box.y + LABEL_STEP / 2;
   fan(groups.map((p) => p.lane!), LABEL_STEP, lo).forEach((y, k) => { groups[k].label = y; });
   const lastLabel = groups.length ? groups[groups.length - 1].label! + LABEL_STEP / 2 : 0;
+  // A box wider than the panel reaches the label column: then it goes below the group labels
+  const ledTop = box.y + box.h + (data.led && data.led.enclosure.width > labelX ? Math.max(0, lastLabel - box.y - box.h) : 0);
+  const led = data.led ? ledLayout(data.led, ledTop, lastLabel + LABEL_STEP) : null;
+  const ledLabels = led ? led.placed.map((p) => p.label ?? 0) : [];
   const width = Math.max(labelX + LABELS, external ? external.x + external.w + SIDE / 5 : 0,
-                         dc ? dc.box.x + dc.box.w + DC_LABEL : 0);
-  const height = Math.max(box.y + box.h, lastLabel, dc ? dc.battery.y + dc.battery.h + 14 : 0);
+                         dc ? dc.box.x + dc.box.w + DC_LABEL : 0, led ? led.box.x + led.box.w : 0);
+  const height = Math.max(box.y + box.h, lastLabel, dc ? dc.battery.y + dc.battery.h + 14 : 0,
+                          led ? led.box.y + led.box.h + 10 : 0, ...ledLabels.map((y) => y + LABEL_STEP / 2));
   return { enclosure: enc, perRow, width, height, box, railX, rails, rows, placed, external, labelX,
-           pe, n, terminals, dc };
+           pe, n, terminals, dc, led };
+}
+
+// LED box: the title, the feed tags and the box under the panel; supplies on their rails (row
+// from the backend), the 12 V line from the bottom terminal into a bundle under the rail (lower
+// for the left supply, no crossings), labels in the group label column, not above lo
+export const LED = { gap: 64, title: 40, feed: 14 } as const;
+
+export function ledLayout(led: PanelLed, top: number, lo: number): LedLayout {
+  const enc = led.enclosure;
+  const box = { x: 0, y: top + LED.gap, w: enc.width, h: enc.height };
+  const railX = box.x + (box.w - enc.per_row * MODULE) / 2;
+  const first = box.y + (box.h - (enc.rows - 1) * enc.pitch) / 2;
+  const rows = Math.max(enc.rows, ...led.devices.map((d) => (d.row ?? 0) + 1));
+  const rails = Array.from({ length: rows }, (_, k) => first + k * enc.pitch);
+  const placed: Placed[] = [];
+  const used: number[] = [];
+  for (const d of led.devices) {
+    const r = d.row ?? 0;
+    used[r] = used[r] ?? railX;
+    placed.push({ dev: d, row: r, lane: null, label: null, x: used[r], y: rails[r] - d.model.height / 2,
+                  w: d.model.width, h: d.model.height });
+    used[r] += d.model.width;
+  }
+  rails.forEach((_, r) => {
+    const mine = placed.filter((p) => p.row === r);
+    const bottom = Math.max(0, ...mine.map((p) => p.y + p.h));
+    const room = (r + 1 < rails.length ? rails[r + 1] - 45 : box.y + box.h - 8) - bottom - LANE_PAD;
+    const pitch = Math.max(LANE_MIN, Math.min(LANE_MAX, room / Math.max(1, mine.length)));
+    let k = mine.length;
+    for (const p of mine) p.lane = bottom + LANE_PAD + (--k + 0.5) * pitch;
+  });
+  const lines = [...placed].sort((a, b) => a.lane! - b.lane!);
+  fan(lines.map((p) => p.lane!), LABEL_STEP, Math.max(lo, box.y)).forEach((y, k) => { lines[k].label = y; });
+  return { box, enclosure: enc, rails, placed, title: box.y - LED.title, feed: box.y - LED.feed };
 }
 
 const DC_LABEL = 80;  // right of the battery box: solar string labels

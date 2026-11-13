@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { PanelDc, PanelData, PanelDevice, PanelEnclosure } from "@/shared/types";
+import type { PanelDc, PanelData, PanelDevice, PanelEnclosure, PanelLed } from "@/shared/types";
 import { busSegments, fan, FEED_LANE, FEED_LANE_3, groupPath, LABEL_STEP, layout, MODULE, splitRows, termX } from "./layout";
 
 const dev = (id: string, modules: number, extra: Partial<PanelDevice> = {}): PanelDevice => ({
@@ -186,6 +186,42 @@ describe("раскладка щита", () => {
     expect(l.height).toBeGreaterThan(x.battery.y + x.battery.h);
     // Group labels sit below the battery box lanes
     for (const p of l.placed.filter((q) => q.label !== null)) expect(p.label!).toBeGreaterThan(Math.max(...x.lanes));
+  });
+});
+
+describe("щит блоков питания LED", () => {
+  const psu = (id: string, modules: number) => dev(id, modules, { kind: "led_psu_din", label: "60 Вт 12 В", row: 0 });
+  const led = (devices: PanelDevice[]): PanelLed => ({
+    enclosure: golf(1, 12), devices, voltage: 12, drop_max: 5,
+    lines: devices.map((d, k) => ({ device: d.id, point: `led${k}`, group: "QF1", color: null, metres: 5,
+                                    metres_assumed: true, power: 72, power_assumed: true, supply: 100, current: 6 })),
+    texts: { title: "", strip: "лента {m} м", from: "" },
+  });
+
+  it("под основным щитом, блоки в ряд по ширине; линии 12 В — пучком без пересечений, подписи ниже групп", () => {
+    const base = data(rowed([[dev("QS1", 2, { kind: "input" })], groups(6)]), golf(2, 12));
+    const l = layout({ ...base, led: led([psu("G1", 4), psu("G2", 3), psu("G3", 1)]) });
+    const box = l.led!.box;
+    expect(box.y).toBeGreaterThan(l.box.y + l.box.h);
+    expect(box.x).toBe(l.box.x);
+    const [a, b, c] = l.led!.placed;
+    expect(b.x).toBeCloseTo(a.x + 4 * MODULE);
+    expect(c.x).toBeCloseTo(b.x + 3 * MODULE);
+    for (const p of l.led!.placed) {
+      expect(p.x + p.w).toBeLessThanOrEqual(box.x + box.w);
+      expect(p.lane!).toBeGreaterThan(p.y + p.h);
+      expect(p.lane!).toBeLessThan(box.y + box.h);
+    }
+    expect(a.lane!).toBeGreaterThan(b.lane!);  // the left one lower: no crossings
+    expect(b.lane!).toBeGreaterThan(c.lane!);
+    const groupLabels = l.placed.filter((p) => p.label !== null).map((p) => p.label!);
+    const ledLabels = l.led!.placed.map((p) => p.label!);
+    expect(Math.min(...ledLabels)).toBeGreaterThan(Math.max(...groupLabels));
+    expect(l.height).toBeGreaterThanOrEqual(box.y + box.h);
+  });
+
+  it("без блоков в щите — второго щита нет", () => {
+    expect(layout(data(rowed([groups(3)]))).led).toBeNull();
   });
 });
 

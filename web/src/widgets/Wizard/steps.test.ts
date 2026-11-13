@@ -22,11 +22,12 @@ function setup(over: Partial<Setup> = {}): Setup {
 }
 const ids = (s: Setup, picks = initialPicks(s)) => wizardSteps(s, picks).map((x) => x.id);
 const WIRING = ["route", "distribution", "lights", "path", "conduit", "plaster", "ceiling", "rough"];
+const EXTRA = ["labels", "insulation", "protection"];  // extra options: last, only with the right to choose
 const yes = (picks: Picks): Picks => ({ ...picks, standby: "yes" });
 
 describe("шаги мастера", () => {
   it("уровня проводки нет: каждый пункт — свой шаг; про резерв — только закладка", () => {
-    expect(ids(setup())).toEqual([...WIRING, "input", "breakers", "standby"]);
+    expect(ids(setup())).toEqual([...WIRING, "input", "breakers", "standby", ...EXTRA]);
   });
   it("блоки питания LED — шаг после гофры, только если в проекте есть выводы LED", () => {
     const led = setup({ variants: { ...variants, led: true } });
@@ -59,7 +60,7 @@ describe("шаги мастера", () => {
   });
   it("закладка «да» открывает резерв, «нет» и без ответа — закрывает", () => {
     const s = setup();
-    expect(ids(s, yes({}))).toEqual([...WIRING, "input", "breakers", "standby", "backup", "inverter", "battery", "pv", "npe"]);
+    expect(ids(s, yes({}))).toEqual([...WIRING, "input", "breakers", "standby", "backup", "inverter", "battery", "pv", "npe", ...EXTRA]);
     expect(ids(s, { standby: "no", backup: "none" })).not.toContain("backup");
     expect(ids(s, {})).not.toContain("inverter");
   });
@@ -98,17 +99,17 @@ describe("шаги мастера", () => {
   });
   it("поле задано в YAML — шага нет", () => {
     const s = setup({ questions: [q("panel_backup", "inverter"), q("panel_inverter", "hybrid")] });
-    expect(ids(s, yes({}))).toEqual([...WIRING, "breakers", "standby", "backup", "inverter"]);
+    expect(ids(s, yes({}))).toEqual([...WIRING, "breakers", "standby", "backup", "inverter", ...EXTRA]);
   });
   it("резерв задан в YAML: шаги инвертора — по отчёту", () => {
-    expect(ids(setup({ questions: dc }), {})).toEqual([...WIRING, "breakers", "inverter", "battery", "pv", "npe"]);
-    expect(ids(setup({ questions: [] }), {})).toEqual([...WIRING, "breakers"]);
+    expect(ids(setup({ questions: dc }), {})).toEqual([...WIRING, "breakers", "inverter", "battery", "pv", "npe", ...EXTRA]);
+    expect(ids(setup({ questions: [] }), {})).toEqual([...WIRING, "breakers", ...EXTRA]);
   });
   it("мощность резерва: шаг с любым резервом, в кВт с дробью, уходит вместе с резервом", () => {
     const power = q("panel_backup_power", 5);
     const s = setup({ questions: [q("panel_backup", "inverter"), power] });
     expect(ids(s, yes({ backup: "plug" }))).toContain("power");
-    expect(ids(s, yes({}))).toEqual([...WIRING, "breakers", "standby", "backup", "power"]);
+    expect(ids(s, yes({}))).toEqual([...WIRING, "breakers", "standby", "backup", "power", ...EXTRA]);
     expect(ids(s, { standby: "no", backup: "none" })).not.toContain("power");
     const step = wizardSteps(s, yes({})).find((x) => x.id === "power")!;
     expect(step.kind).toBe("number");
@@ -131,7 +132,7 @@ describe("шаги мастера", () => {
   });
   it("права: клиент студии только отвечает, монтажник только выбирает вариант", () => {
     expect(ids(setup({ canChoose: false }))[0]).toBe("input");
-    expect(ids(setup({ canAnswer: false }))).toEqual([...WIRING, "breakers"]);
+    expect(ids(setup({ canAnswer: false }))).toEqual([...WIRING, "breakers", ...EXTRA]);
   });
   it("у каждой карточки есть иллюстрация", () => {
     const steps = wizardSteps(setup(), yes({ backup: "inverter" }));
@@ -150,7 +151,7 @@ describe("шаг резерва", () => {
   it("есть шина и вопрос — шаг в конце щита, группы из сборки", () => {
     const s = withQuestion();
     const steps = wizardSteps(s, yes(initialPicks(s)));
-    expect(steps[steps.length - 1]).toMatchObject({ id: "reserve", options: ["QF1", "QF2"] });
+    expect(steps[steps.length - 1 - EXTRA.length]).toMatchObject({ id: "reserve", options: ["QF1", "QF2"] });
   });
   it("нет шины в сборке, вопроса или выбрано «без резерва» — шага нет", () => {
     expect(ids(setup({ reserve }))).not.toContain("reserve");
@@ -181,7 +182,7 @@ describe("начальный выбор", () => {
     const s = setup({ answers: { panel_input: 40, panel_battery: { accept: true } } });
     expect(initialPicks(s)).toEqual({
       route: "ceiling", distribution: "boxes", lights: "boxes", path: "right", conduit: "none", led: "room", plaster: "after", rough: "no", loopConduit: "separate", breakers: "groups",
-      ceiling: "2700", input: "40", battery: UNKNOWN,
+      labels: "yes", insulation: "yes", protection: "no", ceiling: "2700", input: "40", battery: UNKNOWN,
     });
   });
   it("набор из активного варианта; старая сборка без опций — по режиму", () => {
@@ -213,9 +214,9 @@ describe("что уходит на сервер", () => {
   it("вариант целиком, высота — только если менялась", () => {
     const s = setup();
     expect(wizardBody(s, { ...initialPicks(s), route: "floor" }).variant)
-      .toEqual({ mode: "standard", route: "floor", distribution: "boxes", path: "right", conduit: "none", light_wiring: "boxes", led_supply: "room", plaster: "after", rough_light: false, loop_conduit: "separate" });
+      .toEqual({ mode: "standard", route: "floor", distribution: "boxes", path: "right", conduit: "none", light_wiring: "boxes", led_supply: "room", plaster: "after", rough_light: false, panel_labels: true, insulation_test: true, protection_test: false, loop_conduit: "separate" });
     expect(wizardBody(s, { ...initialPicks(s), ceiling: "3000" }).variant)
-      .toEqual({ mode: "standard", route: "ceiling", distribution: "boxes", path: "right", conduit: "none", light_wiring: "boxes", led_supply: "room", plaster: "after", rough_light: false, loop_conduit: "separate", ceiling_height: 3000 });
+      .toEqual({ mode: "standard", route: "ceiling", distribution: "boxes", path: "right", conduit: "none", light_wiring: "boxes", led_supply: "room", plaster: "after", rough_light: false, panel_labels: true, insulation_test: true, protection_test: false, loop_conduit: "separate", ceiling_height: 3000 });
   });
   it("каждый пункт меняет вариант", () => {
     const s = setup();
@@ -314,11 +315,36 @@ describe("штробы при монтаже до штукатурки", () => {
   });
 });
 
+describe("дополнительные опции", () => {
+  it("маркировка щита и замер изоляции: в своём разделе, в конце, по умолчанию — да", () => {
+    const s = setup();
+    const steps = wizardSteps(s, initialPicks(s));
+    expect(steps.filter((x) => x.group === "extra").map((x) => x.id)).toEqual(EXTRA);
+    expect(initialPicks(s)).toMatchObject({ labels: "yes", insulation: "yes" });
+    expect(ART["labels-yes"]).toBeDefined();
+    expect(ART["insulation-no"]).toBeDefined();
+  });
+  it("проверка защиты прибором: по умолчанию — нет, «да» уходит в вариант", () => {
+    const s = setup();
+    expect(initialPicks(s)).toMatchObject({ protection: "no" });
+    expect(wizardBody(s, { ...initialPicks(s), protection: "yes" }).variant).toMatchObject({ protection_test: true });
+    expect(ART["protection-yes"]).toBeDefined();
+    expect(ART["protection-no"]).toBeDefined();
+  });
+  it("«нет» уходит в вариант; без права выбора шагов нет", () => {
+    const s = setup();
+    const body = wizardBody(s, { ...initialPicks(s), labels: "no", insulation: "no" });
+    expect(body.variant).toMatchObject({ panel_labels: false, insulation_test: false });
+    expect(wizardBody(s, initialPicks(s)).variant).toBeUndefined();
+    expect(ids(setup({ canChoose: false }))).not.toContain("labels");
+  });
+});
+
 describe("сколько осталось решить", () => {
   it("открытые вопросы; вариант и потолок уже со значением", () => {
     const progress = setupProgress(setup());
-    expect(progress).toMatchObject({ total: 11, open: ["input", "standby"] });
-    expect(progress.steps).toHaveLength(11);
+    expect(progress).toMatchObject({ total: 14, open: ["input", "standby"] });
+    expect(progress.steps).toHaveLength(14);
     expect(progress.steps).toEqual(expect.arrayContaining(progress.open));
   });
   it("ответ, «оставить» и резерв без инвертора закрывают шаги", () => {
@@ -363,8 +389,8 @@ describe("мастер-выключатель", () => {
 
   it("шаг — в разделе «Щит» после автоматов; что отключает — только после «да»", () => {
     const s = withMaster();
-    expect(ids(s)).toEqual([...WIRING, "input", "breakers", "master"]);
-    expect(ids(s, { master: "yes" })).toEqual([...WIRING, "input", "breakers", "master", "masterOff"]);
+    expect(ids(s)).toEqual([...WIRING, "input", "breakers", "master", ...EXTRA]);
+    expect(ids(s, { master: "yes" })).toEqual([...WIRING, "input", "breakers", "master", "masterOff", ...EXTRA]);
     expect(wizardSteps(s, { master: "yes" }).find((x) => x.id === "masterOff")?.options).toEqual(["QF1", "QF2"]);
     expect(wizardSteps(s, { master: "yes" }).filter((x) => x.group === "panel").map((x) => x.id))
       .toEqual(["input", "breakers", "master", "masterOff"]);

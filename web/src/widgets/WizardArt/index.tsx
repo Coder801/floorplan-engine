@@ -121,6 +121,23 @@ const SOCKETS = (
 // One breaker per group or per line: breakers in a row, lines going out of them
 const breaker = (y: number) => <rect x="16" y={y} width="20" height="16" rx="2" />;
 
+// Panel devices on a DIN rail, room for a sticker over each (labels)
+const modules = (
+  <>
+    <path d="M30 50H136" />
+    {[42, 64, 86, 108].map((x) => <rect key={x} x={x} y="38" width="16" height="36" rx="2" />)}
+  </>
+);
+// A megohmmeter: a case with a dial and a needle (insulation)
+const megger = (
+  <>
+    <rect x="16" y="22" width="46" height="50" rx="3" />
+    <path d="M24 44a15 15 0 0 1 30 0" />
+    <path d="M39 44L48 33" />
+    <rect x="26" y="54" width="26" height="10" rx="1" />
+  </>
+);
+
 // A wall from the front, three layers one over another: the wall, a hatched plaster, the cable.
 // A plaster cut for a chase frames the cable; one with a wavy edge has not reached it yet
 function Plaster({ wall, outline, children }: { wall: string; outline: string; children?: ReactNode }) {
@@ -231,6 +248,24 @@ export const ART: Record<string, ReactNode> = {
       <path d="M127 49V59" />
     </>
   ),
+  "labels-yes": <>{modules}<path className={css.hot} d="M42 26h16v8H42ZM64 26h16v8H64ZM86 26h16v8H86ZM108 26h16v8H108Z" /></>,
+  "labels-no": <>{modules}<path d="M42 30h16M64 30h16M86 30h16M108 30h16" strokeDasharray="2 4" /></>,
+  "insulation-yes": (
+    <>
+      {megger}
+      <path d="M86 70H150" />
+      <path className={css.hot} d="M62 42q14 0 24 28M62 52q30 0 50 18" />
+    </>
+  ),
+  "protection-yes": (
+    <>
+      {megger}
+      {[98, 120].map((x) => <rect key={x} x={x} y="34" width="16" height="36" rx="2" />)}
+      <path className={css.hot} d="M62 42q20 -14 44 -8M62 52q34 30 66 18" />
+    </>
+  ),
+  "protection-no": <>{modules}<path className={css.hot} d="M42 82H124" strokeDasharray="2 4" /></>,
+  "insulation-no": <><path d="M16 70H150" /><path className={css.hot} d="M80 70l-5-8M80 70l5-8" strokeDasharray="2 3" /></>,
   "breakers-simple": <>{breaker(37)}<path className={css.hot} d="M36 45H148M70 45L148 18M100 45L148 72" /></>,
   "breakers-groups": <>{breaker(37)}<path className={css.hot} d="M36 45H70M70 45L148 18M70 45H148M70 45L148 72" /></>,
   "breakers-lines": <>{breaker(10)}{breaker(37)}{breaker(64)}<path className={css.hot} d="M36 18H148M36 45H148M36 72H148" /></>,
