@@ -13,6 +13,7 @@
 
 import { Pinch } from "@/engine/sheet/pinch";
 import { FIT_SHRINK } from "@/shared/consts";
+import { gridStep, paintGrid } from "@/engine/sheet/grid";
 import { palette, refreshPalette, screenColor } from "@/shared/palette";
 import { view } from "@/shared/store";
 import type { ElevWall, Elevation, PipeKind, XY } from "@/shared/types";
@@ -240,8 +241,11 @@ export class ElevationView {
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     ctx.fillStyle = palette.paper || "#ffffff";
     ctx.fillRect(0, 0, this.w, this.h);
+    // The grid of the sheet (sheet/grid.ts) in wall mm; the wall itself stays plain paper
+    paintGrid(ctx, this.dpr * this.ox, this.dpr * this.oy, gridStep(this.dpr * this.scale) * this.dpr * this.scale);
     this.hits = [];
     const d = this.data;
+    if (!this.iso) ctx.fillRect(this.sx(0), this.sy(d.height), d.length * this.scale, d.height * this.scale);
     if (this.iso) this.paintIso(this.iso, this.lit());
     else this.paintWall(d, this.lit(), { from: 0, to: d.length, outline: null, clip: false, rulers: "right", back: true, alpha: 1, shade: 0 });
     this.onZoom({ step: this.step, label: zoomLabel(this.step), pxPerMm: this.scale });
@@ -329,6 +333,7 @@ export class ElevationView {
       ctx.beginPath();
       o.outline.forEach(([x, y], i) => (i ? ctx.lineTo(this.sx(x), this.sy(y)) : ctx.moveTo(this.sx(x), this.sy(y))));
       ctx.closePath();
+      ctx.fillStyle = palette.paper || "#ffffff"; ctx.globalAlpha = 1; ctx.fill(); ctx.globalAlpha = o.alpha;  // no grid through a wall
       if (o.shade) { ctx.fillStyle = screenColor(INK); ctx.globalAlpha = o.alpha * o.shade; ctx.fill(); ctx.globalAlpha = o.alpha; }
       ctx.save();
       ctx.strokeStyle = screenColor(INK); ctx.lineWidth = 1.4; ctx.stroke();
@@ -611,6 +616,7 @@ export class ElevationView {
     ctx.beginPath();
     iso.floor.map(this.toScreen).forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
     ctx.closePath();
+    ctx.fillStyle = palette.paper || "#ffffff"; ctx.fill();  // no grid through the floor
     ctx.fillStyle = screenColor(INK); ctx.globalAlpha = 0.05; ctx.fill(); ctx.globalAlpha = 1;
     const side = iso.side;
     if (side) {

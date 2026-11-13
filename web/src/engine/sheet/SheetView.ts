@@ -17,6 +17,7 @@ import { clampStep, Glide, LAST_STEP, PinchSteps, RAIL_PX, stepBelow, WheelSteps
 import { layerShown, objectLayers, sceneOf, type Drawing, type DrawingItem } from "./drawing";
 import { followsObject, linkEnds, objectVisible, ownLayers, repeatsNumbers, scoped, wiringChains } from "./views";
 import { FLOOR_ALPHA, FLOOR_FADE_MS, floorPath, stepFades } from "./floors";
+import { gridStep, paintGrid, paperRings } from "./grid";
 import { inBox, paint, type DrawItem } from "./paint";
 import { Pinch } from "./pinch";
 import { grownBox, isSymbol, openStacks, pointStacks, symbolCenters, type Stack } from "./stacks";
@@ -82,6 +83,7 @@ export class SheetView {
   private stackOf = new Map<string, Stack>();
   private opens = new Map<string, number>(); private openFrame = 0; private openAt = 0;
   private held: string | null = null;
+  private readonly paper: Path2D;  // the flat: plain paper, no grid (grid.ts)
 
   constructor(private readonly canvas: HTMLCanvasElement, private readonly wrap: HTMLElement,
               readonly drawing: Drawing, page: Page, index: PageIndex) {
@@ -94,6 +96,7 @@ export class SheetView {
     });
     this.allStacks = pointStacks(this.items);
     this.has3d = !!sceneOf(drawing);
+    this.paper = floorPath(paperRings(drawing));
     this.layerOf = objectLayers(drawing);
     this.lines = wiringChains(drawing);
     this.setPage(page, index, false);
@@ -357,6 +360,14 @@ export class SheetView {
     this.frame = requestAnimationFrame(step);
   }
 
+  // Faint squares over the whole block, a round number of model mm each (grid.ts); a sheet
+  // without a plan counts in sheet mm
+  private paintGrid(ctx: CanvasRenderingContext2D) {
+    const [m, tx, ty] = this.drawing.base.model ?? [1, 0, 0];
+    const k = this.dpr * this.scale;
+    paintGrid(ctx, this.dpr * this.ox + tx * k, this.dpr * this.oy + ty * k, gridStep(k * m) * m * k);
+  }
+
   draw() {
     if (view.get().show3d && this.has3d) return;  // the drawing is covered by 3D
     const { ctx } = this;
@@ -364,8 +375,11 @@ export class SheetView {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.fillStyle = palette.paper;  // the block and drawing background are the same
     ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+    this.paintGrid(ctx);
     const k = this.dpr * this.scale;
     ctx.setTransform(k, 0, 0, k, this.dpr * this.ox, this.dpr * this.oy);
+    ctx.fillStyle = palette.paper;  // the flat itself stays plain
+    ctx.fill(this.paper);
     const [x0, y0, x1, y1] = this.drawing.view;
     ctx.save();
     ctx.beginPath(); ctx.rect(x0, y0, x1 - x0, y1 - y0); ctx.clip();
