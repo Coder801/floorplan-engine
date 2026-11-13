@@ -196,7 +196,13 @@ export const uk: Messages = {
     excel: "Завантажити Excel",
     none: "Кошторису немає: перезберіть проєкт (floorplan-engine build)",
   },
+  changelog: {
+    title: "Що нового", lead: "Зміни Shtroba за версіями, нові зверху.",
+    version: "Версія {{version}}", current: "у вас", empty: "Список змін поки порожній.", close: "Закрити",
+    kinds: { added: "Нове", improved: "Швидше і зручніше", fixed: "Виправлено", changed: "Змінилося" },
+  },
   settings: {
+    changes: "Що нового",
     mode: "Вигляд інтерфейсу", modes: { simple: "Простий", engineering: "Інженерний", simpleNote: "креслення, розгортки, траси проводки, кошторис і питання — без інженерних подробиць", engineeringNote: "усі аркуші: правка трас, кабелі, щит, шари, вихідні файли, DXF" },
     feedback: "Залишити відгук", feedbackNote: "помилка, ідея чи питання — читаємо все",
     studio: "Налаштування студії", studioNote: "профіль, прайс робіт",

@@ -129,3 +129,12 @@ uv run floorplan-engine dev                     # http://127.0.0.1:5173, адм�
   `admin/`, `uv.lock` (lock-файлы — `scripts/release_lock.py`), дописывает `CHANGELOG.md`, коммитит
   `bump: version …` и ставит тег `vX.Y.Z`. Версия видна в настройках просмотра
   (`web/src/shared/version.ts`), совпадение всех файлов проверяет `tests/test_version.py`.
+- **`CHANGELOG.md` видят пользователи** (решение 2026-11-13): в просмотре это окно «Что нового»
+  (шестерёнка → «Что нового», `web/src/widgets/Changelog`, разбор — `web/src/shared/changelog.ts`):
+  разделы `feat`, `perf`, `fix`, без областей, без `refactor` и записей только с областями
+  `agents`, `docs`, `tests`, `deploy`, `admin`. Поэтому **в заголовках и телах коммитов не
+  называются проекты клиентов** — ни имена папок `projects/`, ни адреса, ни фамилии:
+  `chore(projects): rebuild out/ for all projects`, `… for two projects`, а не по именам. Только
+  список изменений, без данных проектов (числа длин, сумм, групп конкретной квартиры — тоже нет).
+  Тест `web/src/shared/changelog.test.ts` падает, если `CHANGELOG.md` называет папку из
+  `projects/`; заголовок попадает в `CHANGELOG.md` при релизе и уже не правится.

@@ -7,6 +7,8 @@ WORKDIR /web
 COPY web/package.json web/package-lock.json ./
 RUN npm ci
 COPY web/ ./
+# "What's new" in the viewer is built from the release notes (web/vite.config.ts reads ../CHANGELOG.md)
+COPY CHANGELOG.md /CHANGELOG.md
 RUN npm run build
 
 # Platform admin (admin/): its own front, served at /admin/ on the same domain (shared login cookie)

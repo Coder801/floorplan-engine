@@ -1,7 +1,8 @@
 // Settings, a gear in the header (and on the welcome screen): account (who is logged in, "Log
 // out"), plan (account type), "Studio settings" (pages/Studio, studio only), "Leave feedback"
 // (widgets/Feedback, when the server takes it), interface mode (simple or engineering, shared/mode.ts; what each shows is a tooltip on its button, ui/Tooltip), theme and interface language (i18n: Ukrainian, Russian, English; the choice is remembered);
-// at the bottom the product version and stage with the build number (shared/version.ts)
+// at the bottom the product version and stage with the build number (shared/version.ts) and
+// "What's new" (widgets/Changelog, when there is a changelog)
 
 import { useTranslation } from "react-i18next";
 import type { Space } from "@/shared/auth";
@@ -45,9 +46,10 @@ interface Props {
   onMode: (m: UiMode) => void;
   onStudio?: () => void;  // open the studio settings (studio only; no button otherwise)
   onFeedback?: () => void;  // open "Leave feedback" (widgets/Feedback; no button without it)
+  onChanges?: () => void;   // open "What's new" (widgets/Changelog; no button without it)
 }
 
-export function Settings({ account, theme, onTheme, mode, onMode, onStudio, onFeedback }: Props) {
+export function Settings({ account, theme, onTheme, mode, onMode, onStudio, onFeedback, onChanges }: Props) {
   const { open, closing, setOpen, toggle, ref } = usePopover<HTMLDivElement>();
   const { t } = useTranslation();
   const modeTip = useTooltip();
@@ -109,6 +111,9 @@ export function Settings({ account, theme, onTheme, mode, onMode, onStudio, onFe
           <section>
             <Text as="span"><b className={css.brand}>{BRAND}</b> {t("settings.version", { version: APP_VERSION, stage: t(`app.stages.${STAGE}`) })}</Text>
             <Text as="span" size="small" tone="muted">{t("settings.build", { build: BUILD_ID })}</Text>
+            {onChanges && (
+              <Button size="sm" className={css.changes} onClick={() => { setOpen(false); onChanges(); }}>{t("settings.changes")}</Button>
+            )}
           </section>
         </Menu>
       )}

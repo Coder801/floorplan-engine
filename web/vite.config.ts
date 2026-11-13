@@ -3,7 +3,7 @@
 // API_URL=http://127.0.0.1:8765 npm run dev). /api requests go to it through a proxy, so no
 // CORS is needed; deployment does the same with a reverse proxy (nginx and the like).
 import { execFile } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { basename, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import react from "@vitejs/plugin-react";
@@ -18,6 +18,10 @@ const BUILD_ID = process.env.BUILD_ID || new Date().toISOString().replace(/[-:.T
 // The product version comes from package.json (the same as the Python package:
 // tests/test_version.py); shown in settings (__APP_VERSION__)
 const APP_VERSION = (JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8")) as { version: string }).version;
+// "What's new" (shared/changelog.ts): the repository's CHANGELOG.md, written by `cz bump` on a
+// release; the Docker web stage copies it next to web/ (Dockerfile)
+const changelogFile = new URL("../CHANGELOG.md", import.meta.url);
+const CHANGELOG = existsSync(changelogFile) ? readFileSync(changelogFile, "utf8") : "";
 const version = (): Plugin => ({
   name: "version",
   apply: "build",
@@ -44,6 +48,7 @@ export default defineConfig({
   define: {
     __BUILD_ID__: JSON.stringify(process.env.NODE_ENV === "production" ? BUILD_ID : "dev"),
     __APP_VERSION__: JSON.stringify(APP_VERSION),
+    __CHANGELOG__: JSON.stringify(CHANGELOG),
   },
   // Styles are SCSS modules next to components: .row-btns in the file → styles.rowBtns in code
   css: {

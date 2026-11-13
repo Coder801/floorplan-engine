@@ -196,7 +196,13 @@ export const ru = {
     excel: "Скачать Excel",
     none: "Сметы нет: пересоберите проект (floorplan-engine build)",
   },
+  changelog: {
+    title: "Что нового", lead: "Изменения Shtroba по версиям, новые сверху.",
+    version: "Версия {{version}}", current: "у вас", empty: "Список изменений пока пуст.", close: "Закрыть",
+    kinds: { added: "Новое", improved: "Быстрее и удобнее", fixed: "Исправлено", changed: "Изменилось" },
+  },
   settings: {
+    changes: "Что нового",
     mode: "Вид интерфейса", modes: { simple: "Простой", engineering: "Инженерный", simpleNote: "чертёж, развёртки, трассы проводки, смета и вопросы — без инженерных подробностей", engineeringNote: "все листы: правка трасс, кабели, щит, слои, исходники, DXF" },
     feedback: "Оставить отзыв", feedbackNote: "ошибка, идея или вопрос — читаем всё",
     studio: "Настройки студии", studioNote: "профиль, прайс работ",

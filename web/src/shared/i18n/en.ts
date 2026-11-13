@@ -196,7 +196,13 @@ export const en: Messages = {
     excel: "Download Excel",
     none: "No estimate: rebuild the project (floorplan-engine build)",
   },
+  changelog: {
+    title: "What’s new", lead: "Shtroba changes by version, newest first.",
+    version: "Version {{version}}", current: "yours", empty: "No changes listed yet.", close: "Close",
+    kinds: { added: "New", improved: "Faster and smoother", fixed: "Fixed", changed: "Changed" },
+  },
   settings: {
+    changes: "What’s new",
     mode: "Interface", modes: { simple: "Simple", engineering: "Engineering", simpleNote: "drawing, elevations, wiring routes, estimate and questions — no engineering details", engineeringNote: "every sheet: route editing, cables, panel, layers, sources, DXF" },
     feedback: "Leave feedback", feedbackNote: "a bug, an idea or a question — we read everything",
     studio: "Studio settings", studioNote: "profile, price list",

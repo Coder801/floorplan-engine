@@ -26,3 +26,5 @@
 .langs > button { grid-template-columns: minmax(0, 1fr) auto; }
 // "Studio settings", "Leave feedback": a full-width button with a note
 .studio { justify-items: start; gap: 0; width: 100%; border-radius: var(--radius); }
+// "What's new" under the version: a small button on its own width
+.changes { justify-self: start; margin-top: var(--space-1); }

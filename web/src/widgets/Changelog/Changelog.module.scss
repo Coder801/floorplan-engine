@@ -1,0 +1,17 @@
+// "What's new": releases one under another, a hairline between them; the Modal card scrolls
+
+@use "@/shared/styles/mixins" as *;
+
+.releases { display: grid; gap: 0; }
+.release {
+  display: grid; gap: var(--space-2); padding: var(--space-3) 0; border-top: 1px solid var(--line);
+  &:first-child { border-top: 0; padding-top: 0; }
+}
+.head { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-2); }
+.date { margin-left: auto; font-variant-numeric: tabular-nums; }
+.group { display: grid; gap: var(--space-1); }
+.list {
+  @include type(body);
+  margin: 0; padding-left: var(--space-4); display: grid; gap: 2px;
+  li { overflow-wrap: anywhere; }
+}

@@ -22,6 +22,7 @@ import ui from "@/shared/styles/ui.module.scss";
 import { ELECTRICAL_VIEW, sheetTabs, shownView as viewShown, tabOf, tabViews, viewSheet, type SheetTab, type TabView } from "@/shared/tabs";
 import type { ManifestPage, Overview, Page, Project, ProjectSummary, Scene, Variants } from "@/shared/types";
 import { RESERVE_KEY, type Answer, type QuestionsMemory } from "@/shared/questions";
+import { RELEASES } from "@/shared/changelog";
 import { watchRebuild } from "@/shared/rebuild";
 import { BRAND, watchBuild } from "@/shared/version";
 import { Boundary } from "@/ui/Boundary";
@@ -38,6 +39,7 @@ import { AlphaNotice } from "@/widgets/AlphaNotice";
 import { DownloadMenu } from "@/widgets/DownloadMenu";
 import { Drawer } from "@/widgets/Drawer";
 import { ElevationStage } from "@/widgets/ElevationStage";
+import { Changelog } from "@/widgets/Changelog";
 import { Feedback } from "@/widgets/Feedback";
 import { sheetOf } from "@/widgets/Feedback/feedback";
 import { EstimateStage, type EstimateItem } from "@/widgets/EstimateStage";
@@ -129,6 +131,7 @@ export function Viewer({ account = null }: { account?: Account | null }) {
   const [hasLow, setHasLow] = useState(false);  // the project has low voltage: known once its drawing is loaded
   const [task, setTask] = useState<string | null>(null);  // the task whose card is open
   const [feedback, setFeedback] = useState(false);  // "Leave feedback" is open (widgets/Feedback)
+  const [changes, setChanges] = useState(false);    // "What's new" is open (widgets/Changelog)
   const [overview, setOverview] = useState<Overview | null>(null);
   const [theme, setTheme] = useState<Theme>(savedTheme);
   const [mode, setMode] = useState<UiMode>(() => savedMode(account));  // simple or engineering interface (shared/mode.ts)
@@ -648,7 +651,8 @@ export function Viewer({ account = null }: { account?: Account | null }) {
     : source ?? (info ? t("overview.tab") : estimate ? t("estimate.tab") : workTab ? t("work.tab")
       : tab ? [tab.stage ? label("stage", tab.stage) : tab.name, wall?.title].filter(Boolean).join(" · ") : null);
   const settings = <Settings account={account} theme={theme} onTheme={(th) => { remember("theme", th); setTheme(th); }}
-                             mode={mode} onMode={(m) => { rememberMode(m); setMode(m); }} onStudio={openStudio} onFeedback={openFeedback} />;
+                             mode={mode} onMode={(m) => { rememberMode(m); setMode(m); }} onStudio={openStudio} onFeedback={openFeedback}
+                             onChanges={RELEASES.length ? () => setChanges(true) : undefined} />;
 
   return (
     <div className={css.app}>
@@ -656,6 +660,7 @@ export function Viewer({ account = null }: { account?: Account | null }) {
       {feedback && (
         <Feedback project={feedbackProject} sheet={feedbackSheet} sheetTitle={feedbackSheetTitle} onClose={() => setFeedback(false)} />
       )}
+      {changes && <Changelog onClose={() => setChanges(false)} />}
       {(choosing || saving) && <RebuildModal />}
       {wizard && project && (
         <Wizard key={current} start={wizardStart} project={project} variants={variants} ceiling={overview?.ceiling ?? null} scene={scene}
