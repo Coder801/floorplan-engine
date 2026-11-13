@@ -53,7 +53,8 @@ Development starts from `develop`, work happens in `feature/<name>`, `main` hold
   example, code and a rebuild of `projects/*/out/`; an agent change and a core change). Work that
   is tangled across files is one commit; do not split by hunks (`git add -p`).
 - Rebuilt `out/` files go into the same commit as the code that changed them. A rebuild without
-  code changes is its own commit: `Projects: rebuild out/ for …`.
+  code changes is its own commit: `chore(projects): rebuild out/ for all projects` (or "for N
+  projects"; never the project names).
 - Stage only by explicit paths: `git add <file> …`. Never `git add -A`, `git add .` or
   `git add -u`.
 - Do not add: `.env` and anything that looks like a secret (keys, tokens or passwords in the diff,
@@ -75,6 +76,11 @@ format. `uv run cz bump` computes the version from the titles: `feat` is minor, 
 - `type`: `feat` is a new capability or new behaviour; `fix` is a fix; `refactor` changes no
   behaviour; `perf`; `test`; `docs`; `build` is dependencies, build, husky; `ci`; `chore` is project
   data (`projects/`), `out/` rebuilds, agents and everything else.
+- **Never name client projects** in the title or the body: no `projects/` folder names, addresses,
+  surnames or per-flat numbers (lengths, sums, groups of one flat). Titles go into `CHANGELOG.md`,
+  which users read in the viewer ("What's new", `docs/development.md`), and git history is
+  permanent. Say what changed in general terms: `chore(projects): rebuild out/ for all projects`,
+  `chore(projects): save answers in one project`, `fix(electrical): …` without "on <project>".
 - `scope` (no spaces, several separated by commas): `core`, `electrical`, `plumbing`, `drawing`,
   `viewer`, `admin`, `service`, `db`, `deploy`, `docs`, `projects`, `tests`, `agents`. Module and YAML field
   names are written as in the code. No sign-offs or trailers (`Co-Authored-By` and the like).

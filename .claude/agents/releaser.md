@@ -77,12 +77,17 @@ uv run python scripts/flow.py release --dry-run [--increment patch|minor]
 
 "No commits to bump" or similar (no `feat`/`fix` since the tag): stop and say there is nothing to
 release; if the caller wants a release anyway, it has to ask again with `--increment patch`.
-Otherwise run the same command without `--dry-run`: `main` fast-forwards to `develop`, `cz bump`
+Read the dry-run's changelog section: it is what users see in the viewer ("What's new"). If any
+entry names a client project (a folder name from `ls projects/`, an address, a surname) or
+carries a project's data, stop: no release; name the commits (`git log --oneline <tag>..develop`)
+and say their titles must be reworded by a human before the release (the history is not yours
+to rewrite). Otherwise run the same command without `--dry-run`: `main` fast-forwards to `develop`, `cz bump`
 writes the version files, `CHANGELOG.md`, a `bump: …` commit and a `vX.Y.Z` tag, `develop`
 fast-forwards to `main`. If `main` has commits missing from `develop`, the script refuses: report
 it, do not merge.
 
 After: `uv run pytest -q tests/test_version.py` (all version files agree),
+`(cd web && npx vitest run src/shared/changelog.test.ts)` (the changelog parses and names no project),
 `git log --oneline -3 main develop`, `git describe --tags`.
 
 ## Summary
