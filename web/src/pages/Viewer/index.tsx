@@ -27,7 +27,7 @@ import { watchRebuild } from "@/shared/rebuild";
 import { BRAND, watchBuild } from "@/shared/version";
 import { Boundary } from "@/ui/Boundary";
 import { Button } from "@/ui/Button";
-import { ButtonGroup } from "@/ui/ButtonGroup";
+import { ButtonGroup, GroupButton } from "@/ui/ButtonGroup";
 import { EmptyState } from "@/ui/EmptyState";
 import { ErrorState } from "@/ui/ErrorState";
 import { IconButton } from "@/ui/IconButton";
@@ -686,7 +686,7 @@ export function Viewer({ account = null }: { account?: Account | null }) {
             {list.find((p) => isProject(p, current))?.title ?? current ?? t("app.projects")}
           </span>
         </Button>
-        {/* Sheet tabs: the active one is underlined, the line slides to the next (shared/underline.ts) */}
+        {/* Sheet tabs: the active one is underlined, the line is cut in under it (shared/underline.ts) */}
         <nav ref={tabBar.ref} className={css.sheets} aria-label={t("app.sheets")}>
           {/* Every built project has this tab: a build without the overview (old code) shows a hint to rebuild */}
           {project?.artifact && pages.length > 0 && (
@@ -708,7 +708,7 @@ export function Viewer({ account = null }: { account?: Account | null }) {
           {project?.work && (
             <button aria-current={workTab ? "page" : undefined} data-label={t("work.tab")} onClick={() => { if (!workTab) curtain.go(openWork); }}>{t("work.tab")}</button>
           )}
-          <span className={css.underline} style={tabBar.style} aria-hidden="true" />
+          <span key={tabBar.cut} className={css.underline} style={tabBar.style} aria-hidden="true" />
         </nav>
         <IconButton variant="framed" className={css.more} label={t("app.more")} aria-expanded={more} onClick={() => setMore(!more)}>⋯</IconButton>
         {/* On a phone: the "⋯" menu; choosing an action closes it */}
@@ -734,7 +734,7 @@ export function Viewer({ account = null }: { account?: Account | null }) {
           {subItems.map((it) => (
             <button key={it.key} aria-current={it.current ? "page" : undefined} data-label={it.label} onClick={it.onClick}>{it.label}</button>
           ))}
-          <span className={css.underline} style={subBar.style} aria-hidden="true" />
+          <span key={subBar.cut} className={css.underline} style={subBar.style} aria-hidden="true" />
         </nav>
       )}
       <div className={css.banners}>
@@ -777,10 +777,10 @@ export function Viewer({ account = null }: { account?: Account | null }) {
           </>
         ) : tab && !tab.views && tab.pages.length > 1 && page && (
           <ButtonGroup className={css.pager} label={t("app.sheetPages")}>
-            <Button variant="bare" aria-label={t("app.prevPage")} title="PageUp" disabled={at <= 0} onClick={() => turn(-1)}>‹</Button>
+            <GroupButton aria-label={t("app.prevPage")} title="PageUp" disabled={at <= 0} onClick={() => turn(-1)}>‹</GroupButton>
             <span className="mono">{at + 1} / {tab.pages.length}</span>
-            <Button variant="bare" aria-label={t("app.nextPage")} title="PageDown" disabled={at >= tab.pages.length - 1}
-                    onClick={() => turn(1)}>›</Button>
+            <GroupButton aria-label={t("app.nextPage")} title="PageDown" disabled={at >= tab.pages.length - 1}
+                    onClick={() => turn(1)}>›</GroupButton>
           </ButtonGroup>
         )}
       </main>

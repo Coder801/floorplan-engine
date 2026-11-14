@@ -12,12 +12,12 @@
 
 .pager {
   display: grid; grid-template-columns: auto minmax(0, 1fr) auto;
-  > button { min-height: 32px; font-size: 16px; }
+  > button { font-size: 16px; }
   // The wall name is the list button: the name is truncated, the number and "▾" are always visible
   > .title {
     justify-content: flex-start; gap: 6px; padding: 0 10px; min-width: 0;
     max-width: min(56vw, 480px); font-size: 14px;
-    &[aria-expanded="true"] { background: var(--soft); }
+    &[aria-expanded="true"] { --fill: var(--soft); }
   }
 }
 .name { overflow: hidden; text-overflow: ellipsis; }

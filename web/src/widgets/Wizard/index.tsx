@@ -69,7 +69,7 @@ export function Wizard({ project, variants, ceiling, scene = null, reserve, mast
   });
   const [error, setError] = useState<string | null>(null);
   const box = useRef<HTMLDivElement>(null);
-  useEffect(() => { box.current?.focus(); }, []);
+  useEffect(() => { box.current?.focus({ preventScroll: true }); }, []);
   useEffect(() => {
     if (samePicks(picks, before)) clearDraft(project.id);
     else saveDraft(project.id, project.built, { picks, step: at });

@@ -6,10 +6,10 @@
 // Card (ui/Card, interactive): lifts on hover
 .card {
   grid-template-rows: auto 1fr; gap: 0; border-radius: var(--radius-xl);
-  transition: transform .15s, box-shadow .15s, border-color .15s;
+  transition: transform var(--t), box-shadow var(--t), border-color var(--t);
   &:hover, &:focus-visible {
     transform: translateY(-2px); border-color: var(--hl);
-    box-shadow: 0 10px 28px rgba(0, 0, 0, .14); outline: none;
+    box-shadow: var(--shadow-pop); outline: none;
   }
   @media (prefers-reduced-motion: reduce) { transition: none; &:hover, &:focus-visible { transform: none; } }
 }

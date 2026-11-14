@@ -4,7 +4,7 @@
   position: relative;
   display: grid; align-content: start; gap: var(--space-1); padding: var(--space-3);
   border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--raise);
-  cursor: pointer; transition: border-color .15s ease, box-shadow .15s ease;
+  cursor: pointer; transition: border-color var(--t) var(--ease), box-shadow var(--t) var(--ease);
   &:hover { border-color: var(--muted); }
   &:has(.input:focus-visible) { outline: 2px solid var(--hl); outline-offset: 2px; }
 }

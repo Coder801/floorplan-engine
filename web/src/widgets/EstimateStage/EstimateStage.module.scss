@@ -5,7 +5,7 @@
 
 // Stage estimates one under another
 .stage {
-  position: absolute; inset: 0; overflow: auto; display: grid; align-content: start; gap: var(--space-6);
+  position: absolute; inset: 0; @include scroll-box; display: grid; align-content: start; gap: var(--space-6);
   padding: var(--space-6) var(--space-4) var(--space-10); background: var(--bg);
 }
 .sheet { gap: var(--space-4); width: 100%; max-width: 960px; margin: 0 auto; }
@@ -33,7 +33,7 @@
 }
 .chevron {
   flex: none; width: 6px; height: 6px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor;
-  transform: translateY(-2px) rotate(-45deg); transition: transform 0.15s;
+  transform: translateY(-2px) rotate(-45deg); transition: transform var(--t);
   @media (prefers-reduced-motion: reduce) { transition: none; }
   .more[aria-expanded="true"] & { transform: translateY(-3px) rotate(45deg); }
 }

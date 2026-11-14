@@ -3,7 +3,7 @@
 
 @use "@/shared/styles/mixins" as *;
 
-.list { position: absolute; inset: 0; overflow: auto; padding: var(--space-4) var(--space-4) var(--space-10); background: var(--bg); }
+.list { position: absolute; inset: 0; @include scroll-box; padding: var(--space-4) var(--space-4) var(--space-10); background: var(--bg); }
 .head, .items { max-width: 640px; margin: 0 auto; }
 .head { display: grid; gap: var(--space-3); margin-bottom: var(--space-4); }
 .sums {

@@ -12,7 +12,8 @@ import css from "./PointBlock.module.scss";
 const CORNER = 8, FLOOR = 118, CY = 44, DIM_Y = 88;  // viewBox 300 × 128
 const MAX_POST = 40, MAX_ROW = 204;                  // 6 posts still fit between the corner and the edge
 
-// What stands in a post: a socket is a circle, a switch a key, internet and TV a plate with letters
+// What stands in a post: a socket is a circle, a switch a key, internet, TV and a floor heating
+// thermostat a plate with letters
 function Glyph({ type, x, size }: { type: string; x: number; size: number }) {
   const r = size * 0.34;
   if (type === "switch" || type === "pass_switch") {
@@ -23,6 +24,15 @@ function Glyph({ type, x, size }: { type: string; x: number; size: number }) {
         <rect className={css.post} x={x - r} y={CY - r} width={2 * r} height={2 * r} rx={2} />
         <rect className={css.post} x={x - k} y={CY - k} width={2 * k} height={2 * k} rx={1} />
         {type === "pass_switch" && <path className={css.post} d={`M${x} ${CY - k}V${CY + k}`} />}
+      </>
+    );
+  }
+  if (type === "thermostat") {
+    // Floor heating thermostat: a plate with "t°", as on the sheet
+    return (
+      <>
+        <rect className={css.post} x={x - r} y={CY - r} width={2 * r} height={2 * r} rx={2} />
+        <text className={css.mark} x={x} y={CY + 3} style={{ fontSize: Math.max(7, r * 0.75) }}>t°</text>
       </>
     );
   }

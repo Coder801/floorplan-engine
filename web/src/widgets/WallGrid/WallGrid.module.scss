@@ -3,7 +3,7 @@
 @use "@/shared/styles/mixins" as *;
 
 .grid {
-  position: absolute; inset: 0; z-index: 6; overflow-y: auto; touch-action: pan-y;
+  position: absolute; inset: 0; z-index: 6; overflow-y: auto; scrollbar-gutter: stable; touch-action: pan-y;
   background: var(--paper); padding: var(--space-4) var(--space-5) var(--space-8);
 }
 

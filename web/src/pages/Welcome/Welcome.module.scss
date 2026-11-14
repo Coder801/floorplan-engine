@@ -2,7 +2,7 @@
 
 @use "@/shared/styles/mixins" as *;
 
-.welcome { position: fixed; inset: 0; z-index: 20; overflow: auto; background: var(--bg); }
+.welcome { position: fixed; inset: 0; z-index: 20; @include scroll-box; background: var(--bg); }
 .inner { display: grid; gap: var(--space-6); max-width: 1120px; margin: 0 auto; padding: 56px var(--space-6) 64px; }
 
 // Mark | name and tagline

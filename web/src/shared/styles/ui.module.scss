@@ -6,7 +6,7 @@
 // Panel body: its own scrolling; a flow of tables and notes under section labels (caps). The
 // labels carry the rhythm here: a section starts --space-5 below the previous one
 .panelBody {
-  min-height: 0; overflow: auto; padding: var(--space-3) var(--space-4) var(--space-6);
+  min-height: 0; @include scroll-box; padding: var(--space-3) var(--space-4) var(--space-6);
   h3 {
     @include type(caps); color: var(--muted);
     margin: var(--space-5) 0 var(--space-2);
@@ -21,17 +21,20 @@
   pointer-events: none;
   > * { pointer-events: auto; }
 }
-// Drawing options in the top-right corner, two right-aligned grid rows. The first (.optionsRow) is
-// what is always there, so clicking 3D or Edit moves nothing, with Download last: its menu must not
-// be clipped by scrolling. The second (.strip) is what those buttons open; it scrolls if too wide
+// Drawing options in the top-right corner, one right-aligned row (decision 2026-11-14; two rows on
+// a narrow screen). On the right (.optionsRow) is what is always there, with Download last: its
+// menu must not be clipped by scrolling. What 3D or Edit open (.strip) appears to the left of it,
+// so clicking them moves nothing; the strip is the part that shrinks and scrolls if too wide.
+// In the markup .optionsRow goes first (keyboard order), row-reverse puts it on the right
 .options {
   position: absolute; top: 12px; right: 12px; z-index: 5; max-width: calc(100% - 24px);
-  display: grid; justify-items: end; gap: 8px;
+  display: flex; flex-direction: row-reverse; align-items: start; gap: 8px;
   pointer-events: none;
   > * { pointer-events: auto; }
 }
 .optionsRow, .strip { display: grid; grid-auto-flow: column; gap: 8px; }
-.strip { overflow-x: auto; scrollbar-width: none; }
+.optionsRow { flex: none; }
+.strip { flex: 0 1 auto; min-width: 0; overflow-x: auto; scrollbar-width: none; }
 // "Back to the isometry" in 3D: grey at home, the text colour once the view moved
 .home.home:disabled { color: var(--muted); opacity: 1; }
 .zoomValue { display: flex; align-items: center; padding: 0 8px; }
@@ -39,7 +42,8 @@
 
 // Narrow screen: buttons in one scrolling strip, the mouse hint is not needed
 @media (max-width: $narrow) {
-  .options { top: 8px; right: 8px; max-width: calc(100% - 16px); }
+  .options { top: 8px; right: 8px; max-width: calc(100% - 16px); display: grid; justify-items: end; }
+  .strip { max-width: 100%; }
   .toolbar {
     left: 8px; right: 8px; bottom: 8px;
     flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none;

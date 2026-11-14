@@ -11,9 +11,9 @@
 }
 .tip {
   position: absolute; z-index: 5; top: calc(100% + 8px); right: 0; width: 260px;
-  padding: 10px 12px; border-radius: 8px; font-size: 13px; line-height: 1.5;
+  padding: 10px 12px; border-radius: 0; font-size: 13px; line-height: 1.5;
   color: var(--text); background: var(--raise); border: 1px solid var(--line);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, .12);
+  box-shadow: var(--shadow-pop);
   font-weight: 400; text-align: left; white-space: normal;
 }
 .left { right: auto; left: 0; }

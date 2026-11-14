@@ -578,10 +578,12 @@ export class ElevationView {
     for (let k = 0; k < posts; k++) {
       const x = first + k * pitch;
       ctx.beginPath();
-      if (SWITCHES.has(type)) ctx.rect(x - r, cy - r, 2 * r, 2 * r);
+      if (SWITCHES.has(type) || type === "thermostat") ctx.rect(x - r, cy - r, 2 * r, 2 * r);
       else ctx.arc(x, cy, r, 0, 2 * Math.PI);
       if (fill) ctx.fill();
       ctx.stroke();
+      // Floor heating thermostat: a plate with a circle inside, as on the sheet (drawing/elevations.py)
+      if (type === "thermostat") { ctx.beginPath(); ctx.arc(x, cy, r * 0.55, 0, 2 * Math.PI); ctx.stroke(); }
     }
   }
 

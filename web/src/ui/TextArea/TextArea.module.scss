@@ -8,14 +8,14 @@
 .area {
   @include type(body);
   width: 100%; min-width: 0; min-height: 80px; padding: var(--space-2) var(--space-3); resize: vertical;
-  color: var(--text); background: var(--paper);
-  border: 1px solid var(--line); border-radius: var(--radius);
-  transition: border-color .15s ease;
-  &:hover:not(:disabled) { border-color: var(--muted); }
-  &:focus-visible { outline: 2px solid var(--hl); outline-offset: -1px; border-color: transparent; }
+  color: var(--text); --px-line: var(--line);
+  @include pixel-outline-bg(var(--paper));
+  @include pixel-corners;
+    &:hover:not(:disabled) { --px-line: var(--muted); }
+  &:focus-visible { outline: 2px solid var(--hl); outline-offset: -1px; --px-line: var(--hl); }
   &:disabled { opacity: .5; }
   &::placeholder { color: var(--muted); }
 }
-.invalid { border-color: var(--critical); }
+.invalid { --px-line: var(--critical); }
 .hint { @include type(small); color: var(--muted); }
 .error { @include type(small); color: var(--critical); }

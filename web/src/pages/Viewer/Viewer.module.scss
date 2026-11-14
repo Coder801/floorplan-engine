@@ -42,7 +42,7 @@
 .sheets, .sub {
   > button {
     @include focus-ring;
-    min-height: 34px; padding: 0 10px; border-radius: var(--radius); color: var(--muted); transition: color .15s;
+    min-height: 34px; padding: 0 10px; border-radius: var(--radius); color: var(--muted); transition: color var(--t);
     // The width is the bold label's (hidden copy from data-label): the active tab does not grow
     // and the neighbours and the underline do not jump
     display: inline-flex; flex-direction: column; align-items: center; justify-content: center;
@@ -54,13 +54,16 @@
 // As tall as the side panel tabs (SidePanel .tabs, 44px + the border): the two bottom borders are one line
 .sub > button { min-height: 44px; }
 @media (max-width: $narrow) { .sub > button { min-height: 34px; } }
-// The line under the active sheet tab: slides to the next one (shared/underline.ts)
+// The line under the active sheet tab is cut in like a chase in a wall: it does not slide from
+// the old tab, it is placed at the new one and opens from the left in a few hard steps
+// (shared/underline.ts restarts the animation with a key)
 .underline {
-  position: absolute; left: 0; top: 0; height: 2px; border-radius: 1px; pointer-events: none;
+  position: absolute; left: 0; top: 0; height: 3px; pointer-events: none;
   background: var(--hl);
-  transition: transform .22s cubic-bezier(.4, 0, .2, 1), width .22s cubic-bezier(.4, 0, .2, 1);
-  @media (prefers-reduced-motion: reduce) { transition: none; }
+  animation: cut-in .16s steps(6, end);
+  @media (prefers-reduced-motion: reduce) { animation: none; }
 }
+@keyframes cut-in { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0); } }
 .actions {
   grid-area: actions;
   display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 12px;
@@ -75,14 +78,15 @@
   justify-content: flex-start; max-width: 320px;
   &[aria-expanded="true"] .arrow { transform: rotate(180deg); }
 }
-.arrow { font-size: 18px; line-height: 1; transition: transform .18s ease; }
+.arrow { font-size: 18px; line-height: 1; transition: transform var(--t) var(--ease); }
 .projectName { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 // The count on a button: a red dot at the top right of the label
 .tabName { position: relative; }
 .count {
-  position: absolute; left: 100%; bottom: 55%; margin-left: 1px;
-  min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px;
+  // z-index: above the next segment — its fill, when it is the chosen one, is painted later
+  position: absolute; left: 100%; bottom: 55%; margin-left: 1px; z-index: 1; pointer-events: none;
+  min-width: 16px; height: 16px; padding: 0 4px; border-radius: 0;
   background: var(--badge); color: #ffffff; font-size: 10px; font-weight: 600;
   line-height: 16px; text-align: center;
 }
@@ -95,7 +99,7 @@
 }
 .pill {
   @include focus-ring;
-  min-height: 28px; padding: 0 10px; border-radius: 14px; font-size: 12px;
+  min-height: 28px; padding: 0 10px; border-radius: 0; font-size: 12px;
   background: none; color: var(--major); border: 1px solid currentColor;
 }
 
@@ -118,7 +122,7 @@
   display: grid; place-content: center; justify-items: center; gap: 12px;
   background: color-mix(in srgb, var(--paper) 70%, transparent);
   opacity: 0;
-  animation: loader-in .2s ease-out .15s forwards;
+  animation: loader-in .2s ease-out var(--t) forwards;
 }
 @keyframes loader-in { to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) {
@@ -130,8 +134,8 @@
   position: absolute; inset: 0; z-index: 7;
   display: grid; place-content: center;
   background: var(--paper);
-  &[data-phase="in"] { animation: curtain-in .16s ease-out both; }
-  &[data-phase="out"] { animation: curtain-out .22s ease-in both; pointer-events: none; }
+  &[data-phase="in"] { animation: curtain-in var(--t-in) var(--ease) both; }
+  &[data-phase="out"] { animation: curtain-out var(--t-in) var(--ease) both; pointer-events: none; }
 }
 @keyframes curtain-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes curtain-out { from { opacity: 1; } to { opacity: 0; } }
@@ -140,7 +144,6 @@
 .pager {
   position: absolute; top: 12px; left: 50%; transform: translateX(-50%); z-index: 3;
   > button { font-size: 16px; }
-  > span { display: flex; align-items: center; padding: 0 10px; border-left: 1px solid var(--line); }
 }
 @media (max-width: $narrow) {
   // Pager on the left, "Download" on the right
@@ -187,10 +190,10 @@
     > button { flex: none; }
   }
   .actions {
-    @include raised(10px);
+    @include raised;
     display: none; position: absolute; top: calc(100% - 4px); right: 8px; z-index: 25;
     flex-direction: column; align-items: stretch; gap: var(--space-2); padding: var(--space-3); min-width: 240px;
-    box-shadow: 0 10px 32px rgba(0, 0, 0, .2);
+    box-shadow: var(--shadow-pop);
     > * { justify-content: center; }
   }
   .actions.open { display: flex; }

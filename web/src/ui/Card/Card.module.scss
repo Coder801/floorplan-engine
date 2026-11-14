@@ -16,7 +16,7 @@
 
 .interactive {
   @include focus-ring;
-  cursor: pointer; transition: border-color .15s ease, box-shadow .15s ease;
+  cursor: pointer; transition: border-color var(--t) var(--ease), box-shadow var(--t) var(--ease);
   &:hover:not(:disabled) { border-color: var(--muted); }
   &:disabled { opacity: .5; cursor: default; }
 }

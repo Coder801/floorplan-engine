@@ -8,7 +8,7 @@
 .locked { cursor: progress; }
 .card {
   display: grid; align-content: start; gap: var(--space-4);
-  width: 100%; max-height: calc(100dvh - 2 * var(--space-4)); overflow: auto;
+  width: 100%; max-height: calc(100dvh - 2 * var(--space-4)); @include scroll-box;
   padding: var(--space-6); background: var(--raise); color: var(--text);
   border: 1px solid var(--line); border-radius: var(--radius-xl); box-shadow: var(--shadow-pop);
   outline: none;

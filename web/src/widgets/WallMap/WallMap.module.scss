@@ -3,11 +3,11 @@
 @use "@/shared/styles/mixins" as *;
 
 .map {
-  @include raised(10px);
+  @include raised;
   position: absolute; left: 12px; bottom: 64px; z-index: 3; margin: 0;
   width: 240px; padding: 8px 10px 6px;
   display: grid; gap: 4px; pointer-events: none;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, .1);
+  box-shadow: var(--shadow-pop);
   svg { display: block; width: 100%; height: 150px; }
   polygon { stroke-linejoin: round; vector-effect: non-scaling-stroke; stroke-width: .6px; }
   figcaption { font-size: 12px; color: var(--muted); text-align: center; }

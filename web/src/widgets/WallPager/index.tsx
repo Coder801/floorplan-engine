@@ -9,7 +9,7 @@ import { cx } from "@/shared/cx";
 import { usePopover } from "@/shared/popover";
 import menu from "@/shared/styles/menu.module.scss";
 import { Button } from "@/ui/Button";
-import { ButtonGroup } from "@/ui/ButtonGroup";
+import { ButtonGroup, GroupButton } from "@/ui/ButtonGroup";
 import { Icon } from "@/ui/Icon";
 import css from "./WallPager.module.scss";
 
@@ -43,14 +43,14 @@ export function WallPager({ walls, at, onTurn, onPick, onAll }: Props) {
         </Button>
       )}
       <ButtonGroup className={css.pager} label={t("pager.walls")}>
-        <Button variant="bare" aria-label={t("pager.prev")} title="PageUp" disabled={at <= 0} onClick={() => onTurn(-1)}>‹</Button>
-        <Button variant="bare" className={css.title} aria-haspopup="listbox" aria-expanded={open} title={t("pager.all")} onClick={toggle}>
+        <GroupButton aria-label={t("pager.prev")} title="PageUp" disabled={at <= 0} onClick={() => onTurn(-1)}>‹</GroupButton>
+        <GroupButton className={css.title} aria-haspopup="listbox" aria-expanded={open} title={t("pager.all")} onClick={toggle}>
           <span className={css.name}>{wall.title}</span>
           <span className="mono muted">{` · ${at + 1} / ${walls.length}`}</span>
           <span className={css.caret} aria-hidden="true">▾</span>
-        </Button>
-        <Button variant="bare" aria-label={t("pager.next")} title="PageDown" disabled={at >= walls.length - 1}
-                onClick={() => onTurn(1)}>›</Button>
+        </GroupButton>
+        <GroupButton aria-label={t("pager.next")} title="PageDown" disabled={at >= walls.length - 1}
+                onClick={() => onTurn(1)}>›</GroupButton>
       </ButtonGroup>
       {open && (
         <div ref={list} className={cx(menu.panel, css.list)} data-pop="" data-closing={closing || undefined} role="listbox" aria-label={t("pager.list")}>

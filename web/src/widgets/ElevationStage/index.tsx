@@ -12,8 +12,7 @@ import { remember, remembered } from "@/shared/palette";
 import ui from "@/shared/styles/ui.module.scss";
 import type { Elevation } from "@/shared/types";
 import type { Zoom } from "@/shared/zoom";
-import { Button } from "@/ui/Button";
-import { ButtonGroup } from "@/ui/ButtonGroup";
+import { ButtonGroup, GroupButton } from "@/ui/ButtonGroup";
 import { ScaleBar } from "@/ui/ScaleBar";
 import { ZoomRail } from "@/ui/ZoomRail";
 import type { StageHandle } from "@/widgets/SheetStage";
@@ -60,7 +59,7 @@ export const ElevationStage = forwardRef<StageHandle, Props>(function ElevationS
       <div className={ui.options}>
         <div className={ui.optionsRow}>
           <ButtonGroup>
-            <Button variant="bare" pressed={mode === "iso"} title={t("elevation.isoTitle")} onClick={toggleIso}>{t("elevation.iso")}</Button>
+            <GroupButton pressed={mode === "iso"} title={t("elevation.isoTitle")} onClick={toggleIso}>{t("elevation.iso")}</GroupButton>
           </ButtonGroup>
           {download}
         </div>

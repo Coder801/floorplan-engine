@@ -1,9 +1,6 @@
-// Buttons in one frame, as over the drawing: toggles, a text and arrows, a single button.
-// The buttons here are plain HTML in the ButtonGroup frame; in the viewer they are ui/Button bare
+// A group of buttons, as over the drawing: toggles, a text and arrows, a single button, a badge
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { ButtonGroup } from ".";
-
-const b = { minHeight: 36, padding: "0 12px" } as const;
+import { ButtonGroup, GroupButton } from ".";
 
 const meta = {
   title: "UI/ButtonGroup",
@@ -18,20 +15,38 @@ type Story = StoryObj<typeof meta>;
 export const Toggles: Story = {
   render: (args) => (
     <ButtonGroup {...args}>
-      <button style={{ ...b, background: "var(--accent)", color: "var(--accent-text)" }} aria-pressed>Розетки</button>
-      <button style={b} aria-pressed={false}>Свет</button>
-      <button style={b} aria-pressed={false}>Связь</button>
+      <GroupButton pressed>Розетки</GroupButton>
+      <GroupButton pressed={false}>Свет</GroupButton>
+      <GroupButton pressed={false}>Связь</GroupButton>
+    </ButtonGroup>
+  ),
+};
+export const Badges: Story = {
+  render: (args) => (
+    <ButtonGroup {...args} label="Проект">
+      <GroupButton pressed badge={3} aria-label="Вопросы, открыто 3">Вопросы</GroupButton>
+      <GroupButton pressed={false} badge={12} aria-label="Исходники, 12">Исходники</GroupButton>
+      <GroupButton pressed={false}>Сборка</GroupButton>
     </ButtonGroup>
   ),
 };
 export const Pager: Story = {
   render: (args) => (
     <ButtonGroup {...args} label="Страницы листа">
-      <button style={b} aria-label="Назад">‹</button>
-      <span className="mono" style={{ display: "flex", alignItems: "center", padding: "0 10px", borderLeft: "1px solid var(--line)" }}>2 / 3</span>
-      <button style={b} aria-label="Вперёд">›</button>
+      <GroupButton aria-label="Назад">‹</GroupButton>
+      <span className="mono">2 / 3</span>
+      <GroupButton aria-label="Вперёд">›</GroupButton>
     </ButtonGroup>
   ),
 };
-export const Single: Story = { render: (args) => <ButtonGroup {...args}><button style={b}>3D</button></ButtonGroup> };
+export const Save: Story = {
+  render: (args) => (
+    <ButtonGroup {...args} label="Правка">
+      <GroupButton signal>Сохранить (2)</GroupButton>
+      <GroupButton>Отменить</GroupButton>
+      <GroupButton disabled>Авто</GroupButton>
+    </ButtonGroup>
+  ),
+};
+export const Single: Story = { render: (args) => <ButtonGroup {...args}><GroupButton>3D</GroupButton></ButtonGroup> };
 export const Dark: Story = { ...Toggles, globals: { theme: "dark" } };

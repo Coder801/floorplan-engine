@@ -4,22 +4,22 @@
 
 .backdrop {
   position: fixed; inset: 0; z-index: 14; background: rgba(20, 16, 12, .28);
-  animation: fade-in .18s ease-out;
+  animation: fade-in var(--t) var(--ease);
   @include no-motion;
-  &.out { animation: fade-out .18s ease-in forwards; @include no-motion; }
+  &.out { animation: fade-out var(--t) var(--ease) forwards; @include no-motion; }
 }
 .menu {
   position: fixed; top: 0; bottom: 0; left: 0; z-index: 15; width: min(360px, 92vw);
   display: grid; grid-template-rows: auto minmax(0, 1fr);
   background: var(--panel); border-right: 1px solid var(--line);
-  box-shadow: 8px 0 24px rgba(0, 0, 0, .12);
-  animation: menu-in .2s ease-out;
+  box-shadow: var(--px-s) 0 0 var(--shade);
+  animation: menu-in var(--t-in) var(--ease);
   @include no-motion;
-  &.out { animation: menu-out .18s ease-in forwards; @include no-motion; }
+  &.out { animation: menu-out var(--t) var(--ease) forwards; @include no-motion; }
 }
 // Rows sized by content: otherwise a card (overflow: hidden) shrinks and loses its bottom
 .list {
-  overflow: auto; padding: var(--space-3) var(--space-4) var(--space-6);
+  @include scroll-box; padding: var(--space-3) var(--space-4) var(--space-6);
   display: grid; grid-auto-rows: max-content; gap: var(--space-3);
 }
 

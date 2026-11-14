@@ -5,8 +5,8 @@
   display: inline-flex; align-items: center; gap: var(--space-1); flex: none;
   padding: 0 6px; font-size: 11px; white-space: nowrap; vertical-align: 1px;
 }
-.soft { background: var(--soft); border-radius: var(--radius-sm); line-height: 18px; }
-.outline { border: 1px solid currentColor; border-radius: 10px; line-height: 16px; }
+.soft { @include pixel-corners(1); background: var(--soft); line-height: 18px; }
+.outline { border: 1px solid currentColor; border-radius: 0; line-height: 16px; }
 .mono {
   font: 600 10px/16px $mono; letter-spacing: .04em; padding: 1px 5px;
   border: 1px solid var(--line); border-radius: var(--radius-sm);

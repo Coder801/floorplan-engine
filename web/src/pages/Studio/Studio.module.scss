@@ -3,7 +3,7 @@
 
 @use "@/shared/styles/mixins" as *;
 
-.page { position: fixed; inset: 0; z-index: 20; overflow: auto; background: var(--bg); }
+.page { position: fixed; inset: 0; z-index: 20; @include scroll-box; background: var(--bg); }
 .inner { display: grid; gap: var(--space-8); max-width: 1240px; margin: 0 auto; padding: var(--space-8) var(--space-6) 64px; }
 
 // Back | mark | title and the firm name

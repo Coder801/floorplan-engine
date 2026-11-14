@@ -1,6 +1,7 @@
 // Shared by modules: breakpoints, fonts, the type scale, repeated styling pieces.
 // Use: @use "<path>/styles/mixins" as *;
 
+@use "sass:list";
 @use "sass:map";
 
 $narrow: 900px;   // the side panel moves under the drawing
@@ -32,6 +33,147 @@ $type: (
   @if $role == caps { text-transform: uppercase; letter-spacing: .06em; }
 }
 
+// A stepped "pixel" corner instead of a rounded one: the corner is cut in $steps steps of --px
+// (2 — a control, 1 — a small tag). It is a clip-path, so it keeps the element's own border and
+// fill in every state, but it also clips everything outside the box: use it on leaf elements
+// (button, field, tag, tooltip), never on a container whose child may stick out (a menu, a
+// fixed tooltip). The focus ring moves inside for the same reason.
+// $shadow: true also keeps room for the hard stepped shadow at the bottom right (--px-s)
+@function -corner($x, $y, $dx, $dy, $steps) {
+  // The points of one corner, walking clockwise; $dx/$dy are the directions into the box
+  $u: var(--px);
+  $pts: ();
+  @if $steps == 1 {
+    $pts: (0 1, 1 1, 1 0);
+  } @else {
+    $pts: (0 2, 1 2, 1 1, 2 1, 2 0);
+  }
+  $out: ();
+  // top-left and bottom-right walk the list forwards, the other two backwards
+  $forward: $dx * $dy > 0;
+  $n: list.length($pts);
+  @for $i from 1 through $n {
+    $at: $i;
+    @if not $forward { $at: $n + 1 - $i; }
+    $p: list.nth($pts, $at);
+    $px: list.nth($p, 1); $py: list.nth($p, 2);
+    $out: list.append($out, #{"calc(#{$x} + #{$dx * $px} * #{$u}) calc(#{$y} + #{$dy * $py} * #{$u})"}, comma);
+  }
+  @return $out;
+}
+@mixin pixel-corners($steps: 2, $shadow: false) {
+  $s: var(--px-s);
+  border-radius: 0;
+  @if $shadow {
+    // The box and the same box moved by --px-s, as one outline
+    box-shadow: $s $s 0 var(--shade);
+    clip-path: polygon(
+      -corner(0%, 0%, 1, 1, $steps), -corner(100%, 0%, -1, 1, $steps),
+      100% $s, -corner(calc(100% + #{$s}), $s, -1, 1, $steps),
+      -corner(calc(100% + #{$s}), calc(100% + #{$s}), -1, -1, $steps),
+      -corner($s, calc(100% + #{$s}), 1, -1, $steps), $s 100%,
+      -corner(0%, 100%, 1, -1, $steps)
+    );
+  } @else {
+    clip-path: polygon(
+      -corner(0%, 0%, 1, 1, $steps), -corner(100%, 0%, -1, 1, $steps),
+      -corner(100%, 100%, -1, -1, $steps), -corner(0%, 100%, 1, -1, $steps)
+    );
+  }
+  &:focus-visible { outline-offset: -2px; }
+}
+
+// The border of a pixel-corners(2) element along the cut: the clip leaves the outline open at
+// each corner, this draws the inner step back in the element's own border colour (so hover,
+// pressed and invalid states follow). For an element with a 1px border that may have ::after
+@mixin pixel-outline {
+  position: relative;
+  &::after {
+    content: ""; position: absolute; inset: calc(var(--px) - 1px); pointer-events: none;
+    border: 1px solid; border-color: inherit;
+    $dot: linear-gradient(#000 0 0);
+    mask: $dot 0 0, $dot 100% 0, $dot 0 100%, $dot 100% 100%;
+    mask-size: var(--px) var(--px); mask-repeat: no-repeat;
+  }
+}
+
+// The same for an element that cannot have ::after (input, textarea): the step is drawn with
+// background layers in --px-line. The element sets --px-line together with its border colour
+// (and changes that variable, not border-color, in its states) and its fill as $fill
+@mixin pixel-outline-bg($fill) {
+  $h: linear-gradient(var(--px-line) 0 0); $u: var(--px);
+  background:
+    $h left $u top $u / $u 1px, $h left $u top $u / 1px $u,
+    $h right $u top $u / $u 1px, $h right $u top $u / 1px $u,
+    $h left $u bottom $u / $u 1px, $h left $u bottom $u / 1px $u,
+    $h right $u bottom $u / $u 1px, $h right $u bottom $u / 1px $u,
+    $fill;
+  background-repeat: no-repeat; background-origin: border-box;
+  border: 1px solid var(--px-line);
+}
+
+// A pixel-cornered frame painted with background layers, not cut with clip-path: nothing is
+// clipped, so a child may stick out (a badge on a group button) and a shadow stays. For a
+// container whose fill and line are known. It has no CSS border: the 1px line is part of the
+// background, so the padding must keep the content off the corners (at least 2 × --px)
+@mixin pixel-frame($fill: var(--raise), $line: var(--line)) {
+  $u: var(--px); $u2: calc(2 * var(--px)); $u4: calc(4 * var(--px));
+  $l: linear-gradient($line 0 0); $f: linear-gradient($fill 0 0);
+  $layers: (
+    // straight edges between the corners
+    #{$l} 50% 0 / calc(100% - #{$u4}) 1px, #{$l} 50% 100% / calc(100% - #{$u4}) 1px,
+    #{$l} 0 50% / 1px calc(100% - #{$u4}), #{$l} 100% 50% / 1px calc(100% - #{$u4}),
+  );
+  // the two steps of each corner
+  @each $x in (left, right) {
+    @each $y in (top, bottom) {
+      $layers: list.join($layers, (
+        #{$l} $x $u2 $y 0 / 1px $u, #{$l} $x $u $y $u / $u 1px,
+        #{$l} $x $u $y $u / 1px $u, #{$l} $x 0 $y $u2 / $u 1px,
+      ), comma);
+    }
+  }
+  // the fill: three rectangles that make the stepped shape
+  $layers: list.join($layers, (
+    #{$f} 50% 50% / 100% calc(100% - #{$u4}), #{$f} 50% 50% / calc(100% - #{$u4}) 100%,
+    #{$f} 50% 50% / calc(100% - #{$u2}) calc(100% - #{$u2}),
+  ), comma);
+  border: 0; border-radius: 0;
+  background: $layers; background-repeat: no-repeat;
+}
+
+// A group of buttons is its own element, not ui/Button in a frame (decision 2026-11-14): one
+// pixel frame as a tray (group-tray) and flat entries inside it (group-item). An entry has no
+// frame, corner or clip of its own, so its badge may stick out; the chosen or pressed entry is
+// filled with the accent. ui/ButtonGroup and ui/SegmentedControl both look like this
+@mixin group-tray {
+  @include pixel-frame;
+  display: flex; gap: 2px; padding: 3px;
+}
+// The fill of an entry is --fill, painted as a one-step pixel shape (two crossed rectangles), not
+// as a square background: its corners match the tray's. A state changes --fill, not background
+@mixin group-item {
+  @include type(body);
+  @include focus-ring;
+  $f: linear-gradient(var(--fill) 0 0); $u2: calc(2 * var(--px));
+  --fill: transparent;
+  position: relative;
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2);
+  min-height: calc(var(--control-h) - 6px); min-width: 34px; padding: 0 10px;
+  border: 0; color: var(--text);
+  background: $f 50% 50% / 100% calc(100% - #{$u2}) no-repeat, $f 50% 50% / calc(100% - #{$u2}) 100% no-repeat;
+  white-space: nowrap; text-decoration: none; cursor: pointer;
+  transition: color var(--t) var(--ease);
+  &:hover:not(:disabled) { --fill: var(--soft); }
+  &:disabled { opacity: .5; cursor: default; }
+  &:focus-visible { outline-offset: 0; }
+  @media (prefers-reduced-motion: reduce) { transition: none; }
+}
+@mixin group-item-on {
+  --fill: var(--accent); color: var(--accent-text);
+  &:hover:not(:disabled) { --fill: var(--accent); }
+}
+
 // A badge over the drawing or background: card, button group, popup
 @mixin raised($radius: var(--radius-md)) {
   background: var(--raise);
@@ -55,11 +197,13 @@ $type: (
   border: 1px solid var(--line); border-radius: var(--radius);
   background: var(--raise); color: var(--text);
   text-decoration: none; white-space: nowrap; cursor: pointer;
-  transition: background-color .15s ease, border-color .15s ease, color .15s ease,
-    box-shadow .15s ease, opacity .15s ease, filter .15s ease;
+  transition: background-color var(--t) var(--ease), border-color var(--t) var(--ease), color var(--t) var(--ease),
+    box-shadow var(--t) var(--ease), opacity var(--t) var(--ease), filter var(--t) var(--ease);
   &:hover:not(:disabled) { background: var(--soft); }
   &:disabled { opacity: .5; cursor: default; }
   @media (prefers-reduced-motion: reduce) { transition: none; }
+  @include pixel-corners;
+  @include pixel-outline;
 }
 
 // The keyboard focus ring of every control
@@ -80,4 +224,13 @@ $type: (
 // No animation if the user asked for reduced motion
 @mixin no-motion {
   @media (prefers-reduced-motion: reduce) { animation: none; }
+}
+
+// A block that scrolls inside itself (panel body, stage, dialog). The gutter of the scrollbar is
+// always reserved: with classic scrollbars (Windows, a mouse on Linux) a bar that comes and goes
+// with the content height would narrow the content by its width, and the text would jump sideways
+// on every tab, step or click. Overlay scrollbars (macOS, phones) take no room, nothing changes there
+@mixin scroll-box {
+  overflow: auto;
+  scrollbar-gutter: stable;
 }

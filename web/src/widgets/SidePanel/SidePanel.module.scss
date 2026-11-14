@@ -85,7 +85,7 @@
     // grid-area: auto, otherwise the absolute grid item's frame is its empty side area
     grid-area: auto; position: absolute; left: 0; right: 0; bottom: 0; z-index: 6;
     height: min(72dvh, calc(100% - 96px));
-    border-radius: 12px 12px 0 0; box-shadow: 0 -8px 28px rgba(0, 0, 0, .18);
+    border-radius: 0; box-shadow: 0 calc(-1 * var(--px-s)) 0 var(--shade);
     .bar { border-bottom: 1px solid var(--line); }
     .tabs { display: grid; }
     .body { display: block; }

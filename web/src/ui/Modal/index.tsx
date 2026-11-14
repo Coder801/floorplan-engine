@@ -2,7 +2,8 @@
 // at the bottom (a sheet). Esc and a click on the veil call onClose (closeOnVeil false keeps a
 // half-filled form from closing by a miss); without onClose it cannot be closed (a blocking
 // "wait"). Tab stays inside the card; the card takes focus on open (a child may move it to a
-// field) and gives it back on close. The caller lays out the content (Heading, Stack, buttons).
+// field) and gives it back on close, both without scrolling (preventScroll: the page under the
+// dialog stays where it was). The caller lays out the content (Heading, Stack, buttons).
 
 import { useEffect, useRef, type ClipboardEvent, type FormEvent, type ReactNode, type Ref } from "react";
 import { createPortal } from "react-dom";
@@ -37,7 +38,7 @@ export function Modal({ children, onClose, closeOnVeil = true, size = "md", role
 
   useEffect(() => {
     const before = document.activeElement as HTMLElement | null;
-    card.current?.focus();
+    card.current?.focus({ preventScroll: true });
     const onKey = (ev: KeyboardEvent) => {
       if (ev.key === "Escape") {
         ev.preventDefault(); ev.stopPropagation();
@@ -53,7 +54,7 @@ export function Modal({ children, onClose, closeOnVeil = true, size = "md", role
       else if (!ev.shiftKey && (document.activeElement === last || !inside)) { ev.preventDefault(); first.focus(); }
     };
     window.addEventListener("keydown", onKey, true);
-    return () => { window.removeEventListener("keydown", onKey, true); before?.focus?.(); };
+    return () => { window.removeEventListener("keydown", onKey, true); before?.focus?.({ preventScroll: true }); };
   }, []);
 
   const setRef = (el: HTMLElement | null) => {

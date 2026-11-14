@@ -3,7 +3,7 @@
 
 @use "@/shared/styles/mixins" as *;
 
-.stage { position: absolute; inset: 0; overflow: auto; padding: 64px 16px 48px; background: var(--bg); }
+.stage { position: absolute; inset: 0; @include scroll-box; padding: 64px 16px 48px; background: var(--bg); }
 .sheet { gap: var(--space-5); max-width: 960px; margin: 0 auto; }
 .head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
 .actions { display: flex; align-items: center; flex-wrap: wrap; justify-content: flex-end; gap: var(--space-2); }

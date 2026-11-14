@@ -11,12 +11,12 @@
 .dialog {
   display: grid; width: min(1000px, 100%); height: min(660px, 100%); min-height: 0;
   grid-template: "steps head" auto "steps body" minmax(0, 1fr) "steps foot" auto / 240px minmax(0, 1fr);
-  background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
-  box-shadow: 0 8px 32px rgb(0 0 0 / .2); overflow: hidden; outline: none;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 0;
+  box-shadow: var(--shadow-pop); overflow: hidden; outline: none;
 }
 
 .steps {
-  grid-area: steps; overflow: auto; padding: var(--space-4) var(--space-3); display: grid; align-content: start; gap: var(--space-3);
+  grid-area: steps; @include scroll-box; padding: var(--space-4) var(--space-3); display: grid; align-content: start; gap: var(--space-3);
   background: var(--soft); border-right: 1px solid var(--line);
   ol { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px; }
 }
@@ -27,13 +27,13 @@
   display: flex; align-items: center; gap: var(--space-2); width: 100%; min-height: var(--control-h); padding: 0 var(--space-2);
   border-radius: var(--radius); text-align: left; color: var(--muted);
   &:hover { color: var(--text); }
-  &.on { background: var(--raise); color: var(--text); font-weight: 500; box-shadow: 0 1px 2px rgba(0, 0, 0, .12); }
+  &.on { background: var(--raise); color: var(--text); font-weight: 500; box-shadow: var(--px) var(--px) 0 var(--shade); }
 }
 
 .head { grid-area: head; display: flex; align-items: center; justify-content: space-between; padding: var(--space-2) var(--space-2) 0 var(--space-6); }
 .body {
   --reserve-bleed: var(--space-6); --reserve-top: calc(-1 * var(--space-1));  // ReserveList: side and top padding of this block
-  grid-area: body; overflow: auto; padding: var(--space-1) var(--space-6) var(--space-4); display: grid; align-content: start; gap: var(--space-3);
+  grid-area: body; @include scroll-box; padding: var(--space-1) var(--space-6) var(--space-4); display: grid; align-content: start; gap: var(--space-3);
 }
 .foot {
   grid-area: foot; display: flex; justify-content: space-between; gap: var(--space-2); padding: var(--space-3) var(--space-6);

@@ -27,11 +27,11 @@
 
 // The number as a badge in the group colour, as on the elevation
 .mark {
-  justify-self: start; min-width: 24px; padding: 2px 7px; border-radius: 999px;
+  justify-self: start; min-width: 24px; padding: 2px 7px; border-radius: 0;
   color: #fff; font-weight: 600; text-align: center; background: var(--text);
 }
 .plain { background: var(--muted); }
-.box { background: none; color: #b3261e; border: 1.5px solid #b3261e; border-radius: 3px; padding: 1px 5px; }
+.box { background: none; color: #b3261e; border: 1.5px solid #b3261e; border-radius: 0; padding: 1px 5px; }
 
 .name { display: grid; gap: 2px; }
 .line { color: var(--muted); }

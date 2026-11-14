@@ -9,7 +9,12 @@
   display: inline-grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 8px;
   white-space: nowrap; text-align: left;
 }
-.flat { min-height: 0; border: 0; border-right: 1px solid var(--line); border-radius: 0; background: none; }
+// Inside a button group: an entry of the group (mixins group-item), no frame or corner of its own
+.flat {
+  @include group-item;
+  display: inline-grid; justify-content: stretch; text-align: left;
+  clip-path: none; &::after { content: none; }
+}
 
 // All faces share one cell: the hidden ones hold the width of the widest option
 .face { grid-area: 1 / 1; display: flex; align-items: center; gap: 8px; svg { margin: 0; } }

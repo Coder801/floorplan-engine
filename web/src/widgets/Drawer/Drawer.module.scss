@@ -5,12 +5,12 @@
 .drawer {
   position: absolute; inset: 0; z-index: 5;
   display: grid; grid-template-rows: auto minmax(0, 1fr);
-  background: var(--panel); box-shadow: -8px 0 24px rgba(0, 0, 0, .12);
-  animation: drawer-in .2s ease-out;
+  background: var(--panel); box-shadow: calc(-1 * var(--px-s)) 0 0 var(--shade);
+  animation: drawer-in var(--t-in) var(--ease);
   @include no-motion;
 }
 .out {
-  animation: drawer-out .18s ease-in forwards;
+  animation: drawer-out var(--t) var(--ease) forwards;
   @include no-motion;
 }
 // Narrow screen: full screen, not in the bottom drawer

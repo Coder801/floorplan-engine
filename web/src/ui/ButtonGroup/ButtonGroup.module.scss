@@ -1,8 +1,22 @@
 @use "@/shared/styles/mixins" as *;
 
+// The look is shared with SegmentedControl: mixins group-tray / group-item
 .group {
-  @include raised;
-  display: flex; overflow: hidden;
-  > button, > a { border: 0; border-radius: 0; min-width: 40px; }
-  > * + button, > * + a { border-left: 1px solid var(--line); }
+  @include group-tray;
+  // A text between entries (a page counter)
+  > span { display: flex; align-items: center; padding: 0 var(--space-2); white-space: nowrap; }
+}
+.item { @include group-item; }
+.pressed { @include group-item-on; }
+// The one action of the group that changes data (save): the marking yellow, as Button primary
+.signal {
+  --fill: var(--signal); color: var(--signal-text); font-weight: 600;
+  &:hover:not(:disabled) { --fill: var(--signal); filter: brightness(1.06); }
+}
+// A number on the corner of an entry: it sticks out of the entry and of the frame
+.badge {
+  position: absolute; top: -7px; right: -7px; z-index: 1;
+  min-width: 16px; height: 16px; padding: 0 4px;
+  background: var(--badge); color: #ffffff; font-size: 10px; font-weight: 600;
+  line-height: 16px; text-align: center; pointer-events: none;
 }

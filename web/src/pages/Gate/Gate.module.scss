@@ -10,7 +10,7 @@
 .card {
   justify-items: stretch; gap: var(--space-4);
   width: 100%; max-width: 400px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, .04), 0 12px 32px rgba(0, 0, 0, .08);
+  box-shadow: var(--px) var(--px) 0 var(--shade);
 }
 .wide { max-width: 560px; }
 .brand {

@@ -6,7 +6,7 @@
 
 .sm { min-height: 32px; padding: 0 var(--space-2); }
 .md { min-height: var(--control-h); }
-.lg { min-height: var(--control-h-lg); padding: 0 var(--space-4); border-radius: var(--radius-md); }
+.lg { min-height: var(--control-h-lg); padding: 0 var(--space-4); }
 .block { display: flex; width: 100%; }
 
 @mixin accent-fill {
@@ -14,13 +14,18 @@
   &:hover:not(:disabled) { background: var(--accent); filter: brightness(1.15); }
 }
 
-.primary { @include accent-fill; }
+// The main action is the marking yellow (--signal): one per screen, so it is not the accent
+.primary {
+  background: var(--signal); color: var(--signal-text); border-color: var(--signal-line); font-weight: 600;
+  &:hover:not(:disabled) { background: var(--signal); filter: brightness(1.06); }
+}
 .bare {
   border-color: transparent; background: none;
   &:hover:not(:disabled) { background: var(--soft); }
 }
 .link {
-  min-height: 0; padding: 0; border: 0; background: none; border-radius: 0;
+  min-height: 0; padding: 0; border: 0; background: none; clip-path: none;
+  &::after { content: none; }
   color: inherit; text-decoration: underline; text-underline-offset: 2px;
   &:hover:not(:disabled) { background: none; color: var(--hl); }
 }

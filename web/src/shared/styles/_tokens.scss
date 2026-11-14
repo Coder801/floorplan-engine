@@ -1,37 +1,62 @@
 // Colours are CSS variables, not SCSS variables: the theme switches without a rebuild
-// (palette.ts reads the same ones for the canvas and 3D). Light is a warm white; dark is the
-// "Dark 2026" palette from VS Code (extensions/theme-defaults/themes/2026-dark.json): editor
-// background #121314, side panels #191A1B, widgets #202122, borders #2A2B2C, button accent #297AA0.
+// (palette.ts reads the same ones for the canvas and 3D). Light is "vatman" — cold white drafting
+// paper with blue-black ink. Dark is the "Dark 2026" palette from VS Code
+// (extensions/theme-defaults/themes/2026-dark.json): editor background #121314, side panels
+// #191A1B, widgets #202122, borders #2A2B2C, button accent #297AA0. "Sinka" — a muted blueprint,
+// deep blue with pale lines — is a third set of colours, not offered yet. --signal is the marking yellow of the main action only;
+// --hl is the red-orange pencil of selection (international orange, not a terracotta).
 
 @mixin dark {
   --bg: #121314; --panel: #191a1b; --raise: #202122; --text: #bfbfbf; --muted: #8c8c8c;
   --line: #2a2b2c; --soft: #242526; --accent: #297aa0; --accent-text: #ffffff;
+  --signal: #ffd400; --signal-text: #121314; --signal-line: #ffd400;
   --hl: #48a0c7; --hl-row: #1d3946; --pin: #e3b341; --badge: #d43a2f;
-  --paper: #121314; --ink: #d4d4d4;
+  --paper: #121314; --ink: #d4d4d4; --shade: #060606;
   --critical: #f48771; --major: #cd861a; --warn: #e3b341; --minor: #8c8c8c; --ok: #86cf86;
+  color-scheme: dark;
+}
+
+// "Sinka" is kept as colours only: it is not in THEMES (shared/consts.ts), so nothing in the
+// interface switches to it. To look at it: document.documentElement.dataset.theme = "blueprint"
+@mixin blueprint {
+  --bg: #0e1a2b; --panel: #132238; --raise: #192c46; --text: #cdd8e8; --muted: #8192ab;
+  --line: #263a5a; --soft: #1c304e; --accent: #dfe8f5; --accent-text: #0e1a2b;
+  --signal: #ffd400; --signal-text: #0e1a2b; --signal-line: #ffd400;
+  --hl: #ff6a2b; --hl-row: #3d2c33; --pin: #e3b341; --badge: #e5402f;
+  --paper: #10203a; --ink: #dfe8f5; --shade: #060d18;
+  --critical: #ff8f7a; --major: #e0a030; --warn: #e3b341; --minor: #8192ab; --ok: #7fd49a;
   color-scheme: dark;
 }
 
 // Theme-independent scales. Spacing is a 4px grid: every gap and padding is one of these, and
 // every line-height in the type scale (_mixins.scss, $type) is a multiple of 4px, so blocks keep
-// one vertical rhythm. Radii: controls, cards and dialogs (tags use --radius-sm).
+// one vertical rhythm. Corners are not rounded: a control gets a stepped "pixel" corner
+// (mixins, pixel-corners) of --px per step, panels and cards are square; the radius tokens stay
+// as names and are all zero. Shadows are hard and stepped the same way: --px-s is the offset.
+// Motion is short: --t for a state change, --t-in for something appearing, one curve.
 :root {
   --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 20px;
   --space-6: 24px; --space-8: 32px; --space-10: 40px;
-  --radius-sm: 4px; --radius: 6px; --radius-md: 8px; --radius-lg: 10px; --radius-xl: 12px;
-  --shadow-pop: 0 8px 32px rgb(0 0 0 / .2);
+  --radius-sm: 0; --radius: 0; --radius-md: 0; --radius-lg: 0; --radius-xl: 0;
+  --px: 2px; --px-s: 4px;
+  --shadow-pop:
+    var(--px-s) calc(var(--px-s) + var(--px)) 0 calc(-1 * var(--px)) var(--shade),
+    calc(var(--px-s) + var(--px)) var(--px-s) 0 calc(-1 * var(--px)) var(--shade);
+  --t: .1s; --t-in: .12s; --ease: cubic-bezier(.2, 0, 0, 1);
   --control-h: 36px; --control-h-lg: 44px;
 }
 
 :root {
-  --bg: #efebe2; --panel: #fbf8f2; --raise: #ffffff; --text: #29251f; --muted: #6b6357;
-  --line: #e1dacd; --soft: #f3efe7; --accent: #29251f; --accent-text: #fbf8f2;
-  --hl: #d2491a; --hl-row: #fbe3d6; --pin: #1f6fb5; --badge: #c62828;
-  --paper: #ffffff; --ink: none;
-  --critical: #b3261e; --major: #9a5b00; --warn: #f0b429; --minor: #6b6357; --ok: #2e6b45;
+  --bg: #e8ecf1; --panel: #f5f7fa; --raise: #ffffff; --text: #14213a; --muted: #5a667e;
+  --line: #ccd4de; --soft: #ebeff4; --accent: #14213a; --accent-text: #f5f7fa;
+  --signal: #ffd400; --signal-text: #14213a; --signal-line: #14213a;
+  --hl: #e63c00; --hl-row: #ffe7dc; --pin: #1d5fd0; --badge: #c62828;
+  --paper: #ffffff; --ink: none; --shade: #a9b3c2;
+  --critical: #b3261e; --major: #9a5b00; --warn: #f0b429; --minor: #5a667e; --ok: #2e6b45;
   color-scheme: light;
 }
 :root[data-theme="dark"] { @include dark; }
+:root[data-theme="blueprint"] { @include blueprint; }
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) { @include dark; }
+  :root:not([data-theme="light"]):not([data-theme="blueprint"]) { @include dark; }
 }

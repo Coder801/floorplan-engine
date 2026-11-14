@@ -17,8 +17,7 @@ import { SYSTEMS, useView, view, type System } from "@/shared/store";
 import ui from "@/shared/styles/ui.module.scss";
 import type { Page } from "@/shared/types";
 import type { Zoom } from "@/shared/zoom";
-import { Button } from "@/ui/Button";
-import { ButtonGroup } from "@/ui/ButtonGroup";
+import { ButtonGroup, GroupButton } from "@/ui/ButtonGroup";
 import { EmptyState } from "@/ui/EmptyState";
 import { Icon } from "@/ui/Icon";
 import { ScaleBar } from "@/ui/ScaleBar";
@@ -198,28 +197,28 @@ export const SheetStage = forwardRef<StageHandle, Props>(function SheetStage({ p
           {lightMode && (
             <ButtonGroup role="radiogroup" label={t("sheet.lightMode")}>
               {LIGHT_MODES.map((m) => (
-                <Button key={m} variant="bare" role="radio" aria-checked={lightMode.mode === m} pressed={lightMode.mode === m}
+                <GroupButton key={m} role="radio" aria-checked={lightMode.mode === m} pressed={lightMode.mode === m}
                         title={t(`sheet.lightModes.${m}Title`)}
-                        onClick={() => lightMode.mode !== m && lightMode.onMode(m)}>{t(`sheet.lightModes.${m}`)}</Button>
+                        onClick={() => lightMode.mode !== m && lightMode.onMode(m)}>{t(`sheet.lightModes.${m}`)}</GroupButton>
               ))}
             </ButtonGroup>
           )}
           {systems.length > 0 && !(editMode && ed) && (
             <ButtonGroup label={t("sheet.systems")}>
               {systems.map((sys) => (
-                <Button key={sys} variant="bare" pressed={!systemsOff.has(sys)} title={t("sheet.systemsTitle")}
-                        onClick={() => toggleSystem(sys)}>{t(`views.${SYSTEM_VIEW[sys]}`)}</Button>
+                <GroupButton key={sys} pressed={!systemsOff.has(sys)} title={t("sheet.systemsTitle")}
+                        onClick={() => toggleSystem(sys)}>{t(`views.${SYSTEM_VIEW[sys]}`)}</GroupButton>
               ))}
             </ButtonGroup>
           )}
           {ed && !in3d && editable && (
             <ButtonGroup>
-              <Button variant="bare" pressed={editMode} title={t("sheet.editTitle")} onClick={toggleEdit}>{t("sheet.edit")}</Button>
+              <GroupButton pressed={editMode} title={t("sheet.editTitle")} onClick={toggleEdit}>{t("sheet.edit")}</GroupButton>
             </ButtonGroup>
           )}
           {scene3d && (
             <ButtonGroup>
-              <Button variant="bare" pressed={in3d} onClick={toggle3d} title={t("sheet.title3d")}>3D</Button>
+              <GroupButton pressed={in3d} onClick={toggle3d} title={t("sheet.title3d")}>3D</GroupButton>
             </ButtonGroup>
           )}
           {download}
@@ -228,11 +227,11 @@ export const SheetStage = forwardRef<StageHandle, Props>(function SheetStage({ p
           <div className={ui.strip}>
             <ButtonGroup>
               {/* Grey and inactive while the view is at the isometry */}
-              <Button variant="bare" className={ui.home} disabled={home} aria-label={t("sheet.iso")}
-                      title={t("sheet.iso")} onClick={() => scene.current?.iso()}><Icon name="home" /></Button>
+              <GroupButton className={ui.home} disabled={home} aria-label={t("sheet.iso")}
+                      title={t("sheet.iso")} onClick={() => scene.current?.iso()}><Icon name="home" /></GroupButton>
               {WALL_MODES.map((mode) => (
-                <Button key={mode} variant="bare" pressed={wallMode === mode} title={t("sheet.walls")}
-                        onClick={() => view.set({ wallMode: mode })}>{t(`sheet.wallModes.${mode}`)}</Button>
+                <GroupButton key={mode} pressed={wallMode === mode} title={t("sheet.walls")}
+                        onClick={() => view.set({ wallMode: mode })}>{t(`sheet.wallModes.${mode}`)}</GroupButton>
               ))}
             </ButtonGroup>
             <Filter3D scene={scene3d!} index={index} />
@@ -241,15 +240,15 @@ export const SheetStage = forwardRef<StageHandle, Props>(function SheetStage({ p
         {ed && !in3d && editable && editMode && (
           <div className={ui.strip}>
             <ButtonGroup>
-              <Button variant={n ? "primary" : "bare"} disabled={!n || saving}
+              <GroupButton signal={!!n} disabled={!n || saving}
                       title={t("sheet.saveTitle")} onClick={save}>
                 {n ? t("sheet.saveN", { n }) : t("sheet.save")}
-              </Button>
-              <Button variant="bare" disabled={!ed.history.length} title={t("sheet.undoTitle")}
-                      onClick={() => sv?.undo()}>{t("sheet.undo")}</Button>
-              <Button variant="bare" disabled={!(back && (back.wires.length || back.box)) || saving}
+              </GroupButton>
+              <GroupButton disabled={!ed.history.length} title={t("sheet.undoTitle")}
+                      onClick={() => sv?.undo()}>{t("sheet.undo")}</GroupButton>
+              <GroupButton disabled={!(back && (back.wires.length || back.box)) || saving}
                       title={t("sheet.autoTitle")}
-                      onClick={reset}>{t("sheet.auto")}</Button>
+                      onClick={reset}>{t("sheet.auto")}</GroupButton>
             </ButtonGroup>
           </div>
         )}

@@ -2,7 +2,7 @@
 
 import { THEMES, type Theme } from "./consts";
 
-export const palette = { ink: "none", paper: "#ffffff", hl: "#d2491a", pin: "#1f6fb5" };
+export const palette = { ink: "none", paper: "#ffffff", hl: "#e63c00", pin: "#1d5fd0" };
 
 const cssVar = (name: string) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 
