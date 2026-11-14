@@ -61,6 +61,7 @@ class PushResult:
     version: int  # model version the folder now matches
     new_version: bool
     sources: list[str] = field(default_factory=list)  # source files added to the database
+    restored: list[str] = field(default_factory=list)  # files storage had lost, written again
     build: Build | None = None
 
 
@@ -182,6 +183,52 @@ def take_blank(session: Session, slug: str, studio: Studio) -> Project | None:
     return own if own is not None and _blank(session, own) else None
 
 
+def _source_files(folder: Path) -> list[tuple[str, Path]]:
+    """Files of source/ by their path inside it; hidden ones (.DS_Store…) are skipped."""
+    src = folder / SOURCE_DIR
+    if not src.is_dir():
+        return []
+    files = sorted(p for p in src.rglob("*") if p.is_file())
+    rels = [(p.relative_to(src).as_posix(), p) for p in files]
+    return [(rel, p) for rel, p in rels if not any(x.startswith(".") for x in rel.split("/"))]
+
+
+def _push_sources(
+    session: Session, store: ObjectStore, project: Project, folder: Path, add: bool = True
+) -> tuple[list[str], list[str]]:
+    """source/ of the folder → the project's sources: (added, restored). A file already in the
+    database (by hash) whose object is missing from storage is written again — storage lost it
+    (a deploy without a volume, 2026-11-04) while the row stayed. add=False only restores."""
+    added: list[str] = []
+    restored: list[str] = []
+    for rel, path in _source_files(folder):
+        data = path.read_bytes()
+        digest = repo.sha256(data)
+        row = session.scalar(
+            select(Source).where(Source.project_id == project.id, Source.sha256 == digest)
+        )
+        if row is not None:
+            if not store.exists(row.object_key):
+                store.put(row.object_key, data)
+                restored.append(rel)
+            continue
+        if not add:
+            continue
+        key = source_key(project.id, digest, path.name)
+        store.put(key, data)
+        repo.add_source(session, project.id, rel, data, _source_kind(path), key)
+        added.append(rel)
+    return added, restored
+
+
+def restore_sources(
+    session: Session, store: ObjectStore, project: Project, folder: Path
+) -> list[str]:
+    """Write back source files the storage lost, from the folder; nothing new is added (server
+    start: the database is the truth, the image is only a seed)."""
+    return _push_sources(session, store, project, folder, add=False)[1]
+
+
 def push(
     session: Session,
     store: ObjectStore,
@@ -237,21 +284,7 @@ def push(
         prices.read_text("utf-8") if prices.is_file() else None,
     )
     result = PushResult(project, version.version, new)
-    src = folder / SOURCE_DIR
-    for path in sorted(p for p in src.rglob("*") if p.is_file()) if src.is_dir() else []:
-        if any(part.startswith(".") for part in path.relative_to(src).parts):
-            continue
-        data = path.read_bytes()
-        digest = repo.sha256(data)
-        if session.scalar(
-            select(Source.id).where(Source.project_id == project.id, Source.sha256 == digest)
-        ):
-            continue
-        rel = path.relative_to(src).as_posix()
-        key = source_key(project.id, digest, path.name)
-        store.put(key, data)
-        repo.add_source(session, project.id, rel, data, _source_kind(path), key)
-        result.sources.append(rel)
+    result.sources, result.restored = _push_sources(session, store, project, folder)
     session.flush()
     if build and (new or ps.latest_build(session, project) is None):
         result.build = ps.build(session, store, project, version)

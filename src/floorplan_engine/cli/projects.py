@@ -59,6 +59,8 @@ def _push_one(db: Session, folder: Path, studio: Studio | None, build: bool) -> 
         else f"без изменений (версия {result.version})"
     )
     extra = f", исходников +{len(result.sources)}" if result.sources else ""
+    if result.restored:
+        extra += f", восстановлено файлов исходников: {len(result.restored)}"
     built = f", сборка: {result.build.status}" if result.build is not None else ""
     typer.echo(f"{folder.name}: {what}{extra}{built}")
 
@@ -170,6 +172,7 @@ def project_import(
     from floorplan_engine.service import sync
     from floorplan_engine.service.api.viewer import project_folders
     from floorplan_engine.service.db import access as acc
+    from floorplan_engine.service.objects import store_from_env
 
     with database() as db:
         studio = sync.ensure_owner(db, owner) if create_owner else _owner_studio(db, owner)
@@ -183,8 +186,12 @@ def project_import(
         for folder in project_folders(root):
             if only_new and sync.take_blank(db, folder.name, studio) is None:
                 db.commit()
-                if acc.project_by_slug(db, folder.name, studio) is not None:
-                    typer.echo(f"{folder.name}: уже в базе — пропущен")
+                existing = acc.project_by_slug(db, folder.name, studio)
+                if existing is not None:
+                    restored = sync.restore_sources(db, store_from_env(), existing, folder)
+                    db.commit()
+                    note = f", восстановлено файлов исходников: {len(restored)}" if restored else ""
+                    typer.echo(f"{folder.name}: уже в базе — пропущен{note}")
                     continue
             _push_one(db, folder, studio, build)
 

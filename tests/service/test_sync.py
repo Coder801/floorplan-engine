@@ -154,6 +154,41 @@ def test_ensure_owner_creates_user_and_firm_once(db: Session) -> None:
     assert by_phone.id != studio.id
 
 
+def test_push_restores_a_source_file_storage_lost(db: Session, tmp_path: Path) -> None:
+    """The row stayed in the database, the file is gone from storage (a deploy without a volume):
+    push writes it back under the same key instead of skipping it by hash."""
+    store = LocalObjectStore(tmp_path / "store")
+    folder = _folder(tmp_path)
+    first = sync.push(db, store, folder, _studio(db), build=False)
+    key = next(iter(first.project.sources)).object_key
+    (tmp_path / "store" / key).unlink()
+    again = sync.push(db, store, folder, build=False)
+    assert (again.sources, again.restored) == ([], ["План.pdf"])
+    assert store.get(key) == b"%PDF-1"
+    assert sync.push(db, store, folder, build=False).restored == []
+
+
+def test_import_only_new_restores_lost_source_files(
+    pg: Engine, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Server start skips a project already in the database, but writes back the source files
+    storage lost, from the image; a new file in the image is not added."""
+    root = tmp_path / "seed"
+    _seed(root, tmp_path, monkeypatch)
+    (root / "kv" / "source").mkdir()
+    (root / "kv" / "source" / "План.pdf").write_bytes(b"%PDF-1")
+    runner = CliRunner()
+    assert runner.invoke(app, _import_args(root, "--no-build")).exit_code == 0
+    lost = list((tmp_path / "store").rglob("План.pdf"))
+    assert len(lost) == 1
+    lost[0].unlink()
+    (root / "kv" / "source" / "new.pdf").write_bytes(b"%PDF-2")
+    again = runner.invoke(app, _import_args(root, "--no-build"))
+    assert "kv: уже в базе — пропущен, восстановлено файлов исходников: 1" in again.output
+    assert lost[0].read_bytes() == b"%PDF-1"
+    assert not list((tmp_path / "store").rglob("new.pdf"))
+
+
 def test_import_only_new_keeps_the_database(
     pg: Engine, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
