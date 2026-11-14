@@ -48,7 +48,7 @@ points:
   - { id: cabinet_downlight_3, room: cabinet, ceiling: [649, 729], type: downlight, note: "гр.5", group: QF3 }  # А-32: 600 | 1300 | 1395; 730 від верху і низу  # нова ред. А-35: 650 | 1300 | 1345
   - { id: cabinet_downlight_4, room: cabinet, ceiling: [1949, 729], type: downlight, note: "гр.5", group: QF3 }  # А-32: 600 | 1300 | 1395; 730 від верху і низу  # нова ред. А-35: 650 | 1300 | 1345
   # --- Лоджія
-  - { id: loggia_outlet_1, room: loggia, wall: w2, offset: 1195, type: outlet, height: 1500, note: "терморегулятор, тепла підлога, зона 2,53 м²", group: QF24 }  # А-29: H=1500; там же вимикач 7; потужність — типова, q10
+  - { id: loggia_outlet_1, room: loggia, wall: w2, offset: 1195, type: thermostat, height: 1500, note: "терморегулятор, тепла підлога, зона 2,53 м²", group: QF24 }  # А-29: H=1500; там же вимикач 7; потужність — типова, q10
   - { id: loggia_socket_1, room: loggia, wall: w1, offset: 249, type: socket, height: 880, count: 2, note: "в торці шафи", group: QF6 }  # А-34: 250 від нижнього кута, H=900, в рамці з вимикачем  # нова ред. А-36, А-37: H=880
   - { id: loggia_switch_1, room: loggia, wall: w1, offset: 249, type: switch, height: 880, note: "8: підсвітка полиць", controls: [loggia_led_output_1], group: QF5 }  # А-33: вимикач 8 (гр.8)  # нова ред. А-36, А-37: H=880
   - { id: loggia_pass_switch_1, room: loggia, wall: w1, offset: 249, type: pass_switch, height: 880, note: "5: стеля кімнати (перехресний)", controls: [cabinet_downlight_1, cabinet_downlight_2, cabinet_downlight_3, cabinet_downlight_4], group: QF3 }  # А-33: перехресний 5  # нова ред. А-36, А-37: H=880
@@ -110,9 +110,9 @@ points:
   - { id: hall_downlight_10, room: hall, ceiling: [1981, 3070], type: downlight, note: "гр.2, кухня", group: QF11 }  # А-32: 750 від правої стіни; 960 | 800 | 800 | 800 | 800; ряд 800 | 800  # нова ред. А-35: 1010 | 800 | 800 | 800 | 750
   - { id: hall_pendant_1, room: hall, ceiling: [2255, 5230], type: pendant, note: "підвіс над столом (С-06), гр.3", group: QF11 }  # нова ред. А-35: 450 від стіни кухні, 1250 від вікна
   - { id: hall_pendant_2, room: hall, ceiling: [2605, 5230], type: pendant, note: "підвіс над столом (С-05), гр.3", group: QF11 }  # нова ред. А-35: ще 350
-  - { id: hall_outlet_5, room: hall, wall: w3, offset: 150, type: outlet, height: 1500, note: "терморегулятор, тепла підлога, кухня, зона 6,35 м²", group: QF25 }  # А-29: 150 від нижнього кута стіни, H=1500
-  - { id: hall_outlet_6, room: hall, wall: w1, offset: 3130, type: outlet, height: 1500, note: "терморегулятор, тепла підлога, передпокій, зона 5,28 м²", group: QF26 }  # А-29: EQ | EQ між дверима Д-03 і Д-04, H=1500; там же вимикач 5
-  - { id: hall_outlet_7, room: hall, wall: w7, offset: 121, type: outlet, height: 1500, note: "терморегулятор, тепла підлога, санвузол, зона 1,69 м²", group: QF27 }  # А-29: біля дверей санвузла, EQ | EQ, H=1500; там же вимикачі 1, 2, 14+15
+  - { id: hall_outlet_5, room: hall, wall: w3, offset: 150, type: thermostat, height: 1500, note: "терморегулятор, тепла підлога, кухня, зона 6,35 м²", group: QF25 }  # А-29: 150 від нижнього кута стіни, H=1500
+  - { id: hall_outlet_6, room: hall, wall: w1, offset: 3130, type: thermostat, height: 1500, note: "терморегулятор, тепла підлога, передпокій, зона 5,28 м²", group: QF26 }  # А-29: EQ | EQ між дверима Д-03 і Д-04, H=1500; там же вимикач 5
+  - { id: hall_outlet_7, room: hall, wall: w7, offset: 121, type: thermostat, height: 1500, note: "терморегулятор, тепла підлога, санвузол, зона 1,69 м²", group: QF27 }  # А-29: біля дверей санвузла, EQ | EQ, H=1500; там же вимикачі 1, 2, 14+15
   # --- Санвузол
   - { id: bath_outlet_1, room: bath, wall: w2, offset: 215, type: outlet, height: 2400, note: "ел. вентилятор", group: QF20 }  # А-34: EQ | EQ по центру верху пілона, H=2400
   - { id: bath_socket_1, room: bath, wall: w4, offset: 409, type: socket, height: 650, note: "рушникосушка", group: QF22 }  # А-34: 400 від лівої стіни, в рамці з вимикачем, H=650

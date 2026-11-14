@@ -31,8 +31,8 @@ points:
   - { id: living_switch_5, room: living, wall: w6, offset: 200, type: switch, height: 900, note: "комора", group: QF5 }  # PDF, от откоса
   - { id: living_switch_6, room: living, wall: w4, offset: 860, type: switch, height: 900, note: "санвузол", group: QF3 }  # 140 от откоса (PDF), со стороны ручки: x = 1450 + 140
   # Тёплый пол (изменения заказчика 2026-10-28): регуляторы коридора и санвузла, место и высота — допущение (q7–q9)
-  - { id: living_floor_reg_1, room: living, wall: w5, offset: 240, type: switch, height: 900, note: "регулятор ТП коридору", group: QF15 }  # рядом с выключателем коридора
-  - { id: living_floor_reg_2, room: living, wall: w4, offset: 780, type: switch, height: 900, note: "регулятор ТП санвузла", group: QF15 }  # снаружи санвузла, рядом с его выключателем
+  - { id: living_floor_reg_1, room: living, wall: w5, offset: 240, type: thermostat, height: 900, note: "регулятор ТП коридору", group: QF15 }  # рядом с выключателем коридора
+  - { id: living_floor_reg_2, room: living, wall: w4, offset: 780, type: thermostat, height: 900, note: "регулятор ТП санвузла", group: QF15 }  # снаружи санвузла, рядом с его выключателем
   - { id: living_downlight_1, room: living, ceiling: [-1400, 3178], type: downlight, group: QF1 }  # текст 450/733
   - { id: living_downlight_2, room: living, ceiling: [-517, 3178], type: downlight, group: QF1 }  # текст 883/733
   - { id: living_downlight_3, room: living, ceiling: [1200, 2561], type: downlight, group: QF1 }  # текст: 1200 от перегородки / 1200+700 от правой; 1000/1561

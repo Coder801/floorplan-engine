@@ -14,7 +14,7 @@ points:
   - { id: bath_led_2, room: bath, wall: w5, offset: 120, type: led_output, height: 1790, group: QF6 }
   - { id: bath_hood, room: bath, wall: w6, offset: 1450, type: outlet, height: 2800, note: "витяжка", group: QF6 }  # 330 от правой, 380 от верхней стены
   - { id: bath_towel, room: bath, wall: w7, offset: 2150, type: outlet, height: 900, note: "рушникосушка", group: QF17 }
-  - { id: bath_floor_reg, room: bath, wall: w9, offset: 310, type: switch, height: 1500, note: "регулятор ТП", group: QF18 }
+  - { id: bath_floor_reg, room: bath, wall: w9, offset: 310, type: thermostat, height: 1500, note: "регулятор ТП", group: QF18 }
   - { id: bath_light_1, room: bath, ceiling: [1130, 2340], type: light, note: "люстра стельова", group: QF6 }
   - { id: bath_light_2, room: bath, ceiling: [960, 680], type: light, note: "люстра стельова", group: QF6 }
 
@@ -87,7 +87,7 @@ points:
   - { id: entry_pass_1, room: living, wall: w14, offset: 380, type: pass_switch, height: 1100, group: QF2 }
   - { id: entry_master, room: living, wall: w14, offset: 420, type: switch, height: 1300, note: "майстер-вимикач", group: QF2 }
   - { id: entry_intercom, room: living, wall: w14, offset: 420, type: outlet, height: 1600, note: "домофон" }
-  - { id: entry_floor_reg, room: living, wall: w14, offset: 470, type: switch, height: 1300, note: "регулятор ТП", group: QF18 }
+  - { id: entry_floor_reg, room: living, wall: w14, offset: 470, type: thermostat, height: 1300, note: "регулятор ТП", group: QF18 }
 
   # --- Точкові: коридор, кухня, вітальня, передпокій
   - { id: living_dl_1, room: living, ceiling: [680, 3130], type: downlight, group: QF1 }
