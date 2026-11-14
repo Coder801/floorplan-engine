@@ -885,3 +885,33 @@ def test_wide_chase_priced_from_narrow_in_the_same_material() -> None:
     named = PriceList.model_validate({"items": {"work.chase_wide.brick": 170}})
     quote = derived_quote(Prices(named, MockPriceService()), "work.chase_wide.brick")
     assert quote.price is not None and quote.price.price == 170
+
+
+def test_thermostat_is_one_row_without_a_price() -> None:
+    """A floor heating controller: its own item by point, never priced by the mock and out of the
+    total; no flush box, frame or fitting work is counted for it (its work comes later)."""
+    plan = make_plan(RECT, [DOOR])
+    _, contours = validate_plan(plan)
+    reg = [_pt("t1", "thermostat", 2000, 1500, "QF5"), _pt("t2", "thermostat", 2800, 1500, "QF5")]
+    elec = Electrical.model_validate({**ELEC, "points": [*ELEC["points"], *reg]})
+    wiring = box_wiring(plan, contours, elec)
+    assert wiring is not None
+    base_wiring, base = _wiring()
+    q, q0 = quantities(wiring, elec), quantities(base_wiring, base)
+    assert q["thermostat"] == 2 and "thermostat" not in q0
+    for key in ("socket_box", "work.socket_box", "work.mechanism", "frame.1", "switch2"):
+        assert q.get(key) == q0.get(key), key
+    prices = Prices(None, MockPriceService())
+    est = build_estimate(wiring, elec, prices, "ru")
+    row = next(ln for ln in est.lines if ln.key == "thermostat")
+    assert (row.name, row.unit, row.qty) == ("Регулятор тёплого пола", "шт", 2)
+    assert row.price is None and row.total is None and row.section == "material_finish"
+    assert est.unpriced == 1
+    assert est.total == pytest.approx(sum(ln.total for ln in est.lines if ln.total is not None))
+    assert build_estimate(wiring, elec, prices, "uk").lines[est.lines.index(row)].name == (
+        "Регулятор теплої підлоги"
+    )
+    # A studio price list may price it: then it is in the total like any other item
+    own = PriceList.model_validate({"items": {"thermostat": 1000}})
+    priced = build_estimate(wiring, elec, Prices(own, MockPriceService()), "ru")
+    assert priced.unpriced == 0 and priced.total == pytest.approx(est.total + 2000)

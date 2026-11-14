@@ -714,3 +714,26 @@ def test_busbars_three_phase_and_bars_by_length() -> None:
     assert busbars(three) == {1: 1, 3: 1, 4: 1}
     # 5 rails of 12 modules: 60 modules do not fit a 54-module bar
     assert busbars(_rails(*[_breakers(12) for _ in range(5)])) == {1: 2}
+
+
+def test_thermostat_line_is_an_appliance_and_heavy_for_the_backup_bus() -> None:
+    """Floor heating is an appliance line (not sockets) and, like an air conditioner, a heavy
+    one for the quick picks of the backup bus."""
+    points = [
+        _pt("t1", "thermostat", "QF1"),
+        _pt("t2", "thermostat", "QF1"),
+        _pt("s1", "socket", "QF2"),
+        _pt("s2", "socket", "QF2"),
+    ]
+    cables = {"QF1": "3x2.5", "QF2": "3x2.5"}
+    lines = line_classes(_plan(), _elec(points, cables))
+    assert {g: c.purpose for g, c in lines.items()} == {"QF1": "device", "QF2": "socket"}
+    elec = _elec(points, cables, panel={"backup": "plug", "backup_power": 3})
+    panel = build_panel(_plan(), elec)
+    assert panel is not None
+    heating = next(g for g in panel.groups if g.group == "QF1")
+    assert heating.power == 3000 and heating.kind.value == "sockets"
+    block = reserve_data(panel, elec)
+    assert block is not None
+    kinds = {g["id"]: g["kind"] for g in cast(list[dict[str, Any]], block["items"])}
+    assert kinds == {"QF1": "heavy", "QF2": "sockets"}

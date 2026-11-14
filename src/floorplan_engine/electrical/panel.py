@@ -743,13 +743,16 @@ def _both(key: str, **kw_: object) -> dict[str, str]:
     return {lang: text(key, lang, **kw_) for lang in ("ru", "uk")}
 
 
+_OUTPUT_TYPES = frozenset({PointType.OUTLET, PointType.THERMOSTAT})  # an appliance, not sockets
+
+
 def _purpose(group: PanelGroup, points: dict[str, ElectricalPoint]) -> LinePurpose:
     """Light, an appliance (heavy, only outputs, or one named point: "холодильник") or sockets."""
     if group.kind is Kind.LIGHT:
         return "light"
     powered = [points[ld.point] for ld in group.loads if ld.point in points]
     named = len(powered) == 1 and bool(powered[0].note)
-    outputs = bool(powered) and all(p.type is PointType.OUTLET for p in powered)
+    outputs = bool(powered) and all(p.type in _OUTPUT_TYPES for p in powered)
     return "device" if group.kind is Kind.HEAVY or named or outputs else "socket"
 
 

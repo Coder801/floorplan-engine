@@ -254,7 +254,7 @@ def validate_electrical(
 
 
 # Lighting and socket groups are per room (except in economy mode); dedicated appliance lines
-# and controllers (a switch with a note) do not count
+# and floor heating controllers do not count
 _ROOM_GROUP_TYPES = frozenset(
     {
         PointType.LIGHT,

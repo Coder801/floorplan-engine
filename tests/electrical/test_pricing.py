@@ -7,6 +7,7 @@ import pytest
 
 from floorplan_engine.electrical.estimate import LINES, PriceList, build_estimate
 from floorplan_engine.electrical.pricing import (
+    UNPRICED,
     MockPriceService,
     Prices,
     mock_covers_all_lines,
@@ -89,3 +90,10 @@ def test_estimate_marks_service_lines_and_notes() -> None:
     # Device fitting: its own note and the service mark together
     assert "Встановлення розеток" in (by_key["work.mechanism"].hint or "")
     assert "імітація" in (by_key["work.mechanism"].hint or "")
+
+
+def test_mock_leaves_the_thermostat_without_a_price() -> None:
+    """Prices are not invented: the floor heating controller is the one item the mock skips."""
+    assert {"thermostat"} == UNPRICED and set(LINES) >= UNPRICED
+    assert mock_price("thermostat") is None
+    assert MockPriceService().lookup("thermostat").price is None

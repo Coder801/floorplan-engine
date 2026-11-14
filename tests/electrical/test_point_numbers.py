@@ -3,7 +3,13 @@
 from __future__ import annotations
 
 from floorplan_engine.drawing.schedules import points_table
-from floorplan_engine.electrical.point_numbers import number_points, point_rows, ranges
+from floorplan_engine.electrical.point_numbers import (
+    block_name,
+    number_points,
+    point_name,
+    point_rows,
+    ranges,
+)
 from floorplan_engine.model.schema import Electrical
 from floorplan_engine.validation.issues import parse_model
 from tests.conftest import make_plan
@@ -77,3 +83,19 @@ def test_same_points_share_a_row() -> None:
     assert switch.name.endswith(": коридор") and switch.numbers == "2"
     table = points_table(plan, _elec())
     assert table is not None and len(table.rows) == len(rows) == 3
+
+
+def test_thermostat_is_named_in_the_points_table() -> None:
+    elec, _ = parse_model(
+        Electrical,
+        {
+            "points": [
+                {"id": "t1", "type": "thermostat", "room": "r", "wall": "w1", "offset": 500,
+                 "height": 1500, "note": "санузел"}
+            ]
+        },
+        "e.yaml",
+    )  # fmt: skip
+    assert elec is not None
+    assert point_name(elec.points[0], "ru") == "Регулятор тёплого пола: санузел"
+    assert block_name(elec.points[0], "uk") == "Регулятор теплої підлоги"

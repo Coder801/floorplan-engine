@@ -42,6 +42,7 @@ TEXTS: dict[str, dict[Language, str]] = {
     "symbol_tv": {"ru": "Розетка TV", "uk": "Розетка TV"},
     "symbol_led_output": {"ru": "Вывод под подсветку", "uk": "Вивід для підсвітки"},
     "symbol_outlet": {"ru": "Вывод кабеля к технике", "uk": "Вивід кабелю до техніки"},
+    "symbol_thermostat": {"ru": "Регулятор тёплого пола", "uk": "Регулятор теплої підлоги"},
     "legend_led_strip": {"ru": "LED-подсветка", "uk": "LED-підсвітка"},
     "legend_wires": {"ru": "Цвета линий", "uk": "Кольори ліній"},
     "wires_light": {"ru": "Освещение", "uk": "Освітлення"},

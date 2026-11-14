@@ -182,3 +182,15 @@ def test_groups_show_the_phase_on_three_phases() -> None:
     phases = {g.group: g.phase for g in panel.groups}
     row = next(r for r in table.rows if isinstance(r[0], Mark) and r[0].text == "QF2")
     assert row[3] == phases["QF2"] and table.total is not None and table.total[3] == ""
+
+
+def test_floor_heating_purpose_from_thermostats() -> None:
+    pts = [
+        ElectricalPoint.model_validate(_pt("t1", "thermostat", "QF5")),
+        ElectricalPoint.model_validate(_pt("t2", "thermostat", "QF5")),
+    ]
+    assert composed_purpose(pts, {"t1": "Коридор", "t2": "Санузел"}, "ru") == (
+        "Тёплый пол — Коридор, Санузел"
+    )
+    one = [ElectricalPoint.model_validate(_pt("t1", "thermostat", "QF5", note="зона 2,5 м²"))]
+    assert composed_purpose(one, {"t1": "Лоджія"}, "uk") == "Тепла підлога: зона 2,5 м² — Лоджія"

@@ -5,11 +5,15 @@ from __future__ import annotations
 import pytest
 
 from floorplan_engine.electrical.loads import (
+    FLOOR_HEATING_W,
     POST_SHARE,
     SOCKET_POST_W,
+    Kind,
     Load,
+    assumed_mark,
     backup_peak,
     backup_share,
+    group_kind,
     point_load,
 )
 from floorplan_engine.model.schema import Electrical, ElectricalPoint
@@ -86,3 +90,18 @@ def test_lights_with_a_fan_stay_a_lighting_group() -> None:
     assert assumed_mark(socket, "QF1", socket.points) == "3x2.5"
     big = elec({"id": "o1", "type": "outlet", "power": 1500})
     assert group_kind(big, "QF1") is Kind.SOCKETS
+
+
+def test_thermostat_is_a_floor_heating_load_and_a_power_cable() -> None:
+    """The type names the load: no note needed, unlike a switch or an output with "ТП"."""
+    bare = point_load(_point("thermostat"), "Коридор", "ru")
+    noted = point_load(_point("thermostat", "санузел"), "Коридор", "ru")
+    assert bare is not None and (bare.power, bare.assumed) == (FLOOR_HEATING_W, True)
+    assert bare.title == "Регулятор тёплого пола"
+    assert noted is not None and (noted.power, noted.title) == (FLOOR_HEATING_W, "Санузел")
+    old = point_load(_point("switch", "регулятор ТП"), "Коридор", "ru")
+    assert old is not None and old.power == FLOOR_HEATING_W  # the same load as before the type
+    point = _point("thermostat").model_copy(update={"group": "QF1"})
+    elec = Electrical.model_validate({"points": [point.model_dump()]})
+    assert assumed_mark(elec, "QF1", elec.points) == "3x2.5"  # not a lighting cable
+    assert group_kind(elec, "QF1") is Kind.SOCKETS

@@ -3,7 +3,7 @@ price service.
 
 The price service is external (decision 2026-11-01): a price analysis API, a microservice or a
 database fed from supplier sites. It does not exist yet; its place is taken by the mock
-`MockPriceService` with typical Kyiv prices, so the estimate always has prices and
+`MockPriceService` with typical Kyiv prices, so the estimate has prices (all but UNPRICED) and
 `prices.yaml` holds studio overrides on top (an own price list key beats any service price).
 Rows priced by the service are marked in the estimate (`Line.service`, hint "from the price
 service (mock for now)") so nobody takes them for market prices.
@@ -93,6 +93,11 @@ MOCK_PRICES: dict[str, float] = {
     "work.insulation_test": 150,
     "work.protection_test": 150,  # as the insulation test: per power group, with a report
 }
+# Items the mock deliberately has no price for (decision 2026-11-14): a floor heating controller
+# is other work than a switch or an output (a chase for the cable and the sensor tube, laying in
+# the screed), its items and prices come with the floor heating section. Until then the row
+# stays in the estimate with its quantity, "no price", out of the total
+UNPRICED = frozenset({"thermostat"})
 # Narrow chase by wall material, UAH per metre (Kyiv 2026-11); a wide one is × 1.5 (DERIVED_PRICES)
 CHASE_PRICES = {"concrete": 200.0, "claydite": 150.0, "brick": 120.0, "aerated": 90.0}
 CABLE_PER_MM2 = 10.0  # UAH per metre per mm² of total conductor section: 3×1.5 → 45, 3×2.5 → 75
@@ -228,6 +233,6 @@ def price_notes(
 
 
 def mock_covers_all_lines() -> list[str]:
-    """Item keys the mock has no price for (test: must be empty)."""
+    """Item keys the mock has no price for, except UNPRICED (test: must be empty)."""
     sample = {"cable": "cable.3x1.5", "frame": "frame.2", "conduit": "conduit.20"}
-    return [k for k in LINES if mock_price(sample.get(k, k)) is None]
+    return [k for k in LINES if k not in UNPRICED and mock_price(sample.get(k, k)) is None]

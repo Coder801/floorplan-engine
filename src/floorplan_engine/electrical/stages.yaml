@@ -57,7 +57,8 @@ stages:
   - key: devices
     title: { ru: "Механизмы и светильники", uk: "Механізми і світильники" }
     lines: [work.mechanism, work.led_psu, work.led_psu_din, socket, switch1, switch2, pass_switch,
-            data, tv, frame, light, downlight, pendant, sconce, led_output, outlet, led_strip,
+            data, tv, frame, light, downlight, pendant, sconce, led_output, outlet, thermostat,
+            led_strip,
             led_psu, led_psu_din]
     photo: optional
     after: [assembly]

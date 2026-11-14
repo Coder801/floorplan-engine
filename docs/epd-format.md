@@ -403,6 +403,10 @@ pages/02.json
   `x` — середина рамки, без ключей точка одна;
 - `boxes` — `id`, `key` (`box:<id>`), `label`, `x`, `y`, `size`, `group`, `color`, `from`;
 - `back` — выводы соседа на обратной стороне: `id`, `n`, `type`, `x`, `y`, `posts`, `slot`, `block`;
+- `type` точки — значение из модели (`socket`, `switch`, `pass_switch`, `light`, `downlight`,
+  `pendant`, `sconce`, `data`, `tv`, `led_output`, `outlet`, с 2026-11-14 — `thermostat`,
+  регулятор тёплого пола). Новое значение `version` не меняет: незнакомый тип рисуйте как
+  обычную точку;
 - `water` (необязательный) — водорозетки и выпуски сантехники: `fixture`, `key`
   (`fixture:<id>`), `name` (прибор словами на языке проекта: «Умивальник»), `n` (номер прибора на листе «Сантехника»), `kind` (`cold` | `hot` |
   `sewer`), `x`, `y` (ось от пола), `d`, `assumed` (высота типовая);

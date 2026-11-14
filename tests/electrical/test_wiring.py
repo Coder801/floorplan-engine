@@ -20,6 +20,7 @@ from floorplan_engine.drawing.wiring import (
     lanes,
     offset_path,
 )
+from floorplan_engine.electrical.anchors import SYMBOL_DEPTH
 from floorplan_engine.electrical.boxes import BOX_CLEARANCE
 from floorplan_engine.electrical.bundles import bundles, segments
 from floorplan_engine.electrical.chases import wall_chases, with_conduit
@@ -44,6 +45,7 @@ from floorplan_engine.electrical.wiring_model import (
     line_starts,
 )
 from floorplan_engine.model.geometry import Vec
+from floorplan_engine.model.scale import sheet
 from floorplan_engine.model.schema import Electrical, ElectricalPoint, Plan
 from floorplan_engine.validation.plan import validate_plan
 from tests.conftest import make_plan
@@ -1314,3 +1316,49 @@ def test_stacked_point_is_wired_at_the_wall_not_at_its_symbol() -> None:
         return point
 
     assert (end(stacked) - end(lone)).length() == pytest.approx(0.0, abs=1.0)
+
+
+def test_thermostats_get_lines_of_their_own_as_before_the_type() -> None:
+    """Floor heating controllers go from the panel one by one, without boxes, with or without
+    `direct: true`; the cable is the same as for the switch and the output they used to be."""
+
+    def model(kind: str, direct: bool | None) -> Electrical:
+        cable: dict[str, Any] = {"id": "c5", "from": "board", "to": ["t1", "t2"], "group": "QF5",
+                                 "cable": "3x2.5"}  # fmt: skip
+        if direct is not None:
+            cable["direct"] = direct
+        note = {"note": "регулятор ТП"}
+        return Electrical.model_validate(
+            {
+                "points": [
+                    {**_wall("t1", kind, "w3", 500, 1500, "QF5"), **note},
+                    {**_wall("t2", kind, "w4", 2500, 1500, "QF5"), **note},
+                ],
+                "board": {"room": "r", "wall": "w1", "offset": 500, "height": 1700},
+                "cables": [cable],
+            }
+        )
+
+    plan = make_plan(RECT, [DOOR])
+
+    def lines(elec: Electrical) -> list[tuple[str, str, str, float]]:
+        w = _wiring(plan, elec)
+        assert not w.boxes
+        return [(r.source, r.target, r.mark, round(r.length_mm, 1)) for r in w.runs]
+
+    new = lines(model("thermostat", True))
+    assert [(s, t, m) for s, t, m, _ in new] == [("board", "t1", "3x2.5"), ("board", "t2", "3x2.5")]
+    # The same lines as for the switch and the output they used to be; a route ends at the symbol
+    # tip (anchors.SYMBOL_DEPTH), so the length moves by the difference in symbol depth only
+    for kind in ("switch", "outlet"):
+        old = lines(model(kind, True))
+        assert [x[:3] for x in old] == [x[:3] for x in new]
+        gap = sheet(abs(SYMBOL_DEPTH["thermostat"] - SYMBOL_DEPTH[kind]))
+        assert all(abs(a[3] - b[3]) <= gap + 0.1 for a, b in zip(old, new, strict=True))
+    assert new == lines(model("thermostat", None))  # the type alone is enough
+    # Without a cable in the model: still direct, and a power cable
+    bare = model("thermostat", None).model_copy(update={"cables": []})
+    assert [(s, t, m) for s, t, m, _ in lines(bare)] == [(s, t, m) for s, t, m, _ in new]
+    # direct: false in the model wins, as for any group
+    boxed = _wiring(plan, model("thermostat", False))
+    assert [b.group for b in boxed.boxes] == ["QF5"]

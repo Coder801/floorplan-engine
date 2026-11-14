@@ -25,7 +25,9 @@ separate product specification: the estimate without prices is the bill of quant
   key refinement (breaker.C16);
 - comb busbars over the group rails instead of wire jumpers (panel.busbars): 1 m bars by
   poles (busbar.1P), only with a panel set;
-- lights, lighting outputs and appliance outputs by point, LED strip in metres;
+- lights, lighting outputs and appliance outputs by point, LED strip in metres; a floor
+  heating controller (`thermostat`) is one item by point with no price yet (pricing.UNPRICED)
+  and no flush box, frame or fitting work counted for it;
 - a LED power supply per LED output and its fitting (decision 2026-11-11): at the strip, or on
   a DIN rail in the panel (Electrical.led_supply), with its own prices; in the panel the
   supplies stand in a box of their own (decision 2026-11-13): by power as its devices, its
@@ -218,6 +220,8 @@ LINES: dict[str, tuple[Section, str, str, str]] = {
     "sconce": ("material_finish", "шт", "", ""),
     "led_output": ("material_finish", "шт", "", ""),
     "outlet": ("material_finish", "шт", "", ""),
+    # No price anywhere yet (UNPRICED): the work behind it is set with the floor heating section
+    "thermostat": ("material_finish", "шт", "", ""),
     "led_strip": ("material_finish", "м", "", ""),
     "led_psu": ("material_finish", "шт", "Блок питания LED 12 В", "Блок живлення LED 12 В"),
     "led_psu_din": (
@@ -371,6 +375,7 @@ FIXTURES = {
     "sconce": "symbol_sconce",
     "led_output": "symbol_led_output",
     "outlet": "symbol_outlet",
+    "thermostat": "symbol_thermostat",
     "led_strip": "legend_led_strip",
 }
 TEXT: dict[str, dict[str, str]] = {

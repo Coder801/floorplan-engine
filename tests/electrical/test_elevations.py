@@ -440,3 +440,36 @@ def test_turn_radii_bundle_inner_first_by_turn_side() -> None:
     left = [CableView(c.run, c.group, c.x, c.y0, c.y1, 0.0) for c in turning]
     radius = {c.run: c.radius for c in turn_radii(left, sizes)}
     assert radius == {"a": r_inner, "b": r_next, "c": None}
+
+
+def test_thermostat_on_an_elevation_is_a_square_with_a_dial() -> None:
+    """On a wall elevation a floor heating controller is neither a socket (circle) nor a switch
+    (plain square): a square with a round dial inside."""
+    from ezdxf.entities.lwpolyline import LWPolyline
+    from ezdxf.filemanagement import new as ezdxf_new
+
+    from floorplan_engine.model.geometry import Vec
+
+    plan = make_plan(WALLS)
+    _, contours = validate_plan(plan)
+    wall = {"room": "r", "wall": "w2", "height": 1500, "group": "QF1"}
+
+    def shapes(kind: str) -> tuple[int, int]:
+        elec = _elec([{"id": "p1", "type": kind, "offset": 1000, **wall}])
+        (e,) = [x for x in wall_elevations(plan, contours, elec, None) if x.wall == "w2"]
+        doc = ezdxf_new()
+        psp = doc.paperspace()
+        elevation_panel(e, 50, "ru").draw(psp, Vec(0, 0))
+        closed = [
+            p
+            for p in psp.query("LWPOLYLINE")
+            if isinstance(p, LWPolyline) and p.closed and len(p) == 4
+        ]
+        return len(closed), len(psp.query("CIRCLE"))
+
+    switch, socket, thermostat = shapes("switch"), shapes("socket"), shapes("thermostat")
+    assert thermostat[0] == switch[0] and thermostat[1] == switch[1] + 1
+    assert thermostat[0] > socket[0]
+    data = wall_elevations(plan, contours, _elec([{"id": "p1", "type": "thermostat",
+                                                   "offset": 1000, **wall}]), None)  # fmt: skip
+    assert [p.type.value for e in data for p in e.points] == ["thermostat"]

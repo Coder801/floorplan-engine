@@ -31,6 +31,9 @@ LED_OUTPUT_R = 0.6
 LED_OUTPUT_DEPTH = WALL_GAP + 2.5
 OUTLET_R = 0.8
 OUTLET_DEPTH = WALL_GAP + 2.5
+THERMOSTAT_SIDE = 4.4  # floor heating controller: a square frame with "t°" inside
+THERMOSTAT_TEXT = 2.2  # its text height
+THERMOSTAT_DEPTH = WALL_GAP + THERMOSTAT_SIDE
 BOARD_DEPTH = 3.0
 
 # Symbol key: the point type, "switch2" for a two-key switch, "board" for the panel, "media" for
@@ -49,6 +52,7 @@ SYMBOL_DEPTH: dict[str, float] = {
     PointType.TV: WALL_GAP + DATA_LEN,
     PointType.LED_OUTPUT: LED_OUTPUT_DEPTH,
     PointType.OUTLET: OUTLET_DEPTH,
+    PointType.THERMOSTAT: THERMOSTAT_DEPTH,
     "board": BOARD_DEPTH,
     "media": BOARD_DEPTH,
 }

@@ -36,6 +36,7 @@ TEXT: dict[str, dict[str, str]] = {
     "socket": {"ru": "Розетка", "uk": "Розетка"},
     "outlets": {"ru": "Выводы", "uk": "Виводи"},
     "outlet": {"ru": "Вывод", "uk": "Вивід"},
+    "floor_heating": {"ru": "Тёплый пол", "uk": "Тепла підлога"},
     "low": {"ru": "Связь", "uk": "Зв'язок"},
     "switches": {"ru": "Выключатели", "uk": "Вимикачі"},
     "note": {
@@ -82,13 +83,18 @@ def composed_purpose(
 ) -> str:
     """Purpose from the group's points: point kinds (switches count as lighting) and places
     (point id → zone or room name, model/zones.py; a point not in it takes its room id).
-    A single socket or output with a note uses the note: "Розетка: духовка". The place is where
+    A single socket, output or floor heating controller with a note uses the note: "Розетка:
+    духовка". The place is where
     the consumers are: a switch by the door of another room does not add it (the bathroom
     light switched from the hall is "Освітлення — Санвузол")."""
     types = {p.type for p in points}
     fed = [p for p in points if p.type not in SWITCHES] or points
     where = ", ".join(dict.fromkeys(places.get(p.id, p.room) for p in fed))
-    single = {PointType.SOCKET: "socket", PointType.OUTLET: "outlet"}
+    single = {
+        PointType.SOCKET: "socket",
+        PointType.OUTLET: "outlet",
+        PointType.THERMOSTAT: "floor_heating",
+    }
     if len(points) == 1 and points[0].note and points[0].type in single:
         what = f"{text(single[points[0].type], language)}: {points[0].note}"
         return f"{what} — {where}"
@@ -100,6 +106,8 @@ def composed_purpose(
     outlets = [p for p in points if p.type is PointType.OUTLET]
     if outlets:
         kinds.append(text("outlet" if len(outlets) == 1 else "outlets", language))
+    if PointType.THERMOSTAT in types:
+        kinds.append(text("floor_heating", language))
     if types & LOW:
         kinds.append(text("low", language))
     if not kinds and types & SWITCHES:

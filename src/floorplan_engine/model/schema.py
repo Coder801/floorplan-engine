@@ -217,6 +217,8 @@ class PointType(StrEnum):
     TV = "tv"  # TV socket
     LED_OUTPUT = "led_output"  # lighting output (LED only)
     OUTLET = "outlet"  # power cable output without a plug: the hob (other appliances are sockets)
+    # Floor heating controller on a wall: a line of its own, not a switch and not an output
+    THERMOSTAT = "thermostat"
 
 
 # Lights: what switches turn on ("Lighting" sheet)

@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 from ezdxf import bbox
 from ezdxf.document import Drawing
+from ezdxf.entities.lwpolyline import LWPolyline
 from ezdxf.filemanagement import new as ezdxf_new
 from ezdxf.filemanagement import readfile
 
@@ -15,6 +16,9 @@ from floorplan_engine.drawing.electrical import (
     wiring_legend_rows,
 )
 from floorplan_engine.drawing.ids import object_id
+from floorplan_engine.drawing.lighting import lighting_model
+from floorplan_engine.drawing.symbols import BLOCK_THERMOSTAT, SYMBOLS
+from floorplan_engine.electrical.anchors import THERMOSTAT_SIDE, WALL_GAP
 from floorplan_engine.electrical.colors import FAMILIES, rgb
 from floorplan_engine.model.geometry import Vec
 from floorplan_engine.model.scale import SCALES
@@ -389,3 +393,37 @@ def test_all_sheets_share_one_format(tmp_path: Path) -> None:
     names = [lay.name for lay in sheet_layouts(doc)]
     assert len(sizes) == 1 and sum("Развёртки" in n for n in names) >= 1
     assert names[:5] == [n for n in names if "Развёртки" not in n][:5]
+
+
+def test_thermostat_has_its_own_symbol_on_the_power_sheet(tmp_path: Path) -> None:
+    """A floor heating controller: a square frame with "t°", on the socket layer (the power
+    view), in the legend, and not on the lighting sheet."""
+    plan = make_plan([{"length": 3000}, {"length": 4000}, {"length": 3000}, {"length": 4000}])
+    _, contours = validate_plan(plan)
+    wall = {"room": "r", "wall": "w2", "height": 1500, "group": "QF1"}
+    elec, _ = _rect_plan_elec(
+        {
+            "points": [
+                {"id": "t1", "type": "thermostat", "offset": 1000, **wall},
+                {"id": "k1", "type": "switch", "offset": 2000, **wall, "group": "QF2"},
+                {"id": "l1", "room": "r", "type": "light", "ceiling": [1500, 2000], "group": "QF2"},
+            ]
+        }
+    )
+    assert not validate_electrical(elec, plan, contours)
+    assert [r.tag for r in legend_rows(elec)[1:]] == ["switch", "light", "thermostat"]
+    assert legend_rows(elec)[3].text == "Регулятор тёплого пола"
+    assert legend_rows(elec, "uk")[3].text == "Регулятор теплої підлоги"
+    assert [p.id for p in lighting_model(elec).points] == ["k1", "l1"]
+    doc = _save(build_project_document(plan, contours, elec), tmp_path / "project.dxf")
+    (ref,) = [i for i in doc.modelspace().query("INSERT") if i.dxf.name == BLOCK_THERMOSTAT]
+    assert ref.dxf.layer == "E-SOCKET" and object_id(ref) == ("point", "t1")
+    block = doc.blocks[BLOCK_THERMOSTAT]
+    assert [t.dxf.text for t in block.query("TEXT")] == ["t°"]
+    (frame,) = block.query("LWPOLYLINE")
+    assert isinstance(frame, LWPolyline) and frame.closed and len(frame) == 4
+    # Unlike a socket (arc), a switch (circle with an arm) and an output (stub with a circle)
+    assert not block.query("ARC CIRCLE LINE")
+    assert SYMBOLS["thermostat"].depth == pytest.approx(WALL_GAP + THERMOSTAT_SIDE)
+    legends = [i for lay in sheet_layouts(doc) for i in lay.query("INSERT")]
+    assert ("legend", "thermostat") in {object_id(i) for i in legends}

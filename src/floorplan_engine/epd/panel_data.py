@@ -253,7 +253,9 @@ def _reserve_kind(lines: Sequence[PanelGroup], model: Electrical) -> str:
     points = [by_id[ld.point] for ld in loads if ld.point in by_id]
     if any(p.type in LIGHT for p in points):
         return "light"
-    outlets = bool(points) and all(p.type is PointType.OUTLET for p in points)
+    outlets = bool(points) and all(
+        p.type in (PointType.OUTLET, PointType.THERMOSTAT) for p in points
+    )
     if any(g.kind is Kind.HEAVY for g in lines) or (
         outlets and sum(ld.power for ld in loads) >= HEAVY_OUTLETS_W
     ):

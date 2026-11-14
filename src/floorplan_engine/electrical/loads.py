@@ -41,6 +41,7 @@ HEAVY_W = 2000.0  # from this power a load is heavy and gets its own line
 THREE_PHASE_W = 5000.0  # from this power one appliance goes on three phases, if the flat has them
 SOCKET_POST_W = 100.0  # design power of a socket post without a note (assumption)
 OUTLET_W = 1000.0  # appliance output without a note (assumption)
+FLOOR_HEATING_W = 1500.0  # floor heating zone behind its controller (assumption)
 # Cross-section, mm² → (recommended, maximum) breaker, A: copper, concealed wiring
 CABLE_LIMITS: dict[float, tuple[int, int]] = {
     1.5: (10, 16),
@@ -71,7 +72,7 @@ NOTE_W: tuple[tuple[re.Pattern[str], float], ...] = tuple(
         (r"посудом", 2200.0),
         (r"чайник", 2200.0),
         (r"кондиц|кондиціон", 1500.0),
-        (r"\bтп\b|тепл\w* підлог|тепл\w* пол", 1500.0),
+        (r"\bтп\b|тепл\w* підлог|тепл\w* пол", FLOOR_HEATING_W),
         (r"мікрохвил|микроволн|\bсвч\b", 1200.0),
         (r"рушникосуш|полотенцесуш", 300.0),
         (r"холодил", 300.0),
@@ -256,6 +257,8 @@ def point_load(p: ElectricalPoint, room: str, language: Language) -> Load | None
     if p.type is PointType.OUTLET:
         title = text("outlet_generic", language) if not p.note else title
         return Load(p.id, room, title, p.count, OUTLET_W, True)
+    if p.type is PointType.THERMOSTAT:  # whatever the note says: the type names the load
+        return Load(p.id, room, title, p.count, FLOOR_HEATING_W * p.count, True)
     return None
 
 
@@ -300,6 +303,9 @@ def heavy_cable(elec: Electrical, group: str, points: Sequence[ElectricalPoint])
 # Cable type for a group without one in the model (assumption): the wiring lays it and the panel
 # table shows it with "*"
 POWER_TYPES = frozenset({PointType.SOCKET, PointType.OUTLET})
+# A power cable by default: sockets, outputs and floor heating (its controller is no socket: it
+# never goes in a daisy chain, so it is not in POWER_TYPES)
+_POWER_MARK_TYPES = POWER_TYPES | {PointType.THERMOSTAT}
 LOW_TYPES = frozenset({PointType.DATA, PointType.TV})  # low-voltage
 DEFAULT_MARK = {"power": "3x2.5", "light": "3x1.5", "data": "UTP cat.6", "tv": "RG-6"}
 
@@ -308,7 +314,7 @@ def assumed_mark(elec: Electrical, group: str, points: Sequence[ElectricalPoint]
     """Cable type of a group by its points: low-voltage, light, sockets, or a heavy load."""
     if all(p.type in LOW_TYPES for p in points):
         return DEFAULT_MARK["tv" if all(p.type is PointType.TV for p in points) else "data"]
-    if not any(p.type in POWER_TYPES for p in points) or lighting_line(points):
+    if not any(p.type in _POWER_MARK_TYPES for p in points) or lighting_line(points):
         return DEFAULT_MARK["light"]
     return heavy_cable(elec, group, points) or DEFAULT_MARK["power"]
 

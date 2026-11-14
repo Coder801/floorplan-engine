@@ -25,7 +25,8 @@ Variant rules:
   (box_size, the feeds to the next boxes count), 190×140 only as a last resort;
 - direct lines run from the panel to each point without boxes: cross-section from
   HEAVY_SECTION mm² (hob, oven, boiler), a group made only of appliance outputs (air
-  conditioner, towel rail) and low-voltage; in the model, Cable.direct;
+  conditioner, towel rail) and floor heating controllers (`thermostat`), and low-voltage; in
+  the model, Cable.direct;
 - light in a chain without boxes (Electrical.light_wiring "chain", decision 2026-11-11, see
   _light_chains): panel → switch → its lights one after another; pass switches panel → first →
   second (PASS_MARK) → lights; a LIGHT_LOOP loop at each ceiling light for its future output.
@@ -170,6 +171,9 @@ END_ALLOWANCE = 200.0  # mm: cable tail at every connection except the panel
 RESERVE = 0.15  # margin on the total per cable type
 HEAVY_SECTION = 4.0  # mm²: from this cross-section a line goes from the panel without boxes
 SWITCH_TYPES = frozenset({PointType.SWITCH, PointType.PASS_SWITCH})
+# A group made only of these goes from the panel to each point without boxes: appliance outputs
+# and floor heating controllers
+DIRECT_TYPES = frozenset({PointType.OUTLET, PointType.THERMOSTAT})
 # Lighting in a room goes through a box (decision 2026-10-21), unless in a chain (light_wiring)
 LIGHT_TYPES = frozenset(
     {
@@ -234,7 +238,7 @@ def _direct(
     return (
         circuit == "low"
         or section(mark) >= HEAVY_SECTION
-        or all(p.type is PointType.OUTLET for p in points)
+        or all(p.type in DIRECT_TYPES for p in points)
     )
 
 

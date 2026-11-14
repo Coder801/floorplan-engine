@@ -48,6 +48,8 @@ from floorplan_engine.electrical.anchors import (
     SWITCH_ARM,
     SWITCH_R,
     SYMBOL_DEPTH,
+    THERMOSTAT_SIDE,
+    THERMOSTAT_TEXT,
     WALL_GAP,
 )
 from floorplan_engine.model.scale import sheet_scale
@@ -65,11 +67,13 @@ BLOCK_DATA = "E_DATA"
 BLOCK_TV = "E_TV"
 BLOCK_LED_OUTPUT = "E_LED_OUTPUT"
 BLOCK_OUTLET = "E_OUTLET"
+BLOCK_THERMOSTAT = "E_THERMOSTAT"
 BLOCK_BOARD = "E_BOARD"
 
 _BYBLOCK = {"layer": "0", "color": 0}
 
 TICK = 1.0
+THERMOSTAT_LETTERS = "t°"
 
 
 @dataclass(frozen=True)
@@ -95,6 +99,8 @@ SYMBOLS: dict[str, SymbolSpec] = {
         (PointType.TV, BLOCK_TV, E_DATA),
         (PointType.LED_OUTPUT, BLOCK_LED_OUTPUT, E_LED),
         (PointType.OUTLET, BLOCK_OUTLET, E_SOCKET),
+        # With the power points for now; a floor heating sheet of its own is the next step
+        (PointType.THERMOSTAT, BLOCK_THERMOSTAT, E_SOCKET),
         ("board", BLOCK_BOARD, E_BOARD),
         ("media", BLOCK_BOARD, E_DATA),  # low-voltage cabinet: the panel symbol, low layer
     )
@@ -112,6 +118,7 @@ LEGEND_ORDER: tuple[str, ...] = (
     PointType.SCONCE,
     PointType.LED_OUTPUT,
     PointType.OUTLET,
+    PointType.THERMOSTAT,
     PointType.DATA,
     PointType.TV,
     "board",
@@ -238,6 +245,18 @@ def _outlet(blk: BlockLayout) -> None:
     blk.add_circle((0.0, top + OUTLET_R), OUTLET_R, dxfattribs=_BYBLOCK)
 
 
+def _thermostat(blk: BlockLayout) -> None:
+    """Floor heating controller: a square frame at the wall with "t°" inside."""
+    half, top = THERMOSTAT_SIDE / 2, WALL_GAP + THERMOSTAT_SIDE
+    frame = [(-half, WALL_GAP), (half, WALL_GAP), (half, top), (-half, top)]
+    blk.add_lwpolyline(frame, close=True, dxfattribs=_BYBLOCK)
+    blk.add_text(
+        THERMOSTAT_LETTERS,
+        height=THERMOSTAT_TEXT,
+        dxfattribs={**_BYBLOCK, "style": TEXT_STYLE},
+    ).set_placement((0.0, WALL_GAP + half), align=TextEntityAlignment.MIDDLE_CENTER)
+
+
 def _board(blk: BlockLayout) -> None:
     """Unit 1×1 rectangle (scaled by the insert), the half towards the room is filled."""
     blk.add_lwpolyline([(-0.5, 0), (0.5, 0), (0.5, 1), (-0.5, 1)], close=True, dxfattribs=_BYBLOCK)
@@ -259,6 +278,7 @@ _BUILDERS: dict[str, Callable[[BlockLayout], None]] = {
     BLOCK_TV: _outlet_with_letter("TV"),
     BLOCK_LED_OUTPUT: _led_output,
     BLOCK_OUTLET: _outlet,
+    BLOCK_THERMOSTAT: _thermostat,
     BLOCK_BOARD: _board,
 }
 

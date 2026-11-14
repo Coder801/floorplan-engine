@@ -71,6 +71,7 @@ DASH, DASH_GAP = 0.8, 0.6  # dashed leaders from an outlet to the scales, sheet 
 
 SWITCHES = frozenset({PointType.SWITCH, PointType.PASS_SWITCH})
 LOW_TYPES = frozenset({PointType.DATA, PointType.TV})
+DIAL = 0.5  # floor heating controller: dial radius as a share of the symbol half-size
 
 Box = tuple[float, float, float, float]  # x0, y0, x1, y1 in sheet mm
 
@@ -339,6 +340,13 @@ def _draw(
         taken.append((c.x - half, c.y - half, c.x + half, c.y + half))
         _label(bx.label, c, half, taken, text, BOX, lead)
 
+    def circle(cx: float, cy: float, radius: float, lw: int, color: int) -> None:
+        psp.add_circle(
+            (cx, cy),
+            radius,
+            dxfattribs={"layer": E_ELEV.name, "lineweight": lw, "true_color": color},
+        )
+
     # Outlets on the far side of the wall are faint, below their own, without dimensions
     # (those are on the elevation of that side)
     r = max(34.0 / scale, MIN_SYMBOL)  # flush box Ø68
@@ -350,6 +358,9 @@ def _draw(
             cx = first + k * pitch
             if p.type in SWITCHES:
                 rect((cx - r, c.y - r, cx + r, c.y + r), LW_THIN, BACK)
+            elif p.type is PointType.THERMOSTAT:
+                rect((cx - r, c.y - r, cx + r, c.y + r), LW_THIN, BACK)
+                circle(cx, c.y, r * DIAL, LW_THIN, BACK)
             else:
                 psp.add_circle(
                     (cx, c.y),
@@ -371,6 +382,9 @@ def _draw(
             cx = first + k * pitch
             if p.type in SWITCHES:
                 rect((cx - r, c.y - r, cx + r, c.y + r), LW_WALL, color, 0xFFFFFF)
+            elif p.type is PointType.THERMOSTAT:  # a square face with a round dial
+                rect((cx - r, c.y - r, cx + r, c.y + r), LW_WALL, color, 0xFFFFFF)
+                circle(cx, c.y, r * DIAL, LW_THIN, color)
             else:
                 psp.add_circle(
                     (cx, c.y),
