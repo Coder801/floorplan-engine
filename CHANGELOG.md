@@ -1,3 +1,14 @@
+## v0.9.0 (2026-11-14)
+
+### Feat
+
+- **viewer**: thermostat sign, new theme and stable scrollbar gutter
+- **electrical**: add thermostat point type for floor heating
+
+### Fix
+
+- **service**: restore lost source files on push and project import
+
 ## v0.8.0 (2026-11-13)
 
 ### Feat
