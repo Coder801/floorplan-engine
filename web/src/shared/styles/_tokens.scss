@@ -32,16 +32,14 @@
 // every line-height in the type scale (_mixins.scss, $type) is a multiple of 4px, so blocks keep
 // one vertical rhythm. Corners are not rounded: a control gets a stepped "pixel" corner
 // (mixins, pixel-corners) of --px per step, panels and cards are square; the radius tokens stay
-// as names and are all zero. Shadows are hard and stepped the same way: --px-s is the offset.
+// as names and are all zero. Shadows are hard with square corners: --px-s is the offset.
 // Motion is short: --t for a state change, --t-in for something appearing, one curve.
 :root {
   --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 20px;
   --space-6: 24px; --space-8: 32px; --space-10: 40px;
   --radius-sm: 0; --radius: 0; --radius-md: 0; --radius-lg: 0; --radius-xl: 0;
   --px: 2px; --px-s: 6px;
-  --shadow-pop:
-    var(--px-s) calc(var(--px-s) + var(--px)) 0 calc(-1 * var(--px)) var(--shade),
-    calc(var(--px-s) + var(--px)) var(--px-s) 0 calc(-1 * var(--px)) var(--shade);
+  --shadow-pop: var(--px-s) var(--px-s) 0 var(--shade);
   --t: .1s; --t-in: .12s; --ease: cubic-bezier(.2, 0, 0, 1);
   --control-h: 36px; --control-h-lg: 44px;
 }

@@ -38,7 +38,7 @@ $type: (
 // fill in every state, but it also clips everything outside the box: use it on leaf elements
 // (button, field, tag, tooltip), never on a container whose child may stick out (a menu, a
 // fixed tooltip). The focus ring moves inside for the same reason.
-// $shadow: true also keeps room for the hard stepped shadow at the bottom right (--px-s)
+// $shadow: true also keeps room for the hard square-cornered shadow at the bottom right (--px-s)
 @function -corner($x, $y, $dx, $dy, $steps) {
   // The points of one corner, walking clockwise; $dx/$dy are the directions into the box
   $u: var(--px);
@@ -65,13 +65,13 @@ $type: (
   $s: var(--px-s);
   border-radius: 0;
   @if $shadow {
-    // The box and the same box moved by --px-s, as one outline
+    // The box with stepped corners and the same box moved by --px-s with square ones, as one outline
     box-shadow: $s $s 0 var(--shade);
     clip-path: polygon(
       -corner(0%, 0%, 1, 1, $steps), -corner(100%, 0%, -1, 1, $steps),
-      100% $s, -corner(calc(100% + #{$s}), $s, -1, 1, $steps),
-      -corner(calc(100% + #{$s}), calc(100% + #{$s}), -1, -1, $steps),
-      -corner($s, calc(100% + #{$s}), 1, -1, $steps), $s 100%,
+      100% $s, calc(100% + #{$s}) $s,
+      calc(100% + #{$s}) calc(100% + #{$s}),
+      $s calc(100% + #{$s}), $s 100%,
       -corner(0%, 100%, 1, -1, $steps)
     );
   } @else {
