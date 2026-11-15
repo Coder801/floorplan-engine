@@ -1,32 +1,36 @@
 ﻿section;key;name;unit;qty;price;total
-material_rough;cable.3x1.5;Кабель ВВГнг 3×1,5;м;232,5;45;10462,50
-material_rough;cable.3x2.5;Кабель ВВГнг 3×2,5;м;367,7;70;25739,00
-material_rough;cable.3x6;Кабель ВВГнг 3×6;м;11,3;180;2034,00
-material_rough;cable.4x1.5;Кабель ВВГнг 4×1,5;м;71,8;60;4308,00
-material_rough;cable.UTP cat.6;Кабель UTP cat.6;м;46,3;;
-material_rough;conduit.20;Гофротруба ПВХ Ø20;м;499;14;6986,00
-material_rough;conduit.25;Гофротруба ПВХ Ø25;м;12,4;20;248,00
-material_rough;conduit.32;Гофротруба ПВХ Ø32;м;82,9;30;2487,00
+material_rough;cable.3x1.5;Кабель ВВГнг 3×1,5;м;237,4;45;10683,00
+material_rough;cable.3x2.5;Кабель ВВГнг 3×2,5;м;363,3;70;25431,00
+material_rough;cable.3x6;Кабель ВВГнг 3×6;м;11,5;180;2070,00
+material_rough;cable.4x1.5;Кабель ВВГнг 4×1,5;м;72,9;60;4374,00
+material_rough;cable.UTP cat.6;Кабель UTP cat.6;м;47,3;;
+material_rough;conduit.20;Гофротруба ПВХ Ø20;м;498,2;14;6974,80
+material_rough;conduit.25;Гофротруба ПВХ Ø25;м;11,5;20;230,00
+material_rough;conduit.32;Гофротруба ПВХ Ø32;м;84,4;30;2532,00
 material_rough;conduit_joint.20;Муфта з'єднувальна для гофри Ø20;шт;9;5;45,00
 material_rough;conduit_joint.25;Муфта з'єднувальна для гофри Ø25;шт;1;7;7,00
 material_rough;conduit_joint.32;Муфта з'єднувальна для гофри Ø32;шт;2;10;20,00
 material_rough;socket_box;Підрозетник;шт;81;20;1620,00
 material_rough;crimp;Гільза і термоусадка (опресування);шт;14;8;112,00
-material_rough;conduit_clip.20;Кліпса для гофри Ø20 з дюбель-цвяхом під монтажний пістолет;шт;1073;5;5365,00
-material_rough;conduit_clip.25;Кліпса для гофри Ø25 з дюбель-цвяхом під монтажний пістолет;шт;36;6;216,00
-material_rough;conduit_clip.32;Кліпса для гофри Ø32 з дюбель-цвяхом під монтажний пістолет;шт;338;8;2704,00
+material_rough;conduit_clip.20;Кліпса для гофри Ø20 з дюбель-цвяхом під монтажний пістолет;шт;1097;5;5485,00
+material_rough;conduit_clip.25;Кліпса для гофри Ø25 з дюбель-цвяхом під монтажний пістолет;шт;37;6;222,00
+material_rough;conduit_clip.32;Кліпса для гофри Ø32 з дюбель-цвяхом під монтажний пістолет;шт;386;8;3088,00
 material_rough;board_enclosure;Корпус щита вбудований, 5 рядів, 60 мод.;шт;1;6000;6000,00
+material_rough;heating_cable.20;Секція нагрівального кабелю 20 м;шт;2;;
+material_rough;heating_cable.49;Секція нагрівального кабелю 49 м;шт;1;;
+material_rough;heating_cable.71;Секція нагрівального кабелю 71 м;шт;1;;
+material_rough;heating_sensor;Датчик температури підлоги;шт;4;;
+material_rough;heating_conduit;Гофротруба Ø16 для датчика підлоги;м;15,5;;
 material_finish;input.C63 2P;Вступний автомат, C63 2P;шт;1;850;850,00
 material_finish;relay.63 А;Реле напруги, 63 А;шт;1;1900;1900,00
 material_finish;contactor.63 А 2P;Контактор модульний 63 А 2P;шт;1;1200;1200,00
-material_finish;breaker.C16;Автомат 1P C16;шт;17;140;2380,00
-material_finish;breaker.C32;Автомат 1P C32;шт;1;140;140,00
-material_finish;diff.C16 30 мА;Дифавтомат 1P+N C16 30 мА;шт;3;950;2850,00
+material_finish;diff.C16 30 мА;Дифавтомат 1P+N C16 30 мА;шт;19;950;18050,00
+material_finish;diff.C32 30 мА;Дифавтомат 1P+N C32 30 мА;шт;1;950;950,00
 material_finish;changeover.I-0-II;Перекидний рубильник I-0-II, I-0-II;шт;1;900;900,00
 material_finish;breaker.B6;Автомат 1P B6;шт;1;140;140,00
 material_finish;contactor.25 А 2P;Контактор модульний 25 А 2P;шт;1;1200;1200,00
-material_finish;breaker.C10;Автомат 1P C10;шт;5;140;700,00
-material_finish;diff.C10 30 мА;Дифавтомат 1P+N C10 30 мА;шт;1;950;950,00
+material_finish;rcd.40 А 30 мА;ПЗВ освітлення, 40 А 30 мА;шт;1;1100;1100,00
+material_finish;breaker.C10;Автомат 1P C10;шт;6;140;840,00
 material_finish;busbar.1P;Шина гребінчаста 1P, 1 м;шт;1;200;200,00
 material_finish;busbar.2P;Шина гребінчаста 2P, 1 м;шт;1;400;400,00
 material_finish;socket;Розетка із заземленням;шт;56;180;10080,00
@@ -46,15 +50,16 @@ material_finish;outlet;Вивід кабелю до техніки;шт;8;150;12
 material_finish;thermostat;Регулятор теплої підлоги;шт;4;;
 material_finish;led_strip;LED-підсвітка;м;4,42;250;1105,00
 material_finish;led_psu;Блок живлення LED 12 В;шт;5;450;2250,00
-rough;work.cable;Прокладання кабелю;м;634,5;34;21573,00
-rough;work.conduit;Укладання кабелю в гофротрубу;м;634,5;15;9517,50
-rough;work.chase;Штроба вузька, 1–2 кабелі;м;17,9;120;2148,00
-rough;work.chase_wide;Штроба широка, 3–4 кабелі;м;84,6;180;15228,00
+rough;work.cable;Прокладання кабелю;м;636,9;34;21654,60
+rough;work.conduit;Укладання кабелю в гофротрубу;м;636,9;15;9553,50
+rough;work.chase;Штроба вузька, 1–2 кабелі;м;18,9;120;2268,00
+rough;work.chase_wide;Штроба широка, 3–4 кабелі;м;83,6;180;15048,00
+rough;work.floor_heating;Укладання нагрівального кабелю змійкою з датчиком підлоги;м²;21,9;;
 rough;work.wall_hole;Свердління проходу крізь стіну;шт;12;100;1200,00
 rough;work.socket_box;Свердління і встановлення підрозетника;шт;81;140;11340,00
 rough;work.board_install;Встановлення щита;шт;1;1500;1500,00
-rough;work.insulation_test;Вимірювання опору ізоляції з протоколом;гр.;28;150;4200,00
-finish;work.board_module;Збирання щита;мод.;44;100;4400,00
+rough;work.insulation_test;Вимірювання опору ізоляції з протоколом;гр.;27;150;4050,00
+finish;work.board_module;Збирання щита;мод.;61;100;6100,00
 finish;work.panel_labels;Маркування апаратів щита наліпками;щит;1;600;600,00
 finish;work.mechanism;Встановлення механізмів;шт;81;125;10125,00
 finish;work.led_psu;Встановлення і підключення блока живлення LED біля стрічки;шт;5;220;1100,00
