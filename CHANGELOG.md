@@ -1,3 +1,23 @@
+## v0.10.0 (2026-11-15)
+
+### Feat
+
+- **viewer**: hard shadows with square corners, no stepped shadow
+- **drawing**: all sheets drawn at 1:25, larger scale only if plan does not fit
+- **viewer**: estimate sections separated by lines
+- **viewer**: project card plan draws windows as glass in the gap
+- **viewer**: plan labels larger on screen, outlined, facing walls together
+- **drawing**: plan labels and dimensions placed without overlaps
+- **electrical**: RCD scheme, phases and floor heating protection
+- **viewer**: floor heating tab and furniture layer cards
+- **service**: analyze --stages for furniture and floor heating
+- **electrical,model**: floor heating zones and furniture.yaml
+
+### Fix
+
+- **electrical**: jumper inside one wall frame runs straight along the wall
+- **electrical**: standard panel puts every power group on its own RCBO
+
 ## v0.9.0 (2026-11-14)
 
 ### Feat
