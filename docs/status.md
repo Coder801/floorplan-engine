@@ -581,7 +581,14 @@ Sonnet `medium`. 3 вызова, 7,7 мин, $1,79: план $1,06 + испра�
 - **Компоненты фронта без тестов:** покрытие `web/` — 18 %, `admin/` — 19 %; покрыта логика
   (`npm run coverage`), компоненты и страницы — нет, для них нужны jsdom и testing-library.
   3D юнит-тесты не рисуют: после обновления three, fiber или React проверяй сцену в браузере.
-- **TypeScript 5.9, `@types/node` 22:** остались на месте (TypeScript 7 вышел, уязвимостей нет).
+- **`npm audit` в `web/`:** 4 moderate — `minimatch` через `@joshwooding/vite-plugin-react-docgen-typescript`
+  (зависимость `@storybook/react-vite`, только Storybook, не в сборке). Предложенный `audit fix --force`
+  откатывает Storybook на 8.5 — ждём исправления в Storybook 10.
+
+Закрыто 2026-11-15:
+
+- TypeScript 7.0 (нативный компилятор) в `web/` и `admin/`: `baseUrl` убран из `tsconfig.json`, пути
+  `paths` — от `./`. `@types/node` остаётся 22: по версии Node в Docker (`node:22-slim`).
 
 Закрыто 2026-11-04:
 
