@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Item, Page } from "@/shared/types";
-import { buildDrawing, DRAWING_STAGES, drawingLayers, layerGroup, layerRows, layerShown, objectLayers, shiftOf } from "./drawing";
+import { buildDrawing, DRAWING_STAGES, drawingLayers, isLabel, layerGroup, layerRows, layerShown, objectLayers, shiftOf } from "./drawing";
 
 const item = (l: string, d: string, o?: string): Item => ({ k: "s", c: "#000000", l, d, o });
 
@@ -129,5 +129,19 @@ describe("layerGroup", () => {
     expect(layerGroup("E-FLOORHEAT-TEXT")).toBe("labels");
     expect(layerGroup("F-FURN")).toBe("furniture");
     expect(["0", "M-FIX"].map(layerGroup)).toEqual(["other", "other"]);
+  });
+});
+
+describe("isLabel", () => {
+  const item = (k: "f" | "s", l: string): Item => ({ k, l, c: "#000000", d: "M0 0L1 1" });
+  it("is a filled string on a labels layer", () => {
+    expect(isLabel(item("f", "A-DIMS"))).toBe(true);
+    expect(isLabel(item("f", "A-TEXT"))).toBe(true);
+    expect(isLabel(item("f", "E-TEXT"))).toBe(true);
+  });
+  it("is not a line or a fill elsewhere", () => {
+    expect(isLabel(item("s", "A-DIMS"))).toBe(false);
+    expect(isLabel(item("f", "E-SOCKET"))).toBe(false);
+    expect(isLabel(item("f", "A-SHEET"))).toBe(false);
   });
 });

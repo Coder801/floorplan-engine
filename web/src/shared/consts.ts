@@ -15,8 +15,11 @@ export const NARROW_PX = 900;
 // Sheet PNG for the album: at most A3 at 150 dpi
 export const PNG_DPI = 150, PNG_LONG = 2480, PNG_SHORT = 1754;
 export const MIN_LINE_PX = 0.6;  // no line is drawn thinner than this on screen
-export const SCREEN_BOLD = 1.25;  // engineering lines on screen are this much thicker than on the printed sheet
+export const SCREEN_BOLD = 1.6;   // engineering lines on screen are this much thicker than on the printed sheet
+export const LINE_MIN_PX = 1.5;   // engineering lines on screen are at least this thick (CSS px), at any zoom
 export const SYMBOL_GROW = 1.25;  // point and box symbols on screen are this much larger, about their centre
+export const TEXT_GROW = 1.6;     // labels and dimension numbers on screen are this much larger, each about its centre (drawing.isLabel)
+export const LABEL_BOLD_MM = 0.15; // labels on screen are outlined by this (sheet mm): semi-bold instead of the thin print font
 export const STACK_MS = 180;      // a socket stack opening on hover (engine/sheet/stacks.ts)
 export const CABLE_MIN_PX = 2;   // wiring lines on screen are at least this thick (0.25 mm on the sheet is under 1 px)
 // Layers that exist only on the DXF sheet (frame, title block, tables): not on screen, but in the album PNG

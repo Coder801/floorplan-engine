@@ -24,22 +24,34 @@ export function inView(page: Page, box: Box): boolean {
 // dimensions, sheet frame) and the furniture under it
 export const boldLayer = (l: string) => !l.startsWith("A-") && l !== "F-FURN" && l !== "0";
 
+// Stroke width of a line, drawing units: the sheet width, bolder on screen for engineering
+// layers (bold), never thinner than the floor of its kind (minW, cableW, lineW — px / pxPerMm)
+export function strokeWidth(it: Item, k: number, bold: number, minW: number, cableW: number, lineW: number): number {
+  const eng = boldLayer(it.l);
+  const floor = it.l.startsWith("W-CABLE") ? cableW : eng ? lineW : minW;
+  return Math.max((it.w || 0) * k * (eng ? bold : 1), floor * k);
+}
+
 // Primitives in order; pxPerMm is for the minimum line width; cableMinPx keeps wiring lines on
-// screen at least this thick (device px); 0 in PNG. bold thickens the engineering lines on
-// screen (SCREEN_BOLD); 1 in PNG, the printed sheet stays as built
+// screen at least this thick (device px), lineMinPx — the other engineering lines; 0 in PNG.
+// bold thickens the engineering lines on screen (SCREEN_BOLD); 1 in PNG, the printed sheet stays
+// as built. A fill with w (screen labels, SheetView) is also outlined by w: semi-bold text
 export function paint(ctx: CanvasRenderingContext2D, items: DrawItem[], pxPerMm: number, look: Look,
-                      shown: (layer: string) => boolean, cableMinPx = 0, bold = 1) {
+                      shown: (layer: string) => boolean, cableMinPx = 0, bold = 1, lineMinPx = 0) {
   ctx.lineCap = "round"; ctx.lineJoin = "round";
   const minW = MIN_LINE_PX / pxPerMm, cableW = Math.max(cableMinPx / pxPerMm, minW);
+  const lineW = Math.max(lineMinPx / pxPerMm, minW);
   for (const it of items) {
     if (!shown(it.l)) continue;
     const [c, alpha, k, path] = look(it);
     ctx.globalAlpha = alpha;
     if (!alpha) continue;
-    if (it.k === "f") { ctx.fillStyle = c; ctx.fill(path ?? it.path, "nonzero"); }
-    else {
+    if (it.k === "f") {
+      ctx.fillStyle = c; ctx.fill(path ?? it.path, "nonzero");
+      if (it.w) { ctx.strokeStyle = c; ctx.lineWidth = it.w; ctx.stroke(path ?? it.path); }
+    } else {
       ctx.strokeStyle = c;
-      ctx.lineWidth = Math.max(it.w || 0, it.l.startsWith("W-CABLE") ? cableW : minW) * k * (boldLayer(it.l) ? bold : 1);
+      ctx.lineWidth = strokeWidth(it, k, bold, minW, cableW, lineW);
       ctx.stroke(path ?? it.path);
     }
   }

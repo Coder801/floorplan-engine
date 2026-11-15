@@ -127,6 +127,10 @@ export function layerShown(own: Set<string>, hidden: Set<string>, extra: Set<str
 export const LAYER_GROUPS = ["points", "cables", "plumbing", "heating", "furniture", "labels", "building", "other"] as const;
 export type LayerGroup = typeof LAYER_GROUPS[number];
 
+// A label on the sheet: a filled string on a labels layer (dimension numbers, room names, point
+// labels). Each string is one primitive, so the screen can enlarge it about its own centre
+export const isLabel = (it: Item): boolean => it.k === "f" && layerGroup(it.l) === "labels";
+
 // The section of a "Layers" row (a layer, or a cable row of layerRows)
 export function layerGroup(row: string): LayerGroup {
   if (row.endsWith("-TEXT") || row === "A-DIMS") return "labels";

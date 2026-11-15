@@ -7,14 +7,14 @@
 import { WiringEdit, type Hit } from "@/engine/edit/WiringEdit";
 import {
   CABLE_MIN_PX, DIM_ALPHA, EDIT_HIT_PX, EDIT_MOVE_PX, FOCUS_MS, NEIGHBOR_ALPHA,
-  FIT_SHRINK, REDUCED_MOTION, SCREEN_BOLD, STACK_MS, SYMBOL_GROW, TIP_GAP, VIEW_PAD,
+  FIT_SHRINK, LABEL_BOLD_MM, LINE_MIN_PX, REDUCED_MOTION, SCREEN_BOLD, STACK_MS, SYMBOL_GROW, TEXT_GROW, TIP_GAP, VIEW_PAD,
 } from "@/shared/consts";
 import { expand, filteredKeys, PageIndex } from "@/shared/page";
 import { palette, refreshPalette, screenColor } from "@/shared/palette";
 import { view } from "@/shared/store";
 import type { Page } from "@/shared/types";
 import { clampStep, Glide, LAST_STEP, PinchSteps, RAIL_PX, stepBelow, WheelSteps, ZOOM_STEPS, zoomLabel, type Zoom } from "@/shared/zoom";
-import { layerShown, objectLayers, sceneOf, type Drawing, type DrawingItem } from "./drawing";
+import { isLabel, layerShown, objectLayers, sceneOf, type Drawing, type DrawingItem } from "./drawing";
 import { followsObject, linkEnds, objectVisible, ownLayers, repeatsNumbers, scoped, wiringChains } from "./views";
 import { FLOOR_ALPHA, FLOOR_FADE_MS, floorPath, stepFades } from "./floors";
 import { gridStep, paintGrid, paperRings } from "./grid";
@@ -87,12 +87,16 @@ export class SheetView {
 
   constructor(private readonly canvas: HTMLCanvasElement, private readonly wrap: HTMLElement,
               readonly drawing: Drawing, page: Page, index: PageIndex) {
-    // Point and box symbols are larger on screen, each about its own centre
+    // Point and box symbols are larger on screen, each about its own centre; so are labels
+    // (TEXT_GROW), each string about the centre of its box, and outlined (LABEL_BOLD_MM): semi-bold
     const raw = drawing.items.map((i) => ({ ...i, w: i.w && i.w * i.shift.f, path: pathOf(i) }));
     const centers = symbolCenters(raw);
     this.items = raw.map((it) => {
       const c = isSymbol(it) ? centers.get(it.o!) : undefined;
-      return c ? { ...it, path: movedPath(it.path, SYMBOL_GROW, c[0], c[1]), box: grownBox(it.box, c, SYMBOL_GROW) } : it;
+      if (c) return { ...it, path: movedPath(it.path, SYMBOL_GROW, c[0], c[1]), box: grownBox(it.box, c, SYMBOL_GROW) };
+      if (!isLabel(it)) return it;
+      const m: [number, number] = [(it.box[0] + it.box[2]) / 2, (it.box[1] + it.box[3]) / 2];
+      return { ...it, w: LABEL_BOLD_MM * it.shift.f, path: movedPath(it.path, TEXT_GROW, m[0], m[1]), box: grownBox(it.box, m, TEXT_GROW) };
     });
     this.allStacks = pointStacks(this.items);
     this.has3d = !!sceneOf(drawing);
@@ -389,7 +393,7 @@ export class SheetView {
     const items = this.items.filter((it) => this.inView(it) && (!it.o || !skip.has(it.o)));
     this.paintFloors(ctx);
     this.stepStacks();
-    paint(ctx, items, k, (it) => this.look(it), this.shown, CABLE_MIN_PX * this.dpr, SCREEN_BOLD);
+    paint(ctx, items, k, (it) => this.look(it), this.shown, CABLE_MIN_PX * this.dpr, SCREEN_BOLD, LINE_MIN_PX * this.dpr);
     this.paintCounts(ctx);
     if (this.ed) this.ed.paint(ctx, k, performance.now(), this.dpr);
     ctx.restore();
