@@ -27,7 +27,7 @@
 .card:hover .outline { stroke: var(--hl); }
 
 // Plan from the model: the core writes the SVG (thumbnail.py) with classes room, room kind (wet,
-// kitchen, outdoor, service, living), wall, window; they are global. The kind colour is a tint
+// kitchen, outdoor, service, living), wall, window (the gap), glass (the pane); they are global. The kind colour is a tint
 // mixed with the card background: one set of rules for light and dark themes. Coordinates are
 // in mm, lines do not scale their width; one frame for all cards, the plan is centred inside
 .real {
@@ -40,7 +40,8 @@
     .outdoor { fill: color-mix(in srgb, #6fb37a 30%, var(--soft)); }
     .service { fill: color-mix(in srgb, var(--muted) 22%, var(--soft)); }
     .wall { fill: var(--text); stroke: none; }
-    .window { stroke: var(--paper); stroke-width: 1.5px; vector-effect: non-scaling-stroke; }
+    .window { fill: color-mix(in srgb, #4e9bd6 45%, var(--paper)); stroke: none; }
+    .glass { stroke: #4e9bd6; stroke-width: 1.5px; vector-effect: non-scaling-stroke; }
   }
 }
 .card:hover .real :global(.wall) { fill: var(--hl); }

@@ -26,7 +26,10 @@ def test_view_box_covers_walls_with_padding() -> None:
 def test_room_wall_and_window_classes() -> None:
     svg = _thumb([{"wall": "w2", "type": "window", "offset": 1000, "width": 1200, "sill": 800}])
     classes = [el.get("class") for el in svg]
-    assert classes == ["room living", "wall", "window"]  # "Комната" is living
+    assert classes == ["room living", "wall", "window", "glass"]  # "Комната" is living
+    # The window fills its gap across the wall thickness: from the inner face to the outer one
+    frame = svg.findall(f"{SVG}path")[-1].get("d")
+    assert frame == "M1000 -3000 L2200 -3000 L2200 -3120 L1000 -3120 Z"
     line = svg.find(f"{SVG}line")
     assert line is not None
     # Window in the middle of the top wall: y = −(3000 + 60)

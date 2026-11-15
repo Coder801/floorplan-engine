@@ -1,10 +1,10 @@
 """Plan preview for the project card: SVG from the model, not from the DXF.
 
 Rooms are filled along the inner outline, walls are the shared silhouette (the same wall
-pieces as on the plan, with gaps for openings), windows are a line along the wall middle.
-No colours are set: shapes get classes `room` and the room kind (`room_kind`: `wet`,
-`kitchen`, `outdoor`, `service`, `living`), `wall`, `window`; the page colours them (light
-and dark theme).
+pieces as on the plan, with gaps for openings), windows fill their gap in the wall (`window`)
+with a pane line along the wall middle (`glass`). No colours are set: shapes get classes
+`room` and the room kind (`room_kind`: `wet`, `kitchen`, `outdoor`, `service`, `living`),
+`wall`, `window`, `glass`; the page colours them (light and dark theme).
 """
 
 from __future__ import annotations
@@ -104,9 +104,12 @@ def plan_thumbnail(plan: Plan, contours: dict[str, Contour]) -> str:
             if op.type is not OpeningType.WINDOW:
                 continue
             seg = g.contour.segment(op.wall)
-            mid = seg.outward * (seg.thickness / 2)
-            a, b = seg.point_at(op.offset) + mid, seg.point_at(op.offset + op.width) + mid
+            a, b = seg.point_at(op.offset), seg.point_at(op.offset + op.width)
+            out, mid = seg.outward * seg.thickness, seg.outward * (seg.thickness / 2)
+            frame = _ring(v.as_tuple() for v in (a, b, b + out, a + out))
+            parts.append(f'<path class="window" d="{frame}"/>')
+            a, b = a + mid, b + mid
             ends = f'x1="{a.x:.0f}" y1="{_y(a.y)}" x2="{b.x:.0f}" y2="{_y(b.y)}"'
-            parts.append(f'<line class="window" {ends}/>')
+            parts.append(f'<line class="glass" {ends}/>')
     parts.append("</svg>")
     return "\n".join(parts) + "\n"
