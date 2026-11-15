@@ -12,6 +12,7 @@ from typing import Literal
 from shapely.geometry.base import BaseGeometry
 
 from floorplan_engine.electrical.anchors import Anchor
+from floorplan_engine.electrical.floor_heating import HeatingZone
 from floorplan_engine.model.geometry import Vec
 from floorplan_engine.model.schema import WallMaterial
 
@@ -186,6 +187,8 @@ class Wiring:
     # Lines whose rise from a chain point goes in the conduit of the cable coming in
     # (Electrical.loop_conduit "shared", chases.shared_rises): that rise has no conduit of its own
     shared_rises: frozenset[str] = field(default=frozenset())
+    # Floor heating zones (floor_heating.py): heating cable, sensor and its conduit for the estimate
+    heating: tuple[HeatingZone, ...] = field(default=(), compare=False, repr=False)
 
     @property
     def chase_mm(self) -> float:

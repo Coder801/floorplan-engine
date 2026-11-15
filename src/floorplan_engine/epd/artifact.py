@@ -86,6 +86,10 @@ class PageRecorder(BackendInterface):
     height: float  # sheet height, mm, to flip the Y axis
     objects: dict[str, str] = field(default_factory=dict)  # handle → "type:id"
     items: list[dict[str, Any]] = field(default_factory=list)
+    # handle → layer of the entity itself: what a block entity on layer "0" stands on (a
+    # dimension's lines and ticks are such entities; in DXF layer "0" in a block means "the layer
+    # of the insert")
+    layers: dict[str, str] = field(default_factory=dict)
 
     def _xy(self, v: Vec2) -> str:
         return f"{_num(v.x)} {_num(self.height - v.y)}"
@@ -114,7 +118,10 @@ class PageRecorder(BackendInterface):
         item: dict[str, Any] = {"k": kind, "c": props.color}
         if kind == "s":
             item["w"] = round(props.lineweight, 2)
-        item["l"] = props.layer
+        layer = props.layer
+        if layer == "0" and props.handle in self.layers:
+            layer = self.layers[props.handle]
+        item["l"] = layer
         if props.handle in self.objects:
             item["o"] = self.objects[props.handle]
         last = self.items[-1] if self.items else None
@@ -184,7 +191,12 @@ def record_page(doc: Drawing, layout: Paperspace) -> dict[str, Any]:
         for e in (*doc.modelspace(), *layout)
         if (oid := object_id(e)) is not None
     }
-    recorder = PageRecorder(height, objects)
+    layers = {
+        e.dxf.handle: e.dxf.layer
+        for e in (*doc.modelspace(), *layout)
+        if e.dxf.hasattr("layer") and e.dxf.layer != "0"
+    }
+    recorder = PageRecorder(height, objects, layers=layers)
     # Line widths as in the DXF, in sheet mm
     config = Configuration(lineweight_policy=LineweightPolicy.ABSOLUTE)
     draw_sheet_layout(doc, layout, recorder, config)

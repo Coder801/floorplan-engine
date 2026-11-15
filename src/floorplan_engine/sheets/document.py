@@ -28,6 +28,7 @@ from floorplan_engine.drawing.titleblock import (
     format_candidates,
 )
 from floorplan_engine.electrical.pricing import Prices
+from floorplan_engine.model.furniture import Furniture
 from floorplan_engine.model.geometry import Contour, Vec
 from floorplan_engine.model.plumbing import Plumbing
 from floorplan_engine.model.scale import DEFAULT_SCALE, SCALES, drawing_scale, sheet_scale
@@ -67,6 +68,7 @@ SHEET_SLUGS = {
     "tab_wiring": "wiring",
     "tab_panel": "panel",
     "tab_plumbing": "plumbing",
+    "tab_floor_heating": "floor_heating",
     "tab_points": "points",
     "tab_elevations": "elevations",
 }
@@ -169,13 +171,14 @@ def choose_paper_and_scale(
     prices: Prices | None = None,
     edits: WiringEdits | None = None,
     plumbing: tuple[Plumbing, Network] | None = None,
+    furniture: Furniture | None = None,
 ) -> tuple[Paper, float]:
     """Paper for the set: the smallest on which every sheet fits its tables and legend and the plan
     at 1:50 or larger takes at most VIEW_FILL_MAX of its section (a size from room.yaml is used
     alone). The scale is the one that brings the tightest plan closest to VIEW_FILL, no more than
     VIEW_FILL_MAX."""
     with drawing_scale(DEFAULT_SCALE):
-        draft, all_specs = draw_stages(plan, contours, elec, prices, edits, plumbing)
+        draft, all_specs = draw_stages(plan, contours, elec, prices, edits, plumbing, furniture)
         views = {s.tab_key: view_parts(draft, s) for s in all_specs if s.body is None}
     papers = format_candidates(plan.sheet.format)
     specs = all_specs
@@ -207,7 +210,9 @@ def choose_paper_and_scale(
         best = min(fitting, key=lambda s: abs(worst(paper, s) - VIEW_FILL), default=SCALES[-1])
         for scale in [s for s in SCALES if s >= best]:
             with drawing_scale(scale):
-                real, real_specs = draw_stages(plan, contours, elec, prices, edits, plumbing)
+                real, real_specs = draw_stages(
+                    plan, contours, elec, prices, edits, plumbing, furniture
+                )
                 shown = [s for s in fit_specs(real_specs, paper) if s.body is None]
                 if all(fill(view_size(real, s), plan_region(s, paper)) <= 1.0 for s in shown):
                     return paper, scale
@@ -228,15 +233,17 @@ def build_project_document(
     prices: Prices | None = None,
     edits: WiringEdits | None = None,
     plumbing: Plumbing | None = None,
+    furniture: Furniture | None = None,
 ) -> Drawing:
     """One DXF: the model with all stages and one sheet per stage; paper and scale are shared.
     prices are the estimate prices on the wiring sheet (price list on top of the price service);
     None gives a bill of quantities without prices.
-    edits are manual wiring edits (wiring.yaml); plumbing is plumbing (the "Plumbing" sheet)."""
+    edits are manual wiring edits (wiring.yaml); plumbing is plumbing (the "Plumbing" sheet);
+    furniture is furniture.yaml (on the plan and the floor heating sheets)."""
     water = (plumbing, build_network(plan, contours, plumbing)) if plumbing is not None else None
-    paper, scale = choose_paper_and_scale(plan, contours, elec, prices, edits, water)
+    paper, scale = choose_paper_and_scale(plan, contours, elec, prices, edits, water, furniture)
     with drawing_scale(scale):
-        doc, specs = draw_stages(plan, contours, elec, prices, edits, water)
+        doc, specs = draw_stages(plan, contours, elec, prices, edits, water, furniture)
         specs = fit_specs(specs, paper)
         main_no = 1  # sheet whose tables continue
         for no, spec in enumerate(specs, 1):

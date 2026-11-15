@@ -34,3 +34,19 @@ def test_thermostat_is_a_wall_point_with_no_switch_fields() -> None:
         ElectricalPoint.model_validate({**wall, "controls": ["l1"]})
     with pytest.raises(ValidationError):
         ElectricalPoint.model_validate({**wall, "keys": 2})
+
+
+def test_floor_heating_entry_and_its_series() -> None:
+    from floorplan_engine.model.heating_catalog import DEFAULT_SERIES, SERIES
+    from floorplan_engine.model.schema import FloorHeating, HeatingExclude
+
+    fh = FloorHeating.model_validate({"id": "fh", "room": "r", "thermostat": "t1"})
+    assert fh.series == DEFAULT_SERIES and SERIES[fh.series].assumed
+    assert fh.exclude == [] and fh.fixtures == [] and fh.length is None
+    assert list(SERIES[DEFAULT_SERIES].lengths) == sorted(SERIES[DEFAULT_SERIES].lengths)
+    with pytest.raises(ValidationError, match="серии «x» нет"):
+        FloorHeating.model_validate({"id": "fh", "room": "r", "thermostat": "t", "series": "x"})
+    with pytest.raises(ValidationError, match="больше нуля"):
+        HeatingExclude.model_validate({"at": [0, 0], "size": [0, 100]})
+    with pytest.raises(ValidationError):
+        FloorHeating.model_validate({"id": "fh", "room": "r", "thermostat": "t", "density": 400})

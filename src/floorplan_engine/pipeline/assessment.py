@@ -12,6 +12,7 @@ from floorplan_engine.electrical.estimate import (
     PriceSource,
 )
 from floorplan_engine.electrical.pricing import MockPriceService
+from floorplan_engine.model.furniture import Furniture
 from floorplan_engine.model.intake import (
     Stage,
 )
@@ -73,6 +74,14 @@ def plumbing_of(assessment: Assessment) -> Plumbing | None:
     if status is None or not status.status.builds:
         return None
     return assessment.report.plumbing
+
+
+def furniture_of(assessment: Assessment) -> Furniture | None:
+    """Furniture, if its stage builds (furniture.yaml without errors)."""
+    status = assessment.status(Stage.FURNITURE)
+    if status is None or not status.status.builds:
+        return None
+    return assessment.report.furniture
 
 
 def price_service(given: PriceSource | None) -> PriceSource:

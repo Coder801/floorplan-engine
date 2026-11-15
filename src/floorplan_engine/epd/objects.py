@@ -16,6 +16,8 @@ import shapely
 from shapely.geometry import Polygon
 from shapely.geometry.base import BaseGeometry
 
+from floorplan_engine.drawing.floor_heating import zone_label
+from floorplan_engine.drawing.furniture import furniture_label
 from floorplan_engine.drawing.plan import mirrored_wall, wall_areas, wall_pieces
 from floorplan_engine.drawing.wiring import lay_out
 from floorplan_engine.electrical.anchors import symbol_key
@@ -32,6 +34,7 @@ from floorplan_engine.electrical.elevations import (
     behind_text,
     wall_elevations,
 )
+from floorplan_engine.electrical.floor_heating import heating_zones
 from floorplan_engine.electrical.mounting import text as mounting_text
 from floorplan_engine.electrical.panel import BoardPanel, build_panel
 from floorplan_engine.electrical.panel_text import amps, kw
@@ -46,6 +49,7 @@ from floorplan_engine.electrical.wiring_model import (
     Wiring,
     line_starts,
 )
+from floorplan_engine.model.furniture import Furniture
 from floorplan_engine.model.geometry import Contour, RoomGeometry, Vec, room_geometries
 from floorplan_engine.model.schema import (
     Electrical,
@@ -192,11 +196,14 @@ def describe_objects(
     elec: Electrical | None = None,
     wiring: Wiring | None = None,
     water: WaterMap | None = None,
+    furniture: Furniture | None = None,
 ) -> dict[str, ObjectInfo]:
     """Cards of all model objects by "type:id"; water is plumbing supplies by wall (for elevations,
-    also walls that only have plumbing)."""
+    also walls that only have plumbing); furniture is furniture.yaml."""
     lang = plan.language
     out: dict[str, ObjectInfo] = {}
+    if furniture is not None:
+        out.update(furniture_cards(plan, furniture))
     names = wall_names(plan, contours)
     codes = {key: n.code for key, n in names.items()}
     height_assumed = "ceiling_height" not in plan.model_fields_set
@@ -280,6 +287,7 @@ def describe_objects(
                     ],
                 }
                 out[f"point:{pv.id}"] = replace(out[f"point:{pv.id}"], block=block)
+        out.update(heating_cards(plan, contours, elec))
         panel = build_panel(plan, elec)
         if panel is not None:
             out.update(device_cards(panel, lang))
@@ -296,6 +304,64 @@ def describe_objects(
                     f"{view.room_name} — {plane}", card
                 )
                 out.update(_dimension_cards(view, wiring, lang))
+    return out
+
+
+def heating_cards(
+    plan: Plan, contours: dict[str, Contour], elec: Electrical
+) -> dict[str, ObjectInfo]:
+    """Floor heating zone cards ("heating:<id>", sheet "Floor heating"): area, section, power,
+    pitch, cold lead; "*" — as in the zones table, not from the project; the fixtures cut out by
+    their typical size are named as an assumption (the obstacles are real, not named)."""
+    lang = plan.language
+    out: dict[str, ObjectInfo] = {}
+    for z in heating_zones(plan, contours, elec):
+        rows = [
+            *([(tr("fh_zone", lang), tr("fh_auto_value", lang))] if z.spec.auto else []),
+            (tr("fh_area", lang), f"{z.area_m2:.1f}".replace(".", ",")),
+            *(
+                [(tr("fh_area_src", lang), f"{z.spec.area:g}".replace(".", ","))]
+                if z.spec.area is not None
+                else []
+            ),
+            (tr("fh_length", lang), f"{z.length:g}{'*' if z.length_assumed else ''}"),
+            (tr("fh_power", lang), f"{z.power:.0f}*"),
+            (tr("fh_density", lang), f"{z.real_density:.0f}"),
+            (tr("fh_lead", lang), f"{z.lead_m:.1f}".replace(".", ",")),
+        ]
+        if z.pitch is not None:
+            rows.insert(len(rows) - 2, (tr("fh_pitch", lang), f"{z.pitch:.0f}"))
+        if z.typical:
+            rows.append((tr("fh_fixtures", lang), tr("fh_typical", lang, ids=", ".join(z.typical))))
+        if z.furniture:
+            rows.append((tr("fh_cut", lang), ", ".join(z.furniture)))
+        out[f"heating:{z.spec.id}"] = ObjectInfo(f"{zone_label(z)} — {z.name}", tuple(rows))
+    return out
+
+
+def furniture_cards(plan: Plan, furniture: Furniture) -> dict[str, ObjectInfo]:
+    """Furniture cards ("furniture:<id>", plan and floor heating sheets): what, room, size, how it
+    stands and whether floor heating goes under it."""
+    lang = plan.language
+    rooms = {r.id: r.name for r in plan.rooms}
+    out: dict[str, ObjectInfo] = {}
+    for item in furniture.items:
+        base = tr(f"furn_{item.resting.value}", lang)
+        if item.base_assumed:
+            base = tr("furn_assumed", lang, base=base)
+        rows = [
+            (tr("furn_room", lang), rooms.get(item.room, item.room)),
+            (tr("furn_size", lang), f"{item.size[0]:g} × {item.size[1]:g} мм"),
+            (tr("furn_base", lang), base),
+            (
+                tr("furn_heating", lang),
+                tr("furn_no_heating" if item.solid else "furn_heating_ok", lang),
+            ),
+        ]
+        if item.note:
+            rows.append((tr("furn_note", lang), item.note))
+        title = f"{furniture_label(item, lang).capitalize()} — {item.id}"
+        out[f"furniture:{item.id}"] = ObjectInfo(title, tuple(rows))
     return out
 
 

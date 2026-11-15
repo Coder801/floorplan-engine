@@ -205,11 +205,21 @@ def test_target_must_exist(tmp_path: Path) -> None:
     assert issue.path == "questions[0].target" and "w9" in issue.message
 
 
+@pytest.mark.parametrize("qid", ["panel_reserve", "heating_area"])
+def test_code_question_prefixes_are_reserved(tmp_path: Path, qid: str) -> None:
+    # Such an answer would go to the code-built questions and silently vanish
+    path = _project(tmp_path, {"questions": [_q(id=qid, severity="minor")]})
+    (issue,) = validate_project(path).errors
+    assert (issue.file, issue.path) == ("intake.yaml", "questions[0].id")
+    assert f"«{qid}»" in issue.message and "panel_, heating_" in issue.message
+
+
 def test_stage_statuses(tmp_path: Path) -> None:
     intake = {
         "stages": {
             "plumbing": {"status": "absent", "note": "на листах нет сантехники"},
             "furniture": {"status": "found"},
+            "lighting": {"status": "found"},
         },
         "questions": [_q(target="rooms.r.openings.win.sill", answer="value")],
     }
@@ -217,7 +227,8 @@ def test_stage_statuses(tmp_path: Path) -> None:
     assert statuses == {
         Stage.PLAN: Status.QUESTIONS,
         Stage.ELECTRICAL: Status.READY,
-        Stage.FURNITURE: Status.UNSUPPORTED,
+        Stage.FURNITURE: Status.ABSENT,  # found, but there is no furniture.yaml
+        Stage.LIGHTING: Status.UNSUPPORTED,
         Stage.PLUMBING: Status.ABSENT,
     }
 

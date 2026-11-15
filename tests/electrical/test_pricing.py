@@ -92,8 +92,11 @@ def test_estimate_marks_service_lines_and_notes() -> None:
     assert "імітація" in (by_key["work.mechanism"].hint or "")
 
 
-def test_mock_leaves_the_thermostat_without_a_price() -> None:
-    """Prices are not invented: the floor heating controller is the one item the mock skips."""
-    assert {"thermostat"} == UNPRICED and set(LINES) >= UNPRICED
-    assert mock_price("thermostat") is None
-    assert MockPriceService().lookup("thermostat").price is None
+def test_mock_leaves_floor_heating_without_a_price() -> None:
+    """Prices are not invented: the floor heating controller, cable, sensor and their work are
+    the items the mock skips (a section length as the key parameter too)."""
+    heating = {"heating_cable", "heating_sensor", "heating_conduit", "work.floor_heating"}
+    assert {"thermostat", *heating} == UNPRICED and set(LINES) >= UNPRICED
+    for key in ("thermostat", *heating, "heating_cable.27"):
+        assert mock_price(key) is None
+        assert MockPriceService().lookup(key).price is None

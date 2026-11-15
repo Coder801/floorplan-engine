@@ -98,7 +98,7 @@ def test_draft_groups_lines_by_stage_with_parameters() -> None:
     chases, cable, insulation, assembly, protection = tasks
     assert [ln.key for ln in chases.lines] == ["work.chase.brick", "socket_box"]
     assert (chases.work_total, chases.material_total) == (1200.0, 60.0)
-    assert [t.order for t in tasks] == [1, 2, 5, 7, 9]
+    assert [t.order for t in tasks] == [1, 2, 6, 8, 10]
     assert cable.after == ("electrical.chases",) and cable.photo == "required"
     # No boxes stage in this estimate: insulation comes after the cable only
     assert insulation.after == ("electrical.cable",)

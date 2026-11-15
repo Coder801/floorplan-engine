@@ -131,6 +131,7 @@ from floorplan_engine.electrical.chases import (
     with_material,
 )
 from floorplan_engine.electrical.detours import drop_offset
+from floorplan_engine.electrical.floor_heating import heating_zones
 from floorplan_engine.electrical.groups import group_key
 from floorplan_engine.electrical.groups import text as group_text
 from floorplan_engine.electrical.led_supply import led_loads, led_mark, section_for
@@ -408,6 +409,7 @@ def box_wiring(
         elec.plaster == "before",
         drops,
         shared_rises(runs, elec.points, elec.conduit_level, elec.loop_conduit),
+        heating_zones(plan, contours, elec),
     )
 
 

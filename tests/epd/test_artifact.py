@@ -155,3 +155,13 @@ def test_render_page_png(tmp_path: Path) -> None:
     _, pages = read_artifact(export_artifact(doc, plan, tmp_path / "p.epd"))
     png = render_page_png(pages[0], tmp_path / "page.png")
     assert png.stat().st_size > 10_000
+
+
+def test_block_entities_on_layer_0_take_their_entity_layer(tmp_path: Path) -> None:
+    # Dimension lines and ticks live in the dimension's block on layer "0": in the viewer they
+    # must hide with the dimension's own layer
+    doc, plan = _project(tmp_path)
+    _, pages = read_artifact(export_artifact(doc, plan, tmp_path / "project.epd"))
+    dims = [i for i in pages[0]["items"] if str(i.get("o", "")).startswith("dimension:")]
+    assert dims and {i["l"] for i in dims} == {"A-DIMS"}
+    assert not [i for p in pages for i in p["items"] if i["l"] == "0" and "o" in i]

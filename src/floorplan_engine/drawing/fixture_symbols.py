@@ -14,22 +14,11 @@ import math
 from dataclasses import dataclass
 
 from floorplan_engine.model.geometry import Vec
-from floorplan_engine.model.plumbing import FixtureType
+from floorplan_engine.model.plumbing import FIXTURE_SIZES, FixtureType
 
 ARC_STEP_DEG = 15.0  # polyline step for arcs and ellipses
-# Typical fixture size on the plan, mm: along the wall × away from the wall
-SIZES: dict[FixtureType, tuple[float, float]] = {
-    FixtureType.BATH: (1700.0, 750.0),
-    FixtureType.SHOWER: (900.0, 900.0),
-    FixtureType.WC: (380.0, 680.0),
-    FixtureType.WC_INSTALLATION: (360.0, 540.0),
-    FixtureType.SINK: (550.0, 450.0),
-    FixtureType.KITCHEN_SINK: (500.0, 500.0),
-    FixtureType.WASHER: (600.0, 600.0),
-    FixtureType.DISHWASHER: (600.0, 600.0),
-    FixtureType.BOILER: (450.0, 450.0),
-    FixtureType.HYGIENIC_SHOWER: (120.0, 160.0),
-}
+# Typical fixture size on the plan, mm: along the wall × away from the wall (model/plumbing.py)
+SIZES = FIXTURE_SIZES
 
 
 @dataclass(frozen=True)

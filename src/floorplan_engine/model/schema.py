@@ -19,6 +19,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from floorplan_engine.model.heating_catalog import DEFAULT_SERIES, SERIES
 from floorplan_engine.model.panel_catalog import BRANDS, ENCLOSURE_BY_ARTICLE
 from floorplan_engine.model.texts import Language
 
@@ -354,6 +355,80 @@ class CableChannel(StrictModel):
         return self
 
 
+class HeatingExclude(StrictModel):
+    """Part of a heated floor without cable (decision 2026-11-14): a rectangle along the room
+    axes — furniture without legs, a kitchen unit, a bath that plumbing.yaml does not have."""
+
+    at: tuple[float, float] = Field(description="Левый нижний угол, мм от origin помещения")
+    size: tuple[float, float] = Field(description="Размер по X и по Y, мм")
+    note: str | None = None
+
+    @model_validator(mode="after")
+    def _positive(self) -> HeatingExclude:
+        if self.size[0] <= 0 or self.size[1] <= 0:
+            raise ValueError(f"size {list(self.size)}: обе стороны больше нуля")
+        return self
+
+
+class FloorHeating(StrictModel):
+    """Electric floor heating zone (decision 2026-11-14): the floor of a room or of its zone, less
+    WALL_GAP from the walls, exclusions and plumbing fixtures; a two-core heating cable from the
+    series laid as a serpentine (electrical/floor_heating.py), power behind the controller."""
+
+    id: str = Field(pattern=ID_PATTERN)
+    room: str
+    thermostat: str = Field(description="id точки type: thermostat — регулятор зоны")
+    zone: str | None = Field(
+        default=None, description="Имя зоны помещения (rooms[].zones[].name); нет — весь пол"
+    )
+    exclude: list[HeatingExclude] = Field(
+        default_factory=list, description="Где кабеля нет: мебель без ножек, ванна, тумба"
+    )
+    density: float | None = Field(
+        default=None,
+        gt=0,
+        le=250,
+        description="Плотность, Вт/м² — только из источника; нет — 150 допущением",
+    )
+    length: float | None = Field(
+        default=None,
+        gt=0,
+        le=300,
+        description="Длина греющей секции, м — только из источника; нет — подбор из ряда серии",
+    )
+    series: str = Field(
+        default=DEFAULT_SERIES, description="Серия кабеля из каталога (model/heating_catalog.py)"
+    )
+    area: float | None = Field(
+        default=None,
+        gt=0,
+        le=500,
+        description="Площадь обогрева по источнику, м² (S= на листе тёплого пола): код сверяет "
+        "с раскладкой; нет — не сверяется",
+    )
+    fixtures: list[HeatingExclude] = Field(
+        default_factory=list,
+        description="Пятна сантехприборов из plumbing.yaml — ставит код при проверке, в YAML "
+        "не пишется",
+    )
+    furniture: list[HeatingExclude] = Field(
+        default_factory=list,
+        description="Глухая мебель из furniture.yaml — ставит код при проверке, в YAML не пишется",
+    )
+    auto: bool = Field(
+        default=False,
+        description="Зона построена кодом по регулятору без записи floor_heating (допущение) — "
+        "ставит код, в YAML не пишется",
+    )
+
+    @field_validator("series")
+    @classmethod
+    def _series(cls, value: str) -> str:
+        if value not in SERIES:
+            raise ValueError(f"серии «{value}» нет в каталоге: {', '.join(sorted(SERIES))}")
+        return value
+
+
 # Phase of a group on a three-phase panel: one of the three, or all three (3P: a cooktop, an
 # electric boiler)
 Phase = Literal["L1", "L2", "L3", "3P"]
@@ -622,6 +697,15 @@ class Electrical(StrictModel):
     cables: list[Cable] = Field(default_factory=list)
     led_strips: list[LedStrip] = Field(default_factory=list)
     cable_channels: list[CableChannel] = Field(default_factory=list)
+    floor_heating: list[FloorHeating] = Field(
+        default_factory=list,
+        description="Зоны электрического тёплого пола: кабель змейкой, лист «Тёплый пол»",
+    )
+    heating_rooms: dict[str, str] = Field(
+        default_factory=dict,
+        description="Регулятор без записи floor_heating → где его автозона: id помещения, "
+        "«помещение:зона» или none — без тёплого пола. Ответ на вопрос heating_<id> (строит код)",
+    )
     panel: PanelSetup = Field(default_factory=PanelSetup, description="Щит в лицо: схема, ввод")
 
     @property

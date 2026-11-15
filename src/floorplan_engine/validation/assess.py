@@ -15,13 +15,18 @@ minor 1) exceeds WEIGHT_LIMIT: "not enough data". Electrical without a finished 
 
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from enum import StrEnum
+from typing import TYPE_CHECKING
 
+from floorplan_engine.model.furniture import FURNITURE_FILE
 from floorplan_engine.model.intake import QSeverity, Question, Stage
 from floorplan_engine.model.plumbing import PLUMBING_FILE
-from floorplan_engine.validation.issues import ELECTRICAL_FILE, ROOM_FILE
-from floorplan_engine.validation.validate import Report
+from floorplan_engine.validation.issues import ELECTRICAL_FILE, ROOM_FILE, QuestionState
+
+if TYPE_CHECKING:  # validate.py uses stage_questions_block before the report is assessed
+    from floorplan_engine.validation.validate import Report
 
 GEOMETRY_FIELDS = frozenset({"length", "turn", "origin", "start_angle"})
 PLACEMENT_FIELDS = frozenset({"offset", "width", "wall", "ceiling", "start", "end", "room"})
@@ -34,6 +39,7 @@ STAGE_FILES = {
     Stage.PLAN: ROOM_FILE,
     Stage.ELECTRICAL: ELECTRICAL_FILE,
     Stage.PLUMBING: PLUMBING_FILE,
+    Stage.FURNITURE: FURNITURE_FILE,
 }
 DEPENDS_ON = {
     Stage.ELECTRICAL: Stage.PLAN,
@@ -83,6 +89,28 @@ def severity(q: Question) -> QSeverity:
     return QSeverity.MINOR
 
 
+OPEN_STATES = ("open", "text", "returned")  # a question in these states still counts
+
+
+def open_questions(
+    questions: Sequence[Question], states: Mapping[str, QuestionState], stage: Stage
+) -> list[Question]:
+    """The stage's questions that are not answered yet."""
+    return [q for q in questions if q.stage is stage and states.get(q.id, "open") in OPEN_STATES]
+
+
+def questions_block(questions: Sequence[Question]) -> str | None:
+    """Why open questions stop their stage (a critical one, or too much weight); None — they
+    do not."""
+    critical = sum(1 for q in questions if severity(q) is QSeverity.CRITICAL)
+    if critical:
+        return f"критичных вопросов: {critical}"
+    weight = sum(WEIGHTS[severity(q)] for q in questions)
+    if weight > WEIGHT_LIMIT:
+        return f"вес вопросов {weight} больше {WEIGHT_LIMIT}"
+    return None
+
+
 @dataclass
 class StageResult:
     stage: Stage
@@ -104,8 +132,9 @@ ALWAYS = frozenset({Stage.PLAN, Stage.ELECTRICAL})
 
 def _stages_in_play(report: Report) -> list[Stage]:
     present = set(ALWAYS)
-    if report.plumbing is not None or any(i.file == PLUMBING_FILE for i in report.issues):
-        present.add(Stage.PLUMBING)
+    for stage, model in ((Stage.PLUMBING, report.plumbing), (Stage.FURNITURE, report.furniture)):
+        if model is not None or any(i.file == STAGE_FILES[stage] for i in report.issues):
+            present.add(stage)
     if report.intake is not None:
         present |= set(report.intake.stages)
     present |= {q.stage for q in report.questions}
@@ -117,12 +146,7 @@ def assess(report: Report) -> list[StageResult]:
     intake = report.intake
     results: dict[Stage, StageResult] = {}
     for stage in _stages_in_play(report):
-        open_q = [
-            q
-            for q in report.questions
-            if q.stage is stage
-            and report.question_states.get(q.id, "open") in ("open", "text", "returned")
-        ]
+        open_q = open_questions(report.questions, report.question_states, stage)
         result = StageResult(stage, Status.READY, open_questions=open_q)
         results[stage] = result
         note = intake.stages.get(stage) if intake else None
@@ -131,6 +155,7 @@ def assess(report: Report) -> list[StageResult]:
             (stage is Stage.PLAN and report.plan is not None)
             or (stage is Stage.ELECTRICAL and report.electrical is not None)
             or (stage is Stage.PLUMBING and report.plumbing is not None)
+            or (stage is Stage.FURNITURE and report.furniture is not None)
         )
         errors = [i for i in report.errors if file is not None and i.file in (file,)]
         parent = DEPENDS_ON.get(stage)
@@ -151,12 +176,9 @@ def assess(report: Report) -> list[StageResult]:
         elif errors:
             result.status = Status.INVALID
             result.reason = f"ошибок: {len(errors)}"
-        elif result.count(QSeverity.CRITICAL):
+        elif (blocked := questions_block(open_q)) is not None:
             result.status = Status.INSUFFICIENT
-            result.reason = f"критичных вопросов: {result.count(QSeverity.CRITICAL)}"
-        elif result.weight > WEIGHT_LIMIT:
-            result.status = Status.INSUFFICIENT
-            result.reason = f"вес вопросов {result.weight} больше {WEIGHT_LIMIT}"
+            result.reason = blocked
         elif not has_model:
             result.status = Status.ABSENT
             result.reason = note.note if note else f"нет {file}"

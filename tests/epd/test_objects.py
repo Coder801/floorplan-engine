@@ -7,6 +7,9 @@ import zipfile
 from pathlib import Path
 from typing import Any
 
+import pytest
+
+from floorplan_engine.electrical.floor_heating import with_heating
 from floorplan_engine.electrical.wiring import box_wiring
 from floorplan_engine.electrical.wiring_model import Wiring
 from floorplan_engine.epd.artifact import export_artifact
@@ -18,6 +21,7 @@ from floorplan_engine.epd.objects import (
     plan_chains,
     wire_titles,
 )
+from floorplan_engine.model.furniture import Furniture, solid_spots
 from floorplan_engine.model.schema import Electrical, ElectricalPoint, Plan
 from floorplan_engine.sheets.document import build_project_document
 from floorplan_engine.validation.plan import validate_plan
@@ -361,3 +365,141 @@ def test_frame_card_shows_every_point_of_the_frame() -> None:
     keys: Any = switch["items"]
     assert [i["own"] for i in keys] == [False, True, False]
     assert switch["x"] == frame["x"] and switch["wall"] == frame["wall"]
+
+
+def test_floor_heating_page_has_its_zone_card(tmp_path: Path) -> None:
+    from floorplan_engine.epd.objects import heating_cards
+
+    plan = make_plan([{"length": 3000}, {"length": 4000}, {"length": 3000}, {"length": 4000}])
+    _, contours = validate_plan(plan)
+    reg = {"id": "t1", "room": "r", "type": "thermostat", "wall": "w4", "offset": 500}
+    elec = Electrical.model_validate(
+        {
+            "points": [reg | {"height": 900}],
+            "floor_heating": [{"id": "fh1", "room": "r", "thermostat": "t1"}],
+        }
+    )
+    cards = heating_cards(plan, contours, elec)
+    assert list(cards) == ["heating:fh1"] and cards["heating:fh1"].title == "ТП1 — Комната"
+    doc = build_project_document(plan, contours, elec)
+    path = export_artifact(doc, plan, tmp_path / "p.epd", describe_objects(plan, contours, elec))
+    with zipfile.ZipFile(path) as zf:
+        manifest = json.loads(zf.read("manifest.json"))
+        (entry,) = [p for p in manifest["pages"] if p.get("stage") == "floor_heating"]
+        page = json.loads(zf.read(entry["file"]))
+    assert set(page["objects"]) == {"heating:fh1", "point:t1"}
+
+
+def test_furniture_cards_and_the_zone_card_says_what_is_cut(tmp_path: Path) -> None:
+    from floorplan_engine.epd.objects import furniture_cards, heating_cards
+
+    plan = make_plan([{"length": 3000}, {"length": 4000}, {"length": 3000}, {"length": 4000}])
+    _, contours = validate_plan(plan)
+    furniture = Furniture.model_validate(
+        {
+            "items": [
+                {"id": "k", "room": "r", "kind": "kitchen", "at": [0, 0], "size": [600, 3000]},
+                {
+                    "id": "b",
+                    "room": "r",
+                    "kind": "bed",
+                    "at": [2000, 500],
+                    "size": [1600, 2000],
+                    "note": "у окна",
+                },
+            ]
+        }
+    )
+    cards = furniture_cards(plan, furniture)
+    assert cards["furniture:k"].title == "Кухня — k"
+    assert dict(cards["furniture:k"].rows) == {
+        "Помещение": "Комната",
+        "Размер": "600 × 3000 мм",
+        "Основание": "глухая, на цоколе (по типу, допущение)",
+        "Тёплый пол": "под ней не кладётся",
+    }
+    assert dict(cards["furniture:b"].rows)["Тёплый пол"] == "не мешает"
+    assert dict(cards["furniture:b"].rows)["Примечание"] == "у окна"
+    reg = {"id": "t1", "room": "r", "type": "thermostat", "wall": "w4", "offset": 500}
+    elec = with_heating(
+        plan,
+        contours,
+        Electrical.model_validate({"points": [reg | {"height": 900, "note": "ТП 9 м²"}]}),
+        furniture=solid_spots(furniture),
+    )
+    (card,) = heating_cards(plan, contours, elec).values()
+    rows = dict(card.rows)
+    assert rows["Зона"] == "по регулятору (допущение)" and rows["По проекту, м²"] == "9"
+    assert rows["Без кабеля"] == "k" and list(rows)[-1] == "Без кабеля"
+    doc = build_project_document(plan, contours, elec, furniture=furniture)
+    objects = describe_objects(plan, contours, elec, furniture=furniture)
+    path = export_artifact(doc, plan, tmp_path / "p.epd", objects)
+    with zipfile.ZipFile(path) as zf:
+        manifest = json.loads(zf.read("manifest.json"))
+        stages = {p.get("stage"): json.loads(zf.read(p["file"])) for p in manifest["pages"]}
+    for stage in ("plan", "floor_heating"):
+        assert {"furniture:k", "furniture:b"} <= set(stages[stage]["objects"])
+    assert not any(k.startswith("furniture:") for k in stages["electrical"]["objects"])
+
+
+# Card texts by language: furniture title and rows, zone rows with the typical-size fixture
+CARD_TEXTS: dict[str, dict[str, str]] = {
+    "ru": {
+        "title": "Кухня — k",
+        "room": "Помещение",
+        "heating": "Тёплый пол",
+        "solid": "под ней не кладётся",
+        "zone": "Зона",
+        "auto": "по регулятору (допущение)",
+        "fixtures": "Сантехприборы",
+        "typical": "wc — типовой размер (допущение)",
+        "cut": "Без кабеля",
+    },
+    "uk": {
+        "title": "Кухня — k",
+        "room": "Приміщення",
+        "heating": "Тепла підлога",
+        "solid": "під ними не кладеться",
+        "zone": "Зона",
+        "auto": "за регулятором (припущення)",
+        "fixtures": "Сантехприлади",
+        "typical": "wc — типовий розмір (припущення)",
+        "cut": "Без кабелю",
+    },
+}
+
+
+@pytest.mark.parametrize("lang", ["ru", "uk"])
+def test_furniture_and_zone_cards_by_language(lang: str) -> None:
+    from floorplan_engine.epd.objects import furniture_cards, heating_cards
+    from floorplan_engine.model.plumbing import Plumbing
+    from floorplan_engine.plumbing.floor_spots import heating_spots
+
+    words = CARD_TEXTS[lang]
+    walls = [{"length": 3000}, {"length": 4000}, {"length": 3000}, {"length": 4000}]
+    plan = make_plan(walls).model_copy(update={"language": lang})
+    _, contours = validate_plan(plan)
+    item = {"id": "k", "room": "r", "kind": "kitchen", "at": [0, 0], "size": [600, 3000]}
+    furniture = Furniture.model_validate({"items": [item]})
+    rows = dict(furniture_cards(plan, furniture)["furniture:k"].rows)
+    assert furniture_cards(plan, furniture)["furniture:k"].title == words["title"]
+    assert rows[words["room"]] == "Комната" and rows[words["heating"]] == words["solid"]
+    # A WC by its typical size and a real obstacle: only the WC is named as an assumption
+    plumbing = Plumbing.model_validate(
+        {
+            "fixtures": [{"id": "wc", "room": "r", "type": "wc", "wall": "w2", "offset": 2000}],
+            "obstacles": [{"id": "box", "room": "r", "type": "box", "rect": [3500, 0, 3900, 400]}],
+        }
+    )
+    reg = {"id": "t1", "room": "r", "type": "thermostat", "wall": "w4", "offset": 500}
+    elec = with_heating(
+        plan,
+        contours,
+        Electrical.model_validate({"points": [reg | {"height": 900}]}),
+        heating_spots(plan, contours, plumbing),
+        solid_spots(furniture),
+    )
+    (card,) = heating_cards(plan, contours, elec).values()
+    zone = dict(card.rows)
+    assert zone[words["zone"]] == words["auto"]
+    assert zone[words["fixtures"]] == words["typical"] and zone[words["cut"]] == "k"

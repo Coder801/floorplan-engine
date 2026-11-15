@@ -48,6 +48,7 @@ from fastapi.responses import FileResponse, PlainTextResponse, Response
 from floorplan_engine import BRAND, __version__
 from floorplan_engine.electrical.estimate import PRICES_FILE
 from floorplan_engine.epd.thumbnail import PREVIEW_FILE
+from floorplan_engine.model.furniture import FURNITURE_FILE
 from floorplan_engine.model.intake import ANSWERS_FILE, INTAKE_FILE, AnswerNote
 from floorplan_engine.pipeline import (
     ARTIFACT_FILE,
@@ -90,7 +91,15 @@ from floorplan_engine.validation.report import REPORT_JSON
 
 FRONT_HINT = "страница — проект web/: cd web && npm run dev → http://127.0.0.1:5173"
 SOURCE_DIR = "source"
-MODEL_FILES = (ROOM_FILE, ELECTRICAL_FILE, INTAKE_FILE, ANSWERS_FILE, WIRING_FILE, VARIANT_FILE)
+MODEL_FILES = (
+    ROOM_FILE,
+    ELECTRICAL_FILE,
+    FURNITURE_FILE,
+    INTAKE_FILE,
+    ANSWERS_FILE,
+    WIRING_FILE,
+    VARIANT_FILE,
+)
 
 
 def project_folders(root: Path) -> list[Path]:

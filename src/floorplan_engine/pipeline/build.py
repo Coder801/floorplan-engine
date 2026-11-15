@@ -43,12 +43,14 @@ from floorplan_engine.epd.plumbing import plumbing_objects, plumbing_scene, plum
 from floorplan_engine.epd.scene3d import build_scene
 from floorplan_engine.epd.side import side_legends, side_tables
 from floorplan_engine.epd.thumbnail import PREVIEW_FILE, plan_thumbnail
+from floorplan_engine.model.furniture import Furniture
 from floorplan_engine.model.plumbing import PLUMBING_FILE, Plumbing
 from floorplan_engine.model.scale import drawing_scale
 from floorplan_engine.model.schema import Electrical, Plan
 from floorplan_engine.pipeline.assessment import (
     Assessment,
     assess_project,
+    furniture_of,
     plumbing_of,
     price_service,
     save_checked,
@@ -138,6 +140,7 @@ class _Build:
     elec: Electrical | None
     prices: Prices | None
     plumbing: Plumbing | None
+    furniture: Furniture | None = None
 
     @property
     def out(self) -> Path:
@@ -296,7 +299,7 @@ def _export(
         board = elec.board.name if elec.board is not None else "ЩР"
         panel_view = panel_data(panel, group_colors(elec), board, plan.language, wiring)
     water = water_views(*pipes) if pipes is not None else None
-    objects = describe_objects(plan, contours, elec, wiring, water)
+    objects = describe_objects(plan, contours, elec, wiring, water, run.furniture)
     if pipes is not None:
         objects |= plumbing_objects(plan, *pipes)
     quantities = None
@@ -367,6 +370,7 @@ def build_project(
         project, assessment, price_service(prices_from)
     )
     plumbing = plumbing_of(assessment)
+    furniture = furniture_of(assessment)
     doc = build_project_document(
         report.plan,
         report.contours,
@@ -374,12 +378,13 @@ def build_project(
         prices=prices,
         edits=report.wiring_edits,
         plumbing=plumbing,
+        furniture=furniture,
     )
     saved = save_checked(doc, out / PROJECT_FILE)
     result.dxf = out / PROJECT_FILE
     # Preview for the project card in the viewer
     (out / PREVIEW_FILE).write_text(plan_thumbnail(report.plan, report.contours), "utf-8")
-    run = _Build(project, assessment, result, report.plan, elec, prices, plumbing)
+    run = _Build(project, assessment, result, report.plan, elec, prices, plumbing, furniture)
     found = _wiring_step(run, saved)
     panel = _panel_step(run)
     net = _plumbing_step(run)

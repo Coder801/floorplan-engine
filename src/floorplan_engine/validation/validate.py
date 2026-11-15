@@ -13,14 +13,15 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from floorplan_engine.electrical.floor_heating import with_heating
 from floorplan_engine.electrical.lines import split_by_lines
 from floorplan_engine.electrical.master import with_master_switch
-from floorplan_engine.electrical.panel_questions import AUTO_PREFIX
 from floorplan_engine.electrical.variants import (
     apply_variant,
     default_variant,
     project_routes,
 )
+from floorplan_engine.model.furniture import FURNITURE_FILE, Furniture, solid_spots
 from floorplan_engine.model.geometry import (
     Contour,
 )
@@ -36,12 +37,15 @@ from floorplan_engine.model.intake import (
 from floorplan_engine.model.plumbing import PLUMBING_FILE, Plumbing
 from floorplan_engine.model.schema import (
     Electrical,
+    HeatingExclude,
     Plan,
     Variant,
     WiringEdits,
     WiringFile,
 )
+from floorplan_engine.plumbing.floor_spots import heating_spots
 from floorplan_engine.validation.answers import (
+    AUTO_PREFIXES,
     STAGE_FILE,
     apply_answers,
     apply_auto_answers,
@@ -49,7 +53,13 @@ from floorplan_engine.validation.answers import (
     load_optional,
 )
 from floorplan_engine.validation.answers_file import build_digest
-from floorplan_engine.validation.electrical import validate_electrical
+from floorplan_engine.validation.assess import open_questions, questions_block
+from floorplan_engine.validation.electrical import (
+    floor_heating_source,
+    heating_power_issues,
+    validate_electrical,
+)
+from floorplan_engine.validation.furniture import validate_furniture
 from floorplan_engine.validation.issues import (
     ELECTRICAL_FILE,
     ROOM_FILE,
@@ -72,6 +82,7 @@ class Report:
     plan: Plan | None = None
     electrical: Electrical | None = None
     plumbing: Plumbing | None = None  # plumbing.yaml: water and sewer
+    furniture: Furniture | None = None  # furniture.yaml: rectangles from the furniture plan
     contours: dict[str, Contour] = field(default_factory=dict)
     intake: Intake | None = None
     # open: no answer; answered: value applied; accepted: assumption kept;
@@ -135,7 +146,7 @@ def validate_project(project_dir: Path) -> Report:
     report.answers_digest = build_digest(
         answers_path.read_text("utf-8") if answers_path.exists() else None
     )
-    own = [k for k in (answers.answers if answers else {}) if not k.startswith(AUTO_PREFIX)]
+    own = [k for k in (answers.answers if answers else {}) if not k.startswith(AUTO_PREFIXES)]
     if own and intake is None:
         report.issues.append(Issue(ANSWERS_FILE, "", f"есть ответы, но нет {INTAKE_FILE}"))
 
@@ -146,7 +157,12 @@ def validate_project(project_dir: Path) -> Report:
         report.issues += issues
         if data is not None:
             raw[Stage.PLAN] = data
-    for stage, name in ((Stage.ELECTRICAL, ELECTRICAL_FILE), (Stage.PLUMBING, PLUMBING_FILE)):
+    files = (
+        (Stage.ELECTRICAL, ELECTRICAL_FILE),
+        (Stage.PLUMBING, PLUMBING_FILE),
+        (Stage.FURNITURE, FURNITURE_FILE),
+    )
+    for stage, name in files:
         path = project_dir / name
         if path.exists():
             data, issues = load_yaml(path)
@@ -205,26 +221,74 @@ def _validate_stages(report: Report, raw: dict[Stage, Any], project_dir: Path) -
     report.plan = plan
     issues, report.contours = validate_plan(plan)
     report.issues += issues
-    _validate_electrical(report, raw, project_dir, plan, chosen)
+    plumbing: Plumbing | None = None
+    plumbing_issues: list[Issue] = []
     if Stage.PLUMBING in raw:
-        plumbing, issues = parse_model(Plumbing, raw[Stage.PLUMBING], PLUMBING_FILE)
+        plumbing, plumbing_issues = parse_model(Plumbing, raw[Stage.PLUMBING], PLUMBING_FILE)
+    elec = None
+    if Stage.ELECTRICAL in raw:
+        elec, issues = parse_model(Electrical, raw[Stage.ELECTRICAL], ELECTRICAL_FILE)
         report.issues += issues
-        if plumbing is not None:
-            report.plumbing = plumbing
-            report.issues += validate_plumbing(
-                plumbing, plan, report.contours, report.source_electrical
-            )
+    if plumbing is not None:
+        plumbing_issues += validate_plumbing(plumbing, plan, report.contours, elec)
+    # Floor heating takes the fixture spots from plumbing and the solid furniture — only from a
+    # stage that is drawn (pipeline/assessment.plumbing_of, furniture_of): they are read first
+    spots = (
+        heating_spots(plan, report.contours, plumbing)
+        if plumbing is not None and _stage_draws(report, Stage.PLUMBING, plumbing_issues)
+        else None
+    )
+    furniture = _validate_furniture(report, raw, plan)
+    if elec is not None:
+        _validate_electrical(report, elec, project_dir, plan, chosen, spots, furniture)
+    report.issues += plumbing_issues
+    report.plumbing = plumbing
+
+
+def _stage_draws(report: Report, stage: Stage, issues: list[Issue]) -> bool:
+    """The stage is drawn: its file has no errors and its open questions do not stop it (the
+    same rule as validation/assess.assess; the plan building is checked by its stages)."""
+    if any(i.severity is Severity.ERROR for i in issues):
+        return False
+    return questions_block(open_questions(report.questions, report.question_states, stage)) is None
+
+
+def _validate_furniture(
+    report: Report, raw: dict[Stage, Any], plan: Plan
+) -> dict[str, list[HeatingExclude]] | None:
+    """furniture.yaml: parsed and checked; its solid pieces by room for floor heating, None when
+    there is no file or the stage is not drawn (errors, blocking questions): floor heating then
+    ignores the furniture, as the sheets do."""
+    if Stage.FURNITURE not in raw:
+        return None
+    furniture, issues = parse_model(Furniture, raw[Stage.FURNITURE], FURNITURE_FILE)
+    report.issues += issues
+    if furniture is None:
+        return None
+    issues = validate_furniture(furniture, plan, report.contours)
+    report.issues += issues
+    report.furniture = furniture
+    if not _stage_draws(report, Stage.FURNITURE, issues):
+        return None
+    return solid_spots(furniture)
 
 
 def _validate_electrical(
-    report: Report, raw: dict[Stage, Any], project_dir: Path, plan: Plan, chosen: Variant | None
+    report: Report,
+    elec: Electrical,
+    project_dir: Path,
+    plan: Plan,
+    chosen: Variant | None,
+    spots: dict[str, list[HeatingExclude]] | None = None,
+    furniture: dict[str, list[HeatingExclude]] | None = None,
 ) -> None:
-    if Stage.ELECTRICAL not in raw:
-        return
-    elec, issues = parse_model(Electrical, raw[Stage.ELECTRICAL], ELECTRICAL_FILE)
-    report.issues += issues
-    if elec is None:
-        return
+    source_issues = floor_heating_source(elec, plan, report.contours)
+    report.issues += source_issues
+    if all(i.severity is Severity.WARNING for i in source_issues):
+        # Floor heating: auto zones, plumbing spots and furniture in the zones, the zones' power
+        # on the controllers; a controller's own power is compared with the zones as drawn
+        elec = with_heating(plan, report.contours, elec, spots, furniture)
+        report.issues += heating_power_issues(elec, plan, report.contours)
     report.source_electrical = elec
     report.default_variant = default_variant(elec)
     if chosen is not None and chosen.route not in project_routes(elec):

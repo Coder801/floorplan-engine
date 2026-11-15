@@ -97,7 +97,9 @@ MOCK_PRICES: dict[str, float] = {
 # is other work than a switch or an output (a chase for the cable and the sensor tube, laying in
 # the screed), its items and prices come with the floor heating section. Until then the row
 # stays in the estimate with its quantity, "no price", out of the total
-UNPRICED = frozenset({"thermostat"})
+UNPRICED = frozenset(
+    {"thermostat", "heating_cable", "heating_sensor", "heating_conduit", "work.floor_heating"}
+)
 # Narrow chase by wall material, UAH per metre (Kyiv 2026-11); a wide one is × 1.5 (DERIVED_PRICES)
 CHASE_PRICES = {"concrete": 200.0, "claydite": 150.0, "brick": 120.0, "aerated": 90.0}
 CABLE_PER_MM2 = 10.0  # UAH per metre per mm² of total conductor section: 3×1.5 → 45, 3×2.5 → 75

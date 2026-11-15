@@ -44,13 +44,15 @@ from floorplan_engine.model.zones import plan_floors
 
 # Sheet topic (sheets.SHEET_SLUGS) → object types that get hints on it
 STAGE_OBJECTS: dict[str, frozenset[str]] = {
-    "plan": frozenset({"room", "zone", "wall", "dimension", "opening"}),
+    "plan": frozenset({"room", "zone", "wall", "dimension", "opening", "furniture"}),
     "electrical": frozenset({"point", "label", "board", "cable", "led_strip"}),
     "lighting": frozenset({"point", "led_strip"}),
     "wiring": frozenset({"wire", "box", "board"}),
     "panel": frozenset({"device", "board"}),
     "elevations": frozenset({"elevation", "dim"}),  # walls, ceilings, ceiling scale values
     "plumbing": frozenset({"fixture", "pipe", "riser", "collector", "obstacle"}),
+    # Zones, their controllers and the furniture they go round
+    "floor_heating": frozenset({"heating", "point", "furniture"}),
 }
 
 TEXT: dict[str, dict[str, str]] = {

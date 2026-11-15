@@ -31,6 +31,7 @@ MODEL_COLUMNS = {
     "room.yaml": "room_yaml",
     "electrical.yaml": "electrical_yaml",
     "plumbing.yaml": "plumbing_yaml",
+    "furniture.yaml": "furniture_yaml",
     "intake.yaml": "intake_yaml",
     "answers.yaml": "answers_yaml",
     "wiring.yaml": "wiring_yaml",

@@ -223,6 +223,25 @@ LINES: dict[str, tuple[Section, str, str, str]] = {
     # No price anywhere yet (UNPRICED): the work behind it is set with the floor heating section
     "thermostat": ("material_finish", "шт", "", ""),
     "led_strip": ("material_finish", "м", "", ""),
+    # Floor heating (floor_heating.py, decision 2026-11-14): by zones, no price anywhere yet
+    "heating_cable": (
+        "material_rough",
+        "шт",
+        "Секция нагревательного кабеля {n} м",
+        "Секція нагрівального кабелю {n} м",
+    ),
+    "heating_sensor": (
+        "material_rough",
+        "шт",
+        "Датчик температуры пола",
+        "Датчик температури підлоги",
+    ),
+    "heating_conduit": (
+        "material_rough",
+        "м",
+        "Гофротруба Ø16 для датчика пола",
+        "Гофротруба Ø16 для датчика підлоги",
+    ),
     "led_psu": ("material_finish", "шт", "Блок питания LED 12 В", "Блок живлення LED 12 В"),
     "led_psu_din": (
         "material_finish",
@@ -304,6 +323,12 @@ LINES: dict[str, tuple[Section, str, str, str]] = {
         "Установка временного выключателя",
         "Встановлення тимчасового вимикача",
     ),
+    "work.floor_heating": (
+        "rough",
+        "м²",
+        "Укладка нагревательного кабеля змейкой с датчиком пола",
+        "Укладання нагрівального кабелю змійкою з датчиком підлоги",
+    ),
     "work.insulation_test": (
         "rough",
         "гр.",
@@ -332,6 +357,21 @@ HINTS: dict[str, dict[str, str]] = {
         "ru": "Крепление кабеля без гофры к потолку и стенам монтажным пистолетом",
         "uk": "Кріплення кабелю без гофри до стелі та стін монтажним пістолетом",
     },
+    "heating_cable": {
+        "ru": "Двужильный, 18 Вт/м, холодный конец заводской; серия и ряд длин — допущение, "
+        "уточнить по каталогу производителя",
+        "uk": "Двожильний, 18 Вт/м, холодний кінець заводський; серія і ряд довжин — припущення, "
+        "уточнити за каталогом виробника",
+    },
+    "heating_sensor": {
+        "ru": "Обычно в комплекте регулятора",
+        "uk": "Зазвичай у комплекті регулятора",
+    },
+    "work.floor_heating": {
+        "ru": "По площади обогрева: раскладка по чертежу «Тёплый пол», гофра датчика, замеры",
+        "uk": "За площею обігріву: розкладання за кресленням «Тепла підлога», гофра датчика, "
+        "заміри",
+    },
     "busbar": {
         "ru": "Соединяет автоматы на рейке вместо перемычек; режется по месту",
         "uk": "З'єднує автомати на рейці замість перемичок; ріжеться за місцем",
@@ -344,6 +384,7 @@ PRICE_SERVICE = {
 }
 PARAM_KEYS = (
     "busbar",
+    "heating_cable",
     "cable",
     "conduit",
     "conduit_clip",
@@ -871,11 +912,15 @@ def quantities(wiring: Wiring, elec: Electrical) -> dict[str, float]:
     rough_rooms = len({p.room for p in elec.points if p.type in LIGHT_TYPES})
     if elec.rough_light and rough_rooms:
         q["rough_holder"] = q["rough_lamp"] = q["rough_switch"] = rough_rooms
+    q.update(heating_quantities(wiring))
     q["work.cable"] = round(sum(r.length_mm for r in wiring.runs) / 1000, 1)
     in_conduit = sum(conduit_mm(r, elec.conduit_level) for r in wiring.runs)
     if in_conduit > 0:
         q["work.conduit"] = round(in_conduit / 1000, 1)
     q.update(chase_quantities(wiring))
+    heated = sum(z.area_m2 for z in wiring.heating if z.route is not None)
+    if heated:
+        q["work.floor_heating"] = round(heated, 1)
     q["work.wall_hole"] = sum(1 for h in wiring.holes if not h.large)
     q["work.wall_hole_large"] = sum(1 for h in wiring.holes if h.large)
     q["work.socket_box"] = posts
@@ -892,6 +937,24 @@ def quantities(wiring: Wiring, elec: Electrical) -> dict[str, float]:
     if elec.protection_test:
         q["work.protection_test"] = power_groups
     return {k: v for k, v in q.items() if v}
+
+
+def heating_quantities(wiring: Wiring) -> dict[str, float]:
+    """Floor heating materials (decision 2026-11-14): a section by its length, a floor sensor and
+    its conduit (with RESERVE) per zone that has a layout; a zone without one (empty heated
+    area) buys nothing — the report says why."""
+    q: dict[str, float] = {}
+    laid = [z for z in wiring.heating if z.route is not None]
+    for z in sorted(laid, key=lambda z: z.length):
+        if z.length > 0:
+            key = f"heating_cable.{z.length:g}"
+            q[key] = q.get(key, 0) + 1
+    if laid:
+        q["heating_sensor"] = len(laid)
+        conduit = sum(z.sensor_m for z in laid)
+        if conduit > 0:
+            q["heating_conduit"] = round(conduit * (1 + RESERVE), 1)
+    return q
 
 
 def chase_quantities(wiring: Wiring) -> dict[str, float]:

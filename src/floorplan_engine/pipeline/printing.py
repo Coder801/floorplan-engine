@@ -15,6 +15,7 @@ from floorplan_engine.model.schema import SheetFormat
 from floorplan_engine.pipeline.assessment import (
     Assessment,
     assess_project,
+    furniture_of,
     plumbing_of,
     price_service,
     save_checked,
@@ -73,6 +74,7 @@ def print_project(
             prices=prices,
             edits=assessment.report.wiring_edits,
             plumbing=plumbing_of(assessment),
+            furniture=furniture_of(assessment),
         )
         result.dxf = out / f"print-{paper}.dxf"
         doc = save_checked(doc, result.dxf)

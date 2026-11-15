@@ -384,6 +384,7 @@ class ModelVersion(Base):
     wiring_yaml: Mapped[str | None] = mapped_column(Text)  # route edits from the viewer
     plumbing_yaml: Mapped[str | None] = mapped_column(Text)
     variant_yaml: Mapped[str | None] = mapped_column(Text)  # wiring variant chosen in the viewer
+    furniture_yaml: Mapped[str | None] = mapped_column(Text)  # furniture plan (2026-11-15)
     data: Mapped[dict[str, Any]] = mapped_column(default=dict)
     author: Mapped[str] = mapped_column(String(20))  # analyzer | user | operator
     user_id: Mapped[uuid.UUID | None] = mapped_column(

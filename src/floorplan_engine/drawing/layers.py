@@ -140,6 +140,19 @@ P_OBST = LayerSpec("P-OBST", 8, "Препятствия: инсталляция,
 P_SYMB = LayerSpec("P-SYMB", 8, "Сантехприборы контуром: ванна, душ, унитаз… (типовой размер)")
 P_TEXT = LayerSpec("P-TEXT", 7, "Подписи сантехники: диаметры, уклоны")
 PLUMBING_LAYERS = (P_COLD, P_HOT, P_SEWER, P_FIXT, P_RISER, P_OBST, P_SYMB, P_TEXT, A_SHEET)
+# Floor heating (decision 2026-11-14): its own sheet; the controller symbol is on E-SOCKET as well
+H_CABLE = LayerSpec("E-FLOORHEAT", 1, "Тёплый пол: нагревательный кабель змейкой")
+H_LEAD = LayerSpec(
+    "E-FLOORHEAT-LEAD", 1, "Тёплый пол: холодный конец до регулятора", CABLE_LINETYPE
+)
+H_SENSOR = LayerSpec("E-FLOORHEAT-SENSOR", 5, "Тёплый пол: гофра датчика пола и датчик")
+H_ZONE = LayerSpec("E-FLOORHEAT-ZONE", 8, "Тёплый пол: граница обогрева, где кабеля нет")
+H_TEXT = LayerSpec("E-FLOORHEAT-TEXT", 7, "Тёплый пол: регулятор, шаг, подписи")
+LW_HEAT = 25  # heating cable line weight, 1/100 mm
+FLOOR_HEATING_LAYERS = (H_CABLE, H_LEAD, H_SENSOR, H_ZONE, H_TEXT, A_SHEET)
+F_FURN = LayerSpec(
+    "F-FURN", 8, "Мебель с плана мебели: глухая — сплошной контур, на ножках — пунктир"
+)
 ALL_LAYERS = tuple(
     dict.fromkeys(
         PLAN_LAYERS
@@ -150,6 +163,8 @@ ALL_LAYERS = tuple(
         + MOUNTING_LAYERS
         + (E_ELEV,)
         + PLUMBING_LAYERS
+        + FLOOR_HEATING_LAYERS
+        + (F_FURN,)
     )
 )
 

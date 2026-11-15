@@ -1,5 +1,6 @@
 """Applied on top of the model: the studio profile (projects/studio.yaml), answers from
-answers.yaml into fields by `target`, auto answers to code-built questions (panel questions)."""
+answers.yaml into fields by `target`, auto answers to code-built questions (panel questions and
+the floor heating controllers without a zone, electrical/heating_auto.py)."""
 
 from __future__ import annotations
 
@@ -8,6 +9,7 @@ from typing import Any
 
 from pydantic import ValidationError
 
+from floorplan_engine.electrical.heating_auto import HEATING_PREFIX, HEATING_ROOMS, auto_heating
 from floorplan_engine.electrical.lines import split_by_lines
 from floorplan_engine.electrical.panel import build_panel
 from floorplan_engine.electrical.panel_questions import (
@@ -16,6 +18,7 @@ from floorplan_engine.electrical.panel_questions import (
     GROUPS_FIELD,
     panel_questions,
 )
+from floorplan_engine.model.furniture import FURNITURE_FILE
 from floorplan_engine.model.intake import (
     ANSWERS_FILE,
     INTAKE_FILE,
@@ -54,7 +57,10 @@ STAGE_FILE = {
     Stage.PLAN: ROOM_FILE,
     Stage.ELECTRICAL: ELECTRICAL_FILE,
     Stage.PLUMBING: PLUMBING_FILE,
+    Stage.FURNITURE: FURNITURE_FILE,
 }
+# Ids of code-built questions: never written in intake.yaml
+AUTO_PREFIXES = (AUTO_PREFIX, HEATING_PREFIX)
 
 
 def load_optional(path: Path, model: type[M]) -> tuple[M | None, list[Issue]]:
@@ -114,7 +120,16 @@ def apply_answers(
     accept keeps the assumption; a client question is never put into the model. The source
     YAML files are not rewritten.
     """
-    issues: list[Issue] = []
+    issues: list[Issue] = [
+        Issue(
+            INTAKE_FILE,
+            f"questions[{k}].id",
+            f"id «{q.id}»: префиксы {', '.join(AUTO_PREFIXES)} — у вопросов, которые строит код "
+            "(щит, тёплый пол); дайте вопросу другой id",
+        )
+        for k, q in enumerate(intake.questions)
+        if q.id.startswith(AUTO_PREFIXES)
+    ]
     states: dict[str, QuestionState] = {q.id: "open" for q in intake.questions}
     by_id = {q.id: q for q in intake.questions}
     for k, q in enumerate(intake.questions):
@@ -128,8 +143,8 @@ def apply_answers(
             except TargetError as exc:
                 issues.append(Issue(INTAKE_FILE, f"questions[{k}].{key}", str(exc)))
     for qid, answer in answers.answers.items():
-        if qid.startswith(AUTO_PREFIX):
-            continue  # a panel question: the code builds it (apply_auto_answers)
+        if qid.startswith(AUTO_PREFIXES):
+            continue  # a panel or heating question: the code builds it (apply_auto_answers)
         path = f"answers.{qid}"
         question = by_id.get(qid)
         if question is None:
@@ -180,8 +195,8 @@ def apply_answers(
 
 
 def auto_questions(raw: dict[Stage, Any]) -> list[Question]:
-    """Panel questions from the raw stage data: plan and electrical are parsed silently, their
-    errors are reported by the check."""
+    """Panel questions and floor heating controller questions from the raw stage data: plan and
+    electrical are parsed silently, their errors are reported by the check."""
     plan_data, elec_data = raw.get(Stage.PLAN), raw.get(Stage.ELECTRICAL)
     if plan_data is None or elec_data is None:
         return []
@@ -195,15 +210,18 @@ def auto_questions(raw: dict[Stage, Any]) -> list[Question]:
     if not any(i.severity is Severity.ERROR for i in issues):
         elec = split_by_lines(plan, contours, model)
     panel = build_panel(plan, elec)
-    return panel_questions(elec, panel, plan.language, model) if panel is not None else []
+    heating = list(auto_heating(plan, model).questions)
+    own = panel_questions(elec, panel, plan.language, model) if panel is not None else []
+    return [*own, *heating]
 
 
-def _panel_of(raw: dict[Stage, Any]) -> dict[str, Any] | None:
-    """The `panel` section of the raw electrical stage; None if it is not a mapping."""
+def _section_of(raw: dict[Stage, Any], name: str = "panel") -> dict[str, Any] | None:
+    """A mapping section of the raw electrical stage (`panel`, `heating_rooms`); None if it is
+    not a mapping."""
     elec = raw.get(Stage.ELECTRICAL)
     assert isinstance(elec, dict)
-    panel = elec.setdefault("panel", {})
-    return panel if isinstance(panel, dict) else None
+    section = elec.setdefault(name, {})
+    return section if isinstance(section, dict) else None
 
 
 def apply_auto_answers(
@@ -229,7 +247,7 @@ def apply_auto_answers(
                 issues.append(Issue(ANSWERS_FILE, path, "на этот вопрос нужен ответ { text: ... }"))
             elif q.answer == "groups":
                 if isinstance(answer, list) and set(answer) <= set(q.options):
-                    panel = _panel_of(raw)
+                    panel = _section_of(raw)
                     if panel is not None:
                         panel[GROUPS_FIELD[q.id]] = answer
                         states[q.id] = "answered"
@@ -242,9 +260,15 @@ def apply_auto_answers(
                 )
             elif q.answer == "value" and not isinstance(answer, float):
                 issues.append(Issue(ANSWERS_FILE, path, f"ожидается число{format_value(answer)}"))
+            elif q.id.startswith(HEATING_PREFIX):
+                assert q.target is not None
+                rooms = _section_of(raw, HEATING_ROOMS)
+                if rooms is not None:
+                    rooms[q.target.removeprefix(f"{HEATING_ROOMS}.")] = answer
+                    states[q.id] = "answered"
             else:
                 assert q.target is not None
-                panel = _panel_of(raw)
+                panel = _section_of(raw)
                 if panel is not None:
                     field = q.target.removeprefix("panel.")
                     # Whole fields get an int; the backup power stays as given (3.6 kW)
@@ -265,13 +289,16 @@ def apply_auto_answers(
     final += [q for q in first if q.id not in ids and states.get(q.id) == "answered"]
     known = {q.id for q in final}
     for qid in answers.answers:
-        if qid.startswith(AUTO_PREFIX) and qid not in known:
+        if qid.startswith(AUTO_PREFIXES) and qid not in known:
+            what = "щита" if qid.startswith(AUTO_PREFIX) else "о зоне тёплого пола"
             issues.append(
                 Issue(
                     ANSWERS_FILE,
                     f"answers.{qid}",
-                    "вопроса щита больше нет — ответ не нужен",
+                    f"вопроса {what} больше нет — ответ не нужен",
                     Severity.WARNING,
                 )
             )
-    return final, {k: v for k, v in states.items() if k in known}, issues
+    # Both passes check the same answers: one message each
+    unique = list({(i.file, i.path, i.message): i for i in issues}.values())
+    return final, {k: v for k, v in states.items() if k in known}, unique

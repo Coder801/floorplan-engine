@@ -305,3 +305,47 @@ def test_report_splits_errors_and_warnings() -> None:
     assert not report.ok
     assert Report(issues=[warn]).ok
     assert Report().ok
+
+
+# --- What floor heating takes from plumbing and furniture --------------------
+
+
+HEAT_ROOM = [{"length": 3000}, {"length": 4000}, {"length": 3000}, {"length": 4000}]
+HEAT_ELEC = {
+    "points": [
+        {"id": "t1", "room": "r", "type": "thermostat", "wall": "w4", "offset": 500, "height": 900}
+    ],
+    "floor_heating": [{"id": "fh", "room": "r", "thermostat": "t1"}],
+}
+
+
+def _heated(tmp_path: Path, **files: Any) -> Report:
+    plan = make_plan(HEAT_ROOM).model_dump(mode="json", exclude_defaults=True)
+    for name, data in {"room.yaml": plan, "electrical.yaml": HEAT_ELEC, **files}.items():
+        (tmp_path / name).write_text(yaml.safe_dump(data, allow_unicode=True), "utf-8")
+    return validate_project(tmp_path)
+
+
+def test_floor_heating_ignores_plumbing_that_is_not_built(tmp_path: Path) -> None:
+    bath = {"id": "b", "room": "r", "type": "bath", "rect": [0, 0, 1700, 750]}
+    good = _heated(tmp_path, **{"plumbing.yaml": {"obstacles": [bath]}})
+    assert good.electrical is not None and len(good.electrical.floor_heating[0].fixtures) == 1
+    # A plumbing error: its stage is not drawn, so its spots are not cut out of the floor
+    wc = {"id": "wc", "room": "r", "type": "wc", "wall": "w9", "offset": 500}
+    bad = _heated(tmp_path, **{"plumbing.yaml": {"obstacles": [bath], "fixtures": [wc]}})
+    assert any(i.file == "plumbing.yaml" for i in bad.errors)
+    assert bad.electrical is not None and bad.electrical.floor_heating[0].fixtures == []
+
+
+def test_floor_heating_ignores_furniture_that_is_not_drawn(tmp_path: Path) -> None:
+    from floorplan_engine.pipeline import assess_project, furniture_of
+
+    kitchen = {"id": "k", "room": "r", "kind": "kitchen", "at": [0, 0], "size": [600, 3000]}
+    furniture = {"furniture.yaml": {"items": [kitchen]}}
+    report = _heated(tmp_path, **furniture)
+    assert report.electrical is not None and len(report.electrical.floor_heating[0].furniture)
+    # A critical question stops the furniture stage: neither drawn nor cut out of the floor
+    question = {"id": "q1", "stage": "furniture", "text": "Где кухня?", "severity": "critical"}
+    report = _heated(tmp_path, **furniture, **{"intake.yaml": {"questions": [question]}})
+    assert report.electrical is not None and report.electrical.floor_heating[0].furniture == []
+    assert furniture_of(assess_project(tmp_path)) is None

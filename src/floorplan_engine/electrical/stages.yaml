@@ -24,6 +24,12 @@ stages:
     photo: required  # трассы до штукатурки: то, что потом в стене
     after: [chases]
 
+  - key: floor_heating
+    title: { ru: "Тёплый пол: кабель и датчик", uk: "Тепла підлога: кабель і датчик" }
+    lines: [work.floor_heating, heating_cable, heating_sensor, heating_conduit]
+    photo: required  # змейка до стяжки: то, что потом в полу
+    after: [cable]
+
   - key: boxes
     title: { ru: "Распаечные коробки", uk: "Розподільчі коробки" }
     lines: [work.junction_box, junction_box, junction_box_ip, crimp]

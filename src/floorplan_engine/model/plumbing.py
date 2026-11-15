@@ -72,6 +72,24 @@ FIXTURE_SPECS: dict[FixtureType, FixtureSpec] = {
     FixtureType.BOILER: FixtureSpec(True, False, None, 1300.0, None, hot_source=True),
     FixtureType.HYGIENIC_SHOWER: FixtureSpec(True, True, None, 800.0, None),
 }
+# Typical fixture size on the plan, mm: along the wall × away from the wall; the outline on the
+# "Plumbing" sheet (drawing/fixture_symbols.py) and the spot without floor heating
+# (plumbing/floor_spots.py)
+FIXTURE_SIZES: dict[FixtureType, tuple[float, float]] = {
+    FixtureType.BATH: (1700.0, 750.0),
+    FixtureType.SHOWER: (900.0, 900.0),
+    FixtureType.WC: (380.0, 680.0),
+    FixtureType.WC_INSTALLATION: (360.0, 540.0),
+    FixtureType.SINK: (550.0, 450.0),
+    FixtureType.KITCHEN_SINK: (500.0, 500.0),
+    FixtureType.WASHER: (600.0, 600.0),
+    FixtureType.DISHWASHER: (600.0, 600.0),
+    FixtureType.BOILER: (450.0, 450.0),
+    FixtureType.HYGIENIC_SHOWER: (120.0, 160.0),
+}
+# Note of a floor heating spot cut out by a fixture's typical size (not its real outline, an
+# assumption on the zone card): "plumbing.yaml (типовой размер): <id>"
+TYPICAL_SPOT = "plumbing.yaml (типовой размер)"
 # Fixtures that can be outside wet rooms (kitchen, hallway, storage)
 DRY_ROOM_FIXTURES = frozenset(
     {FixtureType.KITCHEN_SINK, FixtureType.DISHWASHER, FixtureType.WASHER, FixtureType.BOILER}

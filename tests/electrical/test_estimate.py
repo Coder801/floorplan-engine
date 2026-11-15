@@ -483,6 +483,9 @@ def test_works_split_into_rough_and_finish() -> None:
         "rough_holder",
         "rough_lamp",
         "rough_switch",
+        "heating_cable",
+        "heating_sensor",
+        "heating_conduit",
     }
     assert {k for k, s in materials.items() if s == "material_rough"} == rough
     assert all(s == "material_finish" for k, s in materials.items() if k not in rough)
@@ -915,3 +918,55 @@ def test_thermostat_is_one_row_without_a_price() -> None:
     own = PriceList.model_validate({"items": {"thermostat": 1000}})
     priced = build_estimate(wiring, elec, Prices(own, MockPriceService()), "ru")
     assert priced.unpriced == 0 and priced.total == pytest.approx(est.total + 2000)
+
+
+def test_floor_heating_rows_by_zone_without_prices() -> None:
+    """Floor heating (decision 2026-11-14): a section per zone by its length, a sensor and its
+    conduit, the laying work by heated area — all without a price (pricing.UNPRICED)."""
+    plan = make_plan(RECT, [DOOR])
+    _, contours = validate_plan(plan)
+    reg = _pt("t1", "thermostat", 2000, 1500, "QF5")
+    fh = [{"id": "fh1", "room": "r", "thermostat": "t1"}]
+    elec = Electrical.model_validate(
+        {**ELEC, "points": [*ELEC["points"], reg], "floor_heating": fh}
+    )
+    wiring = box_wiring(plan, contours, elec)
+    assert wiring is not None
+    (zone,) = wiring.heating
+    q = quantities(wiring, elec)
+    assert q[f"heating_cable.{zone.length:g}"] == 1
+    assert q["heating_sensor"] == 1
+    assert q["heating_conduit"] == pytest.approx(round(zone.sensor_m * (1 + RESERVE), 1))
+    assert q["work.floor_heating"] == pytest.approx(round(zone.area_m2, 1))
+    est = build_estimate(wiring, elec, Prices(None, MockPriceService()), "ru")
+    rows = {ln.key: ln for ln in est.lines if "heating" in ln.key}
+    assert set(rows) == {
+        f"heating_cable.{zone.length:g}",
+        "heating_sensor",
+        "heating_conduit",
+        "work.floor_heating",
+    }
+    assert all(ln.price is None for ln in rows.values())
+    cable = rows[f"heating_cable.{zone.length:g}"]
+    assert cable.name == f"Секция нагревательного кабеля {zone.length:g} м"
+    assert cable.hint is not None and "допущение" in cable.hint
+    assert "heating_sensor" not in quantities(*_wiring())
+
+
+def test_floor_heating_zone_without_a_layout_buys_no_cable() -> None:
+    """A zone with an empty heated area has no route: no section, no sensor, no work — the
+    report already says why (a remark on the zone)."""
+    plan = make_plan(RECT, [DOOR])
+    _, contours = validate_plan(plan)
+    reg = _pt("t1", "thermostat", 2000, 1500, "QF5")
+    whole = {"at": [0, 0], "size": [6000, 6000]}
+    fh = [{"id": "fh1", "room": "r", "thermostat": "t1", "length": 20, "exclude": [whole]}]
+    elec = Electrical.model_validate(
+        {**ELEC, "points": [*ELEC["points"], reg], "floor_heating": fh}
+    )
+    wiring = box_wiring(plan, contours, elec)
+    assert wiring is not None
+    (zone,) = wiring.heating
+    assert zone.route is None and zone.length == 20
+    q = quantities(wiring, elec)
+    assert not [k for k in q if "heating" in k]

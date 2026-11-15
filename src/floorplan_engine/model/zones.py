@@ -35,7 +35,7 @@ def _distance(p: Vec, s: WallSegment) -> float:
     return (p - s.point_at(t)).length()
 
 
-def _outline(contour: Contour, zone: Zone) -> list[Vec]:
+def zone_outline(contour: Contour, zone: Zone) -> list[Vec]:
     """The zone's walls in walk order, start and end of each; the polygon closes itself."""
     walls = [seg for seg in contour.segments if seg.id in zone.walls]
     return [v for seg in walls for v in (seg.start, seg.end)]
@@ -44,7 +44,9 @@ def _outline(contour: Contour, zone: Zone) -> list[Vec]:
 def _ceiling_zone(room: Room, plan: Plan, at: tuple[float, float]) -> str:
     contour = trace_contour(room, plan.default_wall_thickness)
     p = Vec(*room.origin) + Vec(*at)
-    inside = next((z.name for z in room.zones if point_in_polygon(p, _outline(contour, z))), None)
+    inside = next(
+        (z.name for z in room.zones if point_in_polygon(p, zone_outline(contour, z))), None
+    )
     if inside is not None:
         return inside
     wall = min(contour.segments, key=lambda s: _distance(p, s)).id
@@ -111,7 +113,9 @@ def room_floors(room: Room, contour: Contour) -> list[Floor]:
         walls = tuple(w.id for w in room.walls)
         return [Floor(f"room:{room.id}", room, room.name, tuple(contour.vertices), walls)]
     return [
-        Floor(f"zone:{room.id}.{k}", room, z.name, _distinct(_outline(contour, z)), tuple(z.walls))
+        Floor(
+            f"zone:{room.id}.{k}", room, z.name, _distinct(zone_outline(contour, z)), tuple(z.walls)
+        )
         for k, z in enumerate(room.zones, 1)
     ]
 

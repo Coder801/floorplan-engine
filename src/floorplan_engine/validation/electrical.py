@@ -7,6 +7,15 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import replace
 
+from shapely.geometry import Polygon
+
+from floorplan_engine.electrical.floor_heating import (
+    AREA_TOLERANCE,
+    floor_outline,
+    heating_power,
+    heating_zones,
+)
+from floorplan_engine.electrical.heating_auto import HEATING_ROOMS, NONE, Place, parse_place
 from floorplan_engine.model.geometry import (
     Contour,
     Vec,
@@ -189,6 +198,7 @@ def validate_electrical(
             *((f"cables[{k}].id", c.id) for k, c in enumerate(elec.cables)),
             *((f"led_strips[{k}].id", st.id) for k, st in enumerate(elec.led_strips)),
             *((f"cable_channels[{k}].id", ch.id) for k, ch in enumerate(elec.cable_channels)),
+            *((f"floor_heating[{k}].id", fh.id) for k, fh in enumerate(elec.floor_heating)),
         ],
         file,
         "id",
@@ -223,6 +233,7 @@ def validate_electrical(
         issues += _check_height(ch.entry, f"{path}.entry", file)
         issues += _check_height(ch.exit, f"{path}.exit", file)
     issues += _check_room_groups(elec, plan, file)
+    issues += _check_floor_heating(elec, plan, contours, file)
     used = {p.group for p in elec.points if p.group} | {c.group for c in elec.cables if c.group}
     for name in elec.groups:
         if name not in used:
@@ -288,3 +299,208 @@ def _check_room_groups(elec: Electrical, plan: Plan, file: str) -> list[Issue]:
         for g, rs in sorted(rooms.items())
         if len(rs) > 1
     ]
+
+
+EXCLUDE_TOLERANCE = 1.0  # mm: an exclusion may touch the floor outline
+
+
+def _check_floor_heating(
+    elec: Electrical, plan: Plan, contours: dict[str, Contour], file: str
+) -> list[Issue]:
+    """Floor heating zones: the room and its zone, the controller is a `thermostat` point, the
+    exclusions lie on the floor; the layout remarks (pitch out of range, part not covered)."""
+    issues: list[Issue] = []
+    rooms = {r.id: r for r in plan.rooms}
+    points = {p.id: p for p in elec.points}
+    for k, fh in enumerate(elec.floor_heating):
+        path = f"floor_heating[{k}]"
+        room = rooms.get(fh.room)
+        if room is None:
+            issues.append(Issue(file, f"{path}.room", f"нет помещения «{fh.room}» в {ROOM_FILE}"))
+            continue
+        if fh.zone is not None and fh.zone not in {z.name for z in room.zones}:
+            names = ", ".join(f"«{z.name}»" for z in room.zones) or "зон нет"
+            issues.append(
+                Issue(file, f"{path}.zone", f"в помещении {fh.room} нет зоны «{fh.zone}»: {names}")
+            )
+        reg = points.get(fh.thermostat)
+        if reg is None:
+            issues.append(
+                Issue(file, f"{path}.thermostat", f"нет точки «{fh.thermostat}» — регулятора зоны")
+            )
+        elif reg.type is not PointType.THERMOSTAT:
+            issues.append(
+                Issue(
+                    file,
+                    f"{path}.thermostat",
+                    f"точка «{fh.thermostat}» — {reg.type.value}, а регулятор тёплого пола — "
+                    "type: thermostat",
+                )
+            )
+        outline = floor_outline(plan, contours, fh) if fh.room in contours else None
+        if outline is None or len(outline) < 3:
+            continue
+        floor = Polygon([v.as_tuple() for v in outline]).buffer(EXCLUDE_TOLERANCE)
+        ox, oy = room.origin
+        for j, ex in enumerate(fh.exclude):
+            x, y = ox + ex.at[0], oy + ex.at[1]
+            rect = Polygon(
+                [(x, y), (x + ex.size[0], y), (x + ex.size[0], y + ex.size[1]), (x, y + ex.size[1])]
+            )
+            if not floor.contains(rect):
+                where = f"зоны «{fh.zone}»" if fh.zone else f"помещения {fh.room}"
+                issues.append(
+                    Issue(
+                        file,
+                        f"{path}.exclude[{j}]",
+                        f"прямоугольник at {list(ex.at)}, size {list(ex.size)} выходит за пол "
+                        f"{where}: координаты — мм от origin помещения",
+                    )
+                )
+    issues += _check_heating_overlaps(elec, plan, file)
+    if any(i.severity is Severity.ERROR for i in issues):
+        return issues
+    regs = {p.id: k for k, p in enumerate(elec.points)}
+    for z in heating_zones(plan, contours, elec):
+        # An auto zone has no entry in electrical.yaml: its remarks point to the controller
+        path = (
+            f"points[{regs[z.spec.thermostat]}]"
+            if z.spec.auto and z.spec.thermostat in regs
+            else f"floor_heating[{z.index}]"
+        )
+        what = f"тёплый пол «{z.spec.id}»" + (" (зона по регулятору)" if z.spec.auto else "")
+        if z.spec.auto:
+            issues.append(
+                Issue(
+                    file,
+                    path,
+                    f"{what}: в floor_heating зоны нет — построена кодом: {z.name}* "
+                    "(допущение: помещение по подписи или месту регулятора); уточните по дизайну "
+                    "или задайте heating_rooms",
+                    Severity.WARNING,
+                )
+            )
+        issues += [Issue(file, path, f"{what}: {r}", Severity.WARNING) for r in z.remarks]
+        if z.area_off:
+            assert z.spec.area is not None
+            source = "по подписи регулятора" if z.spec.auto else "по проекту"
+            issues.append(
+                Issue(
+                    file,
+                    f"{path}.note" if z.spec.auto else f"{path}.area",
+                    f"{what}: {source} {_m2(z.spec.area)} м², по раскладке {_m2(z.area_m2)} м² — "
+                    f"расхождение больше {AREA_TOLERANCE:.0%}: уточните вырезы (exclude) или "
+                    "мебель (furniture.yaml)",
+                    Severity.WARNING,
+                )
+            )
+    return issues
+
+
+def _check_heating_overlaps(elec: Electrical, plan: Plan, file: str) -> list[Issue]:
+    """Two zones on one floor (the whole room and a zone of it, or the same place twice) would
+    lay two serpentines and count the power twice: an error on the later one. An auto zone is
+    set by its controller's heating_rooms entry (from the note it never takes a heated floor)."""
+    issues: list[Issue] = []
+    seen: list[tuple[Place, str]] = []
+    for k, fh in enumerate(elec.floor_heating):
+        place = parse_place(plan, Place(fh.room, fh.zone).key)
+        if place is None:
+            continue  # no such room or zone: reported above
+        other = next((zid for p, zid in seen if p.overlaps(place)), None)
+        seen.append((place, fh.id))
+        if other is None:
+            continue
+        if fh.auto:
+            path = f"{HEATING_ROOMS}.{fh.thermostat}"
+        else:
+            path = f"floor_heating[{k}].{'zone' if fh.zone is not None else 'room'}"
+        what = f"зона «{fh.zone}» помещения {fh.room}" if fh.zone else f"помещение {fh.room}"
+        issues.append(
+            Issue(
+                file,
+                path,
+                f"тёплый пол «{fh.id}»: {what} уже греет зона «{other}» — две змейки на одном "
+                "полу и двойная мощность; оставьте одну запись или разделите пол по зонам",
+            )
+        )
+    return issues
+
+
+def _m2(value: float) -> str:
+    return f"{value:.2f}".replace(".", ",")
+
+
+def _check_heating_rooms(elec: Electrical, plan: Plan, file: str) -> list[Issue]:
+    """`heating_rooms`: a key is a controller without a floor_heating entry, a value is a room,
+    «room:zone» or none."""
+    issues: list[Issue] = []
+    points = {p.id: p for p in elec.points}
+    named = {fh.thermostat for fh in elec.floor_heating}
+    for reg, value in elec.heating_rooms.items():
+        path = f"{HEATING_ROOMS}.{reg}"
+        pt = points.get(reg)
+        if pt is None or pt.type is not PointType.THERMOSTAT:
+            issues.append(Issue(file, path, f"«{reg}» — не точка type: thermostat"))
+        elif reg in named:
+            issues.append(
+                Issue(
+                    file,
+                    path,
+                    f"у регулятора {reg} уже есть зона в floor_heating — запись не нужна",
+                    Severity.WARNING,
+                )
+            )
+        elif value != NONE and parse_place(plan, value) is None:
+            issues.append(
+                Issue(
+                    file,
+                    path,
+                    f"«{value}»: ожидается id помещения, «помещение:зона» из {ROOM_FILE} или "
+                    f"{NONE}",
+                )
+            )
+    return issues
+
+
+def floor_heating_source(
+    elec: Electrical, plan: Plan, contours: dict[str, Contour], file: str = ELECTRICAL_FILE
+) -> list[Issue]:
+    """Checks of electrical.yaml as written, before the code adds to it: `fixtures`, `furniture`
+    and `auto` are set by the code; `heating_rooms` names controllers and places."""
+    code_set = {
+        "fixtures": "fixtures ставит код по plumbing.yaml — уберите поле; своё пятно — в exclude",
+        "furniture": "furniture ставит код по furniture.yaml — уберите поле; мебель — в "
+        "furniture.yaml, своё пятно — в exclude",
+        "auto": "auto ставит код у зоны по регулятору — уберите поле",
+    }
+    issues = [
+        Issue(file, f"floor_heating[{k}].{name}", message)
+        for k, fh in enumerate(elec.floor_heating)
+        for name, message in code_set.items()
+        if getattr(fh, name)
+    ]
+    issues += _check_heating_rooms(elec, plan, file)
+    return issues
+
+
+def heating_power_issues(
+    elec: Electrical, plan: Plan, contours: dict[str, Contour], file: str = ELECTRICAL_FILE
+) -> list[Issue]:
+    """A controller's own `power` that differs from its cable sections is a warning. elec is the
+    model after with_heating: the zones as the sheet, the panel and the estimate see them (with
+    the plumbing spots, the solid furniture and the auto zones)."""
+    issues: list[Issue] = []
+    power = heating_power(heating_zones(plan, contours, elec))
+    for k, p in enumerate(elec.points):
+        if p.power is not None and p.id in power and abs(p.power - power[p.id]) > 0.1 * p.power:
+            issues.append(
+                Issue(
+                    file,
+                    f"points[{k}].power",
+                    f"у регулятора {p.id} мощность {p.power:g} Вт, а у его секций тёплого пола "
+                    f"{power[p.id]:g} Вт: щит считается по {p.power:g} Вт — уточните",
+                    Severity.WARNING,
+                )
+            )
+    return issues
