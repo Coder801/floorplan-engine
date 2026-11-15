@@ -19,6 +19,7 @@ from floorplan_engine.service.analysis.llm_analyzer import (
     Reply,
     Usage,
 )
+from floorplan_engine.validation.validate import validate_project
 
 ROOM: dict[str, Any] = {
     "name": "Тест",
@@ -253,3 +254,116 @@ def test_unusable_sources_rejected_before_llm(tmp_path: Path) -> None:
     info = client.get(f"/projects/{pid}").json()
     assert info["state"] == "rejected" and info["llm_calls"] == 0
     assert "plan.pdf — не открывается" in info["message"] and "300 dpi" in info["message"]
+
+
+def test_targeted_analysis_writes_only_furniture_and_the_heating_section(
+    tmp_path: Path,
+) -> None:
+    project = _project(tmp_path)
+    (project / "room.yaml").write_text(yaml.safe_dump(ROOM, allow_unicode=True), "utf-8")
+    elec_text = (
+        "mode: standard  # режим\n"
+        "points:\n"
+        "  - { id: t1, room: r, type: thermostat, wall: w2, offset: 500, height: 900 }  # А-29\n"
+        "floor_heating: []\n"
+    )
+    (project / "electrical.yaml").write_text(elec_text, "utf-8")
+    intake = yaml.safe_dump(INTAKE, allow_unicode=True)
+    (project / "intake.yaml").write_text(intake, "utf-8")
+    furniture = {
+        "items": [{"id": "k", "room": "r", "kind": "kitchen", "at": [0, 0], "size": [600, 3000]}]
+    }
+    bad_zone = "floor_heating:\n  - { id: fh, room: nope, thermostat: t1 }\n"
+    good_zone = "floor_heating:  # S=9,5\n  - { id: fh, room: r, thermostat: t1, area: 9.5 }\n"
+
+    def reply(zone: str) -> dict[str, Any]:
+        files = [
+            {"name": "furniture.yaml", "content": yaml.safe_dump(furniture)},
+            {"name": "floor_heating.yaml", "content": zone},
+            {"name": "room.yaml", "content": "мусор: ["},  # not this step's file
+            {"name": "intake.yaml", "content": "мусор: ["},
+        ]
+        return {"files": files, "resolved": [], "summary": "мебель и тёплый пол"}
+
+    backend = FakeBackend([reply(bad_zone), reply(good_zone)])
+    analyzer = LlmAnalyzer(lambda: backend, stages=("furniture", "floor_heating"))
+    result = analyzer.analyze(project, 2)
+    assert result.calls == 2 and "Точечный разбор" in backend.prompts[0]
+    assert "floor_heating[0].room" in backend.prompts[1]  # the error went back to the model
+    assert yaml.safe_load((project / "room.yaml").read_text("utf-8")) == ROOM
+    assert (project / "intake.yaml").read_text("utf-8") == intake
+    assert yaml.safe_load((project / "furniture.yaml").read_text("utf-8")) == furniture
+    text = (project / "electrical.yaml").read_text("utf-8")
+    assert text.startswith(elec_text.split("floor_heating")[0])  # the rest and its comments
+    assert "# S=9,5" in text and yaml.safe_load(text)["floor_heating"][0]["area"] == 9.5
+
+
+def test_targeted_analysis_needs_a_model_and_known_stages(tmp_path: Path) -> None:
+    project = _project(tmp_path)
+    with pytest.raises(llm_analyzer.AnalyzerError, match=r"room\.yaml"):
+        LlmAnalyzer(lambda: FakeBackend([]), stages=("furniture",)).analyze(project, 1)
+    with pytest.raises(ValueError, match="furniture, floor_heating"):
+        llm_analyzer.make_analyzer("api", stages=("plan",))
+    with pytest.raises(ValueError, match="LLM"):
+        llm_analyzer.make_analyzer("manual", stages=("furniture",))
+    made = llm_analyzer.make_analyzer("api", stages=("floor_heating", "floor_heating"))
+    assert isinstance(made, LlmAnalyzer) and made.stages == ("floor_heating",)
+    (step,) = made.steps()
+    assert step.files == ("floor_heating.yaml",) and not step.needs_intake
+
+
+def _targeted_project(tmp_path: Path, elec_text: str) -> Path:
+    project = _project(tmp_path)
+    (project / "room.yaml").write_text(yaml.safe_dump(ROOM, allow_unicode=True), "utf-8")
+    (project / "electrical.yaml").write_text(elec_text, "utf-8")
+    (project / "intake.yaml").write_text(yaml.safe_dump(INTAKE, allow_unicode=True), "utf-8")
+    return project
+
+
+REG_LINE = "  - { id: t1, room: r, type: thermostat, wall: w2, offset: 500, height: 900 }\n"
+GOOD_ZONE = "floor_heating:\n  - { id: fh, room: r, thermostat: t1 }\n"
+
+
+def test_targeted_step_leaves_text_answers_alone(tmp_path: Path) -> None:
+    project = _targeted_project(tmp_path, f"points:\n{REG_LINE}floor_heating: []\n")
+    answers = "answers:\n  q1: { text: розетку у окна перенести }\n"
+    (project / "answers.yaml").write_text(answers, "utf-8")
+    reply = {
+        "files": [{"name": "floor_heating.yaml", "content": GOOD_ZONE}],
+        "resolved": ["q1"],  # the step must not take it: its electrical.yaml edits are dropped
+        "summary": "тёплый пол",
+    }
+    backend = FakeBackend([reply])
+    LlmAnalyzer(lambda: backend, stages=("floor_heating",)).analyze(project, 2)
+    assert "розетку у окна" not in backend.prompts[0]
+    assert (project / "answers.yaml").read_text("utf-8") == answers
+
+
+def test_targeted_step_sees_and_counts_only_its_own_errors(tmp_path: Path) -> None:
+    # heating_rooms is not the step's: the error stays, but it is not sent and spends no attempt
+    elec = f"points:\n{REG_LINE}floor_heating: []\nheating_rooms: {{ x: r }}\n"
+    project = _targeted_project(tmp_path, elec)
+    reply = {
+        "files": [{"name": "floor_heating.yaml", "content": GOOD_ZONE}],
+        "resolved": [],
+        "summary": "тёплый пол",
+    }
+    backend = FakeBackend([reply])
+    result = LlmAnalyzer(lambda: backend, stages=("floor_heating",)).analyze(project, 2)
+    assert result.calls == 1
+    assert "heating_rooms" not in backend.prompts[0].split("Текущая модель:")[0]
+    assert "Ошибки проверки" not in backend.prompts[0]
+    errors = validate_project(project).errors
+    assert [e.path for e in errors] == ["heating_rooms.x"]
+    assert llm_analyzer.step_errors(errors, ("floor_heating.yaml",)) == []
+    assert llm_analyzer.step_errors(errors, ("electrical.yaml",)) == errors
+
+
+def test_targeted_floor_heating_needs_electrical(tmp_path: Path) -> None:
+    project = _project(tmp_path)
+    (project / "room.yaml").write_text(yaml.safe_dump(ROOM, allow_unicode=True), "utf-8")
+    backend = FakeBackend([])
+    analyzer = LlmAnalyzer(lambda: backend, stages=("floor_heating",))
+    with pytest.raises(llm_analyzer.AnalyzerError, match=r"electrical\.yaml нет"):
+        analyzer.analyze(project, 2)
+    assert not backend.prompts and not (project / "electrical.yaml").exists()

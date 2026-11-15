@@ -12,6 +12,12 @@ with coordinates. Code computes it, the model is left with the meaning.
 
 Analysis runs in one step or two: the plan, then electrical with another (cheaper) model; the
 second step gets the finished room.yaml and writes only electrical.yaml and its stage questions.
+A targeted analysis (`stages`, decision 2026-11-15) runs one step over the finished model and
+returns only furniture.yaml and the `floor_heating` section: the section comes as the pseudo-file
+FLOOR_HEATING_PART and is put into electrical.yaml in place (sections.replace_section), the
+rest of that file and its comments stay; the other files are not written. That step sees no
+text answers and marks none resolved (an answer about another file would be lost), and gets
+only the errors of its own files and of the floor_heating section (step_errors).
 
 The model answers with an envelope (structured output): full texts of the model files, ids of
 handled text answers and a short summary. The core validates the YAML; validation errors go
@@ -39,6 +45,7 @@ import yaml
 if TYPE_CHECKING:
     from anthropic.types.beta import BetaOutputConfigParam
 
+from floorplan_engine.model.furniture import FURNITURE_FILE
 from floorplan_engine.model.intake import ANSWERS_FILE, INTAKE_FILE, Answers, TextAnswer
 from floorplan_engine.model.plumbing import PLUMBING_FILE
 from floorplan_engine.service.analysis.analyzer import (
@@ -48,11 +55,15 @@ from floorplan_engine.service.analysis.analyzer import (
     ManualAnalyzer,
 )
 from floorplan_engine.service.analysis.pdf_facts import describe
+from floorplan_engine.service.analysis.sections import replace_section
 from floorplan_engine.service.facts.source import CAD_PENDING, is_cad
 from floorplan_engine.validation.answers_file import dump_answers
 from floorplan_engine.validation.issues import ELECTRICAL_FILE, ROOM_FILE, Issue
 from floorplan_engine.validation.validate import validate_project
 
+# The floor_heating section of electrical.yaml as a file of its own in a targeted answer
+FLOOR_HEATING_PART = "floor_heating.yaml"
+FLOOR_HEATING_KEY = "floor_heating"
 DEFAULT_MODEL = "claude-opus-5-5"
 DEFAULT_EFFORT = "medium"  # measured 2026-10-20: almost as good as high, faster and cheaper
 FIX_ATTEMPTS = 2
@@ -74,7 +85,7 @@ ENVELOPE_SCHEMA: dict[str, Any] = {
             "items": {
                 "type": "object",
                 "properties": {
-                    "name": {"type": "string", "enum": list(MODEL_FILES)},
+                    "name": {"type": "string", "enum": [*MODEL_FILES, FLOOR_HEATING_PART]},
                     "content": {"type": "string"},
                 },
                 "required": ["name", "content"],
@@ -353,8 +364,14 @@ def _read(path: Path) -> str | None:
     return path.read_text(encoding="utf-8") if path.exists() else None
 
 
-def round_prompt(project: Path, round_no: int, task: str = "") -> str:
-    """Round context: step task, current model, text answers, validation errors."""
+def round_prompt(
+    project: Path, round_no: int, task: str = "", targeted: tuple[str, ...] = ()
+) -> str:
+    """Round context: step task, current model, text answers, validation errors.
+
+    targeted: the files of a targeted step (`stages`). It gets no text answers (it writes only
+    its own files, an answer it took would be lost) and only the errors of its own files and
+    sections (step_errors): the rest it cannot fix."""
     parts = [f"Раунд {round_no}."]
     if task:
         parts.append(task)
@@ -364,11 +381,13 @@ def round_prompt(project: Path, round_no: int, task: str = "") -> str:
         parts += [f"--- {name}\n{text}" for name, text in current.items() if text is not None]
     else:
         parts.append("Модели ещё нет — прочитай источники и напиши её.")
-    text_answers = _pending_text(project)
+    text_answers = {} if targeted else _pending_text(project)
     if text_answers:
         parts.append("Текстовые ответы проектировщика — разбери и верни их id в resolved:")
         parts += [f"- {qid}: {text}" for qid, text in text_answers.items()]
-    issues = [i for i in validate_project(project).errors] if any(current.values()) else []
+    issues = list(validate_project(project).errors) if any(current.values()) else []
+    if targeted:
+        issues = step_errors(issues, targeted)
     if issues:
         parts.append("Ошибки проверки текущей модели — исправь:")
         parts += [f"- {i}" for i in issues]
@@ -400,19 +419,49 @@ def _mark_resolved(project: Path, ids: list[str]) -> None:
         (project / ANSWERS_FILE).write_text(dump_answers(answers), encoding="utf-8")
 
 
-def _apply(project: Path, envelope: dict[str, Any], files: tuple[str, ...]) -> list[str]:
+def _apply(
+    project: Path, envelope: dict[str, Any], files: tuple[str, ...], targeted: bool = False
+) -> list[str]:
+    """Write the step's files from the answer; FLOOR_HEATING_PART goes into electrical.yaml in
+    place. Returns what was written and why a part was not (messages for the model). A targeted
+    step does not mark text answers resolved: it was not shown them."""
     written = []
     for f in envelope.get("files", []):
-        if f["name"] in files:
+        if f["name"] == FLOOR_HEATING_PART and FLOOR_HEATING_PART in files:
+            path = project / ELECTRICAL_FILE
+            text = path.read_text(encoding="utf-8") if path.exists() else ""
+            merged = replace_section(text, FLOOR_HEATING_KEY, f["content"])
+            if merged is None:
+                written.append(f"!{FLOOR_HEATING_PART}")
+                continue
+            path.write_text(merged, encoding="utf-8")
+            written.append(FLOOR_HEATING_PART)
+        elif f["name"] in files:
             (project / f["name"]).write_text(f["content"], encoding="utf-8")
             written.append(f["name"])
-    _mark_resolved(project, list(envelope.get("resolved", [])))
+    if not targeted:
+        _mark_resolved(project, list(envelope.get("resolved", [])))
     return written
 
 
+def _in_section(path: str) -> bool:
+    return path == FLOOR_HEATING_KEY or path.startswith(f"{FLOOR_HEATING_KEY}[")
+
+
+def step_errors(errors: list[Issue], files: tuple[str, ...]) -> list[Issue]:
+    """Errors the step can fix: in its files; with FLOOR_HEATING_PART — only in the floor_heating
+    section of electrical.yaml (heating_rooms and the points are not the step's: it does not
+    write them)."""
+    return [
+        e
+        for e in errors
+        if e.file in files
+        or (FLOOR_HEATING_PART in files and e.file == ELECTRICAL_FILE and _in_section(e.path))
+    ]
+
+
 def _model_errors(project: Path, files: tuple[str, ...]) -> list[Issue]:
-    """Errors in files the step can fix."""
-    return [e for e in validate_project(project).errors if e.file in files]
+    return step_errors(validate_project(project).errors, files)
 
 
 def _log(project: Path, round_no: int, backend: str, attempt: int, usage: Usage) -> None:
@@ -438,10 +487,19 @@ class Step:
     files: tuple[str, ...]  # files the step writes; the rest of the answer is dropped
     task: str  # step task in the round prompt; empty means the whole model
     make_backend: Callable[[], Backend]
+    # A targeted step (`stages`): no intake.yaml, no text answers, only its own errors
+    targeted: bool = False
+
+    @property
+    def needs_intake(self) -> bool:
+        """The answer must hold intake.yaml (not in a targeted step)."""
+        return not self.targeted
 
 
 PLAN_FILES = (INTAKE_FILE, ROOM_FILE)
-ELECTRICAL_FILES = (INTAKE_FILE, ELECTRICAL_FILE, PLUMBING_FILE)
+ELECTRICAL_FILES = (INTAKE_FILE, ELECTRICAL_FILE, PLUMBING_FILE, FURNITURE_FILE)
+# Targeted analysis (`stages`): what each stage writes
+STAGE_PARTS = {"furniture": FURNITURE_FILE, "floor_heating": FLOOR_HEATING_PART}
 PLAN_TASK = (
     "Этот шаг — только план: пиши intake.yaml и room.yaml. Электрику и сантехнику напишет "
     "следующий шаг, поэтому electrical.yaml и plumbing.yaml не пиши, вопросов и записей этапов "
@@ -450,10 +508,31 @@ PLAN_TASK = (
 ELECTRICAL_TASK = (
     "Этот шаг — электрика и сантехника. План уже готов (room.yaml ниже) — не меняй его, "
     "ссылайся на его комнаты и стены. Пиши electrical.yaml, plumbing.yaml (если в источниках "
-    "есть приборы или стояки) и intake.yaml: сохрани все источники, этапы и вопросы из текущего "
-    "intake.yaml и добавь этапы electrical и plumbing и их вопросы; id вопросов продолжай после "
-    "последнего."
+    "есть приборы или стояки), furniture.yaml (если в источниках есть план мебели) и "
+    "intake.yaml: сохрани все источники, этапы и вопросы из текущего intake.yaml и добавь этапы "
+    "electrical, plumbing и furniture и их вопросы; id вопросов продолжай после последнего."
 )
+
+
+def stages_task(stages: tuple[str, ...]) -> str:
+    """The task of a targeted step: only the given stages, the model stays as it is."""
+    parts = []
+    if "furniture" in stages:
+        parts.append(
+            f"{FURNITURE_FILE} целиком — мебель с плана мебели дизайна (раздел «Мебель» правил)"
+        )
+    if "floor_heating" in stages:
+        parts.append(
+            f"{FLOOR_HEATING_PART} — только раздел floor_heating для electrical.yaml: файл из "
+            "одного ключа `floor_heating:` со списком зон (раздел «Тёплый пол» правил); нет "
+            "тёплого пола в дизайне — `floor_heating: []`, зоны по регуляторам построит код"
+        )
+    return (
+        "Точечный разбор: модель уже готова (ниже) — не меняй room.yaml, electrical.yaml (кроме "
+        "раздела floor_heating), plumbing.yaml и intake.yaml, их в files не возвращай. Верни "
+        "только: " + "; ".join(parts) + ". Ссылайся на комнаты, зоны и точки текущей модели. "
+        "Текстовые ответы в этом шаге не разбираются: resolved — пустой список."
+    )
 
 
 @dataclass
@@ -463,8 +542,14 @@ class LlmAnalyzer:
     make_backend: Callable[[], Backend]
     # A separate electrical model makes the analysis two steps: plan and electrical
     make_electrical: Callable[[], Backend] | None = None
+    # Targeted analysis: only these stages (STAGE_PARTS) over the finished model
+    stages: tuple[str, ...] = ()
 
     def steps(self) -> list[Step]:
+        if self.stages:
+            files = tuple(STAGE_PARTS[s] for s in self.stages)
+            make = self.make_electrical or self.make_backend
+            return [Step(files, stages_task(self.stages), make, targeted=True)]
         if self.make_electrical is None:
             return [Step(MODEL_FILES, "", self.make_backend)]
         return [
@@ -473,6 +558,13 @@ class LlmAnalyzer:
         ]
 
     def analyze(self, project: Path, round_no: int) -> AnalysisResult:
+        if self.stages and not (project / ROOM_FILE).exists():
+            raise AnalyzerError(f"точечный разбор — по готовой модели, а {ROOM_FILE} нет")
+        if "floor_heating" in self.stages and not (project / ELECTRICAL_FILE).exists():
+            raise AnalyzerError(
+                f"точечный разбор тёплого пола — по готовой электрике, а {ELECTRICAL_FILE} нет: "
+                "сначала полный разбор"
+            )
         cost, calls, summaries = 0.0, 0, []
         for step in self.steps():
             if step.files == ELECTRICAL_FILES and not (project / ROOM_FILE).exists():
@@ -485,15 +577,22 @@ class LlmAnalyzer:
     @staticmethod
     def _step(project: Path, round_no: int, step: Step) -> tuple[float, int, str]:
         backend = step.make_backend()
-        reply = backend.start(project, round_prompt(project, round_no, step.task))
+        targeted = step.files if step.targeted else ()
+        reply = backend.start(project, round_prompt(project, round_no, step.task, targeted))
         cost, calls = 0.0, 0
         for attempt in range(FIX_ATTEMPTS + 1):
             _log(project, round_no, backend.name, attempt, reply.usage)
             cost += reply.usage.cost_usd or 0.0
             calls += 1
-            _apply(project, reply.envelope, step.files)
-            if not (project / INTAKE_FILE).exists():
+            written = _apply(project, reply.envelope, step.files, step.targeted)
+            refused = [w[1:] for w in written if w.startswith("!")]
+            if step.needs_intake and not (project / INTAKE_FILE).exists():
                 errors_text = f"нет {INTAKE_FILE} — верни его в files"
+            elif refused:
+                errors_text = (
+                    f"{', '.join(refused)}: нужен YAML из одного ключа {FLOOR_HEATING_KEY}: "
+                    "со списком зон — раздел не вписан в electrical.yaml"
+                )
             else:
                 errors = _model_errors(project, step.files)
                 if not errors:
@@ -514,11 +613,20 @@ def make_analyzer(
     model: str = DEFAULT_MODEL,
     effort: str = DEFAULT_EFFORT,
     electrical_model: str | None = None,
+    stages: tuple[str, ...] = (),
 ) -> Analyzer:
     """manual: an operator uploads the model; claude-code: subscription; api: key.
 
-    electrical_model: this model writes electrical in a separate step (for example, Sonnet)."""
+    electrical_model: this model writes electrical in a separate step (for example, Sonnet);
+    stages: a targeted analysis of only these stages (STAGE_PARTS) over the finished model."""
+    unknown = [s for s in stages if s not in STAGE_PARTS]
+    if unknown:
+        raise ValueError(
+            f"точечный разбор — этапы {', '.join(STAGE_PARTS)}, а не {', '.join(unknown)}"
+        )
     if kind == "manual":
+        if stages:
+            raise ValueError("точечный разбор — только LLM-анализатор (claude-code или api)")
         return ManualAnalyzer()
     backends: dict[str, Callable[[str], Backend]] = {
         "claude-code": lambda m: ClaudeCodeBackend(model=m, effort=effort),
@@ -531,4 +639,5 @@ def make_analyzer(
     return LlmAnalyzer(
         lambda: make(model),
         (lambda: make(electrical_model or model)) if split else None,
+        tuple(dict.fromkeys(stages)),
     )

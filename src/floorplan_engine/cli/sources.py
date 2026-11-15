@@ -27,12 +27,23 @@ def analyze(
     effort: EffortOpt = "medium",
     electrical_model: ElectricalModelOpt = None,
     round_no: Annotated[int, typer.Option("--round", help="Номер раунда")] = 1,
+    stages: Annotated[
+        str | None,
+        typer.Option(
+            "--stages",
+            help="Точечный разбор готовой модели, через запятую: furniture, floor_heating — "
+            "пишет только furniture.yaml и раздел floor_heating в electrical.yaml",
+        ),
+    ] = None,
 ) -> None:
     """LLM-анализ папки проекта: source/ → intake.yaml и YAML этапов (затем — build)."""
     from floorplan_engine.service.analysis.llm_analyzer import AnalyzerError, make_analyzer
 
+    only = tuple(s.strip() for s in (stages or "").split(",") if s.strip())
+    with exit_on(ValueError):
+        made = make_analyzer(analyzer, model, effort, electrical_model, only)
     with exit_on(AnalyzerError):
-        result = make_analyzer(analyzer, model, effort, electrical_model).analyze(project, round_no)
+        result = made.analyze(project, round_no)
     typer.echo(result.message)
     typer.echo(f"  вызовов LLM: {result.calls}, стоимость ≈ ${result.cost_usd:.2f}")
     assessment = assess_project(project)

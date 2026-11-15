@@ -119,3 +119,10 @@ def test_serve_refuses_a_public_address_without_login(monkeypatch: pytest.Monkey
     result = runner.invoke(app, ["serve", "--host", "0.0.0.0"])
     assert result.exit_code == 2
     assert "SHTROBA_AUTH" in result.output
+
+
+def test_analyze_stages_are_checked_before_any_llm_call(tmp_path: Path) -> None:
+    result = runner.invoke(app, ["analyze", str(tmp_path), "--stages", "furniture,plan"])
+    assert result.exit_code == 1 and "furniture, floor_heating" in result.output
+    result = runner.invoke(app, ["analyze", str(tmp_path), "--stages", "furniture"])
+    assert result.exit_code == 1 and "room.yaml" in result.output  # no model to work over

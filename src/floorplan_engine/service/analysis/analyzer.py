@@ -11,11 +11,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
+from floorplan_engine.model.furniture import FURNITURE_FILE
 from floorplan_engine.model.intake import ANSWERS_FILE, INTAKE_FILE
 from floorplan_engine.model.plumbing import PLUMBING_FILE
 from floorplan_engine.validation.issues import ROOM_FILE
 
-MODEL_FILES = (INTAKE_FILE, ROOM_FILE, "electrical.yaml", PLUMBING_FILE)
+MODEL_FILES = (INTAKE_FILE, ROOM_FILE, "electrical.yaml", PLUMBING_FILE, FURNITURE_FILE)
 # What an operator may upload ready-made: the model and accumulated answers (reference projects)
 OPERATOR_FILES = (*MODEL_FILES, ANSWERS_FILE)
 
