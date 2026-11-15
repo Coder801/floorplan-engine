@@ -39,6 +39,7 @@ cd web && npm run storybook                          # Storybook: компоне
 cd web && npm run check && npm test                     # типы TypeScript и тесты фронта (vitest); покрытие — npm run coverage
 cd admin && npm install && npm run dev                  # админка платформы http://127.0.0.1:5174/admin/ (API — view, вход — в просмотре)
 uv run floorplan-engine analyze projects/<имя>               # LLM-анализ source/ → YAML (подписка)
+uv run floorplan-engine analyze projects/<имя> --stages furniture,floor_heating  # точечно: только furniture.yaml и раздел floor_heating
 uv run floorplan-engine pdf-facts projects/<имя>/source/x.pdf # выжимка из векторного PDF без LLM (--json)
 uv run floorplan-engine facts projects/<имя>/source/x.jpg   # выжимка из любого источника: вектор или растр
 uv run floorplan-engine facts-bench projects/<имя>/source/x.pdf # точность растра против вектора
@@ -82,7 +83,7 @@ Slash-команды: `/plan`, `/electrical`, `/check`, `/review`, `/commit`, `/
 2. **Перед генерацией покажи таблицу** «стена → длина → источник (фото / текст / допущение)»,
    а также таблицу проёмов и вопросы из `intake.yaml` с их весом.
 3. **После `build` запусти `render-artifact`, открой PNG нужных листов `out/artifact/NN-<лист>.png`
-   (`01-plan`, `02-electrical`, `03-lighting`, `04-wiring`, `NN-plumbing`, `NN-points`, `NN-elevations` — стены и потолки помещений) (Read) и проверь сам** — это ровно то, что клиент
+   (`01-plan`, `02-electrical`, `03-lighting`, `04-wiring`, `NN-plumbing`, `NN-floor_heating` (тёплый пол), `NN-points`, `NN-elevations` — стены и потолки помещений) (Read) и проверь сам** — это ровно то, что клиент
    увидит в браузере (решение 2026-10-23: PNG при сборке не пишутся). Замкнут ли контур, на месте
    ли проёмы (стена, сторона, ширина), читаются ли размеры и не налезают ли подписи.
    Только потом сообщай результат.

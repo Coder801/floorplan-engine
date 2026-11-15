@@ -36,13 +36,14 @@
 | --- | --- | --- | --- | --- | --- |
 | 1 | Штробы, проходы, подрозетники (`chases`) | `work.chase`, `work.chase_wide` (обе — с материалом стены: `work.chase.brick`…), `work.wall_hole`, `work.wall_hole_large`, `work.socket_box` | `socket_box` | `optional` | — |
 | 2 | Прокладка кабеля (`cable`) | `work.cable` (маркировка концов входит в неё: `work.marking` снят 2026-11-11), `work.conduit` | `cable`, `conduit`, `conduit_joint`, `conduit_clip`, `cable_pad` | `required`: трассы до штукатурки | 1 |
-| 3 | Распаечные коробки (`boxes`) | `work.junction_box` | `junction_box`, `junction_box_ip`, `crimp` | `optional` | 2 |
-| 4 | Установка корпуса щита (`board`) | `work.board_install` | `board_enclosure`, `dc_enclosure` (щит АКБ) | `optional` | — |
-| 5 | Замер изоляции (`insulation`) | `work.insulation_test` | — | `required`: протокол, фото или PDF | 2, 3 |
-| 6 | Черновой свет (`rough_light`) | `work.rough_light`, `work.rough_switch` | `rough_holder`, `rough_lamp`, `rough_switch` | `none` | 2 |
-| 7 | Сборка щита (`assembly`) | `work.board_module`, `work.panel_labels` (маркировка, с 2026-11-13 — своя позиция) | `breaker`, `diff`, `rcd`, `input`, `relay`, `spd`, `changeover`, `ats`, `contactor`, `feed`, `output`, `busbar`, `dc_battery`, `dc_breaker`, `dc_spd` | `optional` | 4, 5 |
-| 8 | Механизмы и светильники (`devices`) | `work.mechanism`, `work.led_psu`, `work.led_psu_din` | `socket`, `switch1`, `switch2`, `pass_switch`, `data`, `tv`, `frame`, `light`, `downlight`, `pendant`, `sconce`, `led_output`, `outlet`, `thermostat`, `led_strip`, `led_psu`, `led_psu_din` | `optional` | 7 |
-| 9 | Проверка защиты прибором (`protection`) | `work.protection_test` | — | `required`: протокол, фото или PDF | 7, 8 |
+| 3 | Тёплый пол: кабель и датчик (`floor_heating`, с 2026-11-14) | `work.floor_heating` (м² обогрева) | `heating_cable` (секция по длине: `heating_cable.27`), `heating_sensor`, `heating_conduit` | `required`: змейка до стяжки | 2 |
+| 4 | Распаечные коробки (`boxes`) | `work.junction_box` | `junction_box`, `junction_box_ip`, `crimp` | `optional` | 2 |
+| 5 | Установка корпуса щита (`board`) | `work.board_install` | `board_enclosure`, `dc_enclosure` (щит АКБ) | `optional` | — |
+| 6 | Замер изоляции (`insulation`) | `work.insulation_test` | — | `required`: протокол, фото или PDF | 2, 4 |
+| 7 | Черновой свет (`rough_light`) | `work.rough_light`, `work.rough_switch` | `rough_holder`, `rough_lamp`, `rough_switch` | `none` | 2 |
+| 8 | Сборка щита (`assembly`) | `work.board_module`, `work.panel_labels` (маркировка, с 2026-11-13 — своя позиция) | `breaker`, `diff`, `rcd`, `input`, `relay`, `spd`, `changeover`, `ats`, `contactor`, `feed`, `output`, `busbar`, `dc_battery`, `dc_breaker`, `dc_spd` | `optional` | 5, 6 |
+| 9 | Механизмы и светильники (`devices`) | `work.mechanism`, `work.led_psu`, `work.led_psu_din` | `socket`, `switch1`, `switch2`, `pass_switch`, `data`, `tv`, `frame`, `light`, `downlight`, `pendant`, `sconce`, `led_output`, `outlet`, `thermostat`, `led_strip`, `led_psu`, `led_psu_din` | `optional` | 8 |
+| 10 | Проверка защиты прибором (`protection`) | `work.protection_test` | — | `required`: протокол, фото или PDF | 8, 9 |
 
 Сантехника (`plumbing/stages.yaml`):
 

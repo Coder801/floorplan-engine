@@ -165,6 +165,9 @@ erDiagram
     text intake_yaml
     text answers_yaml
     text wiring_yaml "новое: правки трасс"
+    text plumbing_yaml "вода и канализация"
+    text variant_yaml "вариант проводки из просмотра"
+    text furniture_yaml "план мебели (2026-11-15)"
     string author "analyzer | user | operator"
     uuid user_id FK "новое: кто именно"
     timestamp created_at
@@ -576,7 +579,7 @@ erDiagram
 
 | Шаг | Что |
 | --- | --- |
-| Б1 | `ObjectStore` (локальная папка по ключу); `model_version` — все файлы модели (+ `plumbing.yaml`, `variant.yaml`) текстом и jsonb-копией; прайс студии — текстом YAML (с комментариями) |
+| Б1 | `ObjectStore` (локальная папка по ключу); `model_version` — все файлы модели (+ `plumbing.yaml`, `variant.yaml`, с 2026-11-15 `furniture.yaml`) текстом и jsonb-копией; прайс студии — текстом YAML (с комментариями) |
 | Б2 | Проект из базы: выложить версию во временную папку, собрать, забрать `out/` в хранилище (`build`, `build_file`); тесты на круг «база → папка → сборка → хранилище» |
 | Б3 | `project push` / `pull`: папка ↔ база (новая версия, источники, сборка); импорт текущих проектов |
 | Б4 | Просмотр из базы: проекты и листы — по id проекта из хранилища; правка трасс и вариант — новой версией модели и пересборкой; прайс и профиль — из базы; адреса `web/` — по id, `slug` уникален внутри студии |

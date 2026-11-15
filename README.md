@@ -69,6 +69,7 @@ uv run floorplan-engine pdf-facts projects/kv42/source/plan.pdf        # выж�
 uv run floorplan-engine facts projects/kv42/source/plan.jpg            # выжимка из любого источника: вектор или растр
 uv run floorplan-engine facts-bench projects/kv42/source/plan.pdf      # точность растра против вектора
 uv run floorplan-engine analyze projects/kv42                          # LLM-анализ source/ → YAML (тратит токены)
+uv run floorplan-engine analyze projects/kv42 --stages furniture,floor_heating  # точечно: только furniture.yaml и раздел floor_heating
 ```
 
 **Просмотр и сервис**
@@ -326,6 +327,7 @@ projects/kv42/
   room.yaml          # план
   electrical.yaml    # электрика (необязателен)
   plumbing.yaml      # вода и канализация (необязателен, docs/plumbing.md)
+  furniture.yaml     # мебель с плана мебели (необязателен, можно править руками)
   wiring.yaml        # ручные правки проводки из просмотра (необязателен)
   source/            # исходные фото и заметки
   out/               # project.dxf, project.epd, report.md, report.json; artifact/NN-<лист>.png — render-artifact
@@ -502,6 +504,15 @@ cables:
 | `cables[].route` | `wall` / `floor` / `ceiling` — где идёт кабель; рисуется всегда под 90° |
 | `routes` | Трассы, допустимые в проекте: `[ceiling]` — по полу проводки не будет, вариантов по полу нет; нет поля — обе |
 | `cables[].cable` | Марка или сечение для подписи, например `3x2.5` |
+| `floor_heating[]` | Зоны тёплого пола: `id`, `room`, `thermostat` (точка `type: thermostat`), `zone`, `exclude` (прямоугольники без кабеля), `density`, `length`, `series`, `area` — площадь обогрева по проекту, м² (код сверяет с раскладкой, больше 10 % — предупреждение). Регулятор без зоны получает зону кодом (помещение по его `note` или месту, «*» на листе) |
+| `heating_rooms` | Регулятор без зоны → где его автозона: `room`, `"room:зона"` или `none`; пишет ответ на вопрос `heating_<регулятор>` |
+
+```yaml
+floor_heating:   # с листа тёплого пола дизайна
+  - { id: fh_kitchen, room: hall, zone: "Кухня-вітальня", thermostat: hall_reg_1, area: 6.35 }
+  - { id: fh_bath, room: bath, thermostat: hall_reg_2, area: 1.69 }
+heating_rooms: { loggia_reg_1: loggia }   # ответ на вопрос heating_loggia_reg_1
+```
 
 ## Формат plumbing.yaml
 
@@ -526,6 +537,29 @@ obstacles:
 | `fixtures[].wall`, `offset` | Стена и отступ до середины подводки (у ванны и душа — стена смесителя) |
 | `fixtures[].supply_height`, `drain_height` | Ось водорозеток и выпуска от пола; нет — типовые со «*» |
 | `obstacles[]` | `installation`, `bath`, `shower_tray`, `box`, `cabinet`, `column`, `other`: у стены (`wall`, `offset` до края, `width`, `depth`) или `rect: [x0, y0, x1, y1]` от `origin` |
+
+## Формат furniture.yaml
+
+Мебель с плана мебели дизайна (решение 2026-11-15), схема — `model/furniture.py`. Только
+прямоугольники по осям помещения; файл необязателен и правится руками. Под глухой мебелью
+(`solid`) тёплый пол не кладётся, мебель на ножках (`legs`) его не меняет. Мебель видна на плане
+и листе тёплого пола (слой `F-FURN`).
+
+```yaml
+units: mm
+items:
+  - { id: kitchen_1, room: hall, at: [3730, 2321], size: [600, 3200], kind: kitchen, note: "нижние модули" }
+  - { id: bed, room: bedroom, at: [700, 1200], size: [1600, 2000], kind: bed }
+  - { id: chest, room: bedroom, at: [0, 0], size: [900, 450], kind: other, base: solid }
+```
+
+| Поле | Что |
+| --- | --- |
+| `items[].id` | Уникален в файле |
+| `items[].room`, `at`, `size` | Помещение; левый нижний угол, мм от `origin` помещения; размер по X и Y (поворот на 90° — переставить стороны). Прямоугольник — на полу помещения (допуск 20 мм) |
+| `items[].kind` | `kitchen`, `island`, `wardrobe`, `cabinet`, `tv_stand`, `bed`, `sofa`, `table`, `other` |
+| `items[].base` | `solid` (на цоколе) или `legs` (на ножках); нет — по `kind`: кухня, остров, шкаф, тумба, ТВ-тумба — `solid`, кровать, диван, стол — `legs`; у `other` обязателен |
+| `items[].note` | Примечание |
 
 ## Вопросы и отчёт: intake.yaml, answers.yaml
 
