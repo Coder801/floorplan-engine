@@ -11,7 +11,7 @@ import { Welcome } from "@/pages/Welcome";
 import { base, enc, getManifest, getPage, getProject, isProject, listProjects, reviewAnswer, saveAnswer, saveWizard, type ReviewOutcome, type WizardBody } from "@/shared/api";
 import { NARROW_PX, SIDE_TABS, stickersPdf, type DrawerTab, type PanelMode, type SideTab, type Theme } from "@/shared/consts";
 import { cx } from "@/shared/cx";
-import { sectionOf, sections, wallLayersOf, type Section } from "@/shared/domains";
+import { placeAmongViews, sectionOf, sections, wallLayersOf, type Section } from "@/shared/domains";
 import { label, pageTitle } from "@/shared/i18n";
 import { modeDrawerTabs, modeTabs, rememberMode, savedMode, stageShown, type UiMode } from "@/shared/mode";
 import { applyTheme, remember, remembered, savedTheme } from "@/shared/palette";
@@ -494,12 +494,14 @@ export function Viewer({ account = null }: { account?: Account | null }) {
   // A section opens where it was left (the open tab), else on its first tab
   const openSection = (s: Section) => openTab(s === section && tab ? tab : s.tabs[0], s);
   // The second level: the sheets of the open domain, a tab with views — view by view
-  const subItems = !section?.domain ? [] : section.tabs.flatMap((tb) => (tb.views
-    ? viewsOf(tb).map((v) => ({ key: `view:${v.key}`, label: v.label, current: tb === tab && shownView === v.key, onClick: () => pickView(v) }))
+  type SubItem = { key: string; label: string; current: boolean; onClick: () => void; view?: string; stage?: string };
+  // (floor heating stands among the views, before "Wiring": shared/domains.ts BEFORE_VIEW)
+  const subItems = !section?.domain ? [] : placeAmongViews(section.tabs.flatMap((tb): SubItem[] => (tb.views
+    ? viewsOf(tb).map((v) => ({ key: `view:${v.key}`, view: v.key, label: v.label, current: tb === tab && shownView === v.key, onClick: () => pickView(v) }))
     : [{
-        key: `tab:${tb.pages[0]}`, current: tb === tab, onClick: () => openTab(tb, section),
+        key: `tab:${tb.pages[0]}`, stage: tb.stage, current: tb === tab, onClick: () => openTab(tb, section),
         label: tb.stage === section.key ? t("app.domainSheet") : tabLabel(tb),
-      }]));
+      }])));
   // The simple mode was switched on over a sheet it hides (wiring, panel): to the first tab it shows
   const hidden = !source && !estimate && !info && !workTab && sheet !== null && !stageShown(mode, stageOf(sheet));
   useEffect(() => {

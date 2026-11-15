@@ -9,9 +9,26 @@ import type { SheetTab } from "./tabs";
 
 // Domains in menu order; stages are tab topics (SheetTab.stage). A new domain is a row here
 export const DOMAINS: readonly { key: string; stages: readonly string[] }[] = [
-  { key: "electrical", stages: ["electrical", "panel"] },
+  { key: "electrical", stages: ["electrical", "panel", "floor_heating"] },
   { key: "plumbing", stages: ["plumbing"] },
 ];
+
+// Tabs of a domain that stand among the views of the "Electrical" tab in the second menu row:
+// before the named view (floor heating — after "Low voltage", before "Wiring"). The printed
+// sheets keep their order; only the menu changes
+export const BEFORE_VIEW: Readonly<Record<string, string>> = { floor_heating: "wiring" };
+
+// A second-row item: a view of the "Electrical" tab (view) or a sheet tab (stage)
+export interface SubItemPlace { view?: string; stage?: string }
+
+// Second-row items with the tabs of BEFORE_VIEW moved before their view; without that view the
+// item stays where it is
+export function placeAmongViews<T extends SubItemPlace>(items: readonly T[]): T[] {
+  const moved = items.filter((it) => it.stage && BEFORE_VIEW[it.stage] && items.some((v) => v.view === BEFORE_VIEW[it.stage!]));
+  const out = items.filter((it) => !moved.includes(it));
+  for (const it of moved) out.splice(out.findIndex((v) => v.view === BEFORE_VIEW[it.stage!]), 0, it);
+  return out;
+}
 
 // Tab topics that belong to every domain
 export const SHARED_STAGES: ReadonlySet<string> = new Set(["elevations"]);

@@ -61,11 +61,16 @@ describe("what is selected on a sheet", () => {
   const onStage = (stage: string) =>
     new PageIndex({ stage, objects: { "point:p": { title: "", rows: [] } } } as unknown as Page, other);
 
-  it.each(["electrical", "lighting", "wiring"])("%s: electrics only, the building is a backdrop", (stage) => {
+  it.each(["electrical", "lighting", "wiring", "floor_heating"])("%s: electrics only, the building is a backdrop", (stage) => {
     const index = onStage(stage);
     for (const o of ["wall:a.w1", "opening:d", "room:a", "dimension:a.w1"]) expect(index.interactive(o)).toBe(false);
     expect(index.interactive("point:p")).toBe(true);
     expect(index.interactive("wire:w1")).toBe(true);  // a layer of another electrics sheet
+  });
+
+  it.each(["plan", "floor_heating"])("%s: furniture is selected", (stage) => {
+    const index = new PageIndex({ stage, objects: { "furniture:sofa": { title: "", rows: [] } } } as unknown as Page);
+    expect(index.interactive("furniture:sofa")).toBe(true);
   });
 
   it("elevations: the wall drawing is a backdrop, not selected by the cursor", () => {

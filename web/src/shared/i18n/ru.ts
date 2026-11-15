@@ -20,7 +20,7 @@ export const ru = {
   },
   stage: {
     plan: "План", electrical: "Электрика", wiring: "Проводка", plumbing: "Сантехника",
-    furniture: "Мебель", lighting: "Освещение", panel: "Щит", elevations: "Развёртки",
+    furniture: "Мебель", lighting: "Освещение", panel: "Щит", floor_heating: "Тёплый пол", elevations: "Развёртки",
     points: "Точки", mounting: "Монтаж",
   },
   views: { electrical: "Розетки", low: "Связь", lighting: "Свет", wiring: "Проводка" },
@@ -37,13 +37,15 @@ export const ru = {
     "L-TEXT": "номера света",
     "P-COLD": "холодная вода", "P-HOT": "горячая вода", "P-SEWER": "канализация", "P-FIXT": "сантехприборы",
     "P-RISER": "стояки и коллекторы", "P-OBST": "препятствия", "P-TEXT": "подписи сантехники",
+    "E-FLOORHEAT": "тёплый пол: кабель", "E-FLOORHEAT-LEAD": "тёплый пол: холодный конец", "E-FLOORHEAT-SENSOR": "тёплый пол: датчик и гофра", "E-FLOORHEAT-ZONE": "тёплый пол: где кабеля нет", "E-FLOORHEAT-TEXT": "подписи тёплого пола",
+    "F-FURN": "мебель",
     "0": "прочее",
   },
-  layerGroup: { points: "Точки и выводы", cables: "Кабели и коробки", plumbing: "Сантехника", labels: "Подписи и размеры", building: "Помещение", other: "Прочее" },
+  layerGroup: { points: "Точки и выводы", cables: "Кабели и коробки", plumbing: "Сантехника", heating: "Тёплый пол", furniture: "Мебель", labels: "Подписи и размеры", building: "Помещение", other: "Прочее" },
   object: {
     room: "Помещение", zone: "Зона помещения", wall: "Стена", dimension: "Размеры стены", opening: "Проём",
     point: "Точка", label: "Подпись точек", board: "Щит", cable: "Кабель", led_strip: "LED-лента",
-    wire: "Линия проводки", box: "Коробка",
+    wire: "Линия проводки", box: "Коробка", heating: "Зона тёплого пола", furniture: "Мебель",
   },
   side: {
     tables: "Таблицы", layers: "Слои", tablesAndLayers: "Таблицы и слои", onWall: "На стене",

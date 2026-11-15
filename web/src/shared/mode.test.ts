@@ -56,6 +56,7 @@ describe("tabs of the mode", () => {
     expect(stageShown("simple", undefined)).toBe(true);
     expect(stageShown("simple", "wiring")).toBe(true);
     expect(stageShown("simple", "panel")).toBe(false);
+    expect(stageShown("simple", "floor_heating")).toBe(true);  // where the cable lies: for the client too
   });
   it("simple header keeps only the questions", () => {
     expect(modeDrawerTabs("simple")).toEqual(["questions"]);

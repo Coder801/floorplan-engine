@@ -20,7 +20,7 @@ export const uk: Messages = {
   },
   stage: {
     plan: "План", electrical: "Електрика", wiring: "Проводка", plumbing: "Сантехніка",
-    furniture: "Меблі", lighting: "Освітлення", panel: "Щит", elevations: "Розгортки",
+    furniture: "Меблі", lighting: "Освітлення", panel: "Щит", floor_heating: "Тепла підлога", elevations: "Розгортки",
     points: "Точки", mounting: "Монтаж",
   },
   views: { electrical: "Розетки", low: "Зв'язок", lighting: "Світло", wiring: "Проводка" },
@@ -37,13 +37,15 @@ export const uk: Messages = {
     "L-TEXT": "номери світла",
     "P-COLD": "холодна вода", "P-HOT": "гаряча вода", "P-SEWER": "каналізація", "P-FIXT": "сантехприлади",
     "P-RISER": "стояки і колектори", "P-OBST": "перешкоди", "P-TEXT": "підписи сантехніки",
+    "E-FLOORHEAT": "тепла підлога: кабель", "E-FLOORHEAT-LEAD": "тепла підлога: холодний кінець", "E-FLOORHEAT-SENSOR": "тепла підлога: датчик і гофра", "E-FLOORHEAT-ZONE": "тепла підлога: де кабелю немає", "E-FLOORHEAT-TEXT": "підписи теплої підлоги",
+    "F-FURN": "меблі",
     "0": "інше",
   },
-  layerGroup: { points: "Точки та виводи", cables: "Кабелі та коробки", plumbing: "Сантехніка", labels: "Підписи та розміри", building: "Приміщення", other: "Інше" },
+  layerGroup: { points: "Точки та виводи", cables: "Кабелі та коробки", plumbing: "Сантехніка", heating: "Тепла підлога", furniture: "Меблі", labels: "Підписи та розміри", building: "Приміщення", other: "Інше" },
   object: {
     room: "Приміщення", zone: "Зона приміщення", wall: "Стіна", dimension: "Розміри стіни", opening: "Проріз",
     point: "Точка", label: "Підпис точок", board: "Щит", cable: "Кабель", led_strip: "LED-стрічка",
-    wire: "Лінія проводки", box: "Коробка",
+    wire: "Лінія проводки", box: "Коробка", heating: "Зона теплої підлоги", furniture: "Меблі",
   },
   side: {
     tables: "Таблиці", layers: "Шари", tablesAndLayers: "Таблиці й шари", onWall: "На стіні",

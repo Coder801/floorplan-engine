@@ -10,9 +10,9 @@ import { SHEET_ONLY } from "@/shared/consts";
 import type { Box, Item, ObjectCard, Page, Scene } from "@/shared/types";
 import { bbox, inView, viewOf } from "./paint";
 
-// Sheets of one drawing (plumbing too: walls from the plan, pipes are its own layers); the
-// panel, elevations and schedule stand alone
-export const DRAWING_STAGES = new Set(["plan", "electrical", "lighting", "wiring", "plumbing"]);
+// Sheets of one drawing (plumbing and floor heating too: walls from the plan, pipes and the
+// heating cable are their own layers); the panel, elevations and schedule stand alone
+export const DRAWING_STAGES = new Set(["plan", "electrical", "lighting", "wiring", "plumbing", "floor_heating"]);
 
 // From the source sheet to base: x' = f·x + dx, y' = f·y + dy (sheet mm)
 export interface Shift { f: number; dx: number; dy: number }
@@ -59,7 +59,8 @@ export function buildDrawing(pages: Page[]): Drawing {
     const mine: DrawingItem[] = [];
     for (const src of page.items) {
       if (SHEET_ONLY.has(src.l)) continue;
-      // DXF puts dimension lines on layer 0 and labels on A-DIMS: on the drawing it is one layer
+      // Builds before 2026-11-15 put dimension lines on DXF layer 0 and labels on A-DIMS: on the
+      // drawing it is one layer (newer builds put them on A-DIMS themselves)
       const it = src.l === "0" && src.o?.startsWith("dimension:") ? { ...src, l: "A-DIMS" } : src;
       const box = bbox(it.d);
       if (!inView(page, box)) continue;
@@ -123,15 +124,17 @@ export function layerShown(own: Set<string>, hidden: Set<string>, extra: Set<str
 }
 
 // Sections of "Layers", in panel order: what the rows are about. A section has an eye of its own
-export const LAYER_GROUPS = ["points", "cables", "plumbing", "labels", "building", "other"] as const;
+export const LAYER_GROUPS = ["points", "cables", "plumbing", "heating", "furniture", "labels", "building", "other"] as const;
 export type LayerGroup = typeof LAYER_GROUPS[number];
 
 // The section of a "Layers" row (a layer, or a cable row of layerRows)
 export function layerGroup(row: string): LayerGroup {
   if (row.endsWith("-TEXT") || row === "A-DIMS") return "labels";
   if (row.startsWith("W-") || row === "E-LINK") return "cables";
+  if (row.startsWith("E-FLOORHEAT")) return "heating";  // cable, cold lead, sensor, no-cable areas
   if (row.startsWith("E-")) return "points";
   if (row.startsWith("P-")) return "plumbing";
   if (row.startsWith("A-")) return "building";
+  if (row === "F-FURN") return "furniture";  // outlines and labels of furniture.yaml (plan, floor heating)
   return "other";
 }

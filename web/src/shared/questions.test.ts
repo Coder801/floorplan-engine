@@ -70,6 +70,8 @@ describe("вопросы", () => {
     expect(objectOf("rooms.kitchen.ceiling_height")).toBe("room:kitchen");
     expect(objectOf("board.offset")).toBe("board:board");
     expect(objectOf("risers.r1.at")).toBe("riser:r1");
+    expect(objectOf("floor_heating.fh_bath.length")).toBe("heating:fh_bath");
+    expect(objectOf("heating_rooms.reg_1")).toBe("point:reg_1");  // a controller without a zone: heating_<id>
     expect(objectOf("default_wall_thickness")).toBeNull();
     expect(objectOf("boards")).toBeNull();
     expect(objectOf(undefined)).toBeNull();

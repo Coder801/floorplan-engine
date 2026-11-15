@@ -19,9 +19,9 @@ export function inRings(rings: XY[][], x: number, y: number): boolean {
   return inside;
 }
 
-// On the electrics sheets the building is a backdrop: walls, doors, rooms and dimensions are not
-// selected there, even on a layer switched on from the plan
-const ELECTRIC_STAGES = new Set(["electrical", "lighting", "wiring"]);
+// On the electrics sheets (floor heating too) the building is a backdrop: walls, doors, rooms and
+// dimensions are not selected there, even on a layer switched on from the plan
+const ELECTRIC_STAGES = new Set(["electrical", "lighting", "wiring", "floor_heating"]);
 const BUILDING = new Set(["room", "zone", "wall", "opening", "dimension"]);
 // On the elevations sheet every primitive of a wall is tagged with the wall itself
 // (elevation:<room>.<wall>): under the cursor it would light the whole drawing, so it is a backdrop

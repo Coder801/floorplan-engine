@@ -77,6 +77,9 @@ const OBJECTS: [RegExp, (m: RegExpMatchArray) => string][] = [
   [/^rooms\.([^.]+)/, (m) => `room:${m[1]}`],
   [/^board(\.|$)/, () => "board:board"],
   [/^led_strips\.([^.]+)/, (m) => `led_strip:${m[1]}`],
+  [/^floor_heating\.([^.]+)/, (m) => `heating:${m[1]}`],
+  // Where a floor-heating controller without a zone heats (questions heating_<id>): its point
+  [/^heating_rooms\.([^.]+)/, (m) => `point:${m[1]}`],
   [/^risers\.([^.]+)/, (m) => `riser:${m[1]}`],
   [/^fixtures\.([^.]+)/, (m) => `fixture:${m[1]}`],
   [/^obstacles\.([^.]+)/, (m) => `obstacle:${m[1]}`],

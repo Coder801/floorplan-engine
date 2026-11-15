@@ -20,7 +20,7 @@ export const en: Messages = {
   },
   stage: {
     plan: "Plan", electrical: "Electrical", wiring: "Wiring", plumbing: "Plumbing",
-    furniture: "Furniture", lighting: "Lighting", panel: "Panel", elevations: "Elevations",
+    furniture: "Furniture", lighting: "Lighting", panel: "Panel", floor_heating: "Floor heating", elevations: "Elevations",
     points: "Points", mounting: "Mounting",
   },
   views: { electrical: "Sockets", low: "Comms", lighting: "Lighting", wiring: "Wiring" },
@@ -37,13 +37,15 @@ export const en: Messages = {
     "L-TEXT": "light numbers",
     "P-COLD": "cold water", "P-HOT": "hot water", "P-SEWER": "sewer", "P-FIXT": "fixtures",
     "P-RISER": "risers and manifolds", "P-OBST": "obstacles", "P-TEXT": "plumbing labels",
+    "E-FLOORHEAT": "floor heating: cable", "E-FLOORHEAT-LEAD": "floor heating: cold lead", "E-FLOORHEAT-SENSOR": "floor heating: sensor and conduit", "E-FLOORHEAT-ZONE": "floor heating: no cable", "E-FLOORHEAT-TEXT": "floor heating labels",
+    "F-FURN": "furniture",
     "0": "other",
   },
-  layerGroup: { points: "Points and outlets", cables: "Cables and boxes", plumbing: "Plumbing", labels: "Labels and dimensions", building: "Room", other: "Other" },
+  layerGroup: { points: "Points and outlets", cables: "Cables and boxes", plumbing: "Plumbing", heating: "Floor heating", furniture: "Furniture", labels: "Labels and dimensions", building: "Room", other: "Other" },
   object: {
     room: "Room", zone: "Room zone", wall: "Wall", dimension: "Wall dimensions", opening: "Opening",
     point: "Point", label: "Point label", board: "Panel", cable: "Cable", led_strip: "LED strip",
-    wire: "Wiring line", box: "Box",
+    wire: "Wiring line", box: "Box", heating: "Floor heating zone", furniture: "Furniture",
   },
   side: {
     tables: "Tables", layers: "Layers", tablesAndLayers: "Tables and layers", onWall: "On the wall",

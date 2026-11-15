@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Item, Page } from "@/shared/types";
-import { buildDrawing, drawingLayers, layerGroup, layerRows, layerShown, objectLayers, shiftOf } from "./drawing";
+import { buildDrawing, DRAWING_STAGES, drawingLayers, layerGroup, layerRows, layerShown, objectLayers, shiftOf } from "./drawing";
 
 const item = (l: string, d: string, o?: string): Item => ({ k: "s", c: "#000000", l, d, o });
 
@@ -69,6 +69,13 @@ describe("buildDrawing", () => {
   });
 });
 
+describe("DRAWING_STAGES", () => {
+  it("тёплый пол и сантехника — листы общего чертежа, щит и развёртки — свои", () => {
+    expect(["plan", "electrical", "wiring", "plumbing", "floor_heating"].every((st) => DRAWING_STAGES.has(st))).toBe(true);
+    expect(["panel", "elevations", "points"].some((st) => DRAWING_STAGES.has(st))).toBe(false);
+  });
+});
+
 describe("objectLayers", () => {
   it("слой объекта — первый не текстовый: 3D прячет объект вместе с ним", () => {
     const d = buildDrawing([page("p", 0, [
@@ -118,6 +125,9 @@ describe("layerGroup", () => {
     expect(["E-TEXT", "W-TEXT", "L-TEXT", "A-TEXT", "P-TEXT", "A-DIMS"].map(layerGroup)).toEqual(Array(6).fill("labels"));
     expect(["A-WALL", "A-DOOR", "A-WIND"].map(layerGroup)).toEqual(Array(3).fill("building"));
     expect(["P-COLD", "P-FIXT"].map(layerGroup)).toEqual(["plumbing", "plumbing"]);
+    expect(["E-FLOORHEAT", "E-FLOORHEAT-LEAD", "E-FLOORHEAT-SENSOR", "E-FLOORHEAT-ZONE"].map(layerGroup)).toEqual(Array(4).fill("heating"));
+    expect(layerGroup("E-FLOORHEAT-TEXT")).toBe("labels");
+    expect(layerGroup("F-FURN")).toBe("furniture");
     expect(["0", "M-FIX"].map(layerGroup)).toEqual(["other", "other"]);
   });
 });

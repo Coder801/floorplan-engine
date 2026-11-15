@@ -21,8 +21,8 @@ export function inView(page: Page, box: Box): boolean {
 }
 
 // Layers the screen draws bolder (bold in paint): everything but the building (walls, openings,
-// dimensions, sheet frame)
-const boldLayer = (l: string) => !l.startsWith("A-") && l !== "0";
+// dimensions, sheet frame) and the furniture under it
+export const boldLayer = (l: string) => !l.startsWith("A-") && l !== "F-FURN" && l !== "0";
 
 // Primitives in order; pxPerMm is for the minimum line width; cableMinPx keeps wiring lines on
 // screen at least this thick (device px); 0 in PNG. bold thickens the engineering lines on
