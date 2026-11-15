@@ -5,11 +5,12 @@ load, and best practice is kept where the load allows it.
   phases (3P); its power is shared equally.
 - A phase from the model (`groups.<QF>.phase`) is kept; the code places the rest.
 - What has to share a phase goes as one unit: the backup bus (the backup source has one phase)
-  and, in economy, the groups under the shared RCD of wet zones (a single-phase RCD).
+  and the groups under each shared RCD (a single-phase RCD, `PanelGroup.shared`): wet zones and
+  floor heating in economy; in standard the sockets of the day zone, of the night zone and the
+  floor heating, each RCD its own unit (decision 2026-11-15).
 - Units go largest first, each on the least loaded phase; a unit whose room is already on a
   phase goes there if that phase is no more than ROOM_SLACK_W above the least loaded one: one
-  room on one phase, no 400 V between neighbouring devices. Lighting takes at least two phases,
-  so one phase lost does not leave the whole flat dark.
+  room on one phase, no 400 V between neighbouring devices. Lighting takes at least two phases, so one phase lost does not leave the whole flat dark.
 - Balance is checked on the panel (panel.weak_spots): a phase above the main breaker, a spread
   above UNBALANCE.
 """
@@ -57,8 +58,8 @@ def unbalance(loads: dict[str, float]) -> float:
 
 
 def _units(groups: Sequence[PanelGroup], elec: Electrical, scheme: PanelScheme) -> list[_Unit]:
-    """Single-phase groups as units: the backup bus is one, in economy the wet groups under the
-    shared RCD are one; a phase from the model fixes its unit (the first one found wins)."""
+    """Single-phase groups as units: the backup bus is one, the groups under one shared RCD are
+    one; a phase from the model fixes its unit (the first one found wins)."""
     keys: dict[str, int] = {}
     units: list[_Unit] = []
     for k, g in enumerate(groups):
@@ -68,8 +69,8 @@ def _units(groups: Sequence[PanelGroup], elec: Electrical, scheme: PanelScheme) 
         fixed = info.phase if info is not None and info.phase in PHASES else None
         if g.reserved:
             key = "reserve"
-        elif scheme == "economy" and g.rcd is not None:
-            key = "rcd"
+        elif g.shared is not None:
+            key = f"rcd:{g.shared}"
         else:
             key = g.group
         if key not in keys:

@@ -1,4 +1,5 @@
-"""Route: polyline simplification and axis length; grid search (cost and pruning)."""
+"""Route: polyline simplification and axis length; grid search (cost and pruning); the search
+memo of a build."""
 
 from __future__ import annotations
 
@@ -13,6 +14,7 @@ from floorplan_engine.electrical.routing import (
     apart_cells,
     beside_mm,
     length,
+    search_memo,
     simplify,
 )
 from floorplan_engine.model.geometry import Vec
@@ -187,3 +189,24 @@ def test_beside_mm_counts_overlap_once() -> None:
     others = [_v((0, 0), (600, 0)), _v((400, 200), (800, 200)), _v((900, 300), (1000, 300))]
     assert beside_mm(path, others) == pytest.approx(800)  # 0–600 and 400–800 overlap; 300 is far
     assert beside_mm(_v((500, -500), (500, 500)), others) == 0  # across
+
+
+def test_search_memo_shares_searches_with_the_same_inputs() -> None:
+    area, source = box(0, 0, 3000, 2000), End(Vec(250, 1550), False)
+    target = End(Vec(2800, 300), False)
+    with search_memo():
+        a, b = Router(area, source), Router(area, source)
+        other = Router(area, source, any_angle=True)
+        with search_memo():  # a nested block uses the outer memo
+            c = Router(area, source)
+    assert a.dist is b.dist is c.dist
+    assert other.dist is not a.dist
+    assert a.route(target) == Router(area, source).route(target)
+
+
+def test_search_memo_forgets_after_the_block() -> None:
+    area, source = box(0, 0, 3000, 2000), End(Vec(250, 1550), False)
+    with search_memo():
+        inside = Router(area, source)
+    assert Router(area, source).dist is not inside.dist
+    assert Router(area, source).dist is not Router(area, source).dist

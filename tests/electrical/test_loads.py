@@ -15,6 +15,7 @@ from floorplan_engine.electrical.loads import (
     backup_share,
     group_kind,
     point_load,
+    rcd_of,
 )
 from floorplan_engine.model.schema import Electrical, ElectricalPoint
 
@@ -105,3 +106,19 @@ def test_thermostat_is_a_floor_heating_load_and_a_power_cable() -> None:
     elec = Electrical.model_validate({"points": [point.model_dump()]})
     assert assumed_mark(elec, "QF1", elec.points) == "3x2.5"  # not a lighting cable
     assert group_kind(elec, "QF1") is Kind.SOCKETS
+
+
+def test_rcd_by_scheme_floor_heating_always_protected() -> None:
+    """Decision 2026-11-15: the model wins; standard and premium protect every group; economy
+    only wet ones; floor heating (a controller or a note) in any scheme and any room."""
+    socket, light = _point("socket"), _point("light")
+    heating = [_point("thermostat")]
+    by_note = [_point("socket", "тепла підлога")]
+    for scheme in ("standard", "premium"):
+        assert rcd_of(scheme, [socket], False, None) == "30 мА"
+        assert rcd_of(scheme, [light], False, None) == "30 мА"
+    assert rcd_of("economy", [socket], False, None) is None
+    assert rcd_of("economy", [socket], True, None) == "30 мА"  # a wet zone
+    assert rcd_of("economy", heating, False, None) == "30 мА"
+    assert rcd_of("economy", by_note, False, None) == "30 мА"
+    assert rcd_of("economy", [socket], False, "10 мА") == "10 мА"  # from the model

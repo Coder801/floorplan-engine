@@ -32,7 +32,9 @@ from __future__ import annotations
 import heapq
 import itertools
 import math
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterator, Sequence
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass
 
 import numpy as np
@@ -460,21 +462,20 @@ class Router:
         walls: Sequence[Polygon] = (),
         beside: Sequence[Sequence[Vec]] = (),
     ) -> None:
-        if walls:
-            self.grid = Grid.of(shapely.unary_union([area, *walls]))
-            self.grid.inner = Grid.of(area).inner
-            self.grid.penalty = _wall_penalty(self.grid, walls)
-        else:
-            self.grid = Grid.of(area)
-        if beside and not any_angle:
-            self.grid.apart = apart_cells(self.grid, beside)
         self.area = area
         self.walls = walls
         self.source = source
         self.any_angle = any_angle
-        self.start = self.grid.nearest_free(source.node, open_only=True)
-        search = self.grid.search_any if any_angle else self.grid.search
-        self.prev, self.dist = search(self.start)
+        beside = () if any_angle else beside
+        memo = _MEMO.get()
+        if memo is None:
+            found = _searched(area, source, any_angle, walls, beside)
+        else:
+            key = _search_key(area, source, any_angle, walls, beside)
+            found = memo.get(key) or memo.setdefault(
+                key, _searched(area, source, any_angle, walls, beside)
+            )
+        self.grid, self.start, self.prev, self.dist = found
 
     def apart_from(self, beside: Sequence[Sequence[Vec]]) -> Router:
         """The same router for a low-voltage cable that keeps APART from the given power
@@ -497,6 +498,68 @@ class Router:
         head = _join(self.source.node, middle[0], self.source.vertical_wall)
         tail = list(reversed(_join(target.node, middle[-1], target.vertical_wall)))
         return simplify([*head, *middle, *tail])
+
+
+# A searched router: grid, start cell, state parents and costs. Read only after the search, so
+# routers with the same inputs share it.
+_Search = tuple["Grid", int, dict[int, int], dict[int, float]]
+_MEMO: ContextVar[dict[tuple[object, ...], _Search] | None] = ContextVar(
+    "routing_memo", default=None
+)
+
+
+@contextmanager
+def search_memo() -> Iterator[None]:
+    """Remember router searches by their exact inputs (area, source, angle, walls, power routes
+    beside) until the block ends: one build routes the chosen variant and its neighbours, and most
+    of their routers are the same (variant_block). Outside the block nothing is remembered, so a
+    long-running service holds no searches between builds; a nested block uses the outer one."""
+    if _MEMO.get() is not None:
+        yield
+        return
+    token = _MEMO.set({})
+    try:
+        yield
+    finally:
+        _MEMO.reset(token)
+
+
+def _search_key(
+    area: BaseGeometry,
+    source: End,
+    any_angle: bool,
+    walls: Sequence[Polygon],
+    beside: Sequence[Sequence[Vec]],
+) -> tuple[object, ...]:
+    return (
+        area.wkb,
+        source.node.as_tuple(),
+        source.vertical_wall,
+        any_angle,
+        tuple(w.wkb for w in walls),
+        tuple(tuple(p.as_tuple() for p in path) for path in beside),
+    )
+
+
+def _searched(
+    area: BaseGeometry,
+    source: End,
+    any_angle: bool,
+    walls: Sequence[Polygon],
+    beside: Sequence[Sequence[Vec]],
+) -> _Search:
+    if walls:
+        grid = Grid.of(shapely.unary_union([area, *walls]))
+        grid.inner = Grid.of(area).inner
+        grid.penalty = _wall_penalty(grid, walls)
+    else:
+        grid = Grid.of(area)
+    if beside:
+        grid.apart = apart_cells(grid, beside)
+    start = grid.nearest_free(source.node, open_only=True)
+    search = grid.search_any if any_angle else grid.search
+    prev, dist = search(start)
+    return grid, start, prev, dist
 
 
 def _wall_penalty(grid: Grid, walls: Sequence[Polygon]) -> dict[int, float]:

@@ -13,6 +13,7 @@ import yaml
 from pydantic import ValidationError
 
 from floorplan_engine.electrical.loads import (
+    Breaker,
     Kind,
     cable_section,
     heavy_cable,
@@ -32,6 +33,7 @@ from floorplan_engine.electrical.panel import (
     panel_rows,
     panel_title,
     reserve_groups,
+    shared_rcd_rating,
 )
 from floorplan_engine.electrical.panel_questions import panel_questions
 from floorplan_engine.electrical.panel_text import TEXT
@@ -97,7 +99,9 @@ def test_line_classes_purpose_and_protection() -> None:
         "QF4": "device",
         "QF5": "socket",
     }
-    assert not any(c.rcd for c in lines.values())
+    assert all(c.rcd for c in lines.values())  # standard: RCBOs, lighting under a shared RCD
+    economy = line_classes(_plan(), _elec(points, cables, panel={"scheme": "economy"}))
+    assert not any(c.rcd for c in economy.values())
     premium = line_classes(_plan(), _elec(points, cables, panel={"scheme": "premium"}))
     assert all(c.rcd for c in premium.values())
 
@@ -233,7 +237,13 @@ def test_schemes_rcd_curve_relay_spd_ats() -> None:
     assert "SA1" in std and "KM1" not in std  # a hybrid switches itself: bypass switch
     assert "KM1" in build("standard", inverter="basic")  # no switching of its own: ATS
     assert "KM1" in build("economy", ats=True)  # explicitly set wins
-    assert std["QF2"].kind is DeviceKind.DIFF and std["QF1"].kind is DeviceKind.BREAKER
+    # standard (decision 2026-11-15): power groups on RCBOs, lighting under a shared RCD
+    assert all(std[g].kind is DeviceKind.DIFF for g in ("QF1", "QF2", "QF4", "QF5"))
+    assert std["QF3"].kind is DeviceKind.BREAKER and std["QF3"].label == "C10"
+    shared = [d for d in std.values() if d.kind is DeviceKind.RCD]
+    assert [(d.feeds, d.label, d.title) for d in shared] == [
+        (("QF3",), "40 А 30 мА", "УЗО освещения")
+    ]
     prem = build("premium")
     assert "KV1" in prem and "FV1" in prem
     assert all(prem[g].kind is DeviceKind.DIFF for g in ("QF1", "QF2", "QF3", "QF4", "QF5"))
@@ -672,12 +682,14 @@ def test_group_without_cable_gets_the_wiring_assumption() -> None:
 def test_short_device_names_for_the_panel_table() -> None:
     """The panel table writes АВ / АВДТ, the estimate keeps the full names."""
     points = [_pt("s1", "socket", "QF1"), _pt("w1", "socket", "QF2", room="b")]
-    panel = build_panel(_plan(), _elec(points, {}))
-    assert panel is not None
-    by_group = {d.group: d for d in panel.devices if d.group}
-    assert device_name(by_group["QF1"], "ru", short=True) == "АВ 1P C16"
-    assert device_name(by_group["QF1"], "ru") == "Автомат 1P C16"
-    assert device_name(by_group["QF2"], "uk", short=True).startswith("АВДТ 1P+N C16")
+    economy = build_panel(_plan(), _elec(points, {}, panel={"scheme": "economy"}))
+    standard = build_panel(_plan(), _elec(points, {}))
+    assert economy is not None and standard is not None
+    breaker = next(d for d in economy.devices if d.group == "QF1")
+    assert device_name(breaker, "ru", short=True) == "АВ 1P C16"
+    assert device_name(breaker, "ru") == "Автомат 1P C16"
+    rcbo = next(d for d in standard.devices if d.group == "QF2")
+    assert device_name(rcbo, "uk", short=True).startswith("АВДТ 1P+N C16")
 
 
 def _rails(*rows: list[Device], phases: int = 1) -> BoardPanel:
@@ -737,3 +749,85 @@ def test_thermostat_line_is_an_appliance_and_heavy_for_the_backup_bus() -> None:
     assert block is not None
     kinds = {g["id"]: g["kind"] for g in cast(list[dict[str, Any]], block["items"])}
     assert kinds == {"QF1": "heavy", "QF2": "sockets"}
+
+
+def _protection_elec(scheme: str, **panel: Any) -> Electrical:
+    points = [
+        _pt("s1", "socket", "QF1"),
+        {"id": "l1", "room": "k", "type": "light", "ceiling": [500, 500], "group": "QF2"},
+        {"id": "l2", "room": "b", "type": "light", "ceiling": [500, 500], "group": "QF3"},
+        {"id": "l3", "room": "k", "type": "light", "ceiling": [900, 900], "group": "QF4"},
+        _pt("t1", "thermostat", "QF5", height=1500),
+        _pt("s2", "socket", "QF6", room="b"),
+        _pt("tw", "socket", "QF6", room="b", note="рушникосушка"),
+    ]
+    cables = {"QF1": "3x2.5", "QF2": "3x1.5", "QF3": "3x1.5", "QF4": "3x1.5"}
+    cables |= {"QF5": "3x2.5", "QF6": "3x2.5"}
+    setup = {"scheme": scheme, "backup": "none", **panel}
+    return _elec(points, cables, panel=setup, groups={"QF4": {"rcd": "30 мА"}})
+
+
+def test_standard_power_on_rcbos_lighting_under_a_shared_rcd() -> None:
+    """Decision 2026-11-15: in standard every power group, floor heating and the bathroom
+    sockets with the towel rail on RCBOs; lighting, wet room too, under one RCD; lighting with an
+    rcd in the model on its own RCBO. The towel rail in the bathroom sockets is no weak spot."""
+    elec = _protection_elec("standard")
+    panel = build_panel(_plan(), elec)
+    assert panel is not None
+    by_id = {d.id: d for d in panel.devices}
+    assert all(by_id[g].kind is DeviceKind.DIFF for g in ("QF1", "QF4", "QF5", "QF6"))
+    assert by_id["QF4"].label == "C10 30 мА"
+    rcds = [d for d in panel.devices if d.kind is DeviceKind.RCD]
+    assert [(d.feeds, d.label, d.title) for d in rcds] == [
+        (("QF2", "QF3"), "40 А 30 мА", "УЗО освещения")
+    ]
+    assert by_id["QF2"].kind is by_id["QF3"].kind is DeviceKind.BREAKER
+    assert all(c.rcd for c in line_classes(_plan(), elec).values())  # "with protection" layer
+    assert not [w for w in panel.warnings if w.group == "QF6"]
+    assert TEXT["rcd_light"]["uk"] == "ПЗВ освітлення"
+
+
+def test_floor_heating_is_protected_in_economy_under_the_shared_rcd() -> None:
+    panel = build_panel(_plan(), _protection_elec("economy"))
+    assert panel is not None
+    by_id = {d.id: d for d in panel.devices}
+    rcd = next(d for d in panel.devices if d.kind is DeviceKind.RCD)
+    assert set(rcd.feeds) == {"QF4", "QF5", "QF6"}  # model rcd, floor heating, wet sockets
+    assert rcd.title == "УЗО мокрых зон и тёплого пола"
+    assert by_id["QF5"].kind is DeviceKind.BREAKER
+    assert by_id["QF1"].kind is by_id["QF2"].kind is DeviceKind.BREAKER  # dry: unchanged
+    assert by_id["QF3"].kind is DeviceKind.BREAKER  # bathroom lighting: not protected in economy
+    assert "QF3" not in rcd.feeds
+
+
+def test_standard_shared_rcd_is_split_by_the_master_switch() -> None:
+    """Master switch: lighting it cuts and lighting it keeps each under its own RCD."""
+    panel = build_panel(_plan(), _protection_elec("standard", master=True, master_off=["QF2"]))
+    assert panel is not None
+    rcds = [d for d in panel.devices if d.kind is DeviceKind.RCD]
+    assert [(d.id, d.feeds, d.master) for d in rcds] == [
+        ("QD1", ("QF3",), False),
+        ("QD2", ("QF2",), True),
+    ]
+
+
+def test_shared_rcd_rating_by_current_and_largest_breaker() -> None:
+    panel = build_panel(_plan(), _protection_elec("standard"))
+    assert panel is not None
+    light = [g for g in panel.groups if g.group in ("QF2", "QF3")]
+    assert shared_rcd_rating(light) == 40
+    big = replace(light[0], breaker=Breaker("C", 50, True))
+    assert shared_rcd_rating([big, light[1]]) == 63
+    many = [replace(light[0], loads=(replace(light[0].loads[0], power=2400.0),))] * 4
+    assert sum(g.current for g in many) > 40 and shared_rcd_rating(many) == 63
+
+
+def test_standard_three_phase_rcbo_and_shared_rcd_on_one_phase() -> None:
+    panel, _ = _three_phase(scheme="standard")
+    by_id = {d.id: d for d in panel.devices}
+    cook = by_id["QF1"]
+    assert cook.kind is DeviceKind.DIFF and cook.label.endswith("30 мА 4P") and cook.poles == 4
+    assert by_id["QF2"].kind is by_id["QF3"].kind is DeviceKind.DIFF
+    rcd = next(d for d in panel.devices if d.kind is DeviceKind.RCD)
+    assert set(rcd.feeds) == {"QF5", "QF6"} and rcd.phase in ("L1", "L2", "L3")
+    assert by_id["QF5"].phase == by_id["QF6"].phase == rcd.phase

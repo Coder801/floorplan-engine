@@ -71,6 +71,7 @@ def icons() -> dict[str, list[str]]:
     return loaded
 
 
+@lru_cache(maxsize=4096)  # one panel measures the same names at every size, four PDFs
 def _width(line: str, em: float, font: FontProperties) -> float:
     return float(TextPath((0, 0), line, size=em, prop=font).get_extents().width) if line else 0.0
 

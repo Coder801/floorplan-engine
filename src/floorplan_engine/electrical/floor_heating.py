@@ -10,7 +10,8 @@ sensor and the cold lead to the controller.
    the source is compared with it by the check.
 2. Section length: from `length` (the source), otherwise the series length nearest to area ×
    density / linear power (density `density` or DEFAULT_DENSITY) among those that can be laid
-   at a pitch of PITCH_MIN…PITCH_MAX; none can — the nearest, with a remark.
+   at a pitch of PITCH_MIN…PITCH_MAX; none can — the longest that is laid whole (a section is
+   never cut), with a remark.
 3. Pitch: by bisection, so the route takes the whole heating length; the route is cut at that
    length exactly (the far end of a two-core cable is an end sleeve and may be anywhere). The
    route geometry is electrical/heating_layout.py.
@@ -64,6 +65,9 @@ WALL_GAP = 100.0  # mm: no cable closer to the walls (assumption)
 DEFAULT_DENSITY = 150.0  # W/m²: target density without `density` (assumption)
 PITCH_MIN, PITCH_MAX = 120.0, 170.0  # mm: recommended pitch between runs
 PITCH_MID = (PITCH_MIN + PITCH_MAX) / 2
+# mm: a section this much shorter than the route at PITCH_MAX still fits (the last run is a little
+# shorter, no remark about an uncovered floor of a few centimetres)
+FIT_SLACK = 100.0
 MIN_BEND_DIAMETERS = 6.0  # the smallest turn radius, cable diameters (assumption)
 SENSOR_DEPTH = 500.0  # mm: the sensor tip this far into the zone (assumption)
 LEAD_GAP = 50.0  # mm: the cold lead and the sensor conduit run this far from the wall face
@@ -233,11 +237,16 @@ def choose_length(
 ) -> tuple[float, bool]:
     """Section length from the series, m, and whether it can be laid at PITCH_MIN…PITCH_MAX:
     shortest and longest are the route lengths at PITCH_MAX and PITCH_MIN, mm. Among the lengths
-    that fit — the nearest to area × density / linear power; none fits — the nearest."""
+    that fit — the nearest to area × density / linear power. None fits — the longest that is
+    laid whole (a heating section is never cut: a leftover cable cannot go anywhere, a part of the
+    floor without cable can), and only when even the shortest one is too long — the shortest."""
     target = area_m2 * density / series.watts_per_m
     order = sorted(series.lengths, key=lambda m: (abs(m - target), m))
-    fitting = next((m for m in order if shortest <= m * 1000 <= longest), None)
-    return (fitting, True) if fitting is not None else (order[0], False)
+    fitting = next((m for m in order if shortest - FIT_SLACK <= m * 1000 <= longest), None)
+    if fitting is not None:
+        return fitting, True
+    whole = [m for m in series.lengths if m * 1000 <= longest]
+    return (max(whole) if whole else min(series.lengths)), False
 
 
 # --- Leads ---------------------------------------------------------------------------------------
@@ -419,7 +428,7 @@ def heating_zone(
 
     shortest, longest = needed(PITCH_MAX), needed(PITCH_MIN)
     if fh.length is not None:
-        length, fits = fh.length, shortest <= fh.length * 1000 <= longest
+        length, fits = fh.length, shortest - FIT_SLACK <= fh.length * 1000 <= longest
     else:
         length, fits = choose_length(area_m2, density, series, shortest, longest)
     length_mm = length * 1000

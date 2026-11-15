@@ -241,7 +241,7 @@ def test_viewer_data() -> None:
     assert on is not None
     devices = cast(list[dict[str, Any]], panel_data(on, {}, "ЩР", "ru")["devices"])
     marked = {d["id"] for d in devices if d.get("master")}
-    assert marked == {"KM2", "QF1", "QF2"}
+    assert marked == {"KM2", "QD1", "QF1", "QF2"}  # standard: the cut lighting has its own RCD
 
 
 def test_answers_turn_master_on_with_groups(tmp_path: Path) -> None:

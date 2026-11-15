@@ -18,6 +18,7 @@ def _g(
     return PanelGroup(
         name, kind, "x", False, (load,), "3x2.5", 2.5, Breaker("C", 16, True),
         fields["rcd"], False, fields["reserved"], phase=fields["phase"],
+        rcd_from_model=fields.get("rcd_from_model", False),
     )  # fmt: skip
 
 
@@ -73,6 +74,19 @@ def test_units_share_a_phase_and_a_model_phase_is_kept() -> None:
     wet = [_g("QF1", 800, "A", rcd="30 мА"), _g("QF2", 800, "B", rcd="30 мА")]
     out = assign_phases(wet, Electrical.model_validate({"panel": {"phases": 3}}), "economy")
     assert out[0].phase == out[1].phase  # in economy under one shared RCD
+
+
+def test_standard_lighting_under_the_shared_rcd_takes_one_phase() -> None:
+    """Standard (decision 2026-11-15): the lighting under the shared RCD is one unit; a lighting
+    group with its own RCBO from the model and the power groups on RCBOs are placed apart."""
+    rcd = "30 мА"
+    light = [_g(f"QF{k}", 300, f"R{k}", Kind.LIGHT, rcd=rcd) for k in (1, 2, 3)]
+    own = _g("QF4", 300, "R4", Kind.LIGHT, rcd=rcd, rcd_from_model=True)
+    power = [_g(f"QF{k}", 2000, f"P{k}", rcd=rcd) for k in (5, 6, 7)]
+    phases = _phases([*light, own, *power])
+    assert phases["QF1"] == phases["QF2"] == phases["QF3"]  # one single-phase RCD
+    assert len({phases[g] for g in ("QF5", "QF6", "QF7")}) == 3  # RCBOs: spread
+    assert phases["QF4"] != phases["QF1"]  # lighting still on a second phase
 
 
 def test_unbalance() -> None:

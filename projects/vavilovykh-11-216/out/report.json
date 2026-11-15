@@ -40,11 +40,14 @@
     },
     {
       "stage": "panel",
-      "status": "ready",
+      "status": "questions",
       "builds": true,
       "reason": "",
-      "weight": 0,
-      "questions": []
+      "weight": 2,
+      "questions": [
+        "panel_reserve",
+        "panel_master_off"
+      ]
     }
   ],
   "questions": [
@@ -168,10 +171,10 @@
       "state": "open"
     },
     {
-      "id": "panel_master_off",
+      "id": "panel_reserve",
       "stage": "panel",
       "audience": "studio",
-      "text": "Що вимикає майстер-вимикач? Зараз: QF1, QF2, QF3, QF4, QF5, QF6, QF7, QF8, QF9, QF10, QF11, QF14, QF15, QF16, QF17, QF18, QF19, QF20, QF21, QF22, QF23, QF24, QF25, QF26, QF27 — усе, крім холодильника, котла, роутера, насоса, воріт і сигналізації (припущення)",
+      "text": "Що тримати на резерві? Зараз: QF1, QF3, QF5, QF7, QF11, QF12, QF13, QF19, QF20, QF25 — світло, холодильник, роутер, котел, насос, ворота, розетки кухні (припущення)",
       "also": [],
       "answer": "groups",
       "options": [
@@ -196,7 +199,6 @@
         "QF19",
         "QF20",
         "QF21",
-        "QF22",
         "QF23",
         "QF24",
         "QF25",
@@ -205,7 +207,46 @@
       ],
       "option_labels": {},
       "severity": "minor",
-      "state": "answered"
+      "state": "open"
+    },
+    {
+      "id": "panel_master_off",
+      "stage": "panel",
+      "audience": "studio",
+      "text": "Що вимикає майстер-вимикач? Зараз: QF1, QF2, QF3, QF4, QF5, QF6, QF7, QF8, QF9, QF10, QF11, QF14, QF15, QF16, QF17, QF18, QF19, QF20, QF21, QF23, QF24, QF25, QF26, QF27 — усе, крім холодильника, котла, роутера, насоса, воріт і сигналізації (припущення)",
+      "also": [],
+      "answer": "groups",
+      "options": [
+        "QF1",
+        "QF2",
+        "QF3",
+        "QF4",
+        "QF5",
+        "QF6",
+        "QF7",
+        "QF8",
+        "QF9",
+        "QF10",
+        "QF11",
+        "QF12",
+        "QF13",
+        "QF14",
+        "QF15",
+        "QF16",
+        "QF17",
+        "QF18",
+        "QF19",
+        "QF20",
+        "QF21",
+        "QF23",
+        "QF24",
+        "QF25",
+        "QF26",
+        "QF27"
+      ],
+      "option_labels": {},
+      "severity": "minor",
+      "state": "open"
     },
     {
       "id": "panel_backup",
@@ -276,46 +317,6 @@
       "state": "answered"
     },
     {
-      "id": "panel_reserve",
-      "stage": "panel",
-      "audience": "studio",
-      "text": "Що тримати на резерві? Зараз: QF1, QF3, QF5, QF7, QF11, QF12, QF13, QF19, QF20, QF25 — світло, холодильник, роутер, котел, насос, ворота, розетки кухні (припущення)",
-      "also": [],
-      "answer": "groups",
-      "options": [
-        "QF1",
-        "QF2",
-        "QF3",
-        "QF4",
-        "QF5",
-        "QF6",
-        "QF7",
-        "QF8",
-        "QF9",
-        "QF10",
-        "QF11",
-        "QF12",
-        "QF13",
-        "QF14",
-        "QF15",
-        "QF16",
-        "QF17",
-        "QF18",
-        "QF19",
-        "QF20",
-        "QF21",
-        "QF22",
-        "QF23",
-        "QF24",
-        "QF25",
-        "QF26",
-        "QF27"
-      ],
-      "option_labels": {},
-      "severity": "minor",
-      "state": "answered"
-    },
-    {
       "id": "panel_master",
       "stage": "panel",
       "audience": "studio",
@@ -338,6 +339,18 @@
   ],
   "issues": [
     {
+      "file": "answers.yaml",
+      "path": "answers.panel_reserve",
+      "severity": "error",
+      "message": "ожидается список групп из: QF1, QF2, QF3, QF4, QF5, QF6, QF7, QF8, QF9, QF10, QF11, QF12, QF13, QF14, QF15, QF16, QF17, QF18, QF19, QF20, QF21, QF23, QF24, QF25, QF26, QF27"
+    },
+    {
+      "file": "answers.yaml",
+      "path": "answers.panel_master_off",
+      "severity": "error",
+      "message": "ожидается список групп из: QF1, QF2, QF3, QF4, QF5, QF6, QF7, QF8, QF9, QF10, QF11, QF12, QF13, QF14, QF15, QF16, QF17, QF18, QF19, QF20, QF21, QF23, QF24, QF25, QF26, QF27"
+    },
+    {
       "file": "electrical.yaml",
       "path": "points[24].offset",
       "severity": "warning",
@@ -357,177 +370,51 @@
     },
     {
       "file": "electrical.yaml",
-      "path": "groups.QF1",
+      "path": "points[33]",
       "severity": "warning",
-      "message": "QF1: нет марки кабеля — автомат подобран без проверки по сечению"
+      "message": "тёплый пол «auto_loggia_outlet_1» (зона по регулятору): в floor_heating зоны нет — построена кодом: Лоджія* (допущение: помещение по подписи или месту регулятора); уточните по дизайну или задайте heating_rooms"
     },
     {
       "file": "electrical.yaml",
-      "path": "groups.QF2",
+      "path": "points[33].note",
       "severity": "warning",
-      "message": "QF2: нет марки кабеля — автомат подобран без проверки по сечению"
+      "message": "тёплый пол «auto_loggia_outlet_1» (зона по регулятору): по подписи регулятора 2,53 м², по раскладке 3,00 м² — расхождение больше 10%: уточните вырезы (exclude) или мебель (furniture.yaml)"
     },
     {
       "file": "electrical.yaml",
-      "path": "groups.QF3",
+      "path": "points[93]",
       "severity": "warning",
-      "message": "QF3: нет марки кабеля — автомат подобран без проверки по сечению"
+      "message": "тёплый пол «auto_hall_outlet_5» (зона по регулятору): в floor_heating зоны нет — построена кодом: Кухня-вітальня* (допущение: помещение по подписи или месту регулятора); уточните по дизайну или задайте heating_rooms"
     },
     {
       "file": "electrical.yaml",
-      "path": "groups.QF4",
+      "path": "points[93].note",
       "severity": "warning",
-      "message": "QF4: нет марки кабеля — автомат подобран без проверки по сечению"
+      "message": "тёплый пол «auto_hall_outlet_5» (зона по регулятору): по подписи регулятора 6,35 м², по раскладке 9,25 м² — расхождение больше 10%: уточните вырезы (exclude) или мебель (furniture.yaml)"
     },
     {
       "file": "electrical.yaml",
-      "path": "groups.QF5",
+      "path": "points[94]",
       "severity": "warning",
-      "message": "QF5: нет марки кабеля — автомат подобран без проверки по сечению"
+      "message": "тёплый пол «auto_hall_outlet_6» (зона по регулятору): в floor_heating зоны нет — построена кодом: Передпокій* (допущение: помещение по подписи или месту регулятора); уточните по дизайну или задайте heating_rooms"
     },
     {
       "file": "electrical.yaml",
-      "path": "groups.QF6",
+      "path": "points[94].note",
       "severity": "warning",
-      "message": "QF6: нет марки кабеля — автомат подобран без проверки по сечению"
+      "message": "тёплый пол «auto_hall_outlet_6» (зона по регулятору): по подписи регулятора 5,28 м², по раскладке 6,52 м² — расхождение больше 10%: уточните вырезы (exclude) или мебель (furniture.yaml)"
     },
     {
       "file": "electrical.yaml",
-      "path": "groups.QF7",
+      "path": "points[95]",
       "severity": "warning",
-      "message": "QF7: нет марки кабеля — автомат подобран без проверки по сечению"
+      "message": "тёплый пол «auto_hall_outlet_7» (зона по регулятору): в floor_heating зоны нет — построена кодом: Санвузол* (допущение: помещение по подписи или месту регулятора); уточните по дизайну или задайте heating_rooms"
     },
     {
       "file": "electrical.yaml",
-      "path": "groups.QF8",
+      "path": "points[95].note",
       "severity": "warning",
-      "message": "QF8: нет марки кабеля — автомат подобран без проверки по сечению"
-    },
-    {
-      "file": "electrical.yaml",
-      "path": "groups.QF9",
-      "severity": "warning",
-      "message": "QF9: нет марки кабеля — автомат подобран без проверки по сечению"
-    },
-    {
-      "file": "electrical.yaml",
-      "path": "groups.QF10",
-      "severity": "warning",
-      "message": "QF10: нет марки кабеля — автомат подобран без проверки по сечению"
-    },
-    {
-      "file": "electrical.yaml",
-      "path": "groups.QF11",
-      "severity": "warning",
-      "message": "QF11: нет марки кабеля — автомат подобран без проверки по сечению"
-    },
-    {
-      "file": "electrical.yaml",
-      "path": "groups.QF12",
-      "severity": "warning",
-      "message": "QF12: нет марки кабеля — автомат подобран без проверки по сечению"
-    },
-    {
-      "file": "electrical.yaml",
-      "path": "groups.QF13",
-      "severity": "warning",
-      "message": "QF13: нет марки кабеля — автомат подобран без проверки по сечению"
-    },
-    {
-      "file": "electrical.yaml",
-      "path": "groups.QF14",
-      "severity": "warning",
-      "message": "QF14: нет марки кабеля — автомат подобран без проверки по сечению"
-    },
-    {
-      "file": "electrical.yaml",
-      "path": "groups.QF15",
-      "severity": "warning",
-      "message": "QF15: нет марки кабеля — автомат подобран без проверки по сечению"
-    },
-    {
-      "file": "electrical.yaml",
-      "path": "groups.QF16",
-      "severity": "warning",
-      "message": "QF16: нет марки кабеля — автомат подобран без проверки по сечению"
-    },
-    {
-      "file": "electrical.yaml",
-      "path": "groups.QF17",
-      "severity": "warning",
-      "message": "QF17: нет марки кабеля — автомат подобран без проверки по сечению"
-    },
-    {
-      "file": "electrical.yaml",
-      "path": "groups.QF18",
-      "severity": "warning",
-      "message": "QF18: нет марки кабеля — автомат подобран без проверки по сечению"
-    },
-    {
-      "file": "electrical.yaml",
-      "path": "groups.QF19",
-      "severity": "warning",
-      "message": "QF19: нет марки кабеля — автомат подобран без проверки по сечению"
-    },
-    {
-      "file": "electrical.yaml",
-      "path": "groups.QF20",
-      "severity": "warning",
-      "message": "QF20: нет марки кабеля — автомат подобран без проверки по сечению"
-    },
-    {
-      "file": "electrical.yaml",
-      "path": "groups.QF21",
-      "severity": "warning",
-      "message": "QF21: нет марки кабеля — автомат подобран без проверки по сечению"
-    },
-    {
-      "file": "electrical.yaml",
-      "path": "groups.QF22",
-      "severity": "warning",
-      "message": "QF22: нет марки кабеля — автомат подобран без проверки по сечению"
-    },
-    {
-      "file": "electrical.yaml",
-      "path": "groups.QF23",
-      "severity": "warning",
-      "message": "QF23: нет марки кабеля — автомат подобран без проверки по сечению"
-    },
-    {
-      "file": "electrical.yaml",
-      "path": "groups.QF24",
-      "severity": "warning",
-      "message": "QF24: нет марки кабеля — автомат подобран без проверки по сечению"
-    },
-    {
-      "file": "electrical.yaml",
-      "path": "groups.QF25",
-      "severity": "warning",
-      "message": "QF25: нет марки кабеля — автомат подобран без проверки по сечению"
-    },
-    {
-      "file": "electrical.yaml",
-      "path": "groups.QF26",
-      "severity": "warning",
-      "message": "QF26: нет марки кабеля — автомат подобран без проверки по сечению"
-    },
-    {
-      "file": "electrical.yaml",
-      "path": "groups.QF27",
-      "severity": "warning",
-      "message": "QF27: нет марки кабеля — автомат подобран без проверки по сечению"
-    },
-    {
-      "file": "electrical.yaml",
-      "path": "panel",
-      "severity": "warning",
-      "message": "Расчётный ток квартиры 82,6 А больше вводного автомата 63 А"
-    },
-    {
-      "file": "electrical.yaml",
-      "path": "panel",
-      "severity": "warning",
-      "message": "Зарядная станция — только через силовую вилку-ввод и перекидной рубильник; кабель «вилка-вилка» в розетку запрещён: на штырях напряжение"
+      "message": "тёплый пол «auto_hall_outlet_7» (зона по регулятору): по подписи регулятора 1,69 м², по раскладке 3,14 м² — расхождение больше 10%: уточните вырезы (exclude) или мебель (furniture.yaml)"
     }
   ]
 }

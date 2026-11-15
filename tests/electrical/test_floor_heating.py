@@ -88,7 +88,12 @@ def test_length_from_the_series_that_lays_at_the_recommended_pitch() -> None:
     # 3 m² × 150 W/m² / 18 W/m = 25 m: 27 is nearest, but only 20 fits the pitch range given
     assert choose_length(3.0, 150.0, GENERIC, 26_000, 30_000) == (27, True)
     assert choose_length(3.0, 150.0, GENERIC, 15_000, 22_000) == (20, True)
-    assert choose_length(3.0, 150.0, GENERIC, 200_000, 300_000) == (27, False)
+    # None fits: the longest section that is laid whole, never one with a leftover cable
+    assert choose_length(3.0, 150.0, GENERIC, 200_000, 300_000) == (120, False)
+    assert choose_length(1.5, 150.0, GENERIC, 10_500, 13_000) == (10, False)  # not 15 (2 m over)
+    assert choose_length(0.3, 150.0, GENERIC, 3_000, 5_000) == (10, False)  # even 10 m is too long
+    # A few centimetres of route over the section at the sparsest pitch still fit (FIT_SLACK)
+    assert choose_length(1.5, 150.0, GENERIC, 10_030, 13_000) == (10, True)
 
 
 def test_route_takes_the_whole_section_at_a_pitch_in_range() -> None:

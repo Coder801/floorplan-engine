@@ -7,6 +7,7 @@ are applied by answers.apply_auto_answers."""
 from __future__ import annotations
 
 from floorplan_engine.electrical.loads import (
+    PanelGroup,
     cable_for,
     current,
     rating_for,
@@ -144,7 +145,7 @@ def panel_questions(
                         r=g.breaker.rating,
                         n=len(lines),
                         parts=parts,
-                        wet=text("q_split_wet", language) if g.wet else "",
+                        wet=_split_wet(g, language),
                     ),
                 )
             )
@@ -170,6 +171,14 @@ def panel_questions(
                 )
             )
     return out
+
+
+def _split_wet(g: PanelGroup, language: Language) -> str:
+    """Protection of the lines of a split wet group, as the panel sets it: each line on an RCBO,
+    or under the shared RCD (economy); empty for a dry group."""
+    if not g.wet:
+        return ""
+    return text("q_split_wet_shared" if g.shared else "q_split_wet", language)
 
 
 def _master_questions(

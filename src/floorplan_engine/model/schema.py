@@ -447,9 +447,11 @@ class Group(StrictModel):
     )
 
 
-# Panel scheme (decision 2026-10-27): economy has the fewest devices, wet zones under one RCD,
-# manual backup input; standard has a voltage relay, wet zones on RCBOs, ATS; premium adds
-# a surge protector, all groups on RCBOs, curve B
+# Panel scheme (decisions 2026-10-27, 2026-11-15): economy has the fewest devices, wet zones
+# and floor heating under one RCD; standard puts wet rooms on RCBOs, dry sockets under a shared
+# RCD per zone (day, night), floor heating under a shared RCD, dry lighting and outputs without
+# a plug on bare breakers; premium adds a surge protector, all groups on RCBOs, curve B
+# (electrical/loads.protection)
 PanelScheme = Literal["economy", "standard", "premium"]
 Earthing = Literal["TN-C-S", "TN-S", "TT"]
 
@@ -469,7 +471,10 @@ class PanelSetup(StrictModel):
     )
     scheme: PanelScheme | None = Field(
         default=None,
-        description="economy | standard | premium; не задана — по mode (proper → premium)",
+        description="economy — мокрые зоны и тёплый пол под общим УЗО; standard — мокрые зоны "
+        "дифавтоматами, розетки — под УЗО дневной и спальной зоны, тёплый пол — под своим УЗО, "
+        "сухой свет без УЗО; premium — всё дифавтоматами, УЗИП; не задана — по mode "
+        "(proper → premium)",
     )
     input: int | None = Field(default=None, gt=0, description="Вводной автомат, А")
     power: float | None = Field(default=None, gt=0, description="Выделенная мощность, кВт")

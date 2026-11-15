@@ -22,6 +22,7 @@ from floorplan_engine.electrical.estimate import (
 )
 from floorplan_engine.electrical.panel import BoardPanel, build_panel, write_loads
 from floorplan_engine.electrical.pricing import Prices
+from floorplan_engine.electrical.routing import search_memo
 from floorplan_engine.electrical.wiring import box_wiring, estimate_wiring
 from floorplan_engine.electrical.wiring_model import Wiring
 from floorplan_engine.electrical.work_scope import WORK_SCOPE_MD
@@ -358,7 +359,13 @@ def build_project(
     .epd artifact from the stages that can be built. Sheets are shown from the .epd (canvas);
     PNGs from the DXF only with previews=True, otherwise old out/sheets/*.png are deleted.
     prices_from is the price service for the estimate; None means the mock
-    (pricing.MockPriceService)."""
+    (pricing.MockPriceService). Router searches are remembered for the build (search_memo): the
+    sheets, the estimate and the variant summaries route the same cables many times."""
+    with search_memo():
+        return _build_project(project, previews, prices_from)
+
+
+def _build_project(project: Path, previews: bool, prices_from: PriceSource | None) -> BuildResult:
     assessment = assess_project(project)
     out = project / OUT_DIR
     result = BuildResult(assessment, write_report(out, assessment, project.name))
