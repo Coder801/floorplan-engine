@@ -22,6 +22,8 @@ PLAN = {
 
 
 def _elec(cable: str | None) -> Electrical:
+    """One dry socket group; economy, so the group has a bare breaker (АВ): in standard it is on
+    an RCBO (decision 2026-11-15)."""
     point = {"id": "s1", "room": "k", "type": "socket", "wall": "w1", "offset": 500, "height": 300}
     cables = [{"id": "c1", "from": "board", "to": ["s1"], "group": "QF1", "cable": cable}]
     return Electrical.model_validate(
@@ -29,6 +31,7 @@ def _elec(cable: str | None) -> Electrical:
             "points": [{**point, "group": "QF1"}],
             "board": {"room": "k", "wall": "w1", "offset": 2000, "height": 1700},
             "cables": cables if cable else [],
+            "panel": {"scheme": "economy"},
         }
     )
 
@@ -47,7 +50,8 @@ def test_device_row_short_name_and_assumed_cable() -> None:
 
 
 def _many_groups(n: int) -> Electrical:
-    """n socket groups: enough devices for several 12-module rails."""
+    """n socket groups on bare breakers (economy): enough devices for several 12-module rails of
+    a catalogue enclosure."""
     points = [
         {
             "id": f"s{k}",
@@ -61,7 +65,9 @@ def _many_groups(n: int) -> Electrical:
         for k in range(1, n + 1)
     ]
     board = {"room": "k", "wall": "w1", "offset": 2000, "height": 1700}
-    return Electrical.model_validate({"points": points, "board": board})
+    return Electrical.model_validate(
+        {"points": points, "board": board, "panel": {"scheme": "economy"}}
+    )
 
 
 def test_sheet_draws_the_rails_of_the_chosen_enclosure() -> None:

@@ -11,6 +11,7 @@ from floorplan_engine.electrical.loads import (
     cable_for,
     current,
     rating_for,
+    shared_rcd,
 )
 from floorplan_engine.electrical.master import is_master, master_on
 from floorplan_engine.electrical.panel import (
@@ -20,7 +21,7 @@ from floorplan_engine.electrical.panel import (
 )
 from floorplan_engine.electrical.panel_text import amps, kw, text
 from floorplan_engine.model.intake import QSeverity, Question, Stage
-from floorplan_engine.model.schema import Electrical
+from floorplan_engine.model.schema import Electrical, PanelScheme
 from floorplan_engine.model.texts import Language
 
 AUTO_PREFIX = "panel_"  # ids of questions built by code; they are never written in intake.yaml
@@ -145,7 +146,7 @@ def panel_questions(
                         r=g.breaker.rating,
                         n=len(lines),
                         parts=parts,
-                        wet=_split_wet(g, language),
+                        wet=_split_wet(g, panel.scheme, language),
                     ),
                 )
             )
@@ -173,12 +174,12 @@ def panel_questions(
     return out
 
 
-def _split_wet(g: PanelGroup, language: Language) -> str:
+def _split_wet(g: PanelGroup, scheme: PanelScheme, language: Language) -> str:
     """Protection of the lines of a split wet group, as the panel sets it: each line on an RCBO,
     or under the shared RCD (economy); empty for a dry group."""
     if not g.wet:
         return ""
-    return text("q_split_wet_shared" if g.shared else "q_split_wet", language)
+    return text("q_split_wet_shared" if shared_rcd(scheme, g) else "q_split_wet", language)
 
 
 def _master_questions(

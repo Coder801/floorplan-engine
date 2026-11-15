@@ -7,13 +7,14 @@ electrical/panel_questions.py, labels in electrical/panel_text.py.
 
 - Panel set by scheme (`panel.scheme`, decision 2026-10-27): economy has the main switch,
   voltage relay and groups, wet zones and floor heating under one RCD; standard (decision
-  2026-11-15) puts wet rooms (lighting too) on RCBOs, dry sockets and appliances on a plug on
-  breakers under a shared RCD of their zone (day, night), floor heating under a shared RCD of its
-  own, dry lighting and outputs without a plug on bare breakers; premium adds a surge
-  protector, all groups on RCBOs, curve B (curve C for motor loads). Which group goes where is
-  loads.protection; rcd from the model wins. A shared RCD is 40 A, or 63 A when the design
-  current of its groups or its largest breaker is above 40 A (`shared_rcd_rating`); each bus and
-  each master switch part has its own. A voltage relay is in every scheme (decision 2026-11-01).
+  2026-11-15) puts every power group (sockets, outputs, appliances, floor heating) on its own
+  RCBO and lighting (a wet room's too) on breakers under one shared RCD, lighting with an rcd
+  in the model on its own RCBO; premium adds a surge protector, all groups on RCBOs, curve B
+  (curve C for motor loads). Which group is protected is loads.rcd_of, which sits under the
+  shared RCD is loads.shared_rcd; rcd from the model wins. A shared RCD is 40 A, or 63 A when
+  the design current of its groups or its largest breaker is above 40 A (`shared_rcd_rating`);
+  each bus and each master switch part has its own. A voltage relay is in every scheme
+  (decision 2026-11-01).
 - Backup (`panel.backup`) is independent of the scheme: if unset, a hybrid inverter is
   assumed and a question is asked. The switch depends on the source: a hybrid inverter
   switches grid and battery itself, so a bypass switch; an inverter without its own switching
@@ -68,8 +69,8 @@ from floorplan_engine.electrical.loads import (
     demand_factor,
     panel_groups,
     phases_of,
-    SharedRcd,
     rating_for,
+    shared_rcd,
 )
 from floorplan_engine.electrical.master import CONTACTOR_A, CONTROL_A, CONTROL_ID
 from floorplan_engine.electrical.panel_text import KIND_NAME, SHORT_NAME, amps, kw, text
@@ -100,9 +101,8 @@ from floorplan_engine.model.schema import (
 from floorplan_engine.model.texts import Language
 
 INPUT_A = 63  # main breaker when the model has none (assumption, decision 2026-10-27)
-RCD_A = 40  # shared RCD: wet zones in economy; sockets by zone and floor heating in standard
+RCD_A = 40  # shared RCD: wet zones and floor heating in economy, lighting in standard
 RCD_RATINGS = (RCD_A, 63)  # shared RCD ratings, A (shared_rcd_rating)
-SHARED_ORDER: tuple[SharedRcd, ...] = ("wet", "day", "night", "heating")  # shared RCDs on a bus
 
 
 @dataclass(frozen=True)
@@ -371,16 +371,16 @@ def backup_of(elec: Electrical) -> tuple[str | None, bool]:
 
 
 def _group_devices(
-    groups: Sequence[PanelGroup], reserve: bool, lang: Language, rcds: int
+    groups: Sequence[PanelGroup], scheme: PanelScheme, reserve: bool, lang: Language, rcds: int
 ) -> list[Device]:
-    """Group devices of one bus: the groups behind a shared RCD (`PanelGroup.shared`: wet zones
-    and floor heating in economy; dry sockets by zone and floor heating in standard) go under it
-    at the end, one RCD per key in SHARED_ORDER; the other protected groups get RCBOs (premium:
-    all; standard: wet rooms, lighting of wet rooms included), the rest breakers. A three-phase
-    group gets a 3P breaker or a 3P+N RCBO, never under a shared RCD."""
+    """Group devices of one bus: the groups behind the shared RCD (loads.shared_rcd: wet zones
+    and floor heating in economy, lighting in standard) go under it at the end; the other
+    protected groups get RCBOs, the rest breakers. A three-phase group gets a 3P breaker or a
+    3P+N RCBO, never under the shared RCD."""
     out: list[Device] = []
+    under_rcd = [g for g in groups if shared_rcd(scheme, g)]
     for g in groups:
-        if g.shared is not None:
+        if shared_rcd(scheme, g):
             continue
         kind = DeviceKind.DIFF if g.rcd is not None else DeviceKind.BREAKER
         label = g.breaker.label + (f" {g.rcd}" if g.rcd else "")
@@ -400,13 +400,10 @@ def _group_devices(
                 phase=g.phase,
             )
         )
-    for key in SHARED_ORDER:
-        under_rcd = [g for g in groups if g.shared == key]
-        if not under_rcd:
-            continue
+    if under_rcd:
         rcds += 1
         rcd_label = f"{shared_rcd_rating(under_rcd)} А 30 мА"
-        title = text(_shared_rcd_title(under_rcd), lang)
+        title = text(_shared_rcd_title(under_rcd, scheme), lang)
         feeds = tuple(g.group for g in under_rcd)
         phase = under_rcd[0].phase  # one unit on a three-phase panel (phases.py)
         out.append(
@@ -432,13 +429,14 @@ def _group_devices(
     return out
 
 
-def _shared_rcd_title(groups: Sequence[PanelGroup]) -> str:
-    """Label key of a shared RCD: by its key; the economy one names floor heating too when it
-    feeds floor heating outside a wet zone."""
-    key = groups[0].shared
-    if key == "wet":
-        return "rcd_wet" if all(g.wet for g in groups) else "rcd_wet_heating"
-    return f"rcd_{key}"
+def _shared_rcd_title(groups: Sequence[PanelGroup], scheme: PanelScheme) -> str:
+    """Label key of a shared RCD: lighting in standard; in economy wet zones, and floor heating
+    when it feeds one."""
+    if scheme != "economy":
+        return "rcd_light"
+    if all(g.heating for g in groups):
+        return "rcd_heating"
+    return "rcd_wet_heating" if any(g.heating for g in groups) else "rcd_wet"
 
 
 def shared_rcd_rating(groups: Sequence[PanelGroup]) -> int:
@@ -449,14 +447,14 @@ def shared_rcd_rating(groups: Sequence[PanelGroup]) -> int:
 
 
 def _bus_devices(
-    groups: Sequence[PanelGroup], reserve: bool, lang: Language, rcds: int
+    groups: Sequence[PanelGroup], scheme: PanelScheme, reserve: bool, lang: Language, rcds: int
 ) -> list[Device]:
     """Group devices of one bus: the groups the master switch leaves on, then those behind its
     contactor (each part with its own shared RCD in economy and standard: an RCD is never split
     by a contactor)."""
-    kept = _group_devices([g for g in groups if not g.master], reserve, lang, rcds)
+    kept = _group_devices([g for g in groups if not g.master], scheme, reserve, lang, rcds)
     rcds += sum(1 for d in kept if d.kind is DeviceKind.RCD)
-    cut = _group_devices([g for g in groups if g.master], reserve, lang, rcds)
+    cut = _group_devices([g for g in groups if g.master], scheme, reserve, lang, rcds)
     return kept + [replace(d, master=True) for d in cut]
 
 
@@ -558,7 +556,7 @@ def build_panel(plan: Plan, elec: Electrical) -> BoardPanel | None:
     )
     if master and backup is None:
         devices.append(control)
-    devices += _bus_devices(main, False, lang, 0)
+    devices += _bus_devices(main, scheme, False, lang, 0)
     if backup is not None:
         if backup == "inverter":
             devices.append(
@@ -579,7 +577,7 @@ def build_panel(plan: Plan, elec: Electrical) -> BoardPanel | None:
         if master:
             devices.append(control)
         devices += [d for d in contactors if d.reserve]
-        devices += _bus_devices(reserved, True, lang, rcds)
+        devices += _bus_devices(reserved, scheme, True, lang, rcds)
         if three:  # the backup source has one phase: its devices are on the backup bus phase
             phase = next((g.phase for g in reserved), PHASES[0])
             backup_ids = {"QS2", "KM1", "SA1", "QS3", "KM3", CONTROL_ID}

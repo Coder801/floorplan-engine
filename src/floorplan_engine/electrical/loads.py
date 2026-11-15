@@ -12,19 +12,18 @@ socket post of typical power at POST_SHARE (a laptop and chargers, not ten loade
 the occasional appliances (microwave, kettle, oven, washing machine…) only the largest one: on a
 backup source they run one at a time. The headroom of 20 % lives in the viewer (near the limit).
 
-Leakage protection 30 mA by scheme (decisions 2026-10-27, 2026-11-15; `protection`): rcd from the
+Leakage protection 30 mA by scheme (decisions 2026-10-27, 2026-11-15): which group is protected
+is `rcd_of`, which of them sit under the shared RCD of their bus is `shared_rcd`. rcd from the
 model (`groups.<QF>.rcd`) always wins. Otherwise:
 - premium: every group on its own RCBO;
-- economy: wet groups (sockets or outputs in a wet room) and floor heating under one shared RCD;
-- standard: wet groups and lighting of wet rooms on RCBOs; dry lighting without an RCD (no rule
-  asks for it, and the lights stay on when a socket RCD trips); outputs without a plug (cooktop,
-  air conditioner) without an RCD; sockets of dry rooms, appliances on a plug included (washer,
-  dishwasher, oven, boiler), under a shared RCD of their zone (ПУЭ 7.1.79): day (kitchen, living
-  room, hall, loggia, balcony, and a room not recognised by name) or night (bedroom, study,
-  nursery, dressing room: NIGHT_ROOM); floor heating under one shared RCD of its own.
-Floor heating (a controller or a "тёплый пол" note) is protected in every scheme
+- standard: every group protected; power groups (sockets, outputs, appliances, floor heating) on
+  their own RCBOs, lighting (a wet room's too) on breakers under one shared RCD; lighting with an
+  rcd in the model keeps its own RCBO;
+- economy: wet groups (sockets or outputs in a wet room) and floor heating under one shared RCD,
+  the rest without one.
+Floor heating (a controller or a "тёплый пол" note) is protected in every scheme and room
 (IEC 60364-7-753). A three-phase group never goes under a single-phase shared RCD: its RCBO is
-3P+N. `PanelGroup.shared` names the shared RCD of a group."""
+3P+N."""
 
 from __future__ import annotations
 
@@ -32,12 +31,10 @@ import re
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from enum import StrEnum
-from typing import Literal
 
 from floorplan_engine.electrical.groups import (
     LIGHT,
     LOW,
-    SWITCHES,
     composed_purpose,
     group_key,
     tell_apart,
@@ -123,14 +120,6 @@ KEEP_ON = re.compile(
 # Wet zone by name when room.yaml has no wet: true (assumption)
 WET_NAME = re.compile(r"санв|сануз|ванн|душ|пральн|прачеч|постироч", re.IGNORECASE)
 FLOOR_HEATING = re.compile(FLOOR_HEATING_NOTE, re.IGNORECASE)
-# Night zone of the flat by room name (decision 2026-11-15); any other dry room is the day zone
-NIGHT_ROOM = re.compile(
-    r"спальн|кабінет|кабинет|дитяч|детск|гардероб|bedroom|office|study", re.IGNORECASE
-)
-# A passage joins the neighbouring zone (prompt: mode standard)
-PASSAGE = re.compile(r"коридор|прихож|передпок|\bхол|тамбур|hall", re.IGNORECASE)
-# Appliances wired without a plug, even when written as a socket with a note: no RCD in standard
-HARDWIRED = re.compile(r"варильн|варочн|індукц|индукц|плит|кондиц|кондиціон", re.IGNORECASE)
 # Inrush current: such a group gets curve C even in premium
 MOTOR = re.compile(r"кондиц|кондиціон|насос|ворот|компрес", re.IGNORECASE)
 
@@ -185,10 +174,6 @@ def parse_breaker(text: str) -> tuple[str, int] | None:
     if m is None:
         return None
     return (m.group(1) or "C").upper(), int(m.group(2))
-
-
-# Shared RCD of a group: wet zones (economy), sockets of the day or night zone, floor heating
-SharedRcd = Literal["wet", "day", "night", "heating"]
 
 
 class Kind(StrEnum):
@@ -252,7 +237,8 @@ class PanelGroup:
     phase: str | None = None  # L1, L2, L3 or 3P on a three-phase panel (phases.py); None on one
     master: bool = False  # cut by the master switch (behind its contactor)
     cable_assumed: bool = False  # cable type not in the model: assumed_mark, as the wiring lays it
-    shared: SharedRcd | None = None  # the shared RCD the group is behind; None — its own device
+    rcd_from_model: bool = False  # rcd is `groups.<QF>.rcd`, not set by the scheme
+    heating: bool = False  # floor heating: a controller or a "тёплый пол" note
 
     @property
     def three_phase(self) -> bool:
@@ -430,48 +416,27 @@ def _floor_heating_group(points: Sequence[ElectricalPoint]) -> bool:
     )
 
 
-def room_zone(name: str) -> Literal["day", "night"]:
-    """Zone of a dry room by its name: night (NIGHT_ROOM), otherwise day (a room not recognised
-    is the day zone: an assumption)."""
-    return "night" if NIGHT_ROOM.search(name) else "day"
-
-
-def _zone(points: Sequence[ElectricalPoint], night: set[str]) -> Literal["day", "night"]:
-    """Zone of a socket group: night if most of its points are in night rooms, else day."""
-    fed = [p for p in points if p.type not in SWITCHES] or list(points)
-    return "night" if 2 * sum(p.room in night for p in fed) > len(fed) else "day"
-
-
-def protection(
-    scheme: PanelScheme,
-    kind: Kind,
-    points: Sequence[ElectricalPoint],
-    wet_rooms: set[str],
-    night_rooms: set[str],
-    model: str | None,
-    three: bool,
-) -> tuple[str | None, SharedRcd | None]:
-    """Leakage protection of a group and its shared RCD (see the module); shared None with an
-    rcd means its own RCBO."""
-    heating = _floor_heating_group(points)
-    wet = _wet_group(points, wet_rooms)
+def rcd_of(
+    scheme: PanelScheme, points: Sequence[ElectricalPoint], wet: bool, model: str | None
+) -> str | None:
+    """Leakage protection of a group (see the module): from the model as is; standard and premium
+    protect every group; economy only a wet group and floor heating."""
     if model:
-        return model, "wet" if scheme == "economy" and not three else None
-    if scheme == "premium":
-        return RCD_30, None
+        return model
+    if scheme != "economy" or wet or _floor_heating_group(points):
+        return RCD_30
+    return None
+
+
+def shared_rcd(scheme: PanelScheme, g: PanelGroup) -> bool:
+    """The group sits under the shared RCD of its bus, not on its own RCBO: in economy every
+    protected group, in standard lighting protected by the scheme (not by the model); never a
+    three-phase group (its RCBO is 3P+N) and never in premium."""
+    if g.rcd is None or g.three_phase:
+        return False
     if scheme == "economy":
-        return (RCD_30, None if three else "wet") if wet or heating else (None, None)
-    if wet or any(p.room in wet_rooms and p.type in LIGHT for p in points):
-        return RCD_30, None  # a wet room: its own RCBO, lighting too
-    if heating:
-        return RCD_30, None if three else "heating"
-    powered = [p for p in points if p.type not in SWITCHES and p.type not in LOW]
-    hardwired = all(
-        p.type is not PointType.SOCKET or bool(p.note and HARDWIRED.search(p.note)) for p in powered
-    )
-    if kind is Kind.LIGHT or hardwired:
-        return None, None
-    return RCD_30, None if three else _zone(points, night_rooms)
+        return True
+    return scheme == "standard" and g.kind is Kind.LIGHT and not g.rcd_from_model
 
 
 def panel_groups(
@@ -480,7 +445,6 @@ def panel_groups(
     lang = plan.language
     places = point_places(plan, elec.points)
     wet_rooms = {r.id for r in plan.rooms if r.wet or WET_NAME.search(r.name)}
-    night_rooms = {r.id for r in plan.rooms if room_zone(r.name) == "night"}
     names = {p.group for p in elec.points if p.group} | {c.group for c in elec.cables if c.group}
     reserve = set(elec.panel.reserve)
     master, master_off = master_on(elec), set(elec.panel.master_off)
@@ -508,7 +472,7 @@ def panel_groups(
         )
         wet = _wet_group(points, wet_rooms)
         model_rcd = info.rcd if info is not None and info.rcd else None
-        rcd, shared = protection(scheme, kind, points, wet_rooms, night_rooms, model_rcd, three)
+        rcd = rcd_of(scheme, points, wet, model_rcd)
         purpose = info.name if info is not None and info.name else None
         kitchen = kind is Kind.SOCKETS and any(KITCHEN.search(places[p.id]) for p in points)
         # A three-phase appliance is never on the backup bus: the backup source has one phase
@@ -539,7 +503,8 @@ def panel_groups(
             reserved,
             phase="3P" if three else None,
             cable_assumed=not marks,
-            shared=shared,
+            rcd_from_model=model_rcd is not None,
+            heating=_floor_heating_group(points),
             master=master
             and (
                 g in master_off

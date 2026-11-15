@@ -5,12 +5,12 @@ load, and best practice is kept where the load allows it.
   phases (3P); its power is shared equally.
 - A phase from the model (`groups.<QF>.phase`) is kept; the code places the rest.
 - What has to share a phase goes as one unit: the backup bus (the backup source has one phase)
-  and the groups under each shared RCD (a single-phase RCD, `PanelGroup.shared`): wet zones and
-  floor heating in economy; in standard the sockets of the day zone, of the night zone and the
-  floor heating, each RCD its own unit (decision 2026-11-15).
+  and the groups under the shared RCD of a bus (a single-phase RCD, loads.shared_rcd): wet zones
+  and floor heating in economy, lighting in standard (decision 2026-11-15).
 - Units go largest first, each on the least loaded phase; a unit whose room is already on a
   phase goes there if that phase is no more than ROOM_SLACK_W above the least loaded one: one
-  room on one phase, no 400 V between neighbouring devices. Lighting takes at least two phases, so one phase lost does not leave the whole flat dark.
+  room on one phase, no 400 V between neighbouring devices. Lighting takes at least two phases,
+  so one phase lost does not leave the whole flat dark.
 - Balance is checked on the panel (panel.weak_spots): a phase above the main breaker, a spread
   above UNBALANCE.
 """
@@ -20,7 +20,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
 
-from floorplan_engine.electrical.loads import Kind, PanelGroup
+from floorplan_engine.electrical.loads import Kind, PanelGroup, shared_rcd
 from floorplan_engine.model.schema import Electrical, PanelScheme
 
 PHASES = ("L1", "L2", "L3")
@@ -69,8 +69,8 @@ def _units(groups: Sequence[PanelGroup], elec: Electrical, scheme: PanelScheme) 
         fixed = info.phase if info is not None and info.phase in PHASES else None
         if g.reserved:
             key = "reserve"
-        elif g.shared is not None:
-            key = f"rcd:{g.shared}"
+        elif shared_rcd(scheme, g):
+            key = "rcd"
         else:
             key = g.group
         if key not in keys:
