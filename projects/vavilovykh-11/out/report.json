@@ -570,6 +570,12 @@
       "message": "АКБ 48 В — допущение: ток разряда 104,2 А, автомат и кабель АКБ — по нему; уточните (panel.battery_voltage)"
     },
     {
+      "file": "electrical.yaml",
+      "path": "panel",
+      "severity": "warning",
+      "message": "51 модулей не помещаются ни в один щит каталога — корпус по месту: нужен щит больше или два щита"
+    },
+    {
       "file": "plumbing.yaml",
       "path": "fixtures.bathroom_wc_1",
       "severity": "warning",

@@ -1,9 +1,9 @@
 ﻿section;key;name;unit;qty;price;total
-material_rough;cable.3x1.5;Кабель ВВГнг 3×1,5;м;165,7;45;7456,50
-material_rough;cable.3x2.5;Кабель ВВГнг 3×2,5;м;214,6;70;15022,00
-material_rough;cable.3x4;Кабель ВВГнг 3×4;м;12,8;120;1536,00
-material_rough;cable.RG-6;Кабель RG-6;м;11,2;;
-material_rough;cable.UTP cat.6;Кабель UTP cat.6;м;39,9;;
+material_rough;cable.3x1.5;Кабель ВВГнг 3×1,5;м;168,2;45;7569,00
+material_rough;cable.3x2.5;Кабель ВВГнг 3×2,5;м;217,7;70;15239,00
+material_rough;cable.3x4;Кабель ВВГнг 3×4;м;13;120;1560,00
+material_rough;cable.RG-6;Кабель RG-6;м;11,5;;
+material_rough;cable.UTP cat.6;Кабель UTP cat.6;м;40,6;;
 material_rough;socket_box;Підрозетник;шт;61;20;1220,00
 material_rough;junction_box.80;Коробка розподільча Ø80;шт;2;60;120,00
 material_rough;junction_box.100x100;Коробка розподільча 100×100;шт;8;60;480,00
@@ -11,7 +11,7 @@ material_rough;junction_box_ip.100x100;Коробка розподільча IP4
 material_rough;junction_box.150x110;Коробка розподільча 150×110;шт;2;60;120,00
 material_rough;junction_box_ip.150x110;Коробка розподільча IP44 150×110;шт;1;120;120,00
 material_rough;crimp;Гільза і термоусадка (опресування);шт;58;8;464,00
-material_rough;cable_pad;Площадка під монтажний пістолет з дюбель-цвяхом і стяжкою;шт;1534;5;7670,00
+material_rough;cable_pad;Площадка під монтажний пістолет з дюбель-цвяхом і стяжкою;шт;1627;5;8135,00
 material_rough;board_enclosure;Корпус щита вбудований, 5 рядів, 60 мод.;шт;1;6000;6000,00
 material_rough;dc_enclosure;Корпус щита АКБ Hager Golf VS112PD, 12 мод.;шт;1;1500;1500,00
 material_rough;heating_cable.10;Секція нагрівального кабелю 10 м;шт;1;;
@@ -20,15 +20,13 @@ material_rough;heating_sensor;Датчик температури підлоги
 material_rough;heating_conduit;Гофротруба Ø16 для датчика підлоги;м;5,3;;
 material_finish;input.C63 2P;Вступний автомат, C63 2P;шт;1;850;850,00
 material_finish;relay.63 А;Реле напруги, 63 А;шт;1;1900;1900,00
-material_finish;diff.C16 30 мА;Дифавтомат 1P+N C16 30 мА;шт;3;950;2850,00
+material_finish;diff.C16 30 мА;Дифавтомат 1P+N C16 30 мА;шт;15;950;14250,00
 material_finish;diff.C25 30 мА;Дифавтомат 1P+N C25 30 мА;шт;1;950;950,00
-material_finish;breaker.C16;Автомат 1P C16;шт;12;140;1680,00
-material_finish;rcd.40 А 30 мА;ПЗВ розеток — денна зона, 40 А 30 мА;шт;3;1100;3300,00
 material_finish;feed.C32 2P;Живлення інвертора (AC IN), C32 2P;шт;1;500;500,00
 material_finish;changeover.I-0-II;Обвідний перемикач: мережа / інвертор, I-0-II;шт;1;900;900,00
 material_finish;output.C32 2P;Вихід інвертора (AC OUT), C32 2P;шт;1;500;500,00
-material_finish;breaker.C10;Автомат 1P C10;шт;4;140;560,00
-material_finish;diff.C10 30 мА;Дифавтомат 1P+N C10 30 мА;шт;1;950;950,00
+material_finish;rcd.40 А 30 мА;ПЗВ освітлення, 40 А 30 мА;шт;1;1100;1100,00
+material_finish;breaker.C10;Автомат 1P C10;шт;5;140;700,00
 material_finish;dc_battery.125 А DC 2P;Автомат АКБ, 125 А DC 2P;шт;1;2600;2600,00
 material_finish;busbar.1P;Шина гребінчаста 1P, 1 м;шт;1;200;200,00
 material_finish;busbar.2P;Шина гребінчаста 2P, 1 м;шт;1;400;400,00
@@ -49,7 +47,7 @@ material_finish;led_output;Вивід для підсвітки;шт;4;150;600,0
 material_finish;thermostat;Регулятор теплої підлоги;шт;2;;
 material_finish;led_strip;LED-підсвітка;м;7,84;250;1960,00
 material_finish;led_psu;Блок живлення LED 12 В;шт;4;450;1800,00
-rough;work.cable;Прокладання кабелю;м;386,2;34;13130,80
+rough;work.cable;Прокладання кабелю;м;392,2;34;13334,80
 rough;work.chase;Штроба вузька, 1–2 кабелі;м;54,9;120;6588,00
 rough;work.chase_wide;Штроба широка, 3–4 кабелі;м;15;180;2700,00
 rough;work.floor_heating;Укладання нагрівального кабелю змійкою з датчиком підлоги;м²;20,1;;
@@ -58,7 +56,7 @@ rough;work.socket_box;Свердління і встановлення підр�
 rough;work.junction_box;Монтаж коробки з опресуванням;шт;14;250;3500,00
 rough;work.board_install;Встановлення щита;шт;1;1500;1500,00
 rough;work.insulation_test;Вимірювання опору ізоляції з протоколом;гр.;20;150;3000,00
-finish;work.board_module;Збирання щита;мод.;44;100;4400,00
+finish;work.board_module;Збирання щита;мод.;51;100;5100,00
 finish;work.panel_labels;Маркування апаратів щита наліпками;щит;1;600;600,00
 finish;work.mechanism;Встановлення механізмів;шт;61;125;7625,00
 finish;work.led_psu;Встановлення і підключення блока живлення LED біля стрічки;шт;4;220;880,00
