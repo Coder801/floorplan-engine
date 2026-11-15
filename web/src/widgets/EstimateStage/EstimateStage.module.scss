@@ -1,4 +1,4 @@
-// The estimate as a document centred in the drawing area: a table with sections, totals in
+// The estimate as a document centred in the drawing area: a table with sections divided by lines, totals in
 // bold, items without a price muted; scrolling inside the area
 
 @use "@/shared/styles/mixins" as *;
@@ -17,8 +17,10 @@
   .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
   th.num { text-align: right; }
 }
-.section td { padding-top: var(--space-5); font-weight: 600; border-top: 0; }
-.subtotal td { font-weight: 600; background: var(--soft); }
+// Each section is its own table: a strong line under its heading and under its total, so the
+// sections do not run into one another
+.section td { padding-top: var(--space-5); font-weight: 600; border-top: 0; border-bottom: 2px solid var(--line); }
+.subtotal td { font-weight: 600; background: var(--soft); border-bottom: 2px solid var(--line); }
 .missing td { color: var(--muted); }
 .total td { border-top: 2px solid var(--text); font-weight: 600; }
 .line td:first-child { color: var(--muted); }
