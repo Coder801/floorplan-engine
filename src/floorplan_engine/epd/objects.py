@@ -16,9 +16,10 @@ import shapely
 from shapely.geometry import Polygon
 from shapely.geometry.base import BaseGeometry
 
+from floorplan_engine.drawing.dimensions import facing_walls, mirrored_wall
 from floorplan_engine.drawing.floor_heating import zone_label
 from floorplan_engine.drawing.furniture import furniture_label
-from floorplan_engine.drawing.plan import mirrored_wall, wall_areas, wall_pieces
+from floorplan_engine.drawing.plan import wall_areas, wall_pieces
 from floorplan_engine.drawing.wiring import lay_out
 from floorplan_engine.electrical.anchors import symbol_key
 from floorplan_engine.electrical.boxes import BOX_CLEARANCE, BOX_TITLES, box_wall
@@ -621,9 +622,10 @@ def _covering_wall(geoms: Sequence[RoomGeometry]) -> dict[str, str]:
 
 def plan_chains(plan: Plan, contours: dict[str, Contour]) -> dict[str, list[str]]:
     """What to highlight on click on the plan sheet: a wall or its dimensions — the wall, its
-    openings, the dimensions with them and the other side of the partition, with the walls it
-    covers; an opening — both of its sides (a door in one room, an opening in the neighbour) and
-    their dimensions, which are drawn on one side only; a room — all of that for its walls."""
+    openings, the dimensions with them and the other side of the partition (also one that differs
+    in length or openings, `facing_walls`), with the walls it covers; an opening — both of its
+    sides (a door in one room, an opening in the neighbour) and their dimensions, which are drawn
+    on one side only; a room — all of that for its walls."""
     geoms = room_geometries(plan, contours)
     strips = [(g.room.id, op, opening_strip(g, op)) for g in geoms for op in g.room.openings]
 
@@ -645,9 +647,12 @@ def plan_chains(plan: Plan, contours: dict[str, Contour]) -> dict[str, list[str]
             chain = [f"wall:{tag}", f"dimension:{tag}"]
             for other in geoms:
                 mirror = mirrored_wall(g, seg, other) if other is not g else None
-                if mirror is not None:
-                    chain += [f"wall:{other.room.id}.{mirror.id}"]
-                    chain += [f"dimension:{other.room.id}.{mirror.id}"]
+                sides = [mirror] if mirror is not None else []
+                if other is not g:
+                    sides += [o for o in facing_walls(g, seg, other) if o is not mirror]
+                for side in sides:
+                    chain += [f"wall:{other.room.id}.{side.id}"]
+                    chain += [f"dimension:{other.room.id}.{side.id}"]
             for r, op, strip in strips:
                 if r == g.room.id and op.wall == seg.id:
                     chain += opening_keys(r, op, strip)

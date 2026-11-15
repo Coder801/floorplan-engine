@@ -7,6 +7,8 @@ Hatching: load-bearing (monolithic) walls are dense, partitions are sparse. Wher
 load-bearing wall meets a partition, a material boundary line remains.
 Every wall gets its code ("2.C", model/wall_names.py) inside the room along the wall, on a spot
 free of dimensions, labels and door swings: the same code as on the elevations and in the viewer.
+Labels (room names, sills, dimension numbers, wall codes) do not sit on each other or on the
+linework; one with no free spot nearby goes on a 45° leader (`draw_plan`, `callouts`).
 """
 
 from __future__ import annotations
@@ -25,16 +27,33 @@ from ezdxf.layouts.layout import Modelspace
 from shapely.geometry import Polygon
 from shapely.geometry.base import BaseGeometry
 
+from floorplan_engine.drawing.callouts import (
+    PAD_MM,
+    Board,
+    Candidate,
+    Kind,
+    Label,
+    Obstacle,
+    Spot,
+    readable_angle,
+    reading,
+)
+from floorplan_engine.drawing.dimensions import (
+    Dim,
+    dim_linework,
+    dim_spots,
+    draw_dimension,
+    layout_dimensions,
+    wall_gaps,
+)
 from floorplan_engine.drawing.fields import add_area_field
 from floorplan_engine.drawing.ids import tagged
 from floorplan_engine.drawing.layers import (
     A_AREA,
-    A_DIMS,
     A_DOOR,
     A_TEXT,
     A_WALL,
     A_WIND,
-    DIM_STYLE,
     TEXT_DIM_MM,
     TEXT_ROOM_MM,
     TEXT_SMALL_MM,
@@ -53,6 +72,8 @@ from floorplan_engine.model.geometry import (
 )
 from floorplan_engine.model.scale import DEFAULT_SCALE, sheet, sheet_scale
 from floorplan_engine.model.schema import Opening, OpeningType, Plan, Room
+
+__all__ = ["readable_angle"]  # plan texts and their tests take it from here
 from floorplan_engine.model.texts import Language, tr
 from floorplan_engine.model.wall_names import wall_codes
 from floorplan_engine.model.zones import Floor, plan_floors
@@ -64,28 +85,23 @@ HATCH_SCALE_BEARING = 12.0  # ANSI31 step 3.175 × 12 ≈ 38 mm, 0.8 mm on the s
 HATCH_SCALE_PARTITION = 30.0  # ≈ 95 mm, 1.9 mm on the sheet
 GRID = 0.1  # wall coordinate grid, mm: shared faces of neighbouring rooms match exactly
 MIN_AREA = 1.0  # mm²: smaller pieces are noise and are not hatched
-DIM_LEVEL_1_MM = 8.0  # first dimension row from the wall face, sheet mm
-DIM_LEVEL_STEP_MM = 7.0  # step between rows
-DIM_TEXT_GAP_MM = 0.8  # gap around a dimension label along the line (like dimgap)
-DIM_LIFT_MM = TEXT_DIM_MM * 1.4  # a label with no room along the line goes one row up
-DIM_GAP_MM = 0.8  # label above the dimension line (style dimgap)
-DIM_LINE_BAND_MM = 0.4  # dimension line band for overlap checks
-DIM_STEPS_MM = (0.0, 1.0, 2.0, 3.0, 4.0, 6.0, 8.0)  # how much farther to move the label
-DIM_MAX_SHIFTS = 4  # how many levels a row may move if its place is taken
-SHARED_WALL_TOLERANCE = 1.0
 CODE_INSETS_MM = (3.0, 13.0, 18.0, 23.0)  # wall code from the inner face, sheet mm (dims at 8)
 CODE_ALONG = (0.5, 0.35, 0.65, 0.2, 0.8, 0.1, 0.9)  # spots along the wall, middle first
-CODE_GAP_MM = 0.6  # free margin around a wall code
+SILL_DEPTHS = (1.2, 2.4, 3.6)  # sill label centre from the inner face, in text heights
+SILL_ALONG_MM = (0.0, 2.0, -2.0, 4.0, -4.0, 6.0, -6.0)  # and along the window from its middle
+SWING_SAMPLES = 12  # points on a door arc for label checks
+ROOM_LABEL_STEP_MM = 2.0  # search step around the room label point, over the floor, sheet mm
+ROOM_LABEL_NEAR = 25  # spots nearest to the label point for a label wider than its floor
+ROOM_LINE_GAP = 0.8  # room name above and area below the label point, in name heights
+FRAME_MARGIN_MM = 3.0  # a moved label stays this close to the drawing extent
+WALL_INSET_MM = 0.05  # walls as obstacles are this much thinner on each side, sheet mm
+_ALL = frozenset({Kind.LINE, Kind.WALL, Kind.LABEL, Kind.LEADER, Kind.ZONE})
+_NO_ZONES = frozenset({Kind.LINE, Kind.WALL, Kind.LABEL, Kind.LEADER})
+_TEXTS = frozenset({Kind.LABEL, Kind.LEADER})
 
 
 def _xy(v: Vec) -> tuple[float, float]:
     return v.as_tuple()
-
-
-def _gaps(room: Room, wall: str) -> list[tuple[float, float]]:
-    """Sorted opening intervals on a wall."""
-    spans = [(o.offset, o.offset + o.width) for o in room.openings if o.wall == wall]
-    return sorted(spans)
 
 
 def _solid_intervals(
@@ -135,12 +151,12 @@ def _snap(geometry: BaseGeometry) -> BaseGeometry:
 
 def _open_at_end(room: Room, seg: WallSegment) -> bool:
     """The wall's opening reaches the wall end."""
-    return any(b >= seg.length - 1e-6 for _, b in _gaps(room, seg.id))
+    return any(b >= seg.length - 1e-6 for _, b in wall_gaps(room, seg.id))
 
 
 def _open_at_start(room: Room, seg: WallSegment) -> bool:
     """The wall's opening starts at the wall start."""
-    return any(a <= 1e-6 for a, _ in _gaps(room, seg.id))
+    return any(a <= 1e-6 for a, _ in wall_gaps(room, seg.id))
 
 
 def wall_pieces(g: RoomGeometry) -> list[WallPiece]:
@@ -148,7 +164,7 @@ def wall_pieces(g: RoomGeometry) -> list[WallPiece]:
     segs = g.contour.segments
     for seg in segs:
         prev, nxt = segs[seg.index - 1], segs[(seg.index + 1) % len(segs)]
-        pieces = _solid_intervals(0.0, seg.length, _gaps(g.room, seg.id))
+        pieces = _solid_intervals(0.0, seg.length, wall_gaps(g.room, seg.id))
         for k, (a, b) in enumerate(pieces):
             first = k == 0 and a == 0.0
             last = k == len(pieces) - 1 and abs(b - seg.length) < 1e-6
@@ -258,14 +274,15 @@ def _hatch(msp: Modelspace, area: BaseGeometry, scale: float) -> None:
 # --- Openings ----------------------------------------------------------------
 
 
-def draw_openings(msp: Modelspace, g: RoomGeometry, language: Language = "ru") -> None:
+def draw_openings(msp: Modelspace, g: RoomGeometry) -> None:
+    """Door leaves and swings, windows; sill labels are placed by `draw_plan` (`_draw_sill`)."""
     for op in g.room.openings:
         with tagged(msp, "opening", op.id):
             seg = g.contour.segment(op.wall)
             if op.type is OpeningType.DOOR:
                 _draw_door(msp, g, seg, op)
             elif op.type is OpeningType.WINDOW:
-                _draw_window(msp, g, seg, op, language)
+                _draw_window(msp, seg, op)
 
 
 def door_leaf(g: RoomGeometry, seg: WallSegment, op: Opening) -> tuple[Vec, Vec, Vec]:
@@ -295,244 +312,61 @@ def _draw_door(msp: Modelspace, g: RoomGeometry, seg: WallSegment, op: Opening) 
     msp.add_arc(_xy(hinge), op.width, start, end, dxfattribs=layer)
 
 
-def _draw_window(
-    msp: Modelspace, g: RoomGeometry, seg: WallSegment, op: Opening, language: Language
-) -> None:
+def _draw_window(msp: Modelspace, seg: WallSegment, op: Opening) -> None:
     layer = {"layer": A_WIND.name}
     a, b = op.offset, op.offset + op.width
     for frac in (0.0, 0.5, 1.0):
         shift = seg.outward * (seg.thickness * frac)
         msp.add_line(_xy(seg.point_at(a) + shift), _xy(seg.point_at(b) + shift), dxfattribs=layer)
-    if op.sill is not None:
-        mid = sill_spot(seg, op)
-        text = tr("sill", language, sill=f"{op.sill:g}")
-        # On the plan labels layer: the other sheets take windows, but a sill is not for them
-        add_text(msp, text, mid, TEXT_SMALL_MM, A_TEXT.name, seg.angle_deg)
 
 
-def sill_spot(seg: WallSegment, op: Opening) -> Vec:
-    """Centre of a window's sill label: inside the room by the middle of the window."""
-    return seg.point_at(op.offset + op.width / 2) + seg.inward * sheet(TEXT_SMALL_MM * 1.2)
+def _door_arc(g: RoomGeometry, op: Opening) -> shapely.LineString:
+    """Leaf and swing arc of a door as one line (labels do not sit on them)."""
+    hinge, closed, way = door_leaf(g, g.contour.segment(op.wall), op)
+    radial = (closed - hinge) * (1 / op.width)
+    pts: list[Vec] = []
+    for k in range(SWING_SAMPLES + 1):
+        t = math.pi / 2 * k / SWING_SAMPLES
+        pts.append(hinge + (way * math.cos(t) + radial * math.sin(t)) * op.width)
+    return shapely.LineString([_xy(hinge)] + [_xy(p) for p in pts])
 
 
-def _sill_box(g: RoomGeometry, op: Opening, language: Language) -> BaseGeometry:
-    """Spot of a sill label (_draw_window): wall codes do not sit on it."""
+def _opening_gap(g: RoomGeometry, op: Opening) -> Polygon:
+    """The opening in the wall body, from the inner face to the outer one."""
     seg = g.contour.segment(op.wall)
-    d, up = _reading(seg)
-    c = sill_spot(seg, op)
+    a, b = op.offset, op.offset + op.width
+    out = seg.outward * seg.thickness
+    corners = [seg.point_at(a), seg.point_at(b), seg.point_at(b) + out, seg.point_at(a) + out]
+    return Polygon([_xy(c) for c in corners])
+
+
+def _draw_sill(
+    msp: Modelspace, board: Board, g: RoomGeometry, op: Opening, language: Language
+) -> None:
+    """Sill label of a window: inside the room by the middle of the window, else beside it or
+    deeper in the room, else on a 45° leader from the window. On the plan labels layer: the
+    other sheets take windows, but a sill is not for them."""
+    seg = g.contour.segment(op.wall)
     text = tr("sill", language, sill=f"{op.sill:g}")
-    hw = sheet(text_width(text, TEXT_SMALL_MM) / 2 + CODE_GAP_MM)
-    hh = sheet(TEXT_SMALL_MM / 2 + CODE_GAP_MM)
-    return Polygon([_xy(c + d * sx * hw + up * sy * hh) for sx, sy in CORNERS])
+    d, up = reading(seg.direction)
+    anchor = seg.point_at(op.offset + op.width / 2)
+    h = sheet(TEXT_SMALL_MM)
+    width = sheet(text_width(text, TEXT_SMALL_MM))
+    label = Label(width, h, d, up, anchor, f"opening:{op.id}")
+    spots = [
+        Candidate(anchor + seg.inward * (h * depth) + d * sheet(along))
+        for depth in SILL_DEPTHS
+        for along in SILL_ALONG_MM
+    ]
+    room = Polygon([_xy(v) for v in g.contour.vertices])
+    spot = board.place(label, spots, within=room, prefer=room)
+    add_text(msp, text, spot.centre, TEXT_SMALL_MM, A_TEXT.name, seg.angle_deg)
+    _draw_leader(msp, spot, A_TEXT.name)
 
 
-# --- Dimensions --------------------------------------------------------------
-
-
-def readable_angle(angle: float) -> float:
-    """Text angle that keeps it from reading upside down."""
-    angle = (angle + 180.0) % 360.0 - 180.0
-    if angle > 90.0 + 1e-6 or angle <= -90.0 + 1e-6:
-        angle += 180.0
-    return angle
-
-
-def _reading(seg: WallSegment) -> tuple[Vec, Vec]:
-    """Reading direction of a dimension label along the wall and the "above the line" side."""
-    d = seg.direction
-    angle = math.degrees(math.atan2(d.y, d.x))
-    if abs(readable_angle(angle) - angle) > 1e-6:
-        d = d * -1.0
-    return d, d.left()
-
-
-def _dim_label(a: float, b: float) -> str:
-    return f"{b - a:.0f}"
-
-
-def _text_box(seg: WallSegment, a: float, b: float, offset: float, move: Vec) -> BaseGeometry:
-    """Position of the label for segment a…b: above the dimension line at offset (+ is outward),
-    shifted by move (model mm)."""
-    d, up = _reading(seg)
-    hw = sheet(text_width(_dim_label(a, b), TEXT_DIM_MM) / 2 + DIM_TEXT_GAP_MM)
-    hh = sheet(TEXT_DIM_MM * 0.6)
-    c = seg.point_at((a + b) / 2) + seg.outward * offset + up * (sheet(DIM_GAP_MM) + hh) + move
-    return Polygon([_xy(c + d * sx * hw + up * sy * hh) for sx, sy in CORNERS])
-
-
-CORNERS = ((-1, -1), (1, -1), (1, 1), (-1, 1))
-
-
-def _fits(a: float, b: float) -> bool:
-    """The label fits between the segment's extension lines."""
-    return sheet(text_width(_dim_label(a, b), TEXT_DIM_MM) + 2 * DIM_TEXT_GAP_MM) <= b - a
-
-
-def _moves(seg: WallSegment, a: float, b: float) -> list[Vec]:
-    """Where a narrow segment's label may go: along the line past the segment (closer first),
-    then one row up, centred and along the line."""
-    d, up = _reading(seg)
-    reach = (b - a) / 2 + sheet(text_width(_dim_label(a, b), TEXT_DIM_MM) / 2 + DIM_TEXT_GAP_MM)
-    along = [reach + sheet(step) for step in DIM_STEPS_MM]
-    lift = up * sheet(DIM_LIFT_MM)
-    out = [d * (sign * x) for x in along for sign in (1.0, -1.0)]
-    return out + [lift] + [lift + v for v in out]
-
-
-def _line_band(seg: WallSegment, offset: float) -> BaseGeometry:
-    """Dimension line of a row: other labels must not sit on it. The ends are trimmed: at a room
-    corner the lines of neighbouring walls always cross."""
-    band = sheet(DIM_LINE_BAND_MM)
-    trim = min(abs(offset) + sheet(DIM_GAP_MM), seg.length * 0.45)
-    a, b, n = seg.point_at(trim), seg.point_at(seg.length - trim), seg.outward
-    lo, hi = offset - band, offset + band
-    return Polygon([_xy(a + n * lo), _xy(b + n * lo), _xy(b + n * hi), _xy(a + n * hi)])
-
-
-def _hits(geom: BaseGeometry, taken: Sequence[BaseGeometry]) -> bool:
-    return any(geom.intersection(t).area > 0 for t in taken)
-
-
-def _place_rows(
-    seg: WallSegment,
-    rows: Sequence[Sequence[tuple[float, float]]],
-    sign: float,
-    base: float,
-    taken: list[BaseGeometry],
-) -> tuple[float, list[list[Vec | None]]]:
-    """Wall dimension rows (segments of each row) at the first level where their labels do not touch
-    what is already placed (taken); narrow labels move to a free spot nearby (_moves).
-    Returns the level of the first row and the label shifts; adds what it placed to taken."""
-    step = sheet(DIM_LEVEL_STEP_MM)
-    zero = Vec(0.0, 0.0)
-
-    def offsets(start: float) -> list[float]:
-        return [sign * (start + r * step) for r in range(len(rows))]
-
-    level = base
-    for k in range(DIM_MAX_SHIFTS + 1):
-        start = base + k * step
-        boxes = [
-            _text_box(seg, a, b, off, zero)
-            for parts, off in zip(rows, offsets(start), strict=True)
-            for a, b in parts
-            if _fits(a, b)
-        ]
-        lines = [_line_band(seg, off) for off in offsets(start)]
-        if not any(_hits(g, taken) for g in boxes + lines):
-            level = start
-            break
-    moves: list[list[Vec | None]] = []
-    for parts, off in zip(rows, offsets(level), strict=True):
-        row: list[Vec | None] = []
-        for a, b in parts:
-            default = _text_box(seg, a, b, off, zero)
-            if _fits(a, b) and not _hits(default, taken):
-                taken.append(default)
-                row.append(None)
-                continue
-            # Narrow, or landed on something else: nearest free spot nearby
-            options = ([zero] if _fits(a, b) else []) + _moves(seg, a, b)
-            move = next(
-                (m for m in options if not _hits(_text_box(seg, a, b, off, m), taken)), options[0]
-            )
-            taken.append(_text_box(seg, a, b, off, move))
-            row.append(None if move == zero else move)
-        moves.append(row)
-    taken.extend(_line_band(seg, off) for off in offsets(level))
-    return level, moves
-
-
-def _add_dim(
-    msp: Modelspace, p1: Vec, p2: Vec, offset_outward: float, move: Vec | None = None
-) -> None:
-    """Dimension between points on the wall face, offset along the normal outward (+) or inward (−);
-    move shifts the label from its default spot, model mm (narrow segment of a chain).
-
-    For add_aligned_dim a positive distance is to the left of p1→p2, and "left" of a wall is
-    outward.
-    If the wall runs left or down, the points are swapped so the text is not upside down.
-    """
-    d = p2 - p1
-    angle = math.degrees(math.atan2(d.y, d.x))
-    if abs(readable_angle(angle) - angle) > 1e-6:
-        p1, p2, offset_outward = p2, p1, -offset_outward
-    dim = msp.add_aligned_dim(
-        p1=_xy(p1),
-        p2=_xy(p2),
-        distance=offset_outward,
-        dimstyle=DIM_STYLE,
-        dxfattribs={"layer": A_DIMS.name},
-    )
-    if move is not None:
-        dim.set_location(_xy(move), relative=True)
-    dim.render()
-
-
-def _outside_is_free(g: RoomGeometry, seg: WallSegment, others: Sequence[RoomGeometry]) -> bool:
-    """There is no other room outside the wall (dimensions may go there)."""
-    mid = seg.point_at(seg.length / 2) + seg.outward * (seg.thickness + sheet(DIM_LEVEL_1_MM))
-    return not any(point_in_polygon(mid, o.contour.vertices) for o in others if o is not g)
-
-
-def mirrored_wall(g: RoomGeometry, seg: WallSegment, other: RoomGeometry) -> WallSegment | None:
-    """The wall of another room that is the other side of this same partition."""
-    far_start = seg.start + seg.outward * seg.thickness
-    far_end = seg.end + seg.outward * seg.thickness
-    mine = [(seg.length - b, seg.length - a) for a, b in _gaps(g.room, seg.id)]
-    for o in other.contour.segments:
-        if (o.start - far_end).length() <= SHARED_WALL_TOLERANCE and (
-            o.end - far_start
-        ).length() <= SHARED_WALL_TOLERANCE:
-            theirs = _gaps(other.room, o.id)
-            same = len(mine) == len(theirs) and all(
-                abs(a1 - a2) <= SHARED_WALL_TOLERANCE and abs(b1 - b2) <= SHARED_WALL_TOLERANCE
-                for (a1, b1), (a2, b2) in zip(mine, theirs, strict=True)
-            )
-            return o if same else None
-    return None
-
-
-def draw_dimensions(
-    msp: Modelspace,
-    g: RoomGeometry,
-    all_rooms: Sequence[RoomGeometry],
-    done: Sequence[RoomGeometry] = (),
-    taken: list[BaseGeometry] | None = None,
-) -> None:
-    """Dimensions along the inner face of the wall.
-
-    Free outside: place them beyond the building extent: row 1 is the chain of openings,
-    row 2 the total length.
-    A neighbouring room outside: the same rows go inside this room, but only if this partition
-    has not been dimensioned from the neighbour's side yet (`done`).
-    taken holds labels and dimension lines of rows already placed and room labels, shared by all
-    rooms: a row whose labels land on them moves to the next level; a narrow label (does not fit
-    between the extension lines) moves to a free spot nearby.
-    """
-    taken = taken if taken is not None else []
-    for seg in g.contour.segments:
-        with tagged(msp, "dimension", f"{g.room.id}.{seg.id}"):
-            gaps = _gaps(g.room, seg.id)
-            if _outside_is_free(g, seg, all_rooms):
-                # Beyond the building extent on this wall's side: facade dimensions on one line
-                reach = max(c.dot(seg.outward) for r in all_rooms for c in r.corners)
-                sign, base = 1.0, reach - seg.start.dot(seg.outward) + sheet(DIM_LEVEL_1_MM)
-            else:
-                if any(mirrored_wall(g, seg, o) is not None for o in done):
-                    continue
-                sign, base = -1.0, sheet(DIM_LEVEL_1_MM)
-            parts = [(0.0, seg.length)]
-            if gaps:
-                stops = sorted({0.0, seg.length, *(x for gap in gaps for x in gap)})
-                parts = list(itertools.pairwise(stops))
-            # Rows: chain of openings (if any), then the total length
-            rows = [parts, [(0.0, seg.length)]] if gaps else [parts]
-            level, moves = _place_rows(seg, rows, sign, base, taken)
-            step = sheet(DIM_LEVEL_STEP_MM)
-            for r, (row, row_moves) in enumerate(zip(rows, moves, strict=True)):
-                for (a, b), move in zip(row, row_moves, strict=True):
-                    _add_dim(msp, seg.point_at(a), seg.point_at(b), sign * (level + r * step), move)
+def _draw_leader(msp: Modelspace, spot: Spot, layer: str) -> None:
+    for a, b in itertools.pairwise(spot.leader):
+        msp.add_line(_xy(a), _xy(b), dxfattribs={"layer": layer})
 
 
 # --- Labels ------------------------------------------------------------------
@@ -622,11 +456,12 @@ def draw_area_contour(msp: Modelspace, floor: Floor) -> RoomArea:
     return RoomArea(poly, floor.area_mm2, floor.name)
 
 
-def _room_label_box(floor: Floor) -> BaseGeometry:
-    """Spot of the floor name and area (draw_room_label): dimensions do not sit on it."""
-    at = label_point(floor.vertices)
+def _room_label_box(floor: Floor, at: Vec) -> Polygon:
+    """Spot of the floor name and area (draw_room_label) at point at."""
     w = max(text_width(floor.name, TEXT_ROOM_MM), text_width("00,00 м²", TEXT_DIM_MM))
-    hw, hh = sheet(w / 2 + 1.0), sheet(TEXT_ROOM_MM * 1.6)
+    # Two lines ROOM_LINE_GAP above and below the point, with the label margin
+    hw = sheet(w / 2 + PAD_MM)
+    hh = sheet(TEXT_ROOM_MM * ROOM_LINE_GAP + TEXT_ROOM_MM / 2 + PAD_MM)
     return Polygon(
         [
             (at.x - hw, at.y - hh),
@@ -637,12 +472,67 @@ def _room_label_box(floor: Floor) -> BaseGeometry:
     )
 
 
-def draw_room_label(msp: Modelspace, floor: Floor, area: RoomArea) -> None:
-    """Floor name and area; the area is an AutoCAD field from the area outline."""
+def _room_label_spots(floor: Floor) -> tuple[list[Vec], list[tuple[Vec, Polygon]]]:
+    """Points for the floor name and area, nearest to the label point first, over the floor;
+    and those where the label stays inside the floor, with its box (none if it is wider)."""
+    at = label_point(floor.vertices)
+    room = Polygon([_xy(v) for v in floor.vertices])
+    step = sheet(ROOM_LABEL_STEP_MM)
+    x0, y0, x1, y1 = room.bounds
+    grid = sorted(
+        (
+            (i, j)
+            for i in range(math.floor((x0 - at.x) / step), math.ceil((x1 - at.x) / step) + 1)
+            for j in range(math.floor((y0 - at.y) / step), math.ceil((y1 - at.y) / step) + 1)
+        ),
+        key=lambda ij: (ij[0] ** 2 + ij[1] ** 2, ij),
+    )
+    spots = [at + Vec(i * step, j * step) for i, j in grid]
+    inside = [(c, box) for c in spots for box in (_room_label_box(floor, c),) if room.contains(box)]
+    return spots, inside
+
+
+def _place_room_label(board: Board, floor: Floor) -> Vec:
+    """Point of the floor name and area: the label point (`label_point`) or the nearest point
+    of the floor where the label stays inside the floor off linework, labels and door swings
+    (then off linework and labels only); with none free, the point where it touches the fewest
+    labels and leaders, then lines: inside the floor, or near the label point if the label is
+    wider than its floor."""
+    spots, inside = _room_label_spots(floor)
+    best = next(
+        (
+            (c, box)
+            for kinds in (_ALL, _NO_ZONES)
+            for c, box in inside
+            if not board.blocked(box, kinds)
+        ),
+        None,
+    )
+    if best is None:
+        options = inside or [(c, _room_label_box(floor, c)) for c in spots[:ROOM_LABEL_NEAR]]
+        best = min(
+            options,
+            key=lambda o: 100 * board.count(o[1], _TEXTS) + board.count(o[1], _NO_ZONES),
+        )
+    board.add(Obstacle(best[1], Kind.LABEL, f"room:{floor.key}"))
+    return best[0]
+
+
+def _draw_room_label_at(msp: Modelspace, board: Board, floor: Floor, area: RoomArea) -> None:
+    kind, _, object_id = floor.key.partition(":")
+    at = _place_room_label(board, floor)
+    with tagged(msp, kind, object_id):
+        draw_room_label(msp, floor, area, at)
+
+
+def draw_room_label(msp: Modelspace, floor: Floor, area: RoomArea, at: Vec | None = None) -> None:
+    """Floor name and area at point at (the label point by default); the area is an AutoCAD
+    field from the area outline."""
     doc = msp.doc
     assert doc is not None
-    at = label_point(floor.vertices)
-    gap = sheet(TEXT_ROOM_MM) * 0.8
+    if at is None:
+        at = label_point(floor.vertices)
+    gap = sheet(TEXT_ROOM_MM) * ROOM_LINE_GAP
     add_text(msp, floor.name, at + Vec(0, gap), TEXT_ROOM_MM, A_TEXT.name)
     mtext = msp.add_mtext(
         "",
@@ -658,6 +548,16 @@ def draw_room_label(msp: Modelspace, floor: Floor, area: RoomArea) -> None:
 def draw_plan(msp: Modelspace, plan: Plan, contours: dict[str, Contour]) -> dict[str, RoomArea]:
     """Plan in the model at 1:1: walls, openings, area outlines, labels, dimensions.
 
+    Labels go in two passes. First every wall gets its dimension rows (`layout_dimensions`):
+    they keep off walls and room names at their label points (door swings do not count: in a
+    hallway with three doors the rows would otherwise have nowhere to go). Then, with all
+    linework known (walls, openings, door leaves, every dimension and extension line), labels
+    are placed one by one, each off the linework and the labels before it, the most tied first:
+    room names wider than their floor (by the label point), dimension numbers (larger rooms
+    first), sills, the other room names (anywhere in their floor), wall codes (the smallest,
+    they move most easily). Dimension numbers, sills and codes with no
+    free spot nearby go on a 45° leader (`callouts`).
+
     Returns the area outlines by floor key (`zones.plan_floors`: a room, or each zone of an
     open-plan room), in schedule order: the room schedule fields refer to them.
     """
@@ -666,35 +566,66 @@ def draw_plan(msp: Modelspace, plan: Plan, contours: dict[str, Contour]) -> dict
     areas: dict[str, RoomArea] = {}
     draw_walls(msp, geoms)
     for g in geoms:
-        draw_openings(msp, g, plan.language)
+        draw_openings(msp, g)
     for f in floors:
         kind, _, object_id = f.key.partition(":")
         with tagged(msp, kind, object_id):
             areas[f.key] = draw_area_contour(msp, f)
-            draw_room_label(msp, f, areas[f.key])
-    # Shared partitions are dimensioned from the larger room
-    done: list[RoomGeometry] = []
-    # Dimension labels do not sit on room names or walls. Door swings do not count: in a
-    # hallway with three doors the labels would otherwise have nowhere to go near their segment
-    taken = [_room_label_box(f) for f in floors]
-    taken += [p.polygon for g in geoms for p in wall_pieces(g)]
-    for g in sorted(geoms, key=lambda r: r.contour.area_mm2, reverse=True):
-        draw_dimensions(msp, g, geoms, done, taken)
-        done.append(g)
+    pieces = [p for g in geoms for p in wall_pieces(g)]
+    taken: list[BaseGeometry] = [_room_label_box(f, label_point(f.vertices)) for f in floors]
+    taken += [p.polygon for p in pieces]
+    dims = layout_dimensions(geoms, taken)
+    board = _board(geoms, pieces, dims)
+    # A name wider than its floor crosses lines anyway: it goes first, by its label point, so
+    # that dimension numbers keep off it
+    wide = {f.key for f in floors if not _room_label_spots(f)[1]}
+    for f in floors:
+        if f.key in wide:
+            _draw_room_label_at(msp, board, f, areas[f.key])
+    for dim in dims:
+        spot = board.place(dim.label(), dim_spots(dim))
+        with tagged(msp, "dimension", dim.key):
+            draw_dimension(msp, dim, spot)
+    for g in geoms:
+        for op in g.room.openings:
+            if op.type is OpeningType.WINDOW and op.sill is not None:
+                with tagged(msp, "opening", op.id):
+                    _draw_sill(msp, board, g, op, plan.language)
+    for f in floors:
+        if f.key not in wide:
+            _draw_room_label_at(msp, board, f, areas[f.key])
     codes = wall_codes(plan, contours)
-    # Codes stay off door swings and sill labels too, and off each other
-    taken += [
-        door_swing(g, op) for g in geoms for op in g.room.openings if op.type is OpeningType.DOOR
-    ]
-    taken += [
-        _sill_box(g, op, plan.language)
-        for g in geoms
-        for op in g.room.openings
-        if op.type is OpeningType.WINDOW and op.sill is not None
+    for g in geoms:
+        draw_wall_codes(msp, g, codes, board)
+    return areas
+
+
+def _board(
+    geoms: Sequence[RoomGeometry], pieces: Sequence[WallPiece], dims: Sequence[Dim]
+) -> Board:
+    """Obstacles for plan labels: walls, openings in them, door leaves and arcs, every dimension
+    line, extension line and tick; door swings as zones (only wall codes and room names keep off
+    them). The frame is the extent of all that plus a margin: a moved label stays inside, so the
+    view does not grow."""
+    # Walls a hair thinner: a leader starting at a wall face may run along the next wall's face
+    inset = -sheet(WALL_INSET_MM)
+    fixed = [
+        Obstacle(p.polygon.buffer(inset), Kind.WALL, f"wall:{p.tag}", f"wall:{p.tag}")
+        for p in pieces
     ]
     for g in geoms:
-        draw_wall_codes(msp, g, codes, taken)
-    return areas
+        for op in g.room.openings:
+            owner = f"opening:{op.id}"
+            gap = _opening_gap(g, op).buffer(inset)
+            fixed.append(Obstacle(gap, Kind.WALL, owner, owner))
+            if op.type is OpeningType.DOOR:
+                fixed.append(Obstacle(_door_arc(g, op), Kind.LINE, owner, owner))
+                fixed.append(Obstacle(door_swing(g, op), Kind.ZONE, owner, owner))
+    for dim in dims:
+        fixed += dim_linework(dim)
+    x0, y0, x1, y1 = shapely.unary_union([o.geom for o in fixed]).bounds
+    frame = shapely.box(x0, y0, x1, y1).buffer(sheet(FRAME_MARGIN_MM), join_style="mitre")
+    return Board(fixed, frame)
 
 
 def door_swing(g: RoomGeometry, op: Opening) -> BaseGeometry:
@@ -704,41 +635,33 @@ def door_swing(g: RoomGeometry, op: Opening) -> BaseGeometry:
     return Polygon([_xy(hinge), _xy(edge), _xy(edge + reach), _xy(hinge + reach)])
 
 
-def _code_box(seg: WallSegment, code: str, at: float, inset: float) -> tuple[Vec, BaseGeometry]:
-    """Centre and outline of a wall code at offset at along the wall, inset from its inner face
-    (model mm)."""
-    d, up = _reading(seg)
-    c = seg.point_at(at) + seg.inward * inset
-    hw = sheet(text_width(code, TEXT_DIM_MM) / 2 + CODE_GAP_MM)
-    hh = sheet(TEXT_DIM_MM / 2 + CODE_GAP_MM)
-    return c, Polygon([_xy(c + d * sx * hw + up * sy * hh) for sx, sy in CORNERS])
-
-
 def draw_wall_codes(
     msp: Modelspace,
     g: RoomGeometry,
     codes: dict[tuple[str, str], str],
-    taken: list[BaseGeometry],
+    board: Board,
 ) -> None:
     """Code of every wall inside the room along it: the first spot (middle first, close to the
-    face first) that is inside the room and off what is in taken (dimensions, labels, door
-    swings); with no free spot, the middle by the face. Placed codes are added to taken."""
+    face first) that is inside the room and off linework, labels and door swings; else on a 45°
+    leader from the middle of the wall, preferably inside the room; with no spot at all, the
+    middle by the face. Placed codes become obstacles for the next labels."""
     room = Polygon([_xy(v) for v in g.contour.vertices])
     for seg in g.contour.segments:
         code = codes[(g.room.id, seg.id)]
+        d, up = reading(seg.direction)
+        width = sheet(text_width(code, TEXT_DIM_MM))
+        anchor = seg.point_at(seg.length / 2)
+        label = Label(width, sheet(TEXT_DIM_MM), d, up, anchor, f"wall:{g.room.id}.{seg.id}")
         spots = [
-            _code_box(seg, code, seg.length * k, sheet(inset))
+            Candidate(seg.point_at(seg.length * k) + seg.inward * sheet(inset))
             for inset in CODE_INSETS_MM
             for k in CODE_ALONG
         ]
-        at, box = next(
-            ((c, b) for c, b in spots if room.contains(b) and not _hits(b, taken)),
-            spots[0],
-        )
-        taken.append(box)
-        d, _ = _reading(seg)
+        spot = board.place(label, spots, zones=True, within=room, prefer=room)
         with tagged(msp, "wall", f"{g.room.id}.{seg.id}"):
-            add_text(msp, code, at, TEXT_DIM_MM, A_TEXT.name, math.degrees(math.atan2(d.y, d.x)))
+            angle = math.degrees(math.atan2(d.y, d.x))
+            add_text(msp, code, spot.centre, TEXT_DIM_MM, A_TEXT.name, angle)
+            _draw_leader(msp, spot, A_TEXT.name)
 
 
 def plan_stamp(

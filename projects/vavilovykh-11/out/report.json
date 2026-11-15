@@ -474,6 +474,36 @@
   ],
   "issues": [
     {
+      "file": "electrical.yaml",
+      "path": "points[23]",
+      "severity": "warning",
+      "message": "тёплый пол «auto_living_floor_reg_1» (зона по регулятору): в floor_heating зоны нет — построена кодом: Зал-вітальня + коридор* (допущение: помещение по подписи или месту регулятора); уточните по дизайну или задайте heating_rooms"
+    },
+    {
+      "file": "electrical.yaml",
+      "path": "points[23]",
+      "severity": "warning",
+      "message": "тёплый пол «auto_living_floor_reg_1» (зона по регулятору): одной змейкой покрыта не вся зона: 2 из 3 участков — разбейте зону на две записи floor_heating или поправьте exclude"
+    },
+    {
+      "file": "electrical.yaml",
+      "path": "points[24]",
+      "severity": "warning",
+      "message": "тёплый пол «auto_living_floor_reg_2» (зона по регулятору): в floor_heating зоны нет — построена кодом: Санвузол* (допущение: помещение по подписи или месту регулятора); уточните по дизайну или задайте heating_rooms"
+    },
+    {
+      "file": "electrical.yaml",
+      "path": "points[24]",
+      "severity": "warning",
+      "message": "тёплый пол «auto_living_floor_reg_2» (зона по регулятору): из ряда серии нет длины с шагом 120–170 мм: взята 10 м, не уложено 2.1 м"
+    },
+    {
+      "file": "electrical.yaml",
+      "path": "points[24]",
+      "severity": "warning",
+      "message": "тёплый пол «auto_living_floor_reg_2» (зона по регулятору): одной змейкой покрыта не вся зона: 1 из 2 участков — разбейте зону на две записи floor_heating или поправьте exclude"
+    },
+    {
       "file": "wiring.yaml",
       "path": "wires.wire_27",
       "severity": "warning",
@@ -508,6 +538,12 @@
       "path": "groups.QF13",
       "severity": "warning",
       "message": "QF13: Варильна поверхня (кабель) — ток 31,3 А больше автомата 25 А: нужен кабель сечением больше и автомат 32 А (или мощность прибора ниже)"
+    },
+    {
+      "file": "electrical.yaml",
+      "path": "groups.QF15",
+      "severity": "warning",
+      "message": "QF15: Регулятор ТП коридору (2,16 кВт) в общей группе — нужна своя линия"
     },
     {
       "file": "electrical.yaml",

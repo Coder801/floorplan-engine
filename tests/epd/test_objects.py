@@ -191,6 +191,33 @@ def test_plan_chains_link_walls_openings_and_dimensions() -> None:
     assert "dimension:b.w3" not in room
 
 
+def test_plan_chains_take_the_other_side_of_a_partition_of_another_length() -> None:
+    """A loggia behind a room: the partition is shorter on the loggia side and has other
+    openings, so the sides do not mirror, but a click on either still shows both."""
+
+    def room(rid: str, x: float, partition: int, side: float) -> dict[str, object]:
+        lengths = [side, 3000, side, 3000]
+        walls: list[dict[str, object]] = [
+            {"id": f"w{n + 1}", "length": v} for n, v in enumerate(lengths)
+        ]
+        walls[partition - 1] |= {"thickness": 100}
+        return {"id": rid, "name": rid, "origin": [x, 0], "walls": walls}
+
+    plan = Plan.model_validate(
+        {
+            "name": "тест",
+            "default_wall_thickness": 200,
+            "source": "text",
+            "rooms": [room("a", 0, 3, 3000), room("b", 3100, 1, 2000)],
+        }
+    )
+    _, contours = validate_plan(plan)
+    chains = plan_chains(plan, contours)
+    assert "wall:b.w1" in chains["wall:a.w3"]
+    assert "wall:a.w3" in chains["wall:b.w1"]
+    assert "wall:b.w1" not in chains["wall:a.w1"]
+
+
 def _pylon_room() -> Plan:
     """A room with a pylon in the corner: the thick wall w1 covers the short top of the pylon w2."""
     walls = [

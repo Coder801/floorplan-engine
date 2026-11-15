@@ -1,13 +1,16 @@
 from __future__ import annotations
 
+import math
 from pathlib import Path
 
 import pytest
 import shapely
 from ezdxf.document import Drawing
 from ezdxf.entities.dxfentity import DXFTagStorage
+from ezdxf.entities.line import Line
 from ezdxf.entities.lwpolyline import LWPolyline
 from ezdxf.entities.mtext import MText
+from ezdxf.entities.text import Text
 from ezdxf.filemanagement import readfile
 from shapely.geometry.base import BaseGeometry
 
@@ -16,15 +19,12 @@ from floorplan_engine.drawing.layers import A_TEXT, new_document
 from floorplan_engine.drawing.plan import (
     HATCH_SCALE_BEARING,
     HATCH_SCALE_PARTITION,
-    _fits,
-    _place_rows,
-    _text_box,
-    draw_openings,
+    draw_plan,
     readable_angle,
     wall_pieces,
 )
-from floorplan_engine.model.geometry import Vec, WallSegment, room_geometries
-from floorplan_engine.model.scale import drawing_scale
+from floorplan_engine.model.geometry import Vec, room_geometries
+from floorplan_engine.model.scale import drawing_scale, sheet
 from floorplan_engine.model.schema import Plan
 from floorplan_engine.sheets.document import build_project_document
 from floorplan_engine.sheets.stages import (
@@ -162,46 +162,15 @@ def test_window_to_corner_keeps_square_corner() -> None:
     assert total.intersection(corner).area == pytest.approx(corner.area)
 
 
-def _wall() -> WallSegment:
-    plan = make_plan([{"length": 3000}, {"length": 4000}, {"length": 3000}, {"length": 4000}])
-    _, contours = validate_plan(plan)
-    return contours["r"].segment("w2")  # top wall, 4000
-
-
-def test_row_moves_to_next_level_when_taken() -> None:
-    with drawing_scale(50):
-        seg = _wall()
-        taken: list[BaseGeometry] = []
-        first, _ = _place_rows(seg, [[(0.0, seg.length)]], 1.0, 400.0, taken)
-        second, _ = _place_rows(seg, [[(0.0, seg.length)]], 1.0, 400.0, taken)
-        assert first == 400.0 and second > first  # the same spot is taken: next level
-
-
-def test_narrow_part_text_is_moved_off_its_part() -> None:
-    with drawing_scale(50):
-        seg = _wall()
-        parts = [(0.0, 1900.0), (1900.0, 2000.0), (2000.0, seg.length)]  # 100 mm is 2 sheet mm
-        assert not _fits(1900.0, 2000.0) and _fits(0.0, 1900.0)
-        taken: list[BaseGeometry] = []
-        level, moves = _place_rows(seg, [parts], 1.0, 400.0, taken)
-        assert moves[0][0] is None and moves[0][2] is None
-        move = moves[0][1]
-        assert move is not None
-        narrow = _text_box(seg, 1900.0, 2000.0, level, move)
-        for a, b in (parts[0], parts[2]):
-            assert narrow.intersection(_text_box(seg, a, b, level, Vec(0.0, 0.0))).area == 0
-
-
 def test_sill_label_only_on_the_plan_sheet() -> None:
     plan = make_plan(
         [{"length": 3000}, {"length": 4000}, {"length": 3000}, {"length": 4000}],
         [{"wall": "w2", "type": "window", "offset": 1000, "width": 1000, "sill": 900}],
     )
     _, contours = validate_plan(plan)
-    (g,) = room_geometries(plan, contours)
     doc = new_document()
     msp = doc.modelspace()
-    draw_openings(msp, g)
+    draw_plan(msp, plan, contours)
     labels = [t for t in msp.query("TEXT") if "900" in t.dxf.text]
     assert [t.dxf.layer for t in labels] == [A_TEXT.name]
     assert A_TEXT in PLAN_SHEET_LAYERS
@@ -233,3 +202,104 @@ def test_every_wall_has_its_code_inside_the_room_off_the_door_swing() -> None:
     for _, at in codes.values():
         assert room.contains(shapely.Point(at.x, at.y))
         assert not swing.contains(shapely.Point(at.x, at.y))
+
+
+# --- Labels off each other and off the linework -----------------------------------------
+
+
+def _crowded_hall() -> Plan:
+    """Hallway 3000 × 1400 with doors on both long walls, short segments of 50–150 mm between
+    them, three 50 mm openings 50 mm apart (their numbers have no room by the line) and a
+    window with a sill."""
+    return make_plan(
+        [{"length": 1400}, {"length": 3000}, {"length": 1400}, {"length": 3000}],
+        [
+            {"wall": "w2", "type": "door", "offset": 100, "width": 700},
+            {"wall": "w2", "type": "door", "offset": 850, "width": 700},
+            {"wall": "w2", "type": "window", "offset": 1600, "width": 600, "sill": 900},
+            {"wall": "w2", "type": "door", "offset": 2250, "width": 600},
+            {"wall": "w4", "type": "door", "offset": 150, "width": 800},
+            {"wall": "w4", "type": "opening", "offset": 1000, "width": 50},
+            {"wall": "w4", "type": "opening", "offset": 1100, "width": 50},
+            {"wall": "w4", "type": "opening", "offset": 1200, "width": 50},
+            {"wall": "w4", "type": "door", "offset": 1300, "width": 800},
+        ],
+    )
+
+
+def _box(at: Vec, angle: float, text: str, height: float) -> BaseGeometry:
+    """Outline of a centred text (model mm), slightly shrunk: touching is not overlapping."""
+    from floorplan_engine.drawing.callouts import rect
+    from floorplan_engine.drawing.layers import text_width
+
+    d = Vec(math.cos(math.radians(angle)), math.sin(math.radians(angle)))
+    hw = sheet(text_width(text, height / sheet(1.0))) / 2 - sheet(0.1)
+    return rect(at, d, d.left(), hw, height / 2 - sheet(0.1))
+
+
+def _labels_and_lines(
+    doc: Drawing,
+) -> tuple[list[tuple[str, BaseGeometry]], list[BaseGeometry], list[Line]]:
+    """Text outlines on the plan (codes, sills, room names and areas, dimension numbers),
+    dimension and extension lines, and leaders."""
+    msp = doc.modelspace()
+    labels = [
+        (e.dxf.text, _box(Vec(*e.dxf.align_point.vec2), e.dxf.rotation, e.dxf.text, e.dxf.height))
+        for e in msp.query("TEXT")
+        if isinstance(e, Text)
+    ]
+    lines: list[BaseGeometry] = []
+    for dim in msp.query("DIMENSION"):
+        for part in doc.blocks.get(dim.dxf.geometry):
+            if isinstance(part, MText):
+                at, text = Vec(*part.dxf.insert.vec2), str(part.plain_text())
+                labels.append((text, _box(at, part.dxf.rotation, text, part.dxf.char_height)))
+            elif isinstance(part, Line):
+                lines.append(shapely.LineString([part.dxf.start.vec2, part.dxf.end.vec2]))
+    for area in msp.query("MTEXT"):  # room area
+        if isinstance(area, MText):
+            at, text = Vec(*area.dxf.insert.vec2), str(area.plain_text())
+            labels.append((text, _box(at, 0.0, text, area.dxf.char_height)))
+    layers = ("A-DIMS", "A-TEXT")
+    leaders = [e for e in msp.query("LINE") if isinstance(e, Line) and e.dxf.layer in layers]
+    return labels, lines, leaders
+
+
+def test_crowded_hall_labels_overlap_nothing() -> None:
+    """No label sits on another label, a dimension or extension line, or a leader; no two
+    leaders cross."""
+    plan = _crowded_hall()
+    _, contours = validate_plan(plan)
+    with drawing_scale(50):
+        doc = new_document()
+        draw_plan(doc.modelspace(), plan, contours)
+        labels, lines, leaders = _labels_and_lines(doc)
+    strokes = lines + [shapely.LineString([e.dxf.start.vec2, e.dxf.end.vec2]) for e in leaders]
+    assert len(labels) > 20 and leaders
+    for k, (text, box) in enumerate(labels):
+        for other, box2 in labels[k + 1 :]:
+            assert not box.intersects(box2), f"{text} на {other}"
+        assert not any(box.intersects(s) for s in strokes), f"{text} на линии"
+    paths = [shapely.LineString([e.dxf.start.vec2, e.dxf.end.vec2]) for e in leaders]
+    for k, a in enumerate(paths):
+        assert not any(a.crosses(b) for b in paths[k + 1 :])
+
+
+def test_moved_dimension_label_has_a_45_degree_leader() -> None:
+    """A label with no room by its dimension line goes out on a leader: from the middle of its
+    dimension line at 45°, then a shelf along the text, under it."""
+    plan = _crowded_hall()
+    _, contours = validate_plan(plan)
+    with drawing_scale(50):
+        doc = new_document()
+        draw_plan(doc.modelspace(), plan, contours)
+        _, lines, leaders = _labels_and_lines(doc)
+    dims = [e for e in leaders if e.dxf.layer == "A-DIMS"]
+    assert dims and len(dims) % 2 == 0
+    for slant, shelf in zip(dims[::2], dims[1::2], strict=True):
+        dx, dy = (slant.dxf.end - slant.dxf.start).vec2
+        assert abs(abs(dx) - abs(dy)) < 1e-6  # 45°
+        assert any(s.distance(shapely.Point(slant.dxf.start.vec2)) < 1e-6 for s in lines)
+        assert shelf.dxf.start.isclose(slant.dxf.end)
+        sx, sy = (shelf.dxf.end - shelf.dxf.start).vec2
+        assert abs(sx) < 1e-6 or abs(sy) < 1e-6  # along the text: the walls are square

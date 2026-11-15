@@ -57,6 +57,12 @@ SURFACE_LINETYPE = "P_SURFACE_DASH"  # sewer along the wall above the floor (in 
 TEXT_DIM_MM = 2.5  # dimensions
 TEXT_SMALL_MM = 2.0  # electrical labels, areas
 TEXT_ROOM_MM = 3.5  # room names, total area
+# Plan dimension style, sheet mm: the plan places labels against these lines (drawing/dimensions.py)
+DIM_TICK_MM = 1.25  # tick instead of an arrow
+DIM_EXO_MM = 1.5  # extension line offset from the object
+DIM_EXE_MM = 1.25  # extension line overshoot past the dimension line
+DIM_DLE_MM = 1.25  # dimension line overshoot past the extension lines
+DIM_GAP_MM = 0.8  # text above the dimension line
 MIN_TEXT_MM = 1.8  # GOST 2.304: smaller text does not print on the sheet (checked in printing.py)
 
 
@@ -236,11 +242,11 @@ def _add_dim_style(doc: Drawing) -> None:
             "dimtxsty": TEXT_STYLE,
             "dimtxt": TEXT_DIM_MM,
             "dimasz": 2.5,
-            "dimtsz": 1.25,  # ticks instead of arrows
-            "dimexo": 1.5,  # extension line offset from the object
-            "dimexe": 1.25,  # extension line overshoot past the dimension line
-            "dimdle": 1.25,  # dimension line overshoot past the extension lines
-            "dimgap": 0.8,
+            "dimtsz": DIM_TICK_MM,  # ticks instead of arrows
+            "dimexo": DIM_EXO_MM,
+            "dimexe": DIM_EXE_MM,
+            "dimdle": DIM_DLE_MM,
+            "dimgap": DIM_GAP_MM,
             "dimtad": 1,  # text above the dimension line
             "dimtih": 0,  # text parallel to the dimension line
             "dimtoh": 0,
