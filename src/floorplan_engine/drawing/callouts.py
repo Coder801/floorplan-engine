@@ -36,6 +36,7 @@ CORNERS = ((-1, -1), (1, -1), (1, 1), (-1, 1))
 PAD_MM = 0.5  # free margin around a label: the viewer draws labels larger about their centre
 SHELF_GAP_MM = 0.5  # text above its shelf and past its ends
 LEADER_START_MM = 2.5  # first elbow distance from the anchor along the diagonal
+ANCHOR_TOUCH_MM = 0.5  # a label this close to the anchor counts as covering it
 LEADER_STEP_MM = 1.0
 LEADER_MAX_MM = 30.0
 
@@ -203,8 +204,8 @@ class Board:
         """Free spot on a shelf at the end of the shortest 45° leader from the anchor: the text
         off everything, the leader crossing no label, no other leader and no wall (but its own).
         At the same length: text inside prefer first, then the leader crossing the fewest lines.
-        The text stays inside the drawing frame if it can. Last, if the anchor is under or next
-        to a label (a room name wider than its room), the leader may start across that label."""
+        The text stays inside the drawing frame if it can. Last, if the anchor is under or touches
+        a label (a room name wider than its room), the leader may start across that label."""
         kinds = _kinds(zones)
         own = frozenset({label.owner})
         options = list(_diagonal_spots(label))
@@ -227,7 +228,9 @@ class Board:
                             self.count(o[1], _LINES, own),
                         ),
                     )[0]
-        at = Point(label.anchor.as_tuple()).buffer(sheet(LEADER_START_MM))
+        # only a label the anchor is under or touches: a label merely near it stays a hard
+        # obstacle (a leader across a sill label beside the wall code reads as pointing at it)
+        at = Point(label.anchor.as_tuple()).buffer(sheet(ANCHOR_TOUCH_MM))
         cover = [o.geom for o in self._near(at) if o.kind is Kind.LABEL]
         if cover:
             under = shapely.unary_union(cover).buffer(sheet(0.1))

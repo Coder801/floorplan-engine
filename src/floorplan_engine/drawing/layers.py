@@ -54,9 +54,9 @@ LED_LINETYPE = "E_LED_DASH"
 FLOOR_LINETYPE = "W_FLOOR_DASHDOT"
 SURFACE_LINETYPE = "P_SURFACE_DASH"  # sewer along the wall above the floor (in a box)
 
-TEXT_DIM_MM = 2.5  # dimensions
-TEXT_SMALL_MM = 2.0  # electrical labels, areas
-TEXT_ROOM_MM = 3.5  # room names, total area
+TEXT_DIM_MM = 1.8  # dimensions (GOST 2.304 minimum)
+TEXT_SMALL_MM = 1.8  # electrical labels, areas (GOST 2.304 minimum)
+TEXT_ROOM_MM = 2.5  # room names, total area: one GOST size above the rest
 # Plan dimension style, sheet mm: the plan places labels against these lines (drawing/dimensions.py)
 DIM_TICK_MM = 1.25  # tick instead of an arrow
 DIM_EXO_MM = 1.5  # extension line offset from the object
