@@ -1272,6 +1272,8 @@ def test_light_chain_brings_one_cable_into_the_room() -> None:
     jumper = lit["k2"] if fed["k2"] == "k1" else lit["k1"]
     assert jumper.source in ("k1", "k2") and jumper.vertical_mm == 0  # inside the frame
     assert jumper.plan_mm < 100  # no route across the ceiling
+    # Straight along the wall at any sheet scale: not out to the route lane and back (2026-11-15)
+    assert len(jumper.path) == 2
     assert lit["k3"].vertical_mm > 0  # to the other wall: up to the ceiling and down
     assert all(lit[k].mark == "3x1.5" for k in switches)
     assert len(lit) == 7  # each point fed once

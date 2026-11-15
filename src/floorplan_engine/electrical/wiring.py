@@ -267,6 +267,7 @@ class _Link:
     cross: bool = False  # box branch into a neighbouring room: a switch by the door outside
     ends: float | None = None  # cable at both ends, mm; None: END_ALLOWANCE and the source tail
     led: bool = False  # 12 V line from an LED supply in the panel
+    wall: bool = False  # a jumper between mechanisms of one frame: straight along the wall
 
 
 @dataclass(frozen=True)
@@ -315,9 +316,9 @@ def estimate_wiring(
     elec: Electrical,
     edits: WiringEdits | None = None,
 ) -> Wiring | None:
-    """Wiring for estimate quantities, always at 1:50. Bundle lanes are set in sheet mm, so route
-    lengths depend slightly on the sheet scale; the estimate does not depend on paper size: it is
-    the same on A2, A3 and in out/estimate.*."""
+    """Wiring for estimate quantities, always at the set scale (DEFAULT_SCALE). Bundle lanes are
+    set in sheet mm, so route lengths depend slightly on the sheet scale; the estimate does not
+    depend on paper size: it is the same on A2, A3 and in out/estimate.*."""
     with drawing_scale(DEFAULT_SCALE):
         return box_wiring(plan, contours, elec, edits)
 
@@ -515,8 +516,10 @@ def _group_links(
         down: float,
         cross: bool = False,
         way: Route | None = None,
+        wall: bool = False,
     ) -> None:
-        line = _Link(group, mark, assumed, src, dst, b, up, down, way or route, circuit, cross)
+        line = _Link(group, mark, assumed, src, dst, b, up, down, way or route, circuit, cross,
+                     wall=wall)  # fmt: skip
         links.append(line)
 
     def to_point(
@@ -545,7 +548,7 @@ def _group_links(
             left.remove(p)
             assert prev.height is not None  # only wall points go in a chain
             if _same_frame(prev, p):  # a jumper inside the frame: the cable stays in the wall
-                link(prev.id, p.id, ctx.anchors[p.id], 0.0, 0.0)
+                link(prev.id, p.id, ctx.anchors[p.id], 0.0, 0.0, wall=True)
             else:
                 to_point(prev.id, prev.height, _rise(prev, ctx.ceiling, route), p)
             prev = p
@@ -713,7 +716,7 @@ def _light_chains(
         # wall: a jumper inside one frame, it does not go up to the ceiling or down to the floor
         up, down = (0.0, 0.0) if wall else (_rise(a, ceiling, way), _rise(b, ceiling, way))
         line = _Link(group, cable, cable_assumed, a.id, b.id, ctx.anchors[b.id],
-                     up, down, way, "power", a.room != b.room, ends)  # fmt: skip
+                     up, down, way, "power", a.room != b.room, ends, wall=wall)  # fmt: skip
         out.append(line)
 
     starts: list[ElectricalPoint] = []  # with one_feed: where the group's lines begin
@@ -975,7 +978,11 @@ def _route_runs(
             router = apart[key]
         end = drops.get((ln.target, ln.route)) if ln.target_rise > 0 else None
         start = drops.get((ln.source, ln.route)) if ln.source_rise > 0 else None
-        path = tuple(router.route(anchor_end(end[0] if end else ln.target_anchor)))
+        path: tuple[Vec, ...]
+        if ln.wall:  # one frame: the cable does not leave the wall, no lane on the route grid
+            path = (ctx.anchors[ln.source].node, ln.target_anchor.node)
+        else:
+            path = tuple(router.route(anchor_end(end[0] if end else ln.target_anchor)))
         runs.append(
             Run(
                 id=f"wire_{k + 1}",
