@@ -40,7 +40,9 @@ of routes, and a list of assumptions and questions. Wait for confirmation.
    If there is an error, show it and ask; do not adjust numbers to fit.
 2. Run `uv run floorplan-engine build projects/<name>`.
 3. Run `uv run floorplan-engine render-artifact projects/<name>` and open with Read the electrical
-   sheet `out/artifact/02-electrical.png` (and the wiring sheet `03-wiring.png`). Check that:
+   sheet `out/artifact/02-electrical.png` (and the wiring sheet `03-wiring.png`; with floor
+   heating, also `NN-floor_heating.png`: the serpentine inside each zone, no cable under baths
+   and solid furniture, the zones table readable). Check that:
    - every point is on the right wall and not inside a door or window opening;
    - symbols face into the room;
    - routes connect the right points;

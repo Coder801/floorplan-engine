@@ -16,6 +16,7 @@ from floorplan_engine.model.scale import drawing_scale
 from floorplan_engine.pipeline import (
     assess_project,
     find_prices,
+    furniture_of,
     load_prices,
     plumbing_of,
     price_service,
@@ -39,13 +40,19 @@ def check(project: Path) -> bool:
     prices_path = find_prices(project)
     own = load_prices(prices_path)[0] if prices_path is not None else None
     prices = Prices(own, price_service(None))  # as in build: price list over the price service
+    furniture = furniture_of(assessment)
     paper, scale = choose_paper_and_scale(
-        report.plan, report.contours, report.electrical, prices, plumbing=water
+        report.plan, report.contours, report.electrical, prices, plumbing=water, furniture=furniture
     )
     ok = True
     with drawing_scale(scale):
         doc, specs = draw_stages(
-            report.plan, report.contours, report.electrical, prices, plumbing=water
+            report.plan,
+            report.contours,
+            report.electrical,
+            prices,
+            plumbing=water,
+            furniture=furniture,
         )
         for spec in specs:
             view = view_size(doc, spec)
