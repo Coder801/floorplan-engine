@@ -1,7 +1,7 @@
-"""Project document: the 1:1 model and sheets with 1:50 viewports.
+"""Project document: the 1:1 model and sheets with viewports at the set scale (1:25).
 
 The model holds all geometry of all stages, each stage on its own layers (sheets.stages). A
-sheet (layout) has the frame and title block in sheet mm, a 1:50 viewport onto the model with
+sheet (layout) has the frame and title block in sheet mm, a viewport onto the model with
 the layers of other stages frozen, tables and the legend; the layout logic is sheets.layout.
 
 Paper size, orientation and scale are shared by the whole set (choose_paper_and_scale).
@@ -37,7 +37,6 @@ from floorplan_engine.model.texts import TEXTS, tr
 from floorplan_engine.plumbing.network import build_network
 from floorplan_engine.plumbing.network_model import Network
 from floorplan_engine.sheets.layout import (
-    VIEW_MARGIN,
     Panel,
     Paper,
     SheetSpec,
@@ -47,13 +46,11 @@ from floorplan_engine.sheets.layout import (
     panels_fit,
     place,
     plan_region,
-    view_parts,
     view_size,
     visible_extents,
 )
 from floorplan_engine.sheets.stages import draw_stages
 
-VIEW_FILL = 0.94  # target share of the plan section taken by the drawing (decision 2026-10-21)
 VIEW_FILL_MAX = 1.0  # more than this and the drawing sticks out of the section
 VIEWPORT_LOCKED = 16384  # VIEWPORT flag "Display locked": the mouse wheel does not change the scale
 # Layer 0 carries block contents; sheet layers do not touch the model
@@ -154,16 +151,6 @@ def document_scale(doc: Drawing) -> float:
     return DEFAULT_SCALE
 
 
-def _at(view: tuple[float, float], scale: float) -> tuple[float, float]:
-    """View size at 1:scale from the 1:50 draft, with a margin: labels and dimension lines at a
-    large scale take less model space than in the draft."""
-    k = DEFAULT_SCALE / scale
-    return (
-        (view[0] - 2 * VIEW_MARGIN) * k + 2 * VIEW_MARGIN,
-        (view[1] - 2 * VIEW_MARGIN) * k + 2 * VIEW_MARGIN,
-    )
-
-
 def choose_paper_and_scale(
     plan: Plan,
     contours: dict[str, Contour],
@@ -173,56 +160,33 @@ def choose_paper_and_scale(
     plumbing: tuple[Plumbing, Network] | None = None,
     furniture: Furniture | None = None,
 ) -> tuple[Paper, float]:
-    """Paper for the set: the smallest on which every sheet fits its tables and legend and the plan
-    at 1:50 or larger takes at most VIEW_FILL_MAX of its section (a size from room.yaml is used
-    alone). The scale is the one that brings the tightest plan closest to VIEW_FILL, no more than
-    VIEW_FILL_MAX."""
-    with drawing_scale(DEFAULT_SCALE):
-        draft, all_specs = draw_stages(plan, contours, elec, prices, edits, plumbing, furniture)
-        views = {s.tab_key: view_parts(draft, s) for s in all_specs if s.body is None}
+    """Paper and scale for the set. The scale is 1:25 (decision 2026-11-15, model.scale); the
+    paper is the smallest on which every sheet fits its tables, legend and the plan (a size from
+    room.yaml is used alone). Tables only make the paper larger, never change the scale: so labels
+    and lines keep their size against the plan in every project. Tables that fit no paper go to a
+    continuation sheet of the largest one; the next scale (1:50, 1:100) only if the plan does not
+    fit the largest paper."""
     papers = format_candidates(plan.sheet.format)
-    specs = all_specs
-
-    def worst(paper: Paper, scale: float) -> float:
-        # A diagram (panel) has no scale: panels_fit checks its space
-        def at(core: tuple[float, float], extra: tuple[float, float]) -> tuple[float, float]:
-            w, h = _at(core, scale)
-            return w + extra[0], h + extra[1]
-
-        return max(
-            fill(at(*views[s.tab_key]), plan_region(s, paper)) for s in specs if s.body is None
-        )
-
-    def ok(paper: Paper, scale: float) -> bool:
-        panels = all(panels_fit(s, paper) for s in specs)
-        return panels and worst(paper, scale) <= VIEW_FILL_MAX
-
-    base = [s for s in SCALES if s <= DEFAULT_SCALE]
-    found = next((p for p in papers if any(ok(p, s) for s in base)), None)
-    if found is None:
-        # Tables fit no paper size: take the largest, tables go to a continuation sheet
-        # Scale follows the view: it will not help diagrams (panel, tables), printing checks those
-        paper = max(papers, key=lambda p: (p[1] * p[2], p[1]))
-        specs = fit_specs(all_specs, paper)
-        fitting = [s for s in SCALES if worst(paper, s) <= VIEW_FILL_MAX]
-        # The 1:50 draft estimate understates the dimension band at a small scale, so the chosen
-        # scale is checked by drawing; if it does not fit, the next smaller one
-        best = min(fitting, key=lambda s: abs(worst(paper, s) - VIEW_FILL), default=SCALES[-1])
-        for scale in [s for s in SCALES if s >= best]:
-            with drawing_scale(scale):
-                real, real_specs = draw_stages(
-                    plan, contours, elec, prices, edits, plumbing, furniture
-                )
-                shown = [s for s in fit_specs(real_specs, paper) if s.body is None]
-                if all(fill(view_size(real, s), plan_region(s, paper)) <= 1.0 for s in shown):
+    largest = max(papers, key=lambda p: (p[1] * p[2], p[1]))
+    for scale in SCALES:
+        with drawing_scale(scale):
+            doc, specs = draw_stages(plan, contours, elec, prices, edits, plumbing, furniture)
+            for paper in papers:
+                if all(panels_fit(s, paper) for s in specs) and _plan_fits(doc, specs, paper):
                     return paper, scale
-        return paper, SCALES[-1]
-    else:
-        paper = found
-        fitting = [s for s in SCALES if ok(paper, s)]
-    if not fitting:
-        return paper, SCALES[-1]
-    return paper, min(fitting, key=lambda s: abs(worst(paper, s) - VIEW_FILL))
+            if _plan_fits(doc, fit_specs(specs, largest), largest):
+                return largest, scale
+    return largest, SCALES[-1]
+
+
+def _plan_fits(doc: Drawing, specs: list[SheetSpec], paper: Paper) -> bool:
+    """Every sheet's plan at the current scale fits its section; a diagram (panel) has no scale,
+    panels_fit checks its space."""
+    return all(
+        fill(view_size(doc, s), plan_region(s, paper)) <= VIEW_FILL_MAX
+        for s in specs
+        if s.body is None
+    )
 
 
 def build_project_document(

@@ -7,7 +7,7 @@ title block:
     plan   | tables
     legend | title block
 
-The plan is centred in its section and takes about VIEW_FILL of it; tables are pressed to
+The plan is centred in its section at the set's scale (1:25); tables are pressed to
 the right edge of their section, one under another; if they do not fit, they go in columns
 from right to left, and columns past the title block line take space from the plan section
 (arrange); the legend sits in the section left of the title block.
@@ -28,7 +28,6 @@ from ezdxf.layouts.layout import Paperspace
 from ezdxf.math import BoundingBox
 
 from floorplan_engine.drawing.layers import (
-    E_TEXT,
     LayerSpec,
 )
 from floorplan_engine.drawing.tables import Table, draw_table
@@ -139,26 +138,14 @@ def visible_extents(doc: Drawing, layers: tuple[LayerSpec, ...]) -> BoundingBox:
 def view_size(
     doc: Drawing, spec: SheetSpec, layers: tuple[LayerSpec, ...] | None = None
 ) -> tuple[float, float]:
-    """Width and height of the 1:50 viewport for the sheet layers (or layers), sheet mm; 0 for a
-    diagram.
+    """Width and height of the viewport at the current scale for the sheet layers (or layers),
+    sheet mm; 0 for a diagram.
     """
     if spec.body is not None:
         return 0.0, 0.0
     box = visible_extents(doc, layers or spec.layers)
     k = sheet_scale()
     return box.size.x / k + 2 * VIEW_MARGIN, box.size.y / k + 2 * VIEW_MARGIN
-
-
-def view_parts(doc: Drawing, spec: SheetSpec) -> tuple[tuple[float, float], tuple[float, float]]:
-    """View without electrical labels and how far they stick out, sheet mm. Labels are set in sheet
-    mm and do not grow with the scale, so the overhang is not recomputed when the scale is chosen
-    (labels.py)."""
-    full = view_size(doc, spec)
-    core_layers = tuple(spec_ for spec_ in spec.layers if spec_.name != E_TEXT.name)
-    if spec.body is not None or len(core_layers) == len(spec.layers):
-        return full, (0.0, 0.0)
-    core = view_size(doc, spec, core_layers)
-    return core, (max(full[0] - core[0], 0.0), max(full[1] - core[1], 0.0))
 
 
 @dataclass(frozen=True)

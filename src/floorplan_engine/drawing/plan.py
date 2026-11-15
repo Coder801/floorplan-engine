@@ -70,7 +70,7 @@ from floorplan_engine.model.geometry import (
     room_geometries,
     signed_area,
 )
-from floorplan_engine.model.scale import DEFAULT_SCALE, sheet, sheet_scale
+from floorplan_engine.model.scale import sheet, sheet_scale
 from floorplan_engine.model.schema import Opening, OpeningType, Plan, Room
 
 __all__ = ["readable_angle"]  # plan texts and their tests take it from here
@@ -81,6 +81,7 @@ from floorplan_engine.model.zones import Floor, plan_floors
 HATCH_PATTERN = "ANSI31"
 # Hatch scale at 1:50; at another sheet scale it is proportional, so the step on paper
 # stays the same
+HATCH_REF_SCALE = 50.0  # the scale the hatch scales below are given for
 HATCH_SCALE_BEARING = 12.0  # ANSI31 step 3.175 × 12 ≈ 38 mm, 0.8 mm on the sheet
 HATCH_SCALE_PARTITION = 30.0  # ≈ 95 mm, 1.9 mm on the sheet
 GRID = 0.1  # wall coordinate grid, mm: shared faces of neighbouring rooms match exactly
@@ -230,7 +231,7 @@ def draw_walls(msp: Modelspace, geoms: Sequence[RoomGeometry]) -> None:
     pieces, total, bearing, owned = _owned(geoms)
     for p, own in zip(pieces, owned, strict=True):
         base = HATCH_SCALE_BEARING if p.bearing else HATCH_SCALE_PARTITION
-        scale = base * sheet_scale() / DEFAULT_SCALE
+        scale = base * sheet_scale() / HATCH_REF_SCALE
         with tagged(msp, "wall", p.tag):
             _hatch(msp, own, scale)
     # Silhouette boundary and the "load-bearing | partition" line; shared parts drawn once
