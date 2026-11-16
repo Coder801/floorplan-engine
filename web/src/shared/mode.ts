@@ -2,8 +2,8 @@
 // Tested with users: ordinary people found the full viewer too complex, engineers found it
 // fine. The simple mode only hides: the same drawing, tables, estimate and questions, without
 // the engineering sheets (panel, points print sheet), layers, sources and the project report,
-// and without the DXF. The wiring sheet stays, read-only and brief: the routes without labels,
-// group table and route editing, a hint says only where a line runs (engine/sheet/views.ts). The choice is in settings, like the language, and is remembered
+// and without the DXF. The wiring sheet stays, brief: the routes without labels and group
+// table, a hint says only where a line runs (engine/sheet/views.ts). The choice is in settings, like the language, and is remembered
 // in the browser; without a choice — by account type.
 
 import { DRAWER_TABS, type DrawerTab } from "./consts";

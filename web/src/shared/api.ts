@@ -41,17 +41,6 @@ export async function getText(path: string): Promise<string> {
   return r.text();
 }
 
-export interface SaveAnswer { built: boolean; notes: string[] }
-
-// Wiring edits → wiring.yaml and a project rebuild
-export async function saveWiring(name: string, body: unknown): Promise<SaveAnswer> {
-  const r = await fetch(`${base(name)}/wiring`, {
-    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
-  });
-  if (!r.ok) throw new Error(`${r.status}: ${await detail(r)}`);
-  return (await r.json()) as SaveAnswer;
-}
-
 export interface AnswerResult { built: boolean; rebuilt: boolean }
 export interface RefusedIssue { file: string; path: string; message: string }
 

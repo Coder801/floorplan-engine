@@ -54,7 +54,6 @@ Action = Literal[
     "view",
     "answer",
     "review",
-    "edit_wiring",
     "choose_variant",
     "invite",
     "manage",
@@ -81,11 +80,10 @@ CAN: dict[Action, frozenset[str]] = {
     # Take a client answer into account or send it back with a comment (decision 2026-11-11):
     # the studio that leads the project
     "review": frozenset({"owner", "designer", "superuser"}),
-    "edit_wiring": frozenset({"owner", "designer", "installer", "support", "superuser"}),
     # Wiring variant and the setup wizard (docs/wiring-variants.md): the studio, the owner of
     # "Мой ремонт" and, since 2026-11-11, a studio client — it is their flat, by invite or by a
-    # client code (client_code). Routes stay with whoever edits them (edit_wiring); a view code
-    # (viewer) only views
+    # client code (client_code). A view code (viewer) only views. Routes are not edited by
+    # anyone in the viewer (decision 2026-11-16): the build computes them
     "choose_variant": frozenset(
         {"owner", "designer", "installer", "client", "client_code", "support", "superuser"}
     ),

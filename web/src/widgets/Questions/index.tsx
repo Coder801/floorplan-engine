@@ -59,7 +59,7 @@ export function Questions({ project: p, busy, onAnswer, onReview, stages, onShow
   const { t } = useTranslation();
   const qs = p.report?.questions ?? [];
   const can = p.can?.answer === true;
-  const studio = p.can?.edit_wiring !== false;
+  const studio = p.can?.review !== false;
   const reviewer = p.can?.review === true;
   const order = useRef<Map<string, Group>>(listOrder(qs, p.answers));
   order.current = keepOrder(order.current, qs);

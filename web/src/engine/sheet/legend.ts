@@ -1,11 +1,10 @@
 // Viewer legend icon: primitives from the sheet (page key legend, sheet mm) → a frame for the
 // SVG, so icons of different size (socket, panel, strip) line up in one column
 
-import type { System } from "@/shared/store";
 import type { Box, Item, LegendEntry, Page } from "@/shared/types";
 import type { Drawing } from "./drawing";
 import { bbox } from "./paint";
-import { systemOf } from "./views";
+import { systemOf, type System } from "./views";
 
 export const SYMBOL_PAD = 0.4;  // sheet mm around the icon, for the line width
 

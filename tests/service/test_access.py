@@ -56,7 +56,7 @@ def test_invited_client_and_one_client_project_in_db(db: Session) -> None:
     c = user(db, "client")  # the invite will choose the type
     acc.accept_invite(db, c, acc.create_invite(db, studio, "client", project=p1))
     assert c.account_type == "client" and role(db, c, p1) == "client"
-    assert acc.can("client", "answer") and not acc.can("client", "edit_wiring")
+    assert acc.can("client", "answer") and not acc.can("client", "review")
     with pytest.raises(acc.AccessError, match="уже есть проект"):
         acc.accept_invite(db, c, acc.create_invite(db, studio, "client", project=p2))
     # The database will not allow it either: partial unique index
@@ -72,7 +72,7 @@ def test_outside_installer_sees_only_invited_project(db: Session) -> None:
     inst = user(db, "installer", "pro")
     acc.accept_invite(db, inst, acc.create_invite(db, studio, "installer", project=p1))
     assert role(db, inst, p1) == "installer" and role(db, inst, p2) is None
-    assert acc.can("installer", "edit_wiring")
+    assert acc.can("installer", "choose_variant") and not acc.can("installer", "answer")
 
 
 def test_client_invites_only_installer(db: Session) -> None:
@@ -89,7 +89,7 @@ def test_developer_needs_support_grant(db: Session) -> None:
     dev = user(db, "developer", "pro")  # a regular pro with their own test studio
     assert role(db, dev, p) is None
     grant = acc.grant_support(db, p, dev, studio, "не рисуется щит")
-    assert role(db, dev, p) == "support" and acc.can("support", "edit_wiring")
+    assert role(db, dev, p) == "support" and acc.can("support", "choose_variant")
     grant.expires_at = acc.now() - timedelta(minutes=1)
     assert role(db, dev, p) is None  # expired
     acc.grant_support(db, p, dev, studio, "ещё раз")
@@ -107,7 +107,7 @@ def test_superuser_and_visitor(db: Session) -> None:
     )
     assert role(db, boss, p) == "superuser"
     assert role(db, None, p) == "visitor"
-    assert acc.can("visitor", "view") and not acc.can("visitor", "edit_wiring")
+    assert acc.can("visitor", "view") and not acc.can("visitor", "choose_variant")
     assert acc.visible_slugs(db, acc.VISITOR, {"kv1", "folder-only"}) == {"kv1", "folder-only"}
     boss.is_active = False
     assert role(db, boss, p) is None
@@ -232,18 +232,18 @@ def test_adopt_folders_client_gets_one_project(db: Session) -> None:
 
 
 def test_personal_owner_and_studio_client_choose_variant(db: Session) -> None:
-    """In "Мой ремонт" the owner of their own workspace chooses the variant and edits routes; a
-    studio client chooses the variant but does not edit routes (docs/wiring-variants.md)."""
+    """In "Мой ремонт" the owner of their own workspace chooses the variant and reviews; a studio
+    client chooses the variant but does not review (docs/wiring-variants.md)."""
     home = user(db, "home", "client")
     own = acc.create_project_for(db, home, "Моя квартира", "home")
     assert acc.can(role(db, home, own), "choose_variant")
-    assert acc.can(role(db, home, own), "edit_wiring")
+    assert acc.can(role(db, home, own), "review")
     studio = user(db, "studio", "pro")
     flat = acc.create_project_for(db, studio, "Кв", "kv")
     guest = user(db, "guest")
     acc.accept_invite(db, guest, acc.create_invite(db, studio, "client", project=flat))
     assert role(db, guest, flat) == "client"
-    assert acc.can("client", "choose_variant") and not acc.can("client", "edit_wiring")
+    assert acc.can("client", "choose_variant") and not acc.can("client", "review")
 
 
 def test_studios_do_not_cross(db: Session) -> None:

@@ -4,7 +4,7 @@
 // the stickers of the devices (StickersStage) and, with a backup, the groups kept on it
 // (ReserveStage); a mode the build has no data for has no button, and without any there is no switch.
 
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { PanelView } from "@/engine/panel/PanelView";
 import type { PanelMode } from "@/shared/consts";
@@ -16,7 +16,6 @@ import { SegmentedControl } from "@/ui/SegmentedControl";
 import { ZoomRail } from "@/ui/ZoomRail";
 import { DeviceCard } from "@/widgets/DeviceCard";
 import { ReserveStage } from "@/widgets/ReserveStage";
-import type { StageHandle } from "@/widgets/SheetStage";
 import { StickersStage, type StickerFile } from "@/widgets/StickersStage";
 import { freshStickers } from "@/widgets/StickersStage/fresh";
 import css from "./PanelStage.module.scss";
@@ -36,7 +35,7 @@ interface Props {
 
 const NO_FILE: StickerFile = () => null;
 
-export const PanelStage = forwardRef<StageHandle, Props>(function PanelStage({ page, panel, language, stickersPdf = NO_FILE, mode, onMode, reserve, reserveEditable, busy, onReserve }, ref) {
+export function PanelStage({ page, panel, language, stickersPdf = NO_FILE, mode, onMode, reserve, reserveEditable, busy, onReserve }: Props) {
   const { t } = useTranslation();
   const canvas = useRef<HTMLCanvasElement>(null);
   const pv = useRef<PanelView | null>(null);
@@ -53,10 +52,6 @@ export const PanelStage = forwardRef<StageHandle, Props>(function PanelStage({ p
     pv.current = v;
     return () => { v.destroy(); pv.current = null; };
   }, [panel, language, front]);
-
-  useImperativeHandle(ref, () => ({
-    pending: () => 0,
-  }), []);
 
   const major = panel.warnings.filter((w) => w.severity === "major").length;
   const tot = panel.totals;
@@ -105,4 +100,4 @@ export const PanelStage = forwardRef<StageHandle, Props>(function PanelStage({ p
       </div>
     </>
   );
-});
+}

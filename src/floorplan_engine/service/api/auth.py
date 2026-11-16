@@ -403,9 +403,7 @@ class Auth:
                 return None
             project = acc.project_by_key(db, parts[3], who)
             action: acc.Action = "view"
-            if request.method == "POST" and parts[-1] == "wiring":
-                action = "edit_wiring"
-            elif request.method == "POST" and parts[-1] == "variant":
+            if request.method == "POST" and parts[-1] == "variant":
                 action = "choose_variant"
             elif request.method == "POST" and parts[-1] == "answers":
                 action = "answer"

@@ -89,7 +89,6 @@ export const en: Messages = {
   },
   app: {
     stages: { alpha: "alpha" },  // product stage next to the name and in settings (shared/version.ts STAGE)
-    leave: "Route edits are not saved. Leave without saving?",
     stale: "YAML changed after the build — sheets are outdated: uv run floorplan-engine build projects/{{name}}",
     notBuilt: "Project not built: uv run floorplan-engine build projects/{{name}}",
     chooseProject: "Choose a project",
@@ -255,22 +254,14 @@ export const en: Messages = {
   source: { noPreview: "No preview — open the file in a new tab", back: "← Back to sheet" },
   sheet: {
     lightMode: "Lighting: what to show",
-    lightModes: { wiring: "Wiring", links: "Links", wiringTitle: "Lighting cables, boxes and points, also in 3D", linksTitle: "Which switch turns on which lights, also in 3D" },
-    systems: "Systems on the wiring plan", systemsTitle: "Show or hide the lines of the system",
+    lightModes: { wiring: "Cables", links: "Switching", wiringTitle: "Lighting cables, boxes and points, also in 3D", linksTitle: "Which switch turns on which lights, also in 3D" },
     hint: "wheel — zoom by steps, drag — pan, double click — zoom in at that point (at the last step — whole drawing)",
-    editHint: "Drag a line segment or a box · ⌘/Ctrl+click — several segments · Esc — clear selection",
-    editTitle: "Drag a line segment: neighbouring segments stretch, corners stay square. ⌘/Ctrl+click — select several segments. A box on a wall slides along the wall, on the ceiling — freely. Consumers and the panel do not move.",
-    saveFailed: "Route edits not saved — {{message}}",
     ceiling3d: "ceiling {{h}} — assumption", openings3d: "opening heights ({{n}}) — typical",
     hint3d: "left button — rotate, right — pan, wheel — zoom, double click — to object",
-    saving: "Saving and rebuilding…", canvas: "Sheet drawing", loading3d: "Loading 3D…",
+    canvas: "Sheet drawing", loading3d: "Loading 3D…",
     fit: "Whole drawing", title3d: "Wiring in 3D: routes along ceiling and floor, drops to points",
     iso: "Isometric", walls: "Walls",
     wallModes: { cut: "Cut", ghost: "Transparent", none: "No walls" },
-    edit: "Edit routes", saveTitle: "Write to wiring.yaml and rebuild the project",
-    save: "Save", saveN: "Save ({{n}})", undoTitle: "⌘/Ctrl+Z — step back", undo: "Undo",
-    autoTitle: "Selected lines and the chosen box — back to how the program routes them; saves immediately",
-    auto: "Auto route",
   },
   legend: { title: "Legend", box: "Junction box", low: "Comms lines" },
   filter3d: {

@@ -6,7 +6,7 @@
 - pull: the latest version, the project price list, missing sources and the latest build's out/
   go into the folder.
 - The folder remembers where it came from in a hidden `.shtroba.yaml` (project id and version):
-  push refuses if the database got a newer version meanwhile (a route edit on the server — pull
+  push refuses if the database got a newer version meanwhile (an answer on the server — pull
   first), pull refuses to overwrite local edits that were never pushed (unless forced).
 - Studio files next to the projects (prices.yaml, studio.yaml): push_studio / pull_studio.
 

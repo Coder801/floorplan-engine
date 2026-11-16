@@ -3,9 +3,11 @@
 // (electrical) with different layers; lighting also has its links view (the lighting sheet).
 // The printed sheets stay as they are, the views live only here. Labels and boxes share a
 // layer across systems, so they follow their object, not the layer.
+// Navigation and filters do not share words (decision 2026-11-16): the wiring view shows every
+// system, a system of its own is its view, a combination of systems is the "Layers" panel.
 
 import { expand } from "@/shared/page";
-import type { ElectricalView, System } from "@/shared/store";
+import type { ElectricalView } from "@/shared/store";
 import type { Page, SideTable } from "@/shared/types";
 import type { Drawing } from "./drawing";
 
@@ -21,6 +23,9 @@ const CABLES: Record<ElectricalView, RegExp> = {
   light: /^(W-CABLE-LIGHT|W-BOX$|W-TEXT$)/,
 };
 
+// Systems of the electrics: a view each, the wiring view shows them all
+export type System = "light" | "sockets" | "low";
+
 // The system of a layer: its points, links and lines; walls, the panel, boxes and labels have none
 export function systemOf(l: string): System | null {
   if (LIGHTING.includes(l) || l === "E-LINK" || l.startsWith("W-CABLE-LIGHT")) return "light";
@@ -29,7 +34,7 @@ export function systemOf(l: string): System | null {
   return null;
 }
 
-// Sheets whose labels and boxes are shown by their object; on wiring that matters once a system is off
+// Sheets whose labels and boxes are shown by their object; on wiring that matters once a cable layer is off
 const SCOPED = new Set(["electrical", "lighting", "wiring"]);
 export const scoped = (page: Page) => SCOPED.has(page.stage || "");
 
@@ -47,20 +52,14 @@ export function viewLayers(own: Set<string>, all: Iterable<string>, view: Electr
   return out;
 }
 
-// Layers of a sheet of the drawing; the wiring sheet without the systems switched off
-export function ownLayers(d: Drawing, page: Page, view: ElectricalView, cables = true,
-                          off: ReadonlySet<System> = new Set()): Set<string> | null {
+// Layers of a sheet of the drawing: the electrical sheet by its view, the wiring sheet with every
+// system (its lines are switched off one layer at a time in "Layers"), the rest as they are
+export function ownLayers(d: Drawing, page: Page, view: ElectricalView, cables = true): Set<string> | null {
   const own = d.own.get(page);
   if (!own) return null;
   if (page.stage === "electrical") return viewLayers(own, new Set(d.items.map((i) => i.l)), view, cables);
-  const wiring = page.stage === "wiring";
-  if (cables && !(wiring && off.size)) return own;
-  const hides = (l: string) => {
-    const sys = systemOf(l);
-    if (wiring && sys && off.has(sys)) return true;
-    if (cables) return false;
-    return wiring ? l === WIRING_LABELS : WIRING.test(l);
-  };
+  if (cables) return own;
+  const hides = (l: string) => (page.stage === "wiring" ? l === WIRING_LABELS : WIRING.test(l));
   return new Set([...own].filter((l) => !hides(l)));
 }
 
@@ -88,7 +87,7 @@ export function viewOfLayer(layer: string | undefined): ElectricalView {
 }
 
 // The sheet tables in this view: rows of the objects it shows; a row without objects stays.
-// Objects of a system decide: a group row of a switched-off system goes, though its boxes stay
+// Objects of a system decide: a group row of another system goes, though its boxes stay
 export function viewTables(tables: SideTable[], own: Set<string> | null, layerOf: Map<string, string>): SideTable[] {
   if (!own) return tables;
   const hasOwn = (keys: string[]) => {

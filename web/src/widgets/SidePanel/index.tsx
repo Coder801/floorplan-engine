@@ -95,7 +95,6 @@ function Tables({ page, drawing }: { page: Page | null; drawing: Drawing | null 
   const { t } = useTranslation();
   const electricalView = useView((s) => s.electricalView);
   const cables = useView((s) => s.cables);
-  const systemsOff = useView((s) => s.systemsOff);
   const hover = useView((s) => s.hover);
   const filter = useView((s) => s.filter3d);
   const selected = useView((s) => s.selected);
@@ -114,10 +113,9 @@ function Tables({ page, drawing }: { page: Page | null; drawing: Drawing | null 
   if (!page) return <div className="muted">{t("side.noSheet")}</div>;
   // The simple interface mode: the routes without the group table (breakers, cables, kW)
   if (!cables && page.stage === "wiring") return <p className="muted">{t("side.wiringBrief")}</p>;
-  // The electrical views and the wiring view without a system: rows of the objects shown
-  const filtered = page.stage === "electrical" || (page.stage === "wiring" && systemsOff.size > 0);
-  const tables = filtered && drawing
-    ? viewTables(page.tables || [], ownLayers(drawing, page, electricalView, cables, systemsOff), objectLayers(drawing))
+  // The electrical views: rows of the objects shown; the wiring view shows every line, its table is full
+  const tables = page.stage === "electrical" && drawing
+    ? viewTables(page.tables || [], ownLayers(drawing, page, electricalView, cables), objectLayers(drawing))
     : page.tables || [];
   if (!tables.length) return <div className="muted">{t("side.noTables")}</div>;
   // The eye of a group: every group of the sheet counts, also one with no table row

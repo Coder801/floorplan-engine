@@ -60,11 +60,6 @@ from floorplan_engine.pipeline.prices import (
 )
 from floorplan_engine.pipeline.printing import PrintResult, print_project
 from floorplan_engine.pipeline.variants import save_variant, variant_block
-from floorplan_engine.pipeline.wiring_edits import (
-    dump_wiring_edits,
-    dump_wiring_file,
-    save_wiring_edits,
-)
 
 __all__ = [
     "ALBUM_FILE",
@@ -93,8 +88,6 @@ __all__ = [
     "PrintResult",
     "assess_project",
     "build_project",
-    "dump_wiring_edits",
-    "dump_wiring_file",
     "estimate_project",
     "find_prices",
     "for_client",
@@ -112,7 +105,6 @@ __all__ = [
     "save_checked",
     "save_prices",
     "save_variant",
-    "save_wiring_edits",
     "save_wizard",
     "variant_block",
     "write_estimate",

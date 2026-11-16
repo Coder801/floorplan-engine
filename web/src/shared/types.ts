@@ -58,7 +58,7 @@ export interface ProjectSummary {
 export interface Project extends ProjectSummary {
   // Missing on an old server: everything allowed, except answers (they write nothing there)
   // review: take a client answer into account or send it back (the studio)
-  can?: { edit_wiring: boolean; choose_variant: boolean; answer?: boolean; review?: boolean };
+  can?: { choose_variant: boolean; answer?: boolean; review?: boolean };
   report: Report | null;
   answers: Record<string, unknown>;
   artifact: boolean;
@@ -259,25 +259,6 @@ export interface SideTable {
   notes?: string[];
 }
 
-export interface EditWire {
-  from: string;
-  to: string;
-  path: XY[];
-  lane?: XY[];
-  manual: boolean;
-}
-
-export interface EditBox {
-  room: string;
-  group: string;
-  label: string;
-  at: XY;
-  inward: XY | null;
-  size: number;
-  span: [XY, XY] | null;
-  manual: boolean;
-}
-
 export interface SceneWire {
   group: string;
   color: string;
@@ -476,7 +457,6 @@ export interface Page {
   areas?: Record<string, XY[][]>;
   floors?: Record<string, XY[][]>;  // plan sheet: room and zone floors, filled on hover (engine/sheet/floors.ts)
   groups?: Record<string, string[]>;
-  edit?: { wires: Record<string, EditWire>; boxes: Record<string, EditBox> };
   scene?: Scene;
   panel?: PanelData;
   estimate?: SideTable;  // the estimate is on the wiring page ("Estimate" tab, side.estimate_side_table)

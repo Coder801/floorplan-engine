@@ -32,14 +32,11 @@ describe("views of the electrical tab", () => {
     expect(["A-WALL", "W-BOX", "W-TEXT", "E-BOARD"].map(systemOf)).toEqual([null, null, null, null]);
   });
 
-  it("the wiring sheet without a system switched off: its points and lines are gone", () => {
+  it("the wiring sheet shows every system: its layers are its own, whatever the electrical view", () => {
     const wiring = { stage: "wiring" } as Page;
     const layers = new Set(["A-WALL", "E-LIGHT", "E-SOCKET", "E-DATA", "W-BOX", "W-TEXT", "W-CABLE-LIGHT", "W-CABLE-SOCKET", "W-CABLE-LOW"]);
     const d = { own: new Map([[wiring, layers]]), items: [] } as unknown as Drawing;
-    const v = ownLayers(d, wiring, "sockets", true, new Set(["light", "low"]))!;
-    expect([...v].sort()).toEqual(["A-WALL", "E-SOCKET", "W-BOX", "W-CABLE-SOCKET", "W-TEXT"]);
-    // the simple mode on top: no labels either
-    expect(ownLayers(d, wiring, "sockets", false, new Set(["light"]))!.has("W-TEXT")).toBe(false);
+    for (const v of ["sockets", "light", "low"] as const) expect(ownLayers(d, wiring, v, true)).toBe(layers);
   });
 
   it("without cables (simple interface mode): points only, no lines, boxes or their labels", () => {

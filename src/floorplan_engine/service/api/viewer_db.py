@@ -3,9 +3,10 @@
 addressed by its id (an old link by name still opens) — its sheets and out/ files come from the
 latest build in file storage, the model from the latest version.
 
-Writes keep the core as it is: a route edit or a wiring variant is applied by the same core
-function (save_wiring_edits, save_wizard) in a temporary folder with the latest version, the
-changed files become a new model version by the user, and the project is rebuilt. The studio
+Writes keep the core as it is: an answer or a wiring variant is applied by the same core
+function (save_answer, save_wizard) in a temporary folder with the latest version, the changed
+files become a new model version by the user, and the project is rebuilt. Routes are not edited
+in the viewer (decision 2026-11-16). The studio
 price list is the caller's studio row in price_list (text with comments).
 
 Turned on by create_viewer(..., store=…): login (auth) is required.
@@ -40,7 +41,6 @@ from floorplan_engine.pipeline import (
     review_answer,
     save_answer,
     save_prices,
-    save_wiring_edits,
     save_wizard,
 )
 from floorplan_engine.service import project_store as ps
@@ -288,7 +288,6 @@ def _read_routes(
                 + ([PRICES_FILE] if own_prices else []),
                 "work": True,  # installation by tasks (api/work.py): only with the database
                 "can": {
-                    "edit_wiring": allowed(request, "edit_wiring"),
                     "choose_variant": allowed(request, "choose_variant"),
                     "answer": allowed(request, "answer"),
                     "review": allowed(request, "review"),
@@ -406,13 +405,6 @@ def _edit_routes(
 
         result = rewrite(request, key, apply, lambda: saved.rebuild)
         return {"built": result["built"], "rebuilt": saved.rebuild}
-
-    @app.post("/api/projects/{key}/wiring")
-    def save_wiring(
-        request: Request, key: str, changes: Annotated[dict[str, Any], Body()]
-    ) -> dict[str, Any]:
-        """Wiring edits → wiring.yaml of a new model version, then a rebuild."""
-        return rewrite(request, key, lambda folder: save_wiring_edits(folder, changes))
 
     @app.post("/api/projects/{key}/answers")
     def answer(

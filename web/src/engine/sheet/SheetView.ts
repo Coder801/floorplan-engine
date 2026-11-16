@@ -1,12 +1,12 @@
-// Drawing in canvas: zoom, pan, hints, line selection and route editing.
+// Drawing in canvas: zoom, pan, hints and line selection. Routes are not edited here: the
+// build computes them (decision 2026-11-16).
 // Drawing happens outside React (thousands of primitives, every frame); the sheet talks to the
 // rest of the interface through shared state (store.ts): hover, selection, hint, layers.
 // Sheets with a plan share one drawing (sheet/drawing.ts): switching the tab calls setPage
-// without a new canvas, giving the other sheet's layers, hints and editing at the same zoom and pan.
+// without a new canvas, giving the other sheet's layers and hints at the same zoom and pan.
 
-import { WiringEdit, type Hit } from "@/engine/edit/WiringEdit";
 import {
-  CABLE_MIN_PX, DIM_ALPHA, EDIT_HIT_PX, EDIT_MOVE_PX, FOCUS_MS, NEIGHBOR_ALPHA,
+  CABLE_MIN_PX, DIM_ALPHA, FOCUS_MS, NEIGHBOR_ALPHA,
   FIT_SHRINK, LABEL_BOLD_MM, LINE_MIN_PX, REDUCED_MOTION, SCREEN_BOLD, STACK_MS, SYMBOL_GROW, TEXT_GROW, TIP_GAP, VIEW_PAD,
 } from "@/shared/consts";
 import { expand, filteredKeys, PageIndex } from "@/shared/page";
@@ -43,22 +43,17 @@ function movedPath(p: Path2D, f: number, cx: number, cy: number, dx = 0, dy = 0)
 const easeOut = (t: number) => 1 - (1 - t) ** 3;
 
 interface Drag {
-  edit?: boolean;
-  x: number; y: number;
-  ox?: number; oy?: number;
+  x: number; y: number;    // pointer at the start of the drag
+  ox: number; oy: number;  // pan at the start of the drag
   moved: boolean;
-  additive?: boolean;
 }
 
 export class SheetView {
   readonly items: DrawItem[];
   readonly has3d: boolean;  // the drawing has 3D (the wiring sheet scene), on any tab
-  ed: WiringEdit | null = null;
   page!: Page;
   index!: PageIndex;
   private own = new Set<string>();
-  saved = false;          // edits saved, the sheet is being rebuilt
-  onEditChange: () => void = () => {};
   onZoom: (zoom: Zoom) => void = () => {};
   private step = 0;  // zoom step (zoom.ts)
   private readonly wheel = new WheelSteps();
@@ -67,7 +62,7 @@ export class SheetView {
   private ctx: CanvasRenderingContext2D;
   private w = 1; private h = 1; private dpr = 1;
   private scale = 1; private fitScale = 1; private ox = 0; private oy = 0;
-  private frame = 0; private flowFrame = 0;
+  private frame = 0;
   // Floor highlight under the cursor: share shown per floor, its frame and the last step time
   private fades = new Map<string, number>(); private fadeFrame = 0; private fadeAt = 0;
   private drag: Drag | null = null;
@@ -114,28 +109,24 @@ export class SheetView {
     let seen: unknown[] = [];
     this.cleanup.push(view.subscribe(() => {
       const s = view.get();
-      const now = [s.hover, s.lit, s.selected, s.neighbors, s.hidden, s.extra, s.editMode, s.show3d, s.themeTick, s.filter3d, s.electricalView, s.systemsOff, s.cables];
+      const now = [s.hover, s.lit, s.selected, s.neighbors, s.hidden, s.extra, s.show3d, s.themeTick, s.filter3d, s.electricalView, s.cables];
       if (now.some((v, i) => v !== seen[i])) { seen = now; this.applyView(); this.draw(); }
     }));
     this.bind();
   }
 
-  // Another tab of the same drawing: its layers, hints and editing; zoom and pan stay the same.
-  // Unsaved route edits are lost, so Viewer asks before switching
+  // Another tab of the same drawing: its layers and hints; zoom and pan stay the same
   setPage(page: Page, index: PageIndex, redraw = true) {
     this.page = page;
     this.index = index;
     this.applyView();
-    const model = this.drawing.base.model;
-    this.ed = page.edit && model ? new WiringEdit(page, this.items, this.shown, model) : null;
-    this.saved = false;
     if (redraw) this.draw();
   }
 
   // Layers of this tab in the chosen view (views.ts)
   private applyView() {
     const st = view.get();
-    this.own = ownLayers(this.drawing, this.page, st.electricalView, st.cables, st.systemsOff) ?? new Set(this.items.map((i) => i.l));
+    this.own = ownLayers(this.drawing, this.page, st.electricalView, st.cables) ?? new Set(this.items.map((i) => i.l));
     // Sockets and switches close into stacks on the electrical views; the wiring and lighting
     // sheets keep every symbol, a line runs to each
     this.stacks = this.page.stage === "electrical" ? this.allStacks.filter((s) => this.shown(s.layer)) : [];
@@ -192,13 +183,7 @@ export class SheetView {
 
   destroy() {
     for (const f of this.cleanup) f();
-    cancelAnimationFrame(this.frame); cancelAnimationFrame(this.flowFrame); cancelAnimationFrame(this.fadeFrame);
-    cancelAnimationFrame(this.openFrame);
-  }
-
-  editing() {
-    const s = view.get();
-    return s.editMode && !!this.ed && !this.saved && !(s.show3d && this.has3d);
+    cancelAnimationFrame(this.frame); cancelAnimationFrame(this.fadeFrame); cancelAnimationFrame(this.openFrame);
   }
 
   private layout() {
@@ -387,20 +372,13 @@ export class SheetView {
     const [x0, y0, x1, y1] = this.drawing.view;
     ctx.save();
     ctx.beginPath(); ctx.rect(x0, y0, x1 - x0, y1 - y0); ctx.clip();
-    // Changed lines and boxes are drawn from the edit, not from sheet primitives; while editing
-    // the whole wiring is shown, so the group filter is off
-    const skip = this.ed && this.editing() ? this.ed.hiddenKeys() : this.filtered();
+    const skip = this.filtered();
     const items = this.items.filter((it) => this.inView(it) && (!it.o || !skip.has(it.o)));
     this.paintFloors(ctx);
     this.stepStacks();
     paint(ctx, items, k, (it) => this.look(it), this.shown, CABLE_MIN_PX * this.dpr, SCREEN_BOLD, LINE_MIN_PX * this.dpr);
     this.paintCounts(ctx);
-    if (this.ed) this.ed.paint(ctx, k, performance.now(), this.dpr);
     ctx.restore();
-    // Running dashes: request the next frame while there are lines being edited
-    if (this.editing() && !REDUCED_MOTION && !this.flowFrame && this.ed!.flowing().size) {
-      this.flowFrame = requestAnimationFrame(() => { this.flowFrame = 0; this.draw(); });
-    }
     // Scale bar in model mm (a sheet without a plan has none)
     const m = this.drawing.base.model?.[0];
     this.onZoom({ step: this.step, label: zoomLabel(this.step), pxPerMm: m ? this.scale * m : null });
@@ -410,13 +388,6 @@ export class SheetView {
     const r = this.canvas.getBoundingClientRect();
     const x = ev.clientX - r.left, y = ev.clientY - r.top;
     return { x, y, mx: (x - this.ox) / this.scale, my: (y - this.oy) / this.scale };
-  }
-
-  private editHit(ev: MouseEvent): Hit | null {
-    if (!this.editing()) return null;
-    const { mx, my } = this.toSheet(ev);
-    const o = this.objectAt(ev);
-    return this.ed!.hit(mx, my, EDIT_HIT_PX / this.scale, o && o.startsWith("wire:") ? o.slice(5) : null);
   }
 
   private on<K extends keyof HTMLElementEventMap>(type: K, fn: (ev: HTMLElementEventMap[K]) => void,
@@ -440,19 +411,7 @@ export class SheetView {
         this.stop();
         return;
       }
-      // Edit mode: a line piece or a box gets dragged, anything else pans the drawing
-      const hit = this.editHit(ev);
-      if (hit) {
-        const { mx, my } = this.toSheet(ev);
-        if (this.ed!.press(hit, ev.metaKey || ev.ctrlKey, mx, my)) {
-          this.drag = { edit: true, x: ev.clientX, y: ev.clientY, moved: false };
-          c.setPointerCapture(ev.pointerId);
-        }
-        this.editChanged();
-        return;
-      }
-      this.drag = { x: ev.clientX, y: ev.clientY, ox: this.ox, oy: this.oy, moved: false,
-                    additive: ev.metaKey || ev.ctrlKey };
+      this.drag = { x: ev.clientX, y: ev.clientY, ox: this.ox, oy: this.oy, moved: false };
       c.setPointerCapture(ev.pointerId); c.classList.add("drag");
     });
     this.on("pointermove", (ev) => {
@@ -466,27 +425,13 @@ export class SheetView {
       }
       if (this.pinch.busy) return;
       const drag = this.drag;
-      if (drag?.edit) {
-        if (!drag.moved && Math.abs(ev.clientX - drag.x) + Math.abs(ev.clientY - drag.y) <= EDIT_MOVE_PX) return;
-        drag.moved = true;
-        const { mx, my } = this.toSheet(ev);
-        this.ed!.move(mx, my);
-        this.draw();
-        return;
-      }
       if (drag) {
         if (Math.abs(ev.clientX - drag.x) + Math.abs(ev.clientY - drag.y) > 4) drag.moved = true;
         if (!drag.moved) return;
-        this.ox = drag.ox! + ev.clientX - drag.x; this.oy = drag.oy! + ev.clientY - drag.y;
+        this.ox = drag.ox + ev.clientX - drag.x; this.oy = drag.oy + ev.clientY - drag.y;
         this.fitted = false;
         this.draw();
         return;
-      }
-      if (this.editing()) {
-        const hit = this.editHit(ev), was = this.ed!.hover;
-        this.ed!.hover = hit;
-        c.style.cursor = this.ed!.cursor(hit);
-        if (JSON.stringify(hit) !== JSON.stringify(was)) this.draw();
       }
       this.pick(ev);
     });
@@ -494,26 +439,13 @@ export class SheetView {
     this.on("pointerup", (ev) => {
       this.pinch.up(ev);
       if (this.pinch.used) { this.stop(); return; }  // end of a pinch is not a click
-      const drag = this.drag;
-      if (drag?.edit) { this.stop(); this.editChanged(); return; }
-      const click = drag && !drag.moved, additive = drag?.additive;
+      const click = this.drag && !this.drag.moved;
       this.stop();
-      if (!click) return;
-      if (this.editing() && !additive) { this.ed!.sel.clear(); this.ed!.box = null; this.onEditChange(); }
-      this.select(this.objectAt(ev));
+      if (click) this.select(this.objectAt(ev));
     });
     // A pinned hint stays until focus is lost; Esc also clears the selection
     this.on("blur", () => { if (view.get().pinned) view.set({ pinned: null }); });
-    this.on("keydown", (ev) => {
-      if (ev.key === "Escape") {
-        if (this.ed) { this.ed.sel.clear(); this.ed.box = null; this.onEditChange(); }
-        this.clearSelection();
-      }
-      if (this.editing() && (ev.metaKey || ev.ctrlKey) && ev.key.toLowerCase() === "z") {
-        ev.preventDefault();
-        this.undo();
-      }
-    });
+    this.on("keydown", (ev) => { if (ev.key === "Escape") this.clearSelection(); });
     this.on("pointercancel", (ev) => { this.pinch.up(ev); this.stop(); });
     this.on("pointerleave", () => { this.hold(null, null); this.setHover(null); });
     // Double click zooms one step in at the click point; at the last step, the whole drawing
@@ -521,20 +453,8 @@ export class SheetView {
   }
 
   private stop() {
-    if (this.drag?.edit) this.ed!.release();
     this.drag = null;
     this.canvas.classList.remove("drag");
-  }
-
-  private editChanged() { this.onEditChange(); this.draw(); }
-
-  undo() { if (this.ed?.undo()) this.editChanged(); }
-
-  // "Edit routes" mode is off: piece selection and edit highlighting are cleared
-  editModeChanged() {
-    if (!view.get().editMode && this.ed) this.ed.clearSelection();
-    this.canvas.style.cursor = "";
-    this.editChanged();
   }
 
   // Object under the cursor: candidates by bounding box, then an exact path check; the smaller one wins
@@ -545,9 +465,9 @@ export class SheetView {
     const k = this.dpr * this.scale;
     ctx.setTransform(k, 0, 0, k, this.dpr * this.ox, this.dpr * this.oy);
     let best: { o: string; area: number } | null = null;
-    const off = this.editing() ? null : this.filtered();
+    const off = this.filtered();
     for (const it of this.items) {
-      if (it.o && off?.has(it.o)) continue;
+      if (it.o && off.has(it.o)) continue;
       if (it.o && this.stackOf.has(it.o) && (this.opens.get(this.stackOf.get(it.o)!.key) ?? 0) < 0.5) continue;
       if (!this.shown(it.l) || !this.inView(it) || !this.index.interactive(it.o) || !inBox(it.box, mx, my, tol)) continue;
       const area = (it.box[2] - it.box[0] + tol) * (it.box[3] - it.box[1] + tol);

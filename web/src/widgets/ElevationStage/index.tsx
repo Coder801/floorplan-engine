@@ -5,7 +5,7 @@
 // wall" (store.wallLayers).
 // The album PNG comes from "Download" (Viewer): the whole printed sheet from page primitives.
 
-import { forwardRef, type ReactNode, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ElevationView, type ElevMode } from "@/engine/elevation/ElevationView";
 import { remember, remembered } from "@/shared/palette";
@@ -15,7 +15,6 @@ import type { Zoom } from "@/shared/zoom";
 import { ButtonGroup, GroupButton } from "@/ui/ButtonGroup";
 import { ScaleBar } from "@/ui/ScaleBar";
 import { ZoomRail } from "@/ui/ZoomRail";
-import type { StageHandle } from "@/widgets/SheetStage";
 
 interface Props {
   elevation: Elevation;
@@ -24,7 +23,7 @@ interface Props {
 }
 
 
-export const ElevationStage = forwardRef<StageHandle, Props>(function ElevationStage({ elevation, withMap, download }, ref) {
+export function ElevationStage({ elevation, withMap, download }: Props) {
   const { t } = useTranslation();
   const canvas = useRef<HTMLCanvasElement>(null);
   const ev = useRef<ElevationView | null>(null);
@@ -50,8 +49,6 @@ export const ElevationStage = forwardRef<StageHandle, Props>(function ElevationS
     remember("elevMode", next);
   };
 
-  useImperativeHandle(ref, () => ({ pending: () => 0 }), []);
-
   return (
     <>
       <canvas ref={canvas} tabIndex={0} aria-label={t("elevation.canvas", { title: elevation.title })} />
@@ -74,4 +71,4 @@ export const ElevationStage = forwardRef<StageHandle, Props>(function ElevationS
       </div>
     </>
   );
-});
+}

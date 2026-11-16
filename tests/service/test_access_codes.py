@@ -42,7 +42,7 @@ def test_issue_use_and_viewer_role(db: Session) -> None:
     assert acc.project_role(db, who, kv1) == "viewer"
     assert acc.project_role(db, who, kv2) is None
     assert acc.project_role(db, who, None) is None
-    assert acc.can("viewer", "view") and not acc.can("viewer", "edit_wiring")
+    assert acc.can("viewer", "view") and not acc.can("viewer", "review")
     assert not acc.can("viewer", "answer") and not acc.can("viewer", "choose_variant")
     assert acc.visible_slugs(db, who, {"kv1", "kv2", "other"}) == {"kv1"}
     assert codes.active_code(db, row.id) is row
@@ -51,8 +51,8 @@ def test_issue_use_and_viewer_role(db: Session) -> None:
 
 def test_client_code_answers_and_chooses(db: Session) -> None:
     """A client code (decision 2026-11-11): the client sets the flat up without an account —
-    answers and the variant — but neither edits routes nor invites; a code of an unknown kind
-    is refused."""
+    answers and the variant — but neither reviews nor invites; a code of an unknown kind is
+    refused."""
     studio = _user(db, "studio", "pro")
     kv1 = acc.create_project_for(db, studio, "Кв 1", "kv1")
     row = codes.use_code(db, codes.issue_code(db, kv1, studio, label="Иван", role="client_code"))
@@ -61,7 +61,7 @@ def test_client_code_answers_and_chooses(db: Session) -> None:
     role = acc.project_role(db, who, kv1)
     assert role == "client_code"
     assert acc.can(role, "answer") and acc.can(role, "choose_variant")
-    assert not acc.can(role, "edit_wiring") and not acc.can(role, "invite")
+    assert not acc.can(role, "review") and not acc.can(role, "invite")
     assert not acc.can(role, "manage")
     plain = codes.use_code(db, codes.issue_code(db, kv1, studio))
     assert plain.role == "viewer" and codes.code_role(plain) == "viewer"  # the default only views

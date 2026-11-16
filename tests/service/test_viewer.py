@@ -127,33 +127,6 @@ def test_parsed_sources_from_intake(root: Path) -> None:
     assert p["sources"] == ["план.pdf"]  # photo in intake, file missing
 
 
-def test_save_wiring_edits(root: Path) -> None:
-    client = TestClient(create_viewer(root))
-    path = root / "kv1" / "wiring.yaml"
-    edit = {"from": "board", "to": "s1", "path": [[0, 0], [0, 100], [50, 100]]}
-    r = client.post("/api/projects/kv1/wiring", json={"wires": {"wire_1": edit}})
-    assert r.status_code == 200, r.text
-    assert r.json()["built"] is False  # fixture does not build; edit saved
-    text = path.read_text("utf-8")
-    assert '"wire_1": { from: "board", to: "s1", path: [[0, 0], [0, 100], [50, 100]] }' in text
-    assert client.get("/api/projects").json()[0]["stale"] is False  # rebuilt after writing
-
-    broken = {"from": "board", "to": "s1", "path": [[0, 0]]}  # fewer than two points
-    r = client.post("/api/projects/kv1/wiring", json={"wires": {"wire_2": broken}})
-    assert r.status_code == 422 and "wires.wire_2" in r.json()["detail"]
-    assert path.read_text("utf-8") == text  # file untouched
-    r = client.post("/api/projects/kv1/wiring", json={"wires": "x"})  # not a dict: no crash
-    assert r.status_code == 422 and "wires" in r.json()["detail"]
-
-    box = {"room": "r", "group": "QF1", "at": [100, 200]}
-    client.post(
-        "/api/projects/kv1/wiring", json={"wires": {"wire_1": None}, "boxes": {"box_1": box}}
-    )
-    assert "wire_1" not in path.read_text("utf-8")
-    client.post("/api/projects/kv1/wiring", json={"boxes": {"box_1": None}})
-    assert not path.exists()  # no edits, no file
-
-
 def test_api_only(root: Path) -> None:
     client = TestClient(create_viewer(root))
     about = client.get("/").json()
@@ -166,7 +139,6 @@ def test_choose_variant_open_viewer(root: Path) -> None:
     with a field path."""
     client = TestClient(create_viewer(root))
     assert client.get("/api/projects/kv1").json()["can"] == {
-        "edit_wiring": True,
         "choose_variant": True,
         "answer": True,
         "review": True,

@@ -31,12 +31,8 @@ export const FOCUS_MS = 280;        // duration of zooming to a line
 export const NEIGHBOR_ALPHA = 0.75; // neighbours of the selected line by group
 export const DIM_ALPHA = 0.12;      // the rest of the wiring during selection
 
-// Route editing on the wiring sheet (page key edit): moves snap to SNAP_MM model mm
-export const SNAP_MM = 10;
-export const EDIT_HIT_PX = 6;       // px from the cursor to a line piece or box
-export const EDIT_MOVE_PX = 3;      // a smaller move is a click, not a drag
-// A line being edited: running dashes from source to target (screen px, px per second)
-export const FLOW_WIDTH_PX = 4, FLOW_DASH_PX = 10, FLOW_GAP_PX = 7, FLOW_SPEED_PX = 32;
+// A selected line in 3D: running dashes from source to target (screen px, px per second)
+export const FLOW_DASH_PX = 10, FLOW_GAP_PX = 7, FLOW_SPEED_PX = 32;
 
 // Wiring 3D
 export const CUT_HEIGHT_MM = 300;   // near walls in a cut view become a rim of this height

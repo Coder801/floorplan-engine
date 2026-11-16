@@ -312,7 +312,7 @@ class SupportGrant(Base):
 
 
 class AuditEvent(Base):
-    """Audit log: logins, answers, route edits, builds, invites, downloads, support."""
+    """Audit log: logins, answers, builds, invites, downloads, support."""
 
     __tablename__ = "audit_event"
     __table_args__ = (Index("ix_audit_event_project", "project_id", "created_at"),)
@@ -381,7 +381,7 @@ class ModelVersion(Base):
     electrical_yaml: Mapped[str | None] = mapped_column(Text)
     intake_yaml: Mapped[str | None] = mapped_column(Text)
     answers_yaml: Mapped[str | None] = mapped_column(Text)
-    wiring_yaml: Mapped[str | None] = mapped_column(Text)  # route edits from the viewer
+    wiring_yaml: Mapped[str | None] = mapped_column(Text)  # manual route edits (read by the build)
     plumbing_yaml: Mapped[str | None] = mapped_column(Text)
     variant_yaml: Mapped[str | None] = mapped_column(Text)  # wiring variant chosen in the viewer
     furniture_yaml: Mapped[str | None] = mapped_column(Text)  # furniture plan (2026-11-15)

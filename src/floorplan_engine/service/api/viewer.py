@@ -2,10 +2,10 @@
 
 Projects are built in Claude Code (`/plan`, `/electrical`, `build`); here they are shown:
 stages, questions with answers, remarks, sheets, out/ files, sources and model YAML. There is
-no analysis and no answering. Writes: wiring edits — lines and boxes dragged on the wiring
-sheet are written to the project's wiring.yaml and the project is rebuilt (decision
-2026-10-27), the wiring variant (variant.yaml), and the studio price list — prices of works
-from the studio price page go to prices.yaml next to the projects (decision 2026-11-03).
+no analysis. Writes: answers (answers.yaml), the wiring variant (variant.yaml) and the studio
+price list — prices of works from the studio price page go to prices.yaml next to the projects
+(decision 2026-11-03). Routes are not edited in the viewer (decision 2026-11-16): the build
+computes them; a wiring.yaml left in a project is still applied by the core.
 
 GET /                                   what this service is and where the page is
 GET /api/projects                       list of projects
@@ -15,7 +15,6 @@ GET /api/projects/{name}/source/{path}  a source from source/
 GET /api/projects/{name}/model/{file}   model YAML
 GET /api/projects/{name}/sheets         sheet manifest from out/project.epd
 GET /api/projects/{name}/sheets/{n}     sheet n (1, 2…): vector primitives for canvas
-POST /api/projects/{name}/wiring        wiring edits → wiring.yaml and rebuild
 POST /api/projects/{name}/answers       one answer → answers.yaml and rebuild (not for text)
 POST /api/projects/{name}/answers/review the developer takes a client answer into account or
                                         sends it back with a comment
@@ -62,7 +61,6 @@ from floorplan_engine.pipeline import (
     review_answer,
     save_answer,
     save_prices,
-    save_wiring_edits,
     save_wizard,
 )
 from floorplan_engine.service.api.auth import Auth
@@ -240,9 +238,9 @@ def _read_routes(
             ],
             "model": [f for f in SHOWN_FILES if (path / f).exists()],
             "work": False,  # installation by tasks lives in the database (viewer_db, api/work.py)
-            # What the caller may do: edit routes and choose a variant (studio, "Мой ремонт")
+            # What the caller may do: choose a variant (studio, "Мой ремонт", a studio client),
+            # answer, review client answers
             "can": {
-                "edit_wiring": allowed(request, "edit_wiring"),
                 "choose_variant": allowed(request, "choose_variant"),
                 "answer": allowed(request, "answer"),
                 "review": allowed(request, "review"),
@@ -300,21 +298,7 @@ def _rebuilt(path: Path, saved: AnswerSaved) -> dict[str, Any]:
 def _edit_routes(
     app: FastAPI, auth: Auth | None, project_dir: Callable[[Request, str], Path]
 ) -> None:
-    """What the viewer writes to a project: wiring edits, answers, the variant."""
-
-    @app.post("/api/projects/{name}/wiring")
-    def save_wiring(
-        request: Request, name: str, changes: Annotated[dict[str, Any], Body()]
-    ) -> dict[str, Any]:
-        """Wiring edits: {"wires": {id: {from, to, path} | null}, "boxes": {id: {room, group, at} |
-        null}}, model mm; null restores the auto route. Then a rebuild."""
-        path = project_dir(request, name)
-        issues = save_wiring_edits(path, changes)
-        if issues:
-            raise HTTPException(422, "; ".join(f"{i.path}: {i.message}" for i in issues))
-        result = _build(path)
-        notes = [i for i in result.assessment.report.issues if i.file == WIRING_FILE]
-        return {"built": result.built, "notes": [f"{i.path}: {i.message}" for i in notes]}
+    """What the viewer writes to a project: answers, the variant."""
 
     @app.post("/api/projects/{name}/answers")
     def answer(

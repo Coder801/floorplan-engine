@@ -35,10 +35,6 @@ export interface WallLayers { electrical: boolean; water: boolean }
 // (engine/sheet/views.ts)
 export type ElectricalView = "sockets" | "low" | "light";
 
-// Systems of the electrics: the wiring view shows them all, each can be switched off there
-export const SYSTEMS = ["light", "sockets", "low"] as const;
-export type System = (typeof SYSTEMS)[number];
-
 export interface ViewState {
   hover: string | null;             // object under the cursor (sheet or 3D)
   lit: Set<string> | null;          // objects of the table row under the cursor
@@ -48,7 +44,6 @@ export interface ViewState {
   pinned: string | null;            // pinned hint (on click), at the object
   hidden: Set<string>;              // the sheet's own layers switched off, shared by all sheets
   extra: Set<string>;               // layers switched on from other sheets of the drawing (sheet/drawing.ts)
-  editMode: boolean;                // "Edit routes"
   show3d: boolean;                  // the wiring sheet in 3D
   wallMode: WallMode;
   filter3d: Filter3D;               // only these QF groups (3D, wiring sheet) and the room (3D)
@@ -56,7 +51,6 @@ export interface ViewState {
   // Open this sheet right at the object (from an elevation, from a question); around: SheetView.reveal
   goto: { key: string; stage: string; around?: number } | null;
   electricalView: ElectricalView;   // what the electrical sheet shows (engine/sheet/views.ts)
-  systemsOff: ReadonlySet<System>;  // systems switched off on the wiring view (chips over the drawing)
   cables: boolean;                  // full wiring layers (off in the simple interface mode, shared/mode.ts: no lines on the point views, no labels on wiring)
   wallLayers: WallLayers;           // what is visible on the elevation (the eye in the "On the wall" table)
 }
@@ -65,8 +59,8 @@ type Listener = () => void;
 
 let state: ViewState = {
   hover: null, lit: null, selected: null, neighbors: null, tip: null, pinned: null,
-  hidden: new Set(), extra: new Set(), editMode: false, show3d: false, wallMode: "cut",
-  filter3d: { groups: null, room: null }, themeTick: 0, goto: null, electricalView: "sockets", systemsOff: new Set(), cables: true,
+  hidden: new Set(), extra: new Set(), show3d: false, wallMode: "cut",
+  filter3d: { groups: null, room: null }, themeTick: 0, goto: null, electricalView: "sockets", cables: true,
   wallLayers: { electrical: true, water: true },
 };
 const listeners = new Set<Listener>();
@@ -87,11 +81,11 @@ export function useView<T>(pick: (s: ViewState) => T): T {
   return useSyncExternalStore(view.subscribe, () => pick(state));
 }
 
-// A new sheet: no selection or hint, in its own mode (not 3D, not route editing).
+// A new sheet: no selection or hint, not in 3D.
 // keep3d means another tab of the same drawing: 3D and its filter stay, the layers change
 export function resetSelection(keep3d = false) {
   view.set({
-    hover: null, lit: null, selected: null, neighbors: null, tip: null, pinned: null, editMode: false,
+    hover: null, lit: null, selected: null, neighbors: null, tip: null, pinned: null,
     ...(keep3d ? {} : { show3d: false, filter3d: { groups: null, room: null } }),
   });
 }

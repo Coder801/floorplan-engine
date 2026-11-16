@@ -101,7 +101,6 @@ def test_project_sheets_and_files_from_storage(
     assert p["artifact"] and p["dxf"] == "project.dxf" and p["sources"] == ["plan.pdf"]
     assert p["model"] == ["room.yaml", "electrical.yaml"]
     assert p["can"] == {
-        "edit_wiring": True,
         "choose_variant": True,
         "answer": True,
         "review": True,
@@ -118,14 +117,14 @@ def test_project_sheets_and_files_from_storage(
     client.cookies.set(COOKIE, tokens["b"])  # another firm: the project does not exist for it
     assert client.get("/api/projects").json() == []
     assert client.get(f"/api/projects/{pid}").status_code == 404
-    client.cookies.set(COOKIE, tokens["client"])  # the client sets the flat up, routes stay
+    client.cookies.set(COOKIE, tokens["client"])  # the client sets the flat up, does not review
     assert client.get(f"/api/projects/{pid}").json()["can"] == {
-        "edit_wiring": False,
         "choose_variant": True,
         "answer": True,
         "review": False,
     }
-    assert client.post(f"/api/projects/{pid}/wiring", json={}).status_code == 403
+    # No route editing in the viewer (decision 2026-11-16): the address is gone for everyone
+    assert client.post(f"/api/projects/{pid}/wiring", json={}).status_code in (404, 405)
 
 
 def test_writes_are_new_versions(
@@ -140,7 +139,6 @@ def test_writes_are_new_versions(
     assert [i["path"] for i in bad.json()["detail"]["issues"]] == ["mode"]
     ok = client.post(url, json={"variant": {"mode": "economy", "route": "floor"}})
     assert ok.status_code == 200 and ok.json()["built"] is True
-    assert client.post(f"/api/projects/{pid}/wiring", json={"wires": "x"}).status_code == 422
     with auth.db() as db:
         project = acc.project_by_key(db, pid)
         assert project is not None

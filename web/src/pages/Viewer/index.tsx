@@ -49,7 +49,7 @@ import { activeSummary, breakersOf, parseKey } from "@/widgets/VariantInfo/varia
 import { PanelStage } from "@/widgets/PanelStage";
 import { ProjectsMenu } from "@/widgets/ProjectsMenu";
 import { type Account, Settings } from "@/widgets/Settings";
-import { SheetStage, type LightMode, type StageHandle } from "@/widgets/SheetStage";
+import { SheetStage, type LightMode } from "@/widgets/SheetStage";
 import { SidePanel } from "@/widgets/SidePanel";
 import { SourceView } from "@/widgets/SourceView";
 import { WallMap } from "@/widgets/WallMap";
@@ -113,7 +113,6 @@ export function Viewer({ account = null }: { account?: Account | null }) {
   const [wallKey, setWallKey] = useState<string | null>(null);  // the open elevation
   const cache = useRef(new Map<number, Promise<Page>>());  // project pages, once
   const [error, setError] = useState<string | null>(null);
-  const [banners, setBanners] = useState<string[]>([]);
   const [side, setSide] = useState<SideTab>(() => {
     const saved = remembered("side");
     return (SIDE_TABS as readonly string[]).includes(saved ?? "") ? (saved as SideTab) : "tables";
@@ -149,31 +148,17 @@ export function Viewer({ account = null }: { account?: Account | null }) {
   const [panelMode, setPanelMode] = useState<PanelMode>("front");  // what the "Panel" page shows
   const questionsMemory = useRef<QuestionsMemory>({ drafts: {} });
   const [answering, setAnswering] = useState(false);  // an answer from a question card is being saved
-  const [saving, setSaving] = useState(false);  // route edits are being saved and the project rebuilt
   const [outdated, setOutdated] = useState(false);  // a new version was deployed after the tab was opened
-  const stage = useRef<StageHandle>(null);
-
-  // Leaving a sheet with unsaved route edits only after confirmation
-  const confirmLeave = useCallback(() => {
-    const n = stage.current?.pending() ?? 0;
-    return !n || confirm(t("app.leave"));
-  }, [t]);
 
   useEffect(() => {
     const onHash = () => {
-      if (!confirmLeave()) {  // stay on the sheet with unsaved edits
-        history.replaceState(null, "", `#${encodeURIComponent(current || "")}`);
-        return;
-      }
       setCurrent(fromHash());
       setStudio(studioFromHash());
       if (!studioFromHash()) outside.current = location.hash.slice(1);
     };
-    const onUnload = (ev: BeforeUnloadEvent) => { if (stage.current?.pending()) ev.preventDefault(); };
     window.addEventListener("hashchange", onHash);
-    window.addEventListener("beforeunload", onUnload);
-    return () => { window.removeEventListener("hashchange", onHash); window.removeEventListener("beforeunload", onUnload); };
-  }, [current, confirmLeave]);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
 
   useEffect(() => watchBuild(() => setOutdated(true)), []);
 
@@ -207,7 +192,7 @@ export function Viewer({ account = null }: { account?: Account | null }) {
     remember(`place:${current}`, JSON.stringify({ sheet, estimate, info, work: workTab, domain }));
   }, [current, sheet, estimate, info, workTab, domain]);
 
-  // Project: list, report, sheets; reloads re-reads after saving edits or a rebuild
+  // Project: list, report, sheets; reloads re-reads after a rebuild
   useEffect(() => {
     let alive = true;
     const again = !!current && prevProject.current === current && placed.current === current;
@@ -309,16 +294,15 @@ export function Viewer({ account = null }: { account?: Account | null }) {
   const drawnRef = useRef(drawn);
   drawnRef.current = drawn;
 
-  // Another sheet: drop the hint, 3D and edits right away, without waiting for the page to load
+  // Another sheet: drop the hint and 3D right away, without waiting for the page to load
   const openSheet = (index: number): boolean => {
     setEstimate(false); setInfo(false); setWorkTab(false);
     if (source) { setSource(null); resetSelection(); setSheet(index); return true; }
-    if (page && index === sheet) {  // the sheet is already open: keep the edits, leave 3D for the sheet
+    if (page && index === sheet) {  // the sheet is already open: leave 3D for the sheet
       if (view.get().show3d) view.set({ show3d: false, pinned: null, selected: null, neighbors: null, tip: null });
       return true;
     }
     const sameDrawing = sheet !== null && drawingSheets.includes(sheet) && drawingSheets.includes(index);
-    if (!confirmLeave()) return false;
     resetSelection(sameDrawing);
     setSheet(index);
     return true;
@@ -345,12 +329,10 @@ export function Viewer({ account = null }: { account?: Account | null }) {
   };
   // "Overview" is not a sheet: a page from the manifest; the sheet under it stays loaded
   const openInfo = () => {
-    if (!confirmLeave()) return;
     setSource(null); setEstimate(false); setInfo(true); setWorkTab(false);
   };
   // "Tasks" is not a sheet either: the work plan from the API (useWork), the card in the side panel
   const openWork = () => {
-    if (!confirmLeave()) return;
     setSource(null); setEstimate(false); setInfo(false); setWorkTab(true);
   };
   const work = useWork(current, workTab && !!project?.work);
@@ -366,22 +348,21 @@ export function Viewer({ account = null }: { account?: Account | null }) {
   const closeMenu = useCallback(() => setMenu((m) => (m ? "closing" : m)), []);
   const menuClosed = useCallback(() => setMenu(null), []);
   const drawerClosed = useCallback(() => { setDrawer(null); setClosing(false); }, []);
-  const showSource = (file: string) => { if (confirmLeave()) setSource(file); };
-  const saved = (notes: string[]) => {
-    setBanners(notes.length ? [`wiring.yaml: ${notes.join("; ")}`] : []);
+  const showSource = (file: string) => setSource(file);
+  // The project was rebuilt after an answer or the wizard: the sheets are read again
+  const rebuilt = () => {
     setRefreshing(true);
     setReloads((n) => n + 1);
-    setSaving(false);
   };
 
   // An answer from the question card: no modal, the panel stays usable during the rebuild.
   // A text answer changes no sheet, so only the project is read again
   const answerQuestion = async (id: string, answer: Answer | null) => {
-    if (!current || !confirmLeave()) return null;
+    if (!current) return null;
     setAnswering(true);
     try {
       const result = await saveAnswer(current, id, answer);
-      if (result.rebuilt) saved([]);
+      if (result.rebuilt) rebuilt();
       else setProject(await getProject(current));
       return result;
     } finally {
@@ -391,11 +372,11 @@ export function Viewer({ account = null }: { account?: Account | null }) {
 
   // The studio reviews a client answer: taken into account rebuilds, sent back only saves
   const reviewQuestion = async (id: string, outcome: ReviewOutcome, comment?: string) => {
-    if (!current || !confirmLeave()) return null;
+    if (!current) return null;
     setAnswering(true);
     try {
       const result = await reviewAnswer(current, id, outcome, comment);
-      if (result.rebuilt) saved([]);
+      if (result.rebuilt) rebuilt();
       else setProject(await getProject(current));
       return result;
     } finally {
@@ -405,11 +386,11 @@ export function Viewer({ account = null }: { account?: Account | null }) {
 
   // The setup wizard: all choices at once, one rebuild; a refusal stays in the wizard
   const applyWizard = async (body: WizardBody) => {
-    if (!current || !confirmLeave()) return false;
+    if (!current) return false;
     setChoosing(true);
     try {
       const result = await saveWizard(current, body);
-      if (result.rebuilt) saved([]);
+      if (result.rebuilt) rebuilt();
       else setProject(await getProject(current));
       setWizard(false);
       return true;
@@ -508,8 +489,8 @@ export function Viewer({ account = null }: { account?: Account | null }) {
     if (hidden && tabs[0]) openSheet(tabTarget(tabs[0]));
   }, [hidden]);
   const drawerTabs = modeDrawerTabs(mode);
-  // The simple mode: brief wiring, no route editing
-  useEffect(() => { view.set(mode === "engineering" ? { cables: true } : { cables: false, editMode: false }); }, [mode]);
+  // The simple mode: brief wiring
+  useEffect(() => { view.set({ cables: mode === "engineering" }); }, [mode]);
   useEffect(() => {  // a header panel the mode hides closes
     if (drawer && !modeDrawerTabs(mode).includes(drawer)) drawerClosed();
   }, [drawer, mode, drawerClosed]);
@@ -619,7 +600,7 @@ export function Viewer({ account = null }: { account?: Account | null }) {
   }
   else if (page && project && page.panel) {
     const built = (f: string) => (project.files.includes(f) ? `${base(current)}/out/${f}` : null);
-    main = <PanelStage ref={stage} page={page} panel={page.panel} language={overview?.language}
+    main = <PanelStage page={page} panel={page.panel} language={overview?.language}
                        stickersPdf={(colored, short) => built(stickersPdf(colored, short))}
                        mode={panelMode} onMode={setPanelMode} reserve={overview?.panel?.reserve}
                        reserveEditable={project.can?.answer === true && !!project.report?.questions.some((q) => q.id === "panel_reserve")}
@@ -628,12 +609,11 @@ export function Viewer({ account = null }: { account?: Account | null }) {
   } else if (page && project && !page.items?.length) {
     main = <ErrorState>{t("app.nothingToDraw", { name: page.name })}</ErrorState>;
   } else if (page && project && wall?.data && elevSheets.includes(loaded ?? -1)) {
-    main = <ElevationStage ref={stage} elevation={wall.data} withMap={!!scene} download={download} />;
+    main = <ElevationStage elevation={wall.data} withMap={!!scene} download={download} />;
     downloadInStage = true;
   } else if (page && project && drawing) {
-    main = <SheetStage ref={stage} lightMode={lightSwitch} page={wallPage ?? page} drawing={drawing} project={project.name} language={overview?.language}
-                       editable={mode === "engineering" && (project.can?.edit_wiring ?? true)} download={download} onWall={toWall}
-                       onSaved={saved} onBusy={setSaving} onBanner={(b) => setBanners([b])} />;
+    main = <SheetStage lightMode={lightSwitch} page={wallPage ?? page} drawing={drawing} language={overview?.language}
+                       download={download} onWall={toWall} />;
     downloadInStage = true;
   }
   if (page && project && main) main = <Boundary key={`${current}/${drawn.length > 1 ? "drawing" : loaded}/${shown}`}>{main}</Boundary>;
@@ -663,7 +643,7 @@ export function Viewer({ account = null }: { account?: Account | null }) {
         <Feedback project={feedbackProject} sheet={feedbackSheet} sheetTitle={feedbackSheetTitle} onClose={() => setFeedback(false)} />
       )}
       {changes && <Changelog onClose={() => setChanges(false)} />}
-      {(choosing || saving) && <RebuildModal />}
+      {choosing && <RebuildModal />}
       {wizard && project && (
         <Wizard key={current} start={wizardStart} project={project} variants={variants} ceiling={overview?.ceiling ?? null} scene={scene}
                 reserve={overview?.panel?.reserve ?? null} master={overview?.panel?.master ?? null} onApply={applyWizard} onClose={() => setWizard(false)}
@@ -748,7 +728,6 @@ export function Viewer({ account = null }: { account?: Account | null }) {
         )}
         {/* Not built, YAML changed: a terminal command for the engineer, not for the simple mode */}
         {warn && mode === "engineering" && <div className={css.banner}>{warn}</div>}
-        {banners.map((b) => <div key={b} className={css.banner}>{b}</div>)}
       </div>
       <main id="stage" className={css.stage}>
         {main}
