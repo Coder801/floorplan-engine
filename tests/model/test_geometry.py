@@ -15,6 +15,7 @@ from floorplan_engine.model.geometry import (
     expected_angle_sum,
     outer_corners,
     point_in_polygon,
+    room_geometries,
     signed_area,
     trace_contour,
 )
@@ -83,6 +84,28 @@ def test_outer_corners_respect_thickness() -> None:
     assert corners[0] == Vec(-120, -200)  # joint of the bottom (200) and left (120) walls
     assert corners[1] == Vec(-120, 3120)
     assert corners[2] == Vec(4120, 3120)
+
+
+def test_collinear_joint_keeps_each_outer_face() -> None:
+    """A wall that goes on straight (turn 180) into a thicker wall: the outer face steps at the
+    joint, the thin wall's end is at its own thickness, the thick wall starts at its own."""
+    walls = [
+        {"length": 1000, "thickness": 100, "turn": 180},
+        {"length": 2000, "thickness": 300},
+        {"length": 4000},
+        {"length": 3000},
+        {"length": 4000},
+    ]
+    plan = make_plan(walls)
+    room = plan.rooms[0]
+    c = trace_contour(room, 120)
+    assert c.is_closed()
+    g = room_geometries(plan, {room.id: c})[0]
+    thin, thick = g.contour.segments[0], g.contour.segments[1]
+    assert g.outer_start(thin) == Vec(-100, -120)
+    assert g.outer_end(thin) == Vec(-100, 1000)
+    assert g.outer_start(thick) == Vec(-300, 1000)
+    assert g.outer_end(thick) == Vec(-300, 3120)
 
 
 SQUARE_CCW = [Vec(0, 0), Vec(10, 0), Vec(10, 10), Vec(0, 10)]

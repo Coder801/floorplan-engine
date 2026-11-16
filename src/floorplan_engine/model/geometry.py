@@ -283,6 +283,12 @@ class RoomGeometry:
         return self.corners[seg.index]
 
     def outer_end(self, seg: WallSegment) -> Vec:
+        """Outer corner at the end of seg. At a collinear joint (turn 180) with a wall of another
+        thickness the outer face steps at the joint: each wall keeps its own outer face, so the
+        end of seg is not the next wall's outer start (that would slant seg's outer face)."""
+        nxt = self.contour.segments[(seg.index + 1) % len(self.corners)]
+        if abs(seg.direction.cross(nxt.direction)) < 1e-9:
+            return self.outer_point(seg, seg.length)
         return self.corners[(seg.index + 1) % len(self.corners)]
 
 
