@@ -25,7 +25,7 @@ uv run floorplan-engine dev                                  # просмотр 
 docker compose up -d db mail && uv run alembic upgrade head  # база (Postgres 18, как на сервере; docs/database.md) и Mailpit (письма — http://127.0.0.1:8025)
 uv run python scripts/local.py restore                       # копию сервера (server.py backup) — в локальную базу и data/objects
 docker compose --profile prod up --build                     # боевой образ локально: http://127.0.0.1:8080 (docs/development.md, «Локально как на сервере»)
-uv run floorplan-engine view                                 # только API просмотра projects/ (8000); пишет только wiring.yaml
+uv run floorplan-engine view                                 # только API просмотра projects/ (8000); пишет answers.yaml и variant.yaml
 uv run floorplan-engine access link projects/<имя> --owner <email>  # связать папку с базой (вход)
 uv run floorplan-engine access invite projects/<имя> --role client  # ссылка-приглашение
 uv run floorplan-engine access code projects/<имя> --label "Иван" [--role client_code]  # код доступа без учётки: просмотр или заказчик — настраивает проект (codes, revoke-code)
@@ -141,7 +141,9 @@ Slash-команды: `/plan`, `/electrical`, `/check`, `/review`, `/commit`, `/
 
 ## Ручные правки проводки: wiring.yaml
 
-`wiring.yaml` пишет просмотр (`view`, лист проводки → «Править трассы»): перетянутые линии
+Правки трасс в просмотре нет (решение 2026-11-16): кнопка «Править трассы», эндпоинт
+`POST …/wiring` и право `edit_wiring` удалены, трассы считает сборка. Ядро пока читает
+`wiring.yaml` старого образца, если он лежит в папке проекта: перетянутые линии
 (`wires.<id>: { from, to, path }`, мм модели) и перенесённые коробки (`boxes.<id>: { room,
 group, at }`), по вариантам проводки (`variants.<режим-трасса-разводка>`; правки без раздела —
 у варианта «как в проекте»). Потребители и щит не двигаются. Ты этот файл не пишешь и не
@@ -152,7 +154,7 @@ group, at }`), по вариантам проводки (`variants.<режим-�
 conduit, light_wiring, led_supply, plaster, rough_light, loop_conduit }`, `docs/wiring-variants.md`): режим, трасса, разводка, форма трассы,
 гофра (нет, на потолке, на потолке и в стенах), свет через коробки или цепочкой, блоки питания LED (у ленты или в щите), монтаж кабеля до или после штукатурки, черновой свет, шлейф розеток в двух гофрах или в одной; точки — из проекта. Его тоже пишет только
 просмотр. Нет файла — вариант «как в проекте». Выбирают студия, хозяин «Моего ремонта»
-и клиент студии — по приглашению или по коду заказчика (решение 2026-11-11); трассы руками правит только тот, у кого `edit_wiring`.
+и клиент студии — по приглашению или по коду заказчика (решение 2026-11-11).
 
 ## Код
 

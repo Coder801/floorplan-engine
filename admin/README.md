@@ -8,7 +8,8 @@
 npm install
 npm run dev      # http://127.0.0.1:5174/admin/ ; API — floorplan-engine view (8000), другой адрес: API_URL=… npm run dev
 npm run check    # типы
-npm test         # vitest
+npm test         # vitest: логика (*.test.ts) в Node, компоненты и страницы (*.test.tsx) в jsdom
+npm run coverage # то же с покрытием src/, отчёт — coverage/
 npm run build    # dist/ с base /admin/
 ```
 
@@ -38,3 +39,14 @@ npm run build    # dist/ с base /admin/
 Нарушение правила доступа (одно пространство, один проект у клиента, у студии остаётся
 владелец) API возвращает 409 с причиной — она показывается рядом с действием. Код доступа и
 ссылка-приглашение показываются один раз: API их больше не отдаёт.
+
+## Тесты
+
+Как у `web/` (`web/README.md`, «Тесты»): два проекта vitest в `vite.config.ts` — `logic` в Node и
+`dom` в jsdom с Testing Library; тест — рядом с файлом (`pages/Users.test.tsx`). Подготовка —
+`src/shared/testSetup.ts` (матчеры `jest-dom`, чистый DOM, адрес `#` и заглушки после теста).
+API в тесте — `stubApi` из `src/shared/testApi.ts`: `fetch` отвечает по таблице
+`"METHOD /путь"` → ответ (с запросом и без него), `fail(409, "причина")` — отказ с причиной,
+функция получает тело запроса; запрос без ответа роняет тест, а список отправленного
+проверяют после клика. Записи для ответов — фабрики `src/shared/testData.ts` (переопределяй
+только нужные поля).
