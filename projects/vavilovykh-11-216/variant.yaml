@@ -5,8 +5,10 @@ distribution: loop
 path: right
 conduit: walls
 light_wiring: chain
-led_supply: room
-plaster: before
+led_supply: board
+plaster: after
 rough_light: false
-loop_conduit: separate
-ceiling_height: 2700.0
+panel_labels: true
+insulation_test: false
+protection_test: false
+loop_conduit: shared

@@ -1,6 +1,6 @@
 {
   "project": "Квартира, вул. Вавілових, 11, кв. 216",
-  "answers_digest": "e7b7a3717771295a",
+  "answers_digest": "ab3da2b48012abe8",
   "stages": [
     {
       "stage": "plan",
@@ -40,11 +40,13 @@
     },
     {
       "stage": "panel",
-      "status": "ready",
+      "status": "questions",
       "builds": true,
       "reason": "",
-      "weight": 0,
-      "questions": []
+      "weight": 1,
+      "questions": [
+        "panel_dc_place"
+      ]
     }
   ],
   "questions": [
@@ -160,6 +162,18 @@
       "stage": "electrical",
       "audience": "studio",
       "text": "Кабель-канал ТВ у кімнаті: значки на А-37 стоять на 990 (H=400) і 960 (H=1100) за масштабом; у моделі — один вертикальний канал на 975, широка штроба 700 мм. Підтвердьте місце.",
+      "also": [],
+      "answer": "text",
+      "options": [],
+      "option_labels": {},
+      "severity": "minor",
+      "state": "open"
+    },
+    {
+      "id": "panel_dc_place",
+      "stage": "panel",
+      "audience": "studio",
+      "text": "Де стоять інвертор, щит АКБ і АКБ? Зараз — поруч з основним щитом (припущення): від цього — довжина кабелів GRID, LOAD і АКБ",
       "also": [],
       "answer": "text",
       "options": [],
@@ -310,6 +324,75 @@
         "QF27"
       ],
       "option_labels": {},
+      "severity": "minor",
+      "state": "answered"
+    },
+    {
+      "id": "panel_npe",
+      "stage": "panel",
+      "audience": "studio",
+      "text": "Чи з'єднує інвертор N з PE в резервному режимі (вбудоване реле N–PE, вмикається в налаштуваннях)? Без цього з'єднання ПЗВ і дифавтомати на резерві не спрацюють: no — поставимо контактор N–PE",
+      "target": "panel.npe_relay",
+      "also": [],
+      "answer": "choice",
+      "options": [
+        "yes",
+        "no"
+      ],
+      "option_labels": {
+        "yes": "Так, з'єднує",
+        "no": "Ні, поставити контактор N–PE"
+      },
+      "assumption": "yes",
+      "severity": "major",
+      "state": "answered"
+    },
+    {
+      "id": "panel_inverter",
+      "stage": "panel",
+      "audience": "studio",
+      "text": "Який інвертор? Зараз гібридний (припущення) — сам перемикає мережу і АКБ, у щиті обвідний SA1. basic — без власного перемикання: резерв через АВР",
+      "target": "panel.inverter",
+      "also": [],
+      "answer": "choice",
+      "options": [
+        "hybrid",
+        "basic"
+      ],
+      "option_labels": {
+        "hybrid": "Гібридний",
+        "basic": "Без власного перемикання"
+      },
+      "assumption": "hybrid",
+      "severity": "minor",
+      "state": "answered"
+    },
+    {
+      "id": "panel_battery",
+      "stage": "panel",
+      "audience": "studio",
+      "text": "Напруга АКБ інвертора? Зараз 48 В (припущення): струм розряду 104,2 А при 5,00 кВт — автомат АКБ 125 А, кабель 2×35 мм²",
+      "target": "panel.battery_voltage",
+      "also": [],
+      "answer": "value",
+      "unit": "В",
+      "options": [],
+      "option_labels": {},
+      "assumption": 48.0,
+      "severity": "minor",
+      "state": "answered"
+    },
+    {
+      "id": "panel_pv",
+      "stage": "panel",
+      "audience": "studio",
+      "text": "Чи є сонячні панелі? Зараз немає (припущення). Кількість рядків панелей на інвертор (0–2): у кожного — DC-автомат і ПЗІП у щиті АКБ",
+      "target": "panel.pv_strings",
+      "also": [],
+      "answer": "value",
+      "options": [],
+      "option_labels": {},
+      "assumption": 0.0,
       "severity": "minor",
       "state": "answered"
     },
@@ -567,13 +650,13 @@
       "file": "electrical.yaml",
       "path": "panel",
       "severity": "warning",
-      "message": "Зарядная станция — только через силовую вилку-ввод и перекидной рубильник; кабель «вилка-вилка» в розетку запрещён: на штырях напряжение"
+      "message": "LED: длина ленты не описана у bedroom_led_output_1, loggia_led_output_1, bath_led_output_1, bath_led_output_2 — принято 5 м на вывод, блок питания по ней; уточните ленту (led_strips) или мощность вывода (power)"
     },
     {
       "file": "electrical.yaml",
       "path": "panel",
       "severity": "warning",
-      "message": "61 модулей не помещаются ни в один щит каталога — корпус по месту: нужен щит больше или два щита"
+      "message": "60 модулей не помещаются ни в один щит каталога — корпус по месту: нужен щит больше или два щита"
     }
   ]
 }
