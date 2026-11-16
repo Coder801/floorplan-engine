@@ -1,0 +1,77 @@
+import { render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { describe, expect, it, vi } from "vitest";
+import { fail, stubApi } from "@/shared/testApi";
+import { pricePage, priceRow } from "@/shared/testData";
+import { PriceList } from "./index";
+
+describe("PriceList", () => {
+  it("shows each work with the studio price next to the market", async () => {
+    const user = userEvent.setup();
+    stubApi({ "GET /api/prices": pricePage() });
+    render(<PriceList />);
+    expect(screen.getByText("Загрузка…")).toBeInTheDocument();
+    const field = await screen.findByRole("textbox", { name: "Цена: Установка подрозетника" });
+    expect(field).toHaveValue("100");
+    const row = field.closest("tr")!;
+    expect(within(row).getByText("120")).toBeInTheDocument();
+    expect(within(row).getByRole("img", { name: "мин 80, медиана 120, макс 200" })).toBeInTheDocument();
+    expect(within(row).getByText("-17%")).toBeInTheDocument();
+    await user.click(within(row).getByRole("button", { name: "прайсов: 3" }));
+    expect(screen.getByText("подрозетник в бетоне")).toBeInTheDocument();
+    expect(screen.getAllByRole("link", { name: "Мастер Сервис" })[0]).toHaveAttribute("href", "https://example.com/prices");
+    expect(screen.getByText(/Рынок Киев: 1 открытых прайсов/)).toBeInTheDocument();
+  });
+
+  it("edits, refuses a wrong number, saves the changes and tells the page about unsaved ones", async () => {
+    const user = userEvent.setup();
+    const sent = stubApi({
+      "GET /api/prices": pricePage(),
+      "POST /api/prices": pricePage({ rows: [priceRow({ price: 120 })] }),
+    });
+    const onDirty = vi.fn();
+    render(<PriceList onDirty={onDirty} />);
+    const field = await screen.findByRole("textbox", { name: /Цена:/ });
+    const save = screen.getByRole("button", { name: "Сохранить" });
+    expect(save).toBeDisabled();
+    await user.clear(field);
+    await user.type(field, "-5");
+    expect(screen.getByText("Цена — число не меньше 0")).toBeInTheDocument();
+    expect(save).toBeDisabled();
+    expect(onDirty).toHaveBeenLastCalledWith(true);
+    await user.click(screen.getByRole("button", { name: "Поставить медиану рынка ценой студии" }));
+    expect(field).toHaveValue("120");
+    await user.click(save);
+    expect(sent.at(-1)).toMatchObject({ method: "POST", body: { items: { "work.socket": 120 } } });
+    expect(await screen.findByText("Сохранено в prices.yaml — сметы пересчитаются при сборке")).toBeInTheDocument();
+    expect(onDirty).toHaveBeenLastCalledWith(false);
+  });
+
+  it("an empty field removes the price; reset drops the edits", async () => {
+    const user = userEvent.setup();
+    const sent = stubApi({ "GET /api/prices": pricePage(), "POST /api/prices": pricePage() });
+    render(<PriceList />);
+    const field = await screen.findByRole("textbox", { name: /Цена:/ });
+    await user.type(field, "5");
+    await user.click(screen.getByRole("button", { name: "Сбросить" }));
+    expect(field).toHaveValue("100");
+    await user.clear(field);
+    await user.click(screen.getByRole("button", { name: "Сохранить" }));
+    expect(sent.at(-1)?.body).toEqual({ items: { "work.socket": null } });
+  });
+
+  it("read-only without the right to edit; a row without market data says so", async () => {
+    stubApi({ "GET /api/prices": pricePage({ editable: false, market: null, rows: [priceRow({ market: null, price: null, service: 90 })] }) });
+    render(<PriceList />);
+    expect(await screen.findByText("нет в прайсах")).toBeInTheDocument();
+    expect(screen.queryByRole("textbox")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Сохранить" })).toBeNull();
+    expect(screen.getByText("в смете — имитация")).toBeInTheDocument();
+  });
+
+  it("shows a load error", async () => {
+    stubApi({ "GET /api/prices": fail(403, "Только студия") });
+    render(<PriceList />);
+    expect(await screen.findByRole("alert")).toHaveTextContent("403: Только студия");
+  });
+});

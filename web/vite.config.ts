@@ -2,6 +2,7 @@
 // preview servers. The API is `floorplan-engine view` (port 8000 by default; another address:
 // API_URL=http://127.0.0.1:8765 npm run dev). /api requests go to it through a proxy, so no
 // CORS is needed; deployment does the same with a reverse proxy (nginx and the like).
+/// <reference types="vitest/config" />
 import { execFile } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { basename, dirname } from "node:path";
@@ -73,4 +74,14 @@ export default defineConfig({
     proxy: { ...api, "/admin": process.env.ADMIN_URL || "http://127.0.0.1:5174" },
   },
   preview: { host: "127.0.0.1", port: 4173, proxy: api },
+  // Tests (vitest) in two projects with this config's plugins, aliases and globals: logic (*.test.ts)
+  // runs in Node, components (*.test.tsx) in jsdom with testing-library (src/shared/testSetup.ts)
+  test: {
+    projects: [
+      { extends: true, test: { name: "logic", include: ["{src,scripts}/**/*.test.ts"], environment: "node" } },
+      { extends: true, test: { name: "dom", include: ["src/**/*.test.tsx"], environment: "jsdom", setupFiles: ["src/shared/testSetup.ts"],
+        // Node 25 has its own localStorage, and without a file it shadows jsdom's and warns
+        execArgv: ["--no-experimental-webstorage"] } },
+    ],
+  },
 });
