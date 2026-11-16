@@ -5,8 +5,9 @@ load, and best practice is kept where the load allows it.
   phases (3P); its power is shared equally.
 - A phase from the model (`groups.<QF>.phase`) is kept; the code places the rest.
 - What has to share a phase goes as one unit: the backup bus (the backup source has one phase)
-  and the groups under the shared RCD of a bus (a single-phase RCD, loads.shared_rcd): wet zones
-  and floor heating in economy, lighting in standard (decision 2026-11-15).
+  and the groups under one shared RCD of a bus (a single-phase RCD, loads.shared_rcd_key): wet
+  zones and floor heating in economy; floor heating, the private zone and the public zone in
+  standard, each its own unit (decision 2026-11-16).
 - Units go largest first, each on the least loaded phase; a unit whose room is already on a
   phase goes there if that phase is no more than ROOM_SLACK_W above the least loaded one: one
   room on one phase, no 400 V between neighbouring devices. Lighting takes at least two phases,
@@ -20,7 +21,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
 
-from floorplan_engine.electrical.loads import Kind, PanelGroup, shared_rcd
+from floorplan_engine.electrical.loads import Kind, PanelGroup, shared_rcd_key
 from floorplan_engine.model.schema import Electrical, PanelScheme
 
 PHASES = ("L1", "L2", "L3")
@@ -58,8 +59,8 @@ def unbalance(loads: dict[str, float]) -> float:
 
 
 def _units(groups: Sequence[PanelGroup], elec: Electrical, scheme: PanelScheme) -> list[_Unit]:
-    """Single-phase groups as units: the backup bus is one, the groups under one shared RCD are
-    one; a phase from the model fixes its unit (the first one found wins)."""
+    """Single-phase groups as units: the backup bus is one, the groups under one shared RCD
+    (by its key) are one; a phase from the model fixes its unit (the first one found wins)."""
     keys: dict[str, int] = {}
     units: list[_Unit] = []
     for k, g in enumerate(groups):
@@ -69,8 +70,8 @@ def _units(groups: Sequence[PanelGroup], elec: Electrical, scheme: PanelScheme) 
         fixed = info.phase if info is not None and info.phase in PHASES else None
         if g.reserved:
             key = "reserve"
-        elif shared_rcd(scheme, g):
-            key = "rcd"
+        elif (rcd := shared_rcd_key(scheme, g)) is not None:
+            key = f"rcd:{rcd}"
         else:
             key = g.group
         if key not in keys:

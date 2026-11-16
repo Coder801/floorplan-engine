@@ -447,10 +447,11 @@ class Group(StrictModel):
     )
 
 
-# Panel scheme (decisions 2026-10-27, 2026-11-15): economy has the fewest devices, wet zones
-# and floor heating under one RCD; standard puts every power group (sockets, outputs, appliances,
-# floor heating) on its own RCBO and lighting under one shared RCD; premium adds a surge
-# protector, all groups on RCBOs, curve B (electrical/loads.rcd_of, shared_rcd)
+# Panel scheme (decisions 2026-10-27, 2026-11-16): economy has the fewest devices, wet zones
+# and floor heating under one RCD; standard puts wet groups and water appliances on RCBOs, the
+# other power groups under shared RCDs (floor heating, private zone, public zone), lighting on
+# breakers; premium adds a surge protector, all groups on RCBOs, curve B (electrical/loads.rcd_of,
+# shared_rcd_key)
 PanelScheme = Literal["economy", "standard", "premium"]
 Earthing = Literal["TN-C-S", "TN-S", "TT"]
 

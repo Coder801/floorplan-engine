@@ -2,22 +2,28 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 
 from floorplan_engine.electrical.loads import (
     FLOOR_HEATING_W,
     POST_SHARE,
     SOCKET_POST_W,
+    WATER,
     Kind,
     Load,
     assumed_mark,
     backup_peak,
     backup_share,
     group_kind,
+    group_zone,
+    panel_groups,
     point_load,
     rcd_of,
+    shared_rcd_key,
 )
-from floorplan_engine.model.schema import Electrical, ElectricalPoint
+from floorplan_engine.model.schema import Electrical, ElectricalPoint, Plan
 
 
 def _load(title: str, power: float, *, post: bool = False) -> Load:
@@ -109,16 +115,141 @@ def test_thermostat_is_a_floor_heating_load_and_a_power_cable() -> None:
 
 
 def test_rcd_by_scheme_floor_heating_always_protected() -> None:
-    """Decision 2026-11-15: the model wins; standard and premium protect every group; economy
-    only wet ones; floor heating (a controller or a note) in any scheme and any room."""
+    """Decision 2026-11-16: the model wins; premium protects every group, standard every group
+    but lighting; economy only wet ones; floor heating (a controller or a note) in any scheme
+    and any room."""
     socket, light = _point("socket"), _point("light")
     heating = [_point("thermostat")]
     by_note = [_point("socket", "тепла підлога")]
     for scheme in ("standard", "premium"):
-        assert rcd_of(scheme, [socket], False, None) == "30 мА"
-        assert rcd_of(scheme, [light], False, None) == "30 мА"
-    assert rcd_of("economy", [socket], False, None) is None
-    assert rcd_of("economy", [socket], True, None) == "30 мА"  # a wet zone
-    assert rcd_of("economy", heating, False, None) == "30 мА"
-    assert rcd_of("economy", by_note, False, None) == "30 мА"
-    assert rcd_of("economy", [socket], False, "10 мА") == "10 мА"  # from the model
+        assert rcd_of(scheme, Kind.SOCKETS, [socket], False, None) == "30 мА"
+    assert rcd_of("premium", Kind.LIGHT, [light], False, None) == "30 мА"
+    assert rcd_of("standard", Kind.LIGHT, [light], False, None) is None  # plain breaker
+    assert rcd_of("standard", Kind.LIGHT, [light], True, None) is None  # a bathroom fan too
+    assert rcd_of("standard", Kind.LIGHT, [light], False, "30 мА") == "30 мА"  # the model
+    assert rcd_of("economy", Kind.SOCKETS, [socket], False, None) is None
+    assert rcd_of("economy", Kind.SOCKETS, [socket], True, None) == "30 мА"  # a wet zone
+    assert rcd_of("economy", Kind.SOCKETS, heating, False, None) == "30 мА"
+    assert rcd_of("economy", Kind.SOCKETS, by_note, False, None) == "30 мА"
+    assert rcd_of("economy", Kind.SOCKETS, [socket], False, "10 мА") == "10 мА"  # the model
+
+
+ROOMS = [
+    ("kitchen", "Кухня"),
+    ("bed", "Спальня"),
+    ("kid", "Дитяча"),
+    ("hall", "Коридор"),
+    ("loggia", "Лоджія"),
+    ("bath", "Санвузол"),
+]
+
+
+def _flat() -> Plan:
+    """Six rooms in a row, 3000 × 3000 each; the bathroom is wet by its name."""
+    return Plan.model_validate(
+        {
+            "name": "T",
+            "default_wall_thickness": 100,
+            "source": "text",
+            "rooms": [
+                {
+                    "id": rid,
+                    "name": name,
+                    "origin": [k * 3200, 0],
+                    "walls": [{"id": f"w{n}", "length": 3000} for n in range(1, 5)],
+                }
+                for k, (rid, name) in enumerate(ROOMS)
+            ],
+        }
+    )
+
+
+def _pt(pid: str, kind: str, group: str, room: str, **kw: Any) -> dict[str, Any]:
+    return {
+        "id": pid,
+        "room": room,
+        "type": kind,
+        "wall": "w1",
+        "offset": 500,
+        "height": 300,
+        "group": group,
+        **kw,
+    }
+
+
+def _groups(points: list[dict[str, Any]], scheme: str = "standard", **extra: Any) -> dict[str, Any]:
+    elec = Electrical.model_validate(
+        {
+            "points": points,
+            "board": {"room": "hall", "wall": "w1", "offset": 2000, "height": 1700},
+            "panel": {"scheme": scheme, "backup": "none"},
+            **extra,
+        }
+    )
+    groups = panel_groups(_flat(), elec, elec.panel.scheme or "standard", False)
+    return {g.group: g for g in groups}
+
+
+def test_water_appliances_share_one_pattern() -> None:
+    for note in ("пральна машина", "стиральная", "сушильна", "посудомойка", "бойлер", "водонагрев"):
+        assert WATER.search(note), note
+    assert not WATER.search("холодильник") and not WATER.search("духовка")
+
+
+def test_group_zone_by_the_first_room_a_hall_is_public() -> None:
+    places = {"a": "Спальня", "b": "Коридор", "c": "Вітальня", "d": "Гардеробна"}
+    pt = _point("socket")
+    pts = {k: pt.model_copy(update={"id": k}) for k in places}
+    assert group_zone([pts["a"], pts["b"]], places) == "private"  # bedroom first
+    assert group_zone([pts["b"], pts["a"]], places) == "public"  # hall first: public
+    assert group_zone([pts["c"], pts["d"]], places) == "public"
+    assert group_zone([pts["d"]], places) == "private"  # walk-in closet
+    assert group_zone([], places) is None
+
+
+def test_standard_shared_rcd_keys_by_zone_water_and_wet() -> None:
+    """Decision 2026-11-16: in standard a wet group, a washer in the kitchen and a dryer in the
+    hall get their own RCBOs; floor heating, bedroom and kitchen sockets go under the shared
+    RCD of their kind; the hall and the loggia are the public zone; lighting has no RCD."""
+    points = [
+        _pt("k1", "socket", "QF1", "kitchen"),
+        _pt("k2", "socket", "QF2", "kitchen", note="пральна машина"),
+        _pt("h1", "socket", "QF3", "hall", note="сушильна машина"),
+        _pt("b1", "socket", "QF4", "bed"),
+        _pt("b2", "socket", "QF4", "hall"),  # a bedroom group that reaches the hall stays private
+        _pt("h2", "socket", "QF5", "hall"),
+        _pt("h3", "socket", "QF5", "bed"),  # the hall first: public
+        _pt("w1", "socket", "QF6", "bath"),
+        _pt("t1", "thermostat", "QF7", "bed"),
+        _pt("t2", "thermostat", "QF7", "bath"),
+        _pt("lg", "socket", "QF8", "loggia"),
+        _pt("l1", "light", "QF9", "bath", wall=None, offset=None, height=None, ceiling=[1, 1]),
+        _pt("l2", "light", "QF10", "bed", wall=None, offset=None, height=None, ceiling=[1, 1]),
+        _pt("kd", "socket", "QF11", "kid"),
+    ]
+    g = _groups(points, groups={"QF10": {"rcd": "30 мА"}})
+    keys = {k: shared_rcd_key("standard", v) for k, v in g.items()}
+    assert keys == {
+        "QF1": "public",
+        "QF2": None,  # washer: RCBO, in the kitchen too
+        "QF3": None,  # dryer: RCBO
+        "QF4": "private",
+        "QF5": "public",
+        "QF6": None,  # wet room sockets: RCBO
+        "QF7": "floor",  # floor heating of a bedroom and the bathroom under one RCD
+        "QF8": "public",  # loggia: a closed dry room
+        "QF9": None,  # bathroom lighting: a plain breaker
+        "QF10": None,  # lighting with an rcd in the model: RCBO
+        "QF11": "private",
+    }
+    assert g["QF2"].water and g["QF2"].zone == "public" and g["QF2"].rcd == "30 мА"
+    assert g["QF9"].rcd is None and g["QF10"].rcd == "30 мА" and g["QF10"].rcd_from_model
+    assert g["QF4"].zone == "private" and g["QF11"].zone == "private"
+    economy = _groups(points, "economy", groups={"QF10": {"rcd": "30 мА"}})
+    eco = {k: shared_rcd_key("economy", v) for k, v in economy.items()}
+    assert eco == {  # economy as before: wet and floor heating under the one RCD
+        k: ("wet" if k in ("QF6", "QF7", "QF10") else None) for k in g
+    }
+    premium = _groups(points, "premium")
+    assert all(shared_rcd_key("premium", v) is None for v in premium.values())
+    assert all(v.rcd == "30 мА" for v in premium.values())

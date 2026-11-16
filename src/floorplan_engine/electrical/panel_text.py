@@ -11,6 +11,9 @@ from floorplan_engine.model.texts import Language
 KIND_NAME: dict[DeviceKind | tuple[DeviceKind, int], dict[str, str]] = {
     DeviceKind.BREAKER: {"ru": "Автомат 1P", "uk": "Автомат 1P"},
     DeviceKind.DIFF: {"ru": "Дифавтомат 1P+N", "uk": "Дифавтомат 1P+N"},
+    # Shared RCD of a zone: a purchase line by rating, its zone is in the title (several per bus
+    # since 2026-11-16)
+    DeviceKind.RCD: {"ru": "УЗО 2P", "uk": "ПЗВ 2P"},
     (DeviceKind.BREAKER, 3): {"ru": "Автомат 3P", "uk": "Автомат 3P"},
     (DeviceKind.DIFF, 4): {"ru": "Дифавтомат 3P+N", "uk": "Дифавтомат 3P+N"},
     DeviceKind.CONTACTOR: {"ru": "Контактор модульный", "uk": "Контактор модульний"},
@@ -25,6 +28,7 @@ KIND_NAME: dict[DeviceKind | tuple[DeviceKind, int], dict[str, str]] = {
 SHORT_NAME: dict[DeviceKind | tuple[DeviceKind, int], dict[str, str]] = {
     DeviceKind.BREAKER: {"ru": "АВ 1P", "uk": "АВ 1P"},
     DeviceKind.DIFF: {"ru": "АВДТ 1P+N", "uk": "АВДТ 1P+N"},
+    DeviceKind.RCD: {"ru": "УЗО 2P", "uk": "ПЗВ 2P"},
     (DeviceKind.BREAKER, 3): {"ru": "АВ 3P", "uk": "АВ 3P"},
     (DeviceKind.DIFF, 4): {"ru": "АВДТ 3P+N", "uk": "АВДТ 3P+N"},
     DeviceKind.CONTACTOR: {"ru": "Контактор", "uk": "Контактор"},
@@ -32,8 +36,10 @@ SHORT_NAME: dict[DeviceKind | tuple[DeviceKind, int], dict[str, str]] = {
     DeviceKind.LED_PSU: {"ru": "БП LED", "uk": "БЖ LED"},
 }
 DEVICE_LEGEND = {
-    "ru": "АВ — автоматический выключатель, АВДТ — дифавтомат (автомат с защитой от утечки тока)",
-    "uk": "АВ — автоматичний вимикач, АВДТ — дифавтомат (автомат із захистом від витоку струму)",
+    "ru": "АВ — автоматический выключатель, АВДТ — дифавтомат (автомат с защитой от утечки тока), "
+    "УЗО — устройство защитного отключения",
+    "uk": "АВ — автоматичний вимикач, АВДТ — дифавтомат (автомат із захистом від витоку струму), "
+    "ПЗВ — пристрій захисного відключення",
 }
 
 TEXT: dict[str, dict[str, str]] = {
@@ -48,8 +54,9 @@ TEXT: dict[str, dict[str, str]] = {
         "ru": "УЗО мокрых зон и тёплого пола",
         "uk": "ПЗВ мокрих зон і теплої підлоги",
     },
-    "rcd_light": {"ru": "УЗО освещения", "uk": "ПЗВ освітлення"},
     "rcd_heating": {"ru": "УЗО тёплого пола", "uk": "ПЗВ теплої підлоги"},
+    "rcd_private": {"ru": "УЗО розеток: спальная зона", "uk": "ПЗВ розеток: спальна зона"},
+    "rcd_public": {"ru": "УЗО розеток: общая зона", "uk": "ПЗВ розеток: загальна зона"},
     "changeover": {
         "ru": "Перекидной рубильник I-0-II",
         "uk": "Перекидний рубильник I-0-II",

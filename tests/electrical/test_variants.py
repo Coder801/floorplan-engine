@@ -1,6 +1,6 @@
 """Wiring variants (electrical/variants.py, docs/wiring-variants.md): applying a variant, the "as
 in project" variant, a summary without drawings; in the project, variant.yaml, route edits per
-variant (pipeline.save_wiring_edits), the summary in the .epd manifest."""
+variant (wiring.yaml, read by the build), the summary in the .epd manifest."""
 
 from __future__ import annotations
 
@@ -29,7 +29,6 @@ from floorplan_engine.pipeline import (
     assess_project,
     build_project,
     save_variant,
-    save_wiring_edits,
 )
 from floorplan_engine.validation.issues import Severity
 from floorplan_engine.validation.plan import validate_plan
@@ -267,21 +266,24 @@ def _project(tmp_path: Path) -> Path:
 
 
 def test_variant_choice_and_edits_kept_per_variant(tmp_path: Path) -> None:
+    """The viewer no longer writes wiring.yaml (decision 2026-11-16), but a file left in a project
+    is still read: pre-variant edits belong to "as in project", a variant section to its variant."""
     project = _project(tmp_path)
     chosen = assess_project(project).report.variant
     assert chosen is not None and chosen.key == Variant().key  # "as in project"
-    assert not save_wiring_edits(project, {"wires": {"wire_1": EDIT}})
+    own = {"economy-floor-boxes": {"wires": {"wire_5": EDIT}}}
+    edits = {"wires": {"wire_1": EDIT}, "variants": own}
+    (project / "wiring.yaml").write_text(yaml.safe_dump(edits), "utf-8")
+    legacy = assess_project(project).report.wiring_edits
+    assert legacy is not None and set(legacy.wires) == {"wire_1"}
     assert save_variant(project, {"mode": "cheap"})[0].path == "mode"  # error with a path
     assert not save_variant(project, {"mode": "economy", "route": "floor"})
     report = assess_project(project).report
     assert report.variant is not None and report.variant.key == "economy-floor-boxes"
     assert report.electrical is not None and report.electrical.mode == "economy"
-    assert report.wiring_edits is None  # this variant has no edits
-    assert not save_wiring_edits(project, {"wires": {"wire_5": EDIT}})
-    data = yaml.safe_load((project / "wiring.yaml").read_text("utf-8"))
-    assert set(data["variants"]) == {"standard-ceiling-boxes", "economy-floor-boxes"}
-    assert "wires" not in data  # pre-variant edits moved into the variant section
-    assert set(data["variants"]["economy-floor-boxes"]["wires"]) == {"wire_5"}
+    assert report.wiring_edits is not None and set(report.wiring_edits.wires) == {"wire_5"}
+    assert not save_variant(project, {"mode": "proper", "route": "floor"})
+    assert assess_project(project).report.wiring_edits is None  # this variant has no edits
     # Back to the "as in project" variant: its edits are still there
     assert not save_variant(project, {"mode": "standard", "route": "ceiling"})
     back = assess_project(project).report.wiring_edits

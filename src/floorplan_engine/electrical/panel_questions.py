@@ -11,7 +11,7 @@ from floorplan_engine.electrical.loads import (
     cable_for,
     current,
     rating_for,
-    shared_rcd,
+    shared_rcd_key,
 )
 from floorplan_engine.electrical.master import is_master, master_on
 from floorplan_engine.electrical.panel import (
@@ -179,7 +179,8 @@ def _split_wet(g: PanelGroup, scheme: PanelScheme, language: Language) -> str:
     or under the shared RCD (economy); empty for a dry group."""
     if not g.wet:
         return ""
-    return text("q_split_wet_shared" if shared_rcd(scheme, g) else "q_split_wet", language)
+    shared = shared_rcd_key(scheme, g) is not None
+    return text("q_split_wet_shared" if shared else "q_split_wet", language)
 
 
 def _master_questions(

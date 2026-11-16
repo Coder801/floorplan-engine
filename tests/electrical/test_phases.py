@@ -19,6 +19,7 @@ def _g(
         name, kind, "x", False, (load,), "3x2.5", 2.5, Breaker("C", 16, True),
         fields["rcd"], False, fields["reserved"], phase=fields["phase"],
         rcd_from_model=fields.get("rcd_from_model", False),
+        heating=fields.get("heating", False), zone=fields.get("zone"),
     )  # fmt: skip
 
 
@@ -76,17 +77,22 @@ def test_units_share_a_phase_and_a_model_phase_is_kept() -> None:
     assert out[0].phase == out[1].phase  # in economy under one shared RCD
 
 
-def test_standard_lighting_under_the_shared_rcd_takes_one_phase() -> None:
-    """Standard (decision 2026-11-15): the lighting under the shared RCD is one unit; a lighting
-    group with its own RCBO from the model and the power groups on RCBOs are placed apart."""
+def test_standard_shared_rcds_each_take_one_phase() -> None:
+    """Standard (decision 2026-11-16): the groups of one shared RCD are one unit — floor
+    heating, the private zone and the public zone apart; lighting on plain breakers, a lighting
+    group with its own RCBO from the model and the wet groups on RCBOs are placed apart."""
     rcd = "30 мА"
-    light = [_g(f"QF{k}", 300, f"R{k}", Kind.LIGHT, rcd=rcd) for k in (1, 2, 3)]
-    own = _g("QF4", 300, "R4", Kind.LIGHT, rcd=rcd, rcd_from_model=True)
-    power = [_g(f"QF{k}", 2000, f"P{k}", rcd=rcd) for k in (5, 6, 7)]
-    phases = _phases([*light, own, *power])
+    public = [_g(f"QF{k}", 300, f"R{k}", rcd=rcd, zone="public") for k in (1, 2, 3)]
+    private = [_g(f"QF{k}", 300, f"B{k}", rcd=rcd, zone="private") for k in (4, 5)]
+    floor = [_g(f"QF{k}", 1500, f"F{k}", rcd=rcd, heating=True) for k in (6, 7)]
+    own = _g("QF8", 300, "R8", Kind.LIGHT, rcd=rcd, rcd_from_model=True)
+    light = [_g(f"QF{k}", 300, f"L{k}", Kind.LIGHT) for k in (9, 10)]
+    phases = _phases([*public, *private, *floor, own, *light])
     assert phases["QF1"] == phases["QF2"] == phases["QF3"]  # one single-phase RCD
-    assert len({phases[g] for g in ("QF5", "QF6", "QF7")}) == 3  # RCBOs: spread
-    assert phases["QF4"] != phases["QF1"]  # lighting still on a second phase
+    assert phases["QF4"] == phases["QF5"]
+    assert phases["QF6"] == phases["QF7"]
+    assert len({phases["QF1"], phases["QF4"], phases["QF6"]}) == 3  # three RCDs: spread
+    assert phases["QF9"] != phases["QF10"]  # lighting on breakers: on two phases
 
 
 def test_unbalance() -> None:
