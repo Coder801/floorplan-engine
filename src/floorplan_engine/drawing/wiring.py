@@ -7,16 +7,18 @@ Cables whose routes lie on one line run as a bundle: each has its own lane offse
 on the sheet (lanes), overlapping cables never share a lane; a bundle is at most BAND_MM wide
 and does not run onto walls: next to a wall it shifts away from it, and the step shrinks only
 if the space between walls is less than the bundle needs (clearance). A line is cut into
-pieces where the set of cables does not change (bundles); each piece gets one label beside
-the bundle: piece length in m, and the number of cables if more than one: "L2,0 ×3".
+pieces where the set of cables does not change (bundles); each piece gets one label on the
+bundle, in a frame with a white background over the cables (beside the bundle if no spot on it
+is free), in the group colour or dark grey for a bundle of several groups: piece length in m,
+and the number of cables if more than one: "L2,0 ×3".
 At a wall point there is a drop "↓h1,9", at the panel a rise "↑h1,0"; floor routes (own
 layer, dash-dot) are the other way round: a rise from the floor to the point "↑h0,3", a drop
 at the panel "↓h1,7". Bundles are computed separately for ceiling and floor. Corners are
 rounded (an arc in the same polyline).
-A label is never placed over routes, boxes, points or other labels: both sides and several
-spots along the piece are tried; if nothing fits there is no label (the length is in the
-table and the log). Lengths come from the original route (wiring.py): lane shifts and
-rounding do not change them.
+A label is never placed over other routes, boxes, points or other labels: the bundle itself,
+then both sides, at several spots along the piece are tried; if nothing fits there is no
+label (the length is in the table and the log). Lengths come from the original route
+(wiring.py): lane shifts and rounding do not change them.
 """
 
 from __future__ import annotations
@@ -26,6 +28,7 @@ import math
 from collections.abc import Callable, Iterable, Sequence
 from pathlib import Path
 
+from ezdxf.colors import RGB
 from ezdxf.layouts.layout import Modelspace
 from shapely import STRtree
 from shapely.geometry import LineString, Point, box
@@ -70,7 +73,10 @@ LENGTH_MM = 1.8  # length label height on the sheet
 # like the point height "h300" on the electrical sheet; bare digits were unreadable
 LENGTH = "L"
 VERT = "h"
-LENGTH_OFFSET_MM = 0.6  # from the line (bundle edge) to the label
+LENGTH_OFFSET_MM = 1.2  # a label beside a line: from the line (bundle edge) to the label
+WHITE = 0xFFFFFF
+MIXED = 0x5A5A5A  # label of a bundle of several groups: dark grey, it has no group colour
+FRAME_PAD_MM = 0.4  # from the length label text to its frame
 LENGTH_SLOTS = (0.5, 0.3, 0.7, 0.15, 0.85)  # label spots along the piece, fractions of length
 POINT_CLEAR_MM = 2.5  # no labels around a connection point
 _TOL = 1.0  # model mm: points on one line
@@ -159,21 +165,36 @@ def _draw_bundle_lengths(
     labels: _Labels,
     colors: dict[str, int],
 ) -> None:
-    """Label for a bundle piece: length in m and the number of cables if more than one. A bundle of
-    one group is on the layer of its lines; a mixed one belongs to no cable layer."""
+    """Label for a bundle piece: length in m and the number of cables if more than one. On the
+    layer of the bundle's first line, in its group colour; a bundle of several groups in MIXED."""
     for bundle in plane_bundles:
         runs = [wiring.runs[k] for k in bundle.runs]
         text = length_label(bundle.length, len(runs))
         placed = labels.place_bundle(text, bundle)
         if placed is None:
             continue
-        text, at, angle = placed
+        (text, at, angle), frame = placed
         groups = {r.group for r in runs}
-        one = len(groups) == 1
-        color = colors.get(next(iter(groups))) if one else None
-        layer = layers[bundle.runs[0]] if one and color is not None else W_TEXT.name
+        color = colors.get(next(iter(groups))) if len(groups) == 1 else None
+        if color is None:
+            color = MIXED
+        # on a cable layer, not W-TEXT: the viewer enlarges *-TEXT labels on screen, the text
+        # would grow out of its frame and read as another font
+        layer = layers[bundle.runs[0]]
         with tagged(msp, "wire", runs[0].id):
+            _draw_frame(msp, frame, layer, color)
             add_text(msp, text, at, LENGTH_MM, layer, angle, color=color)
+
+
+def _draw_frame(msp: Modelspace, frame: BaseGeometry, layer: str, color: int) -> None:
+    """White background over the cables and an outline in the label colour (drawn after the
+    lines, so it covers them)."""
+    x0, y0, x1, y1 = frame.bounds
+    corners = [(x0, y0), (x1, y0), (x1, y1), (x0, y1)]
+    hatch = msp.add_hatch(dxfattribs={"layer": layer, "true_color": WHITE})
+    hatch.set_solid_fill(rgb=RGB(255, 255, 255))
+    hatch.paths.add_polyline_path(corners, is_closed=True)
+    msp.add_lwpolyline(corners, close=True, dxfattribs={"layer": layer, "true_color": color})
 
 
 def _draw_board_rises(
@@ -405,10 +426,18 @@ class _Labels:
             max(c.y for c in corners),
         )
 
-    def _free(self, rect: BaseGeometry) -> bool:
+    def _free(self, rect: BaseGeometry, own: BaseGeometry | None = None) -> bool:
+        """Nothing taken touches rect, and no route crosses it (but inside own: the bundle a
+        framed label sits on)."""
         if any(rect.intersects(t) for t in self.taken):
             return False
-        return not any(rect.intersects(self.lines.geometries[i]) for i in self.lines.query(rect))
+        for i in self.lines.query(rect):
+            line = self.lines.geometries[i]
+            if not rect.intersects(line):
+                continue
+            if own is None or not own.contains(rect.intersection(line)):
+                return False
+        return True
 
     def place(self, text: str, candidates: Iterable[tuple[Vec, Vec]]) -> Label | None:
         """The first free spot of (centre, text direction); it is taken."""
@@ -422,20 +451,33 @@ class _Labels:
                 return text, center, math.degrees(math.atan2(along.y, along.x))
         return None
 
-    def place_bundle(self, text: str, b: Bundle) -> Label | None:
-        """Bundle piece label beside the outermost lane; a short piece gets no label."""
-        if sheet(text_width(text, LENGTH_MM)) + 2 * self.gap > b.length:
+    def place_bundle(self, text: str, b: Bundle) -> tuple[Label, BaseGeometry] | None:
+        """Bundle piece label in a frame: on the bundle (the frame may cover only its own
+        cables), else beside the outermost lane; a short piece gets no label. Returns the label
+        and its frame, which is taken."""
+        pad = sheet(FRAME_PAD_MM)
+        if sheet(text_width(text, LENGTH_MM)) + 2 * (pad + self.gap) > b.length:
             return None
         along = Vec(1.0, 0.0) if b.axis == "h" else Vec(0.0, 1.0)
         across = Vec(0.0, 1.0) if b.axis == "h" else Vec(1.0, 0.0)
-        reach = self.gap + self.h / 2
-        sides = (across * (b.band[1] + reach), across * (b.band[0] - reach))
-        spots = []
-        for t in LENGTH_SLOTS:
-            pos = b.lo + (b.hi - b.lo) * t
-            on_line = Vec(pos, b.fixed) if b.axis == "h" else Vec(b.fixed, pos)
-            spots += [(on_line + side, along) for side in sides]
-        return self._try(text, spots)
+        mid = (b.band[0] + b.band[1]) / 2
+        reach = self.gap + pad + self.h / 2
+        sides = (across * (b.band[1] + reach + self.descender), across * (b.band[0] - reach))
+        corridor = _corridor(b).buffer(sheet(0.05))
+        slots = [b.lo + (b.hi - b.lo) * t for t in LENGTH_SLOTS]
+
+        def at(pos: float) -> Vec:
+            return Vec(pos, b.fixed) if b.axis == "h" else Vec(b.fixed, pos)
+
+        spots: list[tuple[Vec, Vec, BaseGeometry | None]]
+        spots = [(at(pos) + across * mid, along, corridor) for pos in slots]
+        spots += [(at(pos) + side, along, None) for pos in slots for side in sides]
+        for center, d, own in spots:
+            frame = self._rect(text, center, d).buffer(pad, join_style="mitre")
+            if self._free(frame, own):
+                self.taken.append(frame)
+                return (text, center, math.degrees(math.atan2(d.y, d.x))), frame
+        return None
 
     def place_end(self, path: Sequence[Vec], text: str, at_end: bool) -> Label | None:
         """Label at the end (or start) of a route: beside the last piece or past the end."""
@@ -452,6 +494,14 @@ class _Labels:
         back = tip - u * (clear + half_w)
         beyond = tip + u * (clear + half_w)
         return self._try(text, [(back + side, along), (back - side, along), (beyond, along)])
+
+
+def _corridor(b: Bundle) -> BaseGeometry:
+    """The strip the bundle piece's lanes fill, model mm."""
+    lo, hi = b.lo, b.hi
+    if b.axis == "h":
+        return box(lo, b.fixed + b.band[0], hi, b.fixed + b.band[1])
+    return box(b.fixed + b.band[0], lo, b.fixed + b.band[1], hi)
 
 
 def _unit(v: Vec) -> Vec:
