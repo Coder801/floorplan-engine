@@ -38,7 +38,8 @@ ROOT = Path(__file__).resolve().parents[1]
 SSH = ("railway", "ssh", "--")
 DONE = "__shtroba_done__"  # код выхода через CLI не проверен: дошёл ли скрипт до конца — по метке
 FILE_START, FILE_END = "__shtroba_file__", "__shtroba_end__"
-MODEL_FILES = ("room.yaml", "electrical.yaml", "plumbing.yaml")  # остальные пишет просмотр
+# Файлы модели, которые шлёт папка; answers.yaml и variant.yaml пишет просмотр
+MODEL_FILES = ("room.yaml", "electrical.yaml", "plumbing.yaml", "intake.yaml")
 DB_SERVICE = "Postgres"  # сервис базы в проекте Railway
 PG_IMAGE = "postgres:18"  # pg_dump не старше сервера быть не может, 18 снимает и 17
 BACKUP_DIR = Path.home() / "shtroba-backups"  # данные клиентов: вне репозитория
