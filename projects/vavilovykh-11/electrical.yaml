@@ -64,11 +64,11 @@ points:
   - { id: bedroom_switch_2, room: bedroom, wall: w2, offset: 3370, type: switch, height: 700, note: "бра", group: QF2 }  # PDF; H текст
   - { id: bedroom_pass_switch_2, room: bedroom, wall: w2, offset: 3450, type: pass_switch, height: 700, note: "стеля", group: QF2 }  # PDF; H текст
   - { id: bedroom_socket_2, room: bedroom, wall: w2, offset: 3530, type: socket, height: 700, count: 2, group: QF7 }  # PDF; H текст
-  - { id: bedroom_switch_3, room: bedroom, wall: w1, offset: 1270, type: switch, height: 1100, group: QF2 }  # 1200 текст (центр) + PDF
-  - { id: bedroom_socket_3, room: bedroom, wall: w1, offset: 1130, type: socket, height: 1100, count: 2, group: QF7 }  # 1200 текст (центр) + PDF
-  - { id: bedroom_data_1, room: bedroom, wall: w1, offset: 770, type: data, height: 300 }  # 700 текст (центр) + PDF
-  - { id: bedroom_socket_4, room: bedroom, wall: w1, offset: 630, type: socket, height: 300, count: 4, group: QF7 }  # 700 текст (центр) + PDF
-  - { id: bedroom_led_output_1, room: bedroom, wall: w1, offset: 1440, type: led_output, height: 1650, note: "підсвітка шафи", group: QF2 }  # PDF; H текст
+  - { id: bedroom_switch_3, room: bedroom, wall: w1b, offset: 920, type: switch, height: 1100, group: QF2 }  # 1200 текст (центр) + PDF
+  - { id: bedroom_socket_3, room: bedroom, wall: w1b, offset: 780, type: socket, height: 1100, count: 2, group: QF7 }  # 1200 текст (центр) + PDF
+  - { id: bedroom_data_1, room: bedroom, wall: w1b, offset: 420, type: data, height: 300 }  # 700 текст (центр) + PDF
+  - { id: bedroom_socket_4, room: bedroom, wall: w1b, offset: 280, type: socket, height: 300, count: 4, group: QF7 }  # 700 текст (центр) + PDF
+  - { id: bedroom_led_output_1, room: bedroom, wall: w1c, offset: 29, type: led_output, height: 1650, note: "підсвітка шафи", group: QF2 }  # PDF; H текст
   - { id: bedroom_socket_5, room: bedroom, wall: w4, offset: 1762, type: socket, height: 300, group: QF7 }  # текст: 200 от откоса
   - { id: bedroom_switch_4, room: bedroom, wall: w4, offset: 1762, type: switch, height: 900, note: "стеля", group: QF2 }  # текст: 200 от откоса
   - { id: bedroom_downlight_1, room: bedroom, ceiling: [1400, 1800], type: downlight, group: QF2 }  # текст: 1400/1642, 900/1200/600
@@ -140,7 +140,8 @@ groups:
   QF19: { name: "Витяжка" }
   QF20: { name: "Розетки — коридор" }
 led_strips:
-  - { id: bedroom_led_strip_1, room: bedroom, wall: w1, start: 0, end: 1400 }  # PDF
+  - { id: bedroom_led_strip_1, room: bedroom, wall: w1, start: 0, end: 350 }  # PDF: лента 0…1400 по левой стене; стена разделена на w1/w1b/w1c (2026-11-16)
+  - { id: bedroom_led_strip_2, room: bedroom, wall: w1b, start: 0, end: 1050 }  # продолжение той же ленты (350…1400 от низа стены)
   - { id: balcony_led_strip_1, room: balcony, wall: w2, start: 0, end: 1300 }  # PDF
   - { id: bathroom_led_strip_1, room: bathroom, wall: w5, start: 600, end: 1600 }  # PDF
   - { id: living_led_strip_1, room: living, wall: w1, start: 0, end: 1740 }  # PDF

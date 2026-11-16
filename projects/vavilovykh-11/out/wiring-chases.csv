@@ -7,10 +7,10 @@ point,balcony,w4,1225,2.40,2,narrow,ceiling,power,balcony_switch_2 balcony_socke
 point,bathroom,w3,400,1.80,2,narrow,ceiling,power,bathroom_socket_3 bathroom_socket_2
 point,bathroom,w5,735,1.60,2,narrow,ceiling,power,bathroom_switch_1 bathroom_socket_1
 point,bathroom,w5,1100,0.90,1,narrow,ceiling,power,bathroom_led_output_1
-point,bedroom,w1,770,2.40,1,narrow,ceiling,low,bedroom_data_1
-point,bedroom,w1,630,2.40,1,narrow,ceiling,power,bedroom_socket_4
-point,bedroom,w1,1200,1.60,2,narrow,ceiling,power,bedroom_socket_3 bedroom_switch_3
-point,bedroom,w1,1440,1.05,1,narrow,ceiling,power,bedroom_led_output_1
+point,bedroom,w1b,420,2.40,1,narrow,ceiling,low,bedroom_data_1
+point,bedroom,w1b,280,2.40,1,narrow,ceiling,power,bedroom_socket_4
+point,bedroom,w1b,850,1.60,2,narrow,ceiling,power,bedroom_socket_3 bedroom_switch_3
+point,bedroom,w1c,29,1.05,1,narrow,ceiling,power,bedroom_led_output_1
 point,bedroom,w2,1401,2.00,3,wide,ceiling,power,bedroom_socket_1 bedroom_pass_switch_1 bedroom_sconce_1
 point,bedroom,w2,1520,2.00,1,narrow,ceiling,power,bedroom_switch_1
 point,bedroom,w2,3410,2.00,3,wide,ceiling,power,bedroom_switch_2 bedroom_sconce_2 bedroom_pass_switch_2
