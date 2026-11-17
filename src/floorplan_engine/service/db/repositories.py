@@ -7,16 +7,14 @@ Workflow operation is one transaction).
 from __future__ import annotations
 
 import hashlib
-import json
 import statistics
 import uuid
 from collections.abc import Sequence
-from typing import Any
 
-import yaml
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from floorplan_engine.service.db import questions
 from floorplan_engine.service.db.models import (
     FactsPage,
     ModelVersion,
@@ -25,6 +23,7 @@ from floorplan_engine.service.db.models import (
     Studio,
     Usage,
 )
+from floorplan_engine.service.db.questions_yaml import parsed_copy as parsed_copy
 from floorplan_engine.service.facts.analysis import ALGO_VERSION, PageFacts, from_dict, to_dict
 
 MODEL_COLUMNS = {
@@ -118,9 +117,16 @@ def cached_facts(session: Session, source_id: uuid.UUID) -> list[PageFacts] | No
 
 
 def add_model_version(
-    session: Session, project_id: uuid.UUID, files: dict[str, str], author: str
+    session: Session,
+    project_id: uuid.UUID,
+    files: dict[str, str],
+    author: str,
+    user_id: uuid.UUID | None = None,
+    label: str = "",
 ) -> ModelVersion:
-    """New model version: YAML texts by file name (room.yaml…); the number is the next one."""
+    """New model version: YAML texts by file name (room.yaml…); the number is the next one. Its
+    questions and answers go into their tables (questions.ingest): who — author (analyzer | user |
+    operator), user_id and label (a client code or a name)."""
     unknown = sorted(set(files) - set(MODEL_COLUMNS))
     if unknown:
         raise ValueError(f"не файлы модели: {', '.join(unknown)}")
@@ -131,22 +137,15 @@ def add_model_version(
         project_id=project_id,
         version=(last or 0) + 1,
         author=author,
+        user_id=user_id,
         data={name: parsed_copy(text) for name, text in files.items()},
     )
     for name, text in files.items():
         setattr(version, MODEL_COLUMNS[name], text)
     session.add(version)
     session.flush()
+    questions.ingest(session, version, questions.Author(author, user_id, label))
     return version
-
-
-def parsed_copy(text: str) -> Any:
-    """The jsonb copy of a YAML text: dates and other non-JSON values become strings; a file that
-    does not parse is kept as None (the text is the truth, the check reports the error)."""
-    try:
-        return json.loads(json.dumps(yaml.safe_load(text), default=str))
-    except yaml.YAMLError:
-        return None
 
 
 def latest_model(session: Session, project_id: uuid.UUID) -> ModelVersion | None:

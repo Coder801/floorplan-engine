@@ -24,6 +24,7 @@ from sqlalchemy.orm import Session
 
 from floorplan_engine.electrical.estimate import PRICES_FILE
 from floorplan_engine.pipeline import OUT_DIR, AuditError, build_project
+from floorplan_engine.service.db import questions
 from floorplan_engine.service.db import repositories as repo
 from floorplan_engine.service.db.models import (
     Build,
@@ -87,11 +88,19 @@ def project_files(
     session: Session, project: Project, version: ModelVersion | None = None
 ) -> dict[str, str]:
     """The project folder's own text files: the model files of a version (the latest by default)
-    and the project's own price list."""
-    version = version or repo.latest_model(session, project.id)
+    and the project's own price list. The latest version's intake.yaml and answers.yaml are made
+    from the question tables (questions.texts); an older version gives its snapshot."""
+    latest = repo.latest_model(session, project.id)
+    version = version or latest
     if version is None:
         raise NoModelError(f"у проекта {project.slug or project.id} нет модели")
     files = repo.model_files(version)
+    if latest is not None and version.id == latest.id:
+        for name, text in questions.texts(session, project.id, version).items():
+            if text is None:
+                files.pop(name, None)
+            else:
+                files[name] = text
     own = session.scalar(select(PriceList).where(PriceList.project_id == project.id))
     if own is not None and own.text:
         files[PRICES_FILE] = own.text
@@ -152,6 +161,7 @@ def build(
         report = out / REPORT_JSON
         if report.is_file():
             row.report = {**json.loads(report.read_text("utf-8")), **row.report}
+            questions.record_code(session, project.id, version.id, row.report)
         for path in sorted(p for p in out.rglob("*") if p.is_file()):
             rel = path.relative_to(out).as_posix()
             key = build_key(project.id, row.id, rel)

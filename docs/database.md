@@ -28,7 +28,8 @@ uv run alembic revision --autogenerate -m "что изменилось"
 | `service/db/models.py` | Таблицы (SQLAlchemy 2). JSON — `jsonb` в Postgres, текст в SQLite |
 | `service/db/session.py` | Подключение: `DATABASE_URL`, `make_engine`, `make_sessions`. База — только Postgres (решение 2026-11-01): схему строят миграции, `create_tables` и SQLite убраны |
 | `tests/service/conftest.py` | Тесты базы — на Postgres из `docker-compose.yml`, своя база `floorplan_engine_test` (`TEST_DATABASE_URL`, имя обязано кончаться на `_test` — она пересоздаётся): миграции вверх, вниз до нуля и снова вверх, после теста таблицы очищаются; `test_db.test_migrations_match_models` сверяет схему миграций с моделями. Postgres не запущен — пропуск, `TEST_REQUIRE_DB=1` — ошибка |
-| `service/db/repositories.py` | Проекты, источники (без повторов по sha256), кэш выжимок по версии алгоритма, версии модели, расход LLM. Функции не делают commit — транзакцией управляет вызывающий |
+| `service/db/repositories.py` | Проекты, источники (без повторов по sha256), кэш выжимок по версии алгоритма, версии модели (новая версия — сразу в таблицы вопросов, `questions.ingest`), расход LLM. Функции не делают commit — транзакцией управляет вызывающий |
+| `service/db/questions.py`, `service/db/questions_yaml.py` | Вопросы и ответы в базе (раздел «Вопросы и ответы»): разбор версии в строки и ревизии (`ingest`), тексты YAML из таблиц (`texts`, `snapshot`), вопросы кода из отчёта сборки (`record_code`), история (`history`), заполнение миграцией (`backfill`); разбор и сборка текста YAML без базы — `questions_yaml` |
 | `service/db/work.py`, `service/db/work_tasks.py`, `service/db/work_records.py` | Монтаж по задачам (`docs/work-tasks.md`): план из черновика `.epd`, его жизнь, статусы и права на них, действия студии за заказчика (`on_behalf`), галочки приёмки, строки, суммы (`totals`) — `work.py`; задачи: добавить, править, порядок, `after` без круга, объединить, перенести строки, удалить — `work_tasks.py`; фото в хранилище, комментарии, оплаты — `work_records.py`. Без commit, как `repositories.py` |
 | `migrations/` | Alembic: `env.py`, `versions/0001_initial.py` |
 
@@ -172,27 +173,12 @@ erDiagram
     uuid user_id FK "новое: кто именно"
     timestamp created_at
   }
-  ROUND {
-    uuid id PK
-    uuid project_id FK
-    int number
-    uuid model_version_id FK
-  }
   QUESTION {
-    uuid id PK
-    uuid round_id FK
-    string qid
-    string stage
-    text target
-    string severity
-    text text
-    string state
-  }
-  ANSWER {
-    uuid question_id PK, FK
-    json value
-    uuid user_id FK
-    timestamp created_at
+    uuid id PK "0017: вместо черновых round, question, answer"
+    uuid project_id FK
+    string qid "UK с project_id"
+    string source "analyzer | studio | operator | code"
+    int position "место в intake.yaml; пусто — не пишется туда"
   }
   BUILD {
     uuid id PK
@@ -255,15 +241,100 @@ erDiagram
   PROJECT ||--o{ SOURCE : "источники"
   SOURCE ||--o{ FACTS_PAGE : "выжимка по страницам"
   PROJECT ||--o{ MODEL_VERSION : "версии YAML"
-  PROJECT ||--o{ ROUND : "раунды"
-  ROUND ||--o{ QUESTION : "вопросы"
-  QUESTION ||--o| ANSWER : "ответ"
+  PROJECT ||--o{ QUESTION : "вопросы (ревизии — ниже)"
   MODEL_VERSION ||--o{ BUILD : "сборки"
   BUILD ||--o{ BUILD_FILE : "файлы сборки"
   PROJECT ||--o{ USAGE : "расход LLM"
   PROJECT ||--o{ AUDIT_EVENT : "журнал"
   APP_USER ||--o{ AUDIT_EVENT : "кто"
 ```
+
+### Вопросы и ответы (решение 2026-11-17, миграция `0017`)
+
+Правда о вопросах и ответах — таблицы ниже; `intake.yaml` и `answers.yaml` — формат обмена на
+границе: сборка, анализатор, `project push`/`pull`. Правила — `service/db/questions.py` (таблицы),
+`service/db/questions_yaml.py` (текст YAML). Это шаг 1: треды вопросов и API истории — шаг 2.
+
+```mermaid
+erDiagram
+  PROJECT ||--o{ QUESTION : "вопросы"
+  QUESTION ||--o{ QUESTION_REVISION : "формулировка"
+  QUESTION ||--o{ ANSWER_REVISION : "ответы"
+  MODEL_VERSION ||--o{ QUESTION_REVISION : "где появилась"
+  MODEL_VERSION ||--o{ ANSWER_REVISION : "где появилась"
+  QUESTION {
+    uuid id PK
+    uuid project_id FK "CASCADE"
+    string qid "q1, panel_input…; UK с project_id"
+    string source "analyzer | studio | operator | code — кто завёл"
+    string stage
+    text target
+    jsonb also
+    string unit
+    string audience "studio | client"
+    string kind "value | choice | text | groups (answer в YAML)"
+    jsonb options
+    jsonb option_labels
+    int position "место в intake.yaml; пусто — вопрос кода, снятый или известный только по ответу"
+  }
+  QUESTION_REVISION {
+    uuid id PK
+    uuid question_id FK "CASCADE"
+    int number "1, 2… в вопросе; UK с question_id"
+    text text
+    jsonb assumption
+    string severity
+    text note "комментарий YAML рядом с вопросом"
+    string reason "new | edit | removed | restored"
+    string author "analyzer | operator | user | code"
+    uuid user_id FK "SET NULL"
+    string author_label "«код: Иван» или имя из log"
+    uuid model_version_id FK "SET NULL"
+  }
+  ANSWER_REVISION {
+    uuid id PK
+    uuid question_id FK "CASCADE"
+    int number "UK с question_id"
+    jsonb value "как в answers.yaml; пусто — ответ снят"
+    string state "pending | resolved | returned — у текстового ответа"
+    text comment "returned: что спрашивает студия"
+    jsonb log "запись log из answers.yaml как есть"
+    string author
+    uuid user_id FK
+    string author_label
+    uuid model_version_id FK
+  }
+```
+
+- **Запись.** Каждая новая версия модели (`repositories.add_model_version`: push, импорт, ответ и
+  мастер в просмотре, вывод анализатора через push) разбирается в таблицы (`questions.ingest`):
+  новый qid — строка `question`; другая формулировка или определение — ревизия `edit`; вопроса нет
+  в `intake.yaml` — ревизия `removed`, вернулся — `restored`; другой ответ или запись `log` —
+  ревизия ответа, ответа нет — ревизия без значения. Битый или неверный файл не разбирается:
+  проверка сообщит, таблицы хранят последнее верное. Автор — автор версии (`analyzer`,
+  `operator`, `user`), её `user_id`, подпись — кода доступа или имя из `log` (только если запись
+  `log` новая: чужая старая запись автора не называет).
+- **Ответы из просмотра** идут прежней функцией ядра (`save_answer`, `save_answers`, `save_wizard`,
+  `review_answer`) во временной папке, где `intake.yaml` и `answers.yaml` собраны из таблиц: так
+  сохраняются все правила — ответ с новой ошибкой проверки не сохраняется, разобранный ответ можно
+  изменить, но не снять, `log` пишется. Результат — новая версия модели и ревизии от пользователя.
+  Просмотр над папкой (`view` без базы) работает с файлами, как раньше.
+- **Чтение.** Тексты последней версии для сборки и `pull` собираются из таблиц
+  (`questions.texts`, `project_store.project_files`); текст версии служит основой: те же данные —
+  тот же текст байт в байт (тот же `answers_digest`), другой ответ — правка строки с сохранением
+  комментариев (`answers_file.edit_answers`), другие вопросы — новый раздел `questions` с
+  комментариями из `note`, разделы `sources` и `stages` — из текста версии. `model_version.intake_yaml`
+  и `answers_yaml` остаются снимком, собранным из таблиц (`questions.snapshot`).
+- **Вопросы кода** (`panel_…`, `heating_…`) после сборки записываются из отчёта с `source = code`
+  (`questions.record_code`), ревизия — при изменении текста или определения; в `intake.yaml`
+  они не пишутся. Ответ на вопрос, которого ещё нет (вопрос щита до первой сборки, ответ на
+  снятый вопрос), заводит строку `question` без формулировки.
+- **Миграция `0017`** удаляет неиспользуемые `round`, `question`, `answer` (заготовка из `0001`) и
+  заполняет новые таблицы из всех версий моделей по порядку (`questions.backfill`; вопросы кода —
+  из последней сборки каждой версии). Проверено на копии локальной базы (19 версий, 3 проекта):
+  тексты из таблиц совпадают со снимками. Откат удаляет ревизии; тексты версий остаются.
+- **Дальше (шаг 2):** треды — обсуждение вопроса (`question_id`) или свободное, без вопроса;
+  API истории — `questions.history`.
 
 ### Монтаж по задачам (решение 2026-11-11, миграции `0013`, `0014`)
 

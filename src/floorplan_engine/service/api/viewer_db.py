@@ -4,10 +4,11 @@ addressed by its id (an old link by name still opens) — its sheets and out/ fi
 latest build in file storage, the model from the latest version.
 
 Writes keep the core as it is: an answer or a wiring variant is applied by the same core
-function (save_answer, save_wizard) in a temporary folder with the latest version, the changed
-files become a new model version by the user, and the project is rebuilt. Routes are not edited
-in the viewer (decision 2026-11-16). The studio
-price list is the caller's studio row in price_list (text with comments).
+function (save_answer, save_wizard) in a temporary folder with the latest version (intake.yaml and
+answers.yaml made from the question tables), the changed files become a new model version by the
+user — its answers become answer revisions (db/questions.py) — and the project is rebuilt.
+Routes are not edited in the viewer (decision 2026-11-16). The studio price list is the caller's
+studio row in price_list (text with comments).
 
 Turned on by create_viewer(..., store=…): login (auth) is required.
 """
@@ -374,9 +375,11 @@ def _edit_routes(
                 if issues:
                     raise HTTPException(422, "; ".join(f"{i.path}: {i.message}" for i in issues))
                 files = sync.model_files(folder)
-            version = repo.add_model_version(db, p.id, files, "user")
             who = auth.principal(db, request)
-            version.user_id = who.user.id if who is not None and who.user is not None else None
+            user_id = who.user.id if who is not None and who.user is not None else None
+            label = answer_note(who).by or ""
+            # Answers go into the question tables as revisions by this user (questions.ingest)
+            version = repo.add_model_version(db, p.id, files, "user", user_id, label)
             if not rebuild():
                 return {"built": False, "notes": []}
             build = ps.build(db, store, p, version)

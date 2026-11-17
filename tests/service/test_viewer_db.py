@@ -17,6 +17,7 @@ from floorplan_engine.service.api.auth import COOKIE, Auth, AuthConfig
 from floorplan_engine.service.api.viewer import create_viewer
 from floorplan_engine.service.api.viewer_db import answer_note
 from floorplan_engine.service.db import access as acc
+from floorplan_engine.service.db import questions
 from floorplan_engine.service.db import repositories as repo
 from floorplan_engine.service.db.models import PriceList, Project
 from floorplan_engine.service.db.session import make_sessions
@@ -266,6 +267,15 @@ def test_answers_are_new_versions(
         log = latest.data["answers.yaml"]["log"]
         assert log["q2"]["by"] == "a"
         assert log["q1"]["by"] == "client" and log["q1"]["reviewed_by"] == "a"
+        # Each answer and review is an answer revision by its user (db/questions.py)
+        q1 = questions.current(db, uuid.UUID(pid))["q1"].row
+        steps = [(a.state, a.author_label) for a in questions.history(db, q1)[1]]
+        assert steps == [
+            ("pending", "client"),
+            ("returned", "a"),
+            ("pending", "client"),
+            ("resolved", "a"),
+        ]
 
 
 def test_wizard_is_one_new_version_by_the_studio_client(

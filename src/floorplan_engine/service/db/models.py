@@ -393,39 +393,78 @@ class ModelVersion(Base):
     created_at: Mapped[datetime] = _created()
 
 
-class Round(Base):
-    __tablename__ = "round"
-    __table_args__ = (UniqueConstraint("project_id", "number"),)
+class Question(Base):
+    """A project question (docs/database.md, «Вопросы и ответы»): who asked it and its definition —
+    what the answer is put into and how it is given. The wording changes by revisions
+    (question_revision), the answers too (answer_revision). intake.yaml is made from these rows:
+    `position` is the place there; None — not written there (a code-built question, one removed
+    from intake.yaml, or one known only by an answer to it)."""
+
+    __tablename__ = "question"
+    __table_args__ = (UniqueConstraint("project_id", "qid"),)
     id: Mapped[uuid.UUID] = _id()
     project_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("project.id", ondelete="CASCADE"))
-    number: Mapped[int] = mapped_column(Integer)
+    qid: Mapped[str] = mapped_column(String(100))  # q1, panel_input… — the id in YAML
+    source: Mapped[str] = mapped_column(String(20))  # analyzer | studio | operator | code
+    stage: Mapped[str | None] = mapped_column(String(20))
+    target: Mapped[str | None] = mapped_column(Text)
+    also: Mapped[list[Any]] = mapped_column(default=list)
+    unit: Mapped[str | None] = mapped_column(String(20))
+    audience: Mapped[str] = mapped_column(String(10), default="studio")  # studio | client
+    kind: Mapped[str] = mapped_column(String(10), default="text")  # value | choice | text | groups
+    options: Mapped[list[Any]] = mapped_column(default=list)
+    option_labels: Mapped[dict[str, Any]] = mapped_column(default=dict)
+    position: Mapped[int | None] = mapped_column(Integer)
+    created_at: Mapped[datetime] = _created()
+
+
+class QuestionRevision(Base):
+    """The wording of a question from one model version on: text, assumption, severity and the
+    YAML comment next to it (note). reason: new | edit | removed | restored. The author is a user
+    (user_id), a client code (author_label), the analyzer, the operator or code."""
+
+    __tablename__ = "question_revision"
+    __table_args__ = (UniqueConstraint("question_id", "number"),)
+    id: Mapped[uuid.UUID] = _id()
+    question_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("question.id", ondelete="CASCADE"))
+    number: Mapped[int] = mapped_column(Integer)  # 1, 2… in the question
+    text: Mapped[str] = mapped_column(Text)
+    assumption: Mapped[Any] = mapped_column(JSONB(none_as_null=True), nullable=True)
+    severity: Mapped[str | None] = mapped_column(String(10))
+    note: Mapped[str] = mapped_column(Text, default="")
+    reason: Mapped[str] = mapped_column(String(20))
+    author: Mapped[str] = mapped_column(String(20))  # analyzer | operator | user | code
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("app_user.id", ondelete="SET NULL")
+    )
+    author_label: Mapped[str] = mapped_column(String(200), default="")
     model_version_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("model_version.id", ondelete="SET NULL")
     )
     created_at: Mapped[datetime] = _created()
 
 
-class Question(Base):
-    __tablename__ = "question"
-    __table_args__ = (UniqueConstraint("round_id", "qid"),)
+class AnswerRevision(Base):
+    """An answer to a question from one model version on: the value as in answers.yaml (None —
+    the answer was removed) and its `log` entry as written. A text answer has a state: pending
+    (waits for the studio), resolved, returned (with the studio comment)."""
+
+    __tablename__ = "answer_revision"
+    __table_args__ = (UniqueConstraint("question_id", "number"),)
     id: Mapped[uuid.UUID] = _id()
-    round_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("round.id", ondelete="CASCADE"))
-    qid: Mapped[str] = mapped_column(String(20))  # q1, q2… from intake.yaml
-    stage: Mapped[str] = mapped_column(String(20))
-    target: Mapped[str | None] = mapped_column(Text)
-    severity: Mapped[str] = mapped_column(String(10))  # critical | major | minor
-    text: Mapped[str] = mapped_column(Text)
-    state: Mapped[str] = mapped_column(String(20), default="open")  # open | answered | …
-
-
-class Answer(Base):
-    __tablename__ = "answer"
-    question_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("question.id", ondelete="CASCADE"), primary_key=True
-    )
-    value: Mapped[dict[str, Any]] = mapped_column()  # {"value": 1800} | {"accept": true} | …
+    question_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("question.id", ondelete="CASCADE"))
+    number: Mapped[int] = mapped_column(Integer)
+    value: Mapped[Any] = mapped_column(JSONB(none_as_null=True), nullable=True)
+    state: Mapped[str | None] = mapped_column(String(10))  # pending | resolved | returned
+    comment: Mapped[str | None] = mapped_column(Text)  # returned: what the studio asks
+    log: Mapped[Any] = mapped_column(JSONB(none_as_null=True), nullable=True)
+    author: Mapped[str] = mapped_column(String(20))
     user_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("app_user.id", ondelete="SET NULL")
+    )
+    author_label: Mapped[str] = mapped_column(String(200), default="")
+    model_version_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("model_version.id", ondelete="SET NULL")
     )
     created_at: Mapped[datetime] = _created()
 
