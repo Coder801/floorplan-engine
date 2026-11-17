@@ -565,7 +565,10 @@ def _misfit(fh: FloorHeating, length: float, length_mm: float, bare: float, long
         return f"из ряда серии нет длины с шагом {pitches}: взята {length:g} м, {extra}"
     without = f"без кабеля ~{bare / 1000:.1f} м трассы"
     if fh.length is not None:
-        return f"длины из источника {length:g} м не хватает на зону при шаге {PITCH_MAX:g} мм: {without}"
+        return (
+            f"длины из источника {length:g} м не хватает на зону при шаге {PITCH_MAX:g} мм: "
+            f"{without}"
+        )
     return f"из ряда серии нет длины с шагом {pitches}: взята {length:g} м, {without}"
 
 
