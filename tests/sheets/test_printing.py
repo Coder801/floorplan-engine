@@ -85,7 +85,9 @@ def test_small_format_moves_tables_to_continuation() -> None:
     names = [lay.name for lay in sheet_layouts(doc)]
     assert any("(продолжение)" in n for n in names)
     checks = {c.tab: c for c in check_sheets(doc)}
-    assert not checks["03 Электрика (продолжение)"].empty
+    # On A4 the plan legend goes to a continuation too, so the sheet numbers shift: by name
+    (electrical,) = [c for t, c in checks.items() if t.endswith("Электрика (продолжение)")]
+    assert not electrical.empty
     assert all(c.min_text is None or c.min_text >= MIN_TEXT_MM - 1e-6 for c in checks.values())
     # What did not fit even on a continuation (panel devices wider than A4) does not vanish silently
     assert all(c.warnings() for c in checks.values() if c.empty or c.overflow > 0.5)

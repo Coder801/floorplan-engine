@@ -7,12 +7,14 @@ The lines of the plane: each on its own lane of the bundle (drawing/wiring.lay_o
 wiring sheet), in its group colour, cut by the room with its walls (a passage through a wall
 shows up to the neighbour). Fixings: one line across the bundle — the conduit clips snap
 together, the pads stand side by side (electrical/mounting.plan_fixings) — with the number of
-fixings, "×5", once per bundle piece; at a bundle turn the radii of the inner and the outer
-line, "R130–160". Boxes "К3". Line ends: a ring with a dot is a drop down a wall (its cable is on
-that wall's elevation), a ring with a cross a point on the ceiling, a square the panel; the point
-numbers of the electrical sheet and the group beside. Below: offsets from the left wall, on the
-right: from the bottom wall (ordinate dimensions as on the elevations), a dashed leader from every
-dimensioned spot to its value; a value with its leaders and spots is its own object,
+fixings, "×5", once per bundle piece. A turn is drawn round with the radius the cable takes
+(drawing/mounting.lane_turns; the lanes of a bundle concentric), signed at a bundle turn with the
+radii of the inner and the outer line, "R130–160", at a single line's turn with its radius, "R115",
+where there is room for it. Boxes "К3". Line ends: a ring with a dot is a drop down a wall (its
+cable is on that wall's elevation), a ring with a cross a point on the ceiling, a square the panel;
+the point numbers of the electrical sheet and the group beside. Below: offsets from the left wall,
+on the right: from the bottom wall (ordinate dimensions as on the elevations), a dashed leader from
+every dimensioned spot to its value; a value with its leaders and spots is its own object,
 "dim:<room>.ceiling.x1450": hovering it in the viewer lights what it measures.
 
 The whole view is the object "elevation:<room>.ceiling" (".floor" for a floor plane): the viewer
@@ -24,6 +26,8 @@ from __future__ import annotations
 from collections import defaultdict
 from collections.abc import Callable, Mapping, Sequence
 
+from ezdxf.entities.dxfgfx import DXFGraphic
+from ezdxf.entities.lwpolyline import LWPolyline
 from ezdxf.enums import TextEntityAlignment
 from ezdxf.layouts.layout import Paperspace
 from shapely.geometry import LineString, Point, Polygon
@@ -45,9 +49,9 @@ from floorplan_engine.drawing.elevations import (
     ElevationPanel,
     spread,
 )
-from floorplan_engine.drawing.ids import tagged
+from floorplan_engine.drawing.ids import set_object_id, tagged
 from floorplan_engine.drawing.layers import E_ELEV, M_FIX, MIN_TEXT_MM, W_BOX, text_width
-from floorplan_engine.drawing.mounting import Bend, bend_label
+from floorplan_engine.drawing.mounting import Turns, bend_label, rounded
 from floorplan_engine.drawing.plan import add_text
 from floorplan_engine.electrical.bundles import Bundle
 from floorplan_engine.electrical.ceilings import (
@@ -55,6 +59,7 @@ from floorplan_engine.electrical.ceilings import (
     CeilingView,
     dimension_key,
     dimension_spots,
+    lane_key,
     view_offsets,
 )
 from floorplan_engine.electrical.mounting import (
@@ -82,6 +87,7 @@ MIN_BOX = 1.2  # box square side, not less than this on the sheet, mm
 LW_CABLE = 25  # line weight of a cable, 1/100 mm
 LW_OUTLINE = 70  # the room's inner outline: thicker than the cables
 BEND_GAP = 2.0  # from the corner to the radius label, sheet mm
+SAME_RADIUS_MM = 12.0  # a single line's radius is not signed again this close, sheet mm
 Box = tuple[float, float, float, float]  # x0, y0, x1, y1 in sheet mm
 Spot = tuple[PlanFixing, float, float]  # a fixing spot and the bundle band across it, model mm
 
@@ -115,15 +121,15 @@ def ceiling_panel(
     view: CeilingView,
     wiring: Wiring,
     paths: Sequence[Sequence[Vec]],
-    bends: Sequence[Bend],
+    turns: Turns,
     colors: Mapping[str, int],
     cable_layers: Mapping[str, str],
     fixings: Sequence[Spot],
     scale: float,
     language: Language,
 ) -> ElevationPanel:
-    """The view of one plane of one room at 1:scale; paths are the line lanes (lay_out), bends
-    the bundle turns (bundle_bends), cable_layers the layer of each line (wiring.cable_layer),
+    """The view of one plane of one room at 1:scale; paths are the line lanes (lay_out), turns
+    their radii and fillets (lane_turns), cable_layers the layer of each line (wiring.cable_layer),
     fixings the plan fixing spots (fixing_bands), all of the whole wiring; draw is from the
     block's top-left corner."""
     xs, ys = view_offsets(view, wiring)
@@ -139,10 +145,14 @@ def ceiling_panel(
     def draw(psp: Paperspace, top_left: Vec) -> None:
         origin = Vec(top_left.x + CODE_PAD, top_left.y - HEAD - CODE_PAD - h)
         with tagged(psp, "elevation", f"{view.room}.{view.plane}"):
-            _draw(
-                psp, view, wiring, paths, bends, colors, cable_layers, fixings, scale, language,
+            lanes = _draw(
+                psp, view, wiring, paths, turns, colors, cable_layers, fixings, scale, language,
                 top_left, origin,
             )  # fmt: skip
+        # Each line's lanes are an object of their own (lane_key): its row in the side panel
+        # lights it, the viewer pages it with the view (walls.ownerOf)
+        for entity, rid in lanes:
+            set_object_id(entity, *lane_key(view, rid).split(":", 1))
         _draw_dims(psp, view, wiring, scale, origin, (xs, ys))
 
     return ElevationPanel(width, height, draw)
@@ -190,11 +200,19 @@ class _Pen:
             dxfattribs={"layer": self.layer, "lineweight": lw, "true_color": color},
         )
 
-    def poly(self, pts: Sequence[Vec], lw: int, color: int, close: bool = False) -> None:
-        self.psp.add_lwpolyline(
+    def poly(self, pts: Sequence[Vec], lw: int, color: int, close: bool = False) -> LWPolyline:
+        # Solid, whatever the layer (decision 2026-11-17): the cable layers are dashed for the
+        # wiring sheet, here the group colour tells the cables apart, the floor has its own view,
+        # and dashes of a dense bundle merge into ripples
+        return self.psp.add_lwpolyline(
             [p.as_tuple() for p in pts],
             close=close,
-            dxfattribs={"layer": self.layer, "lineweight": lw, "true_color": color},
+            dxfattribs={
+                "layer": self.layer,
+                "lineweight": lw,
+                "true_color": color,
+                "linetype": "Continuous",
+            },
         )
 
     def circle(self, c: Vec, r: float, color: int, lw: int = LW_WALL) -> None:
@@ -219,7 +237,7 @@ def _draw(
     view: CeilingView,
     wiring: Wiring,
     paths: Sequence[Sequence[Vec]],
-    bends: Sequence[Bend],
+    turns: Turns,
     colors: Mapping[str, int],
     cable_layers: Mapping[str, str],
     fixings: Sequence[Spot],
@@ -227,7 +245,8 @@ def _draw(
     language: Language,
     top_left: Vec,
     origin: Vec,
-) -> None:
+) -> list[tuple[DXFGraphic, str]]:
+    """Draw the view; returns the cable lanes with their line ids."""
     bx0, by0, _, _ = view.clip.bounds
     pen = _Pen(psp, origin, bx0, by0, scale)
     at = pen.at
@@ -245,17 +264,21 @@ def _draw(
         spot = at(mid + wall.outward * wall.thickness) + wall.outward * (CODE_GAP + LABEL_MM / 2)
         pen.label(wall.code, spot, align=TextEntityAlignment.MIDDLE_CENTER, color=GREY)
 
-    # Lines on their lanes, cut by the room with its walls
+    # Lines on their lanes, turns round, cut by the room with its walls
     index = {r.id: k for k, r in enumerate(wiring.runs)}
+    fillets: dict[int, dict[int, float]] = defaultdict(dict)
+    for (k, i), r in turns.fillets.items():
+        fillets[k][i] = r
+    lanes: list[tuple[DXFGraphic, str]] = []
     for rid in view.runs:
         k = index[rid]
-        lane = paths[k]
+        lane = rounded(paths[k], fillets.get(k, {}))
         if len(lane) < 2:
             continue
         pen.layer = cable_layers.get(rid, E_ELEV.name)
         color = colors.get(wiring.runs[k].group, DARK)
         for part in _parts(LineString([p.as_tuple() for p in lane]).intersection(view.clip)):
-            pen.poly([at(Vec(x, y)) for x, y in part.coords], LW_CABLE, color)
+            lanes.append((pen.poly([at(Vec(x, y)) for x, y in part.coords], LW_CABLE, color), rid))
 
     # Fixings: one line across the bundle, the number of clips or pads once per bundle piece
     pen.layer = M_FIX.name
@@ -270,13 +293,6 @@ def _draw(
             s = f"×{len(fx.keys)}"
             where = p1 + across * (0.4 + text_width(s, LABEL_MM) / 2)
             pen.label(s, where, align=TextEntityAlignment.MIDDLE_CENTER)
-    for bend in bends:
-        if not inner.contains(Point(bend.at.x, bend.at.y)):
-            continue
-        s = bend_label(bend)
-        spot = at(bend.at) + bend.inside * (BEND_GAP + text_width(s, LABEL_MM) / 2)
-        pen.label(s, spot, align=TextEntityAlignment.MIDDLE_CENTER)
-
     pen.layer = W_BOX.name
     for b in view.boxes:
         c = at(b.at)
@@ -290,6 +306,27 @@ def _draw(
         first = end.runs[0] if end.runs else ""
         pen.layer = W_BOX.name if end.kind == "board" else cable_layers.get(first, E_ELEV.name)
         _draw_end(pen, end, at(end.at), taken, colors)
+
+    # Turn radii inside the turn: a bundle's always; a single line's where there is room and the
+    # same radius is not signed close by
+    pen.layer = M_FIX.name
+    signed: list[tuple[Vec, str]] = []
+    for bend in sorted(turns.bends, key=lambda b: -len(b.radii)):
+        if not inner.contains(Point(bend.at.x, bend.at.y)):
+            continue
+        s = bend_label(bend)
+        tw, th = text_width(s, LABEL_MM), max(LABEL_MM, MIN_TEXT_MM)
+        c = at(bend.at) + bend.inside * (BEND_GAP + tw / 2)
+        box = (c.x - tw / 2, c.y - th / 2, c.x + tw / 2, c.y + th / 2)
+        if len(bend.radii) == 1 and (
+            any(_hit(box, t) for t in taken)
+            or any(s == t and (c - p).length() < SAME_RADIUS_MM for p, t in signed)
+        ):
+            continue
+        taken.append(box)
+        signed.append((c, s))
+        pen.label(s, c, align=TextEntityAlignment.MIDDLE_CENTER)
+    return lanes
 
 
 SPOT_R = 0.35  # a dimensioned spot on its leader, sheet mm

@@ -456,7 +456,7 @@ def test_furniture_cards_and_the_zone_card_says_what_is_cut(tmp_path: Path) -> N
     )
     (card,) = heating_cards(plan, contours, elec).values()
     rows = dict(card.rows)
-    assert rows["Зона"] == "по регулятору (допущение)" and rows["По проекту, м²"] == "9"
+    assert rows["Зона"] == "по регулятору (допущение)" and rows["По проекту"] == "9 м²"
     assert rows["Без кабеля"] == "k" and list(rows)[-1] == "Без кабеля"
     doc = build_project_document(plan, contours, elec, furniture=furniture)
     objects = describe_objects(plan, contours, elec, furniture=furniture)

@@ -23,9 +23,11 @@ from floorplan_engine.drawing.electrical import (
 from floorplan_engine.drawing.elevations import ElevationPanel, elevation_panel
 from floorplan_engine.drawing.floor_heating import draw_floor_heating, heating_table
 from floorplan_engine.drawing.furniture import draw_furniture
+from floorplan_engine.drawing.heating_legend import heating_legend_variants
 from floorplan_engine.drawing.layers import (
     A_DIMS,
     A_DOOR,
+    A_SILL,
     A_TEXT,
     A_VPORT,
     A_WALL,
@@ -48,9 +50,10 @@ from floorplan_engine.drawing.layers import (
     text_width,
 )
 from floorplan_engine.drawing.lighting import draw_lighting, lighting_model, switch_table
-from floorplan_engine.drawing.mounting import bends_table, bundle_bends, fixings_table
+from floorplan_engine.drawing.mounting import bends_table, fixings_table, lane_turns
 from floorplan_engine.drawing.panel import devices_table, draw_panel_front, fit_panel, panel_notes
 from floorplan_engine.drawing.plan import RoomArea, add_text, draw_plan
+from floorplan_engine.drawing.plan_legend import plan_legend_variants
 from floorplan_engine.drawing.plumbing import draw_plumbing, fixtures_table, pipes_table
 from floorplan_engine.drawing.plumbing_legend import legend_variants
 from floorplan_engine.drawing.schedules import (
@@ -80,6 +83,7 @@ from floorplan_engine.model.schema import LIGHT_TYPES, Electrical, Plan, WiringE
 from floorplan_engine.model.texts import Language, tr
 from floorplan_engine.plumbing.estimate import build_estimate as plumbing_estimate
 from floorplan_engine.plumbing.estimate import text as plumbing_estimate_text
+from floorplan_engine.plumbing.floor_spots import spot_names
 from floorplan_engine.plumbing.network_model import Network
 from floorplan_engine.plumbing.rows import plumbing_notes, water_views
 from floorplan_engine.sheets.layout import (
@@ -93,7 +97,7 @@ from floorplan_engine.sheets.layout import (
 
 ELEV_NOTES_W = 160.0  # width of the elevations explanation, sheet mm
 # What each sheet's viewport shows; furniture (F_FURN) is on the plan and floor heating sheets
-PLAN_SHEET_LAYERS = (A_WALL, A_DOOR, A_WIND, A_DIMS, A_TEXT, F_FURN)
+PLAN_SHEET_LAYERS = (A_WALL, A_DOOR, A_WIND, A_SILL, A_DIMS, A_TEXT, F_FURN)
 ELECTRICAL_SHEET_LAYERS = (A_WALL, A_DOOR, A_WIND, *ELECTRICAL_LAYERS)
 # Lighting: walls, lights and switches, links and their numbers; no sockets, panel or groups
 LIGHTING_SHEET_LAYERS = (A_WALL, A_DOOR, A_WIND, E_SWITCH, E_LIGHT, E_LED, *LIGHTING_LAYERS)
@@ -270,7 +274,16 @@ def draw_stages(
     areas = draw_plan(msp, plan, contours)
     if furniture is not None:
         draw_furniture(msp, plan, furniture)
-    specs = [SheetSpec("tab_plan", "plan_image", PLAN_SHEET_LAYERS, (schedule_panel(plan, areas),))]
+    plan_legends = tuple(Panel(w, h, draw) for w, h, draw in plan_legend_variants(plan))
+    specs = [
+        SheetSpec(
+            "tab_plan",
+            "plan_image",
+            PLAN_SHEET_LAYERS,
+            (schedule_panel(plan, areas),),
+            legends=plan_legends,
+        )
+    ]
     if elec is not None:
         draw_electrical(msp, plan, contours, elec)
         specs.append(
@@ -307,7 +320,7 @@ def draw_stages(
         board = panel_spec(plan, elec)
         if board is not None:
             specs.append(board)
-        heating = floor_heating_spec(msp, plan, contours, elec)
+        heating = floor_heating_spec(msp, plan, contours, elec, plumbing[0] if plumbing else None)
         if heating is not None:
             specs.append(heating)
     if plumbing is not None:
@@ -362,20 +375,31 @@ def plumbing_spec(
 
 
 def floor_heating_spec(
-    msp: Modelspace, plan: Plan, contours: dict[str, Contour], elec: Electrical
+    msp: Modelspace,
+    plan: Plan,
+    contours: dict[str, Contour],
+    elec: Electrical,
+    plumbing: Plumbing | None = None,
 ) -> SheetSpec | None:
     """The "Floor heating" sheet, after the panel: zones, the cable as a serpentine, sensor and
-    cold lead, the zones table with the assumptions under it. No zones, no sheet."""
+    cold lead, the zones table with the assumptions under it; plumbing names the fixtures cut out
+    of the floor. No zones, no sheet."""
     zones = heating_zones(plan, contours, elec)
     if not zones:
         return None
-    draw_floor_heating(msp, plan, contours, elec, zones)
+    names = spot_names(plumbing, plan.language) if plumbing is not None else {}
+    draw_floor_heating(msp, plan, contours, elec, zones, names)
     built = heating_table(plan, elec, zones)
     assert built is not None
     table, notes = built
     panel = stacked(table_panel(table), notes_panel(notes, width=table.width))
+    legends = tuple(Panel(w, h, draw) for w, h, draw in heating_legend_variants(plan.language))
     return SheetSpec(
-        "tab_floor_heating", "floor_heating_image", FLOOR_HEATING_SHEET_LAYERS, (panel,)
+        "tab_floor_heating",
+        "floor_heating_image",
+        FLOOR_HEATING_SHEET_LAYERS,
+        (panel,),
+        legends=legends,
     )
 
 
@@ -453,7 +477,7 @@ def _ceiling_blocks(
     lang = plan.language
     conduit = elec.conduit_level
     paths, plane_bundles = lay_out(wiring)
-    turns = bundle_bends(wiring, paths, conduit)
+    turns = lane_turns(wiring, paths, conduit)
     spots = fixing_bands(wiring, plane_bundles, conduit)
     colors = group_colors(elec)
     classes = line_classes(plan, elec)

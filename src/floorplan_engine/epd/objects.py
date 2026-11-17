@@ -25,9 +25,11 @@ from floorplan_engine.electrical.anchors import symbol_key
 from floorplan_engine.electrical.boxes import BOX_CLEARANCE, BOX_TITLES, box_wall
 from floorplan_engine.electrical.ceilings import (
     CeilingView,
+    ceiling_lines,
     ceiling_views,
     dimension_key,
     dimension_spots,
+    lane_key,
 )
 from floorplan_engine.electrical.elevations import (
     PointView,
@@ -78,6 +80,7 @@ TEXT: dict[str, dict[str, str]] = {
     "length": {"ru": "Длина", "uk": "Довжина"},
     "size": {"ru": "Размер", "uk": "Розмір"},
     "ceiling_lines": {"ru": "Линий через помещение", "uk": "Ліній через приміщення"},
+    "in_room": {"ru": "В этом помещении", "uk": "У цьому приміщенні"},
     "from_wall": {"ru": "от стены {wall}", "uk": "від стіни {wall}"},
     "from_edge_x": {"ru": "от левого края помещения", "uk": "від лівого краю приміщення"},
     "from_edge_y": {"ru": "от нижнего края помещения", "uk": "від нижнього краю приміщення"},
@@ -305,6 +308,12 @@ def describe_objects(
                     f"{view.room_name} — {plane}", card
                 )
                 out.update(_dimension_cards(view, wiring, lang))
+                # A line on the view: the card of its wiring line plus its length in this room
+                for ln in ceiling_lines(plan, elec, wiring, view):
+                    line = out.get(f"wire:{ln.run}")
+                    if line is not None:
+                        here = (text("in_room", lang), f"{_m(ln.length)} м")
+                        out[lane_key(view, ln.run)] = replace(line, rows=(*line.rows, here))
     return out
 
 
@@ -312,26 +321,27 @@ def heating_cards(
     plan: Plan, contours: dict[str, Contour], elec: Electrical
 ) -> dict[str, ObjectInfo]:
     """Floor heating zone cards ("heating:<id>", sheet "Floor heating"): area, section, power,
-    pitch, cold lead; "*" — as in the zones table, not from the project; the fixtures cut out by
-    their typical size are named as an assumption (the obstacles are real, not named)."""
+    pitch, cold lead, each value with its unit (the labels carry none: the card is read as a
+    hint, not as a table); "*" — as in the zones table, not from the project; the fixtures cut
+    out by their typical size are named as an assumption (the obstacles are real, not named)."""
     lang = plan.language
     out: dict[str, ObjectInfo] = {}
     for z in heating_zones(plan, contours, elec):
         rows = [
             *([(tr("fh_zone", lang), tr("fh_auto_value", lang))] if z.spec.auto else []),
-            (tr("fh_area", lang), f"{z.area_m2:.1f}".replace(".", ",")),
+            (tr("fh_card_area", lang), f"{z.area_m2:.1f} м²".replace(".", ",")),
             *(
-                [(tr("fh_area_src", lang), f"{z.spec.area:g}".replace(".", ","))]
+                [(tr("fh_card_area_src", lang), f"{z.spec.area:g} м²".replace(".", ","))]
                 if z.spec.area is not None
                 else []
             ),
-            (tr("fh_length", lang), f"{z.length:g}{'*' if z.length_assumed else ''}"),
-            (tr("fh_power", lang), f"{z.power:.0f}*"),
-            (tr("fh_density", lang), f"{z.real_density:.0f}"),
-            (tr("fh_lead", lang), f"{z.lead_m:.1f}".replace(".", ",")),
+            (tr("fh_card_length", lang), f"{z.length:g} м{'*' if z.length_assumed else ''}"),
+            (tr("fh_card_power", lang), f"{z.power:.0f} Вт*"),
+            (tr("fh_card_density", lang), f"{z.real_density:.0f} Вт/м²"),
+            (tr("fh_card_lead", lang), f"{z.lead_m:.1f} м".replace(".", ",")),
         ]
         if z.pitch is not None:
-            rows.insert(len(rows) - 2, (tr("fh_pitch", lang), f"{z.pitch:.0f}"))
+            rows.insert(len(rows) - 2, (tr("fh_card_pitch", lang), f"{z.pitch:.0f} мм"))
         if z.typical:
             rows.append((tr("fh_fixtures", lang), tr("fh_typical", lang, ids=", ".join(z.typical))))
         if z.furniture:

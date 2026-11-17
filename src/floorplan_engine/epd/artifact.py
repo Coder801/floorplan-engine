@@ -349,6 +349,7 @@ def export_artifact(
     plan_areas: dict[str, list[list[tuple[float, float]]]] | None = None,
     plan_floors: dict[str, list[list[tuple[float, float]]]] | None = None,
     work_plan: dict[str, Any] | None = None,
+    ceilings: list[dict[str, Any]] | None = None,
 ) -> Path:
     """Write the .epd: the manifest and one page per document sheet. objects are object cards for
     hints (objects.describe_objects): a page gets only its own objects and only those of the sheet
@@ -359,10 +360,12 @@ def export_artifact(
     edited on the wiring sheet (objects.wiring_handles); scene is the 3D wiring scene
     (scene3d.build_scene); panel is the panel for its own view in the viewer
     (panel_data.panel_data); elevations are elevations as data (elevations.elevation_data): a
-    sheet gets the ones on it; legends is the legend for the sheet topic (side.side_legends) for
-    the viewer badge: captions from here, icons are the legend:<key> primitives from the sheet
-    itself; variants are the wiring variants (pipeline.variant_block): the chosen one and a
-    summary of all go into the manifest; overview is the project overview
+    sheet gets the ones on it; ceilings are the ceiling (and floor) views with their lines for
+    the side panel (ceilings.ceiling_data), the same way; legends is the legend for the sheet
+    topic (side.side_legends) for the viewer badge: captions from here, icons are the
+    legend:<key> primitives from the sheet itself; variants are the wiring variants
+    (pipeline.variant_block): the chosen one and a summary of all go into the manifest; overview
+    is the project overview
     (overview.overview_data) for the first viewer tab, also in the manifest; plan_chains is what
     to highlight on click on the plan sheet (objects.plan_chains); light_chains is the switch
     bundle to highlight on click on the lighting sheet (objects.light_chains); plan_areas is
@@ -418,6 +421,9 @@ def export_artifact(
             if elevations and stage == "elevations":
                 drawn = {item["o"] for item in page["items"] if "o" in item}
                 page["elevations"] = [e for e in elevations if e["key"] in drawn]
+            if ceilings and stage == "elevations":
+                drawn = {item["o"] for item in page["items"] if "o" in item}
+                page["ceilings"] = [c for c in ceilings if c["key"] in drawn]
             file = f"pages/{no:02d}.json"
             _write(zf, file, page)
             pages.append(

@@ -11,6 +11,7 @@ from ezdxf.document import Drawing
 from ezdxf.filemanagement import readfile
 
 from floorplan_engine.drawing.wiring import write_chases, write_journal
+from floorplan_engine.electrical.ceilings import ceiling_data
 from floorplan_engine.electrical.colors import group_colors
 from floorplan_engine.electrical.elevations import elevation_data
 from floorplan_engine.electrical.estimate import (
@@ -349,6 +350,9 @@ def _export(
         plan_areas=plan_areas(plan, contours),
         plan_floors=plan_floor_rings(plan, contours),
         work_plan=work_plan(estimate, plumbing_estimate, plan.language),
+        ceilings=ceiling_data(plan, contours, elec, wiring, group_colors(elec))
+        if elec is not None and wiring is not None
+        else None,
     )
 
 

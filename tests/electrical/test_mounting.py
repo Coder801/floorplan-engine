@@ -68,16 +68,20 @@ def _run(path: list[Vec], rise_start: float = 0.0, rise_end: float = 0.0, **kw: 
     )
 
 
-def test_spots_offset_from_ends_and_no_wider_than_step() -> None:
+def test_spots_offset_from_ends_and_no_closer_than_step() -> None:
+    """Decision 2026-11-17: the step is the smallest gap, as many fixings as fit."""
     got = spots(1000.0, 300.0, 50.0)
     assert got[0] == pytest.approx(50.0) and got[-1] == pytest.approx(950.0)
     gaps = [b - a for a, b in itertools.pairwise(got)]
-    assert max(gaps) <= 300.0 + 1e-6 and len(got) == 4  # 900 mm inside: 3 gaps of 300
+    assert min(gaps) >= 300.0 - 1e-6 and len(got) == 4  # 900 mm inside: 3 gaps of 300
     assert spots(400.0, 300.0, 50.0) == pytest.approx([50.0, 350.0])  # exactly one step
+    assert spots(1150.0, 500.0, 50.0) == pytest.approx([50.0, 575.0, 1100.0])  # 2 gaps of 525
+    assert len(spots(1000.0, 500.0, 50.0)) == 2  # 900 inside: not two gaps of 450
 
 
 def test_spots_short_pieces() -> None:
     assert spots(80.0, 300.0, 50.0) == [40.0]  # up to 2·offset: one in the middle
+    assert spots(400.0, 500.0, 50.0) == [200.0]  # the end ones would be 300 apart: the middle
     assert spots(30.0, 300.0, 50.0) == []  # shorter than offset: held by the neighbours
     assert spots(0.0, 300.0, 50.0) == []
 
@@ -90,7 +94,8 @@ def test_run_fixings_per_piece_and_rise() -> None:
     got = run_fixings(run, "none")
     first = [f for f in got if f.piece == 0]
     second = [f for f in got if f.piece == 1]
-    assert len(first) == len(spots(1000, 300, 50)) and len(second) == 2
+    ceiling = PRACTICE.steps["ceiling"]
+    assert len(first) == len(spots(1000, ceiling, 50)) and len(second) == 1
     assert all(f.surface == "ceiling" and not f.in_conduit for f in first + second)
     walls = [f for f in got if f.piece is None]
     assert len(walls) == len(spots(1000, 500, 50)) + len(spots(2000, 500, 50))
@@ -182,7 +187,7 @@ def test_notes_follow_norms_and_conduit(lang: Any) -> None:
     _, elec = _wiring()
     notes = mounting_notes(elec.model_copy(update={"conduit": "walls"}), lang)
     joined = " ".join(notes)
-    assert "300" in joined and "500" in joined and " 50 " in joined and "10" in joined
+    assert "550" in joined and "500" in joined and " 50 " in joined and "10" in joined
     assert PRACTICE.source[lang] in joined
     other = mounting_notes(elec.model_copy(update={"conduit": "none"}), lang)
     assert other != notes  # the conduit line follows the variant
@@ -312,16 +317,16 @@ def test_slanted_piece_is_fixed_on_its_own() -> None:
 
 
 def test_conduit_is_fixed_wider_apart_than_bare_cable() -> None:
-    """Studio norms (2026-11-12): conduit every 450 mm overhead and 550 mm on a wall, bare cable
-    every 300 and 500."""
-    assert PRACTICE.step("ceiling", True) == 450 and PRACTICE.step("wall", True) == 550
-    assert PRACTICE.step("ceiling", False) == 300 and PRACTICE.step("wall", False) == 500
-    run = _run([Vec(0, 0), Vec(3000, 0)], rise_end=2000.0)
+    """Studio norms: conduit on a wall at least 550 mm apart (2026-11-12), everything else at
+    least 500 (2026-11-17: 300 overhead crowded the ceiling)."""
+    assert PRACTICE.step("ceiling", True) == 500 and PRACTICE.step("wall", True) == 550
+    assert PRACTICE.step("ceiling", False) == 500 and PRACTICE.step("wall", False) == 500
+    run = _run([Vec(0, 0), Vec(3000, 0)], rise_end=1100.0)  # 1000 mm between the end fixings
     bare = run_fixings(run, "none")
     piped = run_fixings(run, "walls")
     assert len(piped) < len(bare)
     wiring = Wiring(2700.0, False, (), (run,))
-    assert len(plan_fixings(wiring, "ceiling")) < len(plan_fixings(wiring, "none"))
+    assert len(plan_fixings(wiring, "ceiling")) == len(plan_fixings(wiring, "none"))
 
 
 def test_shared_diameter_by_fill_matches_the_size_tables() -> None:
@@ -371,8 +376,12 @@ def test_plan_conduits_share_on_the_common_stretch_only() -> None:
     assert conduit_lengths(w, "ceiling") == {32: 2000.0, 20: 2000.0}
     counts = fixing_counts(w, "ceiling")
     step, offset = PRACTICE.step("ceiling", True), PRACTICE.offset
-    assert counts[("conduit_clip.32", "ceiling")] == len(spots(2000.0, step, offset))
-    assert counts[("conduit_clip.20", "ceiling")] == 2 * len(spots(1000.0, step, offset))
+    # one stretch of 3 m along y = 0 (spots(3000): 50, 630, …, 2950), then b turns for 1 m
+    along = spots(3000.0, step, offset)
+    assert counts[("conduit_clip.32", "ceiling")] == sum(t <= 2000.0 for t in along)
+    assert counts[("conduit_clip.20", "ceiling")] == sum(t > 2000.0 for t in along) + len(
+        spots(1000.0, step, offset)
+    )
     first = next(f for f in plan_fixings(w, "ceiling") if set(f.runs) == {"a", "b"})
     assert first.keys == ("conduit_clip.32",)  # one clip holds both lines
     bare = next(f for f in plan_fixings(w, "none") if set(f.runs) == {"a", "b"})
@@ -394,3 +403,23 @@ def test_rise_from_the_panel_shares_conduit_with_conduit_in_the_walls() -> None:
     # one Ø32 up the wall and along the ceiling; each cable's end in its own Ø20, as before
     assert lengths[32] == pytest.approx(2000.0)
     assert lengths[20] == pytest.approx(sum(r.ends_mm for r in runs))
+
+
+def test_plan_fixings_do_not_crowd_at_a_branch() -> None:
+    """Decision 2026-11-17: a cable leaving a bundle does not start a new row of fixings: the
+    spots go along the whole stretch of the line, no closer together than the step, and each
+    holds the lines lying there."""
+    a = replace(_run([Vec(0, 0), Vec(3000, 0)]), id="a")
+    b = replace(_run([Vec(0, 0), Vec(1200, 0), Vec(1200, 1000)]), id="b")
+    c = replace(_run([Vec(0, 0), Vec(1900, 0), Vec(1900, 1000)]), id="c")
+    w = Wiring(2700.0, False, (), (a, b, c))
+    line = sorted((f for f in plan_fixings(w, "none") if f.axis == "h"), key=lambda f: f.at.x)
+    xs = [f.at.x for f in line]
+    assert xs == pytest.approx(spots(3000.0, PRACTICE.steps["ceiling"], PRACTICE.offset))
+    assert min(b - a for a, b in itertools.pairwise(xs)) >= PRACTICE.steps["ceiling"] - 1e-6
+    for f in line:
+        held = {"a"} | ({"b"} if f.at.x < 1200 else set()) | ({"c"} if f.at.x < 1900 else set())
+        assert set(f.runs) == held and f.keys == (PAD,) * len(held)
+    assert [f.first for f in line] == [
+        k == 0 or set(line[k - 1].runs) != set(f.runs) for k, f in enumerate(line)
+    ]

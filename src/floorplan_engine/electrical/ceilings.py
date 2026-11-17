@@ -16,14 +16,15 @@ from __future__ import annotations
 
 import itertools
 from collections import defaultdict
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from typing import Any
 
 from shapely.geometry import LineString, Point, Polygon
 
 from floorplan_engine.electrical.anchors import Anchor
 from floorplan_engine.electrical.boxes import box_wall
-from floorplan_engine.electrical.point_numbers import number_points
+from floorplan_engine.electrical.point_numbers import number_points, point_name
 from floorplan_engine.electrical.wiring_model import Route, Run, Wiring
 from floorplan_engine.model.geometry import Contour, RoomGeometry, Vec, room_geometries
 from floorplan_engine.model.schema import Electrical, Plan
@@ -35,6 +36,26 @@ MIN_PIECE_MM = 1.0  # a line touching the room for less than this is not in the 
 BOX_DEFAULT_MM = 100.0
 MERGE_MM = 30.0  # scale values closer than this are one mark (lanes of one bundle)
 END_TOL_MM = 50.0  # a line end this close to the inner outline is in the room (a wall point)
+
+
+@dataclass(frozen=True)
+class CeilingLine:
+    """A line on the view, for the viewer side panel (decision 2026-11-17: on a ceiling page it
+    lists the lines, the installer notes stay on the sheet): where it comes from and goes to
+    (the panel or cabinet by name, a box by its label, a point as "31 · Розетка"), the cable
+    and its length inside the room with its walls, model mm. source_id / target_id are the ends
+    as in the wiring ("board", "media", a box id, a point id): the panel builds the chain of a
+    group by them. transit: neither end is in the room (the line only passes through it)."""
+
+    run: str
+    group: str
+    mark: str
+    source: str
+    target: str
+    length: float
+    source_id: str = ""
+    target_id: str = ""
+    transit: bool = False
 
 
 @dataclass(frozen=True)
@@ -230,6 +251,46 @@ def dimension_spots(
     return assign(xs, lows, "x"), assign(ys, rights, "y")
 
 
+def dimension_runs(view: CeilingView, wiring: Wiring) -> dict[str, tuple[str, ...]]:
+    """Line id → the scale values that measure it (dimension_key), for the viewer: a pinned line
+    keeps its values, the rest are dimmed. A line is measured by the value of each of its axis
+    pieces in the room (as view_offsets), of the boxes on the view it starts or ends at and of
+    its ceiling points; a spot goes to the nearest value within MERGE_MM, as dimension_spots."""
+    xs, ys = view_offsets(view, wiring)
+    o = view.origin
+    inner = Polygon([v.as_tuple() for v in view.outline]).buffer(0)
+    runs = {r.id: r for r in wiring.runs}
+    out: dict[str, list[str]] = {rid: [] for rid in view.runs}
+
+    def add(rid: str, axis: str, offset: float) -> None:
+        values = xs if axis == "x" else ys
+        near = min(values, key=lambda k: abs(k - offset))
+        key = dimension_key(view, axis, near)
+        if abs(near - offset) <= MERGE_MM and key not in out[rid]:
+            out[rid].append(key)
+
+    for rid in view.runs:
+        for a, b in itertools.pairwise(runs[rid].path):
+            piece = LineString([a.as_tuple(), b.as_tuple()])
+            if piece.length < MIN_PIECE_MM or piece.intersection(inner).length < MIN_PIECE_MM:
+                continue
+            if abs(a.x - b.x) < AXIS_TOL_MM:
+                add(rid, "x", a.x - o.x)
+            elif abs(a.y - b.y) < AXIS_TOL_MM:
+                add(rid, "y", a.y - o.y)
+    spots = [
+        (b.at, [r for r in view.runs if b.id in (runs[r].source, runs[r].target)])
+        for b in view.boxes
+    ]
+    spots += [(e.at, list(e.runs)) for e in view.ends if e.kind == "light"]
+    for at, rids in spots:
+        for rid in rids:
+            if rid in out:
+                add(rid, "x", at.x - o.x)
+                add(rid, "y", at.y - o.y)
+    return {rid: tuple(keys) for rid, keys in out.items()}
+
+
 def dimension_key(view: CeilingView, axis: str, value: float) -> str:
     """The object of a scale value: "dim:<room>.<plane>.x1450" ("y" for the right scale)."""
     return f"dim:{view.room}.{view.plane}.{axis}{value:.0f}"
@@ -316,3 +377,97 @@ def _box_side(size: str) -> float:
         return float(size.split("x")[0])
     except ValueError:
         return BOX_DEFAULT_MM
+
+
+def lane_key(view: CeilingView, run: str) -> str:
+    """The object of a line on the view: "lane:<room>.<plane>.<run>" — the cable lanes of this
+    room only (the same line on another room's view is another object)."""
+    return f"lane:{view.room}.{view.plane}.{run}"
+
+
+def ceiling_lines(
+    plan: Plan, elec: Electrical, wiring: Wiring, view: CeilingView
+) -> list[CeilingLine]:
+    """The lines of the view in wiring order: ends named as on the sheets, the length inside the
+    room with its walls (where the view cuts them). A line is transit when no end is in the room:
+    a box end counts if the box is on this view, any other end (panel, cabinet, point) if it lies
+    within END_TOL_MM of the inner outline, as the ends of the view (_ends)."""
+    near = Polygon([v.as_tuple() for v in view.outline]).buffer(0).buffer(END_TOL_MM)
+    here = {b.id for b in view.boxes}
+    numbers = number_points(plan, elec)
+    points = {p.id: p for p in elec.points}
+    boxes = {b.id: b.label for b in wiring.boxes}
+    runs = {r.id: r for r in wiring.runs}
+
+    def name(end: str) -> str:
+        if end == "board":
+            return elec.board.name if elec.board is not None else end
+        if end == "media":
+            return elec.media.name if elec.media is not None else end
+        if end in boxes:
+            return boxes[end]
+        p = points.get(end)
+        return f"{numbers[end]} · {point_name(p, plan.language)}" if p is not None else end
+
+    def inside_room(end: str, at: Vec) -> bool:
+        if end in boxes:
+            return end in here
+        return bool(near.contains(Point(at.x, at.y)))
+
+    out: list[CeilingLine] = []
+    for rid in view.runs:
+        r = runs[rid]
+        inside = LineString([p.as_tuple() for p in r.path]).intersection(view.clip).length
+        transit = not (inside_room(r.source, r.path[0]) or inside_room(r.target, r.path[-1]))
+        out.append(
+            CeilingLine(
+                r.id,
+                r.group,
+                r.mark,
+                name(r.source),
+                name(r.target),
+                inside,
+                r.source,
+                r.target,
+                transit,
+            )
+        )
+    return out
+
+
+def ceiling_data(
+    plan: Plan,
+    contours: dict[str, Contour],
+    elec: Electrical,
+    wiring: Wiring,
+    colors: Mapping[str, int],
+) -> list[dict[str, Any]]:
+    """The views as data for the viewer side panel (page key ceilings): the view object and its
+    lines, each with its lane object on the view (lane_key), group colour, ends by name and by id
+    (the panel chains a group by ids), cable, length in the room, mm, and transit (no end in the
+    room) and the scale values that measure it (dims, dimension_runs)."""
+    out: list[dict[str, Any]] = []
+    for view in ceiling_views(plan, contours, elec, wiring):
+        lines = []
+        dims = dimension_runs(view, wiring)
+        for ln in ceiling_lines(plan, elec, wiring, view):
+            color = colors.get(ln.group)
+            lines.append(
+                {
+                    "key": lane_key(view, ln.run),
+                    "group": ln.group,
+                    "color": f"#{color:06x}" if color is not None else None,
+                    "from": ln.source,
+                    "to": ln.target,
+                    "source": ln.source_id,
+                    "target": ln.target_id,
+                    "transit": ln.transit,
+                    "mark": ln.mark,
+                    "length": round(ln.length),
+                    "dims": list(dims.get(ln.run, ())),
+                }
+            )
+        out.append(
+            {"key": f"elevation:{view.room}.{view.plane}", "plane": view.plane, "lines": lines}
+        )
+    return out

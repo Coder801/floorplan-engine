@@ -5,7 +5,7 @@ from __future__ import annotations
 from floorplan_engine.drawing.ceilings import ceiling_panel, fixing_bands
 from floorplan_engine.drawing.ids import object_id
 from floorplan_engine.drawing.layers import E_ELEV, M_FIX, new_document
-from floorplan_engine.drawing.mounting import bundle_bends
+from floorplan_engine.drawing.mounting import lane_turns
 from floorplan_engine.drawing.wiring import cable_layer, lay_out
 from floorplan_engine.electrical.ceilings import ceiling_views
 from floorplan_engine.electrical.colors import group_colors
@@ -25,12 +25,12 @@ def test_ceiling_is_one_elevation_object_with_layers() -> None:
     assert wiring is not None
     view = ceiling_views(plan, contours, elec, wiring)[0]
     paths, plane_bundles = lay_out(wiring)
-    bends = bundle_bends(wiring, paths, elec.conduit_level)
+    turns = lane_turns(wiring, paths, elec.conduit_level)
     fixings = fixing_bands(wiring, plane_bundles, elec.conduit_level)
     classes = line_classes(plan, elec)
     layers = {r.id: cable_layer(r, classes) for r in wiring.runs}
     panel = ceiling_panel(
-        view, wiring, paths, bends, group_colors(elec), layers, fixings, 40.0, "ru"
+        view, wiring, paths, turns, group_colors(elec), layers, fixings, 40.0, "ru"
     )
     assert panel.width > view.size.x / 40 and panel.height > view.size.y / 40
     doc = new_document()
@@ -43,7 +43,10 @@ def test_ceiling_is_one_elevation_object_with_layers() -> None:
     assert ("elevation", "r.ceiling") in ids
     dims = {i for i in ids if i is not None and i[0] == "dim"}
     assert dims and all(i[1].startswith("r.ceiling.") for i in dims)
-    assert ids <= {("elevation", "r.ceiling"), *dims}
+    # each line's lanes are an object of their own: its row in the side panel lights it
+    lanes = {i for i in ids if i is not None and i[0] == "lane"}
+    assert lanes == {("lane", f"r.ceiling.{rid}") for rid in view.runs}
+    assert ids <= {("elevation", "r.ceiling"), *dims, *lanes}
     # Layers the viewer switches: the room, the cables by purpose, the fixings
     drawn = {e.dxf.layer for e in entities}
     assert {E_ELEV.name, M_FIX.name} <= drawn and drawn & set(layers.values())
@@ -52,3 +55,7 @@ def test_ceiling_is_one_elevation_object_with_layers() -> None:
     for e in psp.query("LINE"):
         for p in (e.dxf.start, e.dxf.end):
             assert -1 <= p.x <= panel.width + 1 and -panel.height - 1 <= p.y <= 1
+    # The cables are solid on the dashed cable layers (decision 2026-11-17)
+    cables = [e for e in psp.query("LWPOLYLINE") if e.dxf.layer in set(layers.values())]
+    assert cables and all(e.dxf.linetype == "Continuous" for e in cables)
+    assert all((object_id(e) or ("", ""))[0] == "lane" for e in cables)

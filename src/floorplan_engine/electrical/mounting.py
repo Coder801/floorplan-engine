@@ -2,9 +2,10 @@
 2026-11-11, the "Mounting" sheet).
 
 Fixings are shot with a mounting gun: conduit gets a clip by conduit diameter, cable without
-conduit a pad with a nail and a tie. Each straight piece of a route gets a fixing `offset` from
-its ends (a bend, a box, a flush box, the panel) and between them evenly, no farther apart than
-the step of its surface (ceiling, wall, floor). The estimate counts the same spots the sheet
+conduit a pad with a nail and a tie. Each straight stretch of a route gets a fixing `offset` from
+its ends (a bend, a box, a flush box, the panel) and between them evenly, no closer together than
+the step of its surface (ceiling, wall, floor; decision 2026-11-17: fixings closer than 500 mm
+crowd the sheet and the ceiling). The estimate counts the same spots the sheet
 draws, plus a reserve for misfires.
 
 The norms are a profile (MountingNorms): the studio practice based on DBN, values from the
@@ -22,7 +23,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Literal
 
-from floorplan_engine.electrical.bundles import bundles, segments
+from floorplan_engine.electrical.bundles import Bundle, bundles, segments
 from floorplan_engine.electrical.chases import source_rises
 from floorplan_engine.electrical.routing import APART
 from floorplan_engine.electrical.wiring_model import Route, Run, Wiring
@@ -65,7 +66,7 @@ CLIP = "conduit_clip"  # estimate key of a conduit clip, conduit_clip.<Ø>
 @dataclass(frozen=True)
 class MountingNorms:
     key: str
-    steps: Mapping[Surface, float]  # mm: the largest gap between fixings by surface, bare cable
+    steps: Mapping[Surface, float]  # mm: the smallest gap between fixings by surface, bare cable
     conduit_steps: Mapping[Surface, float]  # mm: the same for conduit
     offset: float  # mm: from a bend, box, flush box or the panel to the nearest fixing
     bend_factor: float  # smallest flat cable bend radius, in cable widths (bent lying flat)
@@ -74,17 +75,16 @@ class MountingNorms:
     source: Mapping[Language, str]  # where the values come from, for the sheet
 
     def step(self, surface: Surface, in_conduit: bool) -> float:
-        """The largest gap between fixings on this surface, in conduit or bare."""
+        """The smallest gap between fixings on this surface, in conduit or bare."""
         return (self.conduit_steps if in_conduit else self.steps)[surface]
 
 
-# Studio practice (answers 2026-11-11): the overhead step is shorter, the conduit and the cable
-# sag; in wall chases and on the floor under the screed a longer one holds
+# Studio practice (answers 2026-11-11): the step is at least 500 mm everywhere (2026-11-17: 300
+# overhead crowded the ceiling); conduit is stiffer, on a wall every 550 mm (2026-11-12)
 PRACTICE = MountingNorms(
     key="practice",
-    steps={"ceiling": 300.0, "wall": 500.0, "floor": 500.0},
-    # Conduit is stiffer: the studio fixes it every 450 mm overhead, 550 mm on a wall (2026-11-12)
-    conduit_steps={"ceiling": 450.0, "wall": 550.0, "floor": 500.0},
+    steps={"ceiling": 500.0, "wall": 500.0, "floor": 500.0},
+    conduit_steps={"ceiling": 500.0, "wall": 550.0, "floor": 500.0},
     offset=50.0,
     bend_factor=10.0,
     bend_reserve=2,
@@ -274,15 +274,16 @@ def fixing_key(run: Run, in_conduit: bool) -> str:
 
 
 def spots(length: float, step: float, offset: float) -> list[float]:
-    """Fixings along a straight piece, mm from its start: the first and last `offset` from the
-    ends, between them evenly no farther apart than `step`. A piece up to 2·offset gets one in
-    the middle; one shorter than offset gets none (the neighbours' fixings hold it)."""
+    """Fixings along a straight stretch, mm from its start: the first and last `offset` from the
+    ends, between them evenly and no closer together than `step` (as many as fit, decision
+    2026-11-17). A stretch whose end fixings would stand closer than `step` gets one in the
+    middle; one shorter than offset gets none (the neighbours' fixings hold it)."""
     if length < offset or length <= 0:
         return []
-    if length <= 2 * offset:
-        return [length / 2]
     inner = length - 2 * offset
-    n = max(1, math.ceil(inner / step - 1e-9))
+    if inner < step - 1e-9:
+        return [length / 2]
+    n = max(1, math.floor(inner / step + 1e-9))
     return [offset + inner * k / n for k in range(n + 1)]
 
 
@@ -366,30 +367,36 @@ class PlanFixing:
 def plan_fixings(
     wiring: Wiring, conduit: Conduit, norms: MountingNorms = PRACTICE
 ) -> list[PlanFixing]:
-    """Fixing spots of the plan routes: along each bundle piece (a piece of a line where the set
-    of cables does not change, electrical/bundles.bundles) `offset` from its ends and evenly
-    between, no farther apart than the step of the surface (in conduit or bare: on the floor
-    always in conduit, on the ceiling as chosen); the same along a slanted piece. In conduit the
-    lines of a piece share conduits (conduits): a clip per conduit, by its diameter."""
+    """Fixing spots of the plan routes: along each stretch of a bundle line (the bundle pieces
+    on one axis line that touch, electrical/bundles.bundles) `offset` from its ends and evenly
+    between, no closer together than the step of the surface (in conduit or bare: on the floor
+    always in conduit, on the ceiling as chosen); the same along a slanted piece. A spot holds
+    the lines of the bundle piece it falls on: a cable joining or leaving the bundle does not
+    start a new row of fixings (decision 2026-11-17: they crowded at every branch). In conduit
+    the lines of a piece share conduits (conduits): a clip per conduit, by its diameter."""
     out: list[PlanFixing] = []
     for route in ("ceiling", "floor"):
         idx = [k for k, r in enumerate(wiring.runs) if r.route == route]
         surface: Surface = "floor" if route == "floor" else "ceiling"
         in_conduit = route == "floor" or conduit in ("ceiling", "walls")
         step = norms.step(surface, in_conduit)
-        for b in bundles(segments([wiring.runs[k].path for k in idx]), {}):
-            lines = [wiring.runs[idx[j]] for j in b.runs]
-            ids = tuple(r.id for r in lines)
-            keys = (
-                tuple(f"{CLIP}.{d}" for d, _ in conduits(lines))
-                if in_conduit
-                else (PAD,) * len(lines)
-            )
-            along = Vec(1.0, 0.0) if b.axis == "h" else Vec(0.0, 1.0)
-            for n, t in enumerate(spots(b.length, step, norms.offset)):
-                pos = b.lo + t
+        for stretch in stretches(bundles(segments([wiring.runs[k].path for k in idx]), {})):
+            lo, hi = stretch[0].lo, stretch[-1].hi
+            last: Bundle | None = None
+            for t in spots(hi - lo, step, norms.offset):
+                pos = lo + t
+                b = next((b for b in stretch if pos <= b.hi + AXIS_TOL_MM), stretch[-1])
+                lines = [wiring.runs[idx[j]] for j in b.runs]
+                keys = (
+                    tuple(f"{CLIP}.{d}" for d, _ in conduits(lines))
+                    if in_conduit
+                    else (PAD,) * len(lines)
+                )
+                along = Vec(1.0, 0.0) if b.axis == "h" else Vec(0.0, 1.0)
                 at = Vec(pos, b.fixed) if b.axis == "h" else Vec(b.fixed, pos)
-                out.append(PlanFixing(route, at, along, ids, b.axis, b.fixed, n == 0, keys))
+                ids = tuple(r.id for r in lines)
+                out.append(PlanFixing(route, at, along, ids, b.axis, b.fixed, b != last, keys))
+                last = b
         for k in idx:
             r = wiring.runs[k]
             for a, c in itertools.pairwise(r.path):
@@ -403,6 +410,27 @@ def plan_fixings(
                     PlanFixing(route, a + u * t, u, (r.id,), keys=(key,))
                     for t in spots(length, step, norms.offset)
                 ]
+    return out
+
+
+def stretches(pieces: Sequence[Bundle]) -> list[list[Bundle]]:
+    """Bundle pieces grouped by stretch: the pieces of one axis line that touch end to end, from
+    the lower end up; a gap along the line starts a new stretch."""
+    lines: dict[tuple[str, float], list[Bundle]] = {}
+    for b in pieces:
+        lines.setdefault((b.axis, b.fixed), []).append(b)
+    out: list[list[Bundle]] = []
+    for line in lines.values():
+        for b in sorted(line, key=lambda b: b.lo):
+            if (
+                out
+                and out[-1][-1].axis == b.axis
+                and out[-1][-1].fixed == b.fixed
+                and (b.lo <= out[-1][-1].hi + AXIS_TOL_MM)
+            ):
+                out[-1].append(b)
+            else:
+                out.append([b])
     return out
 
 
@@ -453,9 +481,9 @@ TEXT: dict[str, dict[str, str]] = {
         "гофри — площадкою з дюбель-цвяхом і стяжкою.",
     },
     "steps": {
-        "ru": "Шаг креплений — не больше, мм: кабель без гофры — по потолку {c}, по стене {w}; "
+        "ru": "Шаг креплений — не меньше, мм: кабель без гофры — по потолку {c}, по стене {w}; "
         "гофра — по потолку {cc}, по стене {cw}, по полу {f}.",
-        "uk": "Крок кріплень — не більше, мм: кабель без гофри — по стелі {c}, по стіні {w}; "
+        "uk": "Крок кріплень — не менше, мм: кабель без гофри — по стелі {c}, по стіні {w}; "
         "гофра — по стелі {cc}, по стіні {cw}, по підлозі {f}.",
     },
     "offset": {

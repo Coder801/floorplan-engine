@@ -341,13 +341,13 @@ def _two_sockets(plaster: str) -> tuple[Plan, Electrical, list[WallElevation]]:
 
 def test_drop_fixings_follow_the_wall_step_from_the_ceiling() -> None:
     """Fixings on a drop (decision 2026-11-11): first 50 mm under the ceiling, last 50 mm above
-    the flush box, no farther apart than the wall step."""
+    the flush box, no closer together than the wall step (decision 2026-11-17)."""
     _, _, walls = _two_sockets("after")
     w2 = next(e for e in walls if e.wall == "w2")
     chase = next(c for c in w2.chases if c.y0 > 0)
     on = sorted(f.y for f in w2.fixings if f.x == chase.x)
     assert on and on[-1] == chase.y1 - 50 and on[0] == chase.y0 + 50
-    assert max(b - a for a, b in itertools.pairwise(on)) <= 500 + 1e-6
+    assert min(b - a for a, b in itertools.pairwise(on)) >= 500 - 1e-6
 
 
 def test_before_plaster_keeps_fixings_without_chases() -> None:
