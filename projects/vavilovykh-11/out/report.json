@@ -537,7 +537,7 @@
   "issues": [
     {
       "file": "electrical.yaml",
-      "path": "points[24]",
+      "path": "points[23]",
       "severity": "warning",
       "message": "тёплый пол «auto_living_floor_reg_2» (зона по регулятору): в floor_heating зоны нет — построена кодом: Санвузол* (допущение: помещение по подписи или месту регулятора); уточните по дизайну или задайте heating_rooms"
     },

@@ -57,7 +57,7 @@
 
 ## Проверка данных
 
-- [предупреждение] electrical.yaml: points[24]: тёплый пол «auto_living_floor_reg_2» (зона по регулятору): в floor_heating зоны нет — построена кодом: Санвузол* (допущение: помещение по подписи или месту регулятора); уточните по дизайну или задайте heating_rooms
+- [предупреждение] electrical.yaml: points[23]: тёплый пол «auto_living_floor_reg_2» (зона по регулятору): в floor_heating зоны нет — построена кодом: Санвузол* (допущение: помещение по подписи или месту регулятора); уточните по дизайну или задайте heating_rooms
 - [предупреждение] wiring.yaml: wires.wire_27: линия board → box_5 не найдена (это линия box_5 → bedroom_downlight_4) — автотрасса
 - [предупреждение] wiring.yaml: wires.wire_29: линия box_5 → bedroom_switch_4 не найдена (это линия box_5 → bedroom_pass_switch_1) — автотрасса
 - [предупреждение] wiring.yaml: wires.wire_31: линия box_5 → bedroom_downlight_4 не найдена (это линия box_6 → bedroom_switch_1) — автотрасса
