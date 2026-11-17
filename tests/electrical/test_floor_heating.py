@@ -10,6 +10,7 @@ from floorplan_engine.electrical.floor_heating import (
     PITCH_MAX,
     PITCH_MIN,
     SENSOR_DEPTH,
+    TRIM_MAX,
     WALL_GAP,
     choose_length,
     heated_area,
@@ -17,6 +18,7 @@ from floorplan_engine.electrical.floor_heating import (
     heating_zones,
     with_heating,
 )
+from floorplan_engine.electrical.floor_heating import _layout as fh_layout
 from floorplan_engine.electrical.heating_layout import Straight
 from floorplan_engine.electrical.loads import point_load
 from floorplan_engine.model.furniture import Furniture, solid_spots
@@ -64,10 +66,10 @@ def test_heated_area_is_the_floor_less_the_wall_gap_and_exclusions() -> None:
     found = heated_area(plan, contours, fh.model_copy(update={"exclude": [spot]}))
     assert found is not None
     cut, blocked = found.area, found.blocked
-    assert len(blocked) == 1  # the gap goes round the exclusion too
-    # The exclusion with its own gap, clipped by the wall gap: 1700 × 750 less
-    assert cut.area == pytest.approx(area.area - 1700 * 750)
-    assert not cut.intersects(blocked[0])
+    assert len(blocked) == 1
+    # The cable goes right up to the exclusion (no gap of its own): the part inside the wall gap
+    assert cut.area == pytest.approx(area.area - (1700 - WALL_GAP) * (750 - WALL_GAP))
+    assert cut.intersection(blocked[0].shape).area == 0
     # Solid furniture is cut out too and named; a piece off this floor is not
     sofa = HeatingExclude(at=(0, 2000), size=(2000, 600), note="furniture.yaml: k")
     away = HeatingExclude(at=(5000, 0), size=(500, 500), note="furniture.yaml: far")
@@ -117,7 +119,9 @@ def test_route_takes_the_whole_section_at_a_pitch_in_range() -> None:
     runs = [p for p in zone.route.pieces if isinstance(p, Straight)]
     gaps = sorted(abs(tip.y - r.a.y) for r in runs)
     assert gaps[0] == pytest.approx(zone.pitch / 2, abs=1e-3)
-    assert min(tip.x - 100, 3900 - tip.x) == pytest.approx(SENSOR_DEPTH, abs=1.0)
+    # counted from the run ends, which stop zone.trim further from the walls
+    edge = 100 + zone.trim
+    assert min(tip.x - edge, 4000 - edge - tip.x) == pytest.approx(SENSOR_DEPTH, abs=1.0)
     a, b = zone.gap_dim or (tip, tip)
     assert (b - a).length() == pytest.approx(zone.pitch)
 
@@ -231,8 +235,9 @@ def test_solid_furniture_is_cut_out_legs_are_not() -> None:
     cut = with_heating(plan, contours, _elec(), furniture=solid_spots(furniture))
     assert [ex.note for ex in cut.floor_heating[0].furniture] == ["furniture.yaml: k"]
     (a,), (b,) = heating_zones(plan, contours, plain), heating_zones(plan, contours, cut)
-    # The kitchen with its WALL_GAP: 600 + 100 off the 100 mm wall strip, the whole depth
-    assert a.area_m2 - b.area_m2 == pytest.approx(0.6 * 2.8)
+    # The kitchen 600 deep at the wall, the cable right up to it: 600 − 100 of the wall gap,
+    # the whole depth
+    assert a.area_m2 - b.area_m2 == pytest.approx(0.5 * 2.8)
     assert b.furniture == ("k",) and a.furniture == ()
 
 
@@ -249,3 +254,17 @@ def test_auto_zone_and_the_area_from_the_source() -> None:
     close = _elec({"area": round(zone.area_m2 * 1.05, 2)})
     (near,) = heating_zones(plan, contours, close)
     assert not near.area_off
+
+
+def test_cable_reaches_the_end_of_the_zone() -> None:
+    # The pitch with the least leftover route, the rest is taken off the run ends: no bare strip
+    plan, contours = _plan()
+    for length in (60, 63, 66, 70, 75, 80):
+        (zone,) = heating_zones(plan, contours, _elec({"length": length}))
+        assert zone.route is not None and zone.pitch is not None
+        if zone.remarks:
+            continue  # the section does not fit the zone at all
+        full = fh_layout(zone.area, None)(zone.pitch, zone.trim)
+        assert full is not None
+        assert 0 <= zone.trim < TRIM_MAX
+        assert full.length - zone.length * 1000 < 2 * len(full.visits) + 1  # mm, bisection rest

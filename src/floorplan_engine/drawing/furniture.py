@@ -7,6 +7,7 @@ Each piece is one object `furniture:<id>`: the viewer shows its card (epd/object
 
 from __future__ import annotations
 
+from ezdxf.layouts.base import BaseLayout
 from ezdxf.layouts.layout import Modelspace
 
 from floorplan_engine.drawing.ids import tagged
@@ -37,14 +38,29 @@ def _draw_item(
     msp.add_lwpolyline(
         [(x, y), (x + w, y), (x + w, y + h), (x, y + h)], close=True, dxfattribs=attribs
     )
-    label = furniture_label(item, lang)
-    need = sheet(text_width(label, TEXT_SMALL_MM) + 2 * LABEL_PAD_MM)
-    tall = sheet(TEXT_SMALL_MM + 2 * LABEL_PAD_MM)
+    rect_label(msp, (x, y, w, h), furniture_label(item, lang), F_FURN.name)
+
+
+def rect_label(
+    msp: BaseLayout,
+    rect: tuple[float, float, float, float],
+    label: str,
+    layer: str,
+    scale: float | None = None,
+) -> bool:
+    """Small text in the middle of a rectangle (x, y, w, h), along its long side; no room for
+    it — nothing (the card says what it is). Says whether it was placed. The rectangle is in
+    model mm on the sheet scale, or in the units of `scale` (1.0: a paper-space legend)."""
+    x, y, w, h = rect
+    k = sheet(1.0) if scale is None else scale
+    need = k * (text_width(label, TEXT_SMALL_MM) + 2 * LABEL_PAD_MM)
+    tall = k * (TEXT_SMALL_MM + 2 * LABEL_PAD_MM)
     along, across = (w, h) if w >= h else (h, w)
     if need > along or tall > across:
-        return  # no room for the label: the card says what it is
+        return False
     angle = 0.0 if w >= h else 90.0
-    add_text(msp, label, Vec(x + w / 2, y + h / 2), TEXT_SMALL_MM, F_FURN.name, angle=angle)
+    add_text(msp, label, Vec(x + w / 2, y + h / 2), TEXT_SMALL_MM, layer, angle=angle, scale=k)
+    return True
 
 
 def draw_furniture(msp: Modelspace, plan: Plan, furniture: Furniture) -> None:

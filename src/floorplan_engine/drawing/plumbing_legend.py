@@ -2,23 +2,16 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
-from functools import partial
-
-from ezdxf.enums import TextEntityAlignment
 from ezdxf.layouts.layout import Paperspace
 
 from floorplan_engine.drawing.fixture_symbols import SIZES, Frame, symbol
 from floorplan_engine.drawing.layers import (
-    A_TEXT,
     P_FIXT,
     P_OBST,
     P_RISER,
     P_SYMB,
     SURFACE_LINETYPE,
-    TEXT_ROOM_MM,
     TEXT_SMALL_MM,
-    text_width,
 )
 from floorplan_engine.drawing.plan import add_text
 from floorplan_engine.drawing.plumbing import (
@@ -31,6 +24,8 @@ from floorplan_engine.drawing.plumbing import (
     net_hatch,
     pipe_attribs,
 )
+from floorplan_engine.drawing.sample_legend import LEGEND_SAMPLE_MM, LegendDraw
+from floorplan_engine.drawing.sample_legend import legend_variants as sample_legend_variants
 from floorplan_engine.drawing.titleblock import LW_THICK
 from floorplan_engine.model.geometry import Vec
 from floorplan_engine.model.plumbing import FixtureType
@@ -38,10 +33,6 @@ from floorplan_engine.model.scale import sheet
 from floorplan_engine.model.texts import Language
 from floorplan_engine.plumbing.rows import text as rows_text
 from floorplan_engine.plumbing.rules import Kind
-
-LEGEND_ROW_MM = 6.0
-LEGEND_SAMPLE_MM = 10.0
-LEGEND_GAP_MM = 6.0
 
 TEXT: dict[str, dict[str, str]] = {
     "legend": {"ru": "Условные обозначения", "uk": "Умовні позначення"},
@@ -67,9 +58,6 @@ TEXT: dict[str, dict[str, str]] = {
         "uk": "Перешкода: труби в обхід (у короб — лише свого приладу)",
     },
 }
-
-
-LegendDraw = Callable[[Paperspace, Vec], None]  # row sample; the point is the middle on the left
 
 
 def text(key: str, language: Language) -> str:
@@ -161,59 +149,7 @@ def _legend_rows(lang: Language) -> list[tuple[str, LegendDraw]]:
     return rows
 
 
-def _draw_legend(
-    psp: Paperspace,
-    tl: Vec,
-    *,
-    title: str,
-    chunks: list[list[tuple[str, LegendDraw]]],
-    widths: list[float],
-) -> None:
-    left = TextEntityAlignment.MIDDLE_LEFT
-    add_text(
-        psp,
-        title,
-        Vec(tl.x, tl.y - TEXT_ROOM_MM / 2),
-        TEXT_ROOM_MM,
-        A_TEXT.name,
-        align=left,
-        scale=1.0,
-    )
-    x = tl.x
-    for chunk, w in zip(chunks, widths, strict=True):
-        y = tl.y - TEXT_ROOM_MM - 2.0
-        for label, sample in chunk:
-            mid = Vec(x, y - LEGEND_ROW_MM / 2)
-            sample(psp, mid)
-            add_text(
-                psp,
-                label,
-                Vec(x + LEGEND_SAMPLE_MM + 3.0, mid.y),
-                TEXT_SMALL_MM,
-                A_TEXT.name,
-                align=left,
-                scale=1.0,
-            )
-            y -= LEGEND_ROW_MM
-        x += w + LEGEND_GAP_MM
-
-
 def legend_variants(lang: Language) -> list[tuple[float, float, LegendDraw]]:
     """Legend variants next to the title block: (width, height, drawing from the top-left corner),
     k rows per column; the layout takes the lowest one that fits (layout.fit_legend)."""
-    rows = _legend_rows(lang)
-    title = text("legend", lang)
-    out: list[tuple[float, float, LegendDraw]] = []
-    for k in range(3, len(rows) + 1):
-        chunks = [rows[i : i + k] for i in range(0, len(rows), k)]
-        widths = [
-            LEGEND_SAMPLE_MM + 3.0 + max(text_width(t, TEXT_SMALL_MM) for t, _ in chunk)
-            for chunk in chunks
-        ]
-        width = max(
-            sum(widths) + LEGEND_GAP_MM * (len(chunks) - 1), text_width(title, TEXT_ROOM_MM)
-        )
-        height = TEXT_ROOM_MM + 2.0 + k * LEGEND_ROW_MM
-        draw = partial(_draw_legend, title=title, chunks=chunks, widths=widths)
-        out.append((width, height, draw))
-    return out
+    return sample_legend_variants(text("legend", lang), _legend_rows(lang))

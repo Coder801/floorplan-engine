@@ -12,9 +12,13 @@ sensor and the cold lead to the controller.
    density / linear power (density `density` or DEFAULT_DENSITY) among those that can be laid
    at a pitch of PITCH_MIN…PITCH_MAX; none can — the longest that is laid whole (a section is
    never cut), with a remark.
-3. Pitch: by bisection, so the route takes the whole heating length; the route is cut at that
-   length exactly (the far end of a two-core cable is an end sleeve and may be anywhere). The
-   route geometry is electrical/heating_layout.py.
+3. Pitch: the route length jumps by a whole run as the pitch changes (decision 2026-11-17), so
+   of the pitches PITCH_MIN…PITCH_MAX the one is taken whose route is the least longer than the
+   section (the sparsest of those). What is left over is taken off the run ends: every run stops
+   the same `trim` further from the walls (up to TRIM_MAX), so the cable reaches the end of the
+   last run and no strip of the zone is left bare. The route is cut at the section length
+   exactly (the far end of a two-core cable is an end sleeve and may be anywhere). The route
+   geometry is electrical/heating_layout.py.
 4. The cold lead runs from the controller down the wall, along the wall in the margin and into
    the start of the serpentine; it is not part of the heating length. The sensor goes in a
    conduit the same way, into the gap between two neighbouring runs, SENSOR_DEPTH deep. A
@@ -33,10 +37,13 @@ ASSUMPTIONS until a real series is in the catalogue; the sheet says so.
 from __future__ import annotations
 
 import json
+import math
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field, replace
 from itertools import accumulate, pairwise
+from typing import Literal
 
+from shapely import affinity
 from shapely.geometry import Polygon, box
 from shapely.geometry.base import BaseGeometry
 from shapely.ops import unary_union
@@ -74,6 +81,12 @@ LEAD_GAP = 50.0  # mm: the cold lead and the sensor conduit run this far from th
 EDGE_OUT = 40.0  # mm: and come into the zone from this far outside its edge
 DIM_AWAY = 3  # the pitch dimension is this many run pairs away from the sensor
 BISECT_STEPS = 40
+PITCH_SCAN = 1.0  # mm: pitches tried between PITCH_MIN and PITCH_MAX
+# mm: route leftovers this close are equal when choosing the pitch (then the sparsest wins)
+LEFTOVER_STEP = 100.0
+# mm: run ends may stop this much further from the walls, so the cable reaches the end of the last
+# run (assumption: up to WALL_GAP + TRIM_MAX from the wall at the run ends)
+TRIM_MAX = 150.0
 MIN_PART_MM2 = 50_000.0  # pieces of the heated area smaller than this are dropped (0.05 m²)
 AREA_TOLERANCE = 0.10  # the layout area may differ from the source `area` by this share
 
@@ -88,11 +101,12 @@ class HeatingZone:
     name: str  # room or zone name
     floor: BaseGeometry  # floor of the room or zone, model mm
     area: BaseGeometry  # heated area
-    blocked: tuple[BaseGeometry, ...]  # exclusions and fixtures inside the floor
+    blocked: tuple[BlockedSpot, ...]  # exclusions, fixtures and furniture inside the floor
     series: HeatingSeries
     density: float  # target, W/m²
     length: float  # heating section, m
     pitch: float | None = None
+    trim: float = 0.0  # mm: run ends this much further from the walls than WALL_GAP
     route: Serpentine | None = None  # cut at the section length
     lead: tuple[Vec, ...] = ()  # cold lead on the floor: from the wall to the serpentine start
     lead_m: float = 0.0  # its whole length with the drop from the controller, m
@@ -160,6 +174,21 @@ def floor_outline(plan: Plan, contours: dict[str, Contour], fh: FloorHeating) ->
     return zone_outline(contour, zone) if zone is not None else None
 
 
+SpotKind = Literal["exclude", "fixture", "furniture"]
+
+
+@dataclass(frozen=True)
+class BlockedSpot:
+    """A cut-out on the floor as the sheet shows it (decision 2026-11-17: a thin outline with a
+    label, no hatching): its shape inside the floor, where it comes from — an `exclude` of
+    electrical.yaml, a fixture or obstacle of plumbing.yaml, a piece of furniture.yaml — and its
+    name: the exclude's note (may be empty), else the id of the fixture or piece."""
+
+    shape: BaseGeometry
+    kind: SpotKind
+    name: str
+
+
 @dataclass(frozen=True)
 class HeatedArea:
     """The floor of a zone, its heated area and what is cut out of it, model mm; furniture is the
@@ -168,7 +197,7 @@ class HeatedArea:
 
     floor: BaseGeometry
     area: BaseGeometry
-    blocked: tuple[BaseGeometry, ...]
+    blocked: tuple[BlockedSpot, ...]
     furniture: tuple[str, ...] = ()
     typical: tuple[str, ...] = ()  # fixtures cut out by their typical size (TYPICAL_SPOT)
 
@@ -184,28 +213,31 @@ def heated_area(plan: Plan, contours: dict[str, Contour], fh: FloorHeating) -> H
         return None
     room = next(r for r in plan.rooms if r.id == fh.room)
     floor = Polygon([v.as_tuple() for v in outline]).buffer(0)
-    blocked: list[BaseGeometry] = []
+    blocked: list[BlockedSpot] = []
     furniture: list[str] = []
     typical: list[str] = []
-    # Each cut-out with the list its id goes to when it really stands on this floor
-    tagged = [
-        *((ex, None) for ex in fh.exclude),
+    # Each cut-out with its kind and the list its id goes to when it really stands on this floor
+    tagged: list[tuple[HeatingExclude, SpotKind, list[str] | None]] = [
+        *((ex, "exclude", None) for ex in fh.exclude),
         *(
-            (ex, typical if (ex.note or "").startswith(TYPICAL_SPOT) else None)
+            (ex, "fixture", typical if (ex.note or "").startswith(TYPICAL_SPOT) else None)
             for ex in fh.fixtures
         ),
-        *((ex, furniture) for ex in fh.furniture),
+        *((ex, "furniture", furniture) for ex in fh.furniture),
     ]
-    for ex, named in tagged:
+    for ex, kind, named in tagged:
         b = _rect(room.origin, ex).intersection(floor)
         if b.is_empty:
             continue
-        blocked.append(b)
+        name = (ex.note or "") if kind == "exclude" else _cut_id(ex)
+        blocked.append(BlockedSpot(b, kind, name))
         if named is not None and b.area > 1.0:
             named.append(_cut_id(ex))
+    # The cable keeps WALL_GAP from the walls and goes right up to a cut-out (feedback
+    # 2026-11-17: no gap round a WC or a bath)
     inner: BaseGeometry = floor.buffer(-WALL_GAP, join_style="mitre")
-    for b in blocked:
-        inner = inner.difference(b.buffer(WALL_GAP, join_style="mitre"))
+    for spot in blocked:
+        inner = inner.difference(spot.shape)
     parts = [p for p in getattr(inner, "geoms", [inner]) if p.area >= MIN_PART_MM2]
     area = unary_union(parts) if parts else Polygon()
     return HeatedArea(floor, area, tuple(blocked), tuple(furniture), tuple(typical))
@@ -214,11 +246,29 @@ def heated_area(plan: Plan, contours: dict[str, Contour], fh: FloorHeating) -> H
 # --- Length and pitch ---------------------------------------------------------------------------
 
 
-def _bisect(needed: Callable[[float], float], length_mm: float) -> float:
-    """Pitch at which the route is at least the cable long and as sparse as possible: the cable
-    is cut there and ends in the last run (the needed length is a sawtooth: shorter rows mean
-    fewer turns, more rows at a jump)."""
-    lo, hi = PITCH_MIN, PITCH_MAX
+def _pitch(needed: Callable[[float], float], length_mm: float) -> float:
+    """Pitch whose route is the least longer than the cable, the sparsest of near equal ones: the
+    route length jumps by a whole run with the pitch, a leftover is a bare end of the zone (the
+    trim takes it off the run ends). Every pitch is too short — PITCH_MIN."""
+    steps = round((PITCH_MAX - PITCH_MIN) / PITCH_SCAN)
+    best: tuple[float, float] | None = None
+    for k in range(steps + 1):
+        pitch = PITCH_MIN + k * PITCH_SCAN
+        left = needed(pitch) - length_mm
+        if left < 0:
+            continue
+        key = (math.floor(left / LEFTOVER_STEP), -pitch)
+        if best is None or key < best:
+            best = key
+    return -best[1] if best is not None else PITCH_MIN
+
+
+def _trim(needed: Callable[[float], float], length_mm: float) -> float:
+    """The largest trim of the run ends (0…TRIM_MAX) at which the route still takes the whole
+    cable, by bisection."""
+    if needed(TRIM_MAX) >= length_mm:
+        return TRIM_MAX
+    lo, hi = 0.0, TRIM_MAX
     for _ in range(BISECT_STEPS):
         mid = (lo + hi) / 2
         if needed(mid) >= length_mm:
@@ -368,9 +418,22 @@ def _zone_name(plan: Plan, fh: FloorHeating) -> str:
     return fh.zone or (room.name if room is not None else fh.room)
 
 
-def _layout(area: BaseGeometry, near: Vec | None) -> Callable[[float], Serpentine | None]:
-    """Route at a pitch with the run direction that covers the most cells at the middle pitch
-    (along the long side first)."""
+def _trimmed(area: BaseGeometry, along_x: bool, trim: float) -> BaseGeometry:
+    """The area with every run trim shorter at both ends: eroded along the runs only."""
+    if trim <= 0:
+        return area
+    dx, dy = (trim, 0.0) if along_x else (0.0, trim)
+    there = affinity.translate(area, dx, dy)
+    back = affinity.translate(area, -dx, -dy)
+    return area.intersection(there).intersection(back)
+
+
+Layout = Callable[[float, float], Serpentine | None]  # (pitch, trim) → route
+
+
+def _layout(area: BaseGeometry, near: Vec | None) -> Layout:
+    """Route at a pitch and a trim of the run ends, with the run direction that covers the most
+    cells at the middle pitch (along the long side first)."""
     best: tuple[int, int, bool] | None = None
     for k, along_x in enumerate(long_side_first(area)):
         s = serpentine(area, PITCH_MID, along_x, near)
@@ -380,7 +443,7 @@ def _layout(area: BaseGeometry, near: Vec | None) -> Callable[[float], Serpentin
         if best is None or key[:2] < best[:2]:
             best = key
     along = best[2] if best is not None else long_side_first(area)[0]
-    return lambda pitch: serpentine(area, pitch, along, near)
+    return lambda pitch, trim: serpentine(_trimmed(area, along, trim), pitch, along, near)
 
 
 def heating_zone(
@@ -422,8 +485,8 @@ def heating_zone(
     wall = _controller(plan, contours, fh, points)
     route_at = _layout(area, wall.at if wall is not None else None)
 
-    def needed(pitch: float) -> float:
-        s = route_at(pitch)
+    def needed(pitch: float, trim: float = 0.0) -> float:
+        s = route_at(pitch, trim)
         return s.length if s is not None else 0.0
 
     shortest, longest = needed(PITCH_MAX), needed(PITCH_MIN)
@@ -432,17 +495,14 @@ def heating_zone(
     else:
         length, fits = choose_length(area_m2, density, series, shortest, longest)
     length_mm = length * 1000
-    if length_mm > longest:
-        pitch = PITCH_MIN
-    elif length_mm < shortest:
-        pitch = PITCH_MAX
-    else:
-        pitch = _bisect(needed, length_mm)
-    full = route_at(pitch)
+    pitch = _pitch(needed, length_mm)
+    trim = 0.0 if length_mm > longest else _trim(lambda t: needed(pitch, t), length_mm)
+    full = route_at(pitch, trim)
     assert full is not None
     route = full.truncated(length_mm)
-    if not fits:
-        remarks.append(_misfit(fh, length, length_mm, shortest, longest))
+    bare = full.length - length_mm
+    if not fits and (length_mm > longest or bare > FIT_SLACK):
+        remarks.append(_misfit(fh, length, length_mm, bare, longest))
     if full.covered < full.cells:
         remarks.append(
             f"одной змейкой покрыта не вся зона: {full.covered} из {full.cells} участков — "
@@ -453,7 +513,7 @@ def heating_zone(
             f"радиус поворота {pitch / 2:.0f} мм меньше {MIN_BEND_DIAMETERS:g} диаметров кабеля "
             f"({MIN_BEND_DIAMETERS * series.diameter_mm:.0f} мм)"
         )
-    zone = replace(base, length=length, pitch=pitch, route=route)
+    zone = replace(base, length=length, pitch=pitch, trim=trim, route=route)
     if wall is None:
         return replace(zone, remarks=tuple(remarks))
     if not wall.same_room:
@@ -491,10 +551,9 @@ def heating_zone(
     )
 
 
-def _misfit(
-    fh: FloorHeating, length: float, length_mm: float, shortest: float, longest: float
-) -> str:
-    """Remark: the section cannot be laid at PITCH_MIN…PITCH_MAX."""
+def _misfit(fh: FloorHeating, length: float, length_mm: float, bare: float, longest: float) -> str:
+    """Remark: the section cannot be laid at PITCH_MIN…PITCH_MAX; bare is the route left without
+    cable after the trim, mm."""
     pitches = f"{PITCH_MIN:g}–{PITCH_MAX:g} мм"
     if length_mm > longest:
         extra = f"не уложено {(length_mm - longest) / 1000:.1f} м"
@@ -504,12 +563,10 @@ def _misfit(
                 f"{extra} — нужна секция короче или площадь больше"
             )
         return f"из ряда серии нет длины с шагом {pitches}: взята {length:g} м, {extra}"
-    bare = f"без кабеля ~{(shortest - length_mm) / 1000:.1f} м трассы"
+    without = f"без кабеля ~{bare / 1000:.1f} м трассы"
     if fh.length is not None:
-        return (
-            f"длины из источника {length:g} м не хватает на зону при шаге {PITCH_MAX:g} мм: {bare}"
-        )
-    return f"из ряда серии нет длины с шагом {pitches}: взята {length:g} м, {bare}"
+        return f"длины из источника {length:g} м не хватает на зону при шаге {PITCH_MAX:g} мм: {without}"
+    return f"из ряда серии нет длины с шагом {pitches}: взята {length:g} м, {without}"
 
 
 _CACHE: dict[str, tuple[HeatingZone, ...]] = {}

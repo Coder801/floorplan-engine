@@ -5,10 +5,11 @@ from __future__ import annotations
 
 import pytest
 
-from floorplan_engine.drawing.floor_heating import heating_table, zone_label
+from floorplan_engine.drawing.floor_heating import draw_floor_heating, heating_table, zone_label
 from floorplan_engine.drawing.ids import object_id
-from floorplan_engine.drawing.layers import H_CABLE, H_LEAD, H_SENSOR, H_TEXT
+from floorplan_engine.drawing.layers import H_CABLE, H_LEAD, H_SENSOR, H_TEXT, H_ZONE, new_document
 from floorplan_engine.electrical.floor_heating import heating_zones
+from floorplan_engine.model.plumbing import TYPICAL_SPOT
 from floorplan_engine.model.schema import Electrical
 from floorplan_engine.sheets.document import sheet_slug
 from floorplan_engine.sheets.stages import draw_stages
@@ -99,3 +100,41 @@ def test_table_shows_auto_zones_source_area_and_furniture() -> None:
     # Without areas from the source the column is not there
     plain = heating_table(plan, _elec(), heating_zones(plan, contours, _elec()))
     assert plain is not None and "По проекту, м²" not in [c.title for c in plain[0].columns]
+
+
+def test_cut_outs_are_outlines_with_labels_not_hatches() -> None:
+    """A fixture spot and an exclude: a thin outline and a label each (the fixture by its name
+    from plumbing, the exclude by its note), no hatch; a furniture spot is left to its layer."""
+    plan = make_plan(WALLS)
+    _, contours = validate_plan(plan)
+    elec = Electrical.model_validate(
+        {
+            "points": [REG],
+            "floor_heating": [
+                {
+                    "id": "fh1",
+                    "room": "r",
+                    "thermostat": "t1",
+                    "exclude": [{"at": [2000, 2000], "size": [800, 600], "note": "подіум"}],
+                    "fixtures": [
+                        {"at": [0, 0], "size": [1700, 700], "note": f"{TYPICAL_SPOT}: bath1"}
+                    ],
+                    "furniture": [
+                        {"at": [0, 2000], "size": [600, 1000], "note": "furniture.yaml: k"}
+                    ],
+                }
+            ],
+        }
+    )
+    zones = heating_zones(plan, contours, elec)
+    assert [s.kind for s in zones[0].blocked] == ["exclude", "fixture", "furniture"]
+    doc = new_document((H_ZONE, H_TEXT, H_CABLE, H_LEAD, H_SENSOR))
+    msp = doc.modelspace()
+    draw_floor_heating(msp, plan, contours, elec, zones, {"bath1": "Ванна"})
+    assert not msp.query("HATCH")
+    labels = {t.dxf.text for t in msp.query(f'TEXT[layer=="{H_TEXT.name}"]')}
+    assert {"ванна", "подіум"} <= labels and "k" not in labels
+    outlines = msp.query(f'LWPOLYLINE[layer=="{H_ZONE.name}"]')
+    # The heated area (its outer ring and the hole round the exclude), the fixture, the exclude;
+    # the furniture piece is not drawn here
+    assert len(outlines) == 4

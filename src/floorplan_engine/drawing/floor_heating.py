@@ -2,13 +2,17 @@
 (runs and half-circle turns), the cold lead and the floor sensor conduit to the controller, one
 pitch dimension per zone and the zones table. The calculation is electrical/floor_heating.py.
 
+A cut-out without cable (a fixture of plumbing.yaml, an `exclude`) is a thin outline with what it
+is in the middle (decision 2026-11-17: no hatching — hatched it read as a wall); furniture is
+not drawn here again, its own layer shows the piece with its label.
+
 All of a zone is one object `heating:<id>` (the controller is `point:<id>`, as on the electrical
 sheet): the viewer highlights the zone and shows its card.
 """
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import replace
 
 from ezdxf.enums import TextEntityAlignment
@@ -16,6 +20,7 @@ from ezdxf.layouts.layout import Modelspace
 from shapely.geometry.base import BaseGeometry
 
 from floorplan_engine.drawing.electrical import insert_symbol, point_attribs
+from floorplan_engine.drawing.furniture import rect_label
 from floorplan_engine.drawing.ids import tagged
 from floorplan_engine.drawing.layers import (
     DIM_STYLE,
@@ -41,6 +46,7 @@ from floorplan_engine.electrical.floor_heating import (
     PITCH_MIN,
     SENSOR_DEPTH,
     WALL_GAP,
+    BlockedSpot,
     HeatingZone,
 )
 from floorplan_engine.electrical.heating_layout import Arc, Straight
@@ -51,8 +57,6 @@ from floorplan_engine.model.schema import Electrical, Plan
 from floorplan_engine.model.texts import Language, tr
 
 SENSOR_MM = 1.2  # sensor circle radius on the sheet
-HATCH = "ANSI31"
-HATCH_MM = 0.6  # hatch scale per sheet mm
 
 
 def zone_label(zone: HeatingZone) -> str:
@@ -70,19 +74,30 @@ def _rings(geom: BaseGeometry) -> list[list[tuple[float, float]]]:
     return out
 
 
-def _draw_zone(msp: Modelspace, zone: HeatingZone) -> None:
+def spot_label(spot: BlockedSpot, names: Mapping[str, str], lang: Language) -> str:
+    """What a cut-out is, for the sheet: the fixture's name (names: id → name, lower case like
+    the furniture labels), the exclude's note, else "no cable"."""
+    if spot.kind == "fixture":
+        return names.get(spot.name, spot.name).lower()
+    return spot.name or tr("fh_cut", lang).lower()
+
+
+def _draw_zone(
+    msp: Modelspace, zone: HeatingZone, names: Mapping[str, str], lang: Language
+) -> None:
     for ring in _rings(zone.area):
         msp.add_lwpolyline(
             ring, close=True, dxfattribs={"layer": H_ZONE.name, "lineweight": LW_THIN}
         )
     for spot in zone.blocked:
-        for ring in _rings(spot):
+        if spot.kind == "furniture":
+            continue  # the furniture layer draws the piece with its label
+        for ring in _rings(spot.shape):
             msp.add_lwpolyline(
                 ring, close=True, dxfattribs={"layer": H_ZONE.name, "lineweight": LW_THIN}
             )
-            hatch = msp.add_hatch(color=256, dxfattribs={"layer": H_ZONE.name})
-            hatch.set_pattern_fill(HATCH, scale=sheet(HATCH_MM))
-            hatch.paths.add_polyline_path(ring, is_closed=True)
+        x0, y0, x1, y1 = spot.shape.bounds
+        rect_label(msp, (x0, y0, x1 - x0, y1 - y0), spot_label(spot, names, lang), H_TEXT.name)
     if zone.route is None:
         return
     attribs = {"layer": H_CABLE.name, "lineweight": LW_HEAT}
@@ -137,12 +152,14 @@ def draw_floor_heating(
     contours: dict[str, Contour],
     elec: Electrical,
     zones: Sequence[HeatingZone],
+    names: Mapping[str, str] | None = None,
 ) -> None:
     """Zones in the model on the floor heating layers; their controllers once more on H_TEXT (the
-    sheet does not show the sockets layer)."""
+    sheet does not show the sockets layer). names: fixture or obstacle id → its name for the
+    cut-out labels (plumbing/floor_spots.spot_names); without them the id is written."""
     for zone in zones:
         with tagged(msp, "heating", zone.spec.id):
-            _draw_zone(msp, zone)
+            _draw_zone(msp, zone, names or {}, plan.language)
     geoms = {g.room.id: g for g in room_geometries(plan, contours)}
     regs = {z.spec.thermostat for z in zones}
     for pt in elec.points:

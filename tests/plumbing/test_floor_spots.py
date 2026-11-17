@@ -8,6 +8,39 @@ from floorplan_engine.validation.plan import validate_plan
 from tests.conftest import make_flat
 
 
+def test_fixture_on_its_obstacle_is_not_cut_out_twice() -> None:
+    """A bath drawn as an obstacle along the left wall, its mixer (the fixture) on the bottom wall
+    at the bath's end: the obstacle is the footprint, no typical-size spot for the fixture; a
+    bath elsewhere in the room still gets its typical spot."""
+    plan = make_flat()
+    _, contours = validate_plan(plan)
+    bath = {
+        "id": "b",
+        "room": "bath",
+        "type": "bath",
+        "wall": "w1",
+        "offset": 0,
+        "width": 1700,
+        "depth": 750,
+    }
+
+    def spots(offset: float) -> list[str | None]:
+        plumbing = Plumbing.model_validate(
+            {
+                "fixtures": [
+                    {"id": "tub", "room": "bath", "type": "bath", "wall": "w4", "offset": offset}
+                ],
+                "obstacles": [bath],
+            }
+        )
+        return [s.note for s in heating_spots(plan, contours, plumbing)["bath"]]
+
+    # w4 is the bottom wall, walked right to left from the corner with w3: 2000 − 400 = x 1600,
+    # inside the bath (x ≤ 750 from the left wall is the bath's depth — 400 from w1 is on it)
+    assert spots(2000 - 400) == ["plumbing.yaml: b"]
+    assert spots(2000 - 1500) == ["plumbing.yaml: b", "plumbing.yaml (типовой размер): tub"]
+
+
 def test_floor_obstacles_and_standing_fixtures_are_spots() -> None:
     plan = make_flat()
     _, contours = validate_plan(plan)

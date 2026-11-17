@@ -12,16 +12,21 @@ before anything is counted.
 
 from __future__ import annotations
 
+from shapely.geometry import Point, Polygon
+
 from floorplan_engine.model.geometry import Contour, RoomGeometry, room_geometries
 from floorplan_engine.model.plumbing import (
     FIXTURE_SIZES,
     TYPICAL_SPOT,
     Fixture,
     FixtureType,
+    ObstacleType,
     Plumbing,
 )
 from floorplan_engine.model.schema import HeatingExclude, Plan
+from floorplan_engine.model.texts import Language
 from floorplan_engine.plumbing.context import obstacle_polygon
+from floorplan_engine.plumbing.rules import FIXTURE_NAMES
 
 # Fixtures on the floor: no heating cable under them
 FLOOR_FIXTURES = frozenset(
@@ -33,6 +38,28 @@ FLOOR_FIXTURES = frozenset(
         FixtureType.DISHWASHER,
     }
 )
+
+
+# A fixture standing on an obstacle of its own kind: the obstacle is its real footprint, the
+# typical size is not cut out again (a bath drawn along one wall with its mixer on another)
+FOOTPRINTS: dict[FixtureType, frozenset[ObstacleType]] = {
+    FixtureType.BATH: frozenset({ObstacleType.BATH}),
+    FixtureType.SHOWER: frozenset({ObstacleType.SHOWER_TRAY}),
+}
+FOOTPRINT_REACH_MM = 50.0  # the fixture's wall point no farther than this from the obstacle
+
+
+def _on_footprint(
+    fx: Fixture, g: RoomGeometry, footprints: list[tuple[ObstacleType, Polygon]]
+) -> bool:
+    kinds = FOOTPRINTS.get(fx.type)
+    if not kinds:
+        return False
+    try:
+        at = Point(g.contour.segment(fx.wall).point_at(fx.offset).as_tuple())
+    except StopIteration:
+        return False
+    return any(t in kinds and poly.distance(at) <= FOOTPRINT_REACH_MM for t, poly in footprints)
 
 
 def _spot(g: RoomGeometry, bounds: tuple[float, float, float, float], note: str) -> HeatingExclude:
@@ -65,17 +92,41 @@ def heating_spots(
     fixtures on the floor."""
     geoms = {g.room.id: g for g in room_geometries(plan, contours)}
     out: dict[str, list[HeatingExclude]] = {}
+    footprints: dict[str, list[tuple[ObstacleType, Polygon]]] = {}
     for ob in plumbing.obstacles:
         g = geoms.get(ob.room)
         if g is None or (ob.wall is not None and ob.wall not in {s.id for s in g.contour.segments}):
             continue
         poly = obstacle_polygon(ob, g)
         out.setdefault(ob.room, []).append(_spot(g, poly.bounds, f"plumbing.yaml: {ob.id}"))
+        footprints.setdefault(ob.room, []).append((ob.type, poly))
     for fx in plumbing.fixtures:
         g = geoms.get(fx.room)
         if g is None or fx.type not in FLOOR_FIXTURES:
             continue
+        if _on_footprint(fx, g, footprints.get(fx.room, [])):
+            continue
         bounds = _fixture_bounds(fx, g)
         if bounds is not None:
             out.setdefault(fx.room, []).append(_spot(g, bounds, f"{TYPICAL_SPOT}: {fx.id}"))
+    return out
+
+
+OBSTACLE_NAMES: dict[ObstacleType, dict[str, str]] = {
+    ObstacleType.INSTALLATION: {"ru": "Инсталляция", "uk": "Інсталяція"},
+    ObstacleType.BATH: FIXTURE_NAMES[FixtureType.BATH],
+    ObstacleType.SHOWER_TRAY: {"ru": "Поддон", "uk": "Піддон"},
+    ObstacleType.BOX: {"ru": "Короб", "uk": "Короб"},
+    ObstacleType.CABINET: {"ru": "Тумба", "uk": "Тумба"},
+    ObstacleType.COLUMN: {"ru": "Колонна", "uk": "Колона"},
+}
+
+
+def spot_names(plumbing: Plumbing, language: Language) -> dict[str, str]:
+    """Fixture or obstacle id → what it is, for the labels of the cut-outs on the floor heating
+    sheet; an `other` obstacle is named by its note, else by its id."""
+    out = {fx.id: FIXTURE_NAMES[fx.type][language] for fx in plumbing.fixtures}
+    for ob in plumbing.obstacles:
+        names = OBSTACLE_NAMES.get(ob.type)
+        out[ob.id] = names[language] if names else (ob.note or ob.id)
     return out
