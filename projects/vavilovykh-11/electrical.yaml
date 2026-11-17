@@ -126,6 +126,9 @@ cables:
   - { id: cable_19, from: board, to: [living_socket_7], group: QF19, cable: "3x2.5", route: wall }
   # QF20 — розетки: коридор (2026-10-28: отдельно от зала)
   - { id: cable_20, from: board, to: [living_socket_13, living_socket_10], group: QF20, cable: "3x2.5", route: wall }
+  # Связь — со слов заказчика 2026-11-17 (source/изменения-заказчика.md): от щита один кабель до зоны ТВ, оттуда — на балкон и в спальню; марка — как у линий связи по умолчанию
+  - { id: cable_lan_1, from: board, to: [living_data_1], cable: "UTP cat.6" }
+  - { id: cable_lan_2, from: living_data_1, to: [bedroom_data_1, balcony_data_1], cable: "UTP cat.6" }
 # Назначения групп и УЗО — со слов заказчика 2026-10-28; автоматы не названы — подбирает код
 groups:
   QF6: { name: "Розетки — зал" }
