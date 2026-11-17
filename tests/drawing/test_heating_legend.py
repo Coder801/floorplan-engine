@@ -46,3 +46,10 @@ def test_every_sample_is_its_legend_object() -> None:
     assert tagged == {("legend", k) for k in keys}
     captions = {t for _, t in heating_legend_rows("ru")}
     assert all(object_id(e) is None for e in psp.query("TEXT") if e.dxf.text in captions)
+
+
+def test_cable_lead_and_sensor_differ_in_colour() -> None:
+    """Decision 2026-11-17: the cold lead is blue, not red like the heating cable, and the sensor
+    conduit has a colour of its own: the three lines are told apart on the sheet and in print."""
+    assert H_CABLE.color == 1 and H_LEAD.color == 5
+    assert len({H_CABLE.color, H_LEAD.color, H_SENSOR.color}) == 3

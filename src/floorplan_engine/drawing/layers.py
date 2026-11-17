@@ -151,12 +151,15 @@ P_OBST = LayerSpec("P-OBST", 8, "Препятствия: инсталляция,
 P_SYMB = LayerSpec("P-SYMB", 8, "Сантехприборы контуром: ванна, душ, унитаз… (типовой размер)")
 P_TEXT = LayerSpec("P-TEXT", 7, "Подписи сантехники: диаметры, уклоны")
 PLUMBING_LAYERS = (P_COLD, P_HOT, P_SEWER, P_FIXT, P_RISER, P_OBST, P_SYMB, P_TEXT, A_SHEET)
-# Floor heating (decision 2026-11-14): its own sheet; the controller symbol is on E-SOCKET as well
+# Floor heating (decision 2026-11-14): its own sheet; the controller symbol is on E-SOCKET as well.
+# Colours (decision 2026-11-17): the heating cable red, the cold lead blue (as cold water on the
+# plumbing sheet: the installer tells it from the cable at a glance), the sensor conduit magenta
+# (green would merge with the door swings of the backdrop)
 H_CABLE = LayerSpec("E-FLOORHEAT", 1, "Тёплый пол: нагревательный кабель змейкой")
 H_LEAD = LayerSpec(
-    "E-FLOORHEAT-LEAD", 1, "Тёплый пол: холодный конец до регулятора", CABLE_LINETYPE
+    "E-FLOORHEAT-LEAD", 5, "Тёплый пол: холодный конец до регулятора (синий)", CABLE_LINETYPE
 )
-H_SENSOR = LayerSpec("E-FLOORHEAT-SENSOR", 5, "Тёплый пол: гофра датчика пола и датчик")
+H_SENSOR = LayerSpec("E-FLOORHEAT-SENSOR", 6, "Тёплый пол: гофра датчика пола и датчик")
 H_ZONE = LayerSpec("E-FLOORHEAT-ZONE", 8, "Тёплый пол: граница обогрева, где кабеля нет")
 H_TEXT = LayerSpec("E-FLOORHEAT-TEXT", 7, "Тёплый пол: регулятор, шаг, подписи")
 LW_HEAT = 25  # heating cable line weight, 1/100 mm

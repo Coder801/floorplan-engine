@@ -11,6 +11,7 @@ from dataclasses import replace
 from ezdxf.layouts.layout import Paperspace
 
 from floorplan_engine.drawing.electrical import insert_symbol
+from floorplan_engine.drawing.floor_heating import tint_hatch
 from floorplan_engine.drawing.furniture import rect_label
 from floorplan_engine.drawing.ids import tagged
 from floorplan_engine.drawing.layers import (
@@ -73,7 +74,9 @@ def _box(psp: Paperspace, mid: Vec) -> list[tuple[float, float]]:
 
 
 def _area(psp: Paperspace, mid: Vec) -> None:
-    _box(psp, mid)
+    """The heated area as on the sheet: the tint under its thin outline."""
+    pts = _box(psp, mid)
+    tint_hatch(psp).paths.add_polyline_path(pts, is_closed=True)
 
 
 def _cut(psp: Paperspace, mid: Vec) -> None:

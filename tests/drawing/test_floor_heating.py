@@ -4,6 +4,7 @@ cable as lines and arcs tagged with the zone, the controller, the zones table wi
 from __future__ import annotations
 
 import pytest
+from ezdxf.entities.hatch import Hatch
 
 from floorplan_engine.drawing.floor_heating import draw_floor_heating, heating_table, zone_label
 from floorplan_engine.drawing.ids import object_id
@@ -42,7 +43,18 @@ def test_sheet_has_the_serpentine_tagged_with_its_zone() -> None:
     assert msp.query(f'CIRCLE[layer=="{H_SENSOR.name}"]')  # the sensor
     regs = msp.query(f'INSERT[layer=="{H_TEXT.name}"]')
     assert [object_id(r) for r in regs] == [("point", "t1")]
-    assert msp.query(f'DIMENSION[layer=="{H_TEXT.name}"]')  # one pitch
+    # The zone block names the zone, its section and the pitch; no pitch dimension since
+    # 2026-11-17 (the block carries it), no zone name at the sensor
+    texts = [t.dxf.text for t in msp.query(f'TEXT[layer=="{H_TEXT.name}"]')]
+    assert "ТП1" in texts and any(f"{zone.length:g} м · шаг {zone.pitch:.0f}" == t for t in texts)
+    assert not msp.query(f'DIMENSION[layer=="{H_TEXT.name}"]')
+    # The controller's number next to its symbol, tagged with its point
+    reg_texts = [
+        t for t in msp.query(f'TEXT[layer=="{H_TEXT.name}"]') if object_id(t) == ("point", "t1")
+    ]
+    assert [t.dxf.text for t in reg_texts] == ["1"]
+    (tint,) = msp.query(f'HATCH[layer=="{H_ZONE.name}"]')
+    assert isinstance(tint, Hatch) and tint.transparency == pytest.approx(0.88, abs=0.01)
     _, without = draw_stages(plan, contours, _elec(heating=False))
     assert "tab_floor_heating" not in [s.tab_key for s in without]
     assert sheet_slug("06 Тёплый пол") == "floor_heating"
@@ -131,7 +143,12 @@ def test_cut_outs_are_outlines_with_labels_not_hatches() -> None:
     doc = new_document((H_ZONE, H_TEXT, H_CABLE, H_LEAD, H_SENSOR))
     msp = doc.modelspace()
     draw_floor_heating(msp, plan, contours, elec, zones, {"bath1": "Ванна"})
-    assert not msp.query("HATCH")
+    # The heated area is a tint with the cut-outs as its holes (one hatch: the outer ring and
+    # the hole round the exclude; the fixture and the furniture bite the edge) and the zone
+    # block stands on a white backing; the cut-outs themselves are not hatched
+    (tint,) = msp.query(f'HATCH[layer=="{H_ZONE.name}"]')
+    assert isinstance(tint, Hatch) and len(tint.paths) == 2
+    assert len(msp.query(f'HATCH[layer=="{H_TEXT.name}"]')) == 1
     labels = {t.dxf.text for t in msp.query(f'TEXT[layer=="{H_TEXT.name}"]')}
     assert {"ванна", "подіум"} <= labels and "k" not in labels
     outlines = msp.query(f'LWPOLYLINE[layer=="{H_ZONE.name}"]')

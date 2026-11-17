@@ -15,15 +15,19 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from dataclasses import replace
 
+from ezdxf.colors import RGB
+from ezdxf.entities.hatch import Hatch
 from ezdxf.enums import TextEntityAlignment
+from ezdxf.layouts.base import BaseLayout
 from ezdxf.layouts.layout import Modelspace
 from shapely.geometry.base import BaseGeometry
+from shapely.geometry.polygon import orient
+from shapely.ops import polylabel
 
 from floorplan_engine.drawing.electrical import insert_symbol, point_attribs
 from floorplan_engine.drawing.furniture import rect_label
 from floorplan_engine.drawing.ids import tagged
 from floorplan_engine.drawing.layers import (
-    DIM_STYLE,
     H_CABLE,
     H_LEAD,
     H_SENSOR,
@@ -31,6 +35,7 @@ from floorplan_engine.drawing.layers import (
     H_ZONE,
     LW_HEAT,
     TEXT_DIM_MM,
+    TEXT_ROOM_MM,
     TEXT_SMALL_MM,
     text_width,
 )
@@ -38,7 +43,7 @@ from floorplan_engine.drawing.plan import add_text
 from floorplan_engine.drawing.symbols import SYMBOLS
 from floorplan_engine.drawing.tables import CELL_PAD, TEXT_GAP, Column, Table, name_width
 from floorplan_engine.drawing.titleblock import LW_THIN
-from floorplan_engine.electrical.anchors import point_anchor, symbol_key
+from floorplan_engine.electrical.anchors import THERMOSTAT_SIDE, Anchor, point_anchor, symbol_key
 from floorplan_engine.electrical.floor_heating import (
     AREA_TOLERANCE,
     DEFAULT_DENSITY,
@@ -51,12 +56,20 @@ from floorplan_engine.electrical.floor_heating import (
 )
 from floorplan_engine.electrical.heating_layout import Arc, Straight
 from floorplan_engine.electrical.point_numbers import number_points
-from floorplan_engine.model.geometry import Contour, room_geometries
+from floorplan_engine.model.geometry import Contour, Vec, room_geometries
 from floorplan_engine.model.scale import sheet
 from floorplan_engine.model.schema import Electrical, Plan
 from floorplan_engine.model.texts import Language, tr
 
 SENSOR_MM = 1.2  # sensor circle radius on the sheet
+# The heated area (decision 2026-11-17): the cable's red, mostly transparent, under the serpentine
+# — pale pink on paper, dim red on the viewer's dark theme; the cut-outs are holes in it
+ZONE_TINT = 0xE63C00
+ZONE_ALPHA = 0.88  # transparency of the tint, 0 opaque … 1 invisible
+LABEL_PAD_MM = 1.5  # the zone label block: padding of its white backing
+LABEL_SLACK = 1.15  # the backing is this much wider than the font metrics say: viewer fonts differ
+LINE_GAP_MM = 0.8  # between the lines of the zone label block
+REG_NUMBER_GAP_MM = 0.8  # the controller number this far past its symbol, sheet mm
 
 
 def zone_label(zone: HeatingZone) -> str:
@@ -82,9 +95,63 @@ def spot_label(spot: BlockedSpot, names: Mapping[str, str], lang: Language) -> s
     return spot.name or tr("fh_cut", lang).lower()
 
 
+def tint_hatch(layout: BaseLayout) -> Hatch:
+    """An empty hatch in the tint of the heated area (the sheet and its legend add the path)."""
+    hatch = layout.add_hatch(dxfattribs={"layer": H_ZONE.name, "true_color": ZONE_TINT})
+    hatch.set_solid_fill(rgb=RGB.from_hex(f"#{ZONE_TINT:06x}"))
+    hatch.transparency = ZONE_ALPHA
+    return hatch
+
+
+def _tint(msp: Modelspace, geom: BaseGeometry) -> None:
+    """The heated area as a pale solid fill: the cut-outs are its holes."""
+    for p in getattr(geom, "geoms", [geom]):
+        if p.is_empty:
+            continue
+        p = orient(p, 1.0)  # exterior ccw, holes cw: a nonzero fill keeps the holes empty
+        hatch = tint_hatch(msp)
+        hatch.paths.add_polyline_path(list(p.exterior.coords)[:-1], is_closed=True)
+        for r in p.interiors:
+            hatch.paths.add_polyline_path(list(r.coords)[:-1], is_closed=True)
+
+
+def zone_block(zone: HeatingZone, lang: Language) -> list[tuple[str, float]]:
+    """Lines of the zone label block on the sheet: (text, height mm). The name, then what the
+    installer lays: section length and power, pitch."""
+    lines = [(zone_label(zone), TEXT_ROOM_MM)]
+    lines.append((f"{_num(zone.area_m2)} м² · {zone.power:.0f} Вт", TEXT_SMALL_MM))
+    pitch = f" · {tr('fh_pitch_short', lang)} {zone.pitch:.0f}" if zone.pitch is not None else ""
+    lines.append((f"{zone.length:g} м{pitch}", TEXT_SMALL_MM))
+    return lines
+
+
+def _label_block(msp: Modelspace, zone: HeatingZone, lang: Language) -> None:
+    """The zone's data on a white sticker at the point deepest inside the heated area."""
+    biggest = max(getattr(zone.area, "geoms", [zone.area]), key=lambda g: float(g.area))
+    if biggest.is_empty:
+        return
+    c = polylabel(biggest, tolerance=10.0)
+    lines = zone_block(zone, lang)
+    k = sheet(1.0)
+    width = LABEL_SLACK * max(text_width(t, h) for t, h in lines) + 2 * LABEL_PAD_MM
+    height = sum(h for _, h in lines) + LINE_GAP_MM * (len(lines) - 1) + 2 * LABEL_PAD_MM
+    x0, y0 = c.x - k * width / 2, c.y - k * height / 2
+    back = msp.add_hatch(dxfattribs={"layer": H_TEXT.name, "true_color": 0xFFFFFF})
+    back.set_solid_fill(rgb=RGB.from_hex("#ffffff"))
+    back.paths.add_polyline_path(
+        [(x0, y0), (x0 + k * width, y0), (x0 + k * width, y0 + k * height), (x0, y0 + k * height)],
+        is_closed=True,
+    )
+    y = c.y + k * (height / 2 - LABEL_PAD_MM)
+    for text, h in lines:
+        add_text(msp, text, Vec(c.x, y - k * h / 2), h, H_TEXT.name)
+        y -= k * (h + LINE_GAP_MM)
+
+
 def _draw_zone(
     msp: Modelspace, zone: HeatingZone, names: Mapping[str, str], lang: Language
 ) -> None:
+    _tint(msp, zone.area)
     for ring in _rings(zone.area):
         msp.add_lwpolyline(
             ring, close=True, dxfattribs={"layer": H_ZONE.name, "lineweight": LW_THIN}
@@ -101,6 +168,7 @@ def _draw_zone(
     if zone.route is None:
         return
     attribs = {"layer": H_CABLE.name, "lineweight": LW_HEAT}
+    _label_block(msp, zone, lang)
     for piece in zone.route.pieces:
         if isinstance(piece, Straight):
             if piece.length > 1e-6:
@@ -120,30 +188,6 @@ def _draw_zone(
         )
         tip = zone.sensor[-1]
         msp.add_circle(tip.as_tuple(), sheet(SENSOR_MM), dxfattribs={"layer": H_SENSOR.name})
-        back = zone.sensor[-2]
-        along = (tip - back) * (1 / max((tip - back).length(), 1e-6))
-        at = tip + along * sheet(SENSOR_MM + 1.0)
-        add_text(
-            msp,
-            zone_label(zone),
-            at,
-            TEXT_SMALL_MM,
-            H_TEXT.name,
-            align=TextEntityAlignment.MIDDLE_LEFT
-            if along.x >= 0
-            else TextEntityAlignment.MIDDLE_RIGHT,
-        )
-    if zone.gap_dim is not None:
-        # Left to right or bottom to top: the value reads upright, above or left of the line
-        a, b = sorted(zone.gap_dim, key=lambda v: (round(v.x, 3), round(v.y, 3)))
-        dim = msp.add_aligned_dim(
-            p1=a.as_tuple(),
-            p2=b.as_tuple(),
-            distance=sheet(4.0),
-            dimstyle=DIM_STYLE,
-            dxfattribs={"layer": H_TEXT.name},
-        )
-        dim.render()
 
 
 def draw_floor_heating(
@@ -162,15 +206,38 @@ def draw_floor_heating(
             _draw_zone(msp, zone, names or {}, plan.language)
     geoms = {g.room.id: g for g in room_geometries(plan, contours)}
     regs = {z.spec.thermostat for z in zones}
+    numbers = number_points(plan, elec)
     for pt in elec.points:
         if pt.id not in regs or pt.room not in geoms:
             continue
         spec = replace(SYMBOLS[symbol_key(pt)], layer=H_TEXT.name)
+        anchor = point_anchor(pt, geoms)
         with tagged(msp, "point", pt.id):
             k = sheet(1.0)
-            insert_symbol(
-                msp, spec, point_anchor(pt, geoms), xscale=k, yscale=k, attribs=point_attribs(pt)
-            )
+            insert_symbol(msp, spec, anchor, xscale=k, yscale=k, attribs=point_attribs(pt))
+            number = numbers.get(pt.id)
+            if number is not None:
+                lines = [v for z in zones if z.spec.thermostat == pt.id for v in z.lead + z.sensor]
+                _reg_number(msp, str(number), anchor, lines)
+
+
+def _reg_number(msp: Modelspace, text: str, anchor: Anchor, lines: Sequence[Vec]) -> None:
+    """The controller's number (as in the "Points" table and the zones table) beside its symbol,
+    along the wall: the installer finds which controller a zone's lead goes to. The lead and the
+    sensor conduit leave the symbol into the room, so the number takes the side of the symbol
+    they lean away from (lines: their vertices)."""
+    if anchor.inward is None or anchor.wall_dir is None:
+        return
+    side = anchor.wall_dir
+    if lines and sum((v - anchor.pos).dot(side) for v in lines) > 0:
+        side = side * -1.0
+    mid = anchor.pos + anchor.inward * (anchor.depth - sheet(THERMOSTAT_SIDE / 2))
+    at = mid + side * sheet(THERMOSTAT_SIDE / 2 + REG_NUMBER_GAP_MM)
+    if abs(side.x) >= abs(side.y):
+        align = TextEntityAlignment.MIDDLE_LEFT if side.x > 0 else TextEntityAlignment.MIDDLE_RIGHT
+    else:
+        align = TextEntityAlignment.BOTTOM_CENTER if side.y > 0 else TextEntityAlignment.TOP_CENTER
+    add_text(msp, text, at, TEXT_SMALL_MM, H_TEXT.name, align=align)
 
 
 def _column(title: str, least: float) -> Column:
