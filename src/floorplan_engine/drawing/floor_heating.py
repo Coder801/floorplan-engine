@@ -62,10 +62,16 @@ from floorplan_engine.model.schema import Electrical, Plan
 from floorplan_engine.model.texts import Language, tr
 
 SENSOR_MM = 1.2  # sensor circle radius on the sheet
-# The heated area (decision 2026-11-17): the cable's red, mostly transparent, under the serpentine
-# — pale pink on paper, dim red on the viewer's dark theme; the cut-outs are holes in it
-ZONE_TINT = 0xE63C00
-ZONE_ALPHA = 0.88  # transparency of the tint, 0 opaque … 1 invisible
+# The heated area (decision 2026-11-17): a warm orange, mostly transparent, under the serpentine
+# — pale peach on paper, dim amber on the viewer's dark theme; the cut-outs are holes in it
+ZONE_TINT = 0xFF9933
+ZONE_ALPHA = 0.85  # transparency of the tint, 0 opaque … 1 invisible
+# Its border: a red frame with slightly rounded corners, over the tint
+FRAME_COLOR = 0xD32F2F
+FRAME_LW = 35  # 1/100 mm: bolder than the cable, so the frame reads as the border
+FRAME_RADIUS_MM = 1.2  # corner radius, sheet mm
+# The cable inside is the same red, a little paler: the frame stays the strongest red line
+CABLE_COLOR = 0xEF7B7B
 LABEL_PAD_MM = 1.5  # the zone label block: padding of its white backing
 LABEL_SLACK = 1.15  # the backing is this much wider than the font metrics say: viewer fonts differ
 LINE_GAP_MM = 0.8  # between the lines of the zone label block
@@ -101,6 +107,16 @@ def tint_hatch(layout: BaseLayout) -> Hatch:
     hatch.set_solid_fill(rgb=RGB.from_hex(f"#{ZONE_TINT:06x}"))
     hatch.transparency = ZONE_ALPHA
     return hatch
+
+
+def rounded(geom: BaseGeometry, radius: float) -> BaseGeometry:
+    """The area with its corners rounded to radius (model mm): opening rounds the outer corners,
+    closing the inner ones. A shape the rounding would wipe out stays as it is."""
+    if radius <= 0 or geom.is_empty:
+        return geom
+    out = geom.buffer(-radius, quad_segs=4).buffer(radius, quad_segs=4)
+    out = out.buffer(radius, quad_segs=4).buffer(-radius, quad_segs=4)
+    return geom if out.is_empty else out
 
 
 def _tint(msp: Modelspace, geom: BaseGeometry) -> None:
@@ -151,10 +167,13 @@ def _label_block(msp: Modelspace, zone: HeatingZone, lang: Language) -> None:
 def _draw_zone(
     msp: Modelspace, zone: HeatingZone, names: Mapping[str, str], lang: Language
 ) -> None:
-    _tint(msp, zone.area)
-    for ring in _rings(zone.area):
+    area = rounded(zone.area, sheet(FRAME_RADIUS_MM))
+    _tint(msp, area)
+    for ring in _rings(area):
         msp.add_lwpolyline(
-            ring, close=True, dxfattribs={"layer": H_ZONE.name, "lineweight": LW_THIN}
+            ring,
+            close=True,
+            dxfattribs={"layer": H_ZONE.name, "lineweight": FRAME_LW, "true_color": FRAME_COLOR},
         )
     for spot in zone.blocked:
         if spot.kind == "furniture":
@@ -167,7 +186,7 @@ def _draw_zone(
         rect_label(msp, (x0, y0, x1 - x0, y1 - y0), spot_label(spot, names, lang), H_TEXT.name)
     if zone.route is None:
         return
-    attribs = {"layer": H_CABLE.name, "lineweight": LW_HEAT}
+    attribs = {"layer": H_CABLE.name, "lineweight": LW_HEAT, "true_color": CABLE_COLOR}
     _label_block(msp, zone, lang)
     for piece in zone.route.pieces:
         if isinstance(piece, Straight):

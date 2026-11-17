@@ -9,9 +9,18 @@ from __future__ import annotations
 from dataclasses import replace
 
 from ezdxf.layouts.layout import Paperspace
+from shapely.geometry import Polygon
+from shapely.geometry import box as shapely_box
 
 from floorplan_engine.drawing.electrical import insert_symbol
-from floorplan_engine.drawing.floor_heating import tint_hatch
+from floorplan_engine.drawing.floor_heating import (
+    CABLE_COLOR,
+    FRAME_COLOR,
+    FRAME_LW,
+    FRAME_RADIUS_MM,
+    rounded,
+    tint_hatch,
+)
 from floorplan_engine.drawing.furniture import rect_label
 from floorplan_engine.drawing.ids import tagged
 from floorplan_engine.drawing.layers import (
@@ -39,7 +48,7 @@ TURN_MM = 1.2  # serpentine turns in the cable sample: half the pitch
 
 def _cable(psp: Paperspace, mid: Vec) -> None:
     """Two runs with a turn, as the serpentine."""
-    attribs = {"layer": H_CABLE.name, "lineweight": LW_HEAT}
+    attribs = {"layer": H_CABLE.name, "lineweight": LW_HEAT, "true_color": CABLE_COLOR}
     x0, x1 = mid.x, mid.x + SAMPLE_MM - TURN_MM
     psp.add_line((x0, mid.y + TURN_MM), (x1, mid.y + TURN_MM), dxfattribs=attribs)
     psp.add_arc((x1, mid.y), TURN_MM, -90, 90, dxfattribs=attribs)
@@ -74,9 +83,19 @@ def _box(psp: Paperspace, mid: Vec) -> list[tuple[float, float]]:
 
 
 def _area(psp: Paperspace, mid: Vec) -> None:
-    """The heated area as on the sheet: the tint under its thin outline."""
-    pts = _box(psp, mid)
+    """The heated area as on the sheet: the tint under its red frame with rounded corners."""
+    box = rounded(
+        shapely_box(mid.x, mid.y - BOX_H_MM / 2, mid.x + SAMPLE_MM, mid.y + BOX_H_MM / 2),
+        FRAME_RADIUS_MM,
+    )
+    assert isinstance(box, Polygon)
+    pts = [(x, y) for x, y in list(box.exterior.coords)[:-1]]
     tint_hatch(psp).paths.add_polyline_path(pts, is_closed=True)
+    psp.add_lwpolyline(
+        pts,
+        close=True,
+        dxfattribs={"layer": H_ZONE.name, "lineweight": FRAME_LW, "true_color": FRAME_COLOR},
+    )
 
 
 def _cut(psp: Paperspace, mid: Vec) -> None:

@@ -6,9 +6,23 @@ from __future__ import annotations
 import pytest
 from ezdxf.entities.hatch import Hatch
 
-from floorplan_engine.drawing.floor_heating import draw_floor_heating, heating_table, zone_label
+from floorplan_engine.drawing.floor_heating import (
+    CABLE_COLOR,
+    FRAME_COLOR,
+    draw_floor_heating,
+    heating_table,
+    zone_label,
+)
 from floorplan_engine.drawing.ids import object_id
-from floorplan_engine.drawing.layers import H_CABLE, H_LEAD, H_SENSOR, H_TEXT, H_ZONE, new_document
+from floorplan_engine.drawing.layers import (
+    H_CABLE,
+    H_LEAD,
+    H_SENSOR,
+    H_TEXT,
+    H_ZONE,
+    LW_HEAT,
+    new_document,
+)
 from floorplan_engine.electrical.floor_heating import heating_zones
 from floorplan_engine.model.plumbing import TYPICAL_SPOT
 from floorplan_engine.model.schema import Electrical
@@ -54,7 +68,13 @@ def test_sheet_has_the_serpentine_tagged_with_its_zone() -> None:
     ]
     assert [t.dxf.text for t in reg_texts] == ["1"]
     (tint,) = msp.query(f'HATCH[layer=="{H_ZONE.name}"]')
-    assert isinstance(tint, Hatch) and tint.transparency == pytest.approx(0.88, abs=0.01)
+    assert isinstance(tint, Hatch) and tint.transparency == pytest.approx(0.85, abs=0.01)
+    # The area's border is a red frame, bolder than the cable; the cable is a paler red
+    frames = msp.query(f'LWPOLYLINE[layer=="{H_ZONE.name}"]')
+    assert frames and all(f.dxf.true_color == FRAME_COLOR for f in frames)
+    assert all(f.dxf.lineweight > LW_HEAT for f in frames)
+    assert len(frames[0]) > 4  # the rectangle's corners are rounded
+    assert all(a.dxf.true_color == CABLE_COLOR for a in arcs)
     _, without = draw_stages(plan, contours, _elec(heating=False))
     assert "tab_floor_heating" not in [s.tab_key for s in without]
     assert sheet_slug("06 Тёплый пол") == "floor_heating"
