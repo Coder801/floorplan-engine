@@ -15,10 +15,12 @@ from ezdxf.filemanagement import readfile
 from shapely.geometry.base import BaseGeometry
 
 from floorplan_engine.drawing.ids import object_id
-from floorplan_engine.drawing.layers import A_TEXT, new_document
+from floorplan_engine.drawing.layers import A_SILL, A_TEXT, new_document
 from floorplan_engine.drawing.plan import (
+    BEARING_STYLE,
     HATCH_SCALE_BEARING,
     HATCH_SCALE_PARTITION,
+    PARTITION_STYLE,
     draw_plan,
     readable_angle,
     wall_pieces,
@@ -130,6 +132,8 @@ def test_hatch_density_by_material(tmp_path: Path) -> None:
     _, doc = _wall_lines(tmp_path)
     scales: dict[str, set[float]] = {}
     for h in doc.modelspace().query("HATCH"):
+        if h.dxf.solid_fill:  # the wall colour under the pattern
+            continue
         oid = object_id(h)
         assert oid is not None
         scales.setdefault(oid[1], set()).add(round(h.dxf.pattern_scale, 3))
@@ -172,10 +176,74 @@ def test_sill_label_only_on_the_plan_sheet() -> None:
     msp = doc.modelspace()
     draw_plan(msp, plan, contours)
     labels = [t for t in msp.query("TEXT") if "900" in t.dxf.text]
-    assert [t.dxf.layer for t in labels] == [A_TEXT.name]
-    assert A_TEXT in PLAN_SHEET_LAYERS
+    assert [t.dxf.layer for t in labels] == [A_SILL.name]
+    assert A_SILL in PLAN_SHEET_LAYERS
     others = (ELECTRICAL_SHEET_LAYERS, LIGHTING_SHEET_LAYERS, WIRING_SHEET_LAYERS)
-    assert all(A_TEXT not in layers for layers in (*others, PLUMBING_SHEET_LAYERS))
+    assert all(A_SILL not in layers for layers in (*others, PLUMBING_SHEET_LAYERS))
+
+
+def _sill_plan(width: float, thickness: float = 200) -> Plan:
+    return make_plan(
+        [
+            {"length": 3000},
+            {"length": 4000, "thickness": thickness},
+            {"length": 3000},
+            {"length": 4000},
+        ],
+        [{"wall": "w2", "type": "window", "offset": 1000, "width": width, "sill": 900}],
+    )
+
+
+def test_sill_label_sits_inside_the_window_on_a_white_background() -> None:
+    plan = _sill_plan(1500)
+    _, contours = validate_plan(plan)
+    doc = new_document()
+    msp = doc.modelspace()
+    draw_plan(msp, plan, contours)
+    (label,) = [t for t in msp.query("TEXT") if isinstance(t, Text) and "900" in t.dxf.text]
+    at = Vec(*label.dxf.align_point.vec2)
+    (g,) = room_geometries(plan, contours)
+    seg = g.contour.segment("w2")
+    window = shapely.Polygon(
+        [(p.x, p.y) for p in (seg.point_at(1000), seg.point_at(2500))]
+        + [
+            (p.x, p.y)
+            for p in (
+                seg.point_at(2500) + seg.outward * 200,
+                seg.point_at(1000) + seg.outward * 200,
+            )
+        ]
+    )
+    assert window.contains(shapely.Point(at.x, at.y))
+    assert readable_angle(seg.angle_deg) == pytest.approx(label.dxf.rotation)  # along the window
+    (bg,) = [h for h in msp.query("HATCH") if h.dxf.layer == A_SILL.name]
+    assert bg.dxf.solid_fill and bg.dxf.true_color == 0xFFFFFF
+    assert object_id(bg) == object_id(label)
+
+
+def test_sill_label_too_wide_for_the_window_goes_into_the_room() -> None:
+    plan = _sill_plan(300)
+    _, contours = validate_plan(plan)
+    doc = new_document()
+    msp = doc.modelspace()
+    draw_plan(msp, plan, contours)
+    (label,) = [t for t in msp.query("TEXT") if isinstance(t, Text) and "900" in t.dxf.text]
+    (g,) = room_geometries(plan, contours)
+    room = shapely.Polygon([(v.x, v.y) for v in g.contour.vertices])
+    assert room.contains(shapely.Point(*label.dxf.align_point.vec2))
+    assert not [h for h in msp.query("HATCH") if h.dxf.layer == A_SILL.name]
+
+
+def test_walls_are_filled_by_style_under_their_pattern(tmp_path: Path) -> None:
+    _, doc = _wall_lines(tmp_path)
+    fills: dict[str, list[tuple[bool, int]]] = {}
+    for h in doc.modelspace().query("HATCH"):
+        oid = object_id(h)
+        assert oid is not None
+        fills.setdefault(oid[1], []).append((bool(h.dxf.solid_fill), h.dxf.true_color))
+    # Solid colour first, then the pattern over it
+    assert fills["a.w2"] == [(True, BEARING_STYLE.fill), (False, BEARING_STYLE.color)]
+    assert fills["a.w3"] == [(True, PARTITION_STYLE.fill), (False, PARTITION_STYLE.color)]
 
 
 def test_every_wall_has_its_code_inside_the_room_off_the_door_swing() -> None:

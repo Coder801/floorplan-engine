@@ -3,12 +3,16 @@
 The walls of all rooms are first merged into one silhouette: a partition shared by two rooms
 is drawn once, and where a partition meets an exterior wall there are no inner lines.
 The silhouette boundary is drawn as segments by coordinates, openings are gaps with reveals.
-Hatching: load-bearing (monolithic) walls are dense, partitions are sparse. Where a
-load-bearing wall meets a partition, a material boundary line remains.
+Fill (feedback 2026-11-17): load-bearing walls are graphite with dense white diagonals,
+partitions (and walls not marked load-bearing) are light grey with a sparse diamond net; both
+are in the plan legend (`plan_legend`). Where a load-bearing wall meets a partition, a material
+boundary line remains.
 Every wall gets its code ("2.C", model/wall_names.py) inside the room along the wall, on a spot
 free of dimensions, labels and door swings: the same code as on the elevations and in the viewer.
-Labels (room names, sills, dimension numbers, wall codes) do not sit on each other or on the
-linework; one with no free spot nearby goes on a 45° leader (`draw_plan`, `callouts`).
+The sill height sits inside its window, along it, on a white background; a window too small
+for it gets the label in the room by the window. Labels (room names, sills, dimension numbers,
+wall codes) do not sit on each other or on the linework; one with no free spot nearby goes on a
+45° leader (`draw_plan`, `callouts`).
 """
 
 from __future__ import annotations
@@ -20,6 +24,7 @@ from dataclasses import dataclass
 from datetime import date
 
 import shapely
+from ezdxf.colors import RGB
 from ezdxf.entities.lwpolyline import LWPolyline
 from ezdxf.enums import MTextEntityAlignment, TextEntityAlignment
 from ezdxf.layouts.base import BaseLayout
@@ -51,6 +56,7 @@ from floorplan_engine.drawing.ids import tagged
 from floorplan_engine.drawing.layers import (
     A_AREA,
     A_DOOR,
+    A_SILL,
     A_TEXT,
     A_WALL,
     A_WIND,
@@ -78,18 +84,33 @@ from floorplan_engine.model.texts import Language, tr
 from floorplan_engine.model.wall_names import wall_codes
 from floorplan_engine.model.zones import Floor, plan_floors
 
-HATCH_PATTERN = "ANSI31"
 # Hatch scale at 1:50; at another sheet scale it is proportional, so the step on paper
 # stays the same
 HATCH_REF_SCALE = 50.0  # the scale the hatch scales below are given for
 HATCH_SCALE_BEARING = 12.0  # ANSI31 step 3.175 × 12 ≈ 38 mm, 0.8 mm on the sheet
-HATCH_SCALE_PARTITION = 30.0  # ≈ 95 mm, 1.9 mm on the sheet
+HATCH_SCALE_PARTITION = 30.0  # ANSI37 net step ≈ 95 mm, 1.9 mm on the sheet
+WHITE = 0xFFFFFF
+
+
+@dataclass(frozen=True)
+class WallStyle:
+    """Wall fill on the plan: a solid colour under a pattern of another colour (true colours)."""
+
+    fill: int
+    pattern: str
+    color: int
+    scale: float  # pattern scale at HATCH_REF_SCALE
+
+
+BEARING_STYLE = WallStyle(0x5B6670, "ANSI31", WHITE, HATCH_SCALE_BEARING)
+PARTITION_STYLE = WallStyle(0xEEF0F2, "ANSI37", 0x5B6670, HATCH_SCALE_PARTITION)
 GRID = 0.1  # wall coordinate grid, mm: shared faces of neighbouring rooms match exactly
 MIN_AREA = 1.0  # mm²: smaller pieces are noise and are not hatched
 CODE_INSETS_MM = (3.0, 13.0, 18.0, 23.0)  # wall code from the inner face, sheet mm (dims at 8)
 CODE_ALONG = (0.5, 0.35, 0.65, 0.2, 0.8, 0.1, 0.9)  # spots along the wall, middle first
 SILL_DEPTHS = (1.2, 2.4, 3.6)  # sill label centre from the inner face, in text heights
 SILL_ALONG_MM = (0.0, 2.0, -2.0, 4.0, -4.0, 6.0, -6.0)  # and along the window from its middle
+SILL_PAD_MM = 0.4  # white background past the sill text inside the window, sheet mm
 SWING_SAMPLES = 12  # points on a door arc for label checks
 ROOM_LABEL_STEP_MM = 2.0  # search step around the room label point, over the floor, sheet mm
 ROOM_LABEL_NEAR = 25  # spots nearest to the label point for a label wider than its floor
@@ -230,10 +251,10 @@ def draw_walls(msp: Modelspace, geoms: Sequence[RoomGeometry]) -> None:
     """Walls of all rooms: hatching by material and the shared silhouette boundary."""
     pieces, total, bearing, owned = _owned(geoms)
     for p, own in zip(pieces, owned, strict=True):
-        base = HATCH_SCALE_BEARING if p.bearing else HATCH_SCALE_PARTITION
-        scale = base * sheet_scale() / HATCH_REF_SCALE
         with tagged(msp, "wall", p.tag):
-            _hatch(msp, own, scale)
+            for part in shapely.get_parts(own):
+                if isinstance(part, Polygon) and part.area >= MIN_AREA:
+                    wall_fill(msp, part, BEARING_STYLE if p.bearing else PARTITION_STYLE)
     # Silhouette boundary and the "load-bearing | partition" line; shared parts drawn once
     edges = shapely.unary_union([total.boundary, bearing.boundary])
     by_tag: dict[str, list[shapely.LineString]] = {}
@@ -261,15 +282,22 @@ def _owner(pieces: Sequence[WallPiece], at: BaseGeometry) -> str:
     return min(pieces, key=lambda p: p.polygon.distance(at)).tag
 
 
-def _hatch(msp: Modelspace, area: BaseGeometry, scale: float) -> None:
-    for part in shapely.get_parts(area):
-        if not isinstance(part, Polygon) or part.area < MIN_AREA:
-            continue
-        hatch = msp.add_hatch(color=256, dxfattribs={"layer": A_WALL.name})
-        hatch.set_pattern_fill(HATCH_PATTERN, scale=scale)
-        hatch.paths.add_polyline_path(list(part.exterior.coords)[:-1], is_closed=True)
-        for hole in part.interiors:
-            hatch.paths.add_polyline_path(list(hole.coords)[:-1], is_closed=True, flags=0)
+def wall_fill(
+    layout: BaseLayout, area: Polygon, style: WallStyle, scale: float | None = None
+) -> None:
+    """Wall fill of an area: the solid colour, then the pattern over it. scale is drawing units
+    per sheet mm, as in add_text: None is model space, 1 is the sheet itself (legend sample)."""
+    if scale is None:
+        scale = sheet_scale()
+    rings = [list(area.exterior.coords)[:-1], *(list(r.coords)[:-1] for r in area.interiors)]
+    solid = layout.add_hatch(dxfattribs={"layer": A_WALL.name, "true_color": style.fill})
+    solid.set_solid_fill(rgb=RGB.from_hex(f"#{style.fill:06x}"))
+    pattern = layout.add_hatch(dxfattribs={"layer": A_WALL.name, "true_color": style.color})
+    pattern.set_pattern_fill(style.pattern, scale=style.scale * scale / HATCH_REF_SCALE)
+    for hatch in (solid, pattern):
+        hatch.paths.add_polyline_path(rings[0], is_closed=True)
+        for hole in rings[1:]:
+            hatch.paths.add_polyline_path(hole, is_closed=True, flags=0)
 
 
 # --- Openings ----------------------------------------------------------------
@@ -341,14 +369,46 @@ def _opening_gap(g: RoomGeometry, op: Opening) -> Polygon:
     return Polygon([_xy(c) for c in corners])
 
 
+def sill_in_window(seg: WallSegment, op: Opening, text: str) -> tuple[Vec, Polygon] | None:
+    """Sill label inside the window, along it: the text centre (the middle of the window across
+    the wall) and its white background, the text with a margin; None if the window is too
+    narrow or the wall too thin for it."""
+    h, width, pad = sheet(TEXT_SMALL_MM), sheet(text_width(text, TEXT_SMALL_MM)), sheet(SILL_PAD_MM)
+    if width + 2 * pad > op.width or h + 2 * pad > seg.thickness:
+        return None
+    centre = seg.point_at(op.offset + op.width / 2) + seg.outward * (seg.thickness / 2)
+    d = seg.direction
+    corners = [
+        centre + d * (sx * (width / 2 + pad)) + seg.outward * (sy * (h / 2 + pad))
+        for sx, sy in ((-1, -1), (1, -1), (1, 1), (-1, 1))
+    ]
+    return centre, Polygon([_xy(c) for c in corners])
+
+
+def draw_sill_in_window(
+    layout: BaseLayout, text: str, centre: Vec, background: Polygon, angle: float, scale: float
+) -> None:
+    """White background over the window lines, then the text in the window colour on A-SILL."""
+    hatch = layout.add_hatch(dxfattribs={"layer": A_SILL.name, "true_color": WHITE})
+    hatch.set_solid_fill(rgb=RGB(255, 255, 255))
+    hatch.paths.add_polyline_path(list(background.exterior.coords)[:-1], is_closed=True)
+    add_text(layout, text, centre, TEXT_SMALL_MM, A_SILL.name, angle, scale=scale)
+
+
 def _draw_sill(
     msp: Modelspace, board: Board, g: RoomGeometry, op: Opening, language: Language
 ) -> None:
-    """Sill label of a window: inside the room by the middle of the window, else beside it or
-    deeper in the room, else on a 45° leader from the window. On the plan labels layer: the
-    other sheets take windows, but a sill is not for them."""
+    """Sill label of a window: inside the window along it on a white background
+    (`sill_in_window`); in a window too small for it, inside the room by the middle of the
+    window, else beside it or deeper in the room, else on a 45° leader from the window. On
+    A-SILL: the other sheets take windows, but a sill is not for them."""
     seg = g.contour.segment(op.wall)
     text = tr("sill", language, sill=f"{op.sill:g}")
+    inside = sill_in_window(seg, op, text)
+    if inside is not None:
+        centre, background = inside
+        draw_sill_in_window(msp, text, centre, background, seg.angle_deg, sheet_scale())
+        return
     d, up = reading(seg.direction)
     anchor = seg.point_at(op.offset + op.width / 2)
     h = sheet(TEXT_SMALL_MM)
@@ -361,8 +421,8 @@ def _draw_sill(
     ]
     room = Polygon([_xy(v) for v in g.contour.vertices])
     spot = board.place(label, spots, within=room, prefer=room)
-    add_text(msp, text, spot.centre, TEXT_SMALL_MM, A_TEXT.name, seg.angle_deg)
-    _draw_leader(msp, spot, A_TEXT.name)
+    add_text(msp, text, spot.centre, TEXT_SMALL_MM, A_SILL.name, seg.angle_deg)
+    _draw_leader(msp, spot, A_SILL.name)
 
 
 def _draw_leader(msp: Modelspace, spot: Spot, layer: str) -> None:

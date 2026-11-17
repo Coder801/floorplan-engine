@@ -75,11 +75,16 @@ class LayerSpec:
     plot: bool = True
 
 
-A_WALL = LayerSpec("A-WALL", 7, "Стены; штриховка — несущие")
+A_WALL = LayerSpec("A-WALL", 7, "Стены: несущие — графит с белой штриховкой, перегородки — сетка")
 A_DOOR = LayerSpec("A-DOOR", 3, "Двери с дугой открывания")
 A_WIND = LayerSpec("A-WIND", 4, "Окна")
-A_DIMS = LayerSpec("A-DIMS", 2, "Размеры")
-A_TEXT = LayerSpec("A-TEXT", 7, "Названия и площади помещений, подоконники")
+# Dimensions in technical blue (ACI 152, #0052A5; feedback 2026-11-17: yellow read poorly)
+A_DIMS = LayerSpec("A-DIMS", 152, "Размеры")
+A_TEXT = LayerSpec("A-TEXT", 7, "Названия и площади помещений, коды стен")
+# Sill height inside the window on a white background: its own layer, only on the plan sheet
+# (other sheets take windows, not sills); not *-TEXT, so the viewer does not enlarge it out of
+# its background
+A_SILL = LayerSpec("A-SILL", 4, "Высота подоконника в проёме окна")
 # Room outline for area fields: not printed and not visible on sheets; delete it and the
 # area fields show "####"
 A_AREA = LayerSpec("A-AREA", 8, "Контуры площади помещений (не печатается)", plot=False)
@@ -117,7 +122,7 @@ E_PANEL_WIRE = LayerSpec("E-PANEL-WIRE", 1, "Щит в лицо: провода 
 A_SHEET = LayerSpec("A-SHEET", 7, "Рамка листа и основная надпись")
 A_VPORT = LayerSpec("A-VPORT", 8, "Рамки видовых экранов на листах (не печатается)", plot=False)
 
-PLAN_LAYERS = (A_WALL, A_DOOR, A_WIND, A_DIMS, A_TEXT, A_AREA, A_SHEET)
+PLAN_LAYERS = (A_WALL, A_DOOR, A_WIND, A_SILL, A_DIMS, A_TEXT, A_AREA, A_SHEET)
 ELECTRICAL_LAYERS = (
     E_SOCKET,
     E_SWITCH,
