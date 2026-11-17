@@ -35,14 +35,24 @@
 .tag { margin-left: 6px; }
 .actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 .total {
-  display: grid; grid-template-columns: 1fr auto; grid-template-areas: "h btn" "sum btn";
+  display: grid; grid-template-columns: 1fr auto; grid-template-areas: "h btn" "sum btn" "split btn";
   align-items: center; column-gap: var(--space-4); max-width: 960px; margin: 0 auto;
   .totalTitle { grid-area: h; }
   .sum { grid-area: sum; }
+  .split { grid-area: split; }
   .primary { grid-area: btn; }
 }
 .sum { font-size: 24px; line-height: 32px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .primary { min-width: 168px; }
+// Work and materials under the total
+.split {
+  display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-5); margin: 0;
+  font-variant-numeric: tabular-nums;
+  div { display: flex; gap: var(--space-2); align-items: baseline; }
+  dt { color: var(--muted); }
+  dd { margin: 0; font-weight: 600; }
+}
+.guess { font-weight: 400; color: var(--muted); font-style: italic; }
 .side { @include pairs(var(--space-2) var(--space-3)); }
 
 // Side panel of the tab: setup progress and questions (OverviewSummary)
@@ -69,7 +79,7 @@
 // Kept on the page only where the side panel folds under the drawing
 @media (min-width: $narrow + 1) { .narrowOnly.narrowOnly { display: none; } }
 
-@media (max-width: $phone) { .setup { flex-wrap: wrap; justify-content: stretch; } .setupNote { max-width: none; text-align: left; } .card { padding: var(--space-4); } .total { grid-template-columns: 1fr; grid-template-areas: "h" "sum" "btn"; row-gap: 4px; } .primary { width: 100%; } }
+@media (max-width: $phone) { .setup { flex-wrap: wrap; justify-content: stretch; } .setupNote { max-width: none; text-align: left; } .card { padding: var(--space-4); } .total { grid-template-columns: 1fr; grid-template-areas: "h" "sum" "split" "btn"; row-gap: 4px; } .primary { width: 100%; } }
 
 // Rebuild: blocks and labels stay in place, values are hidden by skeleton bars, so the
 // layout does not jump while the new data arrives

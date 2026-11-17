@@ -265,6 +265,13 @@ export function OverviewStage({ overview, variants, project, openQuestions, canC
           <section className={css.total}>
             <Text as="h2" size="small" tone="muted" weight="medium" className={css.totalTitle}>{t("overview.total")}{parts && <> · {parts}</>}</Text>
             <p className={css.sum}>{cash(grand.total, grand.currency)}</p>
+            {grand.work !== undefined && grand.material !== undefined && (
+              // Work and materials apart: material prices are not market prices yet (decision 2026-11-12)
+              <dl className={css.split}>
+                <div><dt>{t("overview.work")}</dt><dd>{cash(grand.work, grand.currency)}</dd></div>
+                <div><dt>{t("overview.materials")}</dt><dd>{cash(grand.material, grand.currency)} <span className={css.guess}>{t("overview.materialsGuess")}</span></dd></div>
+              </dl>
+            )}
             <Button variant="primary" className={css.primary} disabled={!onEstimate} onClick={onEstimate}>{t("overview.openEstimate")}</Button>
           </section>
         </footer>

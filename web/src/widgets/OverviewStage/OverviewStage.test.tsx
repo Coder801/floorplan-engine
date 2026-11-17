@@ -29,7 +29,7 @@ describe("OverviewStage", () => {
       fixtures: [{ type: "wc", text: "Унитаз", count: 1 }],
       water: { distribution: "collector", hot: "boiler", cold_m: 12.5, hot_m: 8, outlets: 4, input_assumed: false },
       sewer: { pipes: [{ d: 110, m: 3.2 }], risers: 1, bends: 2, tees: 1, errors: 1 }, weak: 2,
-      estimate: { total: 15000, currency: "грн", unpriced: 3 },
+      estimate: { total: 15000, material: 10000, work: 5000, currency: "грн", unpriced: 3 },
     } }) });
     expect(screen.getByRole("heading", { name: "Вариант проводки" })).toBeInTheDocument();
     const floor = screen.getByRole("row", { name: /Трасса кабеля:.*по полу/ });
@@ -42,6 +42,8 @@ describe("OverviewStage", () => {
     const total = screen.getByRole("heading", { level: 2, name: /Итог по проекту/ }).closest("section")!;
     expect(total).toHaveTextContent(/65\s000 грн/);
     expect(total).toHaveTextContent(/электрика \(выбранный вариант\) 50\s000 грн · сантехника 15\s000 грн/);
+    expect(total).toHaveTextContent(/Работа\s*25\s000 грн/);
+    expect(total).toHaveTextContent(/Материалы\s*40\s000 грн пока предположение/);
     await userEvent.click(within(total).getByRole("button", { name: "Открыть смету" }));
     expect(onEstimate).toHaveBeenCalledOnce();
   });

@@ -104,6 +104,8 @@ def overview_data(
         if plumbing_estimate is not None and plumbing_estimate.lines:
             out["plumbing"]["estimate"] = {
                 "total": round(plumbing_estimate.total, 2),
+                "material": round(plumbing_estimate.materials, 2),
+                "work": round(plumbing_estimate.work, 2),
                 "currency": plumbing_estimate.currency,
                 "unpriced": plumbing_estimate.unpriced,
             }

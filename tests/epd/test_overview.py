@@ -66,6 +66,8 @@ def test_overview_plumbing_estimate_total() -> None:
     data = overview_data(plan, contours, None, None, PLUMBING, net, est)["plumbing"]
     assert data["estimate"] == {
         "total": round(est.total, 2),
+        "material": round(est.materials, 2),
+        "work": round(est.work, 2),
         "currency": est.currency,
         "unpriced": 0,
     }
