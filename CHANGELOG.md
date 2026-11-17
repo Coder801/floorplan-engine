@@ -1,3 +1,29 @@
+## v0.11.0 (2026-11-17)
+
+### Feat
+
+- **electrical**: route low-current cables from their source point
+- **db**: keep questions and answers as revisions in tables
+- **drawing**: tint the heated area warm with a red frame
+- **drawing**: draw the heated area as a tint and label each zone on its sheet
+- **viewer**: show work and materials apart in the tasks tab
+- **viewer**: split the plumbing total into work and materials
+- **viewer**: ceiling lines and floor heating table in the side panel
+- **electrical,drawing**: lines on ceiling views and fixing steps 500 mm
+- **drawing**: wall fill, window sills and a plan legend
+- **drawing,electrical**: floor heating legend and cut-outs on the floor
+- **viewer**: drop manual route editing, the build computes routes
+- **drawing**: frame bundle length labels over the cables
+- **electrical**: share RCDs by zone in the standard panel scheme
+
+### Fix
+
+- **deploy**: replace a real access code with a placeholder in .env.example
+- **electrical**: wrap long floor heating misfit message
+- **deploy**: send intake.yaml to the server with the model files
+- **core**: keep each outer face at a collinear joint
+- **drawing**: smaller sheet text sizes and anchor-touch leader rule
+
 ## v0.10.0 (2026-11-15)
 
 ### Feat
