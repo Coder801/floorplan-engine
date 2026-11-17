@@ -597,6 +597,7 @@ export const uk: Messages = {
     unpriced: "без ціни: {{n}}",
     paidMark: "оплачено",
     paidPart: "оплачено {{paid}}",
+    split: "робота {{work}} · матеріали {{material}}",
     accepted: "Прийнято",
     ofN: "{{n}} з {{m}}",
     approveLead: "Перегляньте задачі й суми нижче. Кожну роботу ви потім приймете окремо.",

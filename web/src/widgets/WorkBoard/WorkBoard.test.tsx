@@ -59,6 +59,7 @@ describe("WorkBoard", () => {
     render(<WorkBoard state={draftState("draft")} run={live()} busy={false} open={null} onOpen={vi.fn()} />);
     expect(screen.getAllByRole("region")).toHaveLength(1);
     expect(screen.getByText(/Черновик из сметы/)).toBeInTheDocument();
+    expect(screen.getAllByText(/^работа .+ · материалы /).length).toBeGreaterThan(1);
     expect(screen.getByRole("button", { name: "Отправить заказчику" })).toBeInTheDocument();
   });
 

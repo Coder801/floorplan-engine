@@ -597,6 +597,7 @@ export const ru = {
     unpriced: "без цены: {{n}}",
     paidMark: "оплачено",
     paidPart: "оплачено {{paid}}",
+    split: "работа {{work}} · материалы {{material}}",
     accepted: "Принято",
     ofN: "{{n}} из {{m}}",
     approveLead: "Посмотрите задачи и суммы ниже. Каждую работу вы потом примете отдельно.",

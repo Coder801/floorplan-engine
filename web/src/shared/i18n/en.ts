@@ -597,6 +597,7 @@ export const en: Messages = {
     unpriced: "no price: {{n}}",
     paidMark: "paid",
     paidPart: "paid {{paid}}",
+    split: "work {{work}} · materials {{material}}",
     accepted: "Accepted",
     ofN: "{{n}} of {{m}}",
     approveLead: "Check the tasks and sums below. You will accept each piece of work separately later.",

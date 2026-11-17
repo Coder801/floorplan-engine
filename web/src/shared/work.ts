@@ -2,7 +2,7 @@
 // offers, from the work state of the API (GET /work). The server checks every rule again; here
 // only what to show. Rights come from state.can, never from role names.
 
-import i18n from "./i18n";
+import i18n, { locale } from "./i18n";
 import type {
   WorkCan, WorkChannel, WorkComment, WorkDomain, WorkOnBehalf, WorkPhoto, WorkPlan, WorkState, WorkStatus, WorkTask, WorkTotals,
 } from "./types";
@@ -86,6 +86,14 @@ export const needsBehalf = (action: StatusAction | PlanAction, can: WorkCan) => 
 
 // The channel in words for the feed («студия за заказчика — по звонку: звонок 12.11») and the plan
 // («Утверждён студией за заказчика — в Telegram»)
+// "work 12 000 грн · materials 30 000 грн" under a sum: material prices are a guess for now
+// (decision 2026-11-12); materials outside the task price read "not included"
+export function splitText(work: number, material: number, currency: string, included = true): string {
+  const m = (v: number) => money(v, currency, locale());
+  const mat = included ? m(material) : i18n.t("work.card.notIncluded");
+  return i18n.t("work.split", { work: m(work), material: mat });
+}
+
 export function behalfText(ob: WorkOnBehalf, where: "feed" | "plan"): string {
   const head = i18n.t(`work.behalf.${where}`, { how: i18n.t(`work.behalf.how.${ob.channel}`) });
   return ob.note.trim() ? `${head}: ${ob.note.trim()}` : head;

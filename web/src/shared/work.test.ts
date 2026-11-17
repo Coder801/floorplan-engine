@@ -4,7 +4,7 @@ import type { WorkCan, WorkPhoto, WorkPlan, WorkPlanState, WorkState, WorkStatus
 import {
   actsForClient, afterOf, allDone, behalfText, boardColumns, byColumn, byDomain, canDeletePhoto, canMoveLines, cardRights,
   day, emptyOf, feedOf, layoutOf, mergeBlock, mergeTargets, modelChanged, money, needsBehalf, numberOf, parseAmount,
-  planActions, planNeed, progressOf, shiftTo, statusButtons, taskNeed, ticked, today,
+  planActions, planNeed, progressOf, shiftTo, splitText, statusButtons, taskNeed, ticked, today,
 } from "./work";
 
 const CAN = {
@@ -331,5 +331,13 @@ describe("порядок и «после каких задач»", () => {
     expect(cardRights(tasks[0], plan("approved"), CAN.studio).manage).toBe(true);
     expect(cardRights(tasks[0], plan("approved"), CAN.installer).manage).toBe(false);
     expect(cardRights(tasks[0], plan("closed"), CAN.studio).manage).toBe(false);
+  });
+});
+
+describe("splitText", () => {
+  it("work and materials of a sum; materials outside the price read «не входят»", async () => {
+    await i18n.changeLanguage("ru");
+    expect(splitText(1200, 3000, "грн")).toMatch(/^работа 1\s200\sгрн · материалы 3\s000\sгрн$/);
+    expect(splitText(1200, 3000, "грн", false)).toMatch(/^работа 1\s200\sгрн · материалы не входят$/);
   });
 });

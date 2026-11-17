@@ -12,7 +12,7 @@ import { locale } from "@/shared/i18n";
 import { remember, remembered } from "@/shared/palette";
 import type { WorkDomain, WorkPhotoRule, WorkState, WorkTask } from "@/shared/types";
 import {
-  behalfText, boardColumns, byColumn, byDomain, DOMAIN_FILTERS, domainsOf, modelChanged, money, progressOf, taskNeed,
+  behalfText, boardColumns, byColumn, byDomain, DOMAIN_FILTERS, domainsOf, modelChanged, money, progressOf, splitText, taskNeed,
   type DomainFilter, type WorkRun,
 } from "@/shared/work";
 import { Button } from "@/ui/Button";
@@ -66,6 +66,7 @@ export function WorkBoard({ state, run, busy, open, onOpen }: Props) {
             <b>{money(plan.totals.total, plan.currency, locale())}</b>
           </Text>
         )}
+        <Text size="small" tone="muted" className={css.split}>{splitText(plan.totals.work, plan.totals.material, plan.currency)}</Text>
         {modelChanged(state) && (
           <Text size="small" tone="major">{t("work.modelChanged", { plan: plan.model_version, now: state.model_version })}</Text>
         )}
@@ -145,6 +146,7 @@ function Tile({ task, state, open, domain, onOpen }: { task: WorkTask; state: Wo
         <span className={cx(!task.assignee && "muted")}>{task.assignee?.name ?? t("work.nobody")}</span>
         <span className={css.sum}>{money(task.total, plan.currency, locale())}</span>
       </span>
+      <span className={css.split}>{splitText(task.work_total, task.material_total, plan.currency, task.materials_included)}</span>
       <span className={css.marks}>
         {task.photo === "required" && !task.photos.length && <span className={css.want}>{t("work.photoRequired")}</span>}
         {task.photos.length > 0 && <span>{t("work.photosN", { n: task.photos.length })}</span>}

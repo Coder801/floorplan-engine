@@ -63,6 +63,8 @@
 .waiting { @include type(small); color: var(--major); }
 .meta { @include type(small); display: flex; justify-content: space-between; gap: var(--space-2); }
 .sum { font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+// Work and materials under a sum
+.split { @include type(small); color: var(--muted); font-variant-numeric: tabular-nums; }
 .marks {
   @include type(small);
   display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-3); font-size: 11px; color: var(--muted);
