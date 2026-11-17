@@ -1,0 +1,20 @@
+# Меблі з плану електрики (source/Діма і Аня електрика.pdf): прямокутники зняті з векторів за
+# масштабом листа (1 pt = 14,464 мм), мм від origin приміщення. На тому плані стіна санвузла з кухнею
+# стоїть на 180 мм правіше, ніж у room.yaml (план після перепланування): кухня прив'язана до своєї
+# стіни (q16). Під глухою меблею (solid) тёплий пол не кладеться; меблі на ніжках його не змінюють.
+units: mm
+items:
+  # --- Зал-вітальня + коридор (origin [1850, 0])
+  - { id: living_kitchen_1, room: living, at: [0, 0], size: [600, 1745], kind: kitchen, note: "нижні модулі вздовж стіни санвузла, мийка" }
+  - { id: living_fridge_1, room: living, at: [0, 1745], size: [600, 600], kind: other, base: solid, note: "холодильник" }
+  - { id: living_kitchen_2, room: living, at: [600, 0], size: [1800, 600], kind: kitchen, note: "нижні модулі вздовж нижньої стіни: посудомийка, духовка, плита" }
+  - { id: living_island_1, room: living, at: [1800, 600], size: [600, 1600], kind: island, note: "півострів, продовження кухні; підвісні світильники над ним" }
+  - { id: living_tv_stand_1, room: living, at: [2075, 3161], size: [2200, 400], kind: tv_stand, note: "ТВ-тумба під TV блоком (q14: на підлозі чи підвісна)" }
+  # --- Спальня (origin [1903, 3681])
+  - { id: bedroom_wardrobe_1, room: bedroom, at: [0, 0], size: [600, 1400], kind: wardrobe, note: "шафа вздовж лівої стіни, нижня частина, підсвітка" }
+  - { id: bedroom_wardrobe_2, room: bedroom, at: [0, 1400], size: [600, 1300], kind: wardrobe, note: "шафа вздовж лівої стіни, верхня частина" }
+  - { id: bedroom_bed_1, room: bedroom, at: [1642, 799], size: [1600, 1900], kind: bed }
+  - { id: bedroom_nightstand_1, room: bedroom, at: [1242, 2291], size: [400, 400], kind: cabinet, note: "приліжкова тумба" }
+  - { id: bedroom_nightstand_2, room: bedroom, at: [3242, 2300], size: [400, 400], kind: cabinet, note: "приліжкова тумба" }
+  # --- Санвузол (origin [30, 0])
+  - { id: bathroom_cabinet_1, room: bathroom, at: [1270, 750], size: [450, 1000], kind: cabinet, note: "тумба під умивальник, прив'язана до правої стіни (q15: на підлозі чи підвісна)" }

@@ -10,6 +10,9 @@ rooms:
   - id: living
     name: "Зал-вітальня + коридор"
     origin: [1850, 0]              # 1750 + 100 перегородка
+    zones:  # одне приміщення без стіни між ними; межа — від торця виступу санвузла (кут w3/w4) прямо вгору до стіни спальні (кут w8a/w8): лінія x = 2450 від зовнішньої стіни входу (допущення q17, 2026-11-17)
+      - { name: "Коридор", walls: [w4, w5, w6, w7, w8a] }
+      - { name: "Зал-вітальня", walls: [w8, w9, w10, w1, w2, w3] }
     walls:
       - { id: w1, length: 2350, thickness: 100 }             # w1: перегородка с санузлом (вверх)
       - { id: w2, length: 600, thickness: 100, turn: 270 }   # w2: низ выступа стенки 600 (вправо)
@@ -18,14 +21,15 @@ rooms:
       - { id: w5, length: 1461, bearing: true }              # w5: левая наружная, вход (вверх), 350 + 1111
       - { id: w6, length: 1783, thickness: 120 }             # w6: стена кладовки (вправо), расчёт 7245 − 5462
       - { id: w7, length: 350, thickness: 120, turn: 270 }   # w7: торец стены спальни (вниз)
-      - { id: w8, length: 5462, thickness: 120 }             # w8: стена спальни и балкона (вправо)
+      - { id: w8a, length: 667, thickness: 120, turn: 180 }   # w8a: стена спальни до линии торца выступа санузла (вправо); 5462 = 667 + 4795 — граница зон коридор/зал
+      - { id: w8, length: 4795, thickness: 120 }             # w8: стена спальни и балкона (вправо), от границы зон
       - { id: w9, length: 3561, bearing: true }              # w9: правая наружная, с окном (вниз)
       - { id: w10, length: 5395, bearing: true }              # w10: нижняя наружная (влево)
     openings:
       - { id: living_door_1, wall: w4, type: door, offset: 1000, width: 800, hinge: end }  # дверь санвузла (2450 − 1450): наружу, правая — петли у левого откоса
       - { id: living_door_2, wall: w6, type: door, offset: 300, width: 800, hinge: end }     # дверь в комору (текст)
-      - { id: living_door_3, wall: w8, type: door, offset: 1000, width: 1000, hinge: start } # дверь в спальню
-      - { id: living_door_4, wall: w8, type: door, offset: 4312, width: 1000, hinge: end }   # дверь на балкон
+      - { id: living_door_3, wall: w8, type: door, offset: 333, width: 1000, hinge: start }  # дверь в спальню (1000 от стены коморы = 333 от границы зон)
+      - { id: living_door_4, wall: w8, type: door, offset: 3645, width: 1000, hinge: end }   # дверь на балкон (4312 от стены коморы)
       - { id: living_door_5, wall: w5, type: door, offset: 416, width: 800, hinge: end, swing: out }  # входная (текст: 800, наружу); место и петли — PDF: проём 2761…3771, по центру
       - { id: living_window_1, wall: w9, type: window, offset: 740, width: 2400, sill: 700, height: 2000 }  # подоконник — заказчик 2026-10-29; текст: 2400; место — PDF: проём 410…2826, по центру; верх — до потолка, заказчик 2026-11-04
 

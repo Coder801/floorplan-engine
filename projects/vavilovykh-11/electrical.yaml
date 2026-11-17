@@ -20,12 +20,12 @@ points:
   - { id: living_switch_2, room: living, wall: w10, offset: 3130, type: switch, height: 1100, note: "підвісні над островом", group: QF1 }  # PDF
   - { id: living_socket_9, room: living, wall: w10, offset: 2550, type: socket, height: 300, group: QF6 }  # текст: 2550 от правой стены
   - { id: living_socket_14, room: living, wall: w10, offset: 400, type: socket, height: 2200, note: "кондиціонер", group: QF14 }  # изменения заказчика 2026-10-21: нижняя стена, справа окно; offset 400 от правого угла и h — допущение (q4, q5)
-  - { id: living_socket_10, room: living, wall: w8, offset: 480, type: socket, height: 300, group: QF20 }  # PDF; коридор (x < 600 — до выступа санвузла)
-  - { id: living_switch_3, room: living, wall: w8, offset: 480, type: switch, height: 900, keys: 2, note: "кухня / зал", group: QF1 }  # PDF; H легенда
-  - { id: living_socket_11, room: living, wall: w8, offset: 2350, type: socket, height: 700, count: 2, group: QF6 }  # текст: 350 от откоса двери спальни
-  - { id: living_socket_12, room: living, wall: w8, offset: 3000, type: socket, height: 1400, count: 3, note: "TV блок", group: QF6 }  # 1265/1265: середина между дверями + PDF
-  - { id: living_data_1, room: living, wall: w8, offset: 3160, type: data, height: 1400 }  # середина между дверями
-  - { id: living_tv_1, room: living, wall: w8, offset: 3340, type: tv, height: 1400 }  # PDF
+  - { id: living_socket_10, room: living, wall: w8a, offset: 480, type: socket, height: 300, group: QF20 }  # PDF; коридор (x < 600 — до выступа санвузла)
+  - { id: living_switch_3, room: living, wall: w8a, offset: 480, type: switch, height: 900, keys: 2, note: "кухня / зал", group: QF1 }  # PDF; H легенда
+  - { id: living_socket_11, room: living, wall: w8, offset: 1683, type: socket, height: 700, count: 2, group: QF6 }  # текст: 350 от откоса двери спальни
+  - { id: living_socket_12, room: living, wall: w8, offset: 2333, type: socket, height: 1400, count: 3, note: "TV блок", group: QF6 }  # 1265/1265: середина между дверями + PDF
+  - { id: living_data_1, room: living, wall: w8, offset: 2493, type: data, height: 1400 }  # середина между дверями
+  - { id: living_tv_1, room: living, wall: w8, offset: 2673, type: tv, height: 1400 }  # PDF
   - { id: living_socket_13, room: living, wall: w5, offset: 160, type: socket, height: 300, group: QF20 }  # PDF; коридор
   - { id: living_switch_4, room: living, wall: w5, offset: 160, type: switch, height: 900, note: "коридор", group: QF1 }  # PDF
   - { id: living_switch_5, room: living, wall: w6, offset: 200, type: switch, height: 900, note: "комора", group: QF5 }  # PDF, от откоса
@@ -139,6 +139,10 @@ groups:
   QF18: { name: "Холодильник" }
   QF19: { name: "Витяжка" }
   QF20: { name: "Розетки — коридор" }
+floor_heating:
+  # Тёплий пол лише в коридорі (замовник 2026-10-28): зона «Коридор» приміщення (room.yaml, zones);
+  # зал-вітальня — окрема зона без обігріву. Межа зон — допущення (q17).
+  - { id: fh_corridor, room: living, zone: "Коридор", thermostat: living_floor_reg_1 }
 led_strips:
   - { id: bedroom_led_strip_1, room: bedroom, wall: w1, start: 0, end: 350 }  # PDF: лента 0…1400 по левой стене; стена разделена на w1/w1b/w1c (2026-11-16)
   - { id: bedroom_led_strip_2, room: bedroom, wall: w1b, start: 0, end: 1050 }  # продолжение той же ленты (350…1400 от низа стены)
