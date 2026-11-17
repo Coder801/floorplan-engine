@@ -4,23 +4,37 @@
   "stages": [
     {
       "stage": "plan",
-      "status": "ready",
+      "status": "questions",
       "builds": true,
       "reason": "",
-      "weight": 0,
-      "questions": []
+      "weight": 1,
+      "questions": [
+        "q16"
+      ]
     },
     {
       "stage": "electrical",
       "status": "questions",
       "builds": true,
       "reason": "",
-      "weight": 8,
+      "weight": 9,
       "questions": [
         "q5",
         "q7",
         "q8",
-        "q9"
+        "q9",
+        "q17"
+      ]
+    },
+    {
+      "stage": "furniture",
+      "status": "questions",
+      "builds": true,
+      "reason": "",
+      "weight": 2,
+      "questions": [
+        "q14",
+        "q15"
       ]
     },
     {
@@ -238,6 +252,54 @@
       "stage": "plumbing",
       "audience": "studio",
       "text": "Гаряча вода — від бойлера (він є на плані), централізованої ГВП немає? Висоти водорозеток, бойлера і випусків — типові («*» у таблиці «Сантехприлади»): моделі приладів?",
+      "also": [],
+      "answer": "text",
+      "options": [],
+      "option_labels": {},
+      "severity": "minor",
+      "state": "open"
+    },
+    {
+      "id": "q14",
+      "stage": "furniture",
+      "audience": "studio",
+      "text": "ТВ-тумба 2200×400 під TV блоком у залі: стоїть на підлозі (цоколь) чи підвісна? Зараз — на підлозі (за типом), тёплий пол під нею не кладеться.",
+      "also": [],
+      "answer": "text",
+      "options": [],
+      "option_labels": {},
+      "severity": "minor",
+      "state": "open"
+    },
+    {
+      "id": "q15",
+      "stage": "furniture",
+      "audience": "studio",
+      "text": "Тумба під умивальник у санвузлі 450×1000: на підлозі чи підвісна? Зараз — на підлозі (за типом), тёплий пол під нею не кладеться.",
+      "also": [],
+      "answer": "text",
+      "options": [],
+      "option_labels": {},
+      "severity": "minor",
+      "state": "open"
+    },
+    {
+      "id": "q16",
+      "stage": "plan",
+      "audience": "studio",
+      "text": "На плані електрики санвузол на 180 мм ширший, ніж на плані після перепланування (ванна 1800, стіна з кухнею правіше; у моделі — 1720/1750 з плану). Який план актуальний? Меблі кухні прив'язані до стіни санвузла, як на плані електрики.",
+      "also": [],
+      "answer": "text",
+      "options": [],
+      "option_labels": {},
+      "severity": "minor",
+      "state": "open"
+    },
+    {
+      "id": "q17",
+      "stage": "electrical",
+      "audience": "studio",
+      "text": "Тёплий пол у коридорі: межу зон «Коридор» і «Зал-вітальня» взято по лінії торця виступу санвузла — 2450 мм від зовнішньої стіни входу, далі зал і кухня без обігріву. Докуди гріти насправді — до дверей спальні?",
       "also": [],
       "answer": "text",
       "options": [],
@@ -475,33 +537,9 @@
   "issues": [
     {
       "file": "electrical.yaml",
-      "path": "points[23]",
-      "severity": "warning",
-      "message": "тёплый пол «auto_living_floor_reg_1» (зона по регулятору): в floor_heating зоны нет — построена кодом: Зал-вітальня + коридор* (допущение: помещение по подписи или месту регулятора); уточните по дизайну или задайте heating_rooms"
-    },
-    {
-      "file": "electrical.yaml",
-      "path": "points[23]",
-      "severity": "warning",
-      "message": "тёплый пол «auto_living_floor_reg_1» (зона по регулятору): одной змейкой покрыта не вся зона: 2 из 3 участков — разбейте зону на две записи floor_heating или поправьте exclude"
-    },
-    {
-      "file": "electrical.yaml",
       "path": "points[24]",
       "severity": "warning",
       "message": "тёплый пол «auto_living_floor_reg_2» (зона по регулятору): в floor_heating зоны нет — построена кодом: Санвузол* (допущение: помещение по подписи или месту регулятора); уточните по дизайну или задайте heating_rooms"
-    },
-    {
-      "file": "electrical.yaml",
-      "path": "points[24]",
-      "severity": "warning",
-      "message": "тёплый пол «auto_living_floor_reg_2» (зона по регулятору): из ряда серии нет длины с шагом 120–170 мм: взята 10 м, не уложено 2.1 м"
-    },
-    {
-      "file": "electrical.yaml",
-      "path": "points[24]",
-      "severity": "warning",
-      "message": "тёплый пол «auto_living_floor_reg_2» (зона по регулятору): одной змейкой покрыта не вся зона: 1 из 2 участков — разбейте зону на две записи floor_heating или поправьте exclude"
     },
     {
       "file": "wiring.yaml",
@@ -541,9 +579,9 @@
     },
     {
       "file": "electrical.yaml",
-      "path": "groups.QF15",
+      "path": "panel",
       "severity": "warning",
-      "message": "QF15: Регулятор ТП коридору (2,16 кВт) в общей группе — нужна своя линия"
+      "message": "Расчётный ток квартиры 64,4 А больше вводного автомата 63 А"
     },
     {
       "file": "electrical.yaml",
