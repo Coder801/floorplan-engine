@@ -26,7 +26,7 @@ export const en: Messages = {
   views: { electrical: "Sockets", low: "Comms", lighting: "Lighting", wiring: "Wiring" },
   severity: { critical: "critical", major: "important", minor: "clarification" },
   layer: {
-    "A-WALL": "walls", "A-DOOR": "doors", "A-WIND": "windows", "A-DIMS": "dimensions",
+    "A-WALL": "walls", "A-DOOR": "doors", "A-WIND": "windows", "A-SILL": "sills", "A-DIMS": "dimensions",
     "A-TEXT": "plan labels", "A-SHEET": "frame and title block", "E-SOCKET": "sockets",
     "E-SWITCH": "switches", "E-LIGHT": "lights", "E-DATA": "comms", "E-LED": "LED",
     "E-BOARD": "panel", "E-TEXT": "electrical labels", "W-BOX": "boxes",
@@ -48,7 +48,7 @@ export const en: Messages = {
     wire: "Wiring line", box: "Box", heating: "Floor heating zone", furniture: "Furniture",
   },
   side: {
-    tables: "Tables", layers: "Layers", tablesAndLayers: "Tables and layers", onWall: "On the wall",
+    tables: "Tables", layers: "Layers", lines: "Lines", notes: "Notes", tablesAndLayers: "Tables and layers", onWall: "On the wall",
     collapse: "Collapse", noSheet: "No sheet open",
     noTables: "This sheet has no tables", wiringBrief: "The lines show where the cable will run: from the panel to the boxes and from the boxes to the points. Hover a line to see where it runs from and to.", ownLayers: "View layers", otherLayers: "Other layers",
     otherNote: "Add to the drawing: dimensions on wiring, point numbers on lighting — from other views and the plan.",
@@ -305,6 +305,15 @@ export const en: Messages = {
     walls: "Wall elevations", prev: "Previous wall", next: "Next wall",
     all: "Wall list", list: "Walls", overview: "All walls",
   },
+  ceiling: {
+    ceiling: "Lines on the ceiling", floor: "Lines on the floor", none: "No lines", m: "{{v}} m",
+    cable: "{{mark}} — {{v}} m", groupMeta: "lines: {{n}} · {{v}} m", lineMeta: "{{mark}} · {{v}} m",
+    transit: "transit", transitTitle: "The line only passes through the room: none of its ends is here",
+    hideAll: "Hide all lines on the view", showAll: "Show all lines",
+    expand: "Expand {{g}}", collapse: "Collapse {{g}}",
+    route: "Line route", pick: "Click a line in the list or on the view to see its route along the group.",
+    note: "Length is the part of the line in this room, walls included. Hover a row to light the line on the view; the eye hides the group on the view.",
+  },
   wallGrid: {
     back: "Back to the wall", count: "Walls: {{n}}",
     open: "Open: {{title}}",
@@ -327,6 +336,7 @@ export const en: Messages = {
     yourSet: "Your set", ceilingRange: "from {{min}} to {{max}} mm",
     total: "Project total", openEstimate: "Open the estimate",
     totalParts: "electrical (chosen option) {{electrical}} · plumbing {{plumbing}}",
+    work: "Work", materials: "Materials", materialsGuess: "a guess for now",
     plumbingEstimate: "Plumbing estimate", unpriced: "unpriced: {{n}} items",
     plumbing: "Plumbing", fixtures: "Fixtures", water: "Water", sewer: "Drainage",
     distributions: { collector: "home-run from manifold", tee: "tee-branch" },

@@ -116,6 +116,25 @@ describe("SidePanel", () => {
     expect(onOpen).toHaveBeenCalledOnce();
   });
 
+  it("a ceiling page: its lines, the sheet tables on the notes tab", async () => {
+    const ceiling = { key: "elevation:bed.ceiling", plane: "ceiling" as const, lines: [
+      { key: "lane:bed.ceiling.wire_1", group: "QF1", color: null, from: "ЩР", to: "К1", source: "board", target: "box_1",
+        transit: false, mark: "3x2.5", length: 1200 },
+    ] };
+    const { onTab, rerender, ...props } = panel({ tab: "tables", ceiling });
+    const tabs = screen.getByRole("tablist");
+    expect(within(tabs).getAllByRole("tab").map((x) => x.textContent)).toEqual(["Линии", "Памятка", "Слои"]);
+    expect(within(tabs).getByRole("tab", { name: "Линии" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("heading", { name: /Линии на потолке/ })).toBeInTheDocument();
+    expect(screen.getByText(/ЩР → К1/)).toBeInTheDocument();
+    expect(screen.queryByText("Группы")).toBeNull();  // the installer tables are on their own tab
+    await userEvent.click(within(tabs).getByRole("tab", { name: "Памятка" }));
+    expect(onTab).toHaveBeenCalledWith("notes");
+    rerender(<SidePanel {...props} onTab={onTab} ceiling={ceiling} tab="notes" />);
+    expect(screen.getByText("Группы")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: /Линии на потолке/ })).toBeNull();
+  });
+
   it("a summary replaces tables and layers; the bottom drawer folds on a phone", async () => {
     panel({ summary: <p>Сводка проекта</p>, summaryTitle: "План работ" });
     expect(screen.getByText("Сводка проекта")).toBeInTheDocument();

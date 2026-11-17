@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Item, Page } from "@/shared/types";
-import { isPlane, ownerOf, splitTitle, wallPages, wallRooms, wallSheet } from "./walls";
+import { isPlane, laneFocus, ownerOf, splitTitle, wallPages, wallRooms, wallSheet } from "./walls";
 
 const item = (o: string | undefined, d: string): Item => ({ k: "s", c: "#000000", l: "E-ELEV", o, d });
 const page = (items: Item[], objects: Page["objects"] = {}): Page =>
@@ -34,6 +34,17 @@ describe("wallPages", () => {
     expect(view.slice(1)).toEqual([y0, x1, y1]);
     expect(view[0]).toBeLessThan(x0);  // on the left, a margin for the mini map
     expect(wallSheet(p, w).items.map((i) => i.o)).toEqual(["elevation:a.w1"]);
+    expect(wallSheet(p, w).groups).toBeUndefined();  // a wall has no lanes by group
+  });
+
+  it("a ceiling view gets its lanes by group, so the group eyes hide them", () => {
+    const p = page([item("lane:a.ceiling.w1", "M0 0L9 0"), item("lane:a.ceiling.w2", "M0 2L9 2")]);
+    const [w] = wallPages([{ index: 7, page: p }]);
+    const line = (run: string, group: string) => ({ key: `lane:a.ceiling.${run}`, group, color: null, from: "ЩР", to: "К1", mark: "3x1.5", length: 1 });
+    const ceiling = { key: w.key, plane: "ceiling" as const, lines: [line("w1", "QF1"), line("w2", "QF1"), line("w3", "QF2")] };
+    expect(wallSheet(p, { ...w, ceiling }).groups).toEqual({
+      QF1: ["lane:a.ceiling.w1", "lane:a.ceiling.w2"], QF2: ["lane:a.ceiling.w3"],
+    });
   });
 });
 
@@ -81,5 +92,31 @@ describe("ceiling pages", () => {
     expect(ceiling.key).toBe("elevation:bath.ceiling");
     expect(ceiling.box[3]).toBeGreaterThanOrEqual(30);  // the scale is inside the page box
     expect(wallSheet(page, ceiling).items.map((it) => it.o)).toEqual(["elevation:bath.ceiling", "dim:bath.ceiling.x1450"]);
+  });
+  it("a line on a ceiling is drawn on its page and the page carries the lines for the side panel", () => {
+    expect(ownerOf("lane:bath.ceiling.wire_3")).toBe("elevation:bath.ceiling");
+    const items = [
+      { k: "s", d: "M0 0L10 10", o: "elevation:bath.ceiling" },
+      { k: "s", d: "M0 5L40 5", o: "lane:bath.ceiling.wire_3" },
+      { k: "s", d: "M50 50L60 60", o: "elevation:bath.w1" },
+    ] as unknown as Item[];
+    const lines = { key: "elevation:bath.ceiling", plane: "ceiling", lines: [] };
+    const page = { items, ceilings: [lines] } as unknown as Page;
+    const [ceiling, wall] = wallPages([{ index: 7, page }]);
+    expect(ceiling.ceiling).toBe(lines);
+    expect(wall.ceiling).toBeUndefined();
+    expect(ceiling.box[2]).toBeGreaterThanOrEqual(40);
+    expect(wallSheet(page, ceiling).items.map((it) => it.o)).toContain("lane:bath.ceiling.wire_3");
+  });
+  it("a pinned line keeps its lane and the scale values measuring it; other pins keep everything", () => {
+    const line = (run: string, dims?: string[]) => ({ key: `lane:bath.ceiling.${run}`, group: "QF1", color: null,
+      from: "ЩР", to: "К1", mark: "3x1.5", length: 1000, ...(dims ? { dims } : {}) });
+    const page = { items: [], ceilings: [{ key: "elevation:bath.ceiling", plane: "ceiling",
+      lines: [line("w1", ["dim:bath.ceiling.x1450", "dim:bath.ceiling.y300"]), line("w2")] }] } as unknown as Page;
+    expect(laneFocus(page, "lane:bath.ceiling.w1")).toEqual(new Set(["lane:bath.ceiling.w1", "dim:bath.ceiling.x1450", "dim:bath.ceiling.y300"]));
+    expect(laneFocus(page, "lane:bath.ceiling.w2")).toEqual(new Set(["lane:bath.ceiling.w2"]));  // an .epd without dims
+    expect(laneFocus(page, "wire:wire_1")).toBeNull();
+    expect(laneFocus(page, "lane:hall.ceiling.w9")).toBeNull();
+    expect(laneFocus(page, null)).toBeNull();
   });
 });

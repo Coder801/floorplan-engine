@@ -16,11 +16,15 @@ from floorplan_engine.epd.side import (
     drop_column,
     from_table,
     group_side_table,
+    heating_side_table,
     legend_entries,
     side_legends,
     side_tables,
 )
+from floorplan_engine.model.schema import Electrical
 from floorplan_engine.sheets.document import build_project_document, sheet_slug
+from floorplan_engine.validation.plan import validate_plan
+from tests.conftest import make_plan
 from tests.epd.test_objects import _model
 
 
@@ -121,7 +125,8 @@ def test_legend_entries_only_symbol_and_meaning() -> None:
     assert entries[0].text == "Розетка с заземлением"
     assert not any("QF" in e.text or e.text.isdigit() for e in entries)  # no groups and no counts
     legends = side_legends(elec, plan.language)
-    assert set(legends) == {"electrical", "lighting", "wiring"}
+    assert set(legends) == {"electrical", "lighting", "wiring", "floor_heating"}
+    assert legends["floor_heating"][0].key == "fh_cable"  # as on the sheet
     assert legends["lighting"] == []  # no lights in the model
     assert [e.key for e in legends["wiring"]] == ["wires_sockets"]  # colour families only
 
@@ -225,3 +230,26 @@ def test_room_table_has_a_row_per_zone() -> None:
     assert [r.cells[1] for r in table.rows] == ["Кухня", "Прихожая"]
     assert table.rows[0].keys[:3] == ("zone:r.1", "wall:r.w1", "dimension:r.w1")
     assert "wall:r.w3" not in table.rows[0].keys
+
+
+def test_heating_table_keeps_where_and_how_much_the_rest_is_the_hint() -> None:
+    """Floor heating in the narrow panel: zone, room, heated area, cable, power; a row lights its
+    zone and controller, the dropped values (pitch, W/m², lead…) are the row hint."""
+    walls = [{"length": 3000}, {"length": 4000}, {"length": 3000}, {"length": 4000}]
+    plan = make_plan(walls)
+    _, contours = validate_plan(plan)
+    reg = {"id": "t1", "room": "r", "type": "thermostat", "wall": "w4", "offset": 500}
+    reg["height"] = 900
+    elec = Electrical.model_validate(
+        {"points": [reg], "floor_heating": [{"id": "fh1", "room": "r", "thermostat": "t1"}]}
+    )
+    table = heating_side_table(plan, contours, elec)
+    assert table is not None
+    assert table.columns == ("Зона", "Помещение", "Обогрев, м²", "Кабель, м", "P, Вт")
+    (row,) = table.rows
+    assert row.keys == ("heating:fh1", "point:t1")
+    assert row.hint is not None and "Шаг, мм: " in row.hint and "Подводка, м: " in row.hint
+    assert table.total is not None and table.total[0] == "Итого"
+    assert table.notes  # the asterisks are explained
+    assert side_tables(plan, contours, elec, None)["floor_heating"] == [table]
+    assert heating_side_table(plan, contours, Electrical.model_validate({})) is None

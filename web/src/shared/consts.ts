@@ -2,7 +2,9 @@
 
 // Labels live in the i18n dictionaries (src/i18n): only keys here
 export const SIDE_TABS = ["tables", "layers"] as const;
-export type SideTab = (typeof SIDE_TABS)[number];
+// A ceiling (floor) view on the elevations: its lines, the installer notes and tables, layers
+export const CEILING_TABS = ["lines", "notes", "layers"] as const;
+export type SideTab = (typeof SIDE_TABS)[number] | (typeof CEILING_TABS)[number];
 // Not about the sheet: header buttons, a slide-out panel (widgets/Drawer)
 export const DRAWER_TABS = ["questions", "sources", "project"] as const;
 export type DrawerTab = (typeof DRAWER_TABS)[number];

@@ -1,0 +1,81 @@
+// Lines on a ceiling view by group: a group row is chevron | badge | cable | transit | lines and
+// metres | eye; an open group lists its chain under it (node rows, lines with ├ / └). Every row
+// has one height and one line of text (ellipsis), nothing appears on hover: the list never jumps.
+// The card of the pinned line sticks to the bottom of the panel.
+
+@use "@/shared/styles/mixins" as *;
+
+$row: 32px;
+
+.lines { display: grid; gap: var(--space-2); margin-bottom: var(--space-3); }
+.title { display: flex; align-items: center; gap: 6px; margin: var(--space-1) 0 0; }
+.allEye { margin-left: auto; margin-right: 4px; }
+.count { color: var(--muted); font-weight: 400; }
+.cables { overflow-wrap: anywhere; }
+
+.list {
+  @include type(small);
+  list-style: none; margin: 0; padding: 0;
+  :where(li) {
+    display: grid; align-items: center; column-gap: 6px;
+    height: $row; padding: 0 4px; border-top: 1px solid var(--line);
+  }
+  li.lit, li.lit:hover { background: var(--hl-row); box-shadow: inset 3px 0 var(--hl); }
+  // A group hidden on the view: its rows stay, faint; the eye stays clear
+  li.off > :not(.eye) { opacity: .45; }
+}
+
+// chevron | badge | cable or "from → to" | transit | meta | eye
+.group {
+  grid-template-columns: 18px 48px minmax(0, 1fr) auto auto 28px;
+  cursor: pointer; font-weight: 500;
+  &:hover { background: var(--soft); }
+  &.transit .mark { opacity: .6; }
+}
+.chev {
+  @include focus-ring;
+  width: 18px; height: 18px; padding: 0; display: grid; place-items: center;
+  color: var(--muted); font-size: 11px; background: none; border: 0;
+}
+.eye { justify-self: end; }
+
+// A box (panel, chain point) the lines below leave from
+.node {
+  grid-template-columns: 18px minmax(0, 1fr);
+  color: var(--muted); font-weight: 500; border-top-style: dashed;
+  &.near { color: var(--text); }
+}
+.nodeName { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+// A line of an open group: tree mark | where to | transit | metres
+.line {
+  grid-template-columns: 18px minmax(0, 1fr) auto auto;
+  padding-left: 22px; cursor: pointer;
+  &:hover { background: var(--soft); }
+}
+.branch { color: var(--muted); text-align: center; }
+
+// The group as a badge in its colour, as the line on the view
+.mark {
+  justify-self: start; min-width: 24px; padding: 2px 6px; border-radius: 0;
+  color: #fff; font-weight: 600; text-align: center; background: var(--muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
+}
+
+.name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 400; }
+.meta { color: var(--muted); white-space: nowrap; font-weight: 400; }
+.tag { white-space: nowrap; }
+
+// Pinned line: one height with or without a line; no frame (empty, it read as a text field),
+// a rule above it parts it from the list
+.card {
+  position: sticky; bottom: 0; z-index: 1;
+  display: grid; align-content: start; gap: var(--space-1);
+  height: 88px; overflow: hidden; padding: var(--space-2) 4px;
+  background: var(--panel); border-top: 1px solid var(--line);
+}
+.route { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: 6px; @include type(small); }
+.path {
+  overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow-wrap: anywhere;
+}

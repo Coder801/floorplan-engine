@@ -9,7 +9,7 @@ import { wallPages, wallSheet } from "@/engine/sheet/walls";
 import { STUDIO_SECTIONS, Studio, type StudioSection } from "@/pages/Studio";
 import { Welcome } from "@/pages/Welcome";
 import { base, enc, getManifest, getPage, getProject, isProject, listProjects, reviewAnswer, saveAnswer, saveWizard, type ReviewOutcome, type WizardBody } from "@/shared/api";
-import { NARROW_PX, SIDE_TABS, stickersPdf, type DrawerTab, type PanelMode, type SideTab, type Theme } from "@/shared/consts";
+import { CEILING_TABS, NARROW_PX, SIDE_TABS, stickersPdf, type DrawerTab, type PanelMode, type SideTab, type Theme } from "@/shared/consts";
 import { cx } from "@/shared/cx";
 import { placeAmongViews, sectionOf, sections, wallLayersOf, type Section } from "@/shared/domains";
 import { label, pageTitle } from "@/shared/i18n";
@@ -115,7 +115,7 @@ export function Viewer({ account = null }: { account?: Account | null }) {
   const [error, setError] = useState<string | null>(null);
   const [side, setSide] = useState<SideTab>(() => {
     const saved = remembered("side");
-    return (SIDE_TABS as readonly string[]).includes(saved ?? "") ? (saved as SideTab) : "tables";
+    return ([...SIDE_TABS, ...CEILING_TABS] as readonly string[]).includes(saved ?? "") ? (saved as SideTab) : "tables";
   });
   const [drawer, setDrawer] = useState<DrawerTab | null>(null);  // questions, sources, project
   const [closing, setClosing] = useState(false);                // the panel slides away
@@ -768,6 +768,7 @@ export function Viewer({ account = null }: { account?: Account | null }) {
       <SidePanel tab={side} onTab={showSide} page={source ? null : page} drawing={source ? null : drawing}
                  estimate={estimate && !source ? page?.estimate ?? null : null}
                  wall={!source && !loading ? wall?.data ?? null : null} onWiring={toWiring}
+                 ceiling={!source && !loading ? wall?.ceiling ?? null : null}
                  layers={mode === "engineering"}
                  variant={variantLabel ? { label: variantLabel, onOpen: openInfo } : null}
                  summaryTitle={workTab && !source ? t("work.side") : undefined}

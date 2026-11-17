@@ -133,7 +133,7 @@ export interface OverviewPlumbing {
   sewer: { pipes: { d: number; m: number }[]; risers: number; bends: number; tees: number; errors: number };
   weak: number;  // plumbing weak spots
   // Plumbing estimate total (out/plumbing-estimate.*): goes into the project total together with electrical
-  estimate?: { total: number; currency: string; unpriced: number };
+  estimate?: { total: number; material?: number; work?: number; currency: string; unpriced: number };  // material, work: no key — an older build
 }
 
 // Wiring variants (docs/wiring-variants.md): mode, route, distribution, path, conduit;
@@ -461,6 +461,7 @@ export interface Page {
   panel?: PanelData;
   estimate?: SideTable;  // the estimate is on the wiring page ("Estimate" tab, side.estimate_side_table)
   elevations?: Elevation[];
+  ceilings?: CeilingData[];  // ceiling (floor) views of these sheets with their lines, for the side panel
   legend?: LegendEntry[];  // the legend is a badge on the drawing (widgets/Legend)
 }
 
@@ -518,6 +519,32 @@ export interface ElevWall {
   board?: { key: string; name: string; x: number; y: number; width: number; height: number };
   // Plumbing water outlets and drains: n is the fixture number on the "Plumbing" sheet
   water?: ElevWater[];
+}
+
+// A line on a room's ceiling (floor) view (key ceilings of the "Elevations" pages,
+// ceilings.ceiling_data, decision 2026-11-17): key is its lanes on the view
+// (lane:<room>.<plane>.<run>); ends as on the sheets (from, to) and by id (source, target:
+// board, media, a box or a point id — the side panel chains a group by them); length inside
+// the room with its walls, mm; transit: no end in the room. Older .epd: no source, target,
+// transit (the panel chains by names)
+export interface CeilingLine {
+  key: string;
+  group: string;
+  color: string | null;
+  from: string;
+  to: string;
+  source?: string;
+  target?: string;
+  transit?: boolean;
+  mark: string;
+  length: number;
+  dims?: string[];  // scale values that measure the line (dim:<room>.<plane>.x1450)
+}
+
+export interface CeilingData {
+  key: string;              // elevation:<room>.ceiling | .floor
+  plane: "ceiling" | "floor";
+  lines: CeilingLine[];
 }
 
 // Neighbouring wall at a corner: the inner angle (90 means visible together with the elevation) and what is on it

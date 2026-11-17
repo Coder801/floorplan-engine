@@ -15,6 +15,8 @@ type Story = StoryObj<typeof meta>;
 
 export const Visible: Story = {};
 export const Hidden: Story = { args: { on: false } };
+// An own label: the eye isolates a group instead of hiding it (CeilingLines)
+export const OwnLabel: Story = { args: { what: "QF1", label: "Только QF1 на виде" } };
 export const Interactive: Story = {
   render: function Render(args) {
     const [on, setOn] = useState(args.on);

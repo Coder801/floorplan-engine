@@ -14,6 +14,8 @@ from dataclasses import dataclass, field, replace
 
 from floorplan_engine.drawing.electrical import legend_rows, wiring_legend_rows
 from floorplan_engine.drawing.fields import format_area
+from floorplan_engine.drawing.floor_heating import heating_table
+from floorplan_engine.drawing.heating_legend import heating_legend_rows
 from floorplan_engine.drawing.lighting import lighting_model, switch_rows, switch_table
 from floorplan_engine.drawing.mounting import bends_table, fixings_table
 from floorplan_engine.drawing.panel import ASSUMED, devices_table, panel_notes
@@ -27,6 +29,7 @@ from floorplan_engine.drawing.wiring import wiring_notes
 from floorplan_engine.electrical.colors import group_colors
 from floorplan_engine.electrical.estimate import build_estimate
 from floorplan_engine.electrical.estimate import text as estimate_text
+from floorplan_engine.electrical.floor_heating import heating_zones
 from floorplan_engine.electrical.groups import group_rows
 from floorplan_engine.electrical.groups import text as groups_text
 from floorplan_engine.electrical.led_supply import led_lines
@@ -49,7 +52,8 @@ STAGE_OBJECTS: dict[str, frozenset[str]] = {
     "lighting": frozenset({"point", "led_strip"}),
     "wiring": frozenset({"wire", "box", "board"}),
     "panel": frozenset({"device", "board"}),
-    "elevations": frozenset({"elevation", "dim"}),  # walls, ceilings, ceiling scale values
+    # walls, ceilings, ceiling scale values, the lines on a ceiling (decision 2026-11-17)
+    "elevations": frozenset({"elevation", "dim", "lane"}),
     "plumbing": frozenset({"fixture", "pipe", "riser", "collector", "obstacle"}),
     # Zones, their controllers and the furniture they go round
     "floor_heating": frozenset({"heating", "point", "furniture"}),
@@ -224,12 +228,50 @@ def legend_entries(elec: Electrical, language: Language) -> list[LegendEntry]:
 
 def side_legends(elec: Electrical, language: Language) -> dict[str, list[LegendEntry]]:
     """Legend by sheet topic: electrical has all symbols of the sheet, lighting only lights,
-    wiring the line colour families (electrical.wiring_legend_rows)."""
+    wiring the line colour families (electrical.wiring_legend_rows), floor heating the samples
+    of its sheet legend (heating_legend.heating_legend_rows)."""
     return {
         "electrical": legend_entries(elec, language),
         "lighting": legend_entries(lighting_model(elec), language),
         "wiring": [LegendEntry(r.tag, r.text) for r in wiring_legend_rows(elec, language) if r.tag],
+        "floor_heating": [LegendEntry(k, t) for k, t in heating_legend_rows(language)],
     }
+
+
+# Columns of the "Floor heating" table kept in the narrow panel: where the cable goes, how much of
+# it and what it draws; the rest (floor, area from the design, pitch, W/m², lead, controller)
+# becomes the row hint, the zone card has it too
+HEATING_SIDE_COLUMNS = ("fh_zone", "fh_room", "fh_area", "fh_length", "fh_power")
+
+
+def heating_side_table(
+    plan: Plan, contours: dict[str, Contour], elec: Electrical
+) -> SideTable | None:
+    """The "Floor heating" zones: row → the zone (heating:<id>) and its controller; None without
+    zones. The notes are the sheet notes: what the asterisks mean."""
+    zones = heating_zones(plan, contours, elec)
+    built = heating_table(plan, elec, zones)
+    if built is None:
+        return None
+    table, notes = built
+    keys = [(f"heating:{z.spec.id}", f"point:{z.spec.thermostat}") for z in zones]
+    side = from_table(table, keys, notes)
+    kept = {tr(k, plan.language) for k in HEATING_SIDE_COLUMNS}
+    hints = [
+        " · ".join(
+            f"{title}: {cell}"
+            for title, cell in zip(side.columns, r.cells, strict=True)
+            if title not in kept and cell not in ("", "—")
+        )
+        for r in side.rows
+    ]
+    side = replace(
+        side, rows=tuple(replace(r, hint=h or None) for r, h in zip(side.rows, hints, strict=True))
+    )
+    for k in reversed(range(len(side.columns))):
+        if side.columns[k] not in kept:
+            side = drop_column(side, k)
+    return side
 
 
 def points_side_table(plan: Plan, elec: Electrical) -> SideTable | None:
@@ -343,6 +385,9 @@ def side_tables(
             out["elevations"] = mounting_side_tables(elec, wiring, lang)
         if panel is not None:
             out["panel"] = panel_tables(panel, elec, lang, wiring)
+        heating = heating_side_table(plan, contours, elec)
+        if heating is not None:
+            out["floor_heating"] = [heating]
     return out
 
 

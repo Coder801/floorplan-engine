@@ -1,5 +1,6 @@
 // Layer visibility as an eye, like Photoshop layers: open means visible, crossed out means hidden.
 // A button with aria-pressed (pressed means visible); the label says what to show or hide.
+// label replaces it where the eye does something else than hide this one (isolate a group).
 
 import { useTranslation } from "react-i18next";
 import { cx } from "@/shared/cx";
@@ -10,11 +11,12 @@ interface Props {
   onToggle: () => void;
   what: string;           // what it hides and shows, for the tooltip and screen readers
   className?: string;
+  label?: string;         // the tooltip instead of "Hide: what" / "Show: what"
 }
 
-export function EyeToggle({ on, onToggle, what, className }: Props) {
+export function EyeToggle({ on, onToggle, what, className, label: own }: Props) {
   const { t } = useTranslation();
-  const label = t(on ? "eye.hide" : "eye.show", { what });
+  const label = own ?? t(on ? "eye.hide" : "eye.show", { what });
   return (
     <button type="button" className={cx(css.eye, !on && css.off, className)} aria-pressed={on}
             aria-label={label} title={label}

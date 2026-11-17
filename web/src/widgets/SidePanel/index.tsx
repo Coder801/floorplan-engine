@@ -3,7 +3,8 @@
 // and layers from other sheets of the shared drawing (sheet/drawing.ts). Questions, sources and
 // the project are in the header (widgets/Drawer). The "Electrical" tab has a view on top:
 // points, lighting, wiring (sheets of one drawing); the view changes layers, tables, hints and
-// editing, the zoom stays.
+// editing, the zoom stays. A ceiling (floor) view of the elevations has its own tabs: its lines,
+// the installer notes and mounting tables of the sheet, layers.
 // Narrow screen: the panel is a bottom drawer: a strip with the view and "▴" at the bottom,
 // tables and layers inside it.
 
@@ -11,7 +12,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { CABLE_ROWS, LAYER_GROUPS, drawingLayers, layerGroup, layerRows, objectLayers, type Drawing } from "@/engine/sheet/drawing";
 import { ownLayers, viewTables } from "@/engine/sheet/views";
-import { SHEET_ONLY, SIDE_TABS, type SideTab } from "@/shared/consts";
+import { CEILING_TABS, SHEET_ONLY, SIDE_TABS, type SideTab } from "@/shared/consts";
 import { cx } from "@/shared/cx";
 import { label } from "@/shared/i18n";
 import { rowKind, totals } from "@/shared/estimate";
@@ -22,9 +23,10 @@ import ui from "@/shared/styles/ui.module.scss";
 import { Button } from "@/ui/Button";
 import { Dot } from "@/ui/Dot";
 import { IconButton } from "@/ui/IconButton";
-import type { Elevation, Page, SideTable } from "@/shared/types";
+import type { CeilingData, Elevation, Page, SideTable } from "@/shared/types";
 import { EyeToggle } from "@/ui/EyeToggle";
 import { useHoldTip } from "@/ui/HoldTip";
+import { CeilingLines } from "@/widgets/CeilingLines";
 import { WallItems } from "@/widgets/WallItems";
 import css from "./SidePanel.module.scss";
 
@@ -34,8 +36,9 @@ interface Props {
   page: Page | null;
   drawing: Drawing | null;     // the drawing the sheet belongs to
   wall?: Elevation | null;      // elevation: what is on the wall, instead of tables and layers
+  ceiling?: CeilingData | null; // a ceiling (floor) view: its lines, the sheet tables on their own tab
   estimate?: SideTable | null;  // "Estimate" tab: totals and notes instead of tables and layers
-  onWiring?: (key: string) => void;  // from an elevation to the wiring sheet, to the object's line
+  onWiring?: (key: string) => void;  // from a wall elevation to the wiring sheet, to the object's line
   // Wiring variant as a line above the tables of the "Electrical" views and "Estimate"; the
   // choice is on the "Overview" tab (onOpen)
   variant?: { label: string; onOpen: () => void } | null;
@@ -52,15 +55,16 @@ const VARIANT_STAGES = new Set(["electrical", "lighting", "wiring"]);
 export const hasLayers = (page: Page | null) =>
   !!page && !page.panel && page.items.some((it) => !SHEET_ONLY.has(it.l));
 
-export function SidePanel({ tab, onTab, page, drawing, wall, estimate, onWiring, variant, summary, summaryTitle, layers = true, children }: Props) {
+export function SidePanel({ tab, onTab, page, drawing, wall, ceiling, estimate, onWiring, variant, summary, summaryTitle, layers = true, children }: Props) {
   const { t } = useTranslation();
-  const tabs: SideTab[] = wall || estimate || summary ? [] : SIDE_TABS.filter((k) => k !== "layers" || (layers && hasLayers(page)));
-  const shown = tabs.includes(tab) ? tab : "tables";
+  const all: readonly SideTab[] = ceiling ? CEILING_TABS : SIDE_TABS;
+  const tabs: SideTab[] = wall || estimate || summary ? [] : all.filter((k) => k !== "layers" || (layers && hasLayers(page)));
+  const shown = tabs.includes(tab) ? tab : all[0];
   const [open, setOpen] = useState(false);  // narrow screen: the drawer is expanded
   return (
     <aside className={css.side} data-open={open || undefined}>
       <div className={css.bar}>
-        <span className={css.title}>{wall ? t("side.onWall") : summary ? (summaryTitle ?? t("overview.side")) : estimate ? t("estimate.totals") : tabs.length > 1 ? t("side.tablesAndLayers") : t(`side.${shown}`)}</span>
+        <span className={css.title}>{wall ? t("side.onWall") : summary ? (summaryTitle ?? t("overview.side")) : estimate ? t("estimate.totals") : ceiling ? t(`ceiling.${ceiling.plane}`) : tabs.length > 1 ? t("side.tablesAndLayers") : t(`side.${shown}`)}</span>
         <IconButton variant="framed" size="lg" className={css.toggle} aria-expanded={open} label={open ? t("side.collapse") : t("side.tablesAndLayers")}
                     onClick={() => setOpen(!open)}>{open ? "▾" : "▴"}</IconButton>
       </div>
@@ -82,7 +86,9 @@ export function SidePanel({ tab, onTab, page, drawing, wall, estimate, onWiring,
         {summary ? summary
           : wall ? <WallItems wall={wall} onWiring={onWiring} />
           : estimate ? <EstimateTotals table={estimate} />
-          : shown === "layers" ? <Layers page={page} drawing={drawing} /> : <Tables page={page} drawing={drawing} />}
+          : shown === "layers" ? <Layers page={page} drawing={drawing} />
+          : ceiling && shown === "lines" ? <CeilingLines key={ceiling.key} ceiling={ceiling} />
+          : <Tables page={page} drawing={drawing} />}
       </div>
       {children}
     </aside>

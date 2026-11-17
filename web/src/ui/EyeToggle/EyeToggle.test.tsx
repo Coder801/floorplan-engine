@@ -24,4 +24,9 @@ describe("EyeToggle", () => {
     fireEvent.click(screen.getByRole("button"));
     expect(onRow).not.toHaveBeenCalled();
   });
+
+  it("an own label replaces show / hide", () => {
+    render(<EyeToggle on onToggle={() => {}} what="QF1" label="Только QF1 на виде" />);
+    expect(screen.getByRole("button", { name: "Только QF1 на виде", pressed: true })).toHaveAttribute("title", "Только QF1 на виде");
+  });
 });

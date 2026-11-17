@@ -26,7 +26,7 @@ export const uk: Messages = {
   views: { electrical: "Розетки", low: "Зв'язок", lighting: "Світло", wiring: "Проводка" },
   severity: { critical: "критично", major: "важливо", minor: "уточнення" },
   layer: {
-    "A-WALL": "стіни", "A-DOOR": "двері", "A-WIND": "вікна", "A-DIMS": "розміри",
+    "A-WALL": "стіни", "A-DOOR": "двері", "A-WIND": "вікна", "A-SILL": "підвіконня", "A-DIMS": "розміри",
     "A-TEXT": "підписи плану", "A-SHEET": "рамка і штамп", "E-SOCKET": "розетки",
     "E-SWITCH": "вимикачі", "E-LIGHT": "світло", "E-DATA": "зв'язок", "E-LED": "LED",
     "E-BOARD": "щит", "E-TEXT": "підписи електрики", "W-BOX": "коробки",
@@ -48,7 +48,7 @@ export const uk: Messages = {
     wire: "Лінія проводки", box: "Коробка", heating: "Зона теплої підлоги", furniture: "Меблі",
   },
   side: {
-    tables: "Таблиці", layers: "Шари", tablesAndLayers: "Таблиці й шари", onWall: "На стіні",
+    tables: "Таблиці", layers: "Шари", lines: "Лінії", notes: "Пам'ятка", tablesAndLayers: "Таблиці й шари", onWall: "На стіні",
     collapse: "Згорнути", noSheet: "Аркуш не відкрито",
     noTables: "У цього аркуша таблиць немає", wiringBrief: "Лінії показують, де піде кабель: від щита до коробок і від коробок до точок. Наведіть на лінію — підказка скаже, звідки і куди вона йде.", ownLayers: "Шари вигляду", otherLayers: "Інші шари",
     otherNote: "Додати на креслення: розміри до проводки, номери точок до освітлення — з інших виглядів і плану.",
@@ -305,6 +305,15 @@ export const uk: Messages = {
     walls: "Розгортки стін", prev: "Попередня стіна", next: "Наступна стіна",
     all: "Список стін", list: "Стіни", overview: "Усі стіни",
   },
+  ceiling: {
+    ceiling: "Лінії на стелі", floor: "Лінії по підлозі", none: "Ліній немає", m: "{{v}} м",
+    cable: "{{mark}} — {{v}} м", groupMeta: "ліній: {{n}} · {{v}} м", lineMeta: "{{mark}} · {{v}} м",
+    transit: "транзит", transitTitle: "Лінія лише проходить через приміщення: її кінців тут немає",
+    hideAll: "Сховати всі лінії на виді", showAll: "Показати всі лінії",
+    expand: "Розгорнути {{g}}", collapse: "Згорнути {{g}}",
+    route: "Шлях лінії", pick: "Натисніть лінію в списку або на виді — тут буде її шлях групою.",
+    note: "Довжина — частина лінії в цьому приміщенні, зі стінами. Наведіть на рядок — лінія підсвітиться на виді, око ховає групу на виді.",
+  },
   wallGrid: {
     back: "До стіни", count: "Стін: {{n}}",
     open: "Відкрити: {{title}}",
@@ -327,6 +336,7 @@ export const uk: Messages = {
     yourSet: "Ваш набір", ceilingRange: "від {{min}} до {{max}} мм",
     total: "Підсумок за проєктом", openEstimate: "Відкрити кошторис",
     totalParts: "електрика (обраний варіант) {{electrical}} · сантехніка {{plumbing}}",
+    work: "Робота", materials: "Матеріали", materialsGuess: "поки припущення",
     plumbingEstimate: "Кошторис сантехніки", unpriced: "без ціни: {{n}} поз.",
     plumbing: "Сантехніка", fixtures: "Прилади", water: "Вода", sewer: "Каналізація",
     distributions: { collector: "променева від колектора", tee: "трійникова" },

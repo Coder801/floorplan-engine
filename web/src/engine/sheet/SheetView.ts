@@ -21,6 +21,7 @@ import { gridStep, paintGrid, paperRings } from "./grid";
 import { inBox, paint, type DrawItem } from "./paint";
 import { Pinch } from "./pinch";
 import { grownBox, isSymbol, openStacks, pointStacks, symbolCenters, type Stack } from "./stacks";
+import { laneFocus } from "./walls";
 
 const TIP_WIDTH = 320;  // pinned hint (max-width in CSS): room on the right when they overlap
 
@@ -109,7 +110,7 @@ export class SheetView {
     let seen: unknown[] = [];
     this.cleanup.push(view.subscribe(() => {
       const s = view.get();
-      const now = [s.hover, s.lit, s.selected, s.neighbors, s.hidden, s.extra, s.show3d, s.themeTick, s.filter3d, s.electricalView, s.cables];
+      const now = [s.hover, s.lit, s.selected, s.neighbors, s.hidden, s.extra, s.show3d, s.themeTick, s.filter3d, s.electricalView, s.cables, s.pinned];
       if (now.some((v, i) => v !== seen[i])) { seen = now; this.applyView(); this.draw(); }
     }));
     this.bind();
@@ -227,8 +228,8 @@ export class SheetView {
 
   private isLit(o: string | undefined): boolean {
     if (!o) return false;
-    const { hover, lit } = view.get();
-    if (o === hover) return true;
+    const { hover, lit, pinned } = view.get();
+    if (o === hover || (o === pinned && o.startsWith("lane:"))) return true;
     if (!lit) return false;
     // A question about a room (room:hall) also lights the zones of it on the plan
     const room = o.startsWith("zone:") ? `room:${o.slice(5, o.lastIndexOf("."))}` : null;
@@ -279,7 +280,12 @@ export class SheetView {
     const floorHover = !!o && o === view.get().hover && o in this.index.floors;
     if (!floorHover && this.isLit(o)) return [palette.hl, 1, 2];
     const c = screenColor(it.c);
-    const { selected, neighbors } = view.get();
+    const { selected, neighbors, pinned } = view.get();
+    // A line pinned on a ceiling view: the other lanes and scale values are dimmed
+    if (o && (o.startsWith("lane:") || o.startsWith("dim:"))) {
+      const focus = this.focusOf(pinned);
+      if (focus) return focus.has(o) ? [c, 1, 1] : [c, DIM_ALPHA, 1];
+    }
     if (!selected) return [c, 1, 1];
     // A light link is in its switch bundle (chains of the lighting sheet); a build without
     // them lights it by its points. The rest are dimmed with the drawing
@@ -290,9 +296,23 @@ export class SheetView {
     return neighbors && neighbors.has(o) ? [c, NEIGHBOR_ALPHA, 1] : [c, DIM_ALPHA, 1];
   }
 
+  // What a pinned ceiling line keeps undimmed (laneFocus), counted once per pinned line and page
+  private focus: { page: Page | null; pinned: string | null; keys: Set<string> | null } = { page: null, pinned: null, keys: null };
+  private focusOf(pinned: string | null): Set<string> | null {
+    const f = this.focus;
+    if (f.page !== this.page || f.pinned !== pinned) this.focus = { page: this.page, pinned, keys: laneFocus(this.page, pinned) };
+    return this.focus.keys;
+  }
+
   // Select a line and pin the hint; focus also brings the view to it (double click)
   select(o: string | null, focus = false) {
     if (!o) { this.clearSelection(); return; }
+    // A line on a ceiling view (lane:) is pinned: it lights up, the other lanes and the scale
+    // values not measuring it are dimmed (laneFocus); hiding is the group eyes of the side panel
+    if (o.startsWith("lane:")) {
+      view.set({ selected: null, neighbors: null, pinned: view.get().pinned === o ? null : o, tip: null });
+      return;
+    }
     const chain = this.index.chainOf(o);
     view.set({ selected: chain, neighbors: this.index.neighborsOf(chain), pinned: o, tip: null });
     if (focus) this.showKeys(chain);
