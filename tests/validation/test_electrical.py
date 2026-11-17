@@ -172,3 +172,70 @@ def test_two_zones_on_one_floor_are_an_error() -> None:
     (part,) = errors({}, {"zone": "Кухня"})
     assert part.startswith("floor_heating[1].zone: тёплый пол «fh1»: зона «Кухня»")
     assert errors({"zone": "Кухня"}, {"zone": "Кухня"})[0].startswith("floor_heating[1].zone")
+
+
+def _low(cables: list[dict[str, Any]], media: bool = False) -> list[str]:
+    """Issues of a room with internet points d1–d3 and a TV t1 without a group, a socket s1 of
+    QF1 and a panel; the given cables (decision 2026-11-17: low-voltage topology)."""
+    plan = make_plan(ROOM)
+    _, contours = validate_plan(plan)
+
+    def wall(pid: str, kind: str, offset: float, group: str | None = None) -> dict[str, Any]:
+        point = {"id": pid, "room": "r", "type": kind, "wall": "w2", "offset": offset}
+        return point | {"height": 300} | ({"group": group} if group else {})
+
+    data: dict[str, Any] = {
+        "points": [
+            wall("d1", "data", 500),
+            wall("d2", "data", 1500),
+            wall("d3", "data", 2500),
+            wall("t1", "tv", 3500),
+            wall("s1", "socket", 1000, "QF1"),
+        ],
+        "board": {"room": "r", "wall": "w1", "offset": 500, "height": 1700},
+        "cables": [{"cable": "UTP cat.6"} | c for c in cables],
+    }
+    if media:
+        data["media"] = {"room": "r", "wall": "w3", "offset": 500, "height": 1500}
+    elec = Electrical.model_validate(data)
+    return [
+        f"{i.path}: {i.message}"
+        for i in validate_electrical(elec, plan, contours)
+        if i.severity is Severity.ERROR
+    ]
+
+
+def test_low_voltage_cables_set_their_topology() -> None:
+    ok = [
+        {"id": "c1", "from": "board", "to": ["d1"]},
+        {"id": "c2", "from": "d1", "to": ["d2", "t1"]},
+        {"id": "c3", "from": "d2", "to": ["d3"]},
+    ]
+    assert _low(ok) == []
+    assert _low([{"id": "c1", "from": "media", "to": ["d1", "d2"]}], media=True) == []
+    (no_media,) = _low([{"id": "c1", "from": "media", "to": ["d1"]}])
+    assert no_media == "cables[0].from: ссылка на media, но слаботочный щит не задан"
+
+
+def test_low_voltage_cable_errors_name_the_field() -> None:
+    (mixed,) = _low([{"id": "c1", "from": "board", "to": ["d1", "s1"]}])
+    assert mixed.startswith("cables[0].to[1]: точка «s1» не слаботочная без группы")
+    (power,) = _low([{"id": "c1", "from": "s1", "to": ["d1"]}])
+    assert power.startswith("cables[0].from: слаботочная линия не идёт от точки «s1» (socket")
+    (unknown,) = _low([{"id": "c1", "from": "nope", "to": ["d1"]}])
+    assert unknown.startswith("cables[0].from: не найдена точка «nope»")
+    twice = [
+        {"id": "c1", "from": "board", "to": ["d1", "d2"]},
+        {"id": "c2", "from": "d1", "to": ["d2"]},
+    ]
+    (fed,) = _low(twice)
+    assert fed.startswith("cables[1].to[0]: точка «d2» уже получает линию: cables[0]")
+    ring = [
+        {"id": "c1", "from": "d1", "to": ["d2"]},
+        {"id": "c2", "from": "d2", "to": ["d3"]},
+        {"id": "c3", "from": "d3", "to": ["d1"]},
+    ]
+    (loop,) = _low(ring)
+    assert loop.startswith("cables[2].to[0]: кольцо слаботочных линий: d1 → d2 → d3 → d1")
+    (self_fed,) = _low([{"id": "c1", "from": "d1", "to": ["d1"]}])
+    assert self_fed.startswith("cables[0].to[0]: кольцо слаботочных линий: d1 → d1")

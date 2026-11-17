@@ -304,10 +304,18 @@ class MediaBox(Board):
 
 
 class Cable(StrictModel):
+    """Cable of a group; without a group, low-voltage topology (decision 2026-11-17): `to` are
+    internet and TV points without a group, each fed by a line of its own from `from` (board,
+    media or a low point), see wiring.low_feeds."""
+
     id: str = Field(pattern=ID_PATTERN)
-    from_: str = Field(alias="from", description="board или id точки")
+    from_: str = Field(alias="from", description="board, media или id точки")
     to: list[str] = Field(min_length=1)
-    group: str | None = None
+    group: str | None = Field(
+        default=None,
+        description="Группа щита. Без группы — слаботочка: to — интернет и TV без группы, "
+        "каждая точка своей линией от from (board, media или слаботочная точка)",
+    )
     cable: str = Field(min_length=1, description="Марка/сечение, напр. 3x2.5")
     route: Literal["wall", "ceiling", "floor"] = Field(
         default="wall", description="floor — по полу в стяжке; wall и ceiling — по потолку"

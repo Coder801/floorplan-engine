@@ -22,7 +22,7 @@ from floorplan_engine.electrical.estimate import PriceSource, build_estimate, co
 from floorplan_engine.electrical.lines import split_by_lines
 from floorplan_engine.electrical.master import with_master_switch
 from floorplan_engine.electrical.panel import build_panel
-from floorplan_engine.electrical.wiring import estimate_wiring
+from floorplan_engine.electrical.wiring import estimate_wiring, is_low
 from floorplan_engine.model.geometry import Contour
 from floorplan_engine.model.schema import (
     Conduit,
@@ -118,10 +118,13 @@ def neighbour_variants(elec: Electrical, chosen: Variant) -> list[Variant]:
 
 def default_variant(elec: Electrical) -> Variant:
     """The "as in project" variant: options from electrical.yaml; route is the shared one (route),
-    and without it, floor if all cables run on the floor."""
+    and without it, floor if all cables run on the floor (a low-voltage cable without a group,
+    wiring.low_feeds, does not count)."""
     route = elec.route
     if route is None:
-        floor = bool(elec.cables) and all(c.route == "floor" for c in elec.cables)
+        low = {p.id for p in elec.points if is_low(p)}
+        power = [c for c in elec.cables if c.group or not all(t in low for t in c.to)]
+        floor = bool(power) and all(c.route == "floor" for c in power)
         route = "floor" if floor else "ceiling"
     return Variant(
         mode=elec.mode,

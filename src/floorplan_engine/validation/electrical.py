@@ -16,6 +16,7 @@ from floorplan_engine.electrical.floor_heating import (
     heating_zones,
 )
 from floorplan_engine.electrical.heating_auto import HEATING_ROOMS, NONE, Place, parse_place
+from floorplan_engine.electrical.wiring import is_low
 from floorplan_engine.model.geometry import (
     Contour,
     Vec,
@@ -253,15 +254,94 @@ def validate_electrical(
                 if elec.board is None:
                     issues.append(Issue(file, f"{path}.{key}", "ссылка на board, но щит не задан"))
                 continue
+            if ref == "media":
+                if elec.media is None:
+                    issues.append(
+                        Issue(file, f"{path}.{key}", "ссылка на media, но слаботочный щит не задан")
+                    )
+                continue
             if resolve_ref(ref, elec.points) is None:
                 issues.append(
                     Issue(
                         file,
                         f"{path}.{key}",
-                        f"не найдена точка «{ref}»: ожидается board или id точки",
+                        f"не найдена точка «{ref}»: ожидается board, media или id точки",
                     )
                 )
+    issues += _check_low_cables(elec, file)
     return issues
+
+
+def _check_low_cables(elec: Electrical, file: str) -> list[Issue]:
+    """Cables without a group that name internet and TV points without a group (low-voltage
+    topology, wiring.low_feeds): only such points in `to`, the source is board, media or such a
+    point, a point is fed once, no ring."""
+    issues: list[Issue] = []
+    points = {p.id: p for p in elec.points}
+    low = {p.id for p in elec.points if is_low(p)}
+    fed: dict[str, tuple[str, str]] = {}  # point → (its source, path of the cable)
+    for c, cable in enumerate(elec.cables):
+        path = f"cables[{c}]"
+        if cable.group is not None or not any(t in low for t in cable.to):
+            continue
+        mixed = [(k, t) for k, t in enumerate(cable.to) if t in points and t not in low]
+        for k, other in mixed:
+            issues.append(
+                Issue(
+                    file,
+                    f"{path}.to[{k}]",
+                    f"точка «{other}» не слаботочная без группы: в кабеле без group только "
+                    "интернет и TV без группы; силовые точки — кабелем со своей группой",
+                )
+            )
+        src = points.get(cable.from_)
+        if src is not None and src.id not in low:
+            issues.append(
+                Issue(
+                    file,
+                    f"{path}.from",
+                    f"слаботочная линия не идёт от точки «{src.id}» ({src.type.value}"
+                    f"{', группа ' + src.group if src.group else ''}): источник — board, media "
+                    "или интернет / TV без группы",
+                )
+            )
+            continue
+        for t, target in enumerate(cable.to):
+            if target not in low:
+                continue
+            where = f"{path}.to[{t}]"
+            if target in fed:
+                issues.append(
+                    Issue(
+                        file,
+                        where,
+                        f"точка «{target}» уже получает линию: {fed[target][1]} — у слаботочной "
+                        "точки один источник",
+                    )
+                )
+                continue
+            ring = _ring(fed, cable.from_, target)
+            if ring:
+                way = " → ".join([*reversed(ring), target])
+                issues.append(
+                    Issue(
+                        file,
+                        where,
+                        f"кольцо слаботочных линий: {way} — линия должна начинаться в board "
+                        "или media",
+                    )
+                )
+                continue
+            fed[target] = (cable.from_, path)
+    return issues
+
+
+def _ring(fed: dict[str, tuple[str, str]], source: str, target: str) -> list[str]:
+    """Sources up from `source` to the target if feeding it from there closes a ring; else []."""
+    chain = [source]
+    while chain[-1] != target and chain[-1] in fed and len(chain) <= len(fed):
+        chain.append(fed[chain[-1]][0])
+    return chain if chain[-1] == target else []
 
 
 # Lighting and socket groups are per room (except in economy mode); dedicated appliance lines

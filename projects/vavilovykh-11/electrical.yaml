@@ -25,7 +25,6 @@ points:
   - { id: living_socket_11, room: living, wall: w8, offset: 1683, type: socket, height: 700, count: 2, group: QF6 }  # текст: 350 от откоса двери спальни
   - { id: living_socket_12, room: living, wall: w8, offset: 2333, type: socket, height: 1400, count: 3, note: "TV блок", group: QF6 }  # 1265/1265: середина между дверями + PDF
   - { id: living_data_1, room: living, wall: w8, offset: 2493, type: data, height: 1400 }  # середина между дверями
-  - { id: living_tv_1, room: living, wall: w8, offset: 2673, type: tv, height: 1400 }  # PDF
   - { id: living_socket_13, room: living, wall: w5, offset: 160, type: socket, height: 300, group: QF20 }  # PDF; коридор
   - { id: living_switch_4, room: living, wall: w5, offset: 160, type: switch, height: 900, note: "коридор", group: QF1 }  # PDF
   - { id: living_switch_5, room: living, wall: w6, offset: 200, type: switch, height: 900, note: "комора", group: QF5 }  # PDF, от откоса

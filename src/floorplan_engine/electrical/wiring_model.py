@@ -101,12 +101,12 @@ class Run:
 
 
 def line_starts(runs: Sequence[Run]) -> dict[str, str]:
-    """For each line end, what the panel feeds it through: a box, the head of a daisy chain, or
-    the end itself."""
+    """For each line end, what the panel (or the low-voltage cabinet) feeds it through: a box,
+    the head of a daisy chain, or the end itself."""
     source = {r.target: r.source for r in runs}
 
     def start(target: str) -> str:
-        while source.get(target, "board") != "board":
+        while source.get(target, "board") not in ("board", "media"):
             target = source[target]
         return target
 

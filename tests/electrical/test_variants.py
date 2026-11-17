@@ -64,6 +64,15 @@ def test_apply_variant_sets_the_options() -> None:
     assert apply_variant(_elec(), Variant(path="right", conduit="none")) == _elec()  # as in project
 
 
+def test_low_voltage_cable_does_not_change_the_project_route() -> None:
+    """A cable without a group (low-voltage topology) has no say in the route of the project."""
+    floor = {"id": "c1", "from": "board", "to": ["s1", "s2"], "group": "QF2", "cable": "3x2.5"}
+    lan = {"id": "c2", "from": "board", "to": ["d1"], "cable": "UTP cat.6"}
+    d1 = {"id": "d1", "room": "r", "type": "data", "wall": "w4", "offset": 500, "height": 300}
+    elec = _elec(points=[*ELEC["points"], d1], cables=[floor | {"route": "floor"}, lan])
+    assert default_variant(elec).route == "floor"
+
+
 def test_job_options_apply_to_any_variant_and_stay_out_of_the_key() -> None:
     job = Variant(plaster="before", rough_light=True)
     assert job.key == Variant().key  # route edits stay
