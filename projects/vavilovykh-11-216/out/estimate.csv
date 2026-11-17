@@ -23,7 +23,7 @@ material_rough;heating_cable.20;Секція нагрівального кабе
 material_rough;heating_cable.49;Секція нагрівального кабелю 49 м;шт;1;;
 material_rough;heating_cable.71;Секція нагрівального кабелю 71 м;шт;1;;
 material_rough;heating_sensor;Датчик температури підлоги;шт;4;;
-material_rough;heating_conduit;Гофротруба Ø16 для датчика підлоги;м;15,5;;
+material_rough;heating_conduit;Гофротруба Ø16 для датчика підлоги;м;15,4;;
 material_finish;input.C63 2P;Вступний автомат, C63 2P;шт;1;850;850,00
 material_finish;relay.63 А;Реле напруги, 63 А;шт;1;1900;1900,00
 material_finish;contactor.63 А 2P;Контактор модульний 63 А 2P;шт;1;1200;1200,00

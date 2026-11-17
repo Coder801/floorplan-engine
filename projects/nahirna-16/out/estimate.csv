@@ -14,7 +14,7 @@ material_rough;board_enclosure;Корпус щита вбудований, 5 р�
 material_rough;heating_cable.27;Секція нагрівального кабелю 27 м;шт;1;;
 material_rough;heating_cable.120;Секція нагрівального кабелю 120 м;шт;1;;
 material_rough;heating_sensor;Датчик температури підлоги;шт;2;;
-material_rough;heating_conduit;Гофротруба Ø16 для датчика підлоги;м;5,5;;
+material_rough;heating_conduit;Гофротруба Ø16 для датчика підлоги;м;5,6;;
 material_finish;input.C63 2P;Вступний автомат, C63 2P;шт;1;850;850,00
 material_finish;relay.63 А;Реле напруги, 63 А;шт;1;1900;1900,00
 material_finish;contactor.40 А 2P;Контактор модульний 40 А 2P;шт;1;1200;1200,00
