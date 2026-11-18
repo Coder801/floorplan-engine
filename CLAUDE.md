@@ -44,6 +44,7 @@ uv run floorplan-engine pdf-facts projects/<имя>/source/x.pdf # выжимк�
 uv run floorplan-engine facts projects/<имя>/source/x.jpg   # выжимка из любого источника: вектор или растр
 uv run floorplan-engine facts-bench projects/<имя>/source/x.pdf # точность растра против вектора
 uv run floorplan-engine preview projects/<имя>               # PNG листов из DXF (отладка ezdxf)
+uv run floorplan-engine trace projects/<имя> [--line wire_3 | --group QF3 | --point box_6] [--cost]  # отладка трасс: SVG сетки поиска и путей в out/debug/
 TEST_REQUIRE_DB=1 uv run pytest --cov && uv run mypy && uv run ruff check . && uv run ruff format --check . && uv run lint-imports
 uv run python scripts/flow.py feature <имя> | integrate | release [--dry-run]  # ветки и релиз: develop → feature → develop → main (docs/development.md)
 uv run python scripts/flow.py ship [--increment patch] [--rebuild]  # всё после /commit: вливание, проверки, релиз, пуш, пересборка
@@ -83,7 +84,7 @@ Slash-команды: `/plan`, `/electrical`, `/check`, `/review`, `/commit`, `/
 2. **Перед генерацией покажи таблицу** «стена → длина → источник (фото / текст / допущение)»,
    а также таблицу проёмов и вопросы из `intake.yaml` с их весом.
 3. **После `build` запусти `render-artifact`, открой PNG нужных листов `out/artifact/NN-<лист>.png`
-   (`01-plan`, `02-electrical`, `03-lighting`, `04-wiring`, `NN-plumbing`, `NN-floor_heating` (тёплый пол), `NN-points`, `NN-elevations` — стены и потолки помещений) (Read) и проверь сам** — это ровно то, что клиент
+   (`01-plan`, `02-electrical`, `03-lighting`, `04-wiring`, `NN-plumbing`, `NN-floor_heating` (тёплый пол), `NN-points`, `NN-elevations` — стены с электрикой и потолки помещений, `NN-plumbing_elevations` — стены с сантехникой) (Read) и проверь сам** — это ровно то, что клиент
    увидит в браузере (решение 2026-10-23: PNG при сборке не пишутся). Замкнут ли контур, на месте
    ли проёмы (стена, сторона, ширина), читаются ли размеры и не налезают ли подписи.
    Только потом сообщай результат.
