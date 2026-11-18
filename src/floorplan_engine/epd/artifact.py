@@ -68,6 +68,8 @@ from floorplan_engine.sheets.preview import (
 
 FORMAT_NAME = "floorplan-engine/epd"
 FORMAT_VERSION = 1
+# Sheet topics of the wall elevations: electrical and plumbing (decision 2026-11-18)
+WALL_STAGES = ("elevations", "plumbing_elevations")
 MANIFEST = "manifest.json"
 # Fixed zip entry date, for byte-identical output
 _ZIP_DATE = (1980, 1, 1, 0, 0, 0)
@@ -210,7 +212,7 @@ def record_page(doc: Drawing, layout: Paperspace) -> dict[str, Any]:
     }
     stage = sheet_slug(layout.name)
     view = view_rect(layout, height)
-    if view is None and stage in ("panel", "elevations"):  # a diagram on the sheet: by its objects
+    if view is None and stage in ("panel", *WALL_STAGES):  # a diagram on the sheet: by its objects
         view = objects_rect(recorder.items)
     if view is not None:
         page["view"] = view
@@ -418,9 +420,16 @@ def export_artifact(
                 page["scene"] = scene
             if panel and stage == "panel":
                 page["panel"] = panel
-            if elevations and stage == "elevations":
+            if elevations and stage in WALL_STAGES:
                 drawn = {item["o"] for item in page["items"] if "o" in item}
                 page["elevations"] = [e for e in elevations if e["key"] in drawn]
+                # A box on a wall gets its card, as on the wiring sheet: a click shows the hint
+                # with the box scheme (the elevation is drawn from data, not from primitives)
+                if objects:
+                    boxes = {b["key"] for e in page["elevations"] for b in e.get("boxes", [])}
+                    page.setdefault("objects", {}).update(
+                        page_objects(boxes, objects, plan.language)
+                    )
             if ceilings and stage == "elevations":
                 drawn = {item["o"] for item in page["items"] if "o" in item}
                 page["ceilings"] = [c for c in ceilings if c["key"] in drawn]

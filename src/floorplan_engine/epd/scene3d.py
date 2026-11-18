@@ -35,11 +35,11 @@ from shapely.geometry.base import BaseGeometry
 from shapely.ops import unary_union
 
 from floorplan_engine.drawing.plan import convex
-from floorplan_engine.drawing.wiring import lanes as lane_offsets
-from floorplan_engine.drawing.wiring import offset_path
 from floorplan_engine.electrical.anchors import Anchor, board_anchor, point_anchor
-from floorplan_engine.electrical.bundles import segments
+from floorplan_engine.electrical.bundles import lanes as lane_offsets
+from floorplan_engine.electrical.bundles import offset_path, segments
 from floorplan_engine.electrical.colors import group_colors
+from floorplan_engine.electrical.frames import BOX_HALF_MM
 from floorplan_engine.electrical.routing import fit_path
 from floorplan_engine.electrical.wiring_model import JunctionBox, Wiring
 from floorplan_engine.epd.thumbnail import room_kind
@@ -71,7 +71,7 @@ def _xyz(v: Vec, z: float) -> list[float]:
     return [round(v.x, 1), round(v.y, 1), round(z, 1)]
 
 
-def _rings(geom: BaseGeometry) -> list[list[list[list[float]]]]:
+def polygon_rings(geom: BaseGeometry) -> list[list[list[list[float]]]]:
     """Polygons: outer contour and holes, without repeating the first point."""
     polys = getattr(geom, "geoms", [geom])
     out = []
@@ -127,7 +127,7 @@ class _Walls:
             and shape.intersection(geom).area > MIN_AREA_MM2
         ]
         rest = geom.difference(unary_union(overlap)) if overlap else geom
-        rings = _rings(rest)
+        rings = polygon_rings(rest)
         if not rings:
             return
         self.shapes.append((rest, z))
@@ -254,7 +254,23 @@ def _wires(
 ) -> dict[str, Any]:
     """Routes in 3D: rise from the source, plan path in the ceiling or floor plane, drop; a drop
     beside an opening (Run.end_drop, start_drop) turns along the wall to its point at the point
-    height. A line's room is the room of its target (point or box): the viewer filters by it."""
+    height; any other drop to a mechanism goes to its frame entry (Wiring.entries, the side of
+    the block) and stops at the box top (bottom). A line's room is the room of its target (point
+    or box): the viewer filters by it."""
+    entries = dict(wiring.entries)
+
+    def side(end: str) -> Vec:
+        """Where the drop to a line end meets the wall: the frame entry, else the end itself."""
+        p, a = points.get(end), ends[end]
+        if end not in entries or p is None or p.offset is None or a.wall_dir is None:
+            return _face(a)
+        return _face(a) + a.wall_dir * (entries[end] - p.offset)
+
+    def box_edge(end: str, z: float, plane: float) -> float:
+        """Height where a drop meets its end: the box top (bottom) at a frame entry."""
+        if end not in entries:
+            return z
+        return z + BOX_HALF_MM if plane > z else z - BOX_HALF_MM
 
     def beside(end: str, drop: float | None) -> tuple[Vec, Vec, float] | None:
         """Drop spot beside an opening, the point and its height; None for a straight drop."""
@@ -276,13 +292,17 @@ def _wires(
     out: dict[str, Any] = {}
     for r, path in zip(wiring.runs, paths, strict=True):
         first, last = beside(r.source, r.start_drop), beside(r.target, r.end_drop)
-        start = first[0] if first else _face(ends[r.source])
-        end = last[0] if last else _face(ends[r.target])
+        start = first[0] if first else side(r.source)
+        end = last[0] if last else side(r.target)
         plan = fit_path(path, start, end) if len(path) >= 2 else [start, end]
         floor = r.route == "floor"
         plane = FLOOR_Z_MM if floor else ceiling
         z0 = r.rise_start_mm if floor else ceiling - r.rise_start_mm
         z1 = r.rise_end_mm if floor else ceiling - r.rise_end_mm
+        if r.rise_start_mm > 0 and not first:
+            z0 = box_edge(r.source, z0, plane)
+        if r.rise_end_mm > 0 and not last:
+            z1 = box_edge(r.target, z1, plane)
         pts = [_xyz(first[1], first[2]), _xyz(plan[0], first[2])] if first else []
         pts += [] if first else [_xyz(plan[0], max(z0, 0.0))]
         pts += [_xyz(p, plane) for p in plan]

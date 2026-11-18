@@ -8,14 +8,14 @@ from pathlib import Path
 import pypdfium2
 from ezdxf.document import Drawing
 
-from floorplan_engine.drawing.layers import MIN_TEXT_MM
+from floorplan_engine.drawing.layers import BOX_TEXT_MM, MIN_TEXT_MM, W_BOX, W_TEXT
 from floorplan_engine.drawing.tables import Column, Table
 from floorplan_engine.model.geometry import Contour
 from floorplan_engine.model.schema import Electrical, Plan
 from floorplan_engine.sheets.document import build_project_document
 from floorplan_engine.sheets.layout import Panel, paginate, split_table, table_panel
 from floorplan_engine.sheets.preview import sheet_layouts
-from floorplan_engine.sheets.printing import SheetCheck, check_sheets, write_album
+from floorplan_engine.sheets.printing import SheetCheck, _text_heights, check_sheets, write_album
 from floorplan_engine.validation.issues import parse_model
 from floorplan_engine.validation.plan import validate_plan
 from tests.conftest import make_plan
@@ -113,3 +113,16 @@ def test_album_pages_have_paper_size(tmp_path: Path) -> None:
         assert abs(h / 72 * 25.4 - paper.paper_height) < 0.5
     finally:
         document.close()
+
+
+def test_box_name_is_not_counted_as_small_text() -> None:
+    """Decision 2026-11-18: the box name inside its square is BOX_TEXT_MM on purpose, the print
+    check skips its layer; the same size on another layer still counts."""
+    doc = Drawing.new()
+    for name in (W_BOX.name, W_TEXT.name):
+        doc.layers.add(name)
+    msp = doc.modelspace()
+    msp.add_text("К1", height=BOX_TEXT_MM, dxfattribs={"layer": W_BOX.name})
+    assert list(_text_heights(msp)) == []
+    msp.add_text("2,5", height=BOX_TEXT_MM, dxfattribs={"layer": W_TEXT.name})
+    assert list(_text_heights(msp)) == [BOX_TEXT_MM]

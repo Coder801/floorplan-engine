@@ -64,6 +64,10 @@ DIM_EXE_MM = 1.25  # extension line overshoot past the dimension line
 DIM_DLE_MM = 1.25  # dimension line overshoot past the extension lines
 DIM_GAP_MM = 0.8  # text above the dimension line
 MIN_TEXT_MM = 1.8  # GOST 2.304: smaller text does not print on the sheet (checked in printing.py)
+# Junction box name inside its square, in the box colour (decision 2026-11-18): below
+# MIN_TEXT_MM on purpose, the print check skips texts on printing.NAME_ONLY_LAYERS (the name is
+# in the box card too)
+BOX_TEXT_MM = 0.9
 
 
 @dataclass(frozen=True)

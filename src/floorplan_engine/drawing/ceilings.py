@@ -26,6 +26,7 @@ from __future__ import annotations
 from collections import defaultdict
 from collections.abc import Callable, Mapping, Sequence
 
+from ezdxf.colors import RGB
 from ezdxf.entities.dxfgfx import DXFGraphic
 from ezdxf.entities.lwpolyline import LWPolyline
 from ezdxf.enums import TextEntityAlignment
@@ -50,13 +51,22 @@ from floorplan_engine.drawing.elevations import (
     spread,
 )
 from floorplan_engine.drawing.ids import set_object_id, tagged
-from floorplan_engine.drawing.layers import E_ELEV, M_FIX, MIN_TEXT_MM, W_BOX, text_width
+from floorplan_engine.drawing.layers import (
+    BOX_TEXT_MM,
+    E_ELEV,
+    M_FIX,
+    MIN_TEXT_MM,
+    W_BOX,
+    text_width,
+)
 from floorplan_engine.drawing.mounting import Turns, bend_label, rounded
 from floorplan_engine.drawing.plan import add_text
+from floorplan_engine.electrical.boxes import BOX_SIZE_MM
 from floorplan_engine.electrical.bundles import Bundle
 from floorplan_engine.electrical.ceilings import (
     CeilingEnd,
     CeilingView,
+    box_key,
     dimension_key,
     dimension_spots,
     lane_key,
@@ -83,7 +93,6 @@ CODE_PAD = CODE_GAP + 2 * LABEL_MM  # room around the walls for the codes, sheet
 DASH, DASH_GAP = 0.8, 0.6  # dashed leaders to the scales, sheet mm (as on the elevations)
 STROKE_HALF = 0.8  # half a fixing line beyond the outermost cables, sheet mm
 END_R = 0.7  # line end marker radius, sheet mm
-MIN_BOX = 1.2  # box square side, not less than this on the sheet, mm
 LW_CABLE = 25  # line weight of a cable, 1/100 mm
 LW_OUTLINE = 70  # the room's inner outline: thicker than the cables
 BEND_GAP = 2.0  # from the corner to the radius label, sheet mm
@@ -150,9 +159,10 @@ def ceiling_panel(
                 top_left, origin,
             )  # fmt: skip
         # Each line's lanes are an object of their own (lane_key): its row in the side panel
-        # lights it, the viewer pages it with the view (walls.ownerOf)
-        for entity, rid in lanes:
-            set_object_id(entity, *lane_key(view, rid).split(":", 1))
+        # lights it, the viewer pages it with the view (walls.ownerOf); so is each box with its
+        # label (box_key): a click shows its hint with the box scheme
+        for entity, key in lanes:
+            set_object_id(entity, *key.split(":", 1))
         _draw_dims(psp, view, wiring, scale, origin, (xs, ys))
 
     return ElevationPanel(width, height, draw)
@@ -246,7 +256,8 @@ def _draw(
     top_left: Vec,
     origin: Vec,
 ) -> list[tuple[DXFGraphic, str]]:
-    """Draw the view; returns the cable lanes with their line ids."""
+    """Draw the view; returns the primitives with objects of their own: the cable lanes (lane_key)
+    and the boxes with their labels (box_key)."""
     bx0, by0, _, _ = view.clip.bounds
     pen = _Pen(psp, origin, bx0, by0, scale)
     at = pen.at
@@ -278,7 +289,8 @@ def _draw(
         pen.layer = cable_layers.get(rid, E_ELEV.name)
         color = colors.get(wiring.runs[k].group, DARK)
         for part in _parts(LineString([p.as_tuple() for p in lane]).intersection(view.clip)):
-            lanes.append((pen.poly([at(Vec(x, y)) for x, y in part.coords], LW_CABLE, color), rid))
+            poly = pen.poly([at(Vec(x, y)) for x, y in part.coords], LW_CABLE, color)
+            lanes.append((poly, lane_key(view, rid)))
 
     # Fixings: one line across the bundle, the number of clips or pads once per bundle piece
     pen.layer = M_FIX.name
@@ -296,11 +308,18 @@ def _draw(
     pen.layer = W_BOX.name
     for b in view.boxes:
         c = at(b.at)
-        half = max(b.size / 2 / scale, MIN_BOX / 2)
+        half = BOX_SIZE_MM / 2  # one square for every size, as on the wiring sheet (2026-11-17)
         rect = (c.x - half, c.y - half, c.x + half, c.y + half)
+        start = len(psp)
+        # White over the lines, with the label inside, as on the wiring sheet (2026-11-18)
+        back = psp.add_hatch(dxfattribs={"layer": pen.layer, "true_color": 0xFFFFFF})
+        back.set_solid_fill(rgb=RGB(255, 255, 255))
+        back.paths.add_polyline_path([p.as_tuple() for p in _corners(rect)], is_closed=True)
         pen.poly(_corners(rect), LW_WALL, BOX, close=True)
-        _place(b.label, c, half, taken, pen.label, BOX)
+        centred = TextEntityAlignment.MIDDLE_CENTER
+        add_text(psp, b.label, c, BOX_TEXT_MM, pen.layer, align=centred, color=BOX, scale=1.0)
         taken.append(rect)
+        lanes += [(psp[k], box_key(view, b.id)) for k in range(start, len(psp))]
 
     for end in view.ends:
         first = end.runs[0] if end.runs else ""

@@ -184,6 +184,13 @@ def test_epd_page_has_view_stage_tables_and_theme_objects(tmp_path: Path) -> Non
     assert dims and all(
         " мм от " in elev[0]["objects"][k]["title"] for k in dims if k in elev[0]["objects"]
     )
+    # A box on the ceiling is an object of the view with the box card of the wiring sheet
+    vboxes = {
+        k: o for p in elev for k, o in p["objects"].items() if k.startswith("vbox:r.ceiling.")
+    }
+    assert vboxes
+    key, card = next(iter(vboxes.items()))
+    assert card == pages[2]["objects"][f"box:{key.rsplit('.', 1)[1]}"] and "box" in card
     assert "estimate" not in pages[1]
 
 

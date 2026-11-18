@@ -46,7 +46,10 @@ def test_ceiling_is_one_elevation_object_with_layers() -> None:
     # each line's lanes are an object of their own: its row in the side panel lights it
     lanes = {i for i in ids if i is not None and i[0] == "lane"}
     assert lanes == {("lane", f"r.ceiling.{rid}") for rid in view.runs}
-    assert ids <= {("elevation", "r.ceiling"), *dims, *lanes}
+    # so is each box with its label: a click shows its hint with the box scheme
+    boxes = {i for i in ids if i is not None and i[0] == "vbox"}
+    assert view.boxes and boxes == {("vbox", f"r.ceiling.{b.id}") for b in view.boxes}
+    assert ids <= {("elevation", "r.ceiling"), *dims, *lanes, *boxes}
     # Layers the viewer switches: the room, the cables by purpose, the fixings
     drawn = {e.dxf.layer for e in entities}
     assert {E_ELEV.name, M_FIX.name} <= drawn and drawn & set(layers.values())

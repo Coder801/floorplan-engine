@@ -28,7 +28,7 @@ def test_legend_draws_every_sample(lang: Language) -> None:
     assert len(psp.query(f'ARC[layer=="{H_CABLE.name}"]')) == 1
     assert len(psp.query(f'LINE[layer=="{H_LEAD.name}"]')) == 1
     assert len(psp.query(f'CIRCLE[layer=="{H_SENSOR.name}"]')) == 1
-    assert len(psp.query(f'LWPOLYLINE[layer=="{H_ZONE.name}"]')) == 2
+    assert len(psp.query(f'LWPOLYLINE[layer=="{H_ZONE.name}"]')) == 1  # the cut-out; no frame
     assert [t.dxf.text for t in psp.query(f'TEXT[layer=="{H_TEXT.name}"]')] == ["ванна"]
     (reg,) = psp.query("INSERT")  # the controller, on the sheet's text layer
     assert reg.dxf.layer == H_TEXT.name

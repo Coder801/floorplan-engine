@@ -4,7 +4,7 @@ on each stage's sheet: schedules, legend, notes, wall elevations, panel front vi
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import replace
 
 from ezdxf.document import Drawing
@@ -64,9 +64,16 @@ from floorplan_engine.drawing.schedules import (
 from floorplan_engine.drawing.symbols import define_blocks
 from floorplan_engine.drawing.tables import Table, draw_table, room_schedule
 from floorplan_engine.drawing.wiring import cable_layer, draw_wiring, lay_out, wiring_notes
+from floorplan_engine.electrical.boxes import BOX_SIZE_MM, box_square
 from floorplan_engine.electrical.ceilings import ceiling_views
 from floorplan_engine.electrical.colors import group_colors
-from floorplan_engine.electrical.elevations import WaterMap, wall_elevations
+from floorplan_engine.electrical.elevations import (
+    WallElevation,
+    WaterMap,
+    electrical_walls,
+    plumbing_walls,
+    wall_elevations,
+)
 from floorplan_engine.electrical.estimate import build_estimate
 from floorplan_engine.electrical.floor_heating import heating_zones
 from floorplan_engine.electrical.mounting import PRACTICE, mounting_notes
@@ -78,7 +85,7 @@ from floorplan_engine.electrical.wiring_model import Wiring
 from floorplan_engine.model.furniture import Furniture
 from floorplan_engine.model.geometry import Contour, Vec
 from floorplan_engine.model.plumbing import Plumbing
-from floorplan_engine.model.scale import sheet_scale
+from floorplan_engine.model.scale import sheet, sheet_scale
 from floorplan_engine.model.schema import LIGHT_TYPES, Electrical, Plan, WiringEdits
 from floorplan_engine.model.texts import Language, tr
 from floorplan_engine.plumbing.estimate import build_estimate as plumbing_estimate
@@ -285,7 +292,11 @@ def draw_stages(
         )
     ]
     if elec is not None:
-        draw_electrical(msp, plan, contours, elec)
+        wiring = box_wiring(plan, contours, elec, edits)
+        # The point numbers keep off the junction boxes: white squares on the wiring sheet
+        size = sheet(BOX_SIZE_MM)
+        boxes = [box_square(b.anchor, size) for b in wiring.boxes] if wiring is not None else []
+        draw_electrical(msp, plan, contours, elec, boxes)
         specs.append(
             SheetSpec(
                 "tab_electrical",
@@ -297,7 +308,6 @@ def draw_stages(
         lighting = lighting_spec(msp, plan, contours, elec)
         if lighting is not None:
             specs.append(lighting)
-        wiring = box_wiring(plan, contours, elec, edits)
         if wiring is not None:
             draw_wiring(msp, wiring, elec, line_classes(plan, elec))
             specs.append(
@@ -330,12 +340,10 @@ def draw_stages(
         points = points_spec(plan, elec)
         if points is not None:
             specs.append(points)
-        # Wall elevations also at the end, as many sheets as needed; each room's ceiling (with
-        # its lines and fixings) goes before its walls
+        # Wall elevations also at the end, as many sheets as needed: electrical (each room's
+        # ceiling with its lines and fixings goes before its walls), then plumbing
         water = water_views(*plumbing) if plumbing is not None else None
-        elevations = elevations_spec(plan, contours, elec, wiring, water)
-        if elevations is not None:
-            specs.append(elevations)
+        specs += elevations_specs(plan, contours, elec, wiring, water)
     return doc, specs
 
 
@@ -427,43 +435,76 @@ def lighting_spec(
     )
 
 
-def elevations_spec(
+def elevations_specs(
     plan: Plan,
     contours: dict[str, Contour],
     elec: Electrical,
     wiring: Wiring | None,
     water: WaterMap | None = None,
-) -> SheetSpec | None:
-    """The "Elevations" sheets: wall after wall at the set's scale, page by page, each room's
-    ceiling before its walls (decision 2026-11-12: lines, fixings, boxes from above); first an
-    explanation of how to read them, and with wiring the installer notes, the fixings by the
-    drawing and the bend radii. No walls with electrical items and no ceilings, no sheets."""
+) -> list[SheetSpec]:
+    """The elevations sheets by section (decision 2026-11-18): "Electrical elevations" and
+    "Plumbing elevations", each with only its own walls and items. No walls, no sheets."""
     walls = wall_elevations(plan, contours, elec, wiring, water=water)
+    out = [electrical_elevations_spec(plan, contours, elec, wiring, electrical_walls(walls))]
+    out.append(plumbing_elevations_spec(plan, plumbing_walls(walls)))
+    return [spec for spec in out if spec is not None]
+
+
+def electrical_elevations_spec(
+    plan: Plan,
+    contours: dict[str, Contour],
+    elec: Electrical,
+    wiring: Wiring | None,
+    walls: Sequence[WallElevation],
+) -> SheetSpec | None:
+    """The "Electrical elevations" sheets: wall after wall at the set's scale, page by page, each
+    room's ceiling before its walls (decision 2026-11-12: lines, fixings, boxes from above);
+    first an explanation of how to read them, and with wiring the installer notes, the fixings by
+    the drawing and the bend radii. No walls with electrical items and no ceilings, no sheets."""
     ceilings = _ceiling_blocks(plan, contours, elec, wiring) if wiring is not None else {}
     if not walls and not ceilings:
         return None
     lang = plan.language
-    scale = sheet_scale()
-    colors = group_colors(elec)
     notes: list[Panel] = [notes_panel([tr("elev_notes", lang)], width=ELEV_NOTES_W)]
     if wiring is not None:
         notes += _mounting_panels(wiring, elec, lang)
+    return _elevations_spec(
+        plan, walls, group_colors(elec), notes, ceilings, "tab_elevations", "elevations_image"
+    )
+
+
+def plumbing_elevations_spec(plan: Plan, walls: Sequence[WallElevation]) -> SheetSpec | None:
+    """The "Plumbing elevations" sheets: the walls with water outlets and drains, how to read
+    them first. No such walls, no sheets."""
+    if not walls:
+        return None
+    notes = [notes_panel([tr("elev_notes_plumbing", plan.language)], width=ELEV_NOTES_W)]
+    return _elevations_spec(
+        plan, walls, {}, notes, {}, "tab_plumbing_elevations", "plumbing_elevations_image"
+    )
+
+
+def _elevations_spec(
+    plan: Plan,
+    walls: Sequence[WallElevation],
+    colors: Mapping[str, int],
+    notes: Sequence[Panel],
+    ceilings: Mapping[str, list[Panel]],
+    tab: str,
+    image: str,
+) -> SheetSpec:
+    """Elevations sheets: the notes, then room by room its ceilings and walls, page by page."""
+    scale = sheet_scale()
     blocks: list[Panel] = []
     for room in plan.rooms:
         blocks += ceilings.get(room.id, [])
         blocks += [
-            _panel(elevation_panel(e, scale, lang, colors)) for e in walls if e.room == room.id
+            _panel(elevation_panel(e, scale, plan.language, colors))
+            for e in walls
+            if e.room == room.id
         ]
     nothing: Callable[[float, float], Panel | None] = lambda w, h: None  # noqa: E731
-    return SheetSpec(
-        "tab_elevations",
-        "elevations_image",
-        (),
-        body=nothing,
-        wide=True,
-        spill=(*notes, *blocks),
-        paged=True,
-    )
+    return SheetSpec(tab, image, (), body=nothing, wide=True, spill=(*notes, *blocks), paged=True)
 
 
 def _panel(block: ElevationPanel) -> Panel:

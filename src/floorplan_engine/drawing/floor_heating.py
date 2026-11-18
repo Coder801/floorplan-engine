@@ -12,14 +12,17 @@ sheet): the viewer highlights the zone and shows its card.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping, Sequence
 from dataclasses import replace
 
+import shapely
 from ezdxf.colors import RGB
 from ezdxf.entities.hatch import Hatch
 from ezdxf.enums import TextEntityAlignment
 from ezdxf.layouts.base import BaseLayout
 from ezdxf.layouts.layout import Modelspace
+from shapely.geometry import box
 from shapely.geometry.base import BaseGeometry
 from shapely.geometry.polygon import orient
 from shapely.ops import polylabel
@@ -67,13 +70,16 @@ SENSOR_MM = 1.2  # sensor circle radius on the sheet
 ZONE_TINT = 0xFF9933
 ZONE_ALPHA = 0.85  # transparency of the tint, 0 opaque … 1 invisible
 # Its border: a red frame with slightly rounded corners, over the tint
-FRAME_COLOR = 0xD32F2F
-FRAME_LW = 35  # 1/100 mm: bolder than the cable, so the frame reads as the border
+FRAME_COLOR = 0xD32F2F  # the zone card frame on the sheet, the area frame in 3D
 FRAME_RADIUS_MM = 1.2  # corner radius, sheet mm
 # The cable inside is the same red, a little paler: the frame stays the strongest red line
 CABLE_COLOR = 0xEF7B7B
-LABEL_PAD_MM = 1.5  # the zone label block: padding of its white backing
-LABEL_SLACK = 1.15  # the backing is this much wider than the font metrics say: viewer fonts differ
+LABEL_PAD_MM = 2.5  # the zone label block: padding of its white backing, the frame stays clear
+LABEL_RADIUS_MM = 1.0  # its corner radius, sheet mm
+LABEL_LW = 18  # 1/100 mm: its frame, thinner than the zone border
+CARD_STEP_MM = 2.0  # the card moves off the centre in steps this long, sheet mm
+LABEL_WIDTH_MM = 40.0  # a longer zone name wraps at this width, sheet mm
+LABEL_SLACK = 1.3  # the backing is this much wider than the font metrics say: viewer fonts differ
 LINE_GAP_MM = 0.8  # between the lines of the zone label block
 REG_NUMBER_GAP_MM = 0.8  # the controller number this far past its symbol, sheet mm
 
@@ -132,31 +138,76 @@ def _tint(msp: Modelspace, geom: BaseGeometry) -> None:
 
 
 def zone_block(zone: HeatingZone, lang: Language) -> list[tuple[str, float]]:
-    """Lines of the zone label block on the sheet: (text, height mm). The name, then what the
-    installer lays: section length and power, pitch."""
-    lines = [(zone_label(zone), TEXT_ROOM_MM)]
+    """Lines of the zone label block on the sheet: (text, height mm). The room or zone name
+    (decision 2026-11-18: not "ТП1", that stays in the table), wrapped to LABEL_WIDTH_MM, then
+    area and power, then what the installer lays: section length and pitch."""
+    lines = [(t, TEXT_ROOM_MM) for t in _wrap(zone.name, TEXT_ROOM_MM, LABEL_WIDTH_MM)]
     lines.append((f"{_num(zone.area_m2)} м² · {zone.power:.0f} Вт", TEXT_SMALL_MM))
     pitch = f" · {tr('fh_pitch_short', lang)} {zone.pitch:.0f}" if zone.pitch is not None else ""
     lines.append((f"{zone.length:g} м{pitch}", TEXT_SMALL_MM))
     return lines
 
 
+def _wrap(text: str, height: float, width: float) -> list[str]:
+    """Words of text in lines no wider than width (sheet mm, font metrics); a longer word keeps
+    a line of its own."""
+    out: list[str] = []
+    for word in text.split():
+        if out and text_width(f"{out[-1]} {word}", height) <= width:
+            out[-1] = f"{out[-1]} {word}"
+        else:
+            out.append(word)
+    return out or [text]
+
+
+def card_centre(area: BaseGeometry, width: float, height: float) -> Vec | None:
+    """Centre of the zone card (decision 2026-11-18): the centre of the largest piece of the
+    heated area if the card (width × height, model mm) fits inside there, else the spot
+    nearest to it where it fits (a CARD_STEP_MM grid on the sheet), else the point deepest
+    inside the piece; None for an empty area."""
+    piece = max(getattr(area, "geoms", [area]), key=lambda g: float(g.area))
+    if piece.is_empty:
+        return None
+    mid = piece.centroid
+    step = sheet(CARD_STEP_MM)
+    x0, y0, x1, y1 = piece.bounds
+    xs = range(math.floor((x0 - mid.x) / step), math.ceil((x1 - mid.x) / step) + 1)
+    ys = range(math.floor((y0 - mid.y) / step), math.ceil((y1 - mid.y) / step) + 1)
+    spots = sorted((i * i + j * j, i, j) for i in xs for j in ys)
+    shapely.prepare(piece)
+    hw, hh = width / 2, height / 2
+    for _, i, j in spots:
+        x, y = mid.x + i * step, mid.y + j * step
+        if piece.contains(box(x - hw, y - hh, x + hw, y + hh)):
+            return Vec(x, y)
+    p = polylabel(piece, tolerance=10.0)
+    return Vec(p.x, p.y)
+
+
 def _label_block(msp: Modelspace, zone: HeatingZone, lang: Language) -> None:
-    """The zone's data on a white sticker at the point deepest inside the heated area."""
-    biggest = max(getattr(zone.area, "geoms", [zone.area]), key=lambda g: float(g.area))
-    if biggest.is_empty:
-        return
-    c = polylabel(biggest, tolerance=10.0)
+    """The zone's data in a white card with rounded corners and a thin red frame, in the
+    middle of the heated area (card_centre). Drawn after every zone, so nothing on the sheet
+    covers it."""
     lines = zone_block(zone, lang)
     k = sheet(1.0)
     width = LABEL_SLACK * max(text_width(t, h) for t, h in lines) + 2 * LABEL_PAD_MM
     height = sum(h for _, h in lines) + LINE_GAP_MM * (len(lines) - 1) + 2 * LABEL_PAD_MM
-    x0, y0 = c.x - k * width / 2, c.y - k * height / 2
+    c = card_centre(zone.area, k * width, k * height)
+    if c is None:
+        return
+    r = k * LABEL_RADIUS_MM
+    card = box(
+        c.x - k * width / 2 + r, c.y - k * height / 2 + r,
+        c.x + k * width / 2 - r, c.y + k * height / 2 - r,
+    ).buffer(r, quad_segs=4)  # fmt: skip
+    ring = [(x, y) for x, y in list(card.exterior.coords)[:-1]]
     back = msp.add_hatch(dxfattribs={"layer": H_TEXT.name, "true_color": 0xFFFFFF})
     back.set_solid_fill(rgb=RGB.from_hex("#ffffff"))
-    back.paths.add_polyline_path(
-        [(x0, y0), (x0 + k * width, y0), (x0 + k * width, y0 + k * height), (x0, y0 + k * height)],
-        is_closed=True,
+    back.paths.add_polyline_path(ring, is_closed=True)
+    msp.add_lwpolyline(
+        ring,
+        close=True,
+        dxfattribs={"layer": H_TEXT.name, "lineweight": LABEL_LW, "true_color": FRAME_COLOR},
     )
     y = c.y + k * (height / 2 - LABEL_PAD_MM)
     for text, h in lines:
@@ -169,12 +220,7 @@ def _draw_zone(
 ) -> None:
     area = rounded(zone.area, sheet(FRAME_RADIUS_MM))
     _tint(msp, area)
-    for ring in _rings(area):
-        msp.add_lwpolyline(
-            ring,
-            close=True,
-            dxfattribs={"layer": H_ZONE.name, "lineweight": FRAME_LW, "true_color": FRAME_COLOR},
-        )
+    # No red border round the area (decision 2026-11-18): the tint and the cable show it
     for spot in zone.blocked:
         if spot.kind == "furniture":
             continue  # the furniture layer draws the piece with its label
@@ -187,7 +233,6 @@ def _draw_zone(
     if zone.route is None:
         return
     attribs = {"layer": H_CABLE.name, "lineweight": LW_HEAT, "true_color": CABLE_COLOR}
-    _label_block(msp, zone, lang)
     for piece in zone.route.pieces:
         if isinstance(piece, Straight):
             if piece.length > 1e-6:
@@ -238,6 +283,12 @@ def draw_floor_heating(
             if number is not None:
                 lines = [v for z in zones if z.spec.thermostat == pt.id for v in z.lead + z.sensor]
                 _reg_number(msp, str(number), anchor, lines)
+    # Zone cards last: over the tint, the cable, the leads and the controllers
+    for zone in zones:
+        if zone.route is None:
+            continue
+        with tagged(msp, "heating", zone.spec.id):
+            _label_block(msp, zone, plan.language)
 
 
 def _reg_number(msp: Modelspace, text: str, anchor: Anchor, lines: Sequence[Vec]) -> None:

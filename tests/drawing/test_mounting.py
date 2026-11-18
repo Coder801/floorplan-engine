@@ -47,7 +47,7 @@ def test_bundle_turn_gets_radii_inner_first_both_directions() -> None:
     assert len(bends) == 1
     bend = bends[0]
     assert bend.at == Vec(2000, 0) and set(bend.runs) == {"a", "b", "c"}
-    assert list(bend.radii) == sorted(bend.radii) and bend.radii[0] >= 115 + 2 * 11.5
+    assert list(bend.radii) == sorted(bend.radii) and bend.radii[0] == 70
     assert bend_label(bend).startswith("R")
 
 
@@ -59,14 +59,14 @@ def test_bends_table_lists_known_types() -> None:
 
 
 def test_single_line_turn_is_signed_with_its_radius_and_rounded() -> None:
-    """A turn of one line: its smallest radius (no reserve), "R115"; the lane corner gets it."""
+    """A turn of one line: its radius, "R70"; the lane corner gets it."""
     wiring = Wiring(
         2700.0, False, (), (_line("a", [Vec(0, 0), Vec(2000, 0), Vec(2000, 2000)], "3x1.5"),)
     )
     paths, _ = lay_out(wiring)
     turns = lane_turns(wiring, paths, "none")
-    assert [bend_label(b) for b in turns.bends] == ["R115"]
-    assert turns.fillets == {(0, 1): 115.0}
+    assert [bend_label(b) for b in turns.bends] == ["R70"]
+    assert turns.fillets == {(0, 1): 70.0}
     assert bundle_bends(wiring, paths, "none") == []  # one line is not a bundle
 
 

@@ -20,6 +20,7 @@ from floorplan_engine.epd.artifact import (
     read_artifact,
     render_page_png,
 )
+from floorplan_engine.epd.objects import ObjectInfo
 from floorplan_engine.model.schema import Electrical, Plan
 from floorplan_engine.sheets.document import build_project_document
 from floorplan_engine.validation.issues import parse_model
@@ -83,7 +84,7 @@ def test_artifact_round_trip(tmp_path: Path) -> None:
     assert manifest["format"] == FORMAT_NAME and manifest["version"] == FORMAT_VERSION
     assert manifest["project"] == {"name": "тест", "language": "ru"}
     names = [p["name"] for p in manifest["pages"]]
-    assert names == ["01 План", "02 Электрика", "03 Точки", "04 Развёртки"]
+    assert names == ["01 План", "02 Электрика", "03 Точки", "04 Развёртки электрики"]
     for meta, page in zip(manifest["pages"], pages, strict=True):
         width, height = page["size"]
         assert meta["size"] == page["size"] and page["format"].startswith("A")
@@ -97,6 +98,29 @@ def test_artifact_round_trip(tmp_path: Path) -> None:
     layers = {item["l"] for item in pages[1]["items"]}
     assert {"A-WALL", "E-SOCKET", "A-SHEET"} <= layers
     assert "A-DIMS" not in layers  # frozen in the electrical sheet viewport
+
+
+def test_elevations_page_gets_cards_of_its_boxes(tmp_path: Path) -> None:
+    doc, plan = _project(tmp_path)
+    _, pages = read_artifact(export_artifact(doc, plan, tmp_path / "probe.epd"))
+    page = next(p for p in pages if p.get("stage") == "elevations")
+    key = next(item["o"] for item in page["items"] if item.get("o", "").startswith("elevation:"))
+    elevations = [
+        {"key": key, "boxes": [{"key": "box:b1"}]},
+        {"key": "elevation:other.w1", "boxes": [{"key": "box:b2"}]},  # not on this sheet
+    ]
+    objects = {
+        "box:b1": ObjectInfo("Коробка К1", (("Группа", "QF1"),)),
+        "box:b2": ObjectInfo("Коробка К2", ()),
+    }
+    epd = export_artifact(
+        doc, plan, tmp_path / "project.epd", objects=objects, elevations=elevations
+    )
+    _, pages = read_artifact(epd)
+    page = next(p for p in pages if p.get("stage") == "elevations")
+    assert [e["key"] for e in page["elevations"]] == [key]
+    assert page["objects"]["box:b1"]["title"] == "Коробка К1"
+    assert "box:b2" not in page["objects"]
 
 
 def test_model_transform_maps_model_to_sheet(tmp_path: Path) -> None:

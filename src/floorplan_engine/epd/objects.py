@@ -25,6 +25,7 @@ from floorplan_engine.electrical.anchors import symbol_key
 from floorplan_engine.electrical.boxes import BOX_CLEARANCE, BOX_TITLES, box_wall
 from floorplan_engine.electrical.ceilings import (
     CeilingView,
+    box_key,
     ceiling_lines,
     ceiling_views,
     dimension_key,
@@ -52,6 +53,7 @@ from floorplan_engine.electrical.wiring_model import (
     Wiring,
     line_starts,
 )
+from floorplan_engine.epd.box_card import box_card
 from floorplan_engine.model.furniture import Furniture
 from floorplan_engine.model.geometry import Contour, RoomGeometry, Vec, room_geometries
 from floorplan_engine.model.schema import (
@@ -156,8 +158,9 @@ TEXT: dict[str, dict[str, str]] = {
     "water_on_wall": {"ru": "Подводов воды и выпусков", "uk": "Підводів води і випусків"},
 }
 CARD_LOADS = 8  # loads shown on a device card; the rest as "N more"
-# Points whose pinned hint draws the frame they stand in, even when alone in it
-FRAME_TYPES = (*BLOCK_TYPES, PointType.SWITCH, PointType.PASS_SWITCH)
+# Points whose pinned hint draws the frame they stand in, even when alone in it (a floor heating
+# thermostat too: a plate "t°" on its own or beside sockets)
+FRAME_TYPES = (*BLOCK_TYPES, PointType.SWITCH, PointType.PASS_SWITCH, PointType.THERMOSTAT)
 
 
 def text(key: str, language: Language, **values: object) -> str:
@@ -172,11 +175,15 @@ class ObjectInfo:
     # Short card for the simple interface mode: where a line runs, without group, cable and
     # lengths (wiring lines and boxes)
     brief: ObjectInfo | None = None
+    # Junction box: where its cables come from and go to (box_card, decision 2026-11-17)
+    box: dict[str, object] | None = None
 
     def as_dict(self) -> dict[str, object]:
         out: dict[str, object] = {"title": self.title, "rows": [list(r) for r in self.rows]}
         if self.block is not None:
             out["block"] = self.block
+        if self.box is not None:
+            out["box"] = self.box
         if self.brief is not None:
             out["brief"] = self.brief.as_dict()
         return out
@@ -308,6 +315,10 @@ def describe_objects(
                     f"{view.room_name} — {plane}", card
                 )
                 out.update(_dimension_cards(view, wiring, lang))
+                # A box on the view: the box card of the wiring sheet, with its scheme
+                for b in view.boxes:
+                    if f"box:{b.id}" in out:
+                        out[box_key(view, b.id)] = out[f"box:{b.id}"]
                 # A line on the view: the card of its wiring line plus its length in this room
                 for ln in ceiling_lines(plan, elec, wiring, view):
                     line = out.get(f"wire:{ln.run}")
@@ -504,7 +515,8 @@ def _electrical(
                 rows.append((text("wet", lang), text("ip44", lang)))
             title = text("box", lang, label=b.label)
             brief = ObjectInfo(title, (rows[1], rows[4]))  # room and height
-            out[f"box:{b.id}"] = ObjectInfo(title, tuple(rows), brief=brief)
+            card = box_card(b, wiring, numbers, points, short)
+            out[f"box:{b.id}"] = ObjectInfo(title, tuple(rows), brief=brief, box=card)
 
     if elec.board is not None:
         groups = sorted({r.group for r in wiring.runs}) if wiring else []

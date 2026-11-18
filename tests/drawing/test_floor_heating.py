@@ -20,7 +20,6 @@ from floorplan_engine.drawing.layers import (
     H_SENSOR,
     H_TEXT,
     H_ZONE,
-    LW_HEAT,
     new_document,
 )
 from floorplan_engine.electrical.floor_heating import heating_zones
@@ -57,10 +56,21 @@ def test_sheet_has_the_serpentine_tagged_with_its_zone() -> None:
     assert msp.query(f'CIRCLE[layer=="{H_SENSOR.name}"]')  # the sensor
     regs = msp.query(f'INSERT[layer=="{H_TEXT.name}"]')
     assert [object_id(r) for r in regs] == [("point", "t1")]
-    # The zone block names the zone, its section and the pitch; no pitch dimension since
-    # 2026-11-17 (the block carries it), no zone name at the sensor
+    # The zone card names the room (2026-11-18: not "ТП1", that stays in the table), its area
+    # and power, the section and the pitch; no pitch dimension since 2026-11-17
     texts = [t.dxf.text for t in msp.query(f'TEXT[layer=="{H_TEXT.name}"]')]
-    assert "ТП1" in texts and any(f"{zone.length:g} м · шаг {zone.pitch:.0f}" == t for t in texts)
+    assert zone.name in texts and "ТП1" not in texts
+    assert any(f"{zone.length:g} м · шаг {zone.pitch:.0f}" == t for t in texts)
+    assert any(t.endswith(f"{zone.power:.0f} Вт") for t in texts)
+    # The card: white backing in a thin red frame, drawn after the cable, so it stays on top
+    entities = list(msp)
+    card = [
+        e for e in entities if e.dxf.layer == H_TEXT.name and object_id(e) == ("heating", "fh1")
+    ]
+    kinds = [e.dxftype() for e in card]
+    assert kinds[:2] == ["HATCH", "LWPOLYLINE"] and card[1].dxf.true_color == FRAME_COLOR
+    last_cable = max(i for i, e in enumerate(entities) if e.dxf.layer == H_CABLE.name)
+    assert min(entities.index(e) for e in card) > last_cable
     assert not msp.query(f'DIMENSION[layer=="{H_TEXT.name}"]')
     # The controller's number next to its symbol, tagged with its point
     reg_texts = [
@@ -69,11 +79,8 @@ def test_sheet_has_the_serpentine_tagged_with_its_zone() -> None:
     assert [t.dxf.text for t in reg_texts] == ["1"]
     (tint,) = msp.query(f'HATCH[layer=="{H_ZONE.name}"]')
     assert isinstance(tint, Hatch) and tint.transparency == pytest.approx(0.85, abs=0.01)
-    # The area's border is a red frame, bolder than the cable; the cable is a paler red
-    frames = msp.query(f'LWPOLYLINE[layer=="{H_ZONE.name}"]')
-    assert frames and all(f.dxf.true_color == FRAME_COLOR for f in frames)
-    assert all(f.dxf.lineweight > LW_HEAT for f in frames)
-    assert len(frames[0]) > 4  # the rectangle's corners are rounded
+    # No red border round the area since 2026-11-18: the tint and the cable show it
+    assert not msp.query(f'LWPOLYLINE[layer=="{H_ZONE.name}"]')
     assert all(a.dxf.true_color == CABLE_COLOR for a in arcs)
     _, without = draw_stages(plan, contours, _elec(heating=False))
     assert "tab_floor_heating" not in [s.tab_key for s in without]
@@ -172,6 +179,23 @@ def test_cut_outs_are_outlines_with_labels_not_hatches() -> None:
     labels = {t.dxf.text for t in msp.query(f'TEXT[layer=="{H_TEXT.name}"]')}
     assert {"ванна", "подіум"} <= labels and "k" not in labels
     outlines = msp.query(f'LWPOLYLINE[layer=="{H_ZONE.name}"]')
-    # The heated area (its outer ring and the hole round the exclude), the fixture, the exclude;
-    # the furniture piece is not drawn here
-    assert len(outlines) == 4
+    # The fixture and the exclude; no frame round the heated area since 2026-11-18, the
+    # furniture piece is not drawn here
+    assert len(outlines) == 2
+
+
+def test_zone_card_is_centred_in_the_heated_area() -> None:
+    """Decision 2026-11-18: the card stands in the middle of the heated area; where it does not
+    fit there (an L), at the nearest spot where it does."""
+    from shapely.geometry import Polygon
+    from shapely.geometry import box as shapely_box
+
+    from floorplan_engine.drawing.floor_heating import card_centre
+
+    c = card_centre(shapely_box(0, 0, 4000, 2000), 800, 400)
+    assert c is not None and (c.x, c.y) == pytest.approx((2000, 1000))
+    ell = Polygon([(0, 0), (4000, 0), (4000, 1000), (1000, 1000), (1000, 4000), (0, 4000)])
+    c = card_centre(ell, 800, 400)
+    assert c is not None
+    assert ell.contains(shapely_box(c.x - 400, c.y - 200, c.x + 400, c.y + 200))
+    assert card_centre(Polygon(), 10, 10) is None

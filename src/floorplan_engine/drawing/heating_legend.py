@@ -15,8 +15,6 @@ from shapely.geometry import box as shapely_box
 from floorplan_engine.drawing.electrical import insert_symbol
 from floorplan_engine.drawing.floor_heating import (
     CABLE_COLOR,
-    FRAME_COLOR,
-    FRAME_LW,
     FRAME_RADIUS_MM,
     rounded,
     tint_hatch,
@@ -83,7 +81,7 @@ def _box(psp: Paperspace, mid: Vec) -> list[tuple[float, float]]:
 
 
 def _area(psp: Paperspace, mid: Vec) -> None:
-    """The heated area as on the sheet: the tint under its red frame with rounded corners."""
+    """The heated area as on the sheet: the tint with rounded corners, no frame (2026-11-18)."""
     box = rounded(
         shapely_box(mid.x, mid.y - BOX_H_MM / 2, mid.x + SAMPLE_MM, mid.y + BOX_H_MM / 2),
         FRAME_RADIUS_MM,
@@ -91,11 +89,6 @@ def _area(psp: Paperspace, mid: Vec) -> None:
     assert isinstance(box, Polygon)
     pts = [(x, y) for x, y in list(box.exterior.coords)[:-1]]
     tint_hatch(psp).paths.add_polyline_path(pts, is_closed=True)
-    psp.add_lwpolyline(
-        pts,
-        close=True,
-        dxfattribs={"layer": H_ZONE.name, "lineweight": FRAME_LW, "true_color": FRAME_COLOR},
-    )
 
 
 def _cut(psp: Paperspace, mid: Vec) -> None:

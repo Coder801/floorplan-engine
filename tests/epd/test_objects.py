@@ -394,6 +394,21 @@ def test_frame_card_shows_every_point_of_the_frame() -> None:
     assert switch["x"] == frame["x"] and switch["wall"] == frame["wall"]
 
 
+def test_lone_thermostat_card_shows_its_frame() -> None:
+    """A floor heating thermostat alone on the wall still gets the frame scheme in its hint."""
+    plan, contours, elec, _ = _model()
+    s1 = next(p for p in elec.points if p.id == "s1")
+    reg = ElectricalPoint.model_validate(
+        {"room": s1.room, "wall": s1.wall, "offset": (s1.offset or 0) + 500,
+         "height": 1300, "id": "tx", "type": "thermostat", "group": s1.group}
+    )  # fmt: skip
+    elec = elec.model_copy(update={"points": [*elec.points, reg]})
+    cards = describe_objects(plan, contours, elec, None)
+    frame = cards["point:tx"].block
+    assert frame is not None and frame["posts"] == 1 and frame["y"] == 1300
+    assert frame["items"] == [{"type": "thermostat", "posts": 1, "own": True}]
+
+
 def test_floor_heating_page_has_its_zone_card(tmp_path: Path) -> None:
     from floorplan_engine.epd.objects import heating_cards
 

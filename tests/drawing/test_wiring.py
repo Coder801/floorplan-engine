@@ -1,4 +1,4 @@
-"""Wiring sheet: route pieces along axes and small formatters, without DXF."""
+"""Wiring sheet: route pieces along axes, small formatters, turns and wall ends."""
 
 from __future__ import annotations
 
@@ -6,9 +6,18 @@ import math
 
 import pytest
 
-from floorplan_engine.drawing.wiring import _m, _readable, _unit
+from floorplan_engine.drawing.wiring import (
+    _m,
+    _readable,
+    _to_walls,
+    _unit,
+    lay_out,
+    turned,
+)
 from floorplan_engine.electrical.bundles import Bundle, Segment, segments
+from floorplan_engine.electrical.wiring_model import Run, Wiring
 from floorplan_engine.model.geometry import Vec
+from floorplan_engine.model.scale import sheet
 
 
 def test_segments_axis_and_order_of_ends() -> None:
@@ -100,3 +109,38 @@ def test_label_box_covers_the_real_text_with_descender(along: Vec) -> None:
     x0, y0, x1, y1 = rect.bounds
     assert x0 <= ext.extmin.x + tol and y0 <= ext.extmin.y + tol
     assert x1 >= ext.extmax.x - tol and y1 >= ext.extmax.y - tol
+
+
+def test_turned_rounds_a_cable_at_its_radius_and_low_voltage_small() -> None:
+    """Wiring sheet turns (decision 2026-11-17): a bare 3x1.5 turns at 70 mm, as on the ceiling
+    views; a cable without sizes (UTP) gets the small sheet fillet."""
+    path = (Vec(0, 0), Vec(2000, 0), Vec(2000, 2000))
+    far = tuple(p + Vec(0, 5000) for p in path)
+    runs = (
+        Run("a", "QF1", "3x1.5", False, "board", "a", path, 4000.0, 0.0, 0.0, 0.0),
+        Run("u", "QF1", "UTP", False, "board", "u", far, 4000.0, 0.0, 0.0, 0.0),
+    )
+    wiring = Wiring(2700.0, False, (), runs)
+    paths, _ = lay_out(wiring)
+    drawn = turned(wiring, paths, "none")
+    # the arc starts 70 mm before the corner on a right angle (tangent length = radius)
+    assert drawn[0][1].x == pytest.approx(paths[0][1].x - 70.0)
+    assert drawn[1][1].x == pytest.approx(paths[1][1].x - sheet(1.5))
+
+
+def test_to_walls_carries_point_ends_on_to_the_wall() -> None:
+    # point p1 at the wall y=0 (symbol tip 60 mm into the room) → point p2, a daisy chain
+    path = (Vec(0, 60), Vec(0, 1000), Vec(500, 1000), Vec(500, 60))
+    run = Run("w", "QF1", "3x1.5", False, "p1", "p2", path, 2000.0, 1900.0, 1900.0, 0.0)
+    walls = {"p1": 60.0, "p2": 60.0}
+    got = _to_walls(path, walls, run)
+    want = [(0, 0), (0, 1000), (500, 1000), (500, 0)]
+    assert [(v.x, v.y) for v in got] == [pytest.approx(w, abs=1e-9) for w in want]
+
+
+def test_to_walls_keeps_boxes_ceiling_points_and_ends_without_a_drop() -> None:
+    path = (Vec(0, 60), Vec(0, 1000))
+    to_box = Run("w", "QF1", "3x1.5", False, "board", "box_1", path, 940.0, 0.0, 0.0, 0.0)
+    assert _to_walls(path, {"p1": 60.0}, to_box) == list(path)
+    no_drop = Run("w", "QF1", "3x1.5", False, "p1", "p2", path, 940.0, 0.0, 0.0, 0.0)
+    assert _to_walls(path, {"p1": 60.0, "p2": 60.0}, no_drop) == list(path)

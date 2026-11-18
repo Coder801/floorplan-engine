@@ -24,11 +24,11 @@ from floorplan_engine.drawing.layers import (
 )
 from floorplan_engine.drawing.plan import add_text
 from floorplan_engine.electrical.elevations import (
-    POST_PITCH_MM,
     CableView,
     WallElevation,
     behind_text,
 )
+from floorplan_engine.electrical.frames import POST_PITCH_MM
 from floorplan_engine.electrical.point_numbers import ranges
 from floorplan_engine.model.geometry import Vec
 from floorplan_engine.model.schema import PointType
@@ -152,6 +152,14 @@ def _draw(
     def at(x: float, y: float) -> Vec:
         return Vec(x0 + x / scale, floor + y / scale)
 
+    r = max(34.0 / scale, MIN_SYMBOL)  # flush box Ø68
+    pitch = max(POST_PITCH_MM / scale, 2 * r)
+    in_frame = frame_x(e, scale, pitch)
+
+    def on_wall(x: float, y: float) -> Vec:
+        """Spot of a chase, cable or fixing: at a frame's side where the frame is drawn."""
+        return Vec(x0 + in_frame(x), floor + y / scale)
+
     def line(a: Vec, b: Vec, lw: int = LW_THIN, color: int = DARK) -> None:
         psp.add_line(
             a.as_tuple(),
@@ -213,9 +221,9 @@ def _draw(
     for ch in e.chases:
         half = max((50.0 if ch.wide else 30.0) / 2 / scale, 0.3)
         fill = CHASE_LOW if ch.low else CHASE
-        a, b = at(ch.x, ch.y0), at(ch.x, ch.y1)
+        a, b = on_wall(ch.x, ch.y0), on_wall(ch.x, ch.y1)
         if ch.x1 is not None:  # the turn past an opening, along the wall
-            c = at(ch.x1, ch.y0)
+            c = on_wall(ch.x1, ch.y0)
             rect(
                 (min(a.x, c.x) - half, a.y - half, max(a.x, c.x) + half, a.y + half),
                 LW_THIN,
@@ -229,12 +237,12 @@ def _draw(
     # A turn past an opening is an arc of its bend radius, one centre for the bundle, signed
     # "R130–160" (decision 2026-11-13). Labels keep off the cables: a moved one gets a dashed
     # leader to what it names
-    pitch = CABLE_PITCH_SHEET
+    lane = CABLE_PITCH_SHEET
     by_x: dict[float, list[str]] = {}
     for cable in e.cables:
         if cable.x1 is None:
             by_x.setdefault(cable.x, []).append(cable.run)
-    turns = _turns(e, by_x, pitch, scale, at)
+    turns = _turns(e, by_x, lane, scale, on_wall)
     cable_boxes: list[Box] = []
     for cable in e.cables:
         color = colors.get(cable.group, DARK)
@@ -261,8 +269,8 @@ def _draw(
                 (min(centre.x, end.x), end.y - room, max(centre.x, end.x), end.y + room),
             ]
             continue
-        dx = (by_x[cable.x].index(cable.run) - (len(by_x[cable.x]) - 1) / 2) * pitch
-        a, b = at(cable.x, cable.y0), at(cable.x, cable.y1)
+        dx = (by_x[cable.x].index(cable.run) - (len(by_x[cable.x]) - 1) / 2) * lane
+        a, b = on_wall(cable.x, cable.y0), on_wall(cable.x, cable.y1)
         # The end on the route plane goes on past the wall: the cable runs on in the floor or
         # ceiling; the end at a turn stops where its arc starts
         lo = a.y - CABLE_OUT if cable.y0 <= 0.5 else a.y
@@ -278,8 +286,8 @@ def _draw(
     counts: list[tuple[str, Vec, float]] = []  # fixing counts: label, stroke middle, half
     tops = {f.x: max(g.y for g in e.fixings if g.x == f.x) for f in e.fixings}
     for f in e.fixings:
-        spot = at(f.x, f.y)
-        half = FIXING_HALF_MM + (max(f.count, len(by_x.get(f.x, ()))) - 1) / 2 * pitch
+        spot = on_wall(f.x, f.y)
+        half = FIXING_HALF_MM + (max(f.count, len(by_x.get(f.x, ()))) - 1) / 2 * lane
         stroke = psp.add_line(
             (spot.x - half, spot.y),
             (spot.x + half, spot.y),
@@ -349,8 +357,6 @@ def _draw(
 
     # Outlets on the far side of the wall are faint, below their own, without dimensions
     # (those are on the elevation of that side)
-    r = max(34.0 / scale, MIN_SYMBOL)  # flush box Ø68
-    pitch = max(POST_PITCH_MM / scale, 2 * r)
     for p in e.back:
         c = at(p.x, p.y)
         first = c.x + p.slot * pitch - pitch * (p.posts - 1) / 2
@@ -495,6 +501,22 @@ def _quarter(v: Vec) -> tuple[float, float]:
     a = 180.0 if v.x < 0 else 0.0  # the tangent point on the drop
     b = 270.0 if v.y < 0 else 90.0  # the tangent point on the arm along the wall
     return (a, b) if (b - a) % 360 == 90 else (b, a)
+
+
+def frame_x(e: WallElevation, scale: float, pitch: float) -> Callable[[float], float]:
+    """Sheet x from the wall start of a drop, chase or fixing (decision 2026-11-17): a symbol
+    is drawn no smaller than MIN_SYMBOL, so a block may be wider on the sheet than on the wall
+    (pitch: sheet mm per post); a spot inside a frame keeps its place in posts, the cable at the
+    side of a block stays at the side of the drawn one."""
+    frames = sorted({(p.x, p.frame) for p in e.points})
+
+    def x_of(x: float) -> float:
+        for cx, n in frames:
+            if abs(x - cx) <= n * POST_PITCH_MM / 2 + 0.5:
+                return cx / scale + (x - cx) / POST_PITCH_MM * pitch
+        return x / scale
+
+    return x_of
 
 
 def _bend_labels(

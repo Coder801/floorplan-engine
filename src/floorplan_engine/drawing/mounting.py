@@ -1,9 +1,9 @@
 """Mounting parts of the room unfolds (drawing/ceilings.py): the bundle turns with their radii
 and the tables "Fixings by the drawing" and "Smallest bend radius". At a turn of two or more
-lines the radii of the inner and the outer line are signed, "R130–160" (bundle_radii: the inner
-line is the reference, lanes are kept free for cables added later); a single line, its smallest
-radius, "R115". On the ceiling view a turn is drawn round with that radius (lane_turns, rounded;
-decision 2026-11-17): the routes are square, the cable is not bent at 90°.
+lines the radii of the inner and the outer line are signed, "R70–95" (bundle_radii: the inner
+line is the reference, each next one a cable width farther out); a single line, its radius,
+"R70". On the ceiling view and on the wiring sheet a turn is drawn round with that radius
+(lane_turns, rounded; decision 2026-11-17): the routes are square, the cable is not bent at 90°.
 """
 
 from __future__ import annotations
@@ -156,7 +156,7 @@ def lane_turns(
         if not sized:
             continue
         sizes = [t[2] for t in sized]
-        radii = bundle_radii(sizes, norms) if len(sized) > 1 else [sizes[0].radius]
+        radii = bundle_radii(sizes)
         if len(sized) > 1 or _real_turn(wiring, sized[0][3], sized[0][4], radii[0]):
             bends.append(Bend(corner, inside, tuple(t[1] for t in sized), tuple(radii)))
         # The reference line: its lane turns at its radius around the centre on the bisector;
@@ -222,7 +222,7 @@ def rounded(path: Sequence[Vec], radii: Mapping[int, float], step_deg: float = 1
 
 
 def bend_label(bend: Bend) -> str:
-    """The radius label: "R130–160" for a bundle (inner and outer line), "R115" for one line."""
+    """The radius label: "R70–95" for a bundle (inner and outer line), "R70" for one line."""
     if len(bend.radii) == 1:
         return f"R{bend.radii[0]:.0f}"
     return f"R{bend.radii[0]:.0f}–{bend.radii[-1]:.0f}"

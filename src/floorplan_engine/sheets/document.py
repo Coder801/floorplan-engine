@@ -68,6 +68,7 @@ SHEET_SLUGS = {
     "tab_floor_heating": "floor_heating",
     "tab_points": "points",
     "tab_elevations": "elevations",
+    "tab_plumbing_elevations": "plumbing_elevations",
 }
 
 

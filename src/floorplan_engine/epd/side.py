@@ -52,9 +52,11 @@ STAGE_OBJECTS: dict[str, frozenset[str]] = {
     "lighting": frozenset({"point", "led_strip"}),
     "wiring": frozenset({"wire", "box", "board"}),
     "panel": frozenset({"device", "board"}),
-    # walls, ceilings, ceiling scale values, the lines on a ceiling (decision 2026-11-17)
-    "elevations": frozenset({"elevation", "dim", "lane"}),
+    # walls, ceilings, ceiling scale values, the lines on a ceiling (decision 2026-11-17), the
+    # boxes on a ceiling (2026-11-18)
+    "elevations": frozenset({"elevation", "dim", "lane", "vbox"}),
     "plumbing": frozenset({"fixture", "pipe", "riser", "collector", "obstacle"}),
+    "plumbing_elevations": frozenset({"elevation"}),  # walls with water (decision 2026-11-18)
     # Zones, their controllers and the furniture they go round
     "floor_heating": frozenset({"heating", "point", "furniture"}),
 }

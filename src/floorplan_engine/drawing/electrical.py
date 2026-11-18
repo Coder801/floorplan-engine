@@ -363,8 +363,14 @@ def draw_legend(psp: BaseLayout, rows: Sequence[LegendRow], top_left: Vec) -> No
 
 
 def draw_electrical(
-    msp: Modelspace, plan: Plan, contours: dict[str, Contour], elec: Electrical
+    msp: Modelspace,
+    plan: Plan,
+    contours: dict[str, Contour],
+    elec: Electrical,
+    keep_off: Sequence[BaseGeometry] = (),
 ) -> None:
+    """keep_off: areas the point labels do not go on, as LED strips: the junction box squares of
+    the wiring sheet, which are white and would hide them (2026-11-18)."""
     geoms_list = room_geometries(plan, contours)
     geoms = {g.room.id: g for g in geoms_list}
     for strip in elec.led_strips:
@@ -391,7 +397,7 @@ def draw_electrical(
     }
     symbols = [symbol_area(a) for a in anchors] + list(cabinet_area.values())
     strips = [strip_area(strip, geoms) for strip in elec.led_strips]
-    placer = label_placer(geoms_list, symbols, strips)
+    placer = label_placer(geoms_list, symbols, [*strips, *keep_off])
     numbers = number_points(plan, elec)
     for cluster in label_clusters(elec.points):
         # The symbol carries only numbers (kind and height are in the "Points" table); the label is

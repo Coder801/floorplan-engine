@@ -310,7 +310,7 @@ def test_sheets_show_own_layers_at_common_scale(tmp_path: Path) -> None:
     plan_sheet, elec_sheet, points_sheet, walls_sheet = sheet_layouts(doc)
     assert [plan_sheet.name, elec_sheet.name] == ["01 План", "02 Электрика"]
     assert points_sheet.name == "03 Точки"  # point schedule as an appendix at the end
-    assert walls_sheet.name == "04 Развёртки"  # and wall elevations
+    assert walls_sheet.name == "04 Развёртки электрики"  # and wall elevations
     assert "Layout1" not in doc.layout_names()
 
     # The scale is a standard one, shared by all sheets

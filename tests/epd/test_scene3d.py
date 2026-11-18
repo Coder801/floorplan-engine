@@ -9,6 +9,7 @@ import pytest
 from shapely.geometry import Polygon
 from shapely.ops import unary_union
 
+from floorplan_engine.electrical.frames import BOX_HALF_MM
 from floorplan_engine.electrical.wiring import box_wiring
 from floorplan_engine.epd.scene3d import FLOOR_Z_MM, build_scene
 from floorplan_engine.model.geometry import DOOR_TOP_MM, WINDOW_SILL_MM
@@ -42,11 +43,13 @@ def test_wires_are_orthogonal_and_end_at_point_heights() -> None:
         pts = scene["wires"][r.id]["pts"]
         for a, b in itertools.pairwise(pts):
             assert sum(abs(a[i] - b[i]) > 0.5 for i in range(3)) == 1  # a piece along one axis
-        assert pts[0][2] == pytest.approx(2700 - r.rise_start_mm)
-        assert pts[-1][2] == pytest.approx(2700 - r.rise_end_mm)
+        # A drop into a mechanism's frame stops at the box top (frames.py), not its middle
+        top = dict.fromkeys(dict(wiring.entries), BOX_HALF_MM)
+        assert pts[0][2] == pytest.approx(2700 - r.rise_start_mm + top.get(r.source, 0.0))
+        assert pts[-1][2] == pytest.approx(2700 - r.rise_end_mm + top.get(r.target, 0.0))
         assert max(p[2] for p in pts) == pytest.approx(2700)  # on the ceiling
     s1 = next(r for r in wiring.runs if r.target == "s1")
-    assert scene["wires"][s1.id]["pts"][-1][2] == pytest.approx(300)  # socket at 300
+    assert scene["wires"][s1.id]["pts"][-1][2] == pytest.approx(300 + BOX_HALF_MM)  # socket box
     # A line's room is the target's room: the viewer filters 3D by it
     point_rooms = {pid: p["room"] for pid, p in scene["points"].items()}
     box_rooms = {bid: b["room"] for bid, b in scene["boxes"].items()}

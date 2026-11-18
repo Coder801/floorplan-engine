@@ -16,10 +16,11 @@ The ids in YAML stay as they are: openings, points, wiring.yaml and answers refe
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from dataclasses import dataclass
 
 from floorplan_engine.model.geometry import (
+    ANGLE_TOLERANCE_DEG,
     Contour,
     RoomGeometry,
     WallSegment,
@@ -91,17 +92,68 @@ def wall_names(plan: Plan, contours: dict[str, Contour]) -> dict[tuple[str, str]
     for g in geoms:
         for seg, wall in zip(g.contour.segments, g.room.walls, strict=True):
             key = (g.room.id, wall.id)
-            text = wall.name or describe(g.room, seg, behind(g, seg, geoms), plan.language)
+            text = wall.name or describe(g.room, {seg.id}, behind(g, seg, geoms), plan.language)
             out[key] = WallName(codes[key], text)
     return out
 
 
-def describe(room: Room, seg: WallSegment, near: Sequence[Behind], language: Language) -> str:
-    """What is behind the wall and what is in it, in words."""
-    rooms = ", ".join(b.name for b in near)
+def surfaces(room: Room) -> list[list[int]]:
+    """The room's walls by surface (decision 2026-11-17), walk indices from 0: neighbouring walls
+    with no corner between them (turn 180, one plane) are one surface; a corner starts the next.
+    A surface may wrap past the last wall to the first; ordered by its first wall."""
+    n = len(room.walls)
+    straight = [abs(w.turn - 180.0) <= ANGLE_TOLERANCE_DEG for w in room.walls]
+    starts = [k for k in range(n) if not straight[k - 1]]
+    if not starts:
+        return [[k] for k in range(n)]
+    out: list[list[int]] = []
+    for k in starts:
+        chain = [k]
+        while straight[chain[-1]] and len(chain) < n:
+            chain.append((chain[-1] + 1) % n)
+        out.append(chain)
+    return sorted(out)
+
+
+def surface_names(plan: Plan, contours: dict[str, Contour]) -> dict[tuple[str, str], WallName]:
+    """(room id, wall id) → code and description of the surface the wall belongs to (surfaces):
+    a wall alone keeps its name; several walls in one plane get "3.A–C" (one floor) or "1.E–2.D",
+    and a description of the whole plane — the names from room.yaml without repeats, or what is
+    behind all the parts and the openings in them."""
+    names = wall_names(plan, contours)
+    out = dict(names)
+    geoms = room_geometries(plan, contours)
+    for g in geoms:
+        for chain in surfaces(g.room):
+            if len(chain) == 1:
+                continue
+            walls = [g.room.walls[k] for k in chain]
+            first, last = (
+                names[(g.room.id, walls[0].id)].code,
+                names[(g.room.id, walls[-1].id)].code,
+            )
+            floor, _, a = first.partition(".")
+            other, _, b = last.partition(".")
+            code = f"{floor}.{a}–{b}" if floor == other else f"{first}–{last}"
+            if any(w.name for w in walls):
+                texts = [names[(g.room.id, w.id)].text for w in walls]
+                text = "; ".join(dict.fromkeys(texts))
+            else:
+                near: list[Behind] = []
+                for k in chain:
+                    near += [b for b in behind(g, g.contour.segments[k], geoms) if b not in near]
+                text = describe(g.room, {w.id for w in walls}, near, plan.language)
+            for w in walls:
+                out[(g.room.id, w.id)] = WallName(code, text)
+    return out
+
+
+def describe(room: Room, walls: Collection[str], near: Sequence[Behind], language: Language) -> str:
+    """What is behind the wall (its parts `walls`) and what is in it, in words."""
+    rooms = ", ".join(dict.fromkeys(b.name for b in near))
     parts = [WORDS["behind"][language].format(rooms=rooms) if near else WORDS["outside"][language]]
     for kind in OPENING_ORDER:
-        n = sum(1 for op in room.openings if op.wall == seg.id and op.type is kind)
+        n = sum(1 for op in room.openings if op.wall in walls and op.type is kind)
         if n:
             parts.append(WORDS[kind][language] + (f" ×{n}" if n > 1 else ""))
     return ", ".join(parts)

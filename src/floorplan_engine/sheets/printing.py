@@ -35,7 +35,7 @@ from ezdxf.layouts.layout import Paperspace
 from matplotlib.backends.backend_pdf import PdfPages
 
 from floorplan_engine import BRAND
-from floorplan_engine.drawing.layers import A_SHEET, MIN_TEXT_MM
+from floorplan_engine.drawing.layers import A_SHEET, MIN_TEXT_MM, W_BOX
 from floorplan_engine.drawing.titleblock import frame_region
 from floorplan_engine.sheets.preview import (
     BACKGROUND,
@@ -146,12 +146,19 @@ def _beyond(
     return max(0.0, f0 - x0, g0 - y0, x1 - f1, y1 - g1)
 
 
+# Layers whose text is below MIN_TEXT_MM on purpose: the junction box name inside its square
+# (layers.BOX_TEXT_MM, decision 2026-11-18)
+NAME_ONLY_LAYERS = frozenset({W_BOX.name.upper()})
+
+
 def _text_heights(
     entities: Iterable[DXFGraphic], frozen: set[str] | None = None
 ) -> Iterator[float]:
     """Heights of non-empty texts, including texts inside blocks (at the insert scale)."""
     for e in _flat(entities):
         if frozen and e.dxf.layer.upper() in frozen:
+            continue
+        if e.dxf.layer.upper() in NAME_ONLY_LAYERS:
             continue
         if isinstance(e, MText):
             if str(e.plain_text()).strip():

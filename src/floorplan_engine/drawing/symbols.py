@@ -137,7 +137,7 @@ def _socket(blk: BlockLayout) -> None:
 
 def _arm(blk: BlockLayout, angle_deg: float, ticks: int) -> None:
     """Switch lever from the circle at angle_deg with ticks at the end."""
-    cy = WALL_GAP + SWITCH_R
+    cy = 0.0  # the circle is centred on the wall face
     d = math.radians(angle_deg)
     start = (SWITCH_R * math.cos(d), cy + SWITCH_R * math.sin(d))
     end = (start[0] + SWITCH_ARM * math.cos(d), start[1] + SWITCH_ARM * math.sin(d))
@@ -151,7 +151,7 @@ def _arm(blk: BlockLayout, angle_deg: float, ticks: int) -> None:
 
 
 def _switch_body(blk: BlockLayout) -> None:
-    blk.add_circle((0.0, WALL_GAP + SWITCH_R), SWITCH_R, dxfattribs=_BYBLOCK)
+    blk.add_circle((0.0, 0.0), SWITCH_R, dxfattribs=_BYBLOCK)  # half on the wall
 
 
 def _switch(blk: BlockLayout) -> None:

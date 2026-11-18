@@ -13,8 +13,10 @@ is free), in the group colour or dark grey for a bundle of several groups: piece
 and the number of cables if more than one: "L2,0 ×3".
 At a wall point there is a drop "↓h1,9", at the panel a rise "↑h1,0"; floor routes (own
 layer, dash-dot) are the other way round: a rise from the floor to the point "↑h0,3", a drop
-at the panel "↓h1,7". Bundles are computed separately for ceiling and floor. Corners are
-rounded (an arc in the same polyline).
+at the panel "↓h1,7". Bundles are computed separately for ceiling and floor. A turn is drawn
+round with the radius the cable takes, as on the ceiling views (decision 2026-11-17,
+mounting.lane_turns: the inner cable of a bundle at its radius, the others concentric); a turn
+of a cable without sizes (low voltage) gets a small FILLET_MM.
 A label is never placed over other routes, boxes, points or other labels: the bundle itself,
 then both sides, at several spots along the piece are tried; if nothing fits there is no
 label (the length is in the table and the log). Lengths come from the original route
@@ -25,7 +27,7 @@ from __future__ import annotations
 
 import csv
 import math
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Iterable, Sequence
 from pathlib import Path
 
 from ezdxf.colors import RGB
@@ -36,20 +38,21 @@ from shapely.geometry.base import BaseGeometry
 
 from floorplan_engine.drawing.ids import tagged
 from floorplan_engine.drawing.layers import (
-    TEXT_SMALL_MM,
+    BOX_TEXT_MM,
     W_BOX,
     W_CABLES,
     W_TEXT,
     text_descender,
     text_width,
 )
+from floorplan_engine.drawing.mounting import lane_turns, rounded
 from floorplan_engine.drawing.plan import add_text
-from floorplan_engine.electrical.boxes import BOX_SIZE_MM
-from floorplan_engine.electrical.bundles import Bundle, Segment, bundles, by_line, segments
+from floorplan_engine.electrical.anchors import SYMBOL_DEPTH, symbol_key
+from floorplan_engine.electrical.boxes import BOX_SIZE_MM, box_center, box_square
+from floorplan_engine.electrical.bundles import Bundle, lane_paths
 from floorplan_engine.electrical.chases import CHASE_CABLES, CHASE_SHARE
 from floorplan_engine.electrical.colors import LED_LINE, group_colors, rgb
 from floorplan_engine.electrical.panel import OTHER_LINE, LineClass
-from floorplan_engine.electrical.routing import CLEARANCE
 from floorplan_engine.electrical.wiring_model import (
     CHASE_NARROW,
     HOLE_CABLES,
@@ -59,15 +62,10 @@ from floorplan_engine.electrical.wiring_model import (
 )
 from floorplan_engine.model.geometry import Vec
 from floorplan_engine.model.scale import sheet
-from floorplan_engine.model.schema import Electrical
+from floorplan_engine.model.schema import Conduit, Electrical
 from floorplan_engine.model.texts import Language, tr
 
-LABEL_GAP_MM = 1.0
-FILLET_MM = 1.5  # route corner radius on the sheet
-LANE_MM = 0.7  # cable lane step on the sheet (decision 2026-10-24)
-BAND_MM = 14.0  # a bundle is no wider than this on the sheet: a big bundle gets a smaller step
-WALL_CLEAR_MM = 0.4  # from the outermost bundle line to a wall on the sheet
-_SAMPLES = (0.1, 0.3, 0.5, 0.7, 0.9)  # where to measure room to walls, fractions
+FILLET_MM = 1.5  # corner radius on the sheet of a cable without sizes (low voltage)
 LENGTH_MM = 1.8  # length label height on the sheet
 # Label notation (decision 2026-10-24): piece length "L1,4 ×3", vertical drop "↓h1,9",
 # like the point height "h300" on the electrical sheet; bare digits were unreadable
@@ -79,7 +77,6 @@ MIXED = 0x5A5A5A  # label of a bundle of several groups: dark grey, it has no gr
 FRAME_PAD_MM = 0.4  # from the length label text to its frame
 LENGTH_SLOTS = (0.5, 0.3, 0.7, 0.15, 0.85)  # label spots along the piece, fractions of length
 POINT_CLEAR_MM = 2.5  # no labels around a connection point
-_TOL = 1.0  # model mm: points on one line
 
 
 def draw_wiring(
@@ -93,31 +90,28 @@ def draw_wiring(
     size = sheet(BOX_SIZE_MM)
     for b in wiring.boxes:
         labels.block(Point(_box_center(b, size).as_tuple()).buffer(size))
-    _draw_runs(msp, wiring, paths, layers, labels, colors)
+    walls = {p.id: sheet(SYMBOL_DEPTH[symbol_key(p)]) for p in elec.points if p.wall is not None}
+    _draw_runs(msp, wiring, paths, layers, labels, colors, walls)
     _draw_bundle_lengths(msp, wiring, plane_bundles, layers, labels, colors)
     _draw_board_rises(msp, wiring, paths, labels)
     _draw_boxes(msp, wiring)
 
 
 def lay_out(wiring: Wiring) -> tuple[list[list[Vec]], list[Bundle]]:
-    """Line paths with lane shifts and bundle pieces, separately for ceiling and floor
-    (line numbers in bundles index the shared wiring.runs list)."""
-    paths: list[list[Vec]] = [list(r.path) for r in wiring.runs]
-    plane_bundles: list[Bundle] = []
-    for route in ("ceiling", "floor"):
-        idx = [k for k, r in enumerate(wiring.runs) if r.route == route]
-        segs = segments([wiring.runs[k].path for k in idx])
-        margin = max(sheet(WALL_CLEAR_MM), CLEARANCE)  # bundle also stays CLEARANCE from walls
-        room = clearance(wiring.free, margin) if wiring.free is not None else None
-        offsets = lanes(segs, sheet(LANE_MM), sheet(BAND_MM), room)
-        for j, k in enumerate(idx):
-            path = wiring.runs[k].path
-            paths[k] = offset_path(path, [offsets.get((j, i), 0.0) for i in range(len(path) - 1)])
-        plane_bundles += [
-            Bundle(b.axis, b.fixed, b.lo, b.hi, tuple(idx[j] for j in b.runs), b.band)
-            for b in bundles(segs, offsets)
-        ]
-    return paths, plane_bundles
+    """Line paths with lane shifts and bundle pieces (bundles.lane_paths)."""
+    return lane_paths(wiring.runs, wiring.free)
+
+
+def turned(wiring: Wiring, paths: Sequence[Sequence[Vec]], conduit: Conduit) -> list[list[Vec]]:
+    """The lanes as drawn: every corner round, with the radius the cable takes
+    (mounting.lane_turns) or FILLET_MM on the sheet for a cable without sizes."""
+    fillets = lane_turns(wiring, paths, conduit).fillets
+    small = sheet(FILLET_MM)
+    out: list[list[Vec]] = []
+    for k, path in enumerate(paths):
+        radii = {i: fillets.get((k, i), small) for i in range(1, len(path) - 1)}
+        out.append(rounded(path, radii))
+    return out
 
 
 def cable_layer(run: Run, classes: dict[str, LineClass]) -> str:
@@ -135,9 +129,13 @@ def _draw_runs(
     layers: Sequence[str],
     labels: _Labels,
     colors: dict[str, int],
+    walls: dict[str, float] | None = None,
 ) -> None:
     """Lines with rounded corners and a drop (a rise for floor routes) at the point; the drop label
-    is on the line's layer, it goes away with the line."""
+    is on the line's layer, it goes away with the line. walls: wall point id → symbol depth (model
+    mm); a line that goes down (up) to such a point is drawn right up to the wall face, not to the
+    symbol tip (feedback 2026-11-17), the route and its length stay as they are."""
+    walls = walls or {}
     for k, run in enumerate(wiring.runs):
         floor = run.route == "floor"
         attribs: dict[str, object] = {"layer": layers[k]}
@@ -146,7 +144,8 @@ def _draw_runs(
         if color is not None:
             attribs["true_color"] = color
         with tagged(msp, "wire", run.id):
-            msp.add_lwpolyline(fillet(paths[k], sheet(FILLET_MM)), format="xyb", dxfattribs=attribs)
+            drawn = _to_walls(paths[k], walls, run)
+            msp.add_lwpolyline(fillet(drawn, sheet(FILLET_MM)), format="xyb", dxfattribs=attribs)
             if run.rise_end_mm > 0 and not run.target.startswith("box_"):
                 arrow = "↑" if floor else "↓"
                 placed = labels.place_end(
@@ -155,6 +154,25 @@ def _draw_runs(
                 if placed is not None:
                     text, at, angle = placed
                     add_text(msp, text, at, LENGTH_MM, layers[k], angle, color=color)
+
+
+def _to_walls(path: Sequence[Vec], walls: dict[str, float], run: Run) -> list[Vec]:
+    """The path with its point ends carried on along the last (first) piece by the symbol depth:
+    the route reaches a wall point at the symbol tip, the cable goes on to the wall."""
+    out = list(path)
+    if len(out) < 2:
+        return out
+    if run.rise_end_mm > 0 and run.target in walls:
+        out[-1] = _extend(out[-2], out[-1], walls[run.target])
+    if run.rise_start_mm > 0 and run.source in walls:
+        out[0] = _extend(out[1], out[0], walls[run.source])
+    return out
+
+
+def _extend(before: Vec, end: Vec, by: float) -> Vec:
+    d = end - before
+    n = d.length()
+    return end if n == 0 else end + d * (by / n)
 
 
 def _draw_bundle_lengths(
@@ -221,146 +239,25 @@ def _draw_board_rises(
 
 
 def _box_center(b: JunctionBox, size: float) -> Vec:
-    a = b.anchor
-    return a.pos if a.inward is None else a.pos + a.inward * (size / 2)
+    return box_center(b.anchor, size)
 
 
 def _draw_boxes(msp: Modelspace, wiring: Wiring) -> None:
-    """Boxes: a square at the wall (on the ceiling, on the axes at the box point) and a "К1"
-    label.
-    """
+    """Boxes: a white square at the wall (on the ceiling, on the axes at the box point) over
+    the lines, with its "К1" label inside (2026-11-18); what goes in and out of a box is in its
+    card in the viewer (decision 2026-11-17, epd.box_card)."""
     size = sheet(BOX_SIZE_MM)
-    half = size / 2
     for b in wiring.boxes:
-        a = b.anchor
-        across, along = (a.inward, a.wall_dir) if a.inward is not None else (Vec(0, 1), Vec(1, 0))
-        assert along is not None
-        c = _box_center(b, size)
-        corners = [
-            c + along * sx * half + across * sy * half
-            for sx, sy in ((-1, -1), (1, -1), (1, 1), (-1, 1))
-        ]
+        corners = list(box_square(b.anchor, size).exterior.coords)[:-1]
         with tagged(msp, "box", b.id):
-            msp.add_lwpolyline(
-                [p.as_tuple() for p in corners], close=True, dxfattribs={"layer": W_BOX.name}
-            )
-            label_at = c + across * (half + sheet(LABEL_GAP_MM)) + along * half
-            add_text(msp, b.label, label_at, TEXT_SMALL_MM, W_TEXT.name)
+            back = msp.add_hatch(dxfattribs={"layer": W_BOX.name, "true_color": WHITE})
+            back.set_solid_fill(rgb=RGB(255, 255, 255))
+            back.paths.add_polyline_path(corners, is_closed=True)
+            msp.add_lwpolyline(corners, close=True, dxfattribs={"layer": W_BOX.name})
+            add_text(msp, b.label, _box_center(b, size), BOX_TEXT_MM, W_BOX.name)
 
 
 # --- Bundles -----------------------------------------------------------------
-
-
-# Room to walls on both sides of a line piece: (axis, coord, from, to) → (to −, to +), model mm
-Room = Callable[[str, float, float, float], tuple[float, float]]
-
-
-def clearance(free: BaseGeometry, margin: float) -> Room:
-    """Room on both sides of a piece up to the edge of the free area (walls), minus margin: the
-    smallest over several points along the piece; points outside the area do not count."""
-    edge = free.boundary
-    reach = 1e6
-
-    def side(p: Point, d: tuple[float, float]) -> float:
-        ray = LineString([(p.x, p.y), (p.x + d[0] * reach, p.y + d[1] * reach)])
-        hit = ray.intersection(edge)
-        return reach if hit.is_empty else p.distance(hit)
-
-    def room(axis: str, fixed: float, lo: float, hi: float) -> tuple[float, float]:
-        neg = pos = math.inf
-        for t in _SAMPLES:
-            v = lo + (hi - lo) * t
-            p = Point(v, fixed) if axis == "h" else Point(fixed, v)
-            if not free.contains(p):
-                continue
-            up, down = ((0.0, 1.0), (0.0, -1.0)) if axis == "h" else ((1.0, 0.0), (-1.0, 0.0))
-            pos = min(pos, side(p, up) - margin)
-            neg = min(neg, side(p, down) - margin)
-        return max(neg, 0.0), max(pos, 0.0)
-
-    return room
-
-
-def lanes(
-    segs: Sequence[Segment], pitch: float, band: float, room: Room | None = None
-) -> dict[tuple[int, int], float]:
-    """Offset of each piece from the line: (route, piece) → model mm, along +y for horizontal and
-    +x for vertical. Lanes are computed per group of overlapping pieces of a line: overlapping
-    ones go in different lanes (interval colouring), step pitch, the whole group no wider than
-    band. room is the space to walls: the bundle is symmetric about the line, but next to a wall
-    it shifts away; if there is less space than the bundle needs, the step shrinks and the
-    bundle takes the full width."""
-    out: dict[tuple[int, int], float] = {}
-    for line in by_line(segs).values():
-        for cluster in _overlapping(line):
-            ends: list[float] = []  # end of the last piece in each lane
-            lane_of: dict[tuple[int, int], int] = {}
-            for s in cluster:
-                free = next((n for n, end in enumerate(ends) if end <= s.lo + _TOL), None)
-                if free is None:
-                    free = len(ends)
-                    ends.append(s.hi)
-                else:
-                    ends[free] = s.hi
-                lane_of[(s.run, s.index)] = free
-            count = len(ends)
-            if count == 1:
-                for key in lane_of:
-                    out[key] = 0.0
-                continue
-            width = min(pitch * (count - 1), band)
-            center = 0.0
-            if room is not None:
-                s0 = cluster[0]
-                neg, pos = room(
-                    s0.axis, s0.fixed, min(s.lo for s in cluster), max(s.hi for s in cluster)
-                )
-                if neg + pos < width:  # not enough room: smaller step, full width
-                    width, center = neg + pos, (pos - neg) / 2
-                else:  # next to a wall: shift away from it
-                    center = min(max(0.0, width / 2 - neg), pos - width / 2)
-            step = width / (count - 1)
-            for key, n in lane_of.items():
-                out[key] = center + (n - (count - 1) / 2) * step
-    return out
-
-
-def _overlapping(line: Sequence[Segment]) -> list[list[Segment]]:
-    """Line pieces in groups: in a group each overlaps at least one other (touching does not
-    count).
-    """
-    groups: list[list[Segment]] = []
-    reach = -math.inf
-    for s in sorted(line, key=lambda s: (s.lo, s.hi, s.run)):
-        if s.lo < reach - _TOL:
-            groups[-1].append(s)
-            reach = max(reach, s.hi)
-        else:
-            groups.append([s])
-            reach = s.hi
-    return groups
-
-
-def offset_path(path: Sequence[Vec], shifts: Sequence[float]) -> list[Vec]:
-    """Route with each piece shifted into its lane; a vertex between horizontal and vertical is the
-    intersection of the shifted pieces, the ends move across their own piece."""
-    if len(path) < 2:
-        return list(path)
-
-    def normal(i: int) -> Vec:
-        a, b = path[i], path[i + 1]
-        return Vec(0.0, 1.0) if abs(a.y - b.y) <= _TOL else Vec(1.0, 0.0)
-
-    out = [path[0] + normal(0) * shifts[0]]
-    for i in range(1, len(path) - 1):
-        n_in, n_out = normal(i - 1), normal(i)
-        p = path[i]
-        if n_in == n_out:
-            out.append(p + n_out * shifts[i])
-        else:
-            out.append(p + n_in * shifts[i - 1] + n_out * shifts[i])
-    out.append(path[-1] + normal(len(path) - 2) * shifts[-1])
-    return out
 
 
 def fillet(path: Sequence[Vec], radius: float) -> list[tuple[float, float, float]]:
