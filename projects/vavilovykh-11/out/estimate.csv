@@ -1,22 +1,20 @@
 ﻿section;key;name;unit;qty;price;total
-material_rough;cable.3x1.5;Кабель ВВГнг 3×1,5;м;168,2;45;7569,00
-material_rough;cable.3x2.5;Кабель ВВГнг 3×2,5;м;217,7;70;15239,00
+material_rough;cable.3x1.5;Кабель ВВГнг 3×1,5;м;179;45;8055,00
+material_rough;cable.3x2.5;Кабель ВВГнг 3×2,5;м;218,5;70;15295,00
 material_rough;cable.3x4;Кабель ВВГнг 3×4;м;13;120;1560,00
 material_rough;cable.UTP cat.6;Кабель UTP cat.6;м;30,9;;
 material_rough;socket_box;Підрозетник;шт;60;20;1200,00
-material_rough;junction_box.80;Коробка розподільча Ø80;шт;2;60;120,00
-material_rough;junction_box.100x100;Коробка розподільча 100×100;шт;8;60;480,00
-material_rough;junction_box_ip.100x100;Коробка розподільча IP44 100×100;шт;1;120;120,00
-material_rough;junction_box.150x110;Коробка розподільча 150×110;шт;2;60;120,00
-material_rough;junction_box_ip.150x110;Коробка розподільча IP44 150×110;шт;1;120;120,00
+material_rough;junction_box.80;Коробка розподільча Ø80;шт;3;60;180,00
+material_rough;junction_box.100x100;Коробка розподільча 100×100;шт;9;60;540,00
+material_rough;junction_box_ip.100x100;Коробка розподільча IP44 100×100;шт;2;120;240,00
 material_rough;crimp;Гільза і термоусадка (опресування);шт;58;8;464,00
-material_rough;cable_pad;Площадка під монтажний пістолет з дюбель-цвяхом і стяжкою;шт;789;5;3945,00
+material_rough;cable_pad;Площадка під монтажний пістолет з дюбель-цвяхом і стяжкою;шт;790;5;3950,00
 material_rough;board_enclosure;Корпус щита вбудований, 5 рядів, 60 мод.;шт;1;6000;6000,00
 material_rough;dc_enclosure;Корпус щита АКБ Hager Golf VS112PD, 12 мод.;шт;1;1500;1500,00
 material_rough;heating_cable.10;Секція нагрівального кабелю 10 м;шт;1;;
 material_rough;heating_cable.20;Секція нагрівального кабелю 20 м;шт;1;;
 material_rough;heating_sensor;Датчик температури підлоги;шт;2;;
-material_rough;heating_conduit;Гофротруба Ø16 для датчика підлоги;м;5,4;;
+material_rough;heating_conduit;Гофротруба Ø16 для датчика підлоги;м;5,3;;
 material_finish;input.C63 2P;Вступний автомат, C63 2P;шт;1;850;850,00
 material_finish;relay.63 А;Реле напруги, 63 А;шт;1;1900;1900,00
 material_finish;diff.C16 30 мА;Дифавтомат 1P+N C16 30 мА;шт;4;950;3800,00
@@ -46,11 +44,11 @@ material_finish;led_output;Вивід для підсвітки;шт;4;150;600,0
 material_finish;thermostat;Регулятор теплої підлоги;шт;2;;
 material_finish;led_strip;LED-підсвітка;м;7,84;250;1960,00
 material_finish;led_psu;Блок живлення LED 12 В;шт;4;450;1800,00
-rough;work.cable;Прокладання кабелю;м;373,8;34;12709,20
-rough;work.chase;Штроба вузька, 1–2 кабелі;м;53,2;120;6384,00
-rough;work.chase_wide;Штроба широка, 3–4 кабелі;м;15,3;180;2754,00
+rough;work.cable;Прокладання кабелю;м;383,9;34;13052,60
+rough;work.chase;Штроба вузька, 1–2 кабелі;м;49,6;120;5952,00
+rough;work.chase_wide;Штроба широка, 3–4 кабелі;м;16,9;180;3042,00
 rough;work.floor_heating;Укладання нагрівального кабелю змійкою з датчиком підлоги;м²;4,2;;
-rough;work.wall_hole;Свердління проходу крізь стіну;шт;11;100;1100,00
+rough;work.wall_hole;Свердління проходу крізь стіну;шт;10;100;1000,00
 rough;work.socket_box;Свердління і встановлення підрозетника;шт;60;140;8400,00
 rough;work.junction_box;Монтаж коробки з опресуванням;шт;14;250;3500,00
 rough;work.board_install;Встановлення щита;шт;1;1500;1500,00

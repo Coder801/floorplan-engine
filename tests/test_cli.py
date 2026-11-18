@@ -126,3 +126,15 @@ def test_analyze_stages_are_checked_before_any_llm_call(tmp_path: Path) -> None:
     assert result.exit_code == 1 and "furniture, floor_heating" in result.output
     result = runner.invoke(app, ["analyze", str(tmp_path), "--stages", "furniture"])
     assert result.exit_code == 1 and "room.yaml" in result.output  # no model to work over
+
+
+def test_trace_writes_the_svg_and_refuses_an_empty_filter(tmp_path: Path) -> None:
+    from tests.electrical.test_variants import _project
+
+    project = _project(tmp_path)
+    result = runner.invoke(app, ["trace", str(project), "--line", "wire_1", "--cost"])
+    assert result.exit_code == 0, result.output
+    assert "wire_1" in result.output
+    assert (project / "out" / "debug" / "trace-wire_1.svg").is_file()
+    result = runner.invoke(app, ["trace", str(project), "--group", "нет"])
+    assert result.exit_code == 1 and "Нет линий" in result.output

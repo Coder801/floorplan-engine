@@ -17,5 +17,8 @@ data/
 # it names a project id in one particular database, so it never goes to git
 .shtroba.yaml
 
+# Отладка трассировки (floorplan-engine trace): не результат проекта
+projects/*/out/debug/
+
 # Копии базы
 *.dump

@@ -23,6 +23,13 @@ from floorplan_engine.pipeline import (
     print_project,
     render_sheets,
 )
+from floorplan_engine.pipeline.trace import (
+    TraceError,
+    line_note,
+    trace_file,
+    trace_svg,
+    trace_wiring,
+)
 from floorplan_engine.sheets.document import sheet_png_name
 
 ARTIFACT_PREVIEW_DIR = "artifact"
@@ -138,6 +145,43 @@ def render_artifact(project: ProjectArg) -> None:
     for page in pages:
         png = render_page_png(page, target / sheet_png_name(page["name"]))
         typer.echo(f"  {png} — «{page['name']}», примитивов {len(page['items'])}")
+
+
+def trace(
+    project: ProjectArg,
+    line: Annotated[list[str], typer.Option("--line", help="Линия: wire_3 (можно несколько)")] = [],  # noqa: B006
+    group: Annotated[list[str], typer.Option("--group", help="Группа: QF3")] = [],  # noqa: B006
+    point: Annotated[
+        list[str], typer.Option("--point", help="Точка или коробка на конце линии")
+    ] = [],  # noqa: B006
+    cost: Annotated[
+        bool, typer.Option("--cost", help="Раскрасить клетки ценой поиска первой линии")
+    ] = False,
+    out: Annotated[Path | None, typer.Option(help="Куда записать SVG")] = None,
+) -> None:
+    """Отладка трассировки: проводка без чертежа, SVG с сеткой поиска, путём до натяжки и
+    переносами коробок в out/debug/. Без фильтров — все линии; с --line, --group или --point —
+    они крупно, с сеткой своего поиска."""
+    with exit_on(TraceError):
+        tr = trace_wiring(project)
+    focus = [t for t in tr.lines if t.matches(line, group, point)]
+    if (line or group or point) and not focus:
+        fail("Нет линий под фильтр. Все линии — floorplan-engine trace без фильтров.")
+    for t in focus or tr.lines:
+        typer.echo(f"  {line_note(t)}")
+    for m in tr.moves:
+        typer.echo(
+            f"  коробка {m.box}: перенесена с чужих трасс {m.before.as_tuple()} → "
+            f"{m.after.as_tuple()}"
+        )
+    for box, note in tr.wiring.box_notes:
+        typer.secho(f"  {box}: {note}", fg=typer.colors.YELLOW)
+    for path, note in tr.wiring.edit_notes:
+        typer.secho(f"  wiring.yaml: {path}: {note}", fg=typer.colors.YELLOW)
+    target = out or trace_file(project, [*line, *group, *point])
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(trace_svg(tr, focus, cost), "utf-8")
+    typer.echo(f"  {target} — линий {len(tr.lines)}, в фокусе {len(focus)}")
 
 
 def estimate(

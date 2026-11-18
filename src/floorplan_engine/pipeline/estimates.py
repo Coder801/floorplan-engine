@@ -97,6 +97,7 @@ def write_plumbing_estimate(
         plumbing_estimate_text("note_pipes", lang, pct=round(PLUMBING_RESERVE * 100)),
         plumbing_estimate_text("note_input", lang),
         plumbing_estimate_text("note_excluded", lang),
+        estimate_text("note_consumables", lang),
     ]
     status = assessment.status(Stage.PLUMBING)
     if status is not None and status.open_questions:
@@ -279,6 +280,7 @@ def _estimate_notes(
     if wet:
         notes.append(estimate_text("note_wet", lang, n=wet))
     notes.append(estimate_text("note_excluded", lang))
+    notes.append(estimate_text("note_consumables", lang))
     notes.append(scope_text("note_scope", lang, f=WORK_SCOPE_MD, s=scope_text("sheet", lang)))
     if wiring.height_assumed:
         notes.append(estimate_text("note_height", lang))

@@ -328,6 +328,7 @@ def test_terms_go_after_the_estimate_and_into_the_work_scope(project: Path) -> N
     assert "| 4 | Вывоз строительного мусора | Заказчик | силами заказчика | — |" in md
     assert "**Всего со сопутствующими:" in md
     assert "- Не обговорено с заказчиком: подъём и занос материалов," in md
+    assert "- Расходники на инструмент (диски, буры, коронки, свёрла) входят в цену работ" in md
     scope = (project / "out" / "work-scope.md").read_text("utf-8")
     assert "Договорённость: студия, фиксированная сумма — 1 500 грн" in scope
 

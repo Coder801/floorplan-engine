@@ -28,6 +28,7 @@ from floorplan_engine.electrical.wiring import box_wiring, estimate_wiring
 from floorplan_engine.electrical.wiring_model import Wiring
 from floorplan_engine.electrical.work_scope import WORK_SCOPE_MD
 from floorplan_engine.epd.artifact import export_artifact
+from floorplan_engine.epd.heating_scene import heating_scene
 from floorplan_engine.epd.objects import (
     describe_objects,
     light_chains,
@@ -177,7 +178,11 @@ def _wiring_step(run: _Build, saved: Drawing) -> _Wiring:
             found.wiring = box_wiring(run.plan, report.contours, run.elec, report.wiring_edits)
             if found.wiring is not None:
                 found.edit = wiring_handles(run.plan, report.contours, found.wiring)
-                found.scene = build_scene(run.plan, report.contours, run.elec, found.wiring)
+                scene = build_scene(run.plan, report.contours, run.elec, found.wiring)
+                scene |= heating_scene(
+                    run.plan, report.contours, run.elec, found.wiring, scene["points"]
+                )
+                found.scene = scene
     journal, chases = run.out / WIRING_JOURNAL_FILE, run.out / CHASES_FILE
     wiring = found.wiring
     if wiring is None:
@@ -190,6 +195,8 @@ def _wiring_step(run: _Build, saved: Drawing) -> _Wiring:
     result.chases = write_chases(wiring, chases)
     if wiring.edit_notes:
         run.warn([Issue(WIRING_FILE, p, m, Severity.WARNING) for p, m in wiring.edit_notes])
+    if wiring.box_notes:  # a box left on lines that pass by (decision 2026-11-17)
+        run.warn([Issue(ELECTRICAL_FILE, b, m, Severity.WARNING) for b, m in wiring.box_notes])
     return found
 
 

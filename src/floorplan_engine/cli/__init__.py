@@ -24,6 +24,7 @@ from floorplan_engine.cli.documents import (
     print_album,
     render_artifact,
     symbols,
+    trace,
 )
 from floorplan_engine.cli.projects import project_app, studio_app
 from floorplan_engine.cli.sources import analyze, facts, facts_bench, pdf_facts
@@ -236,6 +237,7 @@ app.command()(build)
 app.command("print")(print_album)
 app.command()(preview)
 app.command("render-artifact")(render_artifact)
+app.command()(trace)
 app.command()(serve)
 app.command()(estimate)
 app.command()(view)
