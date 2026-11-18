@@ -1,3 +1,12 @@
+## v0.12.0 (2026-11-18)
+
+### Feat
+
+- **viewer**: show heating, box scheme and trace in the viewer
+- **pipeline**: add wiring trace and rebuild out/ for 3 projects
+- **drawing**: draw heating scene and box cards in sheets
+- **electrical**: add route frames, bundles and low-voltage panel zone
+
 ## v0.11.0 (2026-11-17)
 
 ### Feat
