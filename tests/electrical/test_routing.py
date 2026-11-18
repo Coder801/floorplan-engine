@@ -1,5 +1,5 @@
-"""Route: polyline simplification and axis length; grid search (cost and pruning); the search
-memo of a build."""
+"""Route: polyline simplification and axis length; grid search (cost and pruning); the jog at a
+route's end slid back; the search memo of a build."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ from shapely.geometry import box
 
 from floorplan_engine.electrical.routing import (
     APART,
+    PANEL_FREE,
     End,
     Grid,
     Router,
@@ -16,6 +17,7 @@ from floorplan_engine.electrical.routing import (
     length,
     search_memo,
     simplify,
+    slide_jog,
 )
 from floorplan_engine.model.geometry import Vec
 
@@ -114,6 +116,33 @@ def test_penalty_makes_path_go_around() -> None:
     assert max(p.y for p in around) > 1000
 
 
+def test_slide_jog_removes_a_jog_to_a_point_off_the_cell_centres() -> None:
+    """A socket at x=3965 by the 3950 column: the route drops on the point's own line."""
+    grid = Grid.of(box(0, 0, 5000, 3000))
+    path = _v((300, 2650), (3950, 2650), (3950, 250), (3965, 250), (3965, 60))
+    assert slide_jog(path, grid) == _v((300, 2650), (3965, 2650), (3965, 60))
+
+
+def test_slide_jog_moves_the_jog_to_the_farthest_clear_spot() -> None:
+    """A wall end within CLEARANCE of the point's line: the jog goes right past it, not at the
+    wall the point is on."""
+    room = box(0, 0, 5000, 3000).difference(box(1500, 2350, 2450, 2450))
+    grid = Grid.of(room)
+    path = _v((300, 2650), (2650, 2650), (2650, 250), (2450, 250), (2450, 60))
+    assert slide_jog(path, grid) == _v(
+        (300, 2650), (2650, 2650), (2650, 2150), (2450, 2150), (2450, 60)
+    )
+
+
+def test_slide_jog_keeps_a_long_piece_and_the_start() -> None:
+    """A piece longer than JOG_MAX at the end is a run of its own; the start is not touched."""
+    grid = Grid.of(box(0, 0, 5000, 3000))
+    long_end = _v((300, 2650), (1000, 2650), (1000, 250), (1500, 250), (1500, 60))
+    assert slide_jog(long_end, grid) == long_end
+    jog_at_start = _v((1500, 60), (1500, 250), (1000, 250), (1000, 2650), (300, 2650))
+    assert slide_jog(jog_at_start, grid) == jog_at_start
+
+
 def _square_grid() -> Grid:
     return Grid.of(box(0, 0, 3000, 3000))
 
@@ -184,6 +213,19 @@ def test_apart_cells_by_direction() -> None:
     assert apart_cells(grid, [_v((250, 250), (1750, 1750))]) == (frozenset(), frozenset())
 
 
+def test_apart_cells_skip_the_panel_zone() -> None:
+    """Decision 2026-11-18: within PANEL_FREE of the panel a low-voltage cable need not keep
+    APART from power: all cables leave the panel together."""
+    grid = Grid.of(box(0, 0, 2000, 2000))
+    power = [_v((250, 1050), (1750, 1050))]
+    panel = Vec(250, 1050)
+    along_x, _ = apart_cells(grid, power, panel)
+    every = apart_cells(grid, power)[0]
+    near = {k for k in every if (grid.center(k) - panel).length() < PANEL_FREE}
+    assert near and not near & along_x
+    assert min((grid.center(k) - panel).length() for k in along_x) >= PANEL_FREE
+
+
 def test_beside_mm_counts_overlap_once() -> None:
     path = _v((0, 100), (1000, 100))
     others = [_v((0, 0), (600, 0)), _v((400, 200), (800, 200)), _v((900, 300), (1000, 300))]
@@ -210,3 +252,32 @@ def test_search_memo_forgets_after_the_block() -> None:
         inside = Router(area, source)
     assert Router(area, source).dist is not inside.dist
     assert Router(area, source).dist is not Router(area, source).dist
+
+
+def test_route_is_traced_only_while_recording() -> None:
+    """Router.route gives the same path with and without recording; recording keeps the search:
+    the grid path, the final route and its cost."""
+    from floorplan_engine.electrical import trace
+    from floorplan_engine.electrical.routing import RouteTrace
+
+    router = Router(box(0, 0, 3000, 2000), End(Vec(150, 150), False))
+    target = End(Vec(2800, 1800), False)
+    plain = router.route(target)
+    with trace.recording() as events, trace.scope(line="wire_7"):
+        traced = router.route(target)
+    assert traced == plain
+    [event] = events
+    assert event.labels["line"] == "wire_7"
+    found = event.payload
+    assert isinstance(found, RouteTrace)
+    assert list(found.path) == plain
+    assert found.cost == router.cost(target.node)
+    assert found.cell_cost(found.start) == 0.0
+    assert found.cell_cost(found.target) == found.cost
+    assert found.wall_cells == 0
+    assert all(found.grid.index(c) in range(len(found.grid.free)) for c in found.cells)
+
+
+def test_grid_index_inverts_center() -> None:
+    grid = Grid.of(box(0, 0, 1000, 700))
+    assert all(grid.index(grid.center(k)) == k for k in range(len(grid.free)))

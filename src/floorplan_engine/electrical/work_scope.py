@@ -220,7 +220,8 @@ def write_scope_markdown(
     def t(key: str) -> str:
         return text(key, language)
 
-    out = [f"# {title}", "", t("intro"), "", t("extra"), ""]
+    consumables = estimate_text("note_consumables", language)
+    out = [f"# {title}", "", t("intro"), "", t("extra"), "", f"{consumables}.", ""]
     for section in SECTIONS:
         rows = [e for e in entries if e.section == section]
         if not rows:
@@ -255,6 +256,7 @@ def scope_sheet(
     def add(wb: Workbook) -> None:
         ws = wb.create_sheet(t("sheet")[:31])
         ws.append([t("extra")])
+        ws.append([f"{estimate_text('note_consumables', language)}."])
         ws.append([])
         ws.append(
             [

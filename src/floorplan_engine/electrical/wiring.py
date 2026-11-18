@@ -32,6 +32,10 @@ Variant rules:
   second (PASS_MARK) → lights; a LIGHT_LOOP loop at each ceiling light for its future output.
   The group's other switches in the room are fed from a switch flush box, not from the panel;
   Otherwise light goes through a box, as below;
+- behind a box, lights of one set (decision 2026-11-18, _lamp_sets: one kind, the same
+  switches) share one cable: the box feeds the nearest of them, the cable goes on from light to
+  light with a LIGHT_LOOP at each ceiling light; a box joins different sets, switches and
+  outputs, it does not split one set into branches;
 - LED supplies in the panel (Electrical.led_supply "board", decision 2026-11-11): each LED
   output gets a 12 V line of its own from the panel (Run.led, low-voltage chases), in the
   group of the output; its switch stays in the group as before. The supplies stand in a box
@@ -44,6 +48,10 @@ Variant rules:
   walls (branch_reach) are nearly the shortest, the one closest to their middle (decision
   2026-11-01); for a floor group, on a wall at BOX_ABOVE_FLOOR from the floor where the path
   from the panel plus branches is smallest;
+- a box does not stand on lines that do not go into it (decision 2026-11-17, _clear_boxes):
+  after routing, a box whose square touches a passing line of its plane (with the bundle lanes
+  as on the sheet) moves to the nearest spot by the rule above off those lines, and the lines
+  are routed again; a box moved by hand, or with no such spot, stays, with a warning;
 - routes run at right angles around walls (the same path as on the sheet): on the ceiling,
   or for a group with route: floor in the floor screed; at least routing.CLEARANCE (150 mm)
   from walls, except the approach to a wall point and the pass through an opening; in
@@ -64,12 +72,17 @@ low_feeds) sets their source from the project: `board`, `media` or another low p
 to the TV zone, separate lines from there on); each target gets a line of its own from it, of
 the cable's type. A line from a point goes through the whole flat via the openings.
 
+A box on the ceiling (floor) with 2 to ONE_SIDE_MAX cables takes them all from one side
+(decision 2026-11-18, _one_side): they leave it together, straight, for BOX_LEAD_MM and part only
+there, so the cables lie evenly; boxes with more cables keep their routes.
+
 Internet and TV apart from power (decision 2026-11-13, _apart, routing.apart_cells): on the
 ceiling and on the floor such a cable runs no closer than routing.APART (150 mm) beside a power
 cable and crosses it at 90°. It is routed after the power lines (with their manual routes), so it
-goes round them; it comes closer only where there is no other way: at the panel and at a socket
-block. A 12 V LED line is not held apart; a manual route of the cable itself stays as drawn; at
-any angle (economy) the rule is not applied.
+goes round them; it comes closer only where there is no other way (a socket block, a narrow
+corridor). Within routing.PANEL_FREE (300 mm) of the panel neither the distance nor the 90°
+crossing applies (decision 2026-11-18). A 12 V LED line is not held apart; a manual route of
+the cable itself stays as drawn; at any angle (economy) the rule is not applied.
 
 Chases (wall_chases) are vertical: from the ceiling down (or the floor up) to a wall point,
 at the panel and at a box. A drop never crosses an opening: to a point under a window it goes
@@ -104,25 +117,28 @@ from __future__ import annotations
 
 import itertools
 import re
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field, replace
 
 import shapely
-from shapely.geometry import LineString, Polygon
+from shapely.geometry import LineString, Point, Polygon
 from shapely.geometry.base import BaseGeometry
 
+from floorplan_engine.electrical import trace
 from floorplan_engine.electrical.anchors import Anchor, board_anchor, point_anchor
 from floorplan_engine.electrical.boxes import (
     BOX_BRANCHES,
     BOX_SIZE_MM,
     anchor_end,
     box_size,
+    box_square,
     branch_reach,
     moved_anchor,
     place_box,
     place_ceiling_box,
     split_points,
 )
+from floorplan_engine.electrical.bundles import lane_paths
 from floorplan_engine.electrical.chases import (
     before_plaster,
     channel_chases,
@@ -135,6 +151,7 @@ from floorplan_engine.electrical.chases import (
 )
 from floorplan_engine.electrical.detours import drop_offset
 from floorplan_engine.electrical.floor_heating import heating_zones
+from floorplan_engine.electrical.frames import entries
 from floorplan_engine.electrical.groups import group_key
 from floorplan_engine.electrical.groups import text as group_text
 from floorplan_engine.electrical.led_supply import led_loads, led_mark, section_for
@@ -142,6 +159,7 @@ from floorplan_engine.electrical.loads import DEFAULT_MARK, LOW_TYPES, POWER_TYP
 from floorplan_engine.electrical.master import CONTROL_ID, CONTROL_MARK, master_point
 from floorplan_engine.electrical.panel import scheme_of
 from floorplan_engine.electrical.routing import (
+    End,
     Router,
     drillable_walls,
     fit_path,
@@ -200,6 +218,21 @@ TWO_KEY_MARK = "4x1.5"  # from a two-key switch to its lights: two switched line
 BACK_BOX_FEEDS = 3  # feeds to the next switches from one flush box (assumption: a deep box)
 FRAME_SPAN = 100.0  # mm along the wall: mechanisms this close at one height share a frame
 BOX_LINES_MAX = BOX_BRANCHES + 1  # lines in a 150×110 box: no more feeds from a full one
+# A box keeps off lines that do not go into it (decision 2026-11-17, _clear_boxes): at most this
+# many rounds of moving boxes and routing again; a line closer than BOX_LINE_CLEAR_MM on the sheet
+# counts as touching
+BOX_CLEAR_ROUNDS = 3
+BOX_LINE_CLEAR_MM = 0.3
+# The white box square does not cover point symbols either (2026-11-18): a symbol is kept off as
+# its outline (anchors.SYMBOL_DEPTH) widened by POINT_MARK_MM for its number beside it; a wall
+# symbol is at least POINT_HALF_MM wide on each side of its axis
+POINT_MARK_MM = 1.5
+POINT_HALF_MM = 2.0
+# A box on the ceiling (floor) with this many cables or fewer takes them all from one side
+# (decision 2026-11-18, _one_side): they leave it together, straight, for BOX_LEAD_MM
+ONE_SIDE_MAX = 3
+BOX_LEAD_MM = 150.0
+SIDES = (Vec(1.0, 0.0), Vec(0.0, 1.0), Vec(-1.0, 0.0), Vec(0.0, -1.0))
 
 
 def _one_feed(elec: Electrical) -> bool:
@@ -381,17 +414,32 @@ def box_wiring(
     notes: list[tuple[str, str]] = []
     if edits is not None:
         boxes, links = _moved_boxes(ctx, boxes, links, edits, edited, notes)
-    runs = _route_runs(ctx, links, boxes)
-    if edits is not None:
-        passable = shapely.unary_union([free, *walls]) if walls else free
-        runs = _manual_runs(runs, edits.wires, passable, edited, notes, any_angle)
-    runs = _apart(ctx, links, boxes, runs, edited)
+    passable = shapely.unary_union([free, *walls]) if walls else free
+    wire_notes: list[tuple[str, str]] = []
+
+    rounds = itertools.count()
+
+    def route(boxes: Sequence[JunctionBox], links: Sequence[_Link]) -> list[Run]:
+        """All line routes for these box spots: auto, manual from wiring.yaml, then internet
+        and TV apart from power; the manual-route notes are those of the last call."""
+        with trace.scope(round=next(rounds)):
+            runs = _route_runs(ctx, links, boxes)
+            wire_notes.clear()
+            if edits is not None:
+                runs = _manual_runs(runs, edits.wires, passable, edited, wire_notes, any_angle)
+            return _apart(ctx, links, boxes, runs, edited)
+
+    runs = route(boxes, links)
+    boxes, links, runs, box_notes = _clear_boxes(ctx, boxes, links, runs, route, edited)
+    notes += wire_notes
     if led:
         runs = _led_sections(runs, elec)
     height_assumed = "ceiling_height" not in plan.model_fields_set
     skipped = tuple(p.id for p in elec.points if not p.group and p is not master and p not in low)
+    wall_dirs = {k: a.wall_dir for k, a in ctx.anchors.items() if a.wall_dir is not None}
+    entry = entries(elec.points, runs, wall_dirs)
     drops = with_conduit(
-        wall_chases(runs, elec.points, elec.board, boxes, elec.media),
+        wall_chases(runs, elec.points, elec.board, boxes, elec.media, entry),
         elec.conduit_level,
         elec.loop_conduit,
     )
@@ -415,7 +463,146 @@ def box_wiring(
         drops,
         shared_rises(runs, elec.points, elec.conduit_level, elec.loop_conduit),
         heating_zones(plan, contours, elec),
+        box_notes=tuple(box_notes),
+        entries=tuple(sorted(entry.items())),
     )
+
+
+def _clear_boxes(
+    ctx: _Context,
+    boxes: Sequence[JunctionBox],
+    links: Sequence[_Link],
+    runs: Sequence[Run],
+    route: Callable[[Sequence[JunctionBox], Sequence[_Link]], list[Run]],
+    edited: set[str],
+) -> tuple[list[JunctionBox], list[_Link], list[Run], list[tuple[str, str]]]:
+    """A box does not stand on lines that do not go into it (decision 2026-11-17): its square
+    (boxes.box_square, as on the wiring sheet) touches only its own lines, the feed in and its
+    branches. Lines of its plane (ceiling or floor) that pass by, with their bundle lanes as
+    drawn (bundles.lane_paths), are checked after routing; a box on them gets the nearest
+    spot by the usual rule among those off them (_box_spot with avoid), and all lines are
+    routed again, at most BOX_CLEAR_ROUNDS times (a moved box changes the lanes). A box moved
+    by hand in wiring.yaml stays. A box still on foreign lines stays where it is, with a
+    warning (box id, what was done) for the report."""
+    boxes, links, runs = list(boxes), list(links), list(runs)
+    tried: set[str] = set()  # boxes with no free spot left
+    for _ in range(BOX_CLEAR_ROUNDS):
+        hits = _foreign_hits(ctx, boxes, runs)
+        moved: dict[str, Anchor] = {}
+        for b in boxes:
+            if b.id not in hits or f"box:{b.id}" in edited or b.id in tried:
+                continue
+            spot = _box_spot(
+                ctx, b.room, _box_targets(ctx, b, links), boxes, b.route, hits[b.id], b.id
+            )
+            if spot is None:
+                tried.add(b.id)
+                continue
+            moved[b.id] = spot
+        if not moved:
+            break
+        if trace.on():
+            for b in boxes:
+                if b.id in moved:
+                    trace.emit(BoxMove(b.id, b.anchor.node, moved[b.id].node, hits[b.id]))
+        boxes = [replace(b, anchor=moved[b.id]) if b.id in moved else b for b in boxes]
+        links = [
+            replace(ln, target_anchor=moved[ln.target]) if ln.target in moved else ln
+            for ln in links
+        ]
+        runs = route(boxes, links)
+    notes: list[tuple[str, str]] = []
+    left = _foreign_hits(ctx, boxes, runs)
+    for b in boxes:
+        if b.id not in left:
+            continue
+        if f"box:{b.id}" in edited:
+            why = "перенесена вручную в wiring.yaml — не сдвигается"
+        elif b.id in tried:
+            why = "в помещении нет места вне чужих трасс — оставлена"
+        else:
+            why = "после переноса на неё снова легли трассы — оставлена"
+        notes.append(
+            (b.id, f"коробка {b.label} ({b.group}, {b.room}) стоит на чужих трассах: {why}")
+        )
+    return boxes, links, runs, notes
+
+
+@dataclass(frozen=True)
+class BoxMove:
+    """A box moved off lines that pass by (_clear_boxes), for the debug trace (trace.py)."""
+
+    box: str
+    before: Vec
+    after: Vec
+    avoid: BaseGeometry  # the passing lines, widened: what the box keeps off
+
+
+def _foreign_hits(
+    ctx: _Context, boxes: Sequence[JunctionBox], runs: Sequence[Run]
+) -> dict[str, BaseGeometry]:
+    """Boxes whose square touches a line that does not go into them or a point symbol of its room
+    (_point_marks) → those lines of its plane in its room as drawn (lanes), widened by
+    BOX_LINE_CLEAR_MM, and the symbols: the area the box must keep off."""
+    paths, _ = lane_paths(runs, ctx.free)
+    size = sheet(BOX_SIZE_MM)
+    clear = sheet(BOX_LINE_CLEAR_MM)
+    keys = [k for k in range(len(runs)) if len(paths[k]) > 1]
+    bands = [LineString([p.as_tuple() for p in paths[k]]).buffer(clear) for k in keys]
+    tree = shapely.STRtree(bands)
+    out: dict[str, BaseGeometry] = {}
+    ids = {b.id for b in boxes}
+    for b in boxes:
+        mine = _box_reach(b.id, runs, ids)  # a set chain behind the box is its own line too
+
+        def foreign(i: int, b: JunctionBox = b, mine: set[str] = mine) -> bool:
+            r = runs[keys[i]]
+            return r.route == b.route and b.id != r.target and r.source not in mine
+
+        square = box_square(b.anchor, size)
+        marks = _point_marks(ctx, b.room)
+        if not square.intersects(marks) and not any(
+            foreign(int(i)) for i in tree.query(square, predicate="intersects")
+        ):
+            continue
+        room = room_area(ctx.geoms[b.room])
+        near = [bands[int(i)] for i in tree.query(room, predicate="intersects") if foreign(int(i))]
+        area = shapely.unary_union([*near, marks])
+        shapely.prepare(area)
+        out[b.id] = area
+    return out
+
+
+def _point_marks(ctx: _Context, room: str) -> BaseGeometry:
+    """Point symbols of a room as drawn, with room for their numbers: a box keeps off them
+    (_foreign_hits), its white square would hide them."""
+    pad = sheet(POINT_MARK_MM)
+    marks: list[BaseGeometry] = []
+    for pid, a in sorted(ctx.anchors.items()):
+        if ctx.rooms.get(pid) != room:
+            continue
+        if a.inward is None:
+            marks.append(Point(a.pos.as_tuple()).buffer(a.depth + pad))
+        else:
+            half = max(a.depth / 2, sheet(POINT_HALF_MM))
+            marks.append(LineString([a.pos.as_tuple(), a.node.as_tuple()]).buffer(half + pad))
+    return shapely.unary_union(marks)
+
+
+def _box_reach(box: str, lines: Sequence[_Link] | Sequence[Run], boxes: set[str]) -> set[str]:
+    """The box and the points it feeds: its branches and the lights of a set chain behind
+    them (a chain line always comes after the line to its source)."""
+    reach = {box}
+    for ln in lines:
+        if ln.source in reach and ln.target not in boxes:
+            reach.add(ln.target)
+    return reach
+
+
+def _box_targets(ctx: _Context, b: JunctionBox, links: Sequence[_Link]) -> list[ElectricalPoint]:
+    """Points a box feeds: its branches and the lights of a set chain behind them."""
+    reach = _box_reach(b.id, links, {ln.target for ln in links if ln.target not in ctx.points})
+    return [ctx.points[ln.target] for ln in links if ln.target in reach and ln.target in ctx.points]
 
 
 def _moved_boxes(
@@ -541,6 +728,15 @@ def _group_links(
     def direct(p: ElectricalPoint) -> None:
         to_point("board", height, board_rise, p)
 
+    def lamp_link(a: ElectricalPoint, b: ElectricalPoint) -> None:
+        """Light to light of one set behind a box: on the ceiling if either end is there."""
+        on_ceiling = route == "ceiling" or a.ceiling is not None or b.ceiling is not None
+        way: Route = "ceiling" if on_ceiling else "floor"
+        line = _Link(group, mark, assumed, a.id, b.id, ctx.anchors[b.id],
+                     _rise(a, ctx.ceiling, way), _rise(b, ctx.ceiling, way), way, circuit,
+                     ends=_lamp_end(a, out=True) + _lamp_end(b))  # fmt: skip
+        links.append(line)
+
     def chain(part: Sequence[ElectricalPoint]) -> None:
         """Daisy chain: the point nearest to the panel from it, then from point to point."""
         left = sorted(part, key=lambda p: (ctx.from_board.cost(ctx.anchors[p.id].node), p.id))
@@ -586,6 +782,7 @@ def _group_links(
                 up, down = _rise(tap, ctx.ceiling, route), _rise(p, ctx.ceiling, route)
                 link(tap.id, p.id, ctx.anchors[p.id], up, down, cross=tap.room != p.room)
                 pts = [q for q in pts if q is not p]
+    sets = _lamp_sets(elec, pts)
     # A switch is tapped into the box of its light: in a room where the group has only
     # switches (by the door outside) they get no box or panel line of their own
     lit = {p.room for p in pts if p.type not in SWITCH_TYPES}
@@ -630,8 +827,13 @@ def _group_links(
                 link("board", box.id, box.anchor, board_rise, box.rise_mm)
             else:  # the group's cable is already in the room: from the box it came to
                 link(src.id, box.id, box.anchor, src.rise_mm, box.rise_mm)
-            for p in part:
-                to_point(box.id, _box_height(box, ctx.ceiling), box.rise_mm, p)
+            for run in _lamp_runs(ctx, box, part, sets):
+                head = run[0]
+                to_point(box.id, _box_height(box, ctx.ceiling), box.rise_mm, head)
+                if len(run) > 1:  # a light set: the cable goes on from light to light
+                    links[-1] = replace(links[-1], ends=END_ALLOWANCE + _lamp_end(head))
+                    for a, b in itertools.pairwise(run):
+                        lamp_link(a, b)
     own = [b for b in boxes if b.group == group]
     for p in outside:
         near = _nearest_box(ctx, own, ctx.anchors[p.id])
@@ -640,6 +842,64 @@ def _group_links(
             continue
         to_point(near.id, _box_height(near, ctx.ceiling), near.rise_mm, p, cross=True)
     return links
+
+
+def _lamp_sets(elec: Electrical, pts: Sequence[ElectricalPoint]) -> dict[str, tuple[object, ...]]:
+    """Light set of each light of a group (decision 2026-11-18): lights of one kind turned on by
+    the same switches (switch_links) light up together, so behind a box they share one cable.
+    LED outputs are not in a set: each has its own supply."""
+    ids = {p.id for p in pts}
+    by: dict[str, set[str]] = {}
+    for lk in switch_links(elec):
+        for t in lk.targets:
+            if t in ids:
+                by.setdefault(t, set()).add(lk.switch)
+    return {
+        p.id: (p.type.value, tuple(sorted(by.get(p.id, ()))))
+        for p in pts
+        if p.type in LAMP_TYPES and p.type is not PointType.LED_OUTPUT
+    }
+
+
+def _lamp_runs(
+    ctx: _Context,
+    box: JunctionBox,
+    part: Sequence[ElectricalPoint],
+    sets: dict[str, tuple[object, ...]],
+) -> list[list[ElectricalPoint]]:
+    """Branches of a box (decision 2026-11-18): one per point, except the lights of one set
+    (_lamp_sets), which go in a chain: the box feeds the light of the set nearest to it, the
+    cable goes on to the nearest light not yet taken. A box joins different sets, switches and
+    outputs; it does not split one set into branches."""
+    out: list[list[ElectricalPoint]] = []
+    grouped: dict[tuple[object, ...], list[ElectricalPoint]] = {}
+    for p in part:
+        key = sets.get(p.id)
+        if key is None:
+            out.append([p])
+        else:
+            grouped.setdefault(key, []).append(p)
+    at = box.anchor.node
+    for left in grouped.values():
+        prev = min(left, key=lambda q: ((ctx.anchors[q.id].node - at).length(), q.id))
+        left.remove(prev)
+        run = [prev]
+        while left:
+            node = ctx.anchors[prev.id].node
+            prev = min(left, key=lambda q: ((ctx.anchors[q.id].node - node).length(), q.id))
+            left.remove(prev)
+            run.append(prev)
+        out.append(run)
+    order = {p.id: k for k, p in enumerate(part)}
+    return sorted(out, key=lambda r: order[r[0].id])
+
+
+def _lamp_end(p: ElectricalPoint, out: bool = False) -> float:
+    """Cable at a light of a set chain: a LIGHT_LOOP loop at a ceiling light (the cable comes in
+    there; going out it adds nothing more), the usual END_ALLOWANCE at a wall light."""
+    if p.ceiling is None:
+        return END_ALLOWANCE
+    return 0.0 if out else LIGHT_LOOP
 
 
 def _box_feeders(
@@ -930,16 +1190,21 @@ def _box_spot(
     part: Sequence[ElectricalPoint],
     boxes: Sequence[JunctionBox],
     route: Route,
+    avoid: BaseGeometry | None = None,
+    own: str = "",
 ) -> Anchor | None:
     """Box spot for the points of a zone: on the ceiling at the centre of the points for a ceiling
-    route, on a wall for a floor route."""
+    route, on a wall for a floor route; off avoid (other lines, _clear_boxes). own is the box
+    being moved: its old spot does not count as taken."""
     g = ctx.geoms[room]
-    taken = [b.anchor.node for b in boxes if b.room == room]
+    taken = [b.anchor.node for b in boxes if b.room == room and b.id != own]
     targets = [ctx.anchors[p.id] for p in part]
+    if not targets:
+        return None
     reach = branch_reach(g, targets, ctx.any_angle)
     if route == "floor":
-        return place_box(g, ctx.from_board, reach, taken)
-    return place_ceiling_box(g, reach, targets, taken, sheet(BOX_SIZE_MM))
+        return place_box(g, ctx.from_board, reach, taken, avoid)
+    return place_ceiling_box(g, reach, targets, taken, sheet(BOX_SIZE_MM), avoid)
 
 
 def _comms(circuit: Circuit, led: bool) -> bool:
@@ -980,6 +1245,7 @@ def _route_runs(
     for r in beside or ():
         beside_paths[r.route].append(r.path)
     apart: dict[tuple[int, Route], Router] = {}
+    board = ctx.from_board.source.node  # no APART within PANEL_FREE of it
     routes = {ln.source: ln.route for ln in links}
     drops = {
         (pid, route): spot
@@ -1016,6 +1282,7 @@ def _route_runs(
         area = room_area(ctx.geoms[ctx.rooms[src]])
         routers[src] = Router(area, anchor_end(source_anchor(src)), ctx.any_angle)
     runs: list[Run] = []
+    ways: list[tuple[Router, End] | None] = []  # each run's router and target, for _one_side
     for k, ln in todo:
         if ln.source == "board":
             router = ctx.from_board
@@ -1026,15 +1293,25 @@ def _route_runs(
         if beside is not None:
             key = (id(router), ln.route)
             if key not in apart:
-                apart[key] = router.apart_from(beside_paths[ln.route])
+                apart[key] = router.apart_from(beside_paths[ln.route], board)
             router = apart[key]
         end = drops.get((ln.target, ln.route)) if ln.target_rise > 0 else None
         start = drops.get((ln.source, ln.route)) if ln.source_rise > 0 else None
         path: tuple[Vec, ...]
+        target = anchor_end(end[0] if end else ln.target_anchor)
+        ways.append(None if ln.wall else (router, target))
         if ln.wall:  # one frame: the cable does not leave the wall, no lane on the route grid
             path = (ctx.anchors[ln.source].node, ln.target_anchor.node)
         else:
-            path = tuple(router.route(anchor_end(end[0] if end else ln.target_anchor)))
+            with trace.scope(
+                line=f"wire_{k + 1}",
+                group=ln.group,
+                source=ln.source,
+                target=ln.target,
+                plane=ln.route,
+                stage="main" if beside is None else "apart",
+            ):
+                path = tuple(router.route(target))
         runs.append(
             Run(
                 id=f"wire_{k + 1}",
@@ -1055,7 +1332,106 @@ def _route_runs(
                 led=ln.led,
             )
         )
-    return runs
+    return _one_side(boxes, runs, ways, ctx.any_angle) if beside is None else runs
+
+
+def _one_side(
+    boxes: Sequence[JunctionBox],
+    runs: Sequence[Run],
+    ways: Sequence[tuple[Router, End] | None],
+    any_angle: bool,
+) -> list[Run]:
+    """A box on the ceiling (floor) with 2 to ONE_SIDE_MAX cables takes them all from one side
+    (decision 2026-11-18): the cables run together, straight, BOX_LEAD_MM out of that side and
+    part only there, so they lie evenly. The side is the one with the shortest cables in all,
+    with its lead inside the room and no cable turning back over the box (_via_lead). A cable
+    between two such boxes goes through both leads. A wall box needs none of it: its cables all
+    come down from the top. Boxes with more cables keep their routes. ways are each run's
+    router and target end."""
+    out = list(runs)
+    nodes = {b.id: b.anchor.node for b in boxes}
+    leads: dict[str, Vec] = {}  # boxes given a side: the lead in front of it
+    for b in boxes:
+        mine = [k for k, r in enumerate(out) if b.id in (r.source, r.target)]
+        if not b.on_ceiling or not 2 <= len(mine) <= ONE_SIDE_MAX:
+            continue
+        if any(ways[k] is None for k in mine):
+            continue
+        best: tuple[float, Vec, dict[int, _Via]] | None = None
+        for side in SIDES:
+            here = {**leads, b.id: b.anchor.node + side * BOX_LEAD_MM}
+            vias: dict[int, _Via] = {}
+            for k in mine:
+                way = ways[k]
+                assert way is not None
+                r = out[k]
+                start = (nodes[r.source], here[r.source]) if r.source in here else None
+                end = (here[r.target], nodes[r.target]) if r.target in here else None
+                via = _via_lead(start, end, *way, any_angle)
+                if via is None:
+                    break
+                vias[k] = via
+            if len(vias) < len(mine):
+                continue
+            total = sum(length(v.path()) for v in vias.values())
+            if best is None or total < best[0] - 1e-6:
+                best = (total, here[b.id], vias)
+        if best is not None:
+            leads[b.id] = best[1]
+            for k, via in best[2].items():
+                with trace.scope(line=out[k].id, group=out[k].group, stage="one_side"):
+                    path = via.path()
+                out[k] = replace(out[k], path=path, plan_mm=length(path))
+    return out
+
+
+@dataclass(frozen=True)
+class _Via:
+    """A route through box leads (_via_lead): the router, where it goes and the straight
+    pieces from and into the boxes."""
+
+    router: Router
+    to: End
+    before: tuple[Vec, ...]
+    after: tuple[Vec, ...]
+
+    def path(self) -> tuple[Vec, ...]:
+        return tuple(self.router.route(self.to, self.before, self.after))
+
+
+def _via_lead(
+    start: tuple[Vec, Vec] | None,
+    end: tuple[Vec, Vec] | None,
+    router: Router,
+    target: End,
+    any_angle: bool,
+) -> _Via | None:
+    """A cable through the leads of its boxes (_one_side): start is (box, lead) when it leaves a
+    box from a side, end is (lead, box) when it comes into one; otherwise the run's own router
+    and target. A route that turns back over a box is tried again kept off the stubs (as low
+    voltage off power); None if it still does, or if a lead is outside the router's area."""
+    stubs = [s for s in (start, end) if s is not None]
+    if not all(router.area.contains(Point(v.as_tuple())) for s in stubs for v in s):
+        return None
+    to = End(end[0], False) if end is not None else target
+    boxes = ([Point(start[0].as_tuple())] if start else []) + (
+        [Point(end[1].as_tuple())] if end else []
+    )
+    for beside in ((), tuple(stubs)):
+        if start is not None:
+            begin = End(start[1], False)
+            used = Router(router.area, begin, any_angle, router.walls, beside)
+        elif beside:
+            used = Router(router.area, router.source, any_angle, router.walls, beside)
+        else:
+            used = router
+        rest = used.route(to)
+        line = (
+            LineString([v.as_tuple() for v in rest]) if len(rest) > 1 else Point(rest[0].as_tuple())
+        )
+        if all(line.distance(p) >= BOX_LEAD_MM / 2 for p in boxes):
+            return _Via(used, to, start[:1] if start else (), end[1:] if end else ())
+    return None
 
 
 def _led_sections(runs: Sequence[Run], elec: Electrical) -> list[Run]:

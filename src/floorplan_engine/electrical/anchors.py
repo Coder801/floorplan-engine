@@ -20,7 +20,8 @@ SOCKET_R = 2.0
 SOCKET_DEPTH = WALL_GAP + SOCKET_R  # to the tangent line (earth line)
 SWITCH_R = 1.0
 SWITCH_ARM = 3.0
-SWITCH_DEPTH = WALL_GAP + 2 * SWITCH_R + SWITCH_ARM * math.sin(math.radians(45))
+# the switch circle is centred on the wall face, half of it on the wall (feedback 2026-11-17)
+SWITCH_DEPTH = SWITCH_R + SWITCH_ARM * math.sin(math.radians(45))
 LIGHT_R = 2.5
 DOWNLIGHT_R = 1.0
 PENDANT_R = 2.0

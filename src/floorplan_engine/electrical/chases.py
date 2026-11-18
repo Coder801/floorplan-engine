@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import math
 from collections import defaultdict
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import replace
 
 from shapely.geometry import LineString, Point, Polygon
@@ -48,10 +48,13 @@ def wall_chases(
     board: Board | None,
     boxes: Sequence[JunctionBox],
     media: Board | None = None,
+    entries: Mapping[str, float] | None = None,
 ) -> tuple[Chase, ...]:
     """Wall chases: shared by drops close together (CHASE_SHARE), up to CHASE_CABLES cables. A
     drop beside an opening (Run.end_drop, start_drop) is at its own spot and turns along the
-    wall to the point (Chase.bend)."""
+    wall to the point (Chase.bend); any other goes to the point's frame entry (entries,
+    frames.py: the side of the block), without one above the point."""
+    entries = entries or {}
     by_id = {p.id: p for p in points}
     drops: dict[ChaseKey, list[_Drop]] = defaultdict(list)
     for r in runs:
@@ -65,7 +68,7 @@ def wall_chases(
                 continue
             bend = None if at is None or p.height is None else (p.offset, p.height)
             drops[(p.room, p.wall, r.route, r.lay)].append(
-                (p.offset if at is None else at, rise, p.id, bend)
+                (entries.get(p.id, p.offset) if at is None else at, rise, p.id, bend)
             )
     out: list[Chase] = []
     for key, items in sorted(drops.items()):

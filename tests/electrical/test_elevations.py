@@ -3,9 +3,18 @@
 from __future__ import annotations
 
 import itertools
+from dataclasses import replace
 
 from floorplan_engine.drawing.elevations import elevation_panel, spread
-from floorplan_engine.electrical.elevations import WallElevation, elevation_data, wall_elevations
+from floorplan_engine.electrical.elevations import (
+    WallElevation,
+    WaterView,
+    electrical_walls,
+    elevation_data,
+    plumbing_walls,
+    wall_elevations,
+)
+from floorplan_engine.electrical.frames import BOX_HALF_MM
 from floorplan_engine.electrical.wiring import box_wiring
 from floorplan_engine.model.geometry import DOOR_TOP_MM
 from floorplan_engine.model.schema import CableChannel, Electrical, Plan
@@ -89,6 +98,26 @@ def test_walls_with_electrics_only_and_their_content() -> None:
     assert {1000, 2500} <= set(w2.offsets()) and 300 in w2.heights()
     # A wall box with a mark below the ceiling
     assert all(b.y == w2.height - 200 for b in w2.boxes)
+
+
+def test_electrical_and_plumbing_walls_keep_only_their_own() -> None:
+    plan = make_plan(WALLS, [DOOR])
+    _, contours = validate_plan(plan)
+    elec = _elec([{"id": "s1", "offset": 1000, "height": 300, **SOCKETS}])
+    wiring = box_wiring(plan, contours, elec)
+    sink = WaterView("f1", 1, "cold", 500, 600, 15, False)
+    water = {("r", "w2"): [sink], ("r", "w3"): [replace(sink, kind="hot")]}
+    walls = wall_elevations(plan, contours, elec, wiring, water=water)
+    electrical = {e.wall: e for e in electrical_walls(walls)}
+    plumbing = {e.wall: e for e in plumbing_walls(walls)}
+    # w3 has only water: no electrical elevation; w1 only the panel: no plumbing one
+    assert "w3" not in electrical and {"w1", "w2"} <= set(electrical)
+    assert set(plumbing) == {"w2", "w3"}
+    assert all(not e.water for e in electrical.values())
+    w2 = plumbing["w2"]
+    assert w2.water == (sink,) and w2.openings == electrical["w2"].openings
+    assert not (w2.points or w2.boxes or w2.chases or w2.cables or w2.fixings or w2.back)
+    assert w2.board is None and not w2.electrical and electrical["w2"].electrical
 
 
 def test_points_at_one_spot_share_a_frame_with_low_voltage_last() -> None:
@@ -175,7 +204,6 @@ def test_behind_names_neighbour_and_its_wall() -> None:
 
 
 def test_elevation_side_line() -> None:
-    from dataclasses import replace
 
     from floorplan_engine.drawing.elevations import _side
 
@@ -374,8 +402,13 @@ def test_cables_run_from_the_ceiling_to_their_points_and_fixings_count_them() ->
     w2 = next(e for e in wall_elevations(plan, contours, elec, wiring) if e.wall == "w2")
     assert w2.cables
     ceiling = wiring.ceiling_height
-    to_points = {(c.x, c.y0, c.y1) for c in w2.cables if c.x in (1000, 2500)}
-    assert {(1000, 300, ceiling), (2500, 300, ceiling)} <= to_points
+    # Into the side of each socket (frames.py): at a frame edge, down to the box top
+    entry = dict(wiring.entries)
+    assert {entry["s1"], entry["s2"]} <= {1000 - 35.5, 1000 + 35.5, 2500 - 35.5, 2500 + 35.5}
+    to_points = {(c.x, c.y0, c.y1) for c in w2.cables}
+    top = 300 + BOX_HALF_MM
+    assert {(entry["s1"], top, ceiling), (entry["s2"], top, ceiling)} <= to_points
+    assert all(c.x in (entry["s1"], entry["s2"]) for c in w2.chases)
     assert all(f.count >= 1 for f in w2.fixings)
     data = next(
         d for d in elevation_data(plan, contours, elec, wiring, {}) if d["key"] == "elevation:r.w2"
@@ -473,3 +506,57 @@ def test_thermostat_on_an_elevation_is_a_square_with_a_dial() -> None:
     data = wall_elevations(plan, contours, _elec([{"id": "p1", "type": "thermostat",
                                                    "offset": 1000, **wall}]), None)  # fmt: skip
     assert [p.type.value for e in data for p in e.points] == ["thermostat"]
+
+
+# Left side of the room in two parts with no corner between them (turn 180): 3000 + 1000
+SPLIT = [
+    {"length": 3000, "turn": 180},
+    {"length": 1000},
+    {"length": 4000},
+    {"length": 4000},
+    {"length": 4000},
+]
+
+
+def test_surfaces_join_walls_without_a_corner() -> None:
+    from floorplan_engine.model.wall_names import surfaces
+
+    plan = make_plan(SPLIT)
+    assert surfaces(plan.rooms[0]) == [[0, 1], [2], [3], [4]]
+    # The walk starts mid-plane: the last wall and the first are one surface
+    wrapped = make_plan([SPLIT[1], *SPLIT[2:], SPLIT[0]])
+    assert surfaces(wrapped.rooms[0]) == [[1], [2], [3], [4, 0]]
+
+
+def test_two_parts_in_one_plane_are_one_elevation() -> None:
+    """Items of the second part move along by the length of the first; a corner splits walls."""
+    plan = make_plan(SPLIT, [{"wall": "w2", "type": "door", "offset": 100, "width": 800}])
+    _, contours = validate_plan(plan)
+    sock = {"room": "r", "type": "socket", "group": "QF1", "height": 300}
+    elec = _elec(
+        [
+            {"id": "s1", "wall": "w1", "offset": 1000, **sock},
+            {"id": "s2", "wall": "w2", "offset": 500, **sock},
+            {"id": "s3", "wall": "w3", "offset": 500, **sock},
+        ]
+    )
+    walls = {e.key: e for e in wall_elevations(plan, contours, elec, None)}
+    assert set(walls) == {"r.w1", "r.w3"}
+    left = walls["r.w1"]
+    assert (left.parts, left.length) == (("w1", "w2"), 4000)
+    assert [(p.id, p.x) for p in left.points] == [("s1", 1000), ("s2", 3500)]
+    assert left.board is not None and left.board.x == 2000
+    (door,) = left.openings
+    assert (door.x0, door.x1) == (3100, 3900)
+    assert left.name is not None and (left.name.code, left.name.text) == (
+        "1.A–B",
+        "наружная, дверь",
+    )
+    assert walls["r.w3"].parts == ("w3",)
+
+    data = {e["key"]: e for e in elevation_data(plan, contours, elec, None, {})}
+    face = data["elevation:r.w1"]["face"]
+    assert face[0][1] == 0 and face[1][1] == 4000  # the whole plane, both parts
+    assert data["elevation:r.w1"]["right"]["key"] == "elevation:r.w3"
+    assert data["elevation:r.w3"]["left"]["key"] == "elevation:r.w1"
+    assert data["elevation:r.w3"]["left"]["length"] == 4000

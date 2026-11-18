@@ -22,11 +22,16 @@ from __future__ import annotations
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
-from typing import Any
+from typing import Any, TypeVar
 
 from shapely.geometry import Polygon
 
 from floorplan_engine.electrical.boxes import box_wall
+from floorplan_engine.electrical.frames import (
+    BOX_HALF_MM,
+    LOW_VOLTAGE,
+    posts,
+)
 from floorplan_engine.electrical.mounting import PRACTICE, BendSize, bend_size, bundle_radii, spots
 from floorplan_engine.electrical.point_numbers import number_points, point_name
 from floorplan_engine.electrical.routing import opening_strip
@@ -43,7 +48,6 @@ from floorplan_engine.model.geometry import (
 )
 from floorplan_engine.model.schema import (
     Electrical,
-    ElectricalPoint,
     OpeningType,
     Plan,
     PointType,
@@ -55,12 +59,11 @@ from floorplan_engine.model.wall_names import (
     WallName,
     behind,
     facing_segments,
-    wall_names,
+    surface_names,
+    surfaces,
 )
 
 BOARD_HEIGHT_MM = 400.0  # panel height on the elevation: not in the model, an assumption
-POST_PITCH_MM = 71.0  # post step in a frame
-LOW_VOLTAGE = (PointType.DATA, PointType.TV)
 BOX_DEFAULT_MM = 100.0
 
 
@@ -171,6 +174,9 @@ class WaterView:
 
 
 WaterMap = Mapping[tuple[str, str], Sequence[WaterView]]  # (room, wall) → supplies
+_View = TypeVar(
+    "_View", OpeningView, PointView, BoxView, ChaseView, FixingView, CableView, BoardView, WaterView
+)
 
 
 @dataclass(frozen=True)
@@ -193,6 +199,9 @@ class WallElevation:
     name: WallName | None = None  # code and description (model/wall_names.py)
     fixings: tuple[FixingView, ...] = ()  # fixings on the cable drops (decision 2026-11-11)
     cables: tuple[CableView, ...] = ()  # the cables along the wall (decision 2026-11-12)
+    # Walls of the surface in walk order (decision 2026-11-17): neighbours with no corner between
+    # them (turn 180) are one plane, one elevation; x runs from the start of the first one
+    parts: tuple[str, ...] = ()
 
     @property
     def title(self) -> str:
@@ -213,6 +222,18 @@ class WallElevation:
         if self.board is not None:
             tops.append(self.board.y + self.board.height / 2)
         return max([self.height, *tops])
+
+    @property
+    def electrical(self) -> bool:
+        """Something electrical on the wall: points, panel, boxes, chases, cables or fixings."""
+        return bool(
+            self.points
+            or self.boxes
+            or self.chases
+            or self.cables
+            or self.fixings
+            or self.board is not None
+        )
 
     def above_ceiling(self) -> list[str]:
         """Ids of points above the ceiling."""
@@ -259,7 +280,7 @@ def wall_elevations(
     assumed = wiring.height_assumed if wiring is not None else True
     numbers = number_points(plan, elec)
     geoms = {g.room.id: g for g in room_geometries(plan, contours)}
-    names = wall_names(plan, contours)
+    names = surface_names(plan, contours)
     doors = _doors(geoms)
     walls: dict[tuple[str, str], _Wall] = defaultdict(_Wall)
 
@@ -267,7 +288,7 @@ def wall_elevations(
         if p.wall is None or p.offset is None or p.height is None:
             continue
         walls[(p.room, p.wall)].points.append(
-            PointView(p.id, numbers[p.id], p.type, p.offset, p.height, _posts(p))
+            PointView(p.id, numbers[p.id], p.type, p.offset, p.height, posts(p))
         )
     if elec.board is not None:
         b = elec.board
@@ -307,7 +328,7 @@ def wall_elevations(
                     c.offset, _vertical(c), c.route, ceiling, max(c.cables, 1), walls_in(c.route)
                 )
         for r in wiring.runs:
-            for wall_key, cable in _cables(r, elec, box_at, ceiling):
+            for wall_key, cable in _cables(r, elec, box_at, ceiling, dict(wiring.entries)):
                 walls[wall_key].cables.append(cable)
         by_id = {run.id: run for run in wiring.runs}
         for wall_view in walls.values():
@@ -340,40 +361,108 @@ def wall_elevations(
 
     out: list[WallElevation] = []
     for room in plan.rooms:
-        for k, wall in enumerate(room.walls, 1):
-            w = walls.get((room.id, wall.id))
-            wet = tuple(sorted((water or {}).get((room.id, wall.id), ()), key=lambda v: v.x))
-            if w is None and not wet:
+        g = geoms[room.id]
+        for chain in surfaces(room):
+            parts = [room.walls[k] for k in chain]
+            shifts = _shifts([wall.length for wall in parts])
+            here = [walls.get((room.id, wall.id)) for wall in parts]
+            wet = [tuple((water or {}).get((room.id, wall.id), ())) for wall in parts]
+            if all(w is None for w in here) and not any(wet):
                 continue
-            w = w or _Wall()
-            seg = geoms[room.id].contour.segments[k - 1]
-            openings = _openings(geoms[room.id], wall.id, ceiling, doors)
+            w = _Wall()
+            water_views: list[WaterView] = []
+            openings: list[OpeningView] = []
+            back: list[PointView] = []
+            behind_rooms: list[tuple[str, str | None]] = []
+            for wall, dx, part, part_wet, k in zip(parts, shifts, here, wet, chain, strict=True):
+                seg = g.contour.segments[k]
+                if part is not None:
+                    w.points += [_moved(v, dx) for v in part.points]
+                    w.boxes += [_moved(v, dx) for v in part.boxes]
+                    w.chases += [_moved(v, dx) for v in part.chases]
+                    w.fixings += [_moved(v, dx) for v in part.fixings]
+                    w.cables += [_moved(v, dx) for v in part.cables]
+                    if part.board is not None:
+                        w.board = _moved(part.board, dx)
+                water_views += [_moved(v, dx) for v in part_wet]
+                openings += [_moved(v, dx) for v in _openings(g, wall.id, ceiling, doors)]
+                back += [_moved(v, dx) for v in _back_points(seg, room.id, geoms, elec, numbers)]
+                for near in behind(g, seg, list(geoms.values())):
+                    code = names[(near.room, near.wall)].code if near.wall else None
+                    item = (near.name, code)
+                    if item not in behind_rooms:
+                        behind_rooms.append(item)
             out.append(
                 WallElevation(
                     room.id,
                     room.name,
-                    wall.id,
-                    k,
-                    wall.length,
+                    parts[0].id,
+                    chain[0] + 1,
+                    sum(wall.length for wall in parts),
                     ceiling,
                     assumed,
-                    openings,
+                    tuple(openings),
                     tuple(sorted(_blocks(w.points), key=lambda p: (p.x, p.y))),
                     tuple(sorted(w.boxes, key=lambda b: b.x)),
                     tuple(sorted(w.chases, key=lambda c: (c.x, c.y0))),
                     w.board,
-                    tuple(
-                        (b.name, names[(b.room, b.wall)].code if b.wall else None)
-                        for b in behind(geoms[room.id], seg, list(geoms.values()))
-                    ),
-                    _back_points(seg, room.id, geoms, elec, numbers),
-                    wet,
-                    names[(room.id, wall.id)],
+                    tuple(behind_rooms),
+                    tuple(sorted(_blocks(_unique(back)), key=lambda p: (p.x, p.y))),
+                    tuple(sorted(water_views, key=lambda v: v.x)),
+                    names[(room.id, parts[0].id)],
                     _merged_fixings(w.fixings),
                     tuple(sorted(w.cables, key=lambda c: (c.x, c.run))),
+                    tuple(wall.id for wall in parts),
                 )
             )
     return out
+
+
+def electrical_walls(walls: Sequence[WallElevation]) -> list[WallElevation]:
+    """Walls of the electrical elevations (decision 2026-11-18): only those with something
+    electrical, without the plumbing (it has its own elevations)."""
+    return [replace(e, water=()) for e in walls if e.electrical]
+
+
+def plumbing_walls(walls: Sequence[WallElevation]) -> list[WallElevation]:
+    """Walls of the plumbing elevations (decision 2026-11-18): only those with water outlets or
+    drains, without the electrical items (points, panel, boxes, chases, cables, fixings and the
+    outlets of the far side)."""
+    return [
+        replace(e, points=(), boxes=(), chases=(), board=None, back=(), fixings=(), cables=())
+        for e in walls
+        if e.water
+    ]
+
+
+def _shifts(lengths: Sequence[float]) -> list[float]:
+    """Start of each part of a surface from the start of the first one, mm."""
+    out, at = [], 0.0
+    for length in lengths:
+        out.append(at)
+        at += length
+    return out
+
+
+def _moved(view: _View, dx: float) -> _View:
+    """A view of a wall part moved along the surface by dx, mm."""
+    if dx == 0:
+        return view
+    fields = ("x0", "x1") if isinstance(view, OpeningView) else ("x", "x1")
+    moved: dict[str, Any] = {}
+    for name in fields:
+        x = getattr(view, name, None)
+        if x is not None:
+            moved[name] = x + dx
+    return replace(view, **moved)
+
+
+def _unique(points: Sequence[PointView]) -> list[PointView]:
+    """Points without repeats by id: at the joint of two parts one point may face both."""
+    seen: dict[str, PointView] = {}
+    for p in points:
+        seen.setdefault(p.id, p)
+    return list(seen.values())
 
 
 def _vertical(c: Chase) -> float:
@@ -409,10 +498,12 @@ def _cables(
     elec: Electrical,
     boxes: Mapping[str, tuple[str, str, float, float]],
     ceiling: float,
+    entries: Mapping[str, float],
 ) -> list[tuple[tuple[str, str], CableView]]:
     """The parts of a line along walls: a drop at its end to a wall point or box, a rise at its
     start from the panel, a chain point or a box on a wall; from the route plane (ceiling, or the
-    floor for a floor route)."""
+    floor for a floor route). A drop to a mechanism goes to its frame entry (entries,
+    frames.py: the side of the block) and stops at the box top (bottom), not at its middle."""
     plane = 0.0 if r.route == "floor" else ceiling
     points = {p.id: p for p in elec.points}
     out: list[tuple[tuple[str, str], CableView]] = []
@@ -438,8 +529,12 @@ def _cables(
         if spot is None:
             continue
         room, wall, x, y = spot
+        side = drop is None and end in entries
+        if side:  # into the frame by the corner of its first box
+            y += BOX_HALF_MM if plane > y else -BOX_HALF_MM
         lo, hi = sorted((y, plane))
-        down = x if drop is None else drop  # beside an opening, then along the wall to the point
+        # beside an opening, then along the wall to the point
+        down = drop if drop is not None else entries.get(end, x)
         out.append(
             ((room, wall), CableView(r.id, r.group, round(down, 1), round(lo, 1), round(hi, 1)))
         )
@@ -629,26 +724,35 @@ def elevation_data(
 
     elevations = wall_elevations(plan, contours, elec, wiring, water=water)
     ceiling = elevations[0].height if elevations else 2700.0
-    done = {(e.room, e.wall): content(e) for e in elevations}
+    # Every wall of a surface leads to its elevation: a corner neighbour may be any part of it
+    done = {(e.room, wall): content(e) for e in elevations for wall in e.parts or (e.wall,)}
     geoms = {g.room.id: g for g in room_geometries(plan, contours)}
     doors = _doors(geoms)
 
     def neighbour(room: Room, k: int, turn: float) -> dict[str, Any]:
-        """Neighbouring wall at a corner (k is its walk index, from 0): the angle and what is on it.
-        A wall without electrical items has openings only."""
-        wall = room.walls[k % len(room.walls)]
+        """Neighbouring surface at a corner (k is the walk index of its wall, from 0): the angle
+        and what is on it. A surface without electrical items has openings only."""
+        n = len(room.walls)
+        wall = room.walls[k % n]
         side = done.get((room.id, wall.id))
         if side is None:
+            chain = next(c for c in surfaces(room) if k % n in c)
+            parts = [room.walls[j] for j in chain]
+            openings = [
+                _moved(o, dx)
+                for part, dx in zip(parts, _shifts([w.length for w in parts]), strict=True)
+                for o in _openings(geoms[room.id], part.id, ceiling, doors)
+            ]
             side = content(
                 WallElevation(
                     room.id,
                     room.name,
-                    wall.id,
+                    parts[0].id,
                     0,
-                    wall.length,
+                    sum(w.length for w in parts),
                     ceiling,
                     True,
-                    _openings(geoms[room.id], wall.id, ceiling, doors),
+                    tuple(openings),
                 )
             )
         side = {key: v for key, v in side.items() if key != "back"}
@@ -657,8 +761,10 @@ def elevation_data(
     out: list[dict[str, Any]] = []
     for e in elevations:
         room = next(x for x in plan.rooms if x.id == e.room)
-        seg = geoms[e.room].contour.segments[e.index - 1]
         k = e.index - 1
+        last = (k + max(len(e.parts), 1) - 1) % len(room.walls)
+        segs = geoms[e.room].contour.segments
+        start, end = segs[k].start, segs[last].end
         data = {
             **done[(e.room, e.wall)],
             "title": e.title,
@@ -667,10 +773,10 @@ def elevation_data(
             "height_assumed": e.height_assumed,
             "top": r(e.top),
             # Inner face on the plan (model mm, like the 3D scene): the start is the left corner
-            "face": [[r(seg.start.x), r(seg.start.y)], [r(seg.end.x), r(seg.end.y)]],
-            # Corners to neighbouring walls: left to the previous in the walk, right to the next
+            "face": [[r(start.x), r(start.y)], [r(end.x), r(end.y)]],
+            # Corners to neighbouring surfaces: left to the previous in the walk, right to the next
             "left": neighbour(room, k - 1, room.walls[k - 1].turn),
-            "right": neighbour(room, k + 1, room.walls[k].turn),
+            "right": neighbour(room, last + 1, room.walls[last].turn),
         }
         out.append(data)
     return out
@@ -688,10 +794,10 @@ def _back_points(
     geoms: dict[str, RoomGeometry],
     elec: Electrical,
     numbers: dict[str, int],
-) -> tuple[PointView, ...]:
+) -> list[PointView]:
     """Outlets of neighbouring rooms on the far side of wall seg: a point on the neighbour's wall
     along the same face, in this wall's coordinates (offset from its left corner, view from
-    inside)."""
+    inside); not yet in frames (_blocks)."""
     out: list[PointView] = []
     for g in geoms.values():
         if g.room.id == room:
@@ -707,8 +813,8 @@ def _back_points(
                     continue
                 x = (other.point_at(p.offset) - seg.start).dot(seg.direction)
                 if -FACE_TOLERANCE_MM <= x <= seg.length + FACE_TOLERANCE_MM:
-                    out.append(PointView(p.id, numbers[p.id], p.type, x, p.height, _posts(p)))
-    return tuple(sorted(_blocks(out), key=lambda p: (p.x, p.y)))
+                    out.append(PointView(p.id, numbers[p.id], p.type, x, p.height, posts(p)))
+    return out
 
 
 def _blocks(points: Sequence[PointView]) -> list[PointView]:
@@ -730,11 +836,6 @@ def _blocks(points: Sequence[PointView]) -> list[PointView]:
             out.append(replace(p, slot=k + p.posts / 2 - total / 2, block=total))
             k += p.posts
     return out
-
-
-def _posts(p: ElectricalPoint) -> int:
-    """Posts in a frame: count for sockets and low-voltage, one for everything else."""
-    return p.count if p.type in (PointType.SOCKET, PointType.DATA, PointType.TV) else 1
 
 
 def _doors(geoms: Mapping[str, RoomGeometry]) -> list[tuple[Polygon, Vec]]:

@@ -123,6 +123,7 @@ def test_scope_files(tmp_path: Path) -> None:
     assert "- подключение к аппаратам щита — отдельная позиция «Сборка щита»" in text
     assert "**Результат:** соединения опрессованы" in text
     assert "дополнительная: её объём и цена согласуются до выполнения" in text
+    assert "Расходники на инструмент (диски, буры, коронки, свёрла) входят в цену работ" in text
     assert text.rstrip().endswith("- прим.")
 
     xlsx = write_xlsx(
@@ -133,6 +134,7 @@ def test_scope_files(tmp_path: Path) -> None:
     cells = [str(c.value) for row in wb["Состав работ"].iter_rows() for c in row if c.value]
     assert "Прокладка кабеля" in cells and "прим." in cells
     assert any("• фиксация кабеля площадками" in c for c in cells)
+    assert any(c.startswith("Расходники на инструмент") for c in cells)
 
 
 def test_chases_by_wall_material_share_the_chase_scope() -> None:

@@ -194,29 +194,33 @@ def test_notes_follow_norms_and_conduit(lang: Any) -> None:
 
 
 def test_bend_size_flat_cable_by_width_and_conduit_by_larger_radius() -> None:
-    """Flat cable bent lying flat: its width, 10 widths (studio practice); conduit: its
-    diameter, the larger of the conduit's and the cable's radius (studio data 2026-11-11)."""
-    assert bend_size("3x2.5", False) == BendSize(13.0, 130.0)
+    """Flat cable bent lying flat: its width, the standard 70 mm, a thick one 10 thicknesses
+    (studio practice 2026-11-18); conduit: its diameter, the larger of the conduit's and the cable's
+    radius (studio data 2026-11-11)."""
+    assert bend_size("3x2.5", False) == BendSize(13.0, 70.0)
+    assert bend_size("3x6", False) == BendSize(16.5, 70.0)  # 10 thicknesses, 70, is not more
+    thick = replace(PRACTICE, bend_factor=12.0)
+    assert bend_size("3x6", False, thick) == BendSize(16.5, 84.0)  # 12 × 7 mm thick
     assert bend_size("3x1.5", True) == BendSize(20.0, 80.0)
     assert bend_size("3x2.5", True) == BendSize(20.0, 90.0)  # the cable needs more than Ø20
     assert bend_size("3x6", True) == BendSize(25.0, 100.0)
     assert bend_size("UTP", False) is None  # no sizes: the manufacturer's radius
 
 
-def test_bundle_radii_reference_reserve_and_lanes() -> None:
-    """Inner line is the reference: its radius plus 2 free lanes of its width, then each line
-    goes out by its lane; a thick outer line keeps its own radius."""
-    thin, thick = BendSize(11.5, 115.0), BendSize(16.5, 165.0)
-    assert bundle_radii([thin, thin, thin]) == pytest.approx([138.0, 149.5, 161.0])
+def test_bundle_radii_reference_and_lanes() -> None:
+    """Inner line is the reference and turns at its own radius (no reserve lanes, 2026-11-17),
+    then each line goes out by its lane; a thick outer line keeps its own radius."""
+    thin, thick = BendSize(11.5, 150.0), BendSize(16.5, 175.0)
+    assert bundle_radii([thin, thin, thin]) == pytest.approx([150.0, 161.5, 173.0])
     radii = bundle_radii([thin, thick])
-    assert radii[0] == pytest.approx(138.0)
-    assert radii[1] == pytest.approx(165.0)  # 138 + 14 = 152 is less than its own 165
+    assert radii[0] == pytest.approx(150.0)
+    assert radii[1] == pytest.approx(175.0)  # 150 + 14 = 164 is less than its own 175
     assert bundle_radii([]) == []
 
 
 def test_bend_rows_by_type_without_unknown() -> None:
     rows = bend_rows(["3x2.5", "3x1.5", "UTP", "3x1.5"])
-    assert rows == [("3x1.5", "115", "20", "80"), ("3x2.5", "130", "20", "90")]
+    assert rows == [("3x1.5", "70", "20", "80"), ("3x2.5", "70", "20", "90")]
 
 
 def _chain(loop: str, route: str = "floor", conduit: str = "none") -> Any:

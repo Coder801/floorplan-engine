@@ -25,7 +25,7 @@ from typing import Literal
 
 from floorplan_engine.electrical.bundles import Bundle, bundles, segments
 from floorplan_engine.electrical.chases import source_rises
-from floorplan_engine.electrical.routing import APART
+from floorplan_engine.electrical.routing import APART, PANEL_FREE
 from floorplan_engine.electrical.wiring_model import Route, Run, Wiring
 from floorplan_engine.model.geometry import Vec
 from floorplan_engine.model.schema import Conduit, Electrical, PointType
@@ -69,8 +69,8 @@ class MountingNorms:
     steps: Mapping[Surface, float]  # mm: the smallest gap between fixings by surface, bare cable
     conduit_steps: Mapping[Surface, float]  # mm: the same for conduit
     offset: float  # mm: from a bend, box, flush box or the panel to the nearest fixing
-    bend_factor: float  # smallest flat cable bend radius, in cable widths (bent lying flat)
-    bend_reserve: int  # free lanes left inside a bundle turn for cables added later
+    bare_bend: float  # mm: the standard bend radius of a cable without conduit (one cable)
+    bend_factor: float  # smallest flat cable bend radius, in cable thicknesses
     reserve: float  # fixings lost to misfires and bent nails, share
     source: Mapping[Language, str]  # where the values come from, for the sheet
 
@@ -80,14 +80,16 @@ class MountingNorms:
 
 
 # Studio practice (answers 2026-11-11): the step is at least 500 mm everywhere (2026-11-17: 300
-# overhead crowded the ceiling); conduit is stiffer, on a wall every 550 mm (2026-11-12)
+# overhead crowded the ceiling); conduit is stiffer, on a wall every 550 mm (2026-11-12); a cable
+# without conduit turns at 70 mm (decision 2026-11-18, was 150), a thick one at no less than 10
+# thicknesses (for the studio cables up to 3×6 that is no more than 70)
 PRACTICE = MountingNorms(
     key="practice",
     steps={"ceiling": 500.0, "wall": 500.0, "floor": 500.0},
     conduit_steps={"ceiling": 500.0, "wall": 550.0, "floor": 500.0},
     offset=50.0,
+    bare_bend=70.0,
     bend_factor=10.0,
-    bend_reserve=2,
     reserve=0.1,
     source={"ru": "практика студии на основе ДБН", "uk": "практика студії на основі ДБН"},
 )
@@ -238,8 +240,9 @@ class BendSize:
 
 def bend_size(mark: str, in_conduit: bool, norms: MountingNorms = PRACTICE) -> BendSize | None:
     """Conduit: its diameter, the radius of the conduit or of the cable inside, whichever is
-    larger. Flat cable lying flat (studio practice): its width, bend_factor widths. None for a
-    cable without sizes (low voltage, LED): the radius is the manufacturer's."""
+    larger. Flat cable lying flat (studio practice): its width, the standard bare_bend or
+    bend_factor thicknesses, whichever is larger. None for a cable without sizes (low voltage, LED):
+    the radius is the manufacturer's."""
     section = cable_section(mark)
     if in_conduit:
         d = conduit_diameter(mark)
@@ -247,22 +250,19 @@ def bend_size(mark: str, in_conduit: bool, norms: MountingNorms = PRACTICE) -> B
         return BendSize(float(d), max(CONDUIT_BEND[d], inside))
     if section is None or section not in FLAT_CABLE:
         return None
-    width = FLAT_CABLE[section][1]
-    return BendSize(width, norms.bend_factor * width)
+    thickness, width = FLAT_CABLE[section]
+    return BendSize(width, max(norms.bare_bend, norms.bend_factor * thickness))
 
 
-def bundle_radii(lines: Sequence[BendSize], norms: MountingNorms = PRACTICE) -> list[float]:
-    """Radii of a bundle turn, inner line first (studio rule 2026-11-11): the inner line is the
-    reference, its smallest radius stays free for bend_reserve lanes of its width (cables added
-    later), each next line goes out by half its width and half the previous one (axis to axis);
-    a line never gets less than its own smallest radius."""
+def bundle_radii(lines: Sequence[BendSize]) -> list[float]:
+    """Radii of a bundle turn, inner line first (studio rule, 2026-11-17 without the reserve
+    lanes): the inner line is the reference and turns at its own radius, each next line goes out
+    by half its width and half the previous one (axis to axis); a line never gets less than its
+    own smallest radius."""
     out: list[float] = []
     r = 0.0
     for k, line in enumerate(lines):
-        if k == 0:
-            r = line.radius + norms.bend_reserve * line.width
-        else:
-            r += (lines[k - 1].width + line.width) / 2
+        r = line.radius if k == 0 else r + (lines[k - 1].width + line.width) / 2
         r = max(r, line.radius)
         out.append(r)
     return out
@@ -492,19 +492,18 @@ TEXT: dict[str, dict[str, str]] = {
         "щита.",
     },
     "bend": {
-        "ru": "Плоский кабель на повороте гнётся плашмя, плавно, без заломов: радиус — не меньше "
-        "{k} ширин кабеля; гофра — не меньше радиуса из таблицы.",
-        "uk": "Плоский кабель на повороті гнеться плазом, плавно, без зламів: радіус — не менше "
-        "{k} ширин кабелю; гофра — не менше радіуса з таблиці.",
+        "ru": "Плоский кабель на повороте гнётся плашмя, плавно, без заломов: радиус — {r} мм, "
+        "у толстого — не меньше {k} толщин кабеля; гофра — не меньше радиуса из таблицы.",
+        "uk": "Плоский кабель на повороті гнеться плазом, плавно, без зламів: радіус — {r} мм, "
+        "у товстого — не менше {k} товщин кабелю; гофра — не менше радіуса з таблиці.",
     },
     "bundle": {
-        "ru": "Поворот косы: внутренний кабель — опорный, от его наименьшего радиуса оставить "
-        "место под {n} кабеля, каждый следующий наружу — дальше на свою ширину (гофра — на свой "
-        "диаметр). У поворота косы на виде — радиусы внутреннего и внешнего кабеля, «R130–160».",
-        "uk": "Поворот коси: внутрішній кабель — опорний, від його найменшого радіуса залишити "
-        "місце під {n} кабелі, кожен наступний назовні — далі на свою ширину (гофра — на свій "
-        "діаметр). Біля повороту коси на вигляді — радіуси внутрішнього і зовнішнього кабелю, "
-        "«R130–160».",
+        "ru": "Поворот косы: внутренний кабель — опорный, гнётся по своему радиусу, каждый "
+        "следующий наружу — дальше на свою ширину (гофра — на свой диаметр). У поворота косы на "
+        "виде — радиусы внутреннего и внешнего кабеля, «R70–95».",
+        "uk": "Поворот коси: внутрішній кабель — опорний, гнеться по своєму радіусу, кожен "
+        "наступний назовні — далі на свою ширину (гофра — на свій діаметр). Біля повороту коси "
+        "на вигляді — радіуси внутрішнього і зовнішнього кабелю, «R70–95».",
     },
     "bends": {"ru": "Наименьший радиус изгиба, мм", "uk": "Найменший радіус вигину, мм"},
     "cable": {"ru": "Кабель", "uk": "Кабель"},
@@ -538,8 +537,10 @@ TEXT: dict[str, dict[str, str]] = {
         "{pct} % внутрішнього перерізу (до Ø{d}); інтернет і ТБ — у своїй гофрі.",
     },
     "apart": {
-        "ru": "Интернет и ТВ — не ближе {mm} мм от силового кабеля, пересечение — под 90°.",
-        "uk": "Інтернет і ТБ — не ближче {mm} мм від силового кабелю, перетин — під 90°.",
+        "ru": "Интернет и ТВ — не ближе {mm} мм от силового кабеля, пересечение — под 90°; "
+        "в {near} мм от щита — как удобно.",
+        "uk": "Інтернет і ТБ — не ближче {mm} мм від силового кабелю, перетин — під 90°; "
+        "за {near} мм від щита — як зручно.",
     },
     "sheet": {
         "ru": "На развёртке: линия поперёк косы — место крепления, на потолке и на спусках по "
@@ -601,12 +602,12 @@ def mounting_notes(
             f=f"{g['floor']:g}",
         ),
         text("offset", language, o=f"{norms.offset:g}"),
-        text("bend", language, k=f"{norms.bend_factor:g}"),
-        text("bundle", language, n=norms.bend_reserve),
+        text("bend", language, r=f"{norms.bare_bend:g}", k=f"{norms.bend_factor:g}"),
+        text("bundle", language),
         text(f"conduit_{elec.conduit_level}", language),
         text("shared", language, pct=f"{CONDUIT_FILL * 100:g}", d=max(CONDUIT_INNER)),
         *(
-            [text("apart", language, mm=f"{APART:g}")]
+            [text("apart", language, mm=f"{APART:g}", near=f"{PANEL_FREE:g}")]
             if any(p.type in (PointType.DATA, PointType.TV) for p in elec.points)
             else []
         ),

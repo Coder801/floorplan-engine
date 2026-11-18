@@ -189,6 +189,16 @@ class Wiring:
     shared_rises: frozenset[str] = field(default=frozenset())
     # Floor heating zones (floor_heating.py): heating cable, sensor and its conduit for the estimate
     heating: tuple[HeatingZone, ...] = field(default=(), compare=False, repr=False)
+    # Boxes left on lines that do not go into them (decision 2026-11-17, wiring._clear_boxes):
+    # (box id, what was done), warnings in the report
+    box_notes: tuple[tuple[str, str], ...] = field(default=())
+    # Where the cable goes into a wall mechanism's frame (frames.entries, decision 2026-11-17):
+    # (point id, wall offset), at the side of the block, not above its middle
+    entries: tuple[tuple[str, float], ...] = field(default=())
+
+    def entry(self, point: str, offset: float) -> float:
+        """Wall offset of the cable drop to a point: its frame entry, else the point offset."""
+        return dict(self.entries).get(point, offset)
 
     @property
     def chase_mm(self) -> float:

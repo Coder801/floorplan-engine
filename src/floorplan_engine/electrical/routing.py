@@ -20,11 +20,20 @@ segment lies fully in the free area at least CLEARANCE from walls. The approach 
 point is as usual, perpendicular to the wall. This is only for ceiling and floor: on walls a
 route is always vertical (chases in chases.py).
 
+Jog at the drop (decision 2026-11-18, slide_jog): the grid runs on cell centres, so a point off
+them, or one whose line passes a wall end within CLEARANCE, got a short sideways step right at
+its wall — a zigzag where the elevations round every turn with the cable's radius. The step is
+slid back along the route to the farthest spot from which the route runs on the point's line,
+and disappears if the whole piece is clear.
+
 Low-voltage apart from power (decision 2026-11-13, apart_cells): an internet or TV cable keeps
 APART from a power cable running the same way and crosses it at 90°. A step along a power piece
 closer than APART costs APART_COST more, a step across it costs nothing extra, so the route goes
-beside the power bundle and comes close only where there is no other way (at the panel, at a
-socket block). Only for routes at right angles: at any angle there is no "the same way".
+beside the power bundle and comes close only where there is no other way (a narrow corridor,
+a socket block): the rule is a cost, not a ban. Within PANEL_FREE of the panel (decision
+2026-11-18, calm) neither applies: all cables leave the panel together, so there the route goes
+the short way, beside power or across it at any spot. Only for routes at right angles: at any
+angle there is no "the same way".
 """
 
 from __future__ import annotations
@@ -42,6 +51,7 @@ import shapely
 from shapely.geometry import Polygon
 from shapely.geometry.base import BaseGeometry
 
+from floorplan_engine.electrical import trace
 from floorplan_engine.model.geometry import RoomGeometry, Vec, WallSegment, point_in_polygon
 from floorplan_engine.model.schema import Opening, OpeningType
 
@@ -58,6 +68,8 @@ WALL_DRILL_MAX = 300.0  # mm: thicker non-bearing walls (shafts, pylons, boxes) 
 WALL_PASS_COST = 1000.0  # mm: one pass through a drillable wall weighs as this much cable
 APART = 150.0  # mm: a low-voltage cable runs no closer than this beside a power cable
 APART_COST = 3000.0  # mm: one grid step beside a power cable closer than APART weighs this much
+PANEL_FREE = 300.0  # mm: around the panel a low-voltage cable need not keep APART (2026-11-18)
+JOG_MAX = 2 * STEP  # mm: a sideways step at a route's end this short is slid back (slide_jog)
 
 
 def free_area(geoms: Sequence[RoomGeometry]) -> BaseGeometry:
@@ -184,6 +196,10 @@ class Grid:
     def free_points(self) -> list[Vec]:
         """Centres of free cells: spots inside the area at least CLEARANCE from walls."""
         return [self.center(k) for k, ok in enumerate(self.free) if ok]
+
+    def index(self, p: Vec) -> int:
+        """Cell index of a cell centre (center inverted)."""
+        return round((p.y - self.y0) / STEP) * self.nx + round((p.x - self.x0) / STEP)
 
     def center(self, idx: int) -> Vec:
         iy, ix = divmod(idx, self.nx)
@@ -424,6 +440,71 @@ def move_end(path: Sequence[Vec], at_start: bool, p: Vec) -> list[Vec]:
     return out if at_start else list(reversed(out))
 
 
+def slide_jog(path: Sequence[Vec], grid: Grid) -> list[Vec]:
+    """Move the short jog at the target end of a route back from the point as far as the free
+    area allows.
+
+    The search runs on cell centres; a point off them (a socket at x=3965 by a 3950 column) or a
+    point the route cannot run straight to (a wall end within CLEARANCE of its line) is joined by
+    a short jog (at most JOG_MAX) right at the wall: on the elevations, where every turn is
+    rounded with the cable's radius, it is a zigzag at the drop. Here the piece before the jog is
+    slid over to the point's line: the jog goes to the farthest spot of that piece from which the
+    route runs on the point's line within the area at least CLEARANCE from walls (Grid.inner),
+    and if the whole piece fits it disappears. The length stays the same, the turns do not grow.
+    A low-voltage route does not slide onto cells beside power (Grid.apart). Only the target end
+    and only a short jog: a long piece there is a run of its own, often in a bundle."""
+    pts = list(reversed(path))
+    if grid.inner is None or len(pts) < 4:
+        return list(path)
+    node, b, a, p1 = pts[0], pts[1], pts[2], pts[3]
+    approach, jog, back = b - node, a - b, p1 - a
+    if not (_axis(approach) and _axis(jog) and _axis(back)):
+        return list(path)
+    if _axis(approach) != _axis(back) or _axis(jog) == _axis(back):
+        return list(path)
+    if approach.dot(back) <= 0 or jog.length() > JOG_MAX + 1e-6:
+        return list(path)
+    span = back.length()
+    u = back * (1 / span)
+    tries = [span, *(k * STEP for k in range(math.floor((span - 1e-6) / STEP), 0, -1))]
+    for s in tries:
+        j1 = a + u * s
+        j2 = j1 - jog
+        if _clear(grid, j1, j2) and _clear(grid, j2, b):
+            return list(reversed(simplify([node, j2, j1, *pts[3:]])))
+    return list(path)
+
+
+def _axis(d: Vec) -> str | None:
+    """Axis of a piece: "h" or "v", None for a slanted or zero piece."""
+    if abs(d.y) <= 1e-6 < abs(d.x):
+        return "h"
+    if abs(d.x) <= 1e-6 < abs(d.y):
+        return "v"
+    return None
+
+
+def _clear(grid: Grid, a: Vec, b: Vec) -> bool:
+    """A straight piece within the area at least CLEARANCE from walls and, for a low-voltage
+    route, not along a power cable closer than APART."""
+    if (b - a).length() <= 1e-6:
+        return True
+    assert grid.inner is not None
+    if not grid.inner.covers(shapely.LineString([a.as_tuple(), b.as_tuple()])):
+        return False
+    if grid.apart is None:
+        return True
+    near = grid.apart[0] if _axis(b - a) == "h" else grid.apart[1]
+    n = max(1, math.ceil((b - a).length() / STEP))
+    for k in range(n + 1):
+        p = a + (b - a) * (k / n)
+        ix = round((p.x - grid.x0) / STEP)
+        iy = round((p.y - grid.y0) / STEP)
+        if 0 <= ix < grid.nx and 0 <= iy < grid.ny and iy * grid.nx + ix in near:
+            return False
+    return True
+
+
 def fit_path(path: Sequence[Vec], start: Vec, end: Vec, tol: float = 0.5) -> list[Vec]:
     """Manual route with its ends at the source and target nodes (if they moved)."""
     out = list(path)
@@ -451,8 +532,8 @@ class Router:
     (economy): the shortest path is pulled tight instead of running at 90°. walls are bands of
     drillable walls (drillable_walls): open, but a pass costs WALL_PASS_COST per cell; the pull
     stays in the area itself, so it does not cut through a wall where the search did not.
-    beside are the routes of power cables a low-voltage route keeps APART from (apart_cells);
-    at any angle they are not looked at."""
+    beside are the routes of power cables a low-voltage route keeps APART from (apart_cells),
+    except within PANEL_FREE of calm (the panel); at any angle they are not looked at."""
 
     def __init__(
         self,
@@ -461,28 +542,31 @@ class Router:
         any_angle: bool = False,
         walls: Sequence[Polygon] = (),
         beside: Sequence[Sequence[Vec]] = (),
+        calm: Vec | None = None,
     ) -> None:
         self.area = area
         self.walls = walls
         self.source = source
         self.any_angle = any_angle
         beside = () if any_angle else beside
+        calm = calm if beside else None
         memo = _MEMO.get()
         if memo is None:
-            found = _searched(area, source, any_angle, walls, beside)
+            found = _searched(area, source, any_angle, walls, beside, calm)
         else:
-            key = _search_key(area, source, any_angle, walls, beside)
+            key = _search_key(area, source, any_angle, walls, beside, calm)
             found = memo.get(key) or memo.setdefault(
-                key, _searched(area, source, any_angle, walls, beside)
+                key, _searched(area, source, any_angle, walls, beside, calm)
             )
         self.grid, self.start, self.prev, self.dist = found
 
-    def apart_from(self, beside: Sequence[Sequence[Vec]]) -> Router:
+    def apart_from(self, beside: Sequence[Sequence[Vec]], calm: Vec | None = None) -> Router:
         """The same router for a low-voltage cable that keeps APART from the given power
-        routes; itself when there is nothing to keep from (or at any angle)."""
+        routes, but not within PANEL_FREE of calm (the panel); itself when there is nothing to
+        keep from (or at any angle)."""
         if not beside or self.any_angle:
             return self
-        return Router(self.area, self.source, self.any_angle, self.walls, beside)
+        return Router(self.area, self.source, self.any_angle, self.walls, beside, calm)
 
     def cost(self, node: Vec) -> float:
         """Route cost to the point (with turns); infinity if unreachable."""
@@ -490,14 +574,71 @@ class Router:
         costs = [self.dist[s] for s in range(cell * 4, cell * 4 + 4) if s in self.dist]
         return min(costs, default=float("inf"))
 
-    def route(self, target: End) -> list[Vec]:
+    def route(
+        self, target: End, before: Sequence[Vec] = (), after: Sequence[Vec] = ()
+    ) -> list[Vec]:
+        """The route to target; before and after are straight pieces added at its ends (the lead
+        out of a box, wiring._one_side), kept in the route and its trace."""
         cell = self.grid.nearest_free(target.node, open_only=True)
-        middle = self.grid.path(self.prev, self.dist, cell)
-        if self.any_angle:
-            middle = self.grid.pull(middle)
+        cells = self.grid.path(self.prev, self.dist, cell)
+        middle = self.grid.pull(cells) if self.any_angle else cells
         head = _join(self.source.node, middle[0], self.source.vertical_wall)
         tail = list(reversed(_join(target.node, middle[-1], target.vertical_wall)))
-        return simplify([*head, *middle, *tail])
+        out = simplify([*before, *head, *middle, *tail, *after])
+        if not self.any_angle:
+            out = slide_jog(out, self.grid)
+        if trace.on():
+            trace.emit(
+                RouteTrace(
+                    self.area,
+                    tuple(self.walls),
+                    self.grid,
+                    self.start,
+                    cell,
+                    self.dist,
+                    self.source.node,
+                    target.node,
+                    tuple(cells),
+                    tuple(out),
+                    self.cost(target.node),
+                    self.any_angle,
+                )
+            )
+        return out
+
+
+@dataclass(frozen=True)
+class RouteTrace:
+    """One routed line for the debug trace (trace.py): the router's area and grid, the search
+    costs from its source, the grid path before pull and the final route. Shared with the router,
+    not copied: read only."""
+
+    area: BaseGeometry
+    walls: tuple[Polygon, ...]
+    grid: Grid
+    start: int  # source cell
+    target: int  # target cell
+    dist: dict[int, float]  # search cost of each state (cell · 4 + direction)
+    source: Vec
+    end: Vec
+    cells: tuple[Vec, ...]  # cell centres of the found path, before pull and the end joins
+    path: tuple[Vec, ...]  # the route as returned
+    cost: float  # search cost to the target, mm of cable with turn and wall penalties
+    any_angle: bool
+
+    def cell_cost(self, idx: int) -> float:
+        """Cheapest search cost to the cell over its directions; infinity if unreached."""
+        return min(
+            (self.dist[s] for s in range(idx * 4, idx * 4 + 4) if s in self.dist),
+            default=float("inf"),
+        )
+
+    @property
+    def wall_cells(self) -> int:
+        """Path cells in the band of a drillable wall: more than 0 means the route goes through
+        a wall."""
+        penalty = self.grid.penalty or {}
+        return sum(1 for c in self.cells if self.grid.index(c) in penalty)
 
 
 # A searched router: grid, start cell, state parents and costs. Read only after the search, so
@@ -530,6 +671,7 @@ def _search_key(
     any_angle: bool,
     walls: Sequence[Polygon],
     beside: Sequence[Sequence[Vec]],
+    calm: Vec | None,
 ) -> tuple[object, ...]:
     return (
         area.wkb,
@@ -538,6 +680,7 @@ def _search_key(
         any_angle,
         tuple(w.wkb for w in walls),
         tuple(tuple(p.as_tuple() for p in path) for path in beside),
+        None if calm is None else calm.as_tuple(),
     )
 
 
@@ -547,6 +690,7 @@ def _searched(
     any_angle: bool,
     walls: Sequence[Polygon],
     beside: Sequence[Sequence[Vec]],
+    calm: Vec | None = None,
 ) -> _Search:
     if walls:
         grid = Grid.of(shapely.unary_union([area, *walls]))
@@ -555,7 +699,7 @@ def _searched(
     else:
         grid = Grid.of(area)
     if beside:
-        grid.apart = apart_cells(grid, beside)
+        grid.apart = apart_cells(grid, beside, calm)
     start = grid.nearest_free(source.node, open_only=True)
     search = grid.search_any if any_angle else grid.search
     prev, dist = search(start)
@@ -580,10 +724,11 @@ def _wall_penalty(grid: Grid, walls: Sequence[Polygon]) -> dict[int, float]:
 
 
 def apart_cells(
-    grid: Grid, paths: Sequence[Sequence[Vec]]
+    grid: Grid, paths: Sequence[Sequence[Vec]], calm: Vec | None = None
 ) -> tuple[frozenset[int], frozenset[int]]:
     """Free cells closer than APART to a piece of the routes: beside a piece along x (first set)
-    and beside a piece along y (second). Slanted pieces are skipped."""
+    and beside a piece along y (second). Slanted pieces are skipped; cells closer than
+    PANEL_FREE to calm (the panel) are not in either set."""
     along_x: set[int] = set()
     along_y: set[int] = set()
     reach = APART - 1e-6
@@ -597,8 +742,14 @@ def apart_cells(
             iy * grid.nx + ix
             for iy in range(iy0, iy1 + 1)
             for ix in range(ix0, ix1 + 1)
-            if grid.free[iy * grid.nx + ix]
+            if grid.free[iy * grid.nx + ix] and not near_panel(iy * grid.nx + ix)
         ]
+
+    def near_panel(k: int) -> bool:
+        if calm is None:
+            return False
+        c = grid.center(k)
+        return math.hypot(c.x - calm.x, c.y - calm.y) < PANEL_FREE
 
     for path in paths:
         for a, b in itertools.pairwise(path):

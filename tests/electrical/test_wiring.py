@@ -13,25 +13,28 @@ from typing import Any
 import pytest
 import yaml
 from ezdxf import bbox
-from shapely.geometry import Point, Polygon
+from shapely.geometry import LineString, Point, Polygon
 from shapely.geometry import box as shapely_box
 
-from floorplan_engine.drawing.layers import W_TEXT, new_document
+from floorplan_engine.drawing.ids import object_id
+from floorplan_engine.drawing.layers import BOX_TEXT_MM, W_BOX, W_TEXT, new_document
 from floorplan_engine.drawing.wiring import (
     cable_layer,
     draw_wiring,
     fillet,
-    lanes,
-    offset_path,
+    wiring_notes,
 )
+from floorplan_engine.electrical import boxes as boxes_module
+from floorplan_engine.electrical import wiring as wiring_module
 from floorplan_engine.electrical.anchors import SYMBOL_DEPTH
-from floorplan_engine.electrical.boxes import BOX_CLEARANCE
-from floorplan_engine.electrical.bundles import bundles, segments
+from floorplan_engine.electrical.boxes import BOX_CLEARANCE, BOX_SIZE_MM, box_square
+from floorplan_engine.electrical.bundles import bundles, lane_paths, lanes, offset_path, segments
 from floorplan_engine.electrical.chases import wall_chases, with_conduit
 from floorplan_engine.electrical.estimate import PriceList, build_estimate
 from floorplan_engine.electrical.panel import LineClass
 from floorplan_engine.electrical.routing import length as length_of
 from floorplan_engine.electrical.wiring import (
+    BOX_LEAD_MM,
     END_ALLOWANCE,
     LIGHT_LOOP,
     PASS_MARK,
@@ -118,17 +121,49 @@ def _wiring(plan: Plan, elec: Electrical) -> Any:
     return wiring
 
 
+def _box_sides(w: Wiring) -> dict[str, set[tuple[float, float]]]:
+    """Sides the cables of each box with 2-3 cables take: the unit direction at the box end."""
+    out: dict[str, set[tuple[float, float]]] = {}
+    for b in w.boxes:
+        runs = [r for r in w.runs if b.id in (r.source, r.target)]
+        if not b.on_ceiling or not 2 <= len(runs) <= 3:
+            continue
+        sides = set()
+        for r in runs:
+            a, c = (r.path[0], r.path[1]) if r.source == b.id else (r.path[-1], r.path[-2])
+            d = c - a
+            sides.add((round(d.x / d.length(), 3), round(d.y / d.length(), 3)))
+        out[b.id] = sides
+    return out
+
+
+def test_box_with_few_cables_takes_them_from_one_side() -> None:
+    w = _wiring(make_plan(RECT, [DOOR]), _elec())
+    sides = _box_sides(w)
+    assert sides  # the QF3 box: feed and two sockets
+    assert all(len(s) == 1 for s in sides.values())
+    for b in w.boxes:
+        for r in w.runs:
+            if b.id in sides and b.id in (r.source, r.target):
+                # The lead is straight out of the box, at least BOX_LEAD_MM long in all
+                end = r.path[1] if r.source == b.id else r.path[-2]
+                assert (end - b.anchor.node).length() >= BOX_LEAD_MM - 50  # grid snap
+
+
 def test_topology_board_box_point_only() -> None:
     w = _wiring(make_plan(RECT, [DOOR]), _elec())
     boxes = {b.id: b for b in w.boxes}
     assert sorted(b.group for b in w.boxes) == ["QF1", "QF3"]  # QF2 has one point, no box
     for r in w.runs:
-        assert r.source == "board" or r.source in boxes  # no cable runs from a load
+        # no cable runs from a load, except from light to light of one set (2026-11-18)
+        assert r.source in ("board", "l1", "l2") or r.source in boxes
         if r.target in boxes:
             assert r.source == "board"  # a box is fed only from the panel
     targets = {r.target: r.source for r in w.runs}
     assert targets["s1"] == "board"
-    assert {targets["l1"], targets["l2"], targets["k1"]} == {"box_1"}
+    assert targets["k1"] == "box_1"
+    # l1 and l2 light up together: one cable from the box to the nearer, then to the other
+    assert {targets["l1"], targets["l2"]} - {"box_1"} in ({"l1"}, {"l2"})
     assert targets["d1"] == "board"
     assert w.skipped == ()
 
@@ -385,6 +420,36 @@ def test_wiring_sheet_labels_lengths_and_drops() -> None:
         assert a.intersection(b).area < 1e-6
 
 
+def test_wiring_sheet_box_is_its_square_and_name_only() -> None:
+    """Decision 2026-11-17: no description block beside a box and no note about it under the
+    table: the sheet shows the square and "К1" (inside it, on white, 2026-11-18); where the
+    cables go is in the box card."""
+    plan = make_plan(RECT, [DOOR])
+    issues, contours = validate_plan(plan)
+    assert not issues
+    elec = _elec()
+    wiring = box_wiring(plan, contours, elec)
+    assert wiring is not None and wiring.boxes
+    msp = new_document().modelspace()
+    draw_wiring(msp, wiring, elec, {})
+    for b in wiring.boxes:
+        own = [e for e in msp if object_id(e) == ("box", b.id)]
+        assert sorted(e.dxftype() for e in own) == ["HATCH", "LWPOLYLINE", "TEXT"]
+        assert [e.dxf.text for e in own if e.dxftype() == "TEXT"] == [b.label]
+        # 2026-11-18: a white square over the lines, the label inside it
+        (back,) = [e for e in own if e.dxftype() == "HATCH"]
+        assert back.dxf.true_color == 0xFFFFFF
+        (label,) = [e for e in own if e.dxftype() == "TEXT"]
+        assert label.dxf.layer == W_BOX.name  # red, as the square
+        assert label.dxf.height == pytest.approx(sheet(BOX_TEXT_MM))
+        square = box_square(b.anchor, sheet(BOX_SIZE_MM))
+        assert square.contains(Point(label.dxf.align_point.x, label.dxf.align_point.y))
+    texts = [t.dxf.text for t in msp.query("TEXT")]
+    assert not any(t.startswith(("← ", "→ ")) for t in texts)
+    notes = " ".join(wiring_notes(wiring, "ru"))
+    assert "распаечная коробка" not in notes
+
+
 def testcable_layer_by_purpose_protection_and_route() -> None:
     """Layer of a line: what its group is and where it runs; low-voltage by its circuit."""
     plan = make_plan(RECT, [DOOR])
@@ -520,8 +585,8 @@ def test_board_tail_reaches_floor() -> None:
     w = _wiring(make_plan(RECT, [DOOR]), _elec())
     s1 = next(r for r in w.runs if r.target == "s1")  # from the panel
     assert s1.ends_mm == pytest.approx(END_ALLOWANCE + 1700)  # inside the panel down to the floor
-    l1 = next(r for r in w.runs if r.target == "l1")  # from the box
-    assert l1.ends_mm == 2 * END_ALLOWANCE
+    k1 = next(r for r in w.runs if r.target == "k1")  # from the box
+    assert k1.source == "box_1" and k1.ends_mm == 2 * END_ALLOWANCE
 
 
 def test_floor_route_rises_from_floor() -> None:
@@ -649,7 +714,7 @@ def test_boxes_in_wet_rooms_marked() -> None:
 def test_lanes_keep_clear_of_walls() -> None:
     from shapely.geometry import box
 
-    from floorplan_engine.drawing.wiring import clearance
+    from floorplan_engine.electrical.bundles import clearance
 
     many = [[Vec(0, 50), Vec(1000 + k, 50)] for k in range(5)]  # 5 cables 50 mm from the wall y=0
     room = clearance(box(-100, 0, 2000, 3000), 10.0)
@@ -720,7 +785,8 @@ def test_box_lines_never_exceed_largest_regular_box() -> None:
     from floorplan_engine.electrical.boxes import BOX_BRANCHES
 
     plan = make_plan([{"length": 4000}, {"length": 6000}, {"length": 4000}, {"length": 6000}], [])
-    pts = [_wall(f"d{k}", "sconce", "w1", 300 + 250 * k, 2000, "QF1") for k in range(14)]
+    # LED outputs: never in a light set, a box branch each
+    pts = [_wall(f"d{k}", "led_output", "w1", 300 + 250 * k, 2000, "QF1") for k in range(14)]
     elec = Electrical.model_validate(
         {"points": pts, "board": {"room": "r", "wall": "w4", "offset": 500, "height": 1700}}
     )
@@ -739,7 +805,8 @@ def test_box_lines_never_exceed_largest_regular_box() -> None:
 def test_proper_keeps_a_panel_line_for_every_box() -> None:
     """Where each line from the panel has its own breaker the cable is not shared."""
     plan = make_plan([{"length": 4000}, {"length": 6000}, {"length": 4000}, {"length": 6000}], [])
-    pts = [_wall(f"d{k}", "sconce", "w1", 300 + 250 * k, 2000, "QF1") for k in range(14)]
+    # LED outputs: never in a light set, a box branch each
+    pts = [_wall(f"d{k}", "led_output", "w1", 300 + 250 * k, 2000, "QF1") for k in range(14)]
     board = {"room": "r", "wall": "w4", "offset": 500, "height": 1700}
     elec = Electrical.model_validate({"points": pts, "board": board, "mode": "proper"})
     w = _wiring(plan, elec)
@@ -774,7 +841,7 @@ def test_switch_outside_room_goes_into_its_light_box() -> None:
     to_switch = next(r for r in w.runs if r.target == "k1")
     assert to_switch.source == box.id  # from the light box, not from the panel
     assert not any(r.source == "board" and r.target == "k1" for r in w.runs)
-    assert box.size == "100x100"  # 4 lines: feed, two lights, switch
+    assert box.size == "80"  # 3 lines: feed, the two lights in one set, switch
 
 
 # --- Manual edits (wiring.yaml) ---------------------------------------------
@@ -1500,3 +1567,136 @@ def test_low_voltage_topology_builds_every_sheet(tmp_path: Path) -> None:
     lines = [ln for p in pages for c in p.get("ceilings", []) for ln in c["lines"]]
     assert ("d1", "d2") in {(ln["source"], ln["target"]) for ln in lines}
     assert "UTP cat.6" in (tmp_path / "out" / "estimate.md").read_text("utf-8")
+
+
+def _passing_run_elec() -> Electrical:
+    """QF1 box at the centre of two lights; the QF2 line from the panel to a socket on w3 runs
+    right where that box would stand."""
+    return Electrical.model_validate(
+        {
+            "points": [
+                {"id": "l1", "room": "r", "type": "downlight", "ceiling": [1000, 1500],
+                 "group": "QF1"},
+                {"id": "l2", "room": "r", "type": "downlight", "ceiling": [3000, 1500],
+                 "group": "QF1"},
+                _wall("s1", "socket", "w3", 1550, 300, "QF2"),
+            ],
+            "board": {"room": "r", "wall": "w1", "offset": 500, "height": 1700},
+        }
+    )  # fmt: skip
+
+
+def _touching(wiring: Wiring) -> list[str]:
+    """Boxes whose square touches a line of their plane that does not go into them (a light
+    chain behind the box is its own line too, as in wiring._box_reach)."""
+    paths, _ = lane_paths(wiring.runs, wiring.free)
+    out = []
+    for b in wiring.boxes:
+        mine = {b.id}
+        for r in wiring.runs:
+            if r.source in mine:
+                mine.add(r.target)
+        lines = [
+            LineString([p.as_tuple() for p in paths[k]])
+            for k, r in enumerate(wiring.runs)
+            if r.route == b.route and b.id != r.target and r.source not in mine
+        ]
+        if any(box_square(b.anchor, sheet(BOX_SIZE_MM)).intersects(ln) for ln in lines):
+            out.append(b.id)
+    return out
+
+
+def test_box_is_moved_off_a_line_that_passes_by(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Decision 2026-11-17: a box does not stand on lines that do not go into it."""
+    plan = make_plan(RECT, [DOOR])
+    elec = _passing_run_elec()
+    monkeypatch.setattr(wiring_module, "BOX_CLEAR_ROUNDS", 0)
+    before = _wiring(plan, elec)
+    assert _touching(before) == ["box_1"]  # the spot by the old rule is on the QF2 line
+    monkeypatch.undo()
+    after = _wiring(plan, elec)
+    assert _touching(after) == [] and after.box_notes == ()
+    assert after.boxes[0].anchor.pos != before.boxes[0].anchor.pos
+    # its own lines still go into it, the passing line is as it was
+    targets = {r.target: r.source for r in after.runs}
+    assert {targets["l1"], targets["l2"]} - {"box_1"} in ({"l1"}, {"l2"})  # one light set
+    assert targets["box_1"] == "board"
+    assert after == _wiring(plan, elec)  # deterministic
+
+
+def test_box_without_a_free_spot_stays_with_a_warning(monkeypatch: pytest.MonkeyPatch) -> None:
+    plan = make_plan(RECT, [DOOR])
+    place = boxes_module.place_ceiling_box
+
+    def nowhere(*args: Any, **kw: Any) -> Any:  # no spot off the passing line
+        return None if len(args) > 5 and args[5] is not None else place(*args, **kw)
+
+    monkeypatch.setattr(wiring_module, "place_ceiling_box", nowhere)
+    w = _wiring(plan, _passing_run_elec())
+    assert _touching(w) == ["box_1"]
+    assert len(w.box_notes) == 1
+    box, text = w.box_notes[0]
+    assert box == "box_1" and "К1" in text and "нет места" in text
+
+
+def _set_elec(points: list[dict[str, Any]]) -> Electrical:
+    """A lighting group QF1 in room r: the given points and the panel."""
+    return Electrical.model_validate(
+        {
+            "points": points,
+            "board": {"room": "r", "wall": "w1", "offset": 500, "height": 1700},
+        }
+    )
+
+
+def _dl(pid: str, x: float, y: float, kind: str = "downlight") -> dict[str, Any]:
+    return {"id": pid, "room": "r", "type": kind, "ceiling": [x, y], "group": "QF1"}
+
+
+def test_box_light_set_goes_in_a_chain() -> None:
+    """Lights of one set behind a box share one cable (decision 2026-11-18): box → the nearest
+    light → the next; a loop at each ceiling light, no box branch per light."""
+    elec = _set_elec(
+        [
+            _dl("a", 1000, 2000),
+            _dl("b", 2000, 2000),
+            _dl("c", 3000, 2000),
+            _wall("k", "switch", "w1", 2500, 900, "QF1"),
+        ]
+    )
+    w = _wiring(make_plan(RECT), elec)
+    (box,) = w.boxes
+    by_target = {r.target: r for r in w.runs}
+    from_box = sorted(r.target for r in w.runs if r.source == box.id)
+    assert len(from_box) == 2 and "k" in from_box  # the switch and the head of the set
+    head = next(t for t in from_box if t != "k")
+    chain = [head]
+    while (nxt := next((r.target for r in w.runs if r.source == chain[-1]), None)) is not None:
+        chain.append(nxt)
+    assert sorted(chain) == ["a", "b", "c"]
+    assert by_target[head].ends_mm == END_ALLOWANCE + LIGHT_LOOP
+    for a, b in itertools.pairwise(chain):
+        assert by_target[b].source == a and by_target[b].ends_mm == LIGHT_LOOP
+    assert box.size == "80"  # feed, switch, one set: three lines
+
+
+def test_box_different_sets_get_own_branches() -> None:
+    """Lights of different kinds or switches are different sets: the box joins them, each set
+    gets its own branch; an LED output is never in a set."""
+    elec = _set_elec(
+        [
+            _dl("a", 1000, 2000),
+            _dl("b", 1500, 2000),
+            _dl("p1", 2500, 2000, "pendant"),
+            _dl("p2", 3000, 2000, "pendant"),
+            _wall("led1", "led_output", "w3", 1000, 2400, "QF1"),
+            {**_wall("k1", "switch", "w1", 2000, 900, "QF1"), "controls": ["a", "b"]},
+            {**_wall("k2", "switch", "w1", 2500, 900, "QF1"), "controls": ["p1", "p2"]},
+        ]
+    )
+    w = _wiring(make_plan(RECT), elec)
+    (box,) = w.boxes
+    sources = {r.target: r.source for r in w.runs}
+    assert sources["led1"] == sources["k1"] == sources["k2"] == box.id
+    assert {sources["a"], sources["b"]} in ({box.id, "a"}, {box.id, "b"})
+    assert {sources["p1"], sources["p2"]} in ({box.id, "p1"}, {box.id, "p2"})

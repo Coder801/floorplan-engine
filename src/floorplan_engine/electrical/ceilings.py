@@ -385,6 +385,12 @@ def lane_key(view: CeilingView, run: str) -> str:
     return f"lane:{view.room}.{view.plane}.{run}"
 
 
+def box_key(view: CeilingView, box: str) -> str:
+    """The object of a junction box on the view: "vbox:<room>.<plane>.<box>" — its card is the
+    box card of the wiring sheet, the viewer pages it with the view (as lane_key)."""
+    return f"vbox:{view.room}.{view.plane}.{box}"
+
+
 def ceiling_lines(
     plan: Plan, elec: Electrical, wiring: Wiring, view: CeilingView
 ) -> list[CeilingLine]:
