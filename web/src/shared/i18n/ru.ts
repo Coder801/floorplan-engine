@@ -20,7 +20,7 @@ export const ru = {
   },
   stage: {
     plan: "План", electrical: "Электрика", wiring: "Проводка", plumbing: "Сантехника",
-    furniture: "Мебель", lighting: "Освещение", panel: "Щит", floor_heating: "Тёплый пол", elevations: "Развёртки",
+    furniture: "Мебель", lighting: "Освещение", panel: "Щит", floor_heating: "Тёплый пол", elevations: "Развёртки", plumbing_elevations: "Развёртки",
     points: "Точки", mounting: "Монтаж",
   },
   views: { electrical: "Розетки", low: "Связь", lighting: "Свет", wiring: "Проводка" },
@@ -318,7 +318,8 @@ export const ru = {
     back: "К стене", count: "Стен: {{n}}",
     open: "Открыть: {{title}}",
   },
-  tip: { close: "Закрыть подсказку", openWall: "Развёртка стены", mm: "{{v}} мм", blockAria: "Блок: постов {{n}}, {{x}} мм от начала стены, {{y}} мм от пола" },
+  tip: { close: "Закрыть подсказку", openWall: "Развёртка стены", mm: "{{v}} мм", blockAria: "Блок: постов {{n}}, {{x}} мм от начала стены, {{y}} мм от пола",
+    box: { aria: "Схема коробки {{label}}: кабелей из неё — {{n}}", noFeed: "откуда питание — не указано", m: "{{v}} м", open: "Открыть: {{name}}" } },
   overview: {
     progress: { title: "Готовность проекта", done: "Решено {{done}} из {{total}}", all: "Всё решено: смета и щит — по вашим ответам", open: "не решено", decided: "решено", noQuestions: "Открытых вопросов нет" },
     tab: "Общие сведения", side: "Коротко", title: "Общие сведения",

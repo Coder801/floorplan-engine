@@ -108,11 +108,12 @@ export function wallRooms(walls: readonly { title: string }[]): WallRoom[] {
 export const isPlane = (key: string): boolean => /\.(ceiling|floor)$/.test(key);
 
 // The elevation page an object belongs to: an elevation itself, or a ceiling scale value
-// (dim:bath.ceiling.x1450, decision 2026-11-12) or a line on a ceiling (lane:bath.ceiling.wire_3,
+// (dim:bath.ceiling.x1450, decision 2026-11-12), a box on a ceiling (vbox:bath.ceiling.box_2,
+// 2026-11-18) or a line on a ceiling (lane:bath.ceiling.wire_3,
 // decision 2026-11-17) — its ceiling (elevation:bath.ceiling); null otherwise
 export function ownerOf(o: string): string | null {
   if (o.startsWith("elevation:")) return o;
-  const kind = o.startsWith("dim:") ? 4 : o.startsWith("lane:") ? 5 : 0;
+  const kind = o.startsWith("dim:") ? 4 : o.startsWith("lane:") || o.startsWith("vbox:") ? 5 : 0;
   if (!kind) return null;
   const id = o.slice(kind), k = id.lastIndexOf(".");
   return k < 0 ? null : `elevation:${id.slice(0, k)}`;

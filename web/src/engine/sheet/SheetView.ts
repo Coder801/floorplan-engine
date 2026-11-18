@@ -18,7 +18,7 @@ import { isLabel, layerShown, objectLayers, sceneOf, type Drawing, type DrawingI
 import { followsObject, linkEnds, objectVisible, ownLayers, repeatsNumbers, scoped, wiringChains } from "./views";
 import { FLOOR_ALPHA, FLOOR_FADE_MS, floorPath, stepFades } from "./floors";
 import { gridStep, paintGrid, paperRings } from "./grid";
-import { inBox, paint, type DrawItem } from "./paint";
+import { boxWithin, cardFrames, inBox, isBackdrop, isTint, paint, type DrawItem } from "./paint";
 import { Pinch } from "./pinch";
 import { grownBox, isSymbol, openStacks, pointStacks, symbolCenters, type Stack } from "./stacks";
 import { laneFocus } from "./walls";
@@ -49,8 +49,12 @@ interface Drag {
   moved: boolean;
 }
 
+// Objects of a ceiling (floor) view pinned by a click without selecting a line: its lanes and boxes
+const onView = (o: string) => o.startsWith("lane:") || o.startsWith("vbox:");
+
 export class SheetView {
   readonly items: DrawItem[];
+  private readonly frames: Set<DrawItem>;  // card frames: not thickened when lit (paint.cardFrames)
   readonly has3d: boolean;  // the drawing has 3D (the wiring sheet scene), on any tab
   page!: Page;
   index!: PageIndex;
@@ -87,13 +91,24 @@ export class SheetView {
     // (TEXT_GROW), each string about the centre of its box, and outlined (LABEL_BOLD_MM): semi-bold
     const raw = drawing.items.map((i) => ({ ...i, w: i.w && i.w * i.shift.f, path: pathOf(i) }));
     const centers = symbolCenters(raw);
+    // A card (a frame round its white backdrop: the floor heating zone) grows as one, about its
+    // centre — backdrop, frame and text together, so the frame keeps its margin round the text
+    const cards = [...cardFrames(raw)].map(({ o, box }) => ({ o, box, mid: [(box[0] + box[2]) / 2, (box[1] + box[3]) / 2] as [number, number] }));
+    const cardOf = (it: (typeof raw)[number]) => cards.find((k) => k.o === it.o && boxWithin(it.box, k.box));
     this.items = raw.map((it) => {
+      const card = it.o ? cardOf(it) : undefined;
+      if (card) {
+        const [mx, my] = card.mid;
+        const w = isLabel(it) && !isBackdrop(it) ? LABEL_BOLD_MM * it.shift.f : it.w;
+        return { ...it, w, path: movedPath(it.path, TEXT_GROW, mx, my), box: grownBox(it.box, card.mid, TEXT_GROW) };
+      }
       const c = isSymbol(it) ? centers.get(it.o!) : undefined;
       if (c) return { ...it, path: movedPath(it.path, SYMBOL_GROW, c[0], c[1]), box: grownBox(it.box, c, SYMBOL_GROW) };
       if (!isLabel(it)) return it;
       const m: [number, number] = [(it.box[0] + it.box[2]) / 2, (it.box[1] + it.box[3]) / 2];
       return { ...it, w: LABEL_BOLD_MM * it.shift.f, path: movedPath(it.path, TEXT_GROW, m[0], m[1]), box: grownBox(it.box, m, TEXT_GROW) };
     });
+    this.frames = cardFrames(this.items);
     this.allStacks = pointStacks(this.items);
     this.has3d = !!sceneOf(drawing);
     this.paper = floorPath(paperRings(drawing));
@@ -229,7 +244,7 @@ export class SheetView {
   private isLit(o: string | undefined): boolean {
     if (!o) return false;
     const { hover, lit, pinned } = view.get();
-    if (o === hover || (o === pinned && o.startsWith("lane:"))) return true;
+    if (o === hover || (o === pinned && onView(o))) return true;
     if (!lit) return false;
     // A question about a room (room:hall) also lights the zones of it on the plan
     const room = o.startsWith("zone:") ? `room:${o.slice(5, o.lastIndexOf("."))}` : null;
@@ -278,8 +293,16 @@ export class SheetView {
     const o = it.o;
     // A floor under the cursor is shown by its fill: its outline (along the walls) and label stay
     const floorHover = !!o && o === view.get().hover && o in this.index.floors;
-    if (!floorHover && this.isLit(o)) return [palette.hl, 1, 2];
     const c = screenColor(it.c);
+    // A white fill is a backdrop (the frame under a cable length label, the inside of a fixture):
+    // lit, it keeps the paper colour, or it would cover its own text with the highlight
+    // A see-through area (the heated floor) stays see-through, in the highlight colour, as a
+    // floor under the cursor; a card frame keeps its width so it does not cover the card's text
+    if (!floorHover && this.isLit(o)) {
+      if (isBackdrop(it)) return [c, 1, 1];
+      if (isTint(it)) return [palette.hl, FLOOR_ALPHA, 1];
+      return [palette.hl, 1, this.frames.has(it) ? 1 : 2];
+    }
     const { selected, neighbors, pinned } = view.get();
     // A line pinned on a ceiling view: the other lanes and scale values are dimmed
     if (o && (o.startsWith("lane:") || o.startsWith("dim:"))) {
@@ -309,7 +332,8 @@ export class SheetView {
     if (!o) { this.clearSelection(); return; }
     // A line on a ceiling view (lane:) is pinned: it lights up, the other lanes and the scale
     // values not measuring it are dimmed (laneFocus); hiding is the group eyes of the side panel
-    if (o.startsWith("lane:")) {
+    // A box on a view (vbox:) is pinned the same way: it lights up, its hint shows the box scheme
+    if (onView(o)) {
       view.set({ selected: null, neighbors: null, pinned: view.get().pinned === o ? null : o, tip: null });
       return;
     }

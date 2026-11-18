@@ -1,0 +1,69 @@
+// Box scheme: the wire column (SVG, fan.ts) left, the cable rows right. Row heights here and
+// ROW / ROW_BRIEF in fan.ts are the same numbers: the fan ends at the middle of each row
+
+@use "@/shared/styles/mixins" as *;
+
+.scheme { display: grid; margin-top: var(--space-2); }
+
+.fan {
+  display: grid; grid-template-columns: 84px minmax(0, 1fr);
+}
+.wires { display: block; overflow: visible; }
+.wire {
+  fill: none; stroke: var(--muted); stroke-width: 1.5;
+  transition: stroke-width var(--t) var(--ease);
+  &.on { stroke-width: 3; }
+  @media (prefers-reduced-motion: reduce) { transition: none; }
+}
+.box { fill: var(--raise); stroke: var(--text); stroke-width: 1.5; }
+.label {
+  @include type(small);
+  font-weight: 600; fill: var(--text); text-anchor: middle; dominant-baseline: central;
+}
+
+.outs {
+  list-style: none; margin: 0; padding: 0;
+  display: grid; grid-auto-rows: 36px; align-content: center;
+}
+
+// One cable: badge, where it goes, and below it the group (if another), cable and length
+.line {
+  @include bare-button;
+  @include focus-ring;
+  @include type(small);
+  display: grid; grid-template-columns: 20px minmax(0, 1fr); grid-template-rows: 16px 16px;
+  column-gap: var(--space-2); align-items: center; align-content: center;
+  width: 100%; height: 100%; padding: 0 var(--space-1) 0 0;
+  color: var(--text); text-align: left;
+  &.on { background: var(--hl-row); }
+}
+.link { cursor: pointer; }
+.name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.meta { grid-column: 2; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
+
+// The feed: above the fan, the line drops from under its name
+.source {
+  grid-template-columns: minmax(0, 1fr); height: 32px;
+  .name { font-weight: 600; }
+  .meta { grid-column: 1; }
+}
+.none { @include type(small); display: block; height: auto; color: var(--muted); }
+
+.badge {
+  grid-row: 1 / span 2; justify-self: center;
+  min-width: 20px; height: 20px; padding: 0 2px;
+  display: grid; place-items: center;
+  border: 1px solid var(--muted); background: var(--muted); color: #fff;
+  @include type(caps);
+  letter-spacing: 0;
+}
+.toBox { width: 14px; min-width: 14px; height: 14px; background: none; border-color: var(--text); }
+.dot { width: 8px; min-width: 8px; height: 8px; padding: 0; border-radius: 50%; }
+
+// Simple mode: one line per cable, no meta
+.brief {
+  .outs { grid-auto-rows: 24px; }
+  .line { grid-template-rows: minmax(0, 1fr); }
+  .badge { grid-row: 1; }
+  .source { height: 16px; }
+}

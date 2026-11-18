@@ -24,6 +24,24 @@ export function inView(page: Page, box: Box): boolean {
 // dimensions, sheet frame) and the furniture under it
 export const boldLayer = (l: string) => !l.startsWith("A-") && l !== "F-FURN" && l !== "0";
 
+// A white fill of the sheet: the background under a label or inside a symbol, not the object itself
+export const isBackdrop = (it: Item): boolean => it.k === "f" && /^#ffffff/i.test(it.c);
+
+// A see-through fill (#rrggbbaa with alpha under ff): a tinted area, as the heated floor
+export const isTint = (it: Item): boolean => it.k === "f" && it.c.length === 9 && !/ff$/i.test(it.c);
+
+// Box a lies inside box b (with a tolerance, drawing units)
+export const boxWithin = (a: Box, b: Box, tol = 0.3) =>
+  a[0] >= b[0] - tol && a[1] >= b[1] - tol && a[2] <= b[2] + tol && a[3] <= b[3] + tol;
+
+// Frames of cards: a line of an object around its own white backdrop (the floor heating zone
+// card). Lit, such a frame is not thickened, or it would spread over the card's text
+export function cardFrames<T extends Item & { box: Box }>(items: readonly T[], tol = 0.3): Set<T> {
+  const backs = items.filter((it) => it.o && isBackdrop(it));
+  const near = (a: Box, b: Box) => a.every((v, i) => Math.abs(v - b[i]) <= tol);
+  return new Set(items.filter((it) => it.k === "s" && it.o && backs.some((b) => b.o === it.o && near(b.box, it.box))));
+}
+
 // Stroke width of a line, drawing units: the sheet width, bolder on screen for engineering
 // layers (bold), never thinner than the floor of its kind (minW, cableW, lineW — px / pxPerMm)
 export function strokeWidth(it: Item, k: number, bold: number, minW: number, cableW: number, lineW: number): number {
@@ -59,6 +77,16 @@ export function paint(ctx: CanvasRenderingContext2D, items: DrawItem[], pxPerMm:
 }
 
 // Path bounds: d holds only absolute commands, numbers come in x y pairs
+// Some part of a path is in the sheet viewport. The text of one layer comes as one primitive:
+// the tables and legend round the viewport share a box over the whole sheet, which touches the
+// viewport though no letter is in it (the floor heating sheet, 2026-11-18)
+export function partInView(page: Page, d: string, box: Box = bbox(d)): boolean {
+  if (!inView(page, box)) return false;
+  const [x0, y0, x1, y1] = viewOf(page);
+  if (box[0] >= x0 && box[1] >= y0 && box[2] <= x1 && box[3] <= y1) return true;
+  return d.split(/(?=M)/i).some((part) => /\d/.test(part) && inView(page, bbox(part)));
+}
+
 export function bbox(d: string): Box {
   const nums = d.match(/-?\d*\.?\d+(?:e-?\d+)?/gi) || [];
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;

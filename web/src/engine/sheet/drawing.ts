@@ -8,7 +8,7 @@
 
 import { SHEET_ONLY } from "@/shared/consts";
 import type { Box, Item, ObjectCard, Page, Scene } from "@/shared/types";
-import { bbox, inView, viewOf } from "./paint";
+import { bbox, partInView, viewOf } from "./paint";
 
 // Sheets of one drawing (plumbing and floor heating too: walls from the plan, pipes and the
 // heating cable are their own layers); the panel, elevations and schedule stand alone
@@ -63,7 +63,7 @@ export function buildDrawing(pages: Page[]): Drawing {
       // drawing it is one layer (newer builds put them on A-DIMS themselves)
       const it = src.l === "0" && src.o?.startsWith("dimension:") ? { ...src, l: "A-DIMS" } : src;
       const box = bbox(it.d);
-      if (!inView(page, box)) continue;
+      if (!partInView(page, it.d, box)) continue;
       layers.add(it.l);
       if (!taken.has(it.l)) mine.push({ ...it, box: shiftBox(box, shift), shift });
     }

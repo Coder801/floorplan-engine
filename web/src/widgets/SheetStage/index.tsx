@@ -11,7 +11,7 @@ import { ownLayers, viewOfLayer, wiringChains } from "@/engine/sheet/views";
 import { lightLinks } from "@/engine/three/lightLinks";
 import { SheetView } from "@/engine/sheet/SheetView";
 import { WALL_MODES } from "@/shared/consts";
-import { PageIndex } from "@/shared/page";
+import { groupColors, PageIndex } from "@/shared/page";
 import { useView, view } from "@/shared/store";
 import ui from "@/shared/styles/ui.module.scss";
 import type { Page } from "@/shared/types";
@@ -72,6 +72,7 @@ export function SheetStage({ page, drawing, language, download, onWall, lightMod
     ? wiringLegend(drawing, page, { box: t("legend.box", { lng: language }), low: t("legend.low", { lng: language }) })
     : page.legend ?? []), [drawing, page, t, language]);
   const in3d = show3d && !!scene3d;
+  const colors = useMemo(() => groupColors(drawing.pages), [drawing]);
 
   // The canvas is per drawing; a tab of the same drawing only calls setPage (below)
   const first = useRef({ page, index });
@@ -120,7 +121,7 @@ export function SheetStage({ page, drawing, language, download, onWall, lightMod
           <Scene3D scene={scene3d!} index={index} own={own} layerOf={layerOf} links={links} apiRef={scene} onZoom={setZoom3d} onHome={setHome} />
         </Suspense>
       )}
-      <Tip index={index} onWall={onWall} />
+      <Tip index={index} onWall={onWall} colors={colors} />
       {!in3d && legend.length > 0 && (
         <Legend entries={legend.filter((e) => !own || legendShown(e, own))} language={language} />
       )}

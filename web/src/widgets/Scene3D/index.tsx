@@ -1,7 +1,9 @@
 // Drawing 3D (key scene of the wiring page, scene3d.py): model mm, Z axis up. One for all tabs
 // of the drawing: it shows what the tab's layers show (plan: walls, electrical: points of the
 // view and its lines, lighting links: lights, switches and the links under the ceiling
-// (engine/three/lightLinks.ts), wiring: everything). The "cut" wall mode makes partitions a
+// (engine/three/lightLinks.ts), wiring: everything, floor heating: the zones on the floor, the
+// cable, the cold lead and the sensor conduit up to the controller, and its line from the panel
+// (engine/three/heating.ts)). The "cut" wall mode makes partitions a
 // low rim, and exterior walls a rim when they stand between the camera and the room; the part
 // of a line hidden by a wall is faint and drawn over everything; hints, selection and the
 // link to tables go through the shared state.
@@ -15,6 +17,7 @@ import { useEffect, useMemo, useRef, type MutableRefObject } from "react";
 import * as THREE from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import { layerShown } from "@/engine/sheet/drawing";
+import { HEAT_LAYER, heatingFeed } from "@/engine/three/heating";
 import { LINK_LAYER, type LightLink3D } from "@/engine/three/lightLinks";
 import { wallEdges } from "@/engine/three/wallEdges";
 import {
@@ -25,7 +28,7 @@ import { expand, type PageIndex } from "@/shared/page";
 import { isDark, palette, refreshPalette, screenColor } from "@/shared/palette";
 import { shown3d, useView, view, type ViewState } from "@/shared/store";
 import ui from "@/shared/styles/ui.module.scss";
-import type { PipeKind, Scene, ScenePipe, SceneWire, XY } from "@/shared/types";
+import type { PipeKind, Scene, SceneHeating, ScenePipe, SceneWire, XY } from "@/shared/types";
 import {
   clampStep, Glide, PinchSteps, stepBelow, WheelSteps, ZOOM_STEPS, zoomLabel, type Zoom,
 } from "@/shared/zoom";
@@ -61,6 +64,8 @@ const fallbackLayer = (key: string, w?: SceneWire) =>
     : key.startsWith("board:") ? "E-BOARD" : key.startsWith("riser:") ? "P-RISER"
       : key.startsWith("fixture:") ? "P-FIXT" : null);
 const PIPE_LAYER: Record<PipeKind, string> = { cold: "P-COLD", hot: "P-HOT", sewer: "P-SEWER" };
+const HEAT_TINT_ALPHA = 0.35;  // the heated area over the floor: a warm tint, the floor shows through
+const HEAT_TINT_Z = 2;         // mm above the scene floor (the cable is in the screed at 10)
 
 function shape(rings: XY[][]): THREE.Shape {
   const v = (r: XY[]) => r.map(([x, y]) => new THREE.Vector2(x, y));
@@ -205,6 +210,13 @@ function World({ scene, index, own, layerOf, links, apiRef, onZoom, onHome }: Pr
   // The slab goes under the room floors: door openings and pockets between walls are floor too
   const floors = useMemo(() => [...(scene.slab ?? []).map((ring) => [ring]), ...scene.floors.map((f) => f.rings)]
     .map((rings) => new THREE.ShapeGeometry(shape(rings))), [scene]);
+  // Floor heating: the heated area of each zone as a flat tint, its border as lines
+  const heating = useMemo(() => Object.entries(scene.heating ?? {}).map(([id, z]) => ({
+    id, z,
+    tint: z.area.map((rings) => new THREE.ShapeGeometry(shape(rings))),
+    frame: z.area.flatMap((rings) => rings.map((r) => [...r, r[0]].map(([x, y]) => [x, y, HEAT_TINT_Z + 1] as [number, number, number]))),
+  })), [scene]);
+  const feed = useMemo(() => heatingFeed(scene), [scene]);
   // Points, boxes, panel: on a wall or on the ceiling (shapes — solids.ts)
   const solids = useMemo(() => {
     const out: { key: string; pos: [number, number, number]; color: string; geo: THREE.BufferGeometry;
@@ -290,10 +302,12 @@ function World({ scene, index, own, layerOf, links, apiRef, onZoom, onHome }: Pr
   const alpha = (key: string) => (!s.selected || s.selected.has(key) ? 1
     : s.neighbors && s.neighbors.has(key) ? NEIGHBOR_ALPHA : DIM_ALPHA);
   const handlers = (key: string) => objectEvents(key, index, focus);
-  // An object is visible if its layer is visible on this tab; an unknown layer is always visible
+  // An object is visible if its layer is visible on this tab; an unknown layer is always visible.
+  // A floor heating controller and its line from the panel are visible with the cold lead too
+  const shown = (l: string) => layerShown(own ?? new Set([l]), s.hidden, s.extra, l);
   const visible = (key: string, w?: SceneWire, fallback?: string) => {
     const l = layerOf.get(key) ?? fallback ?? fallbackLayer(key, w);
-    return !l || layerShown(own ?? new Set([l]), s.hidden, s.extra, l);
+    return !l || shown(l) || (feed.has(key) && shown(HEAT_LAYER.lead));
   };
 
   return (
@@ -328,6 +342,10 @@ function World({ scene, index, own, layerOf, links, apiRef, onZoom, onHome }: Pr
             <LinkLines key={l.key} link={l} lit={lit(l.key) || l.ends.some(lit)}
                        alpha={!s.selected || l.ends.some((k) => s.selected!.has(k)) ? 1 : DIM_ALPHA} />
           ))}
+        {heating.filter(({ z }) => shown3d(s.filter3d, null, z.room)).map(({ id, z, tint, frame }) => (
+          <HeatingZone key={id} z={z} tint={tint} frame={frame} shown={shown} lit={lit(z.key)}
+                       alpha={alpha(z.key)} handlers={handlers(z.key)} />
+        ))}
         {Object.entries(scene.pipes ?? {})
           .filter(([, p]) => shown3d(s.filter3d, null, p.room) && visible(p.key, undefined, PIPE_LAYER[p.kind])).map(([id, p]) => (
           <PipeLine key={id} p={p} lit={lit(p.key)} alpha={alpha(p.key)} handlers={handlers(p.key)} />
@@ -427,6 +445,41 @@ function PipeLine({ p, lit, alpha, handlers }: { p: ScenePipe; lit: boolean; alp
             userData={{ key: p.key }} {...handlers} />
       <Line points={p.pts} color={color} lineWidth={2} transparent opacity={GHOST_ALPHA * alpha}
             depthTest={false} renderOrder={ON_TOP} raycast={() => null} />
+    </>
+  );
+}
+
+// Floor heating zone: the tint and border of the heated area, the serpentine, the cold lead and the
+// sensor conduit; each part follows its layer of the sheet. The cable carries the zone hint
+function HeatingZone({ z, tint, frame, shown, lit, alpha, handlers }: {
+  z: SceneHeating; tint: THREE.ShapeGeometry[]; frame: [number, number, number][][];
+  shown: (layer: string) => boolean; lit: boolean; alpha: number; handlers: Handlers;
+}) {
+  const c = z.colors;
+  const line = (pts: [number, number, number][], color: string, width: number, own?: Partial<Handlers> & { userData?: object }) => (
+    <>
+      <Line points={pts} color={lit ? palette.hl : screenColor(color)} lineWidth={lit ? width + 1 : width}
+            transparent opacity={alpha} {...(own ?? { raycast: () => null })} />
+      {/* Under a wall rim or seen from below the floor: faint, on top of everything */}
+      <Line points={pts} color={screenColor(color)} lineWidth={1} transparent opacity={GHOST_ALPHA * alpha}
+            depthTest={false} renderOrder={ON_TOP} raycast={() => null} />
+    </>
+  );
+  return (
+    <>
+      {shown(HEAT_LAYER.area) && tint.map((geo, i) => (
+        <mesh key={`t${i}`} geometry={geo} position={[0, 0, HEAT_TINT_Z]} raycast={() => null}>
+          <meshBasicMaterial color={c.tint} transparent opacity={HEAT_TINT_ALPHA * alpha} depthWrite={false}
+                             side={THREE.DoubleSide} />
+        </mesh>
+      ))}
+      {shown(HEAT_LAYER.area) && frame.map((pts, i) => (
+        <Line key={`f${i}`} points={pts} color={screenColor(c.frame)} lineWidth={1.5} transparent opacity={alpha}
+              raycast={() => null} />
+      ))}
+      {shown(HEAT_LAYER.cable) && z.cable.length > 1 && line(z.cable, c.cable, WIRE_PX, { userData: { key: z.key }, ...handlers })}
+      {shown(HEAT_LAYER.lead) && z.lead.length > 1 && line(z.lead, c.lead, WIRE_PX)}
+      {shown(HEAT_LAYER.sensor) && z.sensor.length > 1 && line(z.sensor, c.sensor, 1)}
     </>
   );
 }

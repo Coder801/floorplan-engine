@@ -1,6 +1,11 @@
 // Tab and mode keys and display settings
 
 // Labels live in the i18n dictionaries (src/i18n): only keys here
+// Sheet topics of the wall elevations (decision 2026-11-18): each section has its own, with only
+// its walls — electrical (with the ceilings) and plumbing
+export const WALL_STAGES: ReadonlySet<string> = new Set(["elevations", "plumbing_elevations"]);
+export const isWallStage = (stage: string | undefined) => WALL_STAGES.has(stage ?? "");
+
 export const SIDE_TABS = ["tables", "layers"] as const;
 // A ceiling (floor) view on the elevations: its lines, the installer notes and tables, layers
 export const CEILING_TABS = ["lines", "notes", "layers"] as const;

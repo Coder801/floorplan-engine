@@ -95,6 +95,7 @@ describe("ceiling pages", () => {
   });
   it("a line on a ceiling is drawn on its page and the page carries the lines for the side panel", () => {
     expect(ownerOf("lane:bath.ceiling.wire_3")).toBe("elevation:bath.ceiling");
+    expect(ownerOf("vbox:bath.ceiling.box_2")).toBe("elevation:bath.ceiling");  // a box on the ceiling
     const items = [
       { k: "s", d: "M0 0L10 10", o: "elevation:bath.ceiling" },
       { k: "s", d: "M0 5L40 5", o: "lane:bath.ceiling.wire_3" },

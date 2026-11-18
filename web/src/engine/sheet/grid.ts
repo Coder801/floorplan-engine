@@ -3,6 +3,7 @@
 // is tied to the model (a square is a round number of mm) and moves and zooms with the drawing.
 // Screen only: PNG and print have none.
 
+import { isWallStage } from "@/shared/consts";
 import { isDark, palette } from "@/shared/palette";
 import type { Item, XY } from "@/shared/types";
 import { shiftOf, sceneOf, type Drawing } from "./drawing";
@@ -70,7 +71,7 @@ export function planeRing(items: readonly Item[]): XY[] | null {
 // On an elevations sheet cut down to one view (a ceiling or floor plane, walls.ts wallSheet) — the
 // room of the plane; a whole sheet with many views has no paper
 export function paperRings(d: Drawing): XY[][] {
-  if (d.base.stage === "elevations") {
+  if (isWallStage(d.base.stage)) {
     const views = new Set(d.base.items.map((it) => it.o).filter((o) => o?.startsWith("elevation:")));
     const ring = views.size === 1 ? planeRing(d.base.items) : null;
     return ring ? [ring] : [];

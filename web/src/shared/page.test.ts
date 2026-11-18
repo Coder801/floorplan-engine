@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { briefCard, filteredKeys, inRings, PageIndex, rowPicked, rowSelection } from "./page";
-import type { Page, XY } from "./types";
+import { briefCard, filteredKeys, groupColors, inRings, PageIndex, rowPicked, rowSelection } from "./page";
+import type { Page, TableRow, XY } from "./types";
 
 const square = (a: number, b: number): XY[] => [[a, a], [b, a], [b, b], [a, b], [a, a]];
 
@@ -97,5 +97,17 @@ describe("card of the simple mode", () => {
   it("other objects keep their card", () => {
     const card = { title: "Розетка", rows };
     expect(briefCard("point:s1", card)).toBe(card);
+  });
+});
+
+describe("цвета групп для схем вне холста", () => {
+  it("из строк таблиц с группой и цветом, первая встреченная выигрывает", () => {
+    const table = (rows: TableRow[]) => ({ title: "Группы", columns: [], align: [], rows });
+    const pages = [
+      { tables: [table([{ cells: ["QF1"], group: "QF1", color: "#f28e2b" }, { cells: ["Итого"] }])] },
+      { tables: [table([{ cells: ["QF1"], group: "QF1", color: "#000000" }, { cells: ["QF2"], group: "QF2", color: "#d4a72c" }])] },
+      {},
+    ] as Page[];
+    expect(groupColors(pages)).toEqual({ QF1: "#f28e2b", QF2: "#d4a72c" });
   });
 });

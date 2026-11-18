@@ -1,7 +1,9 @@
 import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
+import { view } from "@/shared/store";
 import { elevation } from "@/shared/testData";
+import type { Page } from "@/shared/types";
 import { ElevationStage } from "./index";
 
 // The elevation is drawn by its canvas engine (engine/elevation, tested on its own): here a
@@ -46,5 +48,18 @@ describe("ElevationStage", () => {
     first.unmount();
     render(<ElevationStage elevation={elevation()} withMap />);
     expect(views.at(-1)!.mode).toBe("iso");
+  });
+
+  it("a pinned box of the wall shows its hint, as on the wiring sheet; a point does not", () => {
+    const box = { id: "b1", key: "box:b1", label: "К1", x: 800, y: 2550, size: 100, group: "QF4", color: "#123456", from: null };
+    const page: Page = { name: "09 Развёртки", format: "A3", size: [420, 297], background: "#fff", items: [], stage: "elevations",
+                         objects: { "box:b1": { title: "Коробка К1", rows: [["Группа", "QF4"]] } } };
+    render(<ElevationStage elevation={elevation({ boxes: [box] })} withMap={false} page={page} />);
+    expect(screen.queryByText("Коробка К1")).toBeNull();
+    act(() => view.set({ pinned: "box:b1" }));
+    expect(screen.getByText("Коробка К1")).toBeInTheDocument();
+    act(() => view.set({ pinned: "point:p1" }));
+    expect(screen.queryByText("Коробка К1")).toBeNull();
+    act(() => view.set({ pinned: null }));
   });
 });

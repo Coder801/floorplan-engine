@@ -1,8 +1,9 @@
 // Object hint: at the cursor (right and below; if it does not fit, on the other side) or, pinned
 // by a click, in the top-right corner, not over the drawing; closed by ×, Esc (on the sheet and
 // in 3D) and by switching sheets (store.resetSelection). A pinned socket block also shows its
-// scheme and a link to the elevation of the whole wall. The simple interface mode shows the
-// short card of a line or a box: where it runs, without group, cable and lengths
+// scheme and a link to the elevation of the whole wall, a pinned junction box — its cables
+// (BoxScheme: a row opens the next box or the point). The simple interface mode shows the short
+// card of a line or a box: where it runs, without group, cable and lengths
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -11,12 +12,20 @@ import { briefCard, type PageIndex } from "@/shared/page";
 import { useView, view } from "@/shared/store";
 import { Button } from "@/ui/Button";
 import { IconButton } from "@/ui/IconButton";
+import { BoxScheme } from "@/widgets/BoxScheme";
 import { PointBlock } from "@/widgets/PointBlock";
 import css from "./Tip.module.scss";
 
 const unpin = () => view.set({ selected: null, neighbors: null, pinned: null });
 
-export function Tip({ index, onWall }: { index: PageIndex; onWall?: (key: string) => void }) {
+interface Props {
+  index: PageIndex;
+  onWall?: (key: string) => void;
+  colors?: Record<string, string>;  // group colours of the drawing, for the box scheme
+  canOpen?: (o: string) => boolean;  // which rows of the box scheme open; any object of the page by default
+}
+
+export function Tip({ index, onWall, colors, canOpen }: Props) {
   const { t } = useTranslation();
   const { tip, pinned, cables } = useView((s) => s);
   const el = useRef<HTMLDivElement>(null);
@@ -42,8 +51,15 @@ export function Tip({ index, onWall }: { index: PageIndex; onWall?: (key: string
   }, [tip, pinned]);
 
   if (!key) return null;
-  const card = cables ? index.card(key) : briefCard(key, index.card(key));
+  const full = index.card(key);
+  const card = cables ? full : briefCard(key, full);
   const { block } = card;
+  const { box } = full;  // the simple mode shows it too, without cables and lengths
+  // A row of the box scheme: its target is pinned, as by a click on the sheet
+  const open = (o: string) => {
+    const chain = index.chainOf(o);
+    view.set({ selected: chain, neighbors: index.neighborsOf(chain), pinned: o, tip: null });
+  };
   return (
     <div ref={el} className={cx(css.tip, !!pinned && css.docked)}
          style={pinned ? undefined : { left: pos?.left ?? -9999, top: pos?.top ?? -9999 }}
@@ -55,6 +71,9 @@ export function Tip({ index, onWall }: { index: PageIndex; onWall?: (key: string
         <dl>{card.rows.map(([k, v], i) => [<dt key={`t${i}`}>{k}</dt>, <dd key={`d${i}`}>{v}</dd>])}</dl>
       )}
       {pinned && block && <PointBlock block={block} />}
+      {pinned && box && (
+        <BoxScheme box={box} colors={colors} brief={!cables} onOpen={open} canOpen={canOpen ?? ((o) => index.interactive(o))} />
+      )}
       {pinned && block && onWall && (
         <Button size="sm" block className={css.wall} onClick={() => onWall(block.wall)}>{t("tip.openWall")}</Button>
       )}

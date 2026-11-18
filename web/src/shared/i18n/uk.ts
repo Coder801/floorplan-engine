@@ -20,7 +20,7 @@ export const uk: Messages = {
   },
   stage: {
     plan: "План", electrical: "Електрика", wiring: "Проводка", plumbing: "Сантехніка",
-    furniture: "Меблі", lighting: "Освітлення", panel: "Щит", floor_heating: "Тепла підлога", elevations: "Розгортки",
+    furniture: "Меблі", lighting: "Освітлення", panel: "Щит", floor_heating: "Тепла підлога", elevations: "Розгортки", plumbing_elevations: "Розгортки",
     points: "Точки", mounting: "Монтаж",
   },
   views: { electrical: "Розетки", low: "Зв'язок", lighting: "Світло", wiring: "Проводка" },
@@ -318,7 +318,8 @@ export const uk: Messages = {
     back: "До стіни", count: "Стін: {{n}}",
     open: "Відкрити: {{title}}",
   },
-  tip: { close: "Закрити підказку", openWall: "Розгортка стіни", mm: "{{v}} мм", blockAria: "Блок: постів {{n}}, {{x}} мм від початку стіни, {{y}} мм від підлоги" },
+  tip: { close: "Закрити підказку", openWall: "Розгортка стіни", mm: "{{v}} мм", blockAria: "Блок: постів {{n}}, {{x}} мм від початку стіни, {{y}} мм від підлоги",
+    box: { aria: "Схема коробки {{label}}: кабелів з неї — {{n}}", noFeed: "звідки живлення — не вказано", m: "{{v}} м", open: "Відкрити: {{name}}" } },
   overview: {
     progress: { title: "Готовність проєкту", done: "Вирішено {{done}} з {{total}}", all: "Усе вирішено: кошторис і щит — за вашими відповідями", open: "не вирішено", decided: "вирішено", noQuestions: "Відкритих питань немає" },
     tab: "Загальні відомості", side: "Коротко", title: "Загальні відомості",

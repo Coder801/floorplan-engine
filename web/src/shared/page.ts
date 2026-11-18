@@ -1,5 +1,6 @@
 // Links between page objects: the whole line (chains), group (groups), cards (objects)
 
+import { isWallStage } from "@/shared/consts";
 import { label } from "@/shared/i18n";
 import type { ObjectCard, Page, XY } from "./types";
 
@@ -60,7 +61,7 @@ export class PageIndex {
   // lines are chains of another sheet, for a sheet that shows its lines (sockets view)
   constructor(page: Page, private readonly other: Record<string, ObjectCard> = {}, lines: Record<string, string[]> = {}) {
     this.electric = ELECTRIC_STAGES.has(page.stage || "");
-    this.elevations = page.stage === "elevations";
+    this.elevations = isWallStage(page.stage);
     this.objects = page.objects || null;
     this.chains = page.chains || lines;
     this.areas = page.areas || {};
@@ -118,5 +119,17 @@ export class PageIndex {
 // without group, cable and lengths); a build made before it, only the title
 export function briefCard(key: string, card: ObjectCard): ObjectCard {
   if (card.brief) return card.brief;
-  return /^(wire|box):/.test(key) ? { title: card.title, rows: [] } : card;
+  return /^(wire|box|vbox):/.test(key) ? { title: card.title, rows: [] } : card;
+}
+
+// Group colours from the "Groups" tables of the sheets (rows with group and colour), the same
+// colours as the wiring lines: for schemes outside the canvas (BoxScheme)
+export function groupColors(pages: Page[]): Record<string, string> {
+  const colors: Record<string, string> = {};
+  for (const p of pages) {
+    for (const table of p.tables ?? []) {
+      for (const r of table.rows) if (r.group && r.color && !colors[r.group]) colors[r.group] = r.color;
+    }
+  }
+  return colors;
 }

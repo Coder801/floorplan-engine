@@ -78,7 +78,7 @@ export interface ManifestPage {
   format: string | null;
   size: XY;
   file: string;
-  stage?: string;  // sheet topic; "points" is the print schedule, no tab; "elevations" are the elevations
+  stage?: string;  // sheet topic; "points" is the print schedule, no tab; "elevations" and "plumbing_elevations" are the elevations of a section
 }
 
 export interface Manifest {
@@ -224,10 +224,42 @@ export interface PointBlock {
   items?: BlockItem[];  // every point of the frame, left to right; absent in older builds
 }
 
+// Cable of a junction box (wiring sheet): its key, the group, the cable mark and length, m
+export interface BoxCable {
+  key: string;            // wire:<id>
+  group: string;
+  mark: string;           // "3x1.5", as in the estimate
+  length_m: number;
+}
+
+// Where the box is fed from: the panel, another box or a point (a loop); from_key: null — unknown
+export interface BoxFeed extends BoxCable {
+  from: string;           // name in the project language: "ЩР", "К3"
+  from_key: string | null;  // board, box:<id>, point:<id>
+}
+
+// A cable out of the box: to a point (number on the electrical sheet) or to the next box
+export interface BoxBranch extends BoxCable {
+  to: string;             // name in the project language: "Вимикач, Коридор", "К2"
+  to_key: string;         // point:<id> or box:<id>
+  kind: "box" | "point";
+  point_type: string | null;
+  number: number | null;  // point number on the electrical sheet
+}
+
+// Junction box with its cables: the scheme of the pinned box hint (widgets/BoxScheme)
+export interface BoxData {
+  label: string;
+  size: string;
+  in: BoxFeed | null;
+  out: BoxBranch[];
+}
+
 export interface ObjectCard {
   title: string;
   rows: [string, string][];
   block?: PointBlock;  // absent in builds made before it appeared
+  box?: BoxData;       // junction box (box:<id>): its cables; absent in older builds
   brief?: ObjectCard;  // wiring line or box: the short card of the simple interface mode
 }
 
@@ -283,6 +315,21 @@ export interface Scene {
   pipes?: Record<string, ScenePipe>;
   fixtures?: Record<string, { key: string; kind: PipeKind; color: string; pos: XYZ; inward: XY; room?: string }>;
   risers?: { key: string; pos: XY; r: number; z: [number, number]; room?: string }[];
+  // Floor heating (epd/heating_scene.py): zone id → its 3D; none: no zones or built before it appeared
+  heating?: Record<string, SceneHeating>;
+}
+
+// A floor heating zone in 3D: the sheet's zone lifted by height (model mm)
+export interface SceneHeating {
+  key: string;          // heating:<id>
+  room: string;
+  thermostat: string;   // id of its controller point
+  area: XY[][][];       // heated area: polygons (outer ring and holes)
+  cable: XYZ[];         // the serpentine in the screed
+  lead: XYZ[];          // cold lead: from the controller down to the floor and to the serpentine
+  sensor: XYZ[];        // floor sensor conduit, the same way
+  feed: { wires: string[]; boxes: string[] };  // lines and boxes from the panel to the controller
+  colors: { tint: string; frame: string; cable: string; lead: string; sensor: string };
 }
 
 export type PipeKind = "cold" | "hot" | "sewer";

@@ -156,6 +156,9 @@ export class ElevationView {
   private cx = () => (this.w - RAIL_PX) / 2;
 
   private sx = (x: number) => this.ox + x * this.scale;
+  // Screen x of a chase, cable or fixing: like sx, but a spot inside a frame keeps its place in
+  // posts (paintWall sets it per wall)
+  private fx = (x: number) => this.sx(x);
   private sy = (y: number) => this.oy - y * this.scale;
 
   private on<K extends keyof HTMLElementEventMap>(type: K, fn: (ev: HTMLElementEventMap[K]) => void,
@@ -290,8 +293,8 @@ export class ElevationView {
     for (const [id, { x, y, vx, vy, cs }] of corners) {
       const lane = (c: (typeof cs)[number]) => lanes.get(`${c.key}@${x}`) ?? 0;
       const inner = cs.reduce((a, c) => (lane(c) * vx > lane(a) * vx ? c : a));
-      const X = this.sx(x), Y = this.sy(y), ix = X + lane(inner), iy = Y + lane(inner) * vx * vy;
-      const reach = Math.min(...cs.map((c) => Math.abs(this.sx(c.x1!) - ix)));
+      const X = this.fx(x), Y = this.sy(y), ix = X + lane(inner), iy = Y + lane(inner) * vx * vy;
+      const reach = Math.min(...cs.map((c) => Math.abs(this.fx(c.x1!) - ix)));
       const rise = Math.min(...cs.map((c) => { const v = verticals.get(`${c.key}@${x}`)!; return Math.abs(this.sy(vy < 0 ? v.y1 : v.y0) - iy); }));
       const r0 = Math.min((inner.r ?? 0) * this.scale, reach, rise);
       const cx = ix + vx * r0, cy = iy + vy * r0;
@@ -316,6 +319,14 @@ export class ElevationView {
     const { ctx } = this, d = this.data, s = this.scale;
     const x0 = this.sx(o.from), x1 = this.sx(o.to), floor = this.sy(0), ceil = this.sy(d.height), top = this.sy(d.top);
     const r = Math.max(SYMBOL_MM * s, MIN_R), pitch = Math.max(PITCH_MM * s, 2 * r + 1);
+    // The cable goes into a block at its side (decision 2026-11-17): symbols are drawn no
+    // smaller than MIN_R, so a block may be wider on screen than on the wall, and a drop at its
+    // side stays at the side of the drawn one
+    const frames = e.points.map((p) => [p.x, p.block ?? p.posts] as const);
+    this.fx = (x) => {
+      for (const [cx, n] of frames) if (Math.abs(x - cx) <= (n * PITCH_MM) / 2 + 0.5) return this.sx(cx) + ((x - cx) / PITCH_MM) * pitch;
+      return this.sx(x);
+    };
     const seen = (x: number) => x >= o.from - 1 && x <= o.to + 1;
     const edge = o.rulers === "left" ? x0 : x1;  // the edge with the height scale
     const taken: Rect[] = [];
@@ -346,11 +357,11 @@ export class ElevationView {
       const half = Math.max(((c.wide ? 50 : 30) / 2) * s, 1.5);
       ctx.fillStyle = screenColor(c.low ? CHASE_LOW : CHASE);
       if (c.x1 !== undefined) {  // the turn past an opening, along the wall
-        const a = Math.min(this.sx(c.x), this.sx(c.x1)), b = Math.max(this.sx(c.x), this.sx(c.x1));
+        const a = Math.min(this.fx(c.x), this.fx(c.x1)), b = Math.max(this.fx(c.x), this.fx(c.x1));
         ctx.fillRect(a - half, this.sy(c.y0) - half, b - a + 2 * half, 2 * half);
         continue;
       }
-      ctx.fillRect(this.sx(c.x) - half, this.sy(c.y1), 2 * half, (c.y1 - c.y0) * s);
+      ctx.fillRect(this.fx(c.x) - half, this.sy(c.y1), 2 * half, (c.y1 - c.y0) * s);
     }
     // Cables along the wall, those of one drop side by side in their group colour; a fixing is
     // one line across the cables of its drop, their number "×5" at the top one (the clips snap
@@ -380,16 +391,16 @@ export class ElevationView {
         const { cx, cy, kx, ky, r: rr } = turn;
         ctx.save();
         ctx.strokeStyle = screenColor(c.color ?? INK); ctx.lineWidth = CABLE_W;
-        ctx.beginPath(); ctx.moveTo(kx, cy); ctx.arcTo(kx, ky, cx, ky, Math.max(rr, 0.01)); ctx.lineTo(this.sx(c.x1), ky); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(kx, cy); ctx.arcTo(kx, ky, cx, ky, Math.max(rr, 0.01)); ctx.lineTo(this.fx(c.x1), ky); ctx.stroke();
         ctx.restore();
-        const ex = this.sx(c.x1);
+        const ex = this.fx(c.x1);
         taken.push([Math.min(kx, cx) - CABLE_ROOM, Math.min(cy, ky) - CABLE_ROOM, Math.max(kx, cx) + CABLE_ROOM, Math.max(cy, ky) + CABLE_ROOM]);
         taken.push([Math.min(cx, ex), ky - CABLE_ROOM, Math.max(cx, ex), ky + CABLE_ROOM]);
         continue;
       }
       const n = drops.get(c.x)!, k = placed.get(c.x) ?? 0;
       placed.set(c.x, k + 1);
-      const x = this.sx(c.x) + (k - (n - 1) / 2) * lane;
+      const x = this.fx(c.x) + (k - (n - 1) / 2) * lane;
       // The end on the route plane goes on past the wall: the cable runs on in the floor or
       // ceiling; the end at a turn stops where its arc starts
       let lo = this.sy(c.y0) + (c.y0 <= 0.5 ? CABLE_OUT : 0);
@@ -411,7 +422,7 @@ export class ElevationView {
     for (const f of fixings) tops.set(f.x, Math.max(tops.get(f.x) ?? -Infinity, f.y));
     for (const f of fixings) {
       const spread = (Math.max(f.n ?? 1, drops.get(f.x) ?? 1) - 1) / 2 * lane;
-      const half = Math.max(FIXING_MM * s, 3) + spread, x = this.sx(f.x), y = this.sy(f.y);
+      const half = Math.max(FIXING_MM * s, 3) + spread, x = this.fx(f.x), y = this.sy(f.y);
       ctx.save(); ctx.globalAlpha *= FIXING_ALPHA;
       this.line(x - half, y, x + half, y, INK, 1.2);
       ctx.restore();

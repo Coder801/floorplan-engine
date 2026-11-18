@@ -20,7 +20,7 @@ export const en: Messages = {
   },
   stage: {
     plan: "Plan", electrical: "Electrical", wiring: "Wiring", plumbing: "Plumbing",
-    furniture: "Furniture", lighting: "Lighting", panel: "Panel", floor_heating: "Floor heating", elevations: "Elevations",
+    furniture: "Furniture", lighting: "Lighting", panel: "Panel", floor_heating: "Floor heating", elevations: "Elevations", plumbing_elevations: "Elevations",
     points: "Points", mounting: "Mounting",
   },
   views: { electrical: "Sockets", low: "Comms", lighting: "Lighting", wiring: "Wiring" },
@@ -318,7 +318,8 @@ export const en: Messages = {
     back: "Back to the wall", count: "Walls: {{n}}",
     open: "Open: {{title}}",
   },
-  tip: { close: "Close tooltip", openWall: "Wall elevation", mm: "{{v}} mm", blockAria: "Block: {{n}} posts, {{x}} mm from the wall start, {{y}} mm from the floor" },
+  tip: { close: "Close tooltip", openWall: "Wall elevation", mm: "{{v}} mm", blockAria: "Block: {{n}} posts, {{x}} mm from the wall start, {{y}} mm from the floor",
+    box: { aria: "Box {{label}} scheme: {{n}} cables out", noFeed: "feed not given", m: "{{v}} m", open: "Open: {{name}}" } },
   overview: {
     progress: { title: "Project readiness", done: "{{done}} of {{total}} decided", all: "All decided: the estimate and panel follow your answers", open: "not decided", decided: "decided", noQuestions: "No open questions" },
     tab: "Overview", side: "In brief", title: "Overview",

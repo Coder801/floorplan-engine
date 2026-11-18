@@ -12,7 +12,11 @@
   dl { @include pairs(var(--space-1) var(--space-3)); }
 }
 // Below both rows of drawing options: the second one appears with 3D or Edit
-.docked { top: 108px; right: 12px; left: auto; max-width: 320px; pointer-events: auto; padding-right: 32px; }
+// A long box scheme scrolls inside the card, not past the drawing
+.docked {
+  top: 108px; right: 12px; left: auto; max-width: 320px; pointer-events: auto; padding-right: 32px;
+  max-height: calc(100% - 120px); overflow-y: auto;
+}
 @media (max-width: $phone) { .docked { left: 8px; right: 8px; top: 104px; max-width: none; } }
 .wall { margin-top: var(--space-2); }
 .close { position: absolute; top: var(--space-1); right: var(--space-1); }

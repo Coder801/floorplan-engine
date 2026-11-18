@@ -14,21 +14,18 @@ const full = sheetTabs([
   page(5, "05 Щит", "panel"),
   page(6, "06 Тёплый пол", "floor_heating"),
   page(7, "07 Сантехника", "plumbing"),
-  page(8, "08 Развёртки", "elevations"),
-  page(9, "09 Развёртки (продолжение)", "elevations"),
+  page(8, "08 Развёртки электрики", "elevations"),
+  page(9, "09 Развёртки электрики (продолжение)", "elevations"),
+  page(10, "10 Развёртки сантехники", "plumbing_elevations"),
 ]);
 
 describe("sections", () => {
-  it("собирает листы раздела в один пункт, развёртки — в каждый раздел", () => {
+  it("собирает листы раздела в один пункт, у каждого раздела свои развёртки", () => {
     const all = sections(full);
     expect(all.map((s) => s.key)).toEqual(["sheet:1", "electrical", "plumbing"]);
     expect(all[1].tabs.map((t) => t.stage)).toEqual(["electrical", "panel", "floor_heating", "elevations"]);
-    expect(all[2].tabs.map((t) => t.stage)).toEqual(["plumbing", "elevations"]);
-  });
-
-  it("без разделов развёртки — свой пункт", () => {
-    const all = sections(sheetTabs([page(1, "01 План", "plan"), page(2, "02 Развёртки", "elevations")]));
-    expect(all.map((s) => [s.key, s.domain])).toEqual([["sheet:1", false], ["sheet:2", false]]);
+    expect(all[1].tabs.at(-1)!.pages).toEqual([8, 9]);
+    expect(all[2].tabs.map((t) => t.stage)).toEqual(["plumbing", "plumbing_elevations"]);
   });
 
   it("лист без темы — свой пункт", () => {
@@ -39,28 +36,20 @@ describe("sections", () => {
 
 describe("sectionOf", () => {
   const all = sections(full);
-  const walls = full.find((t) => t.stage === "elevations")!;
 
-  it("общая вкладка открыта в названном разделе, иначе в первом", () => {
-    expect(sectionOf(all, walls, "plumbing")?.key).toBe("plumbing");
-    expect(sectionOf(all, walls, null)?.key).toBe("electrical");
-    expect(sectionOf(all, walls, "sheet:1")?.key).toBe("electrical");
-  });
-
-  it("своя вкладка — в своём разделе, что бы ни было названо", () => {
-    expect(sectionOf(all, full.find((t) => t.stage === "panel")!, "plumbing")?.key).toBe("electrical");
-    expect(sectionOf(all, null, "electrical")).toBeNull();
+  it("вкладка — в своём разделе", () => {
+    expect(sectionOf(all, full.find((t) => t.stage === "plumbing_elevations")!)?.key).toBe("plumbing");
+    expect(sectionOf(all, full.find((t) => t.stage === "elevations")!)?.key).toBe("electrical");
+    expect(sectionOf(all, null)).toBeNull();
   });
 });
 
 describe("wallLayersOf", () => {
-  it("слои стены по разделу — только когда разделов со стенами несколько", () => {
-    const all = sections(full);
-    expect(wallLayersOf(all, all[2])).toEqual({ electrical: false, water: true });
-    expect(wallLayersOf(all, all[1])).toEqual({ electrical: true, water: false });
-    expect(wallLayersOf(all, all[0])).toBeNull();
-    const one = sections(full.filter((t) => t.stage !== "plumbing"));
-    expect(wallLayersOf(one, one[1])).toBeNull();
+  it("слои стены — по теме листа развёрток", () => {
+    expect(wallLayersOf("plumbing_elevations")).toEqual({ electrical: false, water: true });
+    expect(wallLayersOf("elevations")).toEqual({ electrical: true, water: false });
+    expect(wallLayersOf("plan")).toBeNull();
+    expect(wallLayersOf(undefined)).toBeNull();
   });
 });
 
