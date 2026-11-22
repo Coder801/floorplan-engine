@@ -68,6 +68,11 @@ from floorplan_engine.model.schema import (
 )
 from floorplan_engine.model.zones import zone_outline
 
+# Floor heating is held back until the next release (decision 2026-11-22): the zones are still
+# counted (the controller's load, the panel), but there is no "Floor heating" sheet and the
+# estimate buys no cable, sensor, conduit or laying work. The viewer shows the tab greyed out.
+RELEASED = False
+
 WALL_GAP = 100.0  # mm: no cable closer to the walls (assumption)
 DEFAULT_DENSITY = 150.0  # W/m²: target density without `density` (assumption)
 PITCH_MIN, PITCH_MAX = 120.0, 170.0  # mm: recommended pitch between runs

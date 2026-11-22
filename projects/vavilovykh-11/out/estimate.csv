@@ -11,10 +11,6 @@ material_rough;crimp;Гільза і термоусадка (опресуван�
 material_rough;cable_pad;Площадка під монтажний пістолет з дюбель-цвяхом і стяжкою;шт;790;5;3950,00
 material_rough;board_enclosure;Корпус щита вбудований, 5 рядів, 60 мод.;шт;1;6000;6000,00
 material_rough;dc_enclosure;Корпус щита АКБ Hager Golf VS112PD, 12 мод.;шт;1;1500;1500,00
-material_rough;heating_cable.10;Секція нагрівального кабелю 10 м;шт;1;;
-material_rough;heating_cable.20;Секція нагрівального кабелю 20 м;шт;1;;
-material_rough;heating_sensor;Датчик температури підлоги;шт;2;;
-material_rough;heating_conduit;Гофротруба Ø16 для датчика підлоги;м;5,3;;
 material_finish;input.C63 2P;Вступний автомат, C63 2P;шт;1;850;850,00
 material_finish;relay.63 А;Реле напруги, 63 А;шт;1;1900;1900,00
 material_finish;diff.C16 30 мА;Дифавтомат 1P+N C16 30 мА;шт;4;950;3800,00
@@ -47,7 +43,6 @@ material_finish;led_psu;Блок живлення LED 12 В;шт;4;450;1800,00
 rough;work.cable;Прокладання кабелю;м;383,9;34;13052,60
 rough;work.chase;Штроба вузька, 1–2 кабелі;м;49,6;120;5952,00
 rough;work.chase_wide;Штроба широка, 3–4 кабелі;м;16,9;180;3042,00
-rough;work.floor_heating;Укладання нагрівального кабелю змійкою з датчиком підлоги;м²;4,2;;
 rough;work.wall_hole;Свердління проходу крізь стіну;шт;10;100;1000,00
 rough;work.socket_box;Свердління і встановлення підрозетника;шт;60;140;8400,00
 rough;work.junction_box;Монтаж коробки з опресуванням;шт;14;250;3500,00

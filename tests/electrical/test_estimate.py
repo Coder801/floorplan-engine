@@ -920,6 +920,7 @@ def test_thermostat_is_one_row_without_a_price() -> None:
     assert priced.unpriced == 0 and priced.total == pytest.approx(est.total + 2000)
 
 
+@pytest.mark.usefixtures("heating_released")
 def test_floor_heating_rows_by_zone_without_prices() -> None:
     """Floor heating (decision 2026-11-14): a section per zone by its length, a sensor and its
     conduit, the laying work by heated area — all without a price (pricing.UNPRICED)."""
@@ -968,5 +969,21 @@ def test_floor_heating_zone_without_a_layout_buys_no_cable() -> None:
     assert wiring is not None
     (zone,) = wiring.heating
     assert zone.route is None and zone.length == 20
+    q = quantities(wiring, elec)
+    assert not [k for k in q if "heating" in k]
+
+
+def test_floor_heating_is_not_in_the_estimate_until_its_release() -> None:
+    """Floor heating is held back (floor_heating.RELEASED, decision 2026-11-22): a zone is laid,
+    but the estimate buys no section, sensor, conduit or laying work."""
+    plan = make_plan(RECT, [DOOR])
+    _, contours = validate_plan(plan)
+    reg = _pt("t1", "thermostat", 2000, 1500, "QF5")
+    fh = [{"id": "fh1", "room": "r", "thermostat": "t1"}]
+    elec = Electrical.model_validate(
+        {**ELEC, "points": [*ELEC["points"], reg], "floor_heating": fh}
+    )
+    wiring = box_wiring(plan, contours, elec)
+    assert wiring is not None and wiring.heating
     q = quantities(wiring, elec)
     assert not [k for k in q if "heating" in k]

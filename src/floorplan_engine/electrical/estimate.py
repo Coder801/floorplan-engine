@@ -75,6 +75,7 @@ from openpyxl.worksheet.worksheet import Worksheet
 from pydantic import Field
 
 from floorplan_engine.electrical.boxes import BOX_ORDER, BOX_TITLES
+from floorplan_engine.electrical.floor_heating import RELEASED as HEATING_RELEASED
 from floorplan_engine.electrical.led_supply import led_outputs as led_outputs_of
 from floorplan_engine.electrical.mounting import (
     conduit_diameter,
@@ -918,14 +919,15 @@ def quantities(wiring: Wiring, elec: Electrical) -> dict[str, float]:
     rough_rooms = len({p.room for p in elec.points if p.type in LIGHT_TYPES})
     if elec.rough_light and rough_rooms:
         q["rough_holder"] = q["rough_lamp"] = q["rough_switch"] = rough_rooms
-    q.update(heating_quantities(wiring))
+    if HEATING_RELEASED:  # held back until the next release (floor_heating.RELEASED)
+        q.update(heating_quantities(wiring))
     q["work.cable"] = round(sum(r.length_mm for r in wiring.runs) / 1000, 1)
     in_conduit = sum(conduit_mm(r, elec.conduit_level) for r in wiring.runs)
     if in_conduit > 0:
         q["work.conduit"] = round(in_conduit / 1000, 1)
     q.update(chase_quantities(wiring))
     heated = sum(z.area_m2 for z in wiring.heating if z.route is not None)
-    if heated:
+    if heated and HEATING_RELEASED:
         q["work.floor_heating"] = round(heated, 1)
     q["work.wall_hole"] = sum(1 for h in wiring.holes if not h.large)
     q["work.wall_hole_large"] = sum(1 for h in wiring.holes if h.large)

@@ -409,6 +409,7 @@ def test_lone_thermostat_card_shows_its_frame() -> None:
     assert frame["items"] == [{"type": "thermostat", "posts": 1, "own": True}]
 
 
+@pytest.mark.usefixtures("heating_released")
 def test_floor_heating_page_has_its_zone_card(tmp_path: Path) -> None:
     from floorplan_engine.epd.objects import heating_cards
 
@@ -432,6 +433,7 @@ def test_floor_heating_page_has_its_zone_card(tmp_path: Path) -> None:
     assert set(page["objects"]) == {"heating:fh1", "point:t1"}
 
 
+@pytest.mark.usefixtures("heating_released")
 def test_furniture_cards_and_the_zone_card_says_what_is_cut(tmp_path: Path) -> None:
     from floorplan_engine.epd.objects import furniture_cards, heating_cards
 

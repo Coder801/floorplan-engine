@@ -39,6 +39,7 @@ def _elec(heating: bool = True) -> Electrical:
     return Electrical.model_validate({"points": [REG], "floor_heating": fh})
 
 
+@pytest.mark.usefixtures("heating_released")
 def test_sheet_has_the_serpentine_tagged_with_its_zone() -> None:
     plan = make_plan(WALLS)
     _, contours = validate_plan(plan)
@@ -199,3 +200,11 @@ def test_zone_card_is_centred_in_the_heated_area() -> None:
     assert c is not None
     assert ell.contains(shapely_box(c.x - 400, c.y - 200, c.x + 400, c.y + 200))
     assert card_centre(Polygon(), 10, 10) is None
+
+
+def test_no_sheet_until_the_release() -> None:
+    """Floor heating is held back (floor_heating.RELEASED, decision 2026-11-22): no sheet."""
+    plan = make_plan(WALLS)
+    _, contours = validate_plan(plan)
+    _, specs = draw_stages(plan, contours, _elec())
+    assert "tab_floor_heating" not in [s.tab_key for s in specs]

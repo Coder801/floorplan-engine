@@ -75,6 +75,7 @@ from floorplan_engine.electrical.elevations import (
     wall_elevations,
 )
 from floorplan_engine.electrical.estimate import build_estimate
+from floorplan_engine.electrical.floor_heating import RELEASED as HEATING_RELEASED
 from floorplan_engine.electrical.floor_heating import heating_zones
 from floorplan_engine.electrical.mounting import PRACTICE, mounting_notes
 from floorplan_engine.electrical.mounting import text as mounting_text
@@ -330,7 +331,12 @@ def draw_stages(
         board = panel_spec(plan, elec)
         if board is not None:
             specs.append(board)
-        heating = floor_heating_spec(msp, plan, contours, elec, plumbing[0] if plumbing else None)
+        # No floor heating sheet until the next release (floor_heating.RELEASED)
+        heating = (
+            floor_heating_spec(msp, plan, contours, elec, plumbing[0] if plumbing else None)
+            if HEATING_RELEASED
+            else None
+        )
         if heating is not None:
             specs.append(heating)
     if plumbing is not None:

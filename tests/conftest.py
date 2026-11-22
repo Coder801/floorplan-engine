@@ -2,7 +2,19 @@ from __future__ import annotations
 
 from typing import Any
 
+import pytest
+
+from floorplan_engine.electrical import estimate
 from floorplan_engine.model.schema import Plan
+from floorplan_engine.sheets import stages
+
+
+@pytest.fixture
+def heating_released(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Floor heating switched on as after its release (floor_heating.RELEASED): the sheet and
+    the estimate rows; the tests of the held-back feature itself keep running."""
+    monkeypatch.setattr(estimate, "HEATING_RELEASED", True)
+    monkeypatch.setattr(stages, "HEATING_RELEASED", True)
 
 
 def make_plan(walls: list[dict[str, Any]], openings: list[dict[str, Any]] | None = None) -> Plan:
