@@ -48,7 +48,10 @@ $mono: "IBM Plex Mono", ui-monospace, monospace;
 .link { color: inherit; text-decoration: underline; text-decoration-color: var(--line); cursor: pointer; }
 .primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
 .danger { color: var(--critical); }
-.actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; align-items: center; }
+// A table cell with buttons stays a cell: flex on <td> takes it out of the table and the row
+// slides; the buttons sit right, one line, and the in-place confirmation keeps its own flex.
+td.actions { display: table-cell; text-align: right; white-space: nowrap; width: 1%; }
 .status { white-space: nowrap; }
 .dot {
   display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 6px;
