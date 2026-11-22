@@ -489,8 +489,8 @@ export class SheetView {
       this.stop();
       if (click) this.select(this.objectAt(ev));
     });
-    // A pinned hint stays until focus is lost; Esc also clears the selection
-    this.on("blur", () => { if (view.get().pinned) view.set({ pinned: null }); });
+    // A pinned hint stays when the canvas loses focus (a click in the side panel, on zoom or
+    // layers): it is closed by ×, Esc, a click on empty space or a sheet switch
     this.on("keydown", (ev) => { if (ev.key === "Escape") this.clearSelection(); });
     this.on("pointercancel", (ev) => { this.pinch.up(ev); this.stop(); });
     this.on("pointerleave", () => { this.hold(null, null); this.setHover(null); });

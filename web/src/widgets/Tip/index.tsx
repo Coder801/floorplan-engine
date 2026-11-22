@@ -63,7 +63,7 @@ export function Tip({ index, onWall, colors, canOpen }: Props) {
   return (
     <div ref={el} className={cx(css.tip, !!pinned && css.docked)}
          style={pinned ? undefined : { left: pos?.left ?? -9999, top: pos?.top ?? -9999 }}
-         // The canvas keeps focus: losing it would unpin the hint before the click lands (SheetView)
+         // The canvas keeps focus, so Esc on the sheet still clears the selection after a click here
          onMouseDown={(ev) => ev.preventDefault()}>
       {pinned && <IconButton variant="close" size="sm" className={css.close} label={t("tip.close")} onClick={unpin} />}
       <b>{card.title}</b>
