@@ -4,11 +4,13 @@
 
     uv run python scripts/server.py check                       # что в контейнере, без секретов
     uv run python scripts/server.py rebuild [имена…] [--wait]   # пересобрать текущим кодом
-    uv run python scripts/server.py send <проект> room.yaml …   # файл модели — новой версией
+    uv run python scripts/server.py send <проект> room.yaml …   # файлы модели — новой версией
     uv run python scripts/server.py backup [--to папка]         # копия базы и файлов на ноутбук
 
 Модель на сервере — правда (docs/database.md), поэтому send сначала показывает разницу с тем, что
-лежит в базе: там могут быть правки, которых нет в папке.
+лежит в базе: там могут быть правки, которых нет в папке. Шлётся любой файл модели, кроме
+wiring.yaml; answers.yaml и variant.yaml пишет и просмотр — перед их разницей send предупреждает,
+что ответы и выбор, записанные на сервере и отсутствующие в папке, пропадут.
 
 backup: база — pg_dump здесь, в Docker, по публичному адресу сервиса Postgres (в контейнере
 сервиса pg_dump нет); файлы хранилища — через ssh пачками tar. Ключ файла после записи не
@@ -38,8 +40,19 @@ ROOT = Path(__file__).resolve().parents[1]
 SSH = ("railway", "ssh", "--")
 DONE = "__shtroba_done__"  # код выхода через CLI не проверен: дошёл ли скрипт до конца — по метке
 FILE_START, FILE_END = "__shtroba_file__", "__shtroba_end__"
-# Файлы модели, которые шлёт папка; answers.yaml и variant.yaml пишет просмотр
-MODEL_FILES = ("room.yaml", "electrical.yaml", "plumbing.yaml", "intake.yaml")
+# Файлы модели, которые шлёт папка: все, что хранит база (repositories.MODEL_COLUMNS), кроме
+# wiring.yaml — правки трасс старого образца, их никто больше не пишет (CLAUDE.md, «wiring.yaml»)
+MODEL_FILES = (
+    "room.yaml",
+    "electrical.yaml",
+    "plumbing.yaml",
+    "furniture.yaml",
+    "intake.yaml",
+    "answers.yaml",
+    "variant.yaml",
+)
+# Их пишет и просмотр: на сервере могут быть ответы и выбор, которых нет в папке
+VIEWER_FILES = ("answers.yaml", "variant.yaml")
 DB_SERVICE = "Postgres"  # сервис базы в проекте Railway
 PG_IMAGE = "postgres:18"  # pg_dump не старше сервера быть не может, 18 снимает и 17
 BACKUP_DIR = Path.home() / "shtroba-backups"  # данные клиентов: вне репозитория
@@ -177,6 +190,11 @@ def send(project: str, names: list[str], yes: bool = False) -> None:
             print(f"{name}: совпадает с сервером")
             continue
         changed[name] = ours
+        if name in VIEWER_FILES:
+            print(
+                f"ВНИМАНИЕ: {name} пишет и просмотр (ответы, вариант проводки) — что записано "
+                "на сервере и чего нет в папке, пропадёт; смотрите строки «-» ниже"
+            )
         print(
             "".join(
                 difflib.unified_diff(

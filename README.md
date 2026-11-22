@@ -106,7 +106,7 @@ uv run floorplan-engine studio push|pull projects --owner <email>      # пра�
 ```bash
 uv run python scripts/server.py check                                  # версия, хранилище, диск, переменные без значений
 uv run python scripts/server.py rebuild [имена…] [--wait]              # пересобрать проекты текущим кодом
-uv run python scripts/server.py send kv42 room.yaml                    # файл модели — новой версией, сначала разница
+uv run python scripts/server.py send kv42 room.yaml                    # файлы модели (кроме wiring.yaml) — новой версией, сначала разница
 uv run python scripts/server.py backup [--to папка]                    # дамп базы и файлы в ~/shtroba-backups (нужен Docker)
 ```
 

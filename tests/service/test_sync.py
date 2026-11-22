@@ -55,6 +55,12 @@ def test_push_new_project_then_only_changes(db: Session, tmp_path: Path) -> None
     (folder / "answers.yaml").write_text("answers: {}\n", "utf-8")
     third = sync.push(db, store, folder)
     assert (third.version, third.new_version) == (2, True)
+    # Furniture is a model file too (scripts/server.py send pushes a pulled folder)
+    (folder / "furniture.yaml").write_text("items: []\n", "utf-8")
+    fourth = sync.push(db, store, folder)
+    assert (fourth.version, fourth.new_version) == (3, True)
+    latest = repo.latest_model(db, fourth.project.id)
+    assert latest is not None and repo.model_files(latest)["furniture.yaml"] == "items: []\n"
 
     other = tmp_path / "copy" / "kv"
     shutil.copytree(folder, other, ignore=shutil.ignore_patterns(".shtroba.yaml"))

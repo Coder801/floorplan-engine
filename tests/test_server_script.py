@@ -147,14 +147,48 @@ def test_send_skips_a_file_equal_to_the_server(
     assert not any("project push" in c for c in calls)
 
 
-def test_send_refuses_files_the_viewer_writes(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_send_allows_every_model_file_but_wiring() -> None:
+    """The folder syncs with the server: every file the database keeps, except the legacy route
+    edits nobody writes any more."""
+    from floorplan_engine.service.db.repositories import MODEL_COLUMNS
+
+    assert set(server.MODEL_FILES) == set(MODEL_COLUMNS) - {"wiring.yaml"}
+
+
+def test_send_refuses_wiring(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     _project(tmp_path, monkeypatch, "x: 1\n")
     calls = _server_file(monkeypatch, "")
     with pytest.raises(server.ServerError, match=r"wiring\.yaml"):
         server.send("kv42", ["wiring.yaml"], yes=True)
     assert calls == []
+
+
+@pytest.mark.parametrize("name", ["answers.yaml", "variant.yaml"])
+def test_send_warns_before_replacing_what_the_viewer_writes(
+    name: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _project(tmp_path, monkeypatch, "x: 1\n")
+    (tmp_path / "projects" / "kv42" / name).write_text("answers: {q1: 1}\n", encoding="utf-8")
+    calls = _server_file(monkeypatch, "answers: {q1: 1, q2: 2}\n")
+    monkeypatch.setattr("builtins.input", lambda _: "n")
+    with pytest.raises(server.ServerError, match="отменено"):
+        server.send("kv42", [name])
+    out = capsys.readouterr().out
+    assert f"ВНИМАНИЕ: {name} пишет и просмотр" in out
+    assert out.index("ВНИМАНИЕ") < out.index(f"сервер/{name}")  # before the diff
+    assert not any("project push" in c for c in calls)
+
+
+def test_send_furniture_without_a_warning(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _project(tmp_path, monkeypatch, "x: 1\n")
+    (tmp_path / "projects" / "kv42" / "furniture.yaml").write_text("items: []\n", "utf-8")
+    calls = _server_file(monkeypatch, "")
+    server.send("kv42", ["furniture.yaml"], yes=True)
+    assert "ВНИМАНИЕ" not in capsys.readouterr().out
+    assert 'base64 -d > "$w"/kv42/furniture.yaml' in calls[-1]
+    assert 'project push "$w"/kv42' in calls[-1]
 
 
 def _variables(monkeypatch: pytest.MonkeyPatch, stdout: str, code: int = 0) -> list[list[str]]:
