@@ -12,6 +12,7 @@ A tag is the object type and its id from YAML:
     board      board               panel and its label
     cable      cable id            route and its label
     led_strip  strip id            strip and its label
+    wire_len   line ids with ","   length label of a bundle piece on the wiring sheet
 
 AutoCAD keeps XDATA on copy, move, stretch and in DWG. The update command will match
 AutoCAD edits to the model by these tags, and the viewer matches page primitives to

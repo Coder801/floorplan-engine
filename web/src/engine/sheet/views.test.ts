@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Page, SideTable } from "@/shared/types";
 import type { Drawing } from "./drawing";
-import { linkEnds, objectVisible, ownLayers, repeatsNumbers, systemOf, viewLayers, viewOfLayer, viewTables } from "./views";
+import { lengthHidden, linkEnds, objectVisible, ownLayers, repeatsNumbers, systemOf, viewLayers, viewOfLayer, viewTables } from "./views";
 
 const own = new Set(["A-WALL", "E-SOCKET", "E-SWITCH", "E-LIGHT", "E-LED", "E-DATA", "E-BOARD", "E-TEXT"]);
 const all = [...own, "W-BOX", "W-TEXT", "W-CABLE-LIGHT", "W-CABLE-SOCKET", "W-CABLE-SOCKET-RCD", "W-CABLE-DEVICE", "W-CABLE-LOW"];
@@ -110,5 +110,26 @@ describe("views of the electrical tab", () => {
                              ["point:s", "E-SOCKET"], ["wire:b", "W-CABLE-SOCKET"], ["board:board", "E-BOARD"]]);
     const [t] = viewTables([table], new Set(["E-SOCKET", "W-CABLE-SOCKET", "W-BOX", "E-BOARD"]), layerOf);
     expect(t.rows.map((r) => r.cells[0])).toEqual(["QF2", "щит"]);
+  });
+});
+
+describe("cable length labels of the wiring sheet", () => {
+  const label = "wire_len:wire_3,wire_5";
+
+  it("hides a label until one of its lines is selected", () => {
+    expect(lengthHidden(label, null)).toBe(true);
+    expect(lengthHidden(label, new Set(["wire:wire_4", "box:box_1"]))).toBe(true);
+    expect(lengthHidden(label, new Set(["wire:wire_5"]))).toBe(false);
+  });
+
+  it("hides a label of a selected line whose group is switched off", () => {
+    const selected = new Set(["wire:wire_5"]);
+    expect(lengthHidden(label, selected, new Set(["wire:wire_5"]))).toBe(true);
+    expect(lengthHidden(label, selected, new Set(["wire:wire_3"]))).toBe(false);
+  });
+
+  it("leaves other objects alone", () => {
+    expect(lengthHidden("wire:wire_3", null)).toBe(false);
+    expect(lengthHidden(undefined, null)).toBe(false);
   });
 });

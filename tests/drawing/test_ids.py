@@ -55,6 +55,7 @@ def test_every_model_entity_has_project_id(tmp_path: Path) -> None:
         "led_strip",
         "box",
         "wire",
+        "wire_len",
     }
     pairs = {oid for oid in ids if oid}
     assert {("wall", "r.w1"), ("opening", "d1"), ("room", "r"), ("box", "box_1")} <= pairs

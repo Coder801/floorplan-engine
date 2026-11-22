@@ -10,7 +10,8 @@ if the space between walls is less than the bundle needs (clearance). A line is 
 pieces where the set of cables does not change (bundles); each piece gets one label on the
 bundle, in a frame with a white background over the cables (beside the bundle if no spot on it
 is free), in the group colour or dark grey for a bundle of several groups: piece length in m,
-and the number of cables if more than one: "L2,0 ×3".
+and the number of cables if more than one: "L2,0 ×3". The label is tagged wire_len with the
+lines of its bundle: the viewer shows it only while one of them is selected.
 At a wall point there is a drop "↓h1,9", at the panel a rise "↑h1,0"; floor routes (own
 layer, dash-dot) are the other way round: a rise from the floor to the point "↑h0,3", a drop
 at the panel "↓h1,7". Bundles are computed separately for ceiling and floor. A turn is drawn
@@ -74,6 +75,7 @@ VERT = "h"
 LENGTH_OFFSET_MM = 1.2  # a label beside a line: from the line (bundle edge) to the label
 WHITE = 0xFFFFFF
 MIXED = 0x5A5A5A  # label of a bundle of several groups: dark grey, it has no group colour
+LENGTH_KIND = "wire_len"  # object type of a length label, its id is the bundle lines with ","
 FRAME_PAD_MM = 0.4  # from the length label text to its frame
 LENGTH_SLOTS = (0.5, 0.3, 0.7, 0.15, 0.85)  # label spots along the piece, fractions of length
 POINT_CLEAR_MM = 2.5  # no labels around a connection point
@@ -199,7 +201,9 @@ def _draw_bundle_lengths(
         # on a cable layer, not W-TEXT: the viewer enlarges *-TEXT labels on screen, the text
         # would grow out of its frame and read as another font
         layer = layers[bundle.runs[0]]
-        with tagged(msp, "wire", runs[0].id):
+        # its own object, not the line's: the viewer shows the label only with a selected line
+        # of the bundle (decision 2026-11-22); the DXF, the print and the album keep them all
+        with tagged(msp, LENGTH_KIND, ",".join(r.id for r in runs)):
             _draw_frame(msp, frame, layer, color)
             add_text(msp, text, at, LENGTH_MM, layer, angle, color=color)
 

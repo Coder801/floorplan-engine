@@ -15,7 +15,7 @@ import { view } from "@/shared/store";
 import type { Page } from "@/shared/types";
 import { clampStep, Glide, LAST_STEP, PinchSteps, RAIL_PX, stepBelow, WheelSteps, ZOOM_STEPS, zoomLabel, type Zoom } from "@/shared/zoom";
 import { isLabel, layerShown, objectLayers, sceneOf, type Drawing, type DrawingItem } from "./drawing";
-import { followsObject, linkEnds, objectVisible, ownLayers, repeatsNumbers, scoped, wiringChains } from "./views";
+import { followsObject, lengthHidden, linkEnds, objectVisible, ownLayers, repeatsNumbers, scoped, wiringChains } from "./views";
 import { FLOOR_ALPHA, FLOOR_FADE_MS, floorPath, stepFades } from "./floors";
 import { gridStep, paintGrid, paperRings } from "./grid";
 import { boxWithin, cardFrames, inBox, isBackdrop, isTint, paint, type DrawItem } from "./paint";
@@ -417,7 +417,9 @@ export class SheetView {
     ctx.save();
     ctx.beginPath(); ctx.rect(x0, y0, x1 - x0, y1 - y0); ctx.clip();
     const skip = this.filtered();
-    const items = this.items.filter((it) => this.inView(it) && (!it.o || !skip.has(it.o)));
+    const { selected } = view.get();
+    const items = this.items.filter((it) => this.inView(it) && (!it.o || !skip.has(it.o))
+      && !lengthHidden(it.o, selected, skip));
     this.paintFloors(ctx);
     this.stepStacks();
     paint(ctx, items, k, (it) => this.look(it), this.shown, CABLE_MIN_PX * this.dpr, SCREEN_BOLD, LINE_MIN_PX * this.dpr);

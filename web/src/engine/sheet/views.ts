@@ -77,6 +77,16 @@ export function objectVisible(o: string, shown: (layer: string) => boolean, laye
 export const repeatsNumbers = (page: Page, it: { o?: string; l: string }) =>
   page.stage === "lighting" && it.l === "E-TEXT" && !!it.o?.startsWith("label:");
 
+// A cable length label of the wiring sheet (`wire_len:<line>,<line>`, the lines of its bundle) is
+// drawn only while one of its lines is selected and not switched off with its group (decision
+// 2026-11-22: the framed labels were noise on the sheet); the album PNG keeps them all
+const LENGTH = "wire_len:";
+export function lengthHidden(o: string | undefined, selected: Set<string> | null, off?: Set<string>): boolean {
+  if (!o?.startsWith(LENGTH)) return false;
+  if (!selected) return true;
+  return !o.slice(LENGTH.length).split(",").some((id) => selected.has(`wire:${id}`) && !off?.has(`wire:${id}`));
+}
+
 // Primitives that follow their object, not their layer
 export const followsObject = (l: string) => l === "W-BOX" || l.endsWith("-TEXT");
 
