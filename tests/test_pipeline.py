@@ -302,6 +302,30 @@ def test_backup_bus_is_answered_by_model_groups(project: Path) -> None:
     )
 
 
+def test_removed_group_does_not_block_the_build_but_a_new_unknown_one_is_refused(
+    project: Path,
+) -> None:
+    """A group removed from the model after the answer only gives a warning: the build goes on and
+    the wizard may send the stored list back. A group the model never had is refused."""
+    (project / "intake.yaml").unlink()
+    build_project(project)
+    names = [g["id"] for g in _reserve_block(project)["items"]]
+    stale = [names[0], "QF99"]
+    (project / "answers.yaml").write_text(
+        yaml.safe_dump({"answers": {"panel_reserve": stale}}), "utf-8"
+    )
+    (project / "out" / "project.epd").unlink()
+    build_project(project)
+    assert (project / "out" / "project.epd").exists()
+    assert [g["id"] for g in _reserve_block(project)["items"] if g["on"]] == [names[0]]
+
+    assert not save_answer(project, "panel_reserve", stale, NOTE).issues
+    refused = save_answer(project, "panel_reserve", [names[0], "QF98"], NOTE).issues
+    assert refused and refused[0].message.startswith("групп QF98 нет в модели")
+    stored = yaml.safe_load((project / "answers.yaml").read_text("utf-8"))["answers"]
+    assert stored["panel_reserve"] == stale
+
+
 def test_dont_know_closes_panel_questions_with_the_assumption(project: Path) -> None:
     ids = ("panel_input", "panel_backup", "panel_inverter", "panel_battery", "panel_reserve")
     saved = save_answers(project, {qid: {"accept": True} for qid in ids}, NOTE)

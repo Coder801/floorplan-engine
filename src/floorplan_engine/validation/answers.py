@@ -246,10 +246,19 @@ def apply_auto_answers(
             elif q.answer == "text":
                 issues.append(Issue(ANSWERS_FILE, path, "на этот вопрос нужен ответ { text: ... }"))
             elif q.answer == "groups":
-                if isinstance(answer, list) and set(answer) <= set(q.options):
+                if isinstance(answer, list):
+                    # A group removed from the model after the answer is dropped with a
+                    # warning; the stored answer stays, a group that comes back counts again
+                    kept = [g for g in answer if g in q.options]
+                    gone = [g for g in answer if g not in q.options]
+                    if gone:
+                        message = f"групп {', '.join(gone)} больше нет в модели — пропущены"
+                        issues.append(Issue(ANSWERS_FILE, path, message, Severity.WARNING))
                     panel = _section_of(raw)
-                    if panel is not None:
-                        panel[GROUPS_FIELD[q.id]] = answer
+                    if gone and not kept:
+                        states.setdefault(q.id, "open")  # nothing left: asked again
+                    elif panel is not None:
+                        panel[GROUPS_FIELD[q.id]] = kept
                         states[q.id] = "answered"
                 else:
                     message = f"ожидается список групп из: {', '.join(q.options)}"

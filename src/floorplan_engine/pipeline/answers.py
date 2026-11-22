@@ -63,6 +63,16 @@ def _parse_answer(qid: str, raw: Any) -> Answer | Issue | None:
     return Issue(ANSWERS_FILE, path, message)
 
 
+def _unknown_groups(question: Question, answer: Answer | None, old: Answer | None) -> list[str]:
+    """Groups of a fresh groups answer that the model does not have. A group kept from the stored
+    answer is not new input: it was removed from the model later and the build skips it with a
+    warning, so resending it (the wizard sends the whole list) is not refused."""
+    if question.answer != "groups" or not isinstance(answer, list):
+        return []
+    before = set(old) if isinstance(old, list) else set()
+    return [g for g in answer if g not in question.options and g not in before]
+
+
 def for_client(question: Question) -> bool:
     """A question the client sees and answers: asked of them, or a panel setting (the wizard)."""
     return question.audience == "client" or question.stage is Stage.PANEL
@@ -115,6 +125,17 @@ def save_answers(
             Issue(ANSWERS_FILE, f"answers.{qid}", "на этот вопрос отвечает студия")
             for qid in parsed
             if client and qid in questions and not for_client(questions[qid])
+        ]
+        or [
+            Issue(
+                ANSWERS_FILE,
+                f"answers.{qid}",
+                f"групп {', '.join(unknown)} нет в модели; "
+                f"ожидается список групп из: {', '.join(questions[qid].options)}",
+            )
+            for qid, answer in parsed.items()
+            if qid in questions
+            and (unknown := _unknown_groups(questions[qid], answer, answers.answers.get(qid)))
         ]
         or [i for i in after.errors if (i.file, i.path) not in known]
     )
