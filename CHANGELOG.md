@@ -1,3 +1,17 @@
+## v0.13.0 (2026-11-22)
+
+### Feat
+
+- **viewer**: add a client tour of the project view
+- **electrical**: list work outside the estimate once per table
+- **viewer**: show cable length labels only for a selected line
+- **electrical**: add a free site survey stage to the work plan
+
+### Fix
+
+- **viewer**: recalculate wiring changes with open panel questions
+- **viewer**: keep a pinned hint when the sheet loses focus
+
 ## v0.12.0 (2026-11-18)
 
 ### Feat
