@@ -7,7 +7,9 @@ belongs to exactly one stage. Unknown keys and keys in two stages are errors (St
 every key of LINES must have a stage (unstaged, a test), like missing_scope of the work scope.
 
 A draft task is a stage with the lines of this estimate: a stage without lines is left out, and a
-task that was to come after it comes after that stage's own predecessors. The acceptance
+task that was to come after it comes after that stage's own predecessors. A stage with no estimate
+items in the template (`lines: []`, the free site survey) is in every non-empty draft, with its
+own `result`. The acceptance
 criterion is the stage's `result`, or else the `result` of its work items in work_scope.yaml.
 The draft is a property of the estimate: the same model gives the same draft
 (pipeline/work_plan.py puts it into the .epd); the service keeps the tasks themselves.
@@ -38,7 +40,9 @@ Kind = Literal["work", "material"]
 class StageTemplate(StrictModel):
     key: str = Field(pattern=r"^[a-z_]+$")
     title: Phrase
-    lines: tuple[str, ...] = Field(min_length=1, description="Базовые ключи сметы; «prefix.*»")
+    lines: tuple[str, ...] = Field(
+        default=(), description="Базовые ключи сметы; «prefix.*»; пусто — бесплатный этап"
+    )
     photo: Photo
     after: tuple[str, ...] = ()
     result: tuple[Phrase, ...] = ()
@@ -59,6 +63,8 @@ class StageCatalog(StrictModel):
             where = f"stages[{k}]"
             if stage.key in earlier:
                 raise ValueError(f"{where}.key: этап {stage.key} уже есть")
+            if not stage.lines and not stage.result:
+                raise ValueError(f"{where}.result: у этапа без позиций нужен критерий приёмки")
             for j, ref in enumerate(stage.after):
                 if ref not in earlier:
                     raise ValueError(f"{where}.after[{j}]: нет этапа {ref} выше по списку")
@@ -204,11 +210,16 @@ def draft_tasks(
         kind: Kind = "work" if base.startswith(WORK_PREFIX) else "material"
         line = DraftLine(ln.key, kind, ln.name, ln.unit, ln.qty, ln.price)
         lines.setdefault(staged[base], []).append(line)
+    if not lines:
+        return []
+    for stage in catalog.stages:
+        if not stage.lines:  # free: always in the draft, with its own result
+            lines[stage.key] = []
     by_key = {s.key: s for s in catalog.stages}
     out: list[DraftTask] = []
     for no, stage in enumerate(catalog.stages, 1):
         rows = lines.get(stage.key)
-        if not rows:
+        if rows is None:
             continue
         result = [p.of(language) for p in stage.result]
         if not result:

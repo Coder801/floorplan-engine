@@ -25,15 +25,18 @@ def test_sections_interleave_by_stage_number() -> None:
         _est("work.cable", "work.chase"), _est("work.water_pipe", "work.chase_pipe"), "ru"
     )
     assert plan is not None and plan["currency"] == "грн"
+    # The free electrical survey is stage 1: first of all, its stages one number later
     assert [t["key"] for t in plan["tasks"]] == [
-        "electrical.chases",
+        "electrical.survey",
         "plumbing.chases",
+        "electrical.chases",
         "electrical.cable",
         "plumbing.water",
     ]
     assert [t["domain"] for t in plan["tasks"]] == [
         "electrical",
         "plumbing",
+        "electrical",
         "electrical",
         "plumbing",
     ]

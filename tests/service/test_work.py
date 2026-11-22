@@ -411,7 +411,9 @@ def test_api_by_role(api: tuple[Auth, LocalObjectStore, dict[str, Any]], tmp_pat
     assert plan["totals"]["tasks"] == len(tasks) > 0
     assert all(t["status"] == "proposed" and t["money_editable"] for t in tasks)
     keys = [t["key"] for t in tasks]
-    assert keys[0] == "electrical.chases" and "electrical.cable" in keys
+    # The free survey comes first: no estimate lines, nothing to pay
+    assert keys[:2] == ["electrical.survey", "electrical.chases"] and "electrical.cable" in keys
+    assert tasks[0]["lines"] == [] and tasks[0]["total"] == 0
     assert client.post(f"{url}/plan/approve").status_code == 409  # still a draft
     assert owner.post(f"{url}/plan/propose").json()["plan"]["state"] == "proposed"
     assert inst.post(f"{url}/plan/approve").status_code == 403
@@ -461,11 +463,11 @@ def test_api_by_role(api: tuple[Auth, LocalObjectStore, dict[str, Any]], tmp_pat
     assert inst.patch(line_url, json={"price": 1}).status_code == 403
     assert owner.patch(line_url, json={"price": 1}).status_code == 409  # agreed with the client
     assert inst.patch(line_url, json={"fact_qty": 1}).status_code == 409  # accepted: frozen
-    chases = approved["tasks"][0]
+    chases = approved["tasks"][1]  # [0]: the survey, no lines
     fact = inst.patch(
         f"{url}/tasks/{chases['id']}/lines/{chases['lines'][0]['id']}", json={"fact_qty": 2}
     )
-    assert fact.json()["tasks"][0]["lines"][0]["fact_qty"] == 2
+    assert fact.json()["tasks"][1]["lines"][0]["fact_qty"] == 2
 
     assert view.post(f"{task_url}/comments", json={"text": "?"}).status_code == 403
     said = code.post(f"{task_url}/comments", json={"text": "спасибо"}).json()
@@ -535,13 +537,13 @@ def test_api_ticks_merge_and_acting_for_the_client(
     url = f"/api/projects/{pid}/work"
     owner, inst, client, view = (_client(api, tmp_path, w) for w in ("a", "inst", "client", "view"))
     tasks = owner.post(f"{url}/plan").json()["tasks"]
-    first, second, third = tasks[0], tasks[1], tasks[2]
+    first, second, third = tasks[1], tasks[2], tasks[3]  # tasks[0]: the survey, no lines
     move = {"line_ids": [first["lines"][0]["id"]], "to_task": second["id"]}
     assert inst.post(f"{url}/tasks/{first['id']}/lines/move", json=move).status_code == 403
     moved = owner.post(f"{url}/tasks/{first['id']}/lines/move", json=move).json()["tasks"]
-    assert moved[1]["lines"][-1]["id"] == first["lines"][0]["id"]
-    assert len(moved[0]["lines"]) == len(first["lines"]) - 1
-    total = moved[1]["total"] + moved[2]["total"]
+    assert moved[2]["lines"][-1]["id"] == first["lines"][0]["id"]
+    assert len(moved[1]["lines"]) == len(first["lines"]) - 1
+    total = moved[2]["total"] + moved[3]["total"]
     bad = owner.post(f"{url}/tasks/{third['id']}/merge", json={"into": third["id"]})
     assert bad.status_code == 422 and bad.json()["detail"].startswith("into:")
     assert (
@@ -550,7 +552,7 @@ def test_api_ticks_merge_and_acting_for_the_client(
     )
     merged = owner.post(f"{url}/tasks/{third['id']}/merge", json={"into": second["id"]}).json()
     assert len(merged["tasks"]) == len(tasks) - 1
-    assert merged["tasks"][1]["total"] == total
+    assert merged["tasks"][2]["total"] == total
     assert [t["position"] for t in merged["tasks"]] == list(range(len(tasks) - 1))
     gone = {third["id"], third["key"]}
     assert all(not gone & set(t["after"]) for t in merged["tasks"])  # links lead to the target

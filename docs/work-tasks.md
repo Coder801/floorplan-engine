@@ -28,22 +28,28 @@
 Шаблон этапов — данные (`stages.yaml` рядом с модулем), каждая позиция сметы (базовый ключ,
 `split_key`) входит ровно в один этап; тест проверяет, что все ключи `LINES` разложены и
 лишних нет (как `missing_scope` у состава работ). Позиция, которой нет в смете проекта, в
-задачу не попадает; этап без позиций в черновик не попадает.
+задачу не попадает; этап без позиций в черновик не попадает. Исключение — этап без `lines` в
+шаблоне (решение 2026-11-22): бесплатная работа, которой нет в смете. Он есть в любом непустом
+черновике, сумма у него 0, критерий приёмки — его собственный `result` (обязателен). Так сделан
+осмотр объекта: сверка размеров и высоты потолка, материал стен, ввод (мощность, счётчик,
+заземление), место щита, препятствия на трассах, отбивка нулевого уровня. Расхождения на месте
+не правятся: их получает студия, чертёж меняется по исходникам.
 
 Электрика (`electrical/stages.yaml`; `prefix.*` — все ключи с этим началом):
 
 | # | Этап (`key`) | Работы | Материалы | Фото при сдаче | После |
 | --- | --- | --- | --- | --- | --- |
-| 1 | Штробы, проходы, подрозетники (`chases`) | `work.chase`, `work.chase_wide` (обе — с материалом стены: `work.chase.brick`…), `work.wall_hole`, `work.wall_hole_large`, `work.socket_box` | `socket_box` | `optional` | — |
-| 2 | Прокладка кабеля (`cable`) | `work.cable` (маркировка концов входит в неё: `work.marking` снят 2026-11-11), `work.conduit` | `cable`, `conduit`, `conduit_joint`, `conduit_clip`, `cable_pad` | `required`: трассы до штукатурки | 1 |
-| 3 | Тёплый пол: кабель и датчик (`floor_heating`, с 2026-11-14) | `work.floor_heating` (м² обогрева) | `heating_cable` (секция по длине: `heating_cable.27`), `heating_sensor`, `heating_conduit` | `required`: змейка до стяжки | 2 |
-| 4 | Распаечные коробки (`boxes`) | `work.junction_box` | `junction_box`, `junction_box_ip`, `crimp` | `optional` | 2 |
-| 5 | Установка корпуса щита (`board`) | `work.board_install` | `board_enclosure`, `dc_enclosure` (щит АКБ) | `optional` | — |
-| 6 | Замер изоляции (`insulation`) | `work.insulation_test` | — | `required`: протокол, фото или PDF | 2, 4 |
-| 7 | Черновой свет (`rough_light`) | `work.rough_light`, `work.rough_switch` | `rough_holder`, `rough_lamp`, `rough_switch` | `none` | 2 |
-| 8 | Сборка щита (`assembly`) | `work.board_module`, `work.panel_labels` (маркировка, с 2026-11-13 — своя позиция) | `breaker`, `diff`, `rcd`, `input`, `relay`, `spd`, `changeover`, `ats`, `contactor`, `feed`, `output`, `busbar`, `dc_battery`, `dc_breaker`, `dc_spd` | `optional` | 5, 6 |
-| 9 | Механизмы и светильники (`devices`) | `work.mechanism`, `work.led_psu`, `work.led_psu_din` | `socket`, `switch1`, `switch2`, `pass_switch`, `data`, `tv`, `frame`, `light`, `downlight`, `pendant`, `sconce`, `led_output`, `outlet`, `thermostat`, `led_strip`, `led_psu`, `led_psu_din` | `optional` | 8 |
-| 10 | Проверка защиты прибором (`protection`) | `work.protection_test` | — | `required`: протокол, фото или PDF | 8, 9 |
+| 1 | Осмотр объекта и сверка с чертежом (`survey`, с 2026-11-22) | — бесплатно, позиции в смете нет | — | `optional` | — |
+| 2 | Штробы, проходы, подрозетники (`chases`) | `work.chase`, `work.chase_wide` (обе — с материалом стены: `work.chase.brick`…), `work.wall_hole`, `work.wall_hole_large`, `work.socket_box` | `socket_box` | `optional` | 1 |
+| 3 | Прокладка кабеля (`cable`) | `work.cable` (маркировка концов входит в неё: `work.marking` снят 2026-11-11), `work.conduit` | `cable`, `conduit`, `conduit_joint`, `conduit_clip`, `cable_pad` | `required`: трассы до штукатурки | 2 |
+| 4 | Тёплый пол: кабель и датчик (`floor_heating`, с 2026-11-14) | `work.floor_heating` (м² обогрева) | `heating_cable` (секция по длине: `heating_cable.27`), `heating_sensor`, `heating_conduit` | `required`: змейка до стяжки | 3 |
+| 5 | Распаечные коробки (`boxes`) | `work.junction_box` | `junction_box`, `junction_box_ip`, `crimp` | `optional` | 3 |
+| 6 | Установка корпуса щита (`board`) | `work.board_install` | `board_enclosure`, `dc_enclosure` (щит АКБ) | `optional` | — |
+| 7 | Замер изоляции (`insulation`) | `work.insulation_test` | — | `required`: протокол, фото или PDF | 3, 5 |
+| 8 | Черновой свет (`rough_light`) | `work.rough_light`, `work.rough_switch` | `rough_holder`, `rough_lamp`, `rough_switch` | `none` | 3 |
+| 9 | Сборка щита (`assembly`) | `work.board_module`, `work.panel_labels` (маркировка, с 2026-11-13 — своя позиция) | `breaker`, `diff`, `rcd`, `input`, `relay`, `spd`, `changeover`, `ats`, `contactor`, `feed`, `output`, `busbar`, `dc_battery`, `dc_breaker`, `dc_spd` | `optional` | 6, 7 |
+| 10 | Механизмы и светильники (`devices`) | `work.mechanism`, `work.led_psu`, `work.led_psu_din` | `socket`, `switch1`, `switch2`, `pass_switch`, `data`, `tv`, `frame`, `light`, `downlight`, `pendant`, `sconce`, `led_output`, `outlet`, `thermostat`, `led_strip`, `led_psu`, `led_psu_din` | `optional` | 9 |
+| 11 | Проверка защиты прибором (`protection`) | `work.protection_test` | — | `required`: протокол, фото или PDF | 9, 10 |
 
 Сантехника (`plumbing/stages.yaml`):
 
@@ -61,11 +67,11 @@
 после прокладки кабеля, нет корпуса щита — сборка щита после замера.
 
 Правда — `stages.yaml` и тест полноты (`tests/electrical/test_stages.py`,
-`tests/plumbing/test_stages.py`); таблица выше — их копия на 2026-11-13. Этапы двух разделов в плане идут одним списком, у каждой задачи
+`tests/plumbing/test_stages.py`); таблица выше — их копия на 2026-11-22. Этапы двух разделов в плане идут одним списком, у каждой задачи
 `domain`: `electrical` | `plumbing`. Электрика и сантехника друг от друга не зависят.
 
 Вариант проводки (`variant.yaml`) черновик меняет только через смету: нет гофры — нет
-`work.conduit`, нет чернового света — нет этапа 6, без замера изоляции (`insulation_test: false`) — нет этапа 5, без проверки защиты прибором (`protection_test: false`, так по умолчанию) — нет этапа 9. Порядок «до или после штукатурки»
+`work.conduit`, нет чернового света — нет этапа 8, без замера изоляции (`insulation_test: false`) — нет этапа 7, без проверки защиты прибором (`protection_test: false`, так по умолчанию) — нет этапа 11. Осмотр (этап 1) есть всегда. Порядок «до или после штукатурки»
 (`plaster`) в MVP не меняет этапы; штукатурка — не наша работа и задачей не бывает.
 
 ### Ключ `.epd` `work_plan`

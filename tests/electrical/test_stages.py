@@ -89,16 +89,21 @@ def test_draft_groups_lines_by_stage_with_parameters() -> None:
     tasks = electrical_draft(est, "ru")
     keys = [t.key for t in tasks]
     assert keys == [
+        "electrical.survey",
         "electrical.chases",
         "electrical.cable",
         "electrical.insulation",
         "electrical.assembly",
         "electrical.protection",
     ]
-    chases, cable, insulation, assembly, protection = tasks
+    survey, chases, cable, insulation, assembly, protection = tasks
+    # The free survey: no estimate items, its own criteria, everything else after it
+    assert survey.lines == () and survey.work_total == 0.0 and survey.order == 1
+    assert survey.after == () and len(survey.result) > 1
+    assert chases.after == ("electrical.survey",)
     assert [ln.key for ln in chases.lines] == ["work.chase.brick", "socket_box"]
     assert (chases.work_total, chases.material_total) == (1200.0, 60.0)
-    assert [t.order for t in tasks] == [1, 2, 6, 8, 10]
+    assert [t.order for t in tasks] == [1, 2, 3, 7, 9, 11]
     assert cable.after == ("electrical.chases",) and cable.photo == "required"
     # No boxes stage in this estimate: insulation comes after the cable only
     assert insulation.after == ("electrical.cable",)
@@ -115,11 +120,13 @@ def test_draft_groups_lines_by_stage_with_parameters() -> None:
 
 
 def test_draft_text_in_the_project_language() -> None:
-    [task] = electrical_draft(_estimate(("work.cable", 1.0, 34.0)), "uk")
+    survey, task = electrical_draft(_estimate(("work.cable", 1.0, 34.0)), "uk")
+    assert survey.title == "Огляд об'єкта і звірка з кресленням"
     assert task.title == "Прокладання кабелю"
     assert task.result == (load_scope().items["work.cable"].result.uk,)
     data = task.as_dict()
-    assert data["key"] == "electrical.cable" and data["after"] == []
+    # No chases in this estimate: the cable comes right after the survey
+    assert data["key"] == "electrical.cable" and data["after"] == ["electrical.survey"]
     assert data["lines"] == [
         {
             "key": "work.cable",
@@ -145,3 +152,19 @@ def test_own_result_wins_over_the_scope() -> None:
 
 def test_empty_estimate_has_no_tasks() -> None:
     assert electrical_draft(Estimate((), "грн"), "ru") == []
+
+
+def test_stage_without_items_is_always_in_the_draft() -> None:
+    done = [{"ru": "осмотрено", "uk": "оглянуто"}]
+    catalog = parse_stages(
+        {"stages": [_stage("look", [], result=done), _stage("a", ["work.cable"], after=["look"])]},
+        LINES,
+    )
+    look, a = draft_tasks(_estimate(("work.cable", 1.0, 1.0)), catalog, LINES, "x", "ru")
+    assert (look.key, look.lines, look.result) == ("x.look", (), ("осмотрено",))
+    assert a.after == ("x.look",)
+
+
+def test_stage_without_items_needs_a_result() -> None:
+    with pytest.raises(ValidationError, match=r"stages\[0\].result: у этапа без позиций"):
+        parse_stages({"stages": [_stage("look", [])]}, LINES)
