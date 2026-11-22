@@ -14,8 +14,9 @@ const electrical: SideTable = {
   ],
   total: ["", "Итого", "", "10 080"],
   notes: ["Цены — прайс студии"],
-  outside: ["вывоз строительного мусора"],
 };
+// builds before 2026-11-22 may still carry the removed `outside` list
+const legacy = { ...electrical, outside: ["вывоз строительного мусора"] } as SideTable;
 
 describe("EstimateStage", () => {
   it("shows each estimate with its Excel file, total and notes", () => {
@@ -26,9 +27,12 @@ describe("EstimateStage", () => {
     expect(screen.getAllByRole("link", { name: "Скачать Excel" })).toHaveLength(1);
     expect(screen.getAllByRole("row", { name: /Итого/ })[0]).toHaveTextContent("10 080");
     expect(screen.getAllByText("Цены — прайс студии")).toHaveLength(2);
-    // work the estimate does not have: one list per estimate, not under every row
-    expect(screen.getAllByRole("heading", { level: 2, name: "Работы вне сметы" })).toHaveLength(2);
-    expect(screen.getAllByText("вывоз строительного мусора")).toHaveLength(2);
+  });
+
+  it("does not show work outside the estimate, even if an old build has it", () => {
+    render(<EstimateStage items={[{ table: legacy, xlsx: null }]} />);
+    expect(screen.queryByRole("heading", { name: "Работы вне сметы" })).toBeNull();
+    expect(screen.queryByText("вывоз строительного мусора")).toBeNull();
   });
 
   it("a work row unfolds what its price covers; the hint says what it is", async () => {

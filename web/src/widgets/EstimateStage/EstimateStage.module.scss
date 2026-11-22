@@ -73,11 +73,6 @@
   .result { margin: 0; }
 }
 .notes { @include type(small); margin: 0; padding-left: 18px; color: var(--muted); }
-// Work the estimate does not have: one quiet list for the whole estimate, after the notes
-.outside {
-  display: grid; gap: var(--space-1);
-  ul { @include type(small); margin: 0; padding-left: 18px; }
-}
 
 @media (max-width: $phone) {
   .stage { --stage-pt: var(--space-3); padding: var(--stage-pt) var(--space-2) var(--space-8); }

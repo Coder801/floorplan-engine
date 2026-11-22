@@ -288,7 +288,6 @@ export interface SideTable {
   rows: TableRow[];
   total?: string[];
   notes?: string[];
-  outside?: string[];  // estimate: work it does not have, one list for the whole table
 }
 
 export interface SceneWire {

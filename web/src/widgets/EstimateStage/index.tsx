@@ -3,9 +3,8 @@
 // list, a bill of quantities. Excel is the same calculation as a file (build writes
 // out/estimate.xlsx and out/plumbing-estimate.xlsx). In print, an estimate is on its stage's sheet.
 // A work row with a scope (TableRow.scope) unfolds: what its price includes and the handover
-// result, so the client sees there are no hidden services; work the estimate does not have is one
-// list under the table (SideTable.outside). The title, Excel and the column headings stay on top
-// while the estimate scrolls.
+// result, so the client sees there are no hidden services. The title, Excel and the column headings
+// stay on top while the estimate scrolls.
 
 import { Fragment, useEffect, useState, type CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
@@ -89,13 +88,6 @@ function Estimate({ table, xlsx }: EstimateItem) {
           </tbody>
         </table>
         {!!table.notes?.length && <ul className={css.notes}>{table.notes.map((n, i) => <li key={i}>{n}</li>)}</ul>}
-        {!!table.outside?.length && (
-          <section className={css.outside}>
-            <Heading level={2} size="subheading">{t("estimate.outside")}</Heading>
-            <Text size="small" tone="muted">{t("estimate.outsideNote")}</Text>
-            <ul>{table.outside.map((x) => <li key={x}>{x}</li>)}</ul>
-          </section>
-        )}
       </Card>
   );
 }

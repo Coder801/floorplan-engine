@@ -220,7 +220,6 @@ export const en: Messages = {
   estimate: {
     about: "What it includes: {{name}}",
     includes: "Included in the price", result: "Result",
-    outside: "Work outside the estimate", outsideNote: "The estimate does not have this work: another contractor does it, or it is agreed before the work starts.",
     scopeNote: "Click a work item to see what its price includes.",
     tab: "Estimate",
     totals: "Estimate totals",
