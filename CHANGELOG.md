@@ -1,3 +1,13 @@
+## v0.15.0 (2026-11-22)
+
+### Feat
+
+- **deploy**: send every model file to the server except wiring.yaml
+
+### Fix
+
+- **core**: skip a removed panel group in answers instead of failing the build
+
 ## v0.14.0 (2026-11-22)
 
 ### Feat
