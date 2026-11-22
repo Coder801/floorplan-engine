@@ -1,3 +1,10 @@
+## v0.15.1 (2026-11-22)
+
+### Refactor
+
+- **viewer**: drop the work-outside-estimate list from the estimate tab
+- **electrical**: drop the "work outside the estimate" section
+
 ## v0.15.0 (2026-11-22)
 
 ### Feat
