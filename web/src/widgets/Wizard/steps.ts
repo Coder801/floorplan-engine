@@ -296,6 +296,13 @@ export function missingSteps(steps: Step[], picks: Picks): Step[] {
   return steps.filter((s) => isRequired(s.id) && !isPicked(picks[s.id]));
 }
 
+// Required steps that keep "Recalculate" off for this change: all of them when it answers panel
+// questions (an answer without the others makes a panel nobody asked for), none for a change of
+// the wiring alone: the open questions stay with the assumptions of the model (decision 2026-11-22)
+export function blockingSteps(steps: Step[], picks: Picks, body: WizardBody): Step[] {
+  return body.answers ? missingSteps(steps, picks) : [];
+}
+
 function asAnswer(s: PanelStep, pick: string): Answer {
   if (pick === UNKNOWN) return { accept: true };
   if (s.kind === "groups") return pick.split(",");

@@ -1,7 +1,9 @@
 // Setup wizard: a popup with the steps on the left and one question in the middle, cards with
 // pictures or a field. What it asks depends on the project (steps.ts). Nothing is written until
-// "Recalculate" (on every step, off until something changes and while a required step, one that
-// changes the price, has no answer): the choices go together, with one rebuild (api.saveWizard).
+// "Recalculate" (on every step, off until something changes; with panel answers among the changes
+// also while a required step, one that changes the price, has no answer; a change of the wiring
+// alone leaves the open panel questions to their assumptions, decision 2026-11-22): the choices go
+// together, with one rebuild (api.saveWizard).
 // Until then they are a draft
 // that survives a reload (draft.ts). An unanswered step stays an open question; the assumption of
 // the model is only marked on its card.
@@ -31,7 +33,7 @@ import { masterOn } from "@/widgets/MasterList/master";
 import { findChoice } from "@/widgets/VariantInfo/variants";
 import { WizardArt } from "@/widgets/WizardArt";
 import { clearDraft, loadDraft, samePicks, saveDraft } from "./draft";
-import { UNKNOWN, VARIANT_STEPS, applyPick, chasesKept, initialPicks, invalid, isPicked, isRequired, missingSteps, optionKey, otherQuestions, setupOf, variantOf, wizardBody, wizardSteps, type Picks, type Step, type StepId } from "./steps";
+import { UNKNOWN, VARIANT_STEPS, applyPick, chasesKept, initialPicks, invalid, isPicked, isRequired, blockingSteps, optionKey, otherQuestions, setupOf, variantOf, wizardBody, wizardSteps, type Picks, type Step, type StepId } from "./steps";
 import css from "./Wizard.module.scss";
 
 const DONE = "done";
@@ -81,8 +83,9 @@ export function Wizard({ project, variants, ceiling, scene = null, reserve, mast
   const wrong = steps.find((s) => invalid(s, picks[s.id]));
   const body = wizardBody(setup, picks);
   const changed = !!body.variant || !!body.answers;
-  // Required steps (those that change the price) with no answer: nothing is recalculated without them
-  const missing = missingSteps(steps, picks);
+  // Required steps (those that change the price) with no answer: they hold back answers of the
+  // panel, not a change of the wiring alone (decision 2026-11-22)
+  const missing = blockingSteps(steps, picks, body);
   const pick = (id: StepId, value: string) => { setPicks((p) => applyPick(p, id, value)); setError(null); };
   const go = (delta: number) => setAt(steps[index + delta]?.id ?? DONE);
   // A list of groups always shows a set (the project's one until changed): "next" agrees with it,

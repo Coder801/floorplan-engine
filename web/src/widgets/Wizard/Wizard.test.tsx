@@ -130,4 +130,26 @@ describe("Wizard", () => {
     expect(screen.getByText("Изменений нет.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Пересчитать" })).toBeDisabled();
   });
+
+  it("a change of the wiring alone is recalculated with panel questions still open", async () => {
+    const user = userEvent.setup();
+    const item = (route: string, total: number) =>
+      ({ key: `standard-${route}-boxes`, mode: "standard", route, distribution: "boxes", total, currency: "грн", cable_m: 120, chases_m: 30 }) as VariantSummary;
+    const variants: Variants = { active: "standard-ceiling-boxes", default: "standard-ceiling-boxes", items: [item("ceiling", 10000), item("floor", 20000)] };
+    const { onApply } = open(panel(), { variants });
+    const recalc = screen.getByRole("button", { name: "Пересчитать" });
+    expect(recalc).toBeDisabled();
+    const cards = screen.getByRole("radiogroup", { name: "Как вести кабель?" });
+    await user.click(within(cards).getByRole("radio", { name: /пол/i }));
+    expect(screen.queryByText(/Осталось:/)).toBeNull();
+    expect(recalc).toBeEnabled();
+    await user.click(recalc);
+    expect(onApply).toHaveBeenCalledWith({ variant: expect.objectContaining({ route: "floor" }) });
+
+    // a panel answer among the changes needs the other required steps again
+    await user.click(within(screen.getByRole("navigation", { name: "Шаги настройки" })).getByRole("button", { name: "Фазы на вводе" }));
+    await user.click(screen.getByRole("radio", { name: /Три фазы/ }));
+    expect(screen.getByText(/Осталось: Вводной автомат/)).toBeInTheDocument();
+    expect(recalc).toBeDisabled();
+  });
 });
