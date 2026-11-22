@@ -210,9 +210,12 @@ def test_estimate_work_rows_carry_their_scope() -> None:
     table = side_tables(plan, contours, elec, wiring)["estimate"][0]
     cable = next(r for r in table.rows if len(r.cells) > 1 and r.cells[1] == "Прокладка кабеля")
     scope = cable.as_dict()["scope"]
-    assert isinstance(scope, dict) and set(scope) == {"includes", "excludes", "result"}
+    assert isinstance(scope, dict) and set(scope) == {"includes", "result"}
     assert "раскладка кабеля по трассе" in scope["includes"]
-    assert any(x.startswith("соединение жил в коробках — отдельная") for x in scope["excludes"])
+    # work the estimate does not have: one list for the table, not under every row
+    outside = table.as_dict()["outside"]
+    assert isinstance(outside, list) and "монтаж светильников" in outside
+    assert "раскладка кабеля по трассе" not in outside
     # materials, section rows and totals have no scope
     material = next(r for r in table.rows if len(r.cells) > 1 and r.cells[1] == "Подрозетник")
     assert material.scope is None and "scope" not in material.as_dict()

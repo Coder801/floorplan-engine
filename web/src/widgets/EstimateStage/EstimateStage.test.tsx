@@ -9,11 +9,12 @@ const electrical: SideTable = {
   rows: [
     { cells: ["", "Работы", "", ""], section: true },
     { cells: ["1", "Штроба в кирпиче", "м", "10 080"], hint: "по трассам проекта",
-      scope: { includes: ["разметка", "штробление"], excludes: ["вывоз мусора — отдельная позиция"], result: "штроба под кабель" } },
+      scope: { includes: ["разметка", "штробление"], result: "штроба под кабель" } },
     { cells: ["2", "Подрозетник", "шт", "—"] },
   ],
   total: ["", "Итого", "", "10 080"],
   notes: ["Цены — прайс студии"],
+  outside: ["вывоз строительного мусора"],
 };
 
 describe("EstimateStage", () => {
@@ -25,6 +26,9 @@ describe("EstimateStage", () => {
     expect(screen.getAllByRole("link", { name: "Скачать Excel" })).toHaveLength(1);
     expect(screen.getAllByRole("row", { name: /Итого/ })[0]).toHaveTextContent("10 080");
     expect(screen.getAllByText("Цены — прайс студии")).toHaveLength(2);
+    // work the estimate does not have: one list per estimate, not under every row
+    expect(screen.getAllByRole("heading", { level: 2, name: "Работы вне сметы" })).toHaveLength(2);
+    expect(screen.getAllByText("вывоз строительного мусора")).toHaveLength(2);
   });
 
   it("a work row unfolds what its price covers; the hint says what it is", async () => {
@@ -35,7 +39,7 @@ describe("EstimateStage", () => {
     expect(row).toHaveAttribute("aria-expanded", "false");
     await user.click(row);
     expect(screen.getByRole("heading", { name: "Входит в цену" })).toBeInTheDocument();
-    expect(screen.getByText("вывоз мусора — отдельная позиция")).toBeInTheDocument();
+    expect(screen.queryByText("Не входит")).not.toBeInTheDocument();
     expect(screen.getByText("штроба под кабель")).toBeInTheDocument();
     await user.click(row);
     expect(screen.queryByRole("heading", { name: "Входит в цену" })).toBeNull();

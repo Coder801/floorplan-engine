@@ -21,6 +21,7 @@ from floorplan_engine.electrical.estimate import (
 from floorplan_engine.electrical.work_scope import (
     load_scope,
     missing_scope,
+    outside_scope,
     parse_scope,
     scope_entries,
     scope_sheet,
@@ -72,7 +73,7 @@ def test_catalogue_needs_both_languages_and_an_include() -> None:
         parse_scope({"work.cable": {"includes": [], "result": PHRASE}})
 
 
-def test_excluded_operation_names_where_it_is_paid() -> None:
+def test_scope_entries_and_work_outside_the_estimate() -> None:
     est = _estimate("cable", "work.cable", "work.chase", "work.junction_box", "work.mechanism")
     entries = scope_entries(est, "ru")
     assert [e.key for e in entries] == [
@@ -83,56 +84,50 @@ def test_excluded_operation_names_where_it_is_paid() -> None:
     ]  # materials have no scope
     cable = entries[0]
     assert (cable.section, cable.no, cable.name) == ("rough", 1, "Прокладка кабеля")
-    # both chase items are referenced, only the one in this estimate is named
-    assert "штроба — отдельная позиция «Штроба узкая, 1–2 кабеля»" in cable.excludes
-    assert "соединение жил в коробках — отдельная позиция «Монтаж коробки с опрессовкой»" in (
-        cable.excludes
-    )
-    # the estimate has no conduit item
-    assert "укладка в гофротрубу — в этой смете не предусмотрено" in cable.excludes
+    assert "раскладка кабеля по трассе" in cable.includes
     mechanism = entries[-1]
     assert (mechanism.section, mechanism.no) == ("finish", 1)
-    assert "монтаж светильников — в смету не входит" in mechanism.excludes
+    outside = outside_scope(est, "ru")
+    # what another item of this estimate pays for is not listed
+    assert "штроба" not in outside and "соединение жил в коробках" not in outside
+    # the estimate has no conduit item; fixtures are in no estimate at all
+    assert "укладка в гофротрубу" in outside and "монтаж светильников" in outside
+    # once each, in estimate order: both chase items would name the same operations
+    assert len(outside) == len(set(outside))
+    assert outside.index("укладка в гофротрубу") < outside.index("монтаж светильников")
+    two = outside_scope(_estimate("work.chase", "work.chase_wide"), "uk")
+    assert two.count("вивезення будівельного сміття") == 1
 
 
-def test_reference_uses_the_name_from_this_estimate_and_language() -> None:
-    est = _estimate("work.cable", "work.chase", "work.chase_wide")
-    renamed = Estimate(
-        (
-            est.lines[0],
-            Line("rough", "work.chase", "Штроба в бетоні", "м", 1.0, None),
-            est.lines[2],
-        ),
-        "грн",
-    )
-    cable = scope_entries(renamed, "uk")[0]
-    assert (
-        "штроба — окремі позиції «Штроба в бетоні», «Штроба широкая, 3–4 кабеля»" in cable.excludes
-    )
+def test_scope_is_in_the_project_language() -> None:
+    cable = scope_entries(_estimate("work.cable"), "uk")[0]
     assert cable.result.startswith("кабель лежить по трасі")
 
 
 def test_scope_files(tmp_path: Path) -> None:
     est = _estimate("work.cable", "work.junction_box", "work.board_module")
     entries = scope_entries(est, "ru")
-    md = write_scope_markdown(entries, tmp_path / "work-scope.md", "Состав работ", ["прим."], "ru")
+    outside = outside_scope(est, "ru")
+    md = write_scope_markdown(entries, tmp_path / "work-scope.md", "Состав работ", outside, "ru")
     text = md.read_text("utf-8")
     assert "## Черновые работы" in text and "## Чистовые работы" in text
     assert "### 1. Прокладка кабеля — 2 м" in text
     assert "- раскладка кабеля по трассе" in text
-    assert "- подключение к аппаратам щита — отдельная позиция «Сборка щита»" in text
+    assert "Не входит" not in text and "отдельная позиция" not in text
+    assert "## Работы вне сметы" in text and "- укладка в гофротрубу" in text
+    assert "- подключение к аппаратам щита" not in text  # paid by "Сборка щита" of this estimate
     assert "**Результат:** соединения опрессованы" in text
     assert "дополнительная: её объём и цена согласуются до выполнения" in text
     assert "Расходники на инструмент (диски, буры, коронки, свёрла) входят в цену работ" in text
-    assert text.rstrip().endswith("- прим.")
 
     xlsx = write_xlsx(
-        est, tmp_path / "e.xlsx", "Смета", [], "ru", scope_sheet(entries, ["прим."], "ru")
+        est, tmp_path / "e.xlsx", "Смета", [], "ru", scope_sheet(entries, outside, "ru")
     )
     wb = load_workbook(xlsx)
     assert wb.sheetnames == ["Смета электрики", "Состав работ"]
     cells = [str(c.value) for row in wb["Состав работ"].iter_rows() for c in row if c.value]
-    assert "Прокладка кабеля" in cells and "прим." in cells
+    assert "Прокладка кабеля" in cells and "Не входит" not in cells
+    assert "Работы вне сметы" in cells and "• укладка в гофротрубу" in cells
     assert any("• фиксация кабеля площадками" in c for c in cells)
     assert any(c.startswith("Расходники на инструмент") for c in cells)
 
@@ -148,7 +143,5 @@ def test_chases_by_wall_material_share_the_chase_scope() -> None:
     entries = scope_entries(Estimate(lines, "грн"), "ru")
     assert [e.key for e in entries] == [ln.key for ln in lines]
     assert entries[1].includes == entries[2].includes
-    assert (
-        "штроба — отдельные позиции «Штроба узкая, бетон», «Штроба узкая, газоблок»"
-        in entries[0].excludes
-    )
+    # a chase by wall material is the chase item: "штроба" is paid in this estimate
+    assert "штроба" not in outside_scope(Estimate(lines, "грн"), "ru")

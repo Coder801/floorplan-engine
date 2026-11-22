@@ -327,5 +327,5 @@ def terms_scope_sheet(
     out = [["", text("title", language)], ["", text("intro", language)]]
     for r in rows:
         amount = "" if r.amount is None else f" — {_num(r.amount)} {currency}"
-        out.append([str(r.no), r.name, "", r.about, "", f"{r.who}: {r.terms}{amount}"])
+        out.append([str(r.no), r.name, "", r.about, f"{r.who}: {r.terms}{amount}"])
     return out

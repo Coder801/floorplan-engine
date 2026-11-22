@@ -275,10 +275,9 @@ export interface TableRow {
 }
 
 // Work scope of an estimate row, in the project language (electrical/work_scope.py): operations
-// inside the price, what is not inside (each with the place it is paid) and the handover result
+// inside the price and the handover result
 export interface WorkScope {
   includes: string[];
-  excludes: string[];
   result: string;
 }
 
@@ -289,6 +288,7 @@ export interface SideTable {
   rows: TableRow[];
   total?: string[];
   notes?: string[];
+  outside?: string[];  // estimate: work it does not have, one list for the whole table
 }
 
 export interface SceneWire {

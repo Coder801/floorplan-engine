@@ -12,7 +12,6 @@ items:
   junction_box: 60
   junction_box_ip: 120           # IP44 у санвузлах
   crimp: 8                       # гильза ГМЛ + термоусадка на соединение
-  cable_fixing: 2                # клипса / дюбель-хомут
   board_enclosure: { price: 6000, name: "Корпус щита вбудований, 5 рядів, 60 мод." }
   breaker: 140                   # класс Schneider Easy9
   # Механизмы и рамки — по выбранной серии, впишите цены:

@@ -39,7 +39,7 @@ from floorplan_engine.electrical.panel import BoardPanel, build_panel, color_of
 from floorplan_engine.electrical.point_numbers import point_rows
 from floorplan_engine.electrical.pricing import Prices, price_notes
 from floorplan_engine.electrical.wiring_model import Wiring
-from floorplan_engine.electrical.work_scope import ScopeEntry, scope_entries
+from floorplan_engine.electrical.work_scope import ScopeEntry, outside_scope, scope_entries
 from floorplan_engine.model.geometry import Contour
 from floorplan_engine.model.schema import Electrical, Plan
 from floorplan_engine.model.texts import Language, tr
@@ -103,7 +103,6 @@ class SideRow:
         if self.scope:
             out["scope"] = {
                 "includes": list(self.scope.includes),
-                "excludes": list(self.scope.excludes),
                 "result": self.scope.result,
             }
         if self.keys:
@@ -121,6 +120,7 @@ class SideTable:
     rows: tuple[SideRow, ...]
     total: tuple[str, ...] | None = None
     notes: tuple[str, ...] = field(default=())
+    outside: tuple[str, ...] = field(default=())  # estimate: work it does not have, a list
 
     def as_dict(self) -> dict[str, object]:
         out: dict[str, object] = {
@@ -133,6 +133,8 @@ class SideTable:
             out["total"] = list(self.total)
         if self.notes:
             out["notes"] = list(self.notes)
+        if self.outside:
+            out["outside"] = list(self.outside)
         return out
 
 
@@ -340,7 +342,8 @@ def estimate_side_table(
     """Estimate (prices from the list on top of the price service) or bill of quantities (prices
     None), for the viewer "Estimate" tab (key estimate of the wiring page); for print the same
     calculation is on the wiring sheet (stages.wiring_panels). A work row carries its scope
-    (work_scope.scope_entries): what the price includes, what it does not and the result."""
+    (work_scope.scope_entries): what the price includes and the result; the table carries the
+    work this estimate does not have (work_scope.outside_scope), once for all rows."""
     priced = prices is not None and prices.priced
     est = build_estimate(wiring, elec, prices or Prices(), language, panel)
     notes = [estimate_text("note_panel", language)] if panel is not None else []
@@ -355,7 +358,7 @@ def estimate_side_table(
         else r
         for r in table.rows
     )
-    return replace(table, rows=rows)
+    return replace(table, rows=rows, outside=outside_scope(est, language))
 
 
 def side_tables(

@@ -493,7 +493,7 @@ $SKPOLY
   9
 $TDCREATE
  40
-2461363.4349305555
+2461367.1069328706
   9
 $TDUCREATE
  40
@@ -501,7 +501,7 @@ $TDUCREATE
   9
 $TDUPDATE
  40
-2461363.4349652776
+2461367.1069675926
   9
 $TDUUPDATE
  40
@@ -933,11 +933,11 @@ $PSTYLEMODE
   9
 $FINGERPRINTGUID
   2
-{18171329-DBC3-424C-A8CA-5153D6749C86}
+{C95CB49D-6A92-4637-B990-ADDC97332E5F}
   9
 $VERSIONGUID
   2
-{292C177C-3BC6-47D6-83DF-D2A255546F8C}
+{072EA8D8-F379-4AD4-AF21-4E4DF7F4AE66}
   9
 $EXTNAMES
 290
@@ -1359,9 +1359,9 @@ ISM
   0
 CLASS
   1
-ACDBPLACEHOLDER
+LAYOUT
   2
-AcDbPlaceHolder
+AcDbLayout
   3
 ObjectDBX Classes
  90
@@ -1375,9 +1375,9 @@ ObjectDBX Classes
   0
 CLASS
   1
-LAYOUT
+ACDBPLACEHOLDER
   2
-AcDbLayout
+AcDbPlaceHolder
   3
 ObjectDBX Classes
  90
@@ -972299,7 +972299,7 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_12
   0
@@ -972339,7 +972339,7 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_12
   0
@@ -972383,7 +972383,7 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_12
   0
@@ -972457,9 +972457,9 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_1
+wire_1,wire_13
   0
 LWPOLYLINE
   5
@@ -972497,9 +972497,9 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_1
+wire_1,wire_13
   0
 TEXT
   5
@@ -972543,9 +972543,9 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_1
+wire_1,wire_13
   0
 HATCH
   5
@@ -972617,9 +972617,9 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_2
+wire_2,wire_3,wire_13,wire_18
   0
 LWPOLYLINE
   5
@@ -972657,9 +972657,9 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_2
+wire_2,wire_3,wire_13,wire_18
   0
 TEXT
   5
@@ -972701,9 +972701,9 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_2
+wire_2,wire_3,wire_13,wire_18
   0
 HATCH
   5
@@ -972775,9 +972775,9 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_2
+wire_2,wire_3,wire_13
   0
 LWPOLYLINE
   5
@@ -972815,9 +972815,9 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_2
+wire_2,wire_3,wire_13
   0
 TEXT
   5
@@ -972859,9 +972859,9 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_2
+wire_2,wire_3,wire_13
   0
 HATCH
   5
@@ -972933,9 +972933,9 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_1
+wire_1,wire_13
   0
 LWPOLYLINE
   5
@@ -972973,9 +972973,9 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_1
+wire_1,wire_13
   0
 TEXT
   5
@@ -973017,9 +973017,9 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_1
+wire_1,wire_13
   0
 HATCH
   5
@@ -973091,7 +973091,7 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_4
   0
@@ -973131,7 +973131,7 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_4
   0
@@ -973175,7 +973175,7 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_4
   0
@@ -973249,7 +973249,7 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_5
   0
@@ -973289,7 +973289,7 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_5
   0
@@ -973335,7 +973335,7 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_5
   0
@@ -973409,7 +973409,7 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_7
   0
@@ -973449,7 +973449,7 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_7
   0
@@ -973493,7 +973493,7 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_7
   0
@@ -973567,7 +973567,7 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_6
   0
@@ -973607,7 +973607,7 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_6
   0
@@ -973651,7 +973651,7 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_6
   0
@@ -973725,7 +973725,7 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_8
   0
@@ -973765,7 +973765,7 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_8
   0
@@ -973811,7 +973811,7 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_8
   0
@@ -973885,9 +973885,9 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_45
+wire_45,wire_46
   0
 LWPOLYLINE
   5
@@ -973925,9 +973925,9 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_45
+wire_45,wire_46
   0
 TEXT
   5
@@ -973969,9 +973969,9 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_45
+wire_45,wire_46
   0
 HATCH
   5
@@ -974043,9 +974043,9 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_10
+wire_10,wire_14,wire_26,wire_34,wire_36,wire_42,wire_69,wire_73,wire_78,wire_79,wire_80,wire_81,wire_82,wire_83,wire_88,wire_91,wire_96,wire_97,wire_98,wire_99,wire_100,wire_106,wire_108,wire_109,wire_110
   0
 LWPOLYLINE
   5
@@ -974083,9 +974083,9 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_10
+wire_10,wire_14,wire_26,wire_34,wire_36,wire_42,wire_69,wire_73,wire_78,wire_79,wire_80,wire_81,wire_82,wire_83,wire_88,wire_91,wire_96,wire_97,wire_98,wire_99,wire_100,wire_106,wire_108,wire_109,wire_110
   0
 TEXT
   5
@@ -974129,9 +974129,9 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_10
+wire_10,wire_14,wire_26,wire_34,wire_36,wire_42,wire_69,wire_73,wire_78,wire_79,wire_80,wire_81,wire_82,wire_83,wire_88,wire_91,wire_96,wire_97,wire_98,wire_99,wire_100,wire_106,wire_108,wire_109,wire_110
   0
 HATCH
   5
@@ -974203,9 +974203,9 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_10
+wire_10,wire_14,wire_26,wire_34,wire_36,wire_42,wire_69,wire_73,wire_78,wire_79,wire_80,wire_81,wire_82,wire_83,wire_88,wire_91,wire_97,wire_98,wire_99,wire_100,wire_106,wire_108,wire_109,wire_110
   0
 LWPOLYLINE
   5
@@ -974243,9 +974243,9 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_10
+wire_10,wire_14,wire_26,wire_34,wire_36,wire_42,wire_69,wire_73,wire_78,wire_79,wire_80,wire_81,wire_82,wire_83,wire_88,wire_91,wire_97,wire_98,wire_99,wire_100,wire_106,wire_108,wire_109,wire_110
   0
 TEXT
   5
@@ -974289,9 +974289,9 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_10
+wire_10,wire_14,wire_26,wire_34,wire_36,wire_42,wire_69,wire_73,wire_78,wire_79,wire_80,wire_81,wire_82,wire_83,wire_88,wire_91,wire_97,wire_98,wire_99,wire_100,wire_106,wire_108,wire_109,wire_110
   0
 HATCH
   5
@@ -974363,9 +974363,9 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_10
+wire_10,wire_14,wire_19,wire_26,wire_42,wire_73,wire_78,wire_80,wire_81,wire_83,wire_98,wire_99,wire_106,wire_108
   0
 LWPOLYLINE
   5
@@ -974403,9 +974403,9 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_10
+wire_10,wire_14,wire_19,wire_26,wire_42,wire_73,wire_78,wire_80,wire_81,wire_83,wire_98,wire_99,wire_106,wire_108
   0
 TEXT
   5
@@ -974449,9 +974449,9 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_10
+wire_10,wire_14,wire_19,wire_26,wire_42,wire_73,wire_78,wire_80,wire_81,wire_83,wire_98,wire_99,wire_106,wire_108
   0
 HATCH
   5
@@ -974523,9 +974523,9 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_10
+wire_10,wire_14,wire_42,wire_73,wire_78,wire_80,wire_81,wire_83,wire_98,wire_106,wire_108
   0
 LWPOLYLINE
   5
@@ -974563,9 +974563,9 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_10
+wire_10,wire_14,wire_42,wire_73,wire_78,wire_80,wire_81,wire_83,wire_98,wire_106,wire_108
   0
 TEXT
   5
@@ -974609,9 +974609,9 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_10
+wire_10,wire_14,wire_42,wire_73,wire_78,wire_80,wire_81,wire_83,wire_98,wire_106,wire_108
   0
 HATCH
   5
@@ -974683,9 +974683,9 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_10
+wire_10,wire_42,wire_73,wire_78,wire_81,wire_83,wire_98,wire_106,wire_108
   0
 LWPOLYLINE
   5
@@ -974723,9 +974723,9 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_10
+wire_10,wire_42,wire_73,wire_78,wire_81,wire_83,wire_98,wire_106,wire_108
   0
 TEXT
   5
@@ -974769,9 +974769,9 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_10
+wire_10,wire_42,wire_73,wire_78,wire_81,wire_83,wire_98,wire_106,wire_108
   0
 HATCH
   5
@@ -974843,9 +974843,9 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_81
+wire_81,wire_106
   0
 LWPOLYLINE
   5
@@ -974883,9 +974883,9 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_81
+wire_81,wire_106
   0
 TEXT
   5
@@ -974927,9 +974927,9 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_81
+wire_81,wire_106
   0
 HATCH
   5
@@ -975001,9 +975001,9 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_10
+wire_10,wire_81,wire_106
   0
 LWPOLYLINE
   5
@@ -975041,9 +975041,9 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_10
+wire_10,wire_81,wire_106
   0
 TEXT
   5
@@ -975085,9 +975085,9 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_10
+wire_10,wire_81,wire_106
   0
 HATCH
   5
@@ -975159,9 +975159,9 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_12
+wire_12,wire_81,wire_106
   0
 LWPOLYLINE
   5
@@ -975199,9 +975199,9 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_12
+wire_12,wire_81,wire_106
   0
 TEXT
   5
@@ -975245,9 +975245,9 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_12
+wire_12,wire_81,wire_106
   0
 HATCH
   5
@@ -975319,9 +975319,9 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_12
+wire_12,wire_16,wire_81,wire_106
   0
 LWPOLYLINE
   5
@@ -975359,9 +975359,9 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_12
+wire_12,wire_16,wire_81,wire_106
   0
 TEXT
   5
@@ -975405,9 +975405,9 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_12
+wire_12,wire_16,wire_81,wire_106
   0
 HATCH
   5
@@ -975479,7 +975479,7 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_14
   0
@@ -975519,7 +975519,7 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_14
   0
@@ -975563,7 +975563,7 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_14
   0
@@ -975637,7 +975637,7 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_15
   0
@@ -975677,7 +975677,7 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_15
   0
@@ -975723,7 +975723,7 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_15
   0
@@ -975797,7 +975797,7 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_15
   0
@@ -975837,7 +975837,7 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_15
   0
@@ -975881,7 +975881,7 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_15
   0
@@ -975955,7 +975955,7 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_17
   0
@@ -975995,7 +975995,7 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_17
   0
@@ -976039,7 +976039,7 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_17
   0
@@ -976113,7 +976113,7 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_17
   0
@@ -976153,7 +976153,7 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_17
   0
@@ -976199,7 +976199,7 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_17
   0
@@ -976273,7 +976273,7 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_18
   0
@@ -976313,7 +976313,7 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_18
   0
@@ -976359,7 +976359,7 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_18
   0
@@ -976433,7 +976433,7 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_19
   0
@@ -976473,7 +976473,7 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_19
   0
@@ -976517,7 +976517,7 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_19
   0
@@ -976591,9 +976591,9 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_88
+wire_88,wire_100
   0
 LWPOLYLINE
   5
@@ -976631,9 +976631,9 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_88
+wire_88,wire_100
   0
 TEXT
   5
@@ -976675,9 +976675,9 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_88
+wire_88,wire_100
   0
 HATCH
   5
@@ -976749,7 +976749,7 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_19
   0
@@ -976789,7 +976789,7 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_19
   0
@@ -976835,7 +976835,7 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_19
   0
@@ -976909,7 +976909,7 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_107
   0
@@ -976949,7 +976949,7 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_107
   0
@@ -976993,7 +976993,7 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_107
   0
@@ -977067,9 +977067,9 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_20
+wire_20,wire_107
   0
 LWPOLYLINE
   5
@@ -977107,9 +977107,9 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_20
+wire_20,wire_107
   0
 TEXT
   5
@@ -977151,9 +977151,9 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_20
+wire_20,wire_107
   0
 HATCH
   5
@@ -977225,9 +977225,9 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_27
+wire_27,wire_28,wire_107
   0
 LWPOLYLINE
   5
@@ -977265,9 +977265,9 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_27
+wire_27,wire_28,wire_107
   0
 TEXT
   5
@@ -977309,9 +977309,9 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_27
+wire_27,wire_28,wire_107
   0
 HATCH
   5
@@ -977383,9 +977383,9 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_35
+wire_35,wire_37
   0
 LWPOLYLINE
   5
@@ -977423,9 +977423,9 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_35
+wire_35,wire_37
   0
 TEXT
   5
@@ -977469,9 +977469,9 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_35
+wire_35,wire_37
   0
 HATCH
   5
@@ -977543,9 +977543,9 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_20
+wire_20,wire_35
   0
 LWPOLYLINE
   5
@@ -977583,9 +977583,9 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_20
+wire_20,wire_35
   0
 TEXT
   5
@@ -977627,9 +977627,9 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_20
+wire_20,wire_35
   0
 HATCH
   5
@@ -977701,7 +977701,7 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_21
   0
@@ -977741,7 +977741,7 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_21
   0
@@ -977785,7 +977785,7 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_21
   0
@@ -977859,7 +977859,7 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_22
   0
@@ -977899,7 +977899,7 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_22
   0
@@ -977943,7 +977943,7 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_22
   0
@@ -978017,7 +978017,7 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_23
   0
@@ -978057,7 +978057,7 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_23
   0
@@ -978103,7 +978103,7 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_23
   0
@@ -978177,7 +978177,7 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_24
   0
@@ -978217,7 +978217,7 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_24
   0
@@ -978261,7 +978261,7 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_24
   0
@@ -978335,7 +978335,7 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_25
   0
@@ -978375,7 +978375,7 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_25
   0
@@ -978419,7 +978419,7 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_25
   0
@@ -978493,9 +978493,9 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_25
+wire_25,wire_29
   0
 LWPOLYLINE
   5
@@ -978533,9 +978533,9 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_25
+wire_25,wire_29
   0
 TEXT
   5
@@ -978577,9 +978577,9 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_25
+wire_25,wire_29
   0
 HATCH
   5
@@ -978651,7 +978651,7 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_29
   0
@@ -978691,7 +978691,7 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_29
   0
@@ -978737,7 +978737,7 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_29
   0
@@ -978811,7 +978811,7 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_31
   0
@@ -978851,7 +978851,7 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_31
   0
@@ -978895,7 +978895,7 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_31
   0
@@ -978969,7 +978969,7 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_70
   0
@@ -979009,7 +979009,7 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_70
   0
@@ -979053,7 +979053,7 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_70
   0
@@ -979127,7 +979127,7 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_71
   0
@@ -979167,7 +979167,7 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_71
   0
@@ -979211,7 +979211,7 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_71
   0
@@ -979285,7 +979285,7 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_33
   0
@@ -979325,7 +979325,7 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_33
   0
@@ -979371,7 +979371,7 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_33
   0
@@ -979445,7 +979445,7 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_32
   0
@@ -979485,7 +979485,7 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_32
   0
@@ -979531,7 +979531,7 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_32
   0
@@ -979605,9 +979605,9 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_34
+wire_34,wire_36,wire_97
   0
 LWPOLYLINE
   5
@@ -979645,9 +979645,9 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_34
+wire_34,wire_36,wire_97
   0
 TEXT
   5
@@ -979689,9 +979689,9 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_34
+wire_34,wire_36,wire_97
   0
 HATCH
   5
@@ -979763,7 +979763,7 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_37
   0
@@ -979803,7 +979803,7 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_37
   0
@@ -979847,7 +979847,7 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_37
   0
@@ -979921,9 +979921,9 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_42
+wire_42,wire_73,wire_78,wire_83,wire_98,wire_108
   0
 LWPOLYLINE
   5
@@ -979961,9 +979961,9 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_42
+wire_42,wire_73,wire_78,wire_83,wire_98,wire_108
   0
 TEXT
   5
@@ -980005,9 +980005,9 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_42
+wire_42,wire_73,wire_78,wire_83,wire_98,wire_108
   0
 HATCH
   5
@@ -980079,9 +980079,9 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_39
+wire_39,wire_42,wire_73,wire_78,wire_83,wire_98,wire_108
   0
 LWPOLYLINE
   5
@@ -980119,9 +980119,9 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_39
+wire_39,wire_42,wire_73,wire_78,wire_83,wire_98,wire_108
   0
 TEXT
   5
@@ -980163,9 +980163,9 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_39
+wire_39,wire_42,wire_73,wire_78,wire_83,wire_98,wire_108
   0
 HATCH
   5
@@ -980237,9 +980237,9 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_73
+wire_73,wire_78,wire_83,wire_98,wire_108
   0
 LWPOLYLINE
   5
@@ -980277,9 +980277,9 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_73
+wire_73,wire_78,wire_83,wire_98,wire_108
   0
 TEXT
   5
@@ -980321,9 +980321,9 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_73
+wire_73,wire_78,wire_83,wire_98,wire_108
   0
 HATCH
   5
@@ -980395,9 +980395,9 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_78
+wire_78,wire_83
   0
 LWPOLYLINE
   5
@@ -980435,9 +980435,9 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_78
+wire_78,wire_83
   0
 TEXT
   5
@@ -980479,9 +980479,9 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_78
+wire_78,wire_83
   0
 HATCH
   5
@@ -980553,7 +980553,7 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_102
   0
@@ -980593,7 +980593,7 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_102
   0
@@ -980639,7 +980639,7 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_102
   0
@@ -980713,7 +980713,7 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_39
   0
@@ -980753,7 +980753,7 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_39
   0
@@ -980799,7 +980799,7 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_39
   0
@@ -980873,7 +980873,7 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_40
   0
@@ -980913,7 +980913,7 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_40
   0
@@ -980957,7 +980957,7 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_40
   0
@@ -981031,7 +981031,7 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_40
   0
@@ -981071,7 +981071,7 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_40
   0
@@ -981117,7 +981117,7 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_40
   0
@@ -981191,7 +981191,7 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_41
   0
@@ -981231,7 +981231,7 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_41
   0
@@ -981275,7 +981275,7 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_41
   0
@@ -981349,7 +981349,7 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_43
   0
@@ -981389,7 +981389,7 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_43
   0
@@ -981435,7 +981435,7 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_43
   0
@@ -981509,7 +981509,7 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_44
   0
@@ -981549,7 +981549,7 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_44
   0
@@ -981595,7 +981595,7 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_44
   0
@@ -981669,7 +981669,7 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_44
   0
@@ -981709,7 +981709,7 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_44
   0
@@ -981755,7 +981755,7 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_44
   0
@@ -981829,9 +981829,9 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_45
+wire_45,wire_46
   0
 LWPOLYLINE
   5
@@ -981869,9 +981869,9 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_45
+wire_45,wire_46
   0
 TEXT
   5
@@ -981915,9 +981915,9 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_45
+wire_45,wire_46
   0
 HATCH
   5
@@ -981989,9 +981989,9 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_60
+wire_60,wire_66,wire_101
   0
 LWPOLYLINE
   5
@@ -982029,9 +982029,9 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_60
+wire_60,wire_66,wire_101
   0
 TEXT
   5
@@ -982073,9 +982073,9 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_60
+wire_60,wire_66,wire_101
   0
 HATCH
   5
@@ -982147,9 +982147,9 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_47
+wire_47,wire_61
   0
 LWPOLYLINE
   5
@@ -982187,9 +982187,9 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_47
+wire_47,wire_61
   0
 TEXT
   5
@@ -982233,9 +982233,9 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_47
+wire_47,wire_61
   0
 HATCH
   5
@@ -982307,9 +982307,9 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_54
+wire_54,wire_62
   0
 LWPOLYLINE
   5
@@ -982347,9 +982347,9 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_54
+wire_54,wire_62
   0
 TEXT
   5
@@ -982393,9 +982393,9 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_54
+wire_54,wire_62
   0
 HATCH
   5
@@ -982467,7 +982467,7 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_62
   0
@@ -982507,7 +982507,7 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_62
   0
@@ -982553,7 +982553,7 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_62
   0
@@ -982627,7 +982627,7 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_48
   0
@@ -982667,7 +982667,7 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_48
   0
@@ -982711,7 +982711,7 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_48
   0
@@ -982785,7 +982785,7 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_48
   0
@@ -982825,7 +982825,7 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_48
   0
@@ -982871,7 +982871,7 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_48
   0
@@ -982945,7 +982945,7 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_49
   0
@@ -982985,7 +982985,7 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_49
   0
@@ -983031,7 +983031,7 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_49
   0
@@ -983105,7 +983105,7 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_51
   0
@@ -983145,7 +983145,7 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_51
   0
@@ -983191,7 +983191,7 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_51
   0
@@ -983265,7 +983265,7 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_50
   0
@@ -983305,7 +983305,7 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_50
   0
@@ -983351,7 +983351,7 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_50
   0
@@ -983425,9 +983425,9 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_62
+wire_62,wire_63
   0
 LWPOLYLINE
   5
@@ -983465,9 +983465,9 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_62
+wire_62,wire_63
   0
 TEXT
   5
@@ -983511,9 +983511,9 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_62
+wire_62,wire_63
   0
 HATCH
   5
@@ -983585,7 +983585,7 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_53
   0
@@ -983625,7 +983625,7 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_53
   0
@@ -983669,7 +983669,7 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_53
   0
@@ -983743,7 +983743,7 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_54
   0
@@ -983783,7 +983783,7 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_54
   0
@@ -983827,7 +983827,7 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_54
   0
@@ -983901,7 +983901,7 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_55
   0
@@ -983941,7 +983941,7 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_55
   0
@@ -983985,7 +983985,7 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_55
   0
@@ -984059,7 +984059,7 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_56
   0
@@ -984099,7 +984099,7 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_56
   0
@@ -984143,7 +984143,7 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_56
   0
@@ -984217,7 +984217,7 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_57
   0
@@ -984257,7 +984257,7 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_57
   0
@@ -984303,7 +984303,7 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_57
   0
@@ -984377,7 +984377,7 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_58
   0
@@ -984417,7 +984417,7 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_58
   0
@@ -984463,7 +984463,7 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_58
   0
@@ -984537,7 +984537,7 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_59
   0
@@ -984577,7 +984577,7 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_59
   0
@@ -984623,7 +984623,7 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_59
   0
@@ -984697,7 +984697,7 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_68
   0
@@ -984737,7 +984737,7 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_68
   0
@@ -984781,7 +984781,7 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_68
   0
@@ -984855,7 +984855,7 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_62
   0
@@ -984895,7 +984895,7 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_62
   0
@@ -984939,7 +984939,7 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_62
   0
@@ -985013,7 +985013,7 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_63
   0
@@ -985053,7 +985053,7 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_63
   0
@@ -985097,7 +985097,7 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_63
   0
@@ -985171,7 +985171,7 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_67
   0
@@ -985211,7 +985211,7 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_67
   0
@@ -985257,7 +985257,7 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_67
   0
@@ -985331,7 +985331,7 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_82
   0
@@ -985371,7 +985371,7 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_82
   0
@@ -985415,7 +985415,7 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_82
   0
@@ -985489,9 +985489,9 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_69
+wire_69,wire_79
   0
 LWPOLYLINE
   5
@@ -985529,9 +985529,9 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_69
+wire_69,wire_79
   0
 TEXT
   5
@@ -985573,9 +985573,9 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_69
+wire_69,wire_79
   0
 HATCH
   5
@@ -985647,7 +985647,7 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_79
   0
@@ -985687,7 +985687,7 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_79
   0
@@ -985731,7 +985731,7 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_79
   0
@@ -985805,7 +985805,7 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_72
   0
@@ -985845,7 +985845,7 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_72
   0
@@ -985891,7 +985891,7 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_72
   0
@@ -985965,7 +985965,7 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_80
   0
@@ -986005,7 +986005,7 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_80
   0
@@ -986049,7 +986049,7 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_80
   0
@@ -986123,7 +986123,7 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_73
   0
@@ -986163,7 +986163,7 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_73
   0
@@ -986209,7 +986209,7 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_73
   0
@@ -986283,7 +986283,7 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_74
   0
@@ -986323,7 +986323,7 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_74
   0
@@ -986367,7 +986367,7 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_74
   0
@@ -986441,7 +986441,7 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_77
   0
@@ -986481,7 +986481,7 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_77
   0
@@ -986527,7 +986527,7 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_77
   0
@@ -986601,9 +986601,9 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_76
+wire_76,wire_77
   0
 LWPOLYLINE
   5
@@ -986641,9 +986641,9 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_76
+wire_76,wire_77
   0
 TEXT
   5
@@ -986687,9 +986687,9 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_76
+wire_76,wire_77
   0
 HATCH
   5
@@ -986761,9 +986761,9 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_78
+wire_78,wire_83
   0
 LWPOLYLINE
   5
@@ -986801,9 +986801,9 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_78
+wire_78,wire_83
   0
 TEXT
   5
@@ -986847,9 +986847,9 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_78
+wire_78,wire_83
   0
 HATCH
   5
@@ -986921,7 +986921,7 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_83
   0
@@ -986961,7 +986961,7 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_83
   0
@@ -987007,7 +987007,7 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_83
   0
@@ -987081,7 +987081,7 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_84
   0
@@ -987121,7 +987121,7 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_84
   0
@@ -987165,7 +987165,7 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_84
   0
@@ -987239,7 +987239,7 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_85
   0
@@ -987279,7 +987279,7 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_85
   0
@@ -987323,7 +987323,7 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_85
   0
@@ -987397,7 +987397,7 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_86
   0
@@ -987437,7 +987437,7 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_86
   0
@@ -987483,7 +987483,7 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_86
   0
@@ -987557,7 +987557,7 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_87
   0
@@ -987597,7 +987597,7 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_87
   0
@@ -987641,7 +987641,7 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_87
   0
@@ -987715,9 +987715,9 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_91
+wire_91,wire_109,wire_110
   0
 LWPOLYLINE
   5
@@ -987755,9 +987755,9 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_91
+wire_91,wire_109,wire_110
   0
 TEXT
   5
@@ -987799,9 +987799,9 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_91
+wire_91,wire_109,wire_110
   0
 HATCH
   5
@@ -987873,9 +987873,9 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_89
+wire_89,wire_91,wire_109,wire_110
   0
 LWPOLYLINE
   5
@@ -987913,9 +987913,9 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_89
+wire_89,wire_91,wire_109,wire_110
   0
 TEXT
   5
@@ -987957,9 +987957,9 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_89
+wire_89,wire_91,wire_109,wire_110
   0
 HATCH
   5
@@ -988031,9 +988031,9 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_109
+wire_109,wire_110
   0
 LWPOLYLINE
   5
@@ -988071,9 +988071,9 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_109
+wire_109,wire_110
   0
 TEXT
   5
@@ -988115,9 +988115,9 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_109
+wire_109,wire_110
   0
 HATCH
   5
@@ -988189,7 +988189,7 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_110
   0
@@ -988229,7 +988229,7 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_110
   0
@@ -988273,7 +988273,7 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_110
   0
@@ -988347,7 +988347,7 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_90
   0
@@ -988387,7 +988387,7 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_90
   0
@@ -988433,7 +988433,7 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_90
   0
@@ -988507,7 +988507,7 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_90
   0
@@ -988547,7 +988547,7 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_90
   0
@@ -988591,7 +988591,7 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_90
   0
@@ -988665,7 +988665,7 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_94
   0
@@ -988705,7 +988705,7 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_94
   0
@@ -988751,7 +988751,7 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_94
   0
@@ -988825,7 +988825,7 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_96
   0
@@ -988865,7 +988865,7 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_96
   0
@@ -988909,7 +988909,7 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_96
   0
@@ -988983,7 +988983,7 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_96
   0
@@ -989023,7 +989023,7 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_96
   0
@@ -989069,7 +989069,7 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_96
   0
@@ -989143,7 +989143,7 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_104
   0
@@ -989183,7 +989183,7 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_104
   0
@@ -989227,7 +989227,7 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_104
   0
@@ -989301,9 +989301,9 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_103
+wire_103,wire_104
   0
 LWPOLYLINE
   5
@@ -989341,9 +989341,9 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_103
+wire_103,wire_104
   0
 TEXT
   5
@@ -989385,9 +989385,9 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
-wire_103
+wire_103,wire_104
   0
 HATCH
   5
@@ -989459,7 +989459,7 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_102
   0
@@ -989499,7 +989499,7 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_102
   0
@@ -989543,7 +989543,7 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_102
   0
@@ -989617,7 +989617,7 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_102
   0
@@ -989657,7 +989657,7 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_102
   0
@@ -989703,7 +989703,7 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_102
   0
@@ -989777,7 +989777,7 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_103
   0
@@ -989817,7 +989817,7 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_103
   0
@@ -989863,7 +989863,7 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_103
   0
@@ -989937,7 +989937,7 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_103
   0
@@ -989977,7 +989977,7 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_103
   0
@@ -990021,7 +990021,7 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_103
   0
@@ -990095,7 +990095,7 @@ SOLID
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_108
   0
@@ -990135,7 +990135,7 @@ AcDbPolyline
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_108
   0
@@ -990179,7 +990179,7 @@ AcDbText
 1001
 FLOORPLAN_ENGINE
 1000
-wire
+wire_len
 1000
 wire_108
   0
@@ -1003551,7 +1003551,7 @@ DictionaryVariables
 280
 0
   1
-1.4.4 @ 2026-11-18T08:26:18.041721+00:00
+1.4.4 @ 2026-11-22T00:33:59.361353+00:00
   0
 DICTIONARY
   5
@@ -1008783,7 +1008783,7 @@ DictionaryVariables
 280
 0
   1
-1.4.4 @ 2026-11-18T08:26:21.078931+00:00
+1.4.4 @ 2026-11-22T00:34:02.335530+00:00
   0
 ENDSEC
   0

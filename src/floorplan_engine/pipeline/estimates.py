@@ -43,6 +43,7 @@ from floorplan_engine.electrical.wiring import END_ALLOWANCE, RESERVE, estimate_
 from floorplan_engine.electrical.wiring_model import CHASE_NARROW, HOLE_CABLES, Wiring
 from floorplan_engine.electrical.work_scope import (
     WORK_SCOPE_MD,
+    outside_scope,
     scope_entries,
     scope_sheet,
     write_scope_markdown,
@@ -175,7 +176,7 @@ def write_estimate(
         notes.append(note)
     title = estimate_text("title", lang, name=plan.name)
     scope = scope_entries(est, lang)
-    left_out = [estimate_text("note_excluded", lang)]
+    left_out = outside_scope(est, lang)
     out = project / OUT_DIR
     files = [
         write_markdown(

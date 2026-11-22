@@ -5,7 +5,11 @@ the estimate (estimate.LINES):
 
 - includes — operations inside the item's price;
 - excludes — what a client may expect but the price does not cover; `ref` names the estimate
-  items where it is paid, no `ref` means it is not in the estimate at all;
+  items where it is paid, no `ref` means it is not in the estimate at all. A document does not
+  list them under every item (decision 2026-11-22: a "not included" list per item reads as
+  hostile and mostly repeats the other items of the same estimate): what this estimate has
+  elsewhere is not printed, the rest goes once into "Work outside the estimate"
+  (outside_scope);
 - result — the state the work is handed over in, something the client can check.
 
 The catalogue has no prices and changes no quantities: it only describes the items the estimate
@@ -13,9 +17,7 @@ already has. Code checks it: unknown keys and references are errors (ScopeCatalo
 item must have a scope (missing_scope, a test).
 
 For a project the scope goes next to the estimate: out/work-scope.md (an appendix that can be
-attached to a contract) and a second sheet in out/estimate.xlsx. A reference is printed with the
-name of the item in this estimate; a referenced item the estimate does not have (no conduit, no
-chases) is marked as not planned in it.
+attached to a contract) and a second sheet in out/estimate.xlsx.
 """
 
 from __future__ import annotations
@@ -50,10 +52,10 @@ TEXT: dict[str, dict[str, str]] = {
     "title": {"ru": "Состав работ по электрике: {name}", "uk": "Склад робіт з електрики: {name}"},
     "sheet": {"ru": "Состав работ", "uk": "Склад робіт"},
     "intro": {
-        "ru": "Приложение к смете электрики. По каждой позиции работ: что входит в её цену, "
-        "что не входит и где это учтено, в каком виде работа сдаётся.",
-        "uk": "Додаток до кошторису електрики. Для кожної позиції робіт: що входить у її ціну, "
-        "що не входить і де це враховано, у якому вигляді робота здається.",
+        "ru": "Приложение к смете электрики. По каждой позиции работ: что входит в её цену "
+        "и в каком виде работа сдаётся.",
+        "uk": "Додаток до кошторису електрики. Для кожної позиції робіт: що входить у її ціну "
+        "і в якому вигляді робота здається.",
     },
     "extra": {
         "ru": "Работа, которой нет в составе позиций, — дополнительная: её объём и цена "
@@ -62,19 +64,18 @@ TEXT: dict[str, dict[str, str]] = {
         "узгоджуються до виконання.",
     },
     "includes": {"ru": "Входит", "uk": "Входить"},
-    "excludes": {"ru": "Не входит", "uk": "Не входить"},
+    "outside": {"ru": "Работы вне сметы", "uk": "Роботи поза кошторисом"},
+    "outside_intro": {
+        "ru": "Этих работ в смете нет: их выполняет другой подрядчик или они согласуются "
+        "до начала работ.",
+        "uk": "Цих робіт у кошторисі немає: їх виконує інший підрядник або вони узгоджуються "
+        "до початку робіт.",
+    },
     "result": {"ru": "Результат", "uk": "Результат"},
     "col_work": {"ru": "Работа", "uk": "Робота"},
-    "paid_one": {"ru": "отдельная позиция {names}", "uk": "окрема позиція {names}"},
-    "paid_many": {"ru": "отдельные позиции {names}", "uk": "окремі позиції {names}"},
-    "paid_absent": {
-        "ru": "в этой смете не предусмотрено",
-        "uk": "у цьому кошторисі не передбачено",
-    },
-    "not_in_estimate": {"ru": "в смету не входит", "uk": "до кошторису не входить"},
     "note_scope": {
-        "ru": "Состав работ по позициям (что входит и что не входит) — {f} и лист «{s}» в Excel",
-        "uk": "Склад робіт за позиціями (що входить і що не входить) — {f} і аркуш «{s}» в Excel",
+        "ru": "Состав работ по позициям — {f} и лист «{s}» в Excel",
+        "uk": "Склад робіт за позиціями — {f} і аркуш «{s}» в Excel",
     },
 }
 
@@ -150,33 +151,35 @@ class ScopeEntry:
     unit: str
     qty: float
     includes: tuple[str, ...]
-    excludes: tuple[str, ...]  # each with the place where it is paid
     result: str
 
 
-def _excluded(item: Excluded, names: dict[str, list[str]], language: Language) -> str:
-    """ "штроба — отдельные позиции «…», «…»": where the excluded operation is paid."""
-    if not item.ref:
-        where = text("not_in_estimate", language)
-    else:
-        found = [f"«{name}»" for ref in item.ref for name in names.get(ref, [])]
-        if not found:
-            where = text("paid_absent", language)
-        else:
-            key = "paid_one" if len(found) == 1 else "paid_many"
-            where = text(key, language, names=", ".join(found))
-    return f"{item.of(language)} — {where}"
+def outside_scope(
+    est: Estimate, language: Language, catalog: ScopeCatalog | None = None
+) -> tuple[str, ...]:
+    """Work a client may expect that this estimate does not have, once each, in estimate order:
+    an excluded operation with no `ref`, or one whose referenced items are all absent from this
+    estimate (no conduit, no insulation test). What another item of the estimate pays for is
+    not listed: the item itself says it."""
+    catalog = catalog or load_scope()
+    present = {split_key(ln.key)[0] for ln in est.lines}
+    out: dict[str, None] = {}
+    for section in SECTIONS:
+        for ln in est.lines:
+            scope = catalog.items.get(split_key(ln.key)[0])
+            if ln.section != section or scope is None:
+                continue
+            for item in scope.excludes:
+                if not present.intersection(item.ref):
+                    out.setdefault(item.of(language))
+    return tuple(out)
 
 
 def scope_entries(
     est: Estimate, language: Language, catalog: ScopeCatalog | None = None
 ) -> tuple[ScopeEntry, ...]:
-    """Scope for the work items of this estimate, in estimate order; references use the names
-    the items have in this estimate (a price list may rename them)."""
+    """Scope for the work items of this estimate, in estimate order."""
     catalog = catalog or load_scope()
-    names: dict[str, list[str]] = {}  # by item without a parameter: chases by wall material
-    for ln in est.lines:
-        names.setdefault(split_key(ln.key)[0], []).append(ln.name)
     out: list[ScopeEntry] = []
     for section in SECTIONS:
         rows = [ln for ln in est.lines if ln.section == section]
@@ -193,7 +196,6 @@ def scope_entries(
                     ln.unit,
                     ln.qty,
                     tuple(p.of(language) for p in scope.includes),
-                    tuple(_excluded(x, names, language) for x in scope.excludes),
                     scope.result.of(language),
                 )
             )
@@ -208,14 +210,14 @@ def write_scope_markdown(
     entries: tuple[ScopeEntry, ...],
     path: Path,
     title: str,
-    notes: list[str],
+    outside: Sequence[str],
     language: Language,
     terms: Sequence[str] = (),
 ) -> Path:
-    """The appendix: the rule about extra work, then every work item with what it includes,
-    what it does not and its result; terms — the section of items agreed with the client
-    apart from the work (terms.terms_scope_markdown); notes — what the whole estimate leaves
-    out."""
+    """The appendix: the rule about extra work, then every work item with what it includes and
+    its result; outside — work this estimate does not have (outside_scope), one section after
+    the items; terms — the section of items agreed with the client apart from the work
+    (terms.terms_scope_markdown)."""
 
     def t(key: str) -> str:
         return text(key, language)
@@ -230,12 +232,11 @@ def write_scope_markdown(
         for e in rows:
             out += [f"### {e.no}. {e.name} — {_qty(e)}", "", f"**{t('includes')}:**", ""]
             out += [f"- {x}" for x in e.includes]
-            if e.excludes:
-                out += ["", f"**{t('excludes')}:**", ""]
-                out += [f"- {x}" for x in e.excludes]
             out += ["", f"**{t('result')}:** {e.result}", ""]
+    if outside:
+        out += [f"## {t('outside')}", "", t("outside_intro"), ""]
+        out += [f"- {x}" for x in outside] + [""]
     out += terms
-    out += [f"- {n}" for n in notes]
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("\n".join(out) + "\n", encoding="utf-8")
     return path
@@ -243,11 +244,12 @@ def write_scope_markdown(
 
 def scope_sheet(
     entries: tuple[ScopeEntry, ...],
-    notes: list[str],
+    outside: Sequence[str],
     language: Language,
     terms: Sequence[Sequence[str]] = (),
 ) -> Callable[[Workbook], None]:
     """A sheet with the same scope for the estimate workbook (estimate.write_xlsx, extra);
+    outside — work this estimate does not have (outside_scope), a block after the items;
     terms — rows of the items agreed apart from the work (terms.terms_scope_sheet)."""
 
     def t(key: str) -> str:
@@ -264,7 +266,6 @@ def scope_sheet(
                 t("col_work"),
                 estimate_text("col_qty", language),
                 t("includes"),
-                t("excludes"),
                 t("result"),
             ]
         )
@@ -286,22 +287,24 @@ def scope_sheet(
                         e.name,
                         _qty(e),
                         "\n".join(f"• {x}" for x in e.includes),
-                        "\n".join(f"• {x}" for x in e.excludes),
                         e.result,
                     ]
                 )
                 for cell in ws[ws.max_row]:
                     cell.alignment = wrap
+        if outside:
+            ws.append(["", t("outside")])
+            ws.cell(ws.max_row, 2).font = Font(bold=True)
+            ws.append(["", t("outside_intro")])
+            for x in outside:
+                ws.append(["", f"• {x}"])
         for k, row in enumerate(terms):
             ws.append(list(row))
             if k == 0:
                 ws.cell(ws.max_row, 2).font = Font(bold=True)
             for cell in ws[ws.max_row]:
                 cell.alignment = wrap
-        ws.append([])
-        for note in notes:
-            ws.append(["", note])
-        for letter, width in zip("ABCDEF", (5, 34, 12, 52, 62, 46), strict=True):
+        for letter, width in zip("ABCDE", (5, 34, 12, 62, 52), strict=True):
             ws.column_dimensions[letter].width = width
         ws.freeze_panes = f"A{head + 1}"
 

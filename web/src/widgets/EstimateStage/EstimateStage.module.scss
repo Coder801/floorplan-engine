@@ -5,15 +5,34 @@
 
 // Stage estimates one under another
 .stage {
+  --stage-pt: var(--space-6);
   position: absolute; inset: 0; @include scroll-box; display: grid; align-content: start; gap: var(--space-6);
-  padding: var(--space-6) var(--space-4) var(--space-10); background: var(--bg);
+  padding: var(--stage-pt) var(--space-4) var(--space-10); background: var(--bg);
 }
-.sheet { gap: var(--space-4); width: 100%; max-width: 960px; margin: 0 auto; }
-.head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
+// --pad-y, --pad-x repeat the card padding (pad-lg): the sticky head spans the card edge to edge
+// --stick: where the head sticks. A sticky element stops at the scroll container's padding, so the
+// stage padding is taken back, and of the head's own top padding only space-3 stays on top
+.sheet {
+  --pad-y: var(--space-8); --pad-x: var(--space-8);
+  --stick: calc(var(--space-3) - var(--pad-y) - var(--stage-pt));
+  gap: var(--space-4); width: 100%; max-width: 960px; margin: 0 auto;
+}
+// Title, Excel and the column headings stay on top while the estimate scrolls: the head sticks to
+// the top of the area, the column headings right under it (--head-h, measured), both until the end
+// of their estimate (the card is their containing block), then the next estimate's take over
+.head {
+  position: sticky; top: var(--stick); z-index: 2;
+  display: flex; align-items: center; justify-content: space-between; gap: var(--space-3);
+  margin: calc(-1 * var(--pad-y)) calc(-1 * var(--pad-x)) 0; padding: var(--pad-y) var(--pad-x) var(--space-3);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0; background: var(--raise);
+}
 .table {
   width: 100%; border-collapse: collapse;
   th, td { padding: var(--space-2); border-top: 1px solid var(--line); text-align: left; vertical-align: top; }
-  th { color: var(--muted); font-weight: 500; border-top: 0; }
+  th {
+    position: sticky; top: calc(var(--head-h, 0px) + var(--stick)); z-index: 1; color: var(--muted); font-weight: 500; border-top: 0;
+    background: var(--raise); box-shadow: inset 0 -1px 0 var(--line);
+  }
   .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
   th.num { text-align: right; }
 }
@@ -47,18 +66,21 @@
 .scopeBody {
   contain: inline-size;
   @include type(small);
-  display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3) var(--space-6); padding: var(--space-3); border-radius: var(--radius);
+  display: grid; gap: var(--space-3); padding: var(--space-3); border-radius: var(--radius);
   background: var(--soft);
   h3 { @include type(small); font-weight: 600; margin-bottom: var(--space-1); }
   ul { margin: 0; padding-left: 16px; }
-  .out { color: var(--muted); h3 { color: var(--text); } }
-  .result { grid-column: 1 / -1; margin: 0; }
+  .result { margin: 0; }
 }
 .notes { @include type(small); margin: 0; padding-left: 18px; color: var(--muted); }
+// Work the estimate does not have: one quiet list for the whole estimate, after the notes
+.outside {
+  display: grid; gap: var(--space-1);
+  ul { @include type(small); margin: 0; padding-left: 18px; }
+}
 
 @media (max-width: $phone) {
-  .stage { padding: var(--space-3) var(--space-2) var(--space-8); }
-  .sheet { padding: var(--space-4) var(--space-3); }
+  .stage { --stage-pt: var(--space-3); padding: var(--stage-pt) var(--space-2) var(--space-8); }
+  .sheet { --pad-y: var(--space-4); --pad-x: var(--space-3); padding: var(--pad-y) var(--pad-x); }
   .table { @include type(small); th, td { padding: var(--space-1); } }
-  .scopeBody { grid-template-columns: 1fr; }
 }

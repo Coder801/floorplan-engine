@@ -2,10 +2,12 @@
 // wiring page) and plumbing (the "Plumbing" page): sections, items, totals; without a price
 // list, a bill of quantities. Excel is the same calculation as a file (build writes
 // out/estimate.xlsx and out/plumbing-estimate.xlsx). In print, an estimate is on its stage's sheet.
-// A work row with a scope (TableRow.scope) unfolds: what its price includes, what it does not
-// (and where that is paid) and the handover result, so the client sees there are no hidden services.
+// A work row with a scope (TableRow.scope) unfolds: what its price includes and the handover
+// result, so the client sees there are no hidden services; work the estimate does not have is one
+// list under the table (SideTable.outside). The title, Excel and the column headings stay on top
+// while the estimate scrolls.
 
-import { Fragment, useState } from "react";
+import { Fragment, useEffect, useState, type CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
 import { cx } from "@/shared/cx";
 import { rowKind } from "@/shared/estimate";
@@ -31,6 +33,7 @@ function Estimate({ table, xlsx }: EstimateItem) {
   const { t } = useTranslation();
   const al = (i: number) => (table.align[i] === "left" ? undefined : css.num);
   const [open, setOpen] = useState<ReadonlySet<number>>(new Set());
+  const headH = useHeight<HTMLElement>();
   const scoped = table.rows.some((r) => r.scope);
   const toggle = (i: number) => setOpen((prev) => {
     const next = new Set(prev);
@@ -38,8 +41,8 @@ function Estimate({ table, xlsx }: EstimateItem) {
     return next;
   });
   return (
-      <Card as="article" padding="lg" className={css.sheet}>
-        <header className={css.head}>
+      <Card as="article" padding="lg" className={css.sheet} style={{ "--head-h": `${headH.height}px` } as CSSProperties}>
+        <header ref={headH.ref} className={css.head}>
           <Heading level={1}>{table.title}</Heading>
           {xlsx && <Button variant="primary" href={xlsx} download>{t("estimate.excel")}</Button>}
         </header>
@@ -86,11 +89,32 @@ function Estimate({ table, xlsx }: EstimateItem) {
           </tbody>
         </table>
         {!!table.notes?.length && <ul className={css.notes}>{table.notes.map((n, i) => <li key={i}>{n}</li>)}</ul>}
+        {!!table.outside?.length && (
+          <section className={css.outside}>
+            <Heading level={2} size="subheading">{t("estimate.outside")}</Heading>
+            <Text size="small" tone="muted">{t("estimate.outsideNote")}</Text>
+            <ul>{table.outside.map((x) => <li key={x}>{x}</li>)}</ul>
+          </section>
+        )}
       </Card>
   );
 }
 
-// What the price of a work covers: two lists side by side and the result under them
+// Height of an element, kept up to date: the sticky column headings sit right under the sticky head,
+// whose height changes when the title wraps (phone, a long name)
+function useHeight<T extends HTMLElement>() {
+  const [height, setHeight] = useState(0);
+  const [node, ref] = useState<T | null>(null);
+  useEffect(() => {
+    if (!node || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => setHeight(node.offsetHeight));
+    ro.observe(node);
+    return () => ro.disconnect();
+  }, [node]);
+  return { height, ref };
+}
+
+// What the price of a work covers: the operations and the result under them
 function Scope({ scope }: { scope: WorkScope }) {
   const { t } = useTranslation();
   return (
@@ -99,12 +123,6 @@ function Scope({ scope }: { scope: WorkScope }) {
         <Heading level={3} size="subheading">{t("estimate.includes")}</Heading>
         <ul>{scope.includes.map((x) => <li key={x}>{x}</li>)}</ul>
       </section>
-      {scope.excludes.length > 0 && (
-        <section className={css.out}>
-          <Heading level={3} size="subheading">{t("estimate.excludes")}</Heading>
-          <ul>{scope.excludes.map((x) => <li key={x}>{x}</li>)}</ul>
-        </section>
-      )}
       <p className={css.result}><b>{t("estimate.result")}:</b> {scope.result}</p>
     </div>
   );
