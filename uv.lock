@@ -931,7 +931,7 @@ wheels = [
 
 [[package]]
 name = "floorplan-engine"
-version = "0.13.0"
+version = "0.14.0"
 source = { editable = "." }
 dependencies = [
     { name = "ezdxf" },

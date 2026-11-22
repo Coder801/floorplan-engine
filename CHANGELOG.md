@@ -1,3 +1,14 @@
+## v0.14.0 (2026-11-22)
+
+### Feat
+
+- **viewer**: grey out the floor heating sheet until its release
+- **electrical**: hold floor heating back until the next release
+
+### Fix
+
+- **admin**: keep action buttons in one line inside table rows
+
 ## v0.13.0 (2026-11-22)
 
 ### Feat
