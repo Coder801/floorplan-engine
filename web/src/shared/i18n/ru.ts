@@ -96,7 +96,7 @@ export const ru = {
     nothingToDraw: "На листе {{name}} нечего рисовать — пересоберите проект или обновите страницу",
     projects: "Проекты", sheets: "Листы", more: "Ещё", project: "Проект",
     openCount: "{{name}}: открытых {{n}}", pages: "Страниц: {{n}}",
-    domainSheet: "Схема", sectionSheets: "Листы раздела «{{name}}»",
+    comingSoon: "Будет доступен в следующем релизе", domainSheet: "Схема", sectionSheets: "Листы раздела «{{name}}»",
     newVersion: "Доступна новая версия {{brand}} — эта вкладка открыта до обновления и может показывать листы неверно.",
     loadingSheet: "Загружаю лист…", loadingProject: "Загружаю проект…",
     sheetPages: "Страницы листа", prevPage: "Предыдущая страница", nextPage: "Следующая страница",

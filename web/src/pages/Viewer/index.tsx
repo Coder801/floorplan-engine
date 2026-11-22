@@ -11,7 +11,7 @@ import { Welcome } from "@/pages/Welcome";
 import { base, enc, getManifest, getPage, getProject, isProject, listProjects, reviewAnswer, saveAnswer, saveWizard, type ReviewOutcome, type WizardBody } from "@/shared/api";
 import { CEILING_TABS, isWallStage, NARROW_PX, SIDE_TABS, stickersPdf, type DrawerTab, type PanelMode, type SideTab, type Theme } from "@/shared/consts";
 import { cx } from "@/shared/cx";
-import { placeAmongViews, sectionOf, sections, wallLayersOf, type Section } from "@/shared/domains";
+import { heldBack, placeAmongViews, sectionOf, sections, wallLayersOf, withComingSoon, type Section } from "@/shared/domains";
 import { label, pageTitle } from "@/shared/i18n";
 import { modeDrawerTabs, modeTabs, rememberMode, savedMode, stageShown, type UiMode } from "@/shared/mode";
 import { applyTheme, remember, remembered, savedTheme } from "@/shared/palette";
@@ -481,16 +481,19 @@ export function Viewer({ account = null }: { account?: Account | null }) {
   // A section opens where it was left (the open tab), else on its first tab
   const openSection = (s: Section) => openTab(s === section && tab ? tab : s.tabs[0]);
   // The second level: the sheets of the open domain, a tab with views — view by view
-  type SubItem = { key: string; label: string; current: boolean; onClick: () => void; view?: string; stage?: string };
-  // (floor heating stands among the views, before "Wiring": shared/domains.ts BEFORE_VIEW)
-  const subItems = !section?.domain ? [] : placeAmongViews(section.tabs.flatMap((tb): SubItem[] => (tb.views
+  type SubItem = { key: string; label: string; current: boolean; onClick: () => void; view?: string; stage?: string; soon?: boolean };
+  // (floor heating stands among the views, before "Wiring": shared/domains.ts BEFORE_VIEW; until
+  // its release it is greyed out and inert: COMING_SOON)
+  const subItems = !section?.domain ? [] : placeAmongViews(withComingSoon(section.tabs.flatMap((tb): SubItem[] => (tb.views
     ? viewsOf(tb).map((v) => ({ key: `view:${v.key}`, view: v.key, label: v.label, current: tb === tab && shownView === v.key, onClick: () => pickView(v) }))
     : [{
         key: `tab:${tb.pages[0]}`, stage: tb.stage, current: tb === tab, onClick: () => openTab(tb),
         label: tb.stage === section.key ? t("app.domainSheet") : tabLabel(tb),
-      }])));
-  // The simple mode was switched on over a sheet it hides (wiring, panel): to the first tab it shows
-  const hidden = !source && !estimate && !info && !workTab && sheet !== null && !stageShown(mode, stageOf(sheet));
+      }])), section.key, (stage) => ({ key: `soon:${stage}`, stage, soon: true, current: false, onClick: () => {}, label: label("stage", stage) })));
+  // The simple mode was switched on over a sheet it hides (wiring, panel), or a link opened a sheet
+  // held back until the next release (an old build's floor heating): to the first tab it shows
+  const hidden = !source && !estimate && !info && !workTab && sheet !== null
+    && (!stageShown(mode, stageOf(sheet)) || heldBack(stageOf(sheet)));
   useEffect(() => {
     if (hidden && tabs[0]) openSheet(tabTarget(tabs[0]));
   }, [hidden]);
@@ -758,7 +761,10 @@ export function Viewer({ account = null }: { account?: Account | null }) {
       {subItems.length > 1 && (
         <nav ref={subBar.ref} className={css.sub} aria-label={t("app.sectionSheets", { name: label("stage", section!.key) })}>
           {subItems.map((it) => (
-            <button key={it.key} aria-current={it.current ? "page" : undefined} data-label={it.label} onClick={it.onClick}>{it.label}</button>
+            it.soon
+              // aria-disabled, not disabled: a disabled button gets no hover, and the hint is the point
+              ? <button key={it.key} className={css.soon} aria-disabled="true" data-label={it.label} title={t("app.comingSoon")}>{it.label}</button>
+              : <button key={it.key} aria-current={it.current ? "page" : undefined} data-label={it.label} onClick={it.onClick}>{it.label}</button>
           ))}
           <span key={subBar.cut} className={css.underline} style={subBar.style} aria-hidden="true" />
         </nav>

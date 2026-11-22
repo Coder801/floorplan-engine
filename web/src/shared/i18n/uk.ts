@@ -96,7 +96,7 @@ export const uk: Messages = {
     nothingToDraw: "На аркуші {{name}} нічого малювати — перезберіть проєкт або оновіть сторінку",
     projects: "Проєкти", sheets: "Аркуші", more: "Ще", project: "Проєкт",
     openCount: "{{name}}: відкритих {{n}}", pages: "Сторінок: {{n}}",
-    domainSheet: "Схема", sectionSheets: "Аркуші розділу «{{name}}»",
+    comingSoon: "Буде доступна в наступному релізі", domainSheet: "Схема", sectionSheets: "Аркуші розділу «{{name}}»",
     newVersion: "Доступна нова версія {{brand}} — цю вкладку відкрито до оновлення, аркуші можуть показуватися неправильно.",
     loadingSheet: "Завантажую аркуш…", loadingProject: "Завантажую проєкт…",
     sheetPages: "Сторінки аркуша", prevPage: "Попередня сторінка", nextPage: "Наступна сторінка",

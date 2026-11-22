@@ -96,7 +96,7 @@ export const en: Messages = {
     nothingToDraw: "Nothing to draw on sheet {{name}} — rebuild the project or refresh the page",
     projects: "Projects", sheets: "Sheets", more: "More", project: "Project",
     openCount: "{{name}}: {{n}} open", pages: "Pages: {{n}}",
-    domainSheet: "Layout", sectionSheets: "Sheets of \"{{name}}\"",
+    comingSoon: "Coming in the next release", domainSheet: "Layout", sectionSheets: "Sheets of \"{{name}}\"",
     newVersion: "A new version of {{brand}} is available — this tab was opened before the update and may show sheets incorrectly.",
     loadingSheet: "Loading sheet…", loadingProject: "Loading project…",
     sheetPages: "Sheet pages", prevPage: "Previous page", nextPage: "Next page",

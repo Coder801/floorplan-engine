@@ -21,6 +21,21 @@ export const BEFORE_VIEW: Readonly<Record<string, string>> = { floor_heating: "w
 // A second-row item: a view of the "Electrical" tab (view) or a sheet tab (stage)
 export interface SubItemPlace { view?: string; stage?: string }
 
+// Sheets of a domain held back until the next release (decision 2026-11-22): the menu keeps them
+// greyed out and inert, with a hint, whether or not the build has the sheet (an old build may)
+export const COMING_SOON: Readonly<Record<string, readonly string[]>> = { electrical: ["floor_heating"] };
+
+// A sheet topic held back until the next release (in any domain)
+export const heldBack = (stage: string | undefined): boolean =>
+  Object.values(COMING_SOON).some((stages) => stages.includes(stage ?? ""));
+
+// The second-row items of a domain with its held-back sheets: a built one is replaced, a missing
+// one is added; `soon` makes the item of a stage (placed by placeAmongViews like any other)
+export function withComingSoon<T extends SubItemPlace>(items: readonly T[], domain: string, soon: (stage: string) => T): T[] {
+  const held = COMING_SOON[domain] ?? [];
+  return [...items.filter((it) => !held.includes(it.stage ?? "")), ...held.map(soon)];
+}
+
 // Second-row items with the tabs of BEFORE_VIEW moved before their view; without that view the
 // item stays where it is
 export function placeAmongViews<T extends SubItemPlace>(items: readonly T[]): T[] {

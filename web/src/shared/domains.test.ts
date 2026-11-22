@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { placeAmongViews, sectionOf, sections, wallLayersOf } from "./domains";
+import { heldBack, placeAmongViews, sectionOf, sections, wallLayersOf, withComingSoon } from "./domains";
 import { sheetTabs } from "./tabs";
 import type { ManifestPage } from "./types";
 
@@ -67,5 +67,26 @@ describe("placeAmongViews", () => {
     const short = views.filter((v) => v.view !== "wiring");
     expect(placeAmongViews([...short, panel, heat]).map((it) => it.key))
       .toEqual(["view:lighting", "view:electrical", "view:low", "tab:5", "tab:6"]);
+  });
+});
+
+describe("withComingSoon", () => {
+  const soon = (stage: string) => ({ key: `soon:${stage}`, stage });
+  const panel = { key: "tab:5", stage: "panel" };
+
+  it("тёплый пол до релиза: собранный лист заменяется неактивным пунктом", () => {
+    expect(withComingSoon([{ key: "view:wiring", view: "wiring" }, panel, { key: "tab:6", stage: "floor_heating" }], "electrical", soon)
+      .map((it) => it.key)).toEqual(["view:wiring", "tab:5", "soon:floor_heating"]);
+  });
+
+  it("нет листа — пункт всё равно есть; у сантехники ничего не добавляется", () => {
+    expect(withComingSoon([panel], "electrical", soon).map((it) => it.key)).toEqual(["tab:5", "soon:floor_heating"]);
+    expect(withComingSoon([panel], "plumbing", soon)).toEqual([panel]);
+  });
+
+  it("отложенный лист узнаётся по теме", () => {
+    expect(heldBack("floor_heating")).toBe(true);
+    expect(heldBack("panel")).toBe(false);
+    expect(heldBack(undefined)).toBe(false);
   });
 });

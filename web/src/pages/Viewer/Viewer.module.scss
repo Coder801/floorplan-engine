@@ -51,6 +51,8 @@
     &[aria-current="page"] { color: var(--text); font-weight: 500; }
   }
 }
+// A sheet held back until the next release (shared/domains.ts COMING_SOON): pale, inert, a hint on hover
+.sub > button.soon, .sub > button.soon:hover { color: var(--muted); opacity: .45; cursor: not-allowed; }
 // As tall as the side panel tabs (SidePanel .tabs, 44px + the border): the two bottom borders are one line
 .sub > button { min-height: 44px; }
 @media (max-width: $narrow) { .sub > button { min-height: 34px; } }
