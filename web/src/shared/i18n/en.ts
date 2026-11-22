@@ -114,6 +114,36 @@ export const en: Messages = {
     ok: "Got it, continue",
     foot: "This window is shown once. The product stage is in settings, next to the version.",
   },
+  tour: {
+    help: "How to use",
+    next: "Next", done: "Got it", skip: "Skip",
+    stepOf: "{{n}} of {{total}}",
+    mouse: "Wheel to zoom, drag to pan.",
+    touch: "Pinch with two fingers to zoom.",
+    steps: {
+      overview: {
+        title: "This is your project",
+        body: "Everything in brief: rooms and areas, how many sockets and lights are planned and what it costs. The project total is at the bottom, the details are in “Open the estimate”.",
+      },
+      sheets: {
+        title: "Look at the drawing",
+        body: "The sheets are in the tabs: plan, electrical, plumbing. Click a socket or a light to see what it is and at what height.",
+      },
+      questions: {
+        title: "Answer the questions",
+        body: "The studio needs a few details from you; the number on the button is how many questions are waiting. Your answer is a hint for the studio: it will correct the drawing itself.",
+        inMenu: "The questions are in the “⋯” menu.",
+      },
+      setup: {
+        title: "Set up the project",
+        body: "Choose how the cable runs, how the breakers are split in the panel and what else you need. The estimate is recalculated for your choice.",
+      },
+      help: {
+        title: "Help is here",
+        body: "Use this button to take the tour again.",
+      },
+    },
+  },
   feedback: {
     title: "Leave feedback",
     lead: "About a bug, something awkward or an idea — about the service itself. We read every message.",

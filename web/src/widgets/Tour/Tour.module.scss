@@ -1,0 +1,55 @@
+// The client tour: a layer over everything that takes every click, the cutout around the anchor
+// (its shadow is the veil) and the card next to it; on a narrow screen the card is a sheet at the
+// bottom. The cutout and the card move to the next step in --t-in, without motion if asked.
+
+@use "@/shared/styles/mixins" as *;
+
+.tour { position: fixed; inset: 0; z-index: 115; }
+
+// The veil: the shade and a blur over everything but the cutout (a hole in clip-path, steps.hole),
+// so only the real element stays sharp. Without the blur support — the shade alone
+.cut, .veil { position: fixed; pointer-events: none; }
+.veil {
+  inset: 0; background: color-mix(in srgb, var(--shade) 55%, transparent);
+  -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px);
+  transition: clip-path var(--t-in) var(--ease);
+  @media (prefers-reduced-motion: reduce) { transition: none; }
+}
+// The cutout: square corners like the panels, the selection colour around the real element
+.cut {
+  border: 2px solid var(--hl);
+  transition: left var(--t-in) var(--ease), top var(--t-in) var(--ease), width var(--t-in) var(--ease), height var(--t-in) var(--ease);
+  @media (prefers-reduced-motion: reduce) { transition: none; }
+}
+
+// The card: the look of Menu and Tip (raised, the hard pop shadow, no rounding)
+.card {
+  @include raised;
+  position: fixed; width: 320px; max-width: calc(100vw - 2 * var(--space-2));
+  display: grid; align-content: start; gap: var(--space-2);
+  padding: var(--space-4); color: var(--text); box-shadow: var(--shadow-pop);
+  transition: left var(--t-in) var(--ease), top var(--t-in) var(--ease);
+  animation: tour-in var(--t-in) var(--ease);
+  @media (prefers-reduced-motion: reduce) { transition: none; animation: none; }
+}
+@keyframes tour-in { from { opacity: 0; } to { opacity: 1; } }
+
+// "Skip" on the left, "Next" on the right; the DOM order is Next first (focus, Tab)
+.buttons {
+  display: grid; grid-template-areas: "skip next"; grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center; gap: var(--space-3); margin-top: var(--space-2);
+}
+.next { grid-area: next; }
+// The card's buttons have no red ring: the selection colour belongs to the cutout. Tab still
+// shows where the focus is, in the text colour
+.buttons button:focus-visible { outline-color: var(--text); }
+.skip { grid-area: skip; justify-self: start; }
+
+// A narrow screen: a sheet at the bottom, full width, big buttons one under the other
+.bottom {
+  left: 0; right: 0; bottom: 0; width: auto; max-width: none;
+  padding: var(--space-5) var(--space-5) calc(var(--space-5) + env(safe-area-inset-bottom));
+  border-width: 1px 0 0;
+  .buttons { grid-template-areas: "next" "skip"; grid-template-columns: minmax(0, 1fr); gap: var(--space-2); }
+  .skip { justify-self: stretch; }
+}

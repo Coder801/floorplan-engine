@@ -1,6 +1,6 @@
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { resetSelection, view } from "@/shared/store";
 import { fail, stubApi } from "@/shared/testApi";
 import { overview, page, pricePage, project, question, summary, variants } from "@/shared/testData";
@@ -167,5 +167,87 @@ describe("Viewer", () => {
   it("counts the unresolved questions", () => {
     expect(unresolved(null)).toBe(0);
     expect(unresolved(project({ report: { questions: [question(), question({ id: "q2", state: "answered" }), question({ id: "q3", state: "text" })], issues: [] } }))).toBe(2);
+  });
+});
+
+// The client tour (widgets/Tour): only the client side, once per browser, after the stage notice
+describe("Viewer: the client tour", () => {
+  const client = (can = { choose_variant: true, answer: true, review: false }) =>
+    project({ can, report: { questions: [question()], issues: [] } });
+  // jsdom has no layout: every element gets a box, so the tour finds its anchors
+  beforeEach(() => {
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue(
+      { left: 100, top: 10, width: 120, height: 36, right: 220, bottom: 46, x: 100, y: 10, toJSON: () => ({}) } as DOMRect);
+  });
+  afterEach(() => vi.restoreAllMocks());
+
+  it("starts by itself for a client on the overview; Esc closes it for good", async () => {
+    const user = userEvent.setup();
+    serve({ [`GET ${P}`]: client() });
+    location.hash = "#p1";
+    render(<Viewer />);
+    expect(await screen.findByRole("dialog", { name: "Это ваш проект" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Как пользоваться" })).toHaveAttribute("aria-pressed", "true");
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Это ваш проект" })).toBeNull());
+    expect(localStorage.getItem("tour:client")).toBe("seen");
+    expect(screen.getByRole("button", { name: "Как пользоваться" })).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("drops the questions and setup steps without the rights", async () => {
+    serve({ [`GET ${P}`]: client({ choose_variant: false, answer: false, review: false }) });
+    location.hash = "#p1";
+    render(<Viewer />);
+    await screen.findByRole("dialog", { name: "Это ваш проект" });
+    expect(screen.getByText("1 из 3")).toBeInTheDocument();
+  });
+
+  it("waits for the stage notice to close", async () => {
+    const user = userEvent.setup();
+    localStorage.removeItem("notice:alpha");
+    const sent = serve({ [`GET ${P}`]: client() });
+    location.hash = "#p1";
+    render(<Viewer />);
+    await waitFor(() => expect(sent.some((r) => r.path === `${P}/sheets/0`)).toBe(true));
+    await act(() => new Promise((r) => setTimeout(r, 50)));
+    expect(screen.queryByRole("dialog", { name: "Это ваш проект" })).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Понятно, продолжить" }));
+    expect(await screen.findByRole("dialog", { name: "Это ваш проект" })).toBeInTheDocument();
+  });
+
+  it("once seen it does not start again; «?» replays it from step 1 and closes it", async () => {
+    const user = userEvent.setup();
+    localStorage.setItem("tour:client", "seen");
+    serve({ [`GET ${P}`]: client() });
+    location.hash = "#p1";
+    render(<Viewer />);
+    const help = await screen.findByRole("button", { name: "Как пользоваться" });
+    await screen.findByRole("heading", { level: 1, name: "Общие сведения" });
+    expect(screen.queryByRole("dialog", { name: "Это ваш проект" })).toBeNull();
+    await user.click(help);
+    expect(screen.getByRole("dialog", { name: "Это ваш проект" })).toBeInTheDocument();
+    expect(help).toHaveAttribute("aria-pressed", "true");
+    await user.click(help);
+    expect(screen.queryByRole("dialog", { name: "Это ваш проект" })).toBeNull();
+  });
+
+  it("the studio gets no tour and no «?»", async () => {
+    serve();
+    location.hash = "#p1";
+    render(<Viewer />);
+    await screen.findByRole("heading", { level: 1, name: "Общие сведения" });
+    await act(() => new Promise((r) => setTimeout(r, 50)));
+    expect(screen.queryByRole("dialog", { name: "Это ваш проект" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Как пользоваться" })).toBeNull();
+  });
+
+  it("«?tour» in the address starts it for the studio too, even when seen, and leaves the address", async () => {
+    localStorage.setItem("tour:client", "seen");
+    window.history.replaceState(null, "", "/?tour#p1");
+    serve();
+    render(<Viewer />);
+    expect(await screen.findByRole("dialog", { name: "Это ваш проект" })).toBeInTheDocument();
+    expect(window.location.search).toBe("");
+    expect(window.location.hash).toBe("#p1");
   });
 });

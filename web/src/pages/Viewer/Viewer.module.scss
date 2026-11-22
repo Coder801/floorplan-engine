@@ -69,6 +69,11 @@
   display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 12px;
 }
 
+// "?" (the client tour) and the gear: one row in the settings cell, in the first header row on
+// every width. While the tour is open "?" stands over its veil, so a second press closes it
+.tools { grid-area: settings; display: flex; align-items: center; gap: 12px; }
+.help[aria-pressed="true"] { position: relative; z-index: 116; }
+
 // "⋯" puts the header actions into a menu on a phone; not needed when wider
 .header .more { display: none; grid-area: more; }
 
@@ -184,6 +189,7 @@
   .sub { padding: 0 12px; }
   .projectSwitch { max-width: none; justify-self: start; min-width: 0; }
   .header .more { display: inline-grid; }
+  .tools { gap: 8px; }
   // .header beats ui.segmented (which wraps buttons)
   .header .sheets {
     justify-self: stretch; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none;

@@ -18,6 +18,8 @@ export type Theme = (typeof THEMES)[number];
 
 // The width where the side panel moves under the drawing ($narrow in styles/_mixins.scss)
 export const NARROW_PX = 900;
+// The width where header actions go into the "⋯" menu ($phone in styles/_mixins.scss)
+export const PHONE_PX = 560;
 
 // Sheet PNG for the album: at most A3 at 150 dpi
 export const PNG_DPI = 150, PNG_LONG = 2480, PNG_SHORT = 1754;

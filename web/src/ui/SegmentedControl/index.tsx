@@ -12,7 +12,8 @@ export interface Segment<T extends string> {
   title?: string;       // tooltip
   ariaLabel?: string;   // when the label is not enough (a count badge)
   disabled?: boolean;
-  buttonProps?: ButtonHTMLAttributes<HTMLButtonElement>;  // e.g. the handlers of useTooltip
+  // e.g. the handlers of useTooltip, or a data-* mark (data-tour of the client tour)
+  buttonProps?: ButtonHTMLAttributes<HTMLButtonElement> & { [data: `data-${string}`]: string | undefined };
 }
 
 interface Props<T extends string> {

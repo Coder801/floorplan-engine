@@ -68,9 +68,9 @@
   .todo { color: var(--text); }
   .declined { text-decoration: line-through; }  // decided as "there will be none": a check, the name struck
 }
-// The way into the wizard is the main action of the side panel: the full width, a frame in the
-// text colour so it stands out from the ordinary buttons
-.wizardOpen { margin-top: var(--space-1); border-color: var(--text); font-weight: 600; box-shadow: var(--px) var(--px) 0 var(--shade); }
+// The way into the wizard is the main action of the side panel: the full width, the marking
+// yellow of the main action (Button primary)
+.wizardOpen { margin-top: var(--space-1); box-shadow: var(--px) var(--px) 0 var(--shade); }
 .stepLink {
   justify-content: flex-start; text-align: left; color: var(--text);
   text-decoration-color: var(--line); text-underline-offset: 3px;

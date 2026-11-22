@@ -1,7 +1,8 @@
 // Notice about the product stage on the first visit: a card over everything saying the service
 // is in alpha testing. Shown once per browser and stage (seen.ts); "Got it", Esc or a click on
 // the veil close it. With onFeedback the feedback point has a "Leave feedback" link: the notice
-// closes and the feedback form opens (widgets/Feedback).
+// closes and the feedback form opens (widgets/Feedback). onClose tells the page it was closed: the
+// client tour (widgets/Tour) waits for it.
 
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -17,14 +18,14 @@ import css from "./AlphaNotice.module.scss";
 
 const POINTS = ["errors", "changes", "projects", "feedback"] as const;
 
-export function AlphaNotice({ onFeedback }: { onFeedback?: () => void }) {
+export function AlphaNotice({ onFeedback, onClose }: { onFeedback?: () => void; onClose?: () => void }) {
   const { t } = useTranslation();
   const fade = useFade();
   const [first] = useState(() => !noticeSeen(STAGE));
   useEffect(() => { if (first) fade.set(true); }, [first]);
   const open = fade.shown && !fade.closing;
   const ok = useRef<HTMLButtonElement>(null);
-  const close = () => { markNoticeSeen(STAGE); fade.set(false); };  // fades out (global.scss), then unmounts
+  const close = () => { markNoticeSeen(STAGE); fade.set(false); onClose?.(); };  // fades out (global.scss), then unmounts
 
   useEffect(() => { if (open) ok.current?.focus(); }, [open]);
 

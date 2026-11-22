@@ -98,7 +98,8 @@ export function OverviewStage({ overview, variants, project, openQuestions, canC
     </tr>
   );
   return (
-    <div className={cx(css.stage, refreshing && css.skeleton)} aria-busy={refreshing}>
+    // data-tour: the anchors of the client tour (widgets/Tour/steps.ts)
+    <div className={cx(css.stage, refreshing && css.skeleton)} aria-busy={refreshing} data-tour="overview">
       <div className={css.body}>
       <article className={css.page}>
         <header className={css.head}>
@@ -110,7 +111,7 @@ export function OverviewStage({ overview, variants, project, openQuestions, canC
             // On a wide screen the side panel lists what is left and opens the wizard (OverviewSummary)
             <div className={cx(css.setup, css.narrowOnly)}>
               {setup && setup.open.length > 0 && <SetupNote {...setup} />}
-              <Button variant="primary" className={css.primary} onClick={onWizard}>{t("wizard.open")}</Button>
+              <Button variant="primary" className={css.primary} onClick={onWizard} data-tour="setup-page">{t("wizard.open")}</Button>
             </div>
           )}
         </header>
@@ -321,7 +322,7 @@ export function OverviewSummary({ setup, questions, onWizard, onDrawer, refreshi
             {setup.open.length ? t("overview.progress.done", { done, total: setup.total }) : t("overview.progress.all")}
           </Text>
           {onWizard && (
-            <Button size="lg" block className={css.wizardOpen} onClick={() => onWizard()}>{t("wizard.open")}</Button>
+            <Button variant="primary" size="lg" block className={css.wizardOpen} onClick={() => onWizard()} data-tour="setup">{t("wizard.open")}</Button>
           )}
         </section>
       )}

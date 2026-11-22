@@ -15,7 +15,7 @@ import { placeAmongViews, sectionOf, sections, wallLayersOf, type Section } from
 import { label, pageTitle } from "@/shared/i18n";
 import { modeDrawerTabs, modeTabs, rememberMode, savedMode, stageShown, type UiMode } from "@/shared/mode";
 import { applyTheme, remember, remembered, savedTheme } from "@/shared/palette";
-import { hideSplash } from "@/shared/splash";
+import { hideSplash, SPLASH_OUT_MS } from "@/shared/splash";
 import { useUnderline } from "@/shared/underline";
 import { resetSelection, useView, view } from "@/shared/store";
 import ui from "@/shared/styles/ui.module.scss";
@@ -24,7 +24,7 @@ import type { ManifestPage, Overview, Page, Project, ProjectSummary, Scene, Vari
 import { RESERVE_KEY, type Answer, type QuestionsMemory } from "@/shared/questions";
 import { RELEASES } from "@/shared/changelog";
 import { watchRebuild } from "@/shared/rebuild";
-import { BRAND, watchBuild } from "@/shared/version";
+import { BRAND, STAGE, watchBuild } from "@/shared/version";
 import { Boundary } from "@/ui/Boundary";
 import { Button } from "@/ui/Button";
 import { ButtonGroup, GroupButton } from "@/ui/ButtonGroup";
@@ -36,6 +36,7 @@ import { MarkLoader } from "@/ui/MarkLoader";
 import { SegmentedControl } from "@/ui/SegmentedControl";
 import { Text } from "@/ui/Text";
 import { AlphaNotice } from "@/widgets/AlphaNotice";
+import { noticeSeen } from "@/widgets/AlphaNotice/seen";
 import { DownloadMenu } from "@/widgets/DownloadMenu";
 import { Drawer } from "@/widgets/Drawer";
 import { ElevationStage } from "@/widgets/ElevationStage";
@@ -52,6 +53,8 @@ import { type Account, Settings } from "@/widgets/Settings";
 import { SheetStage, type LightMode } from "@/widgets/SheetStage";
 import { SidePanel } from "@/widgets/SidePanel";
 import { SourceView } from "@/widgets/SourceView";
+import { Tour } from "@/widgets/Tour";
+import { markTourSeen, tourForced, tourSeen, withoutTourParam } from "@/widgets/Tour/seen";
 import { WallMap } from "@/widgets/WallMap";
 import { WallGrid } from "@/widgets/WallGrid";
 import { useCurtain } from "@/shared/curtain";
@@ -147,6 +150,8 @@ export function Viewer({ account = null }: { account?: Account | null }) {
   const questionsMemory = useRef<QuestionsMemory>({ drafts: {} });
   const [answering, setAnswering] = useState(false);  // an answer from a question card is being saved
   const [outdated, setOutdated] = useState(false);  // a new version was deployed after the tab was opened
+  const [notice, setNotice] = useState(() => !noticeSeen(STAGE));  // the stage notice is open (AlphaNotice)
+  const [tour, setTour] = useState(false);  // the client tour is open (widgets/Tour)
 
   useEffect(() => {
     const onHash = () => {
@@ -567,6 +572,28 @@ export function Viewer({ account = null }: { account?: Account | null }) {
   // Between drawings: fade to the loading mark and back (shared/curtain.ts)
   const curtain = useCurtain(loading);
 
+  // The client tour (decision 2026-11-22): only the client side (no right to review, the studio
+  // has it). It starts by itself once per browser, after the stage notice, once the project is
+  // loaded and "Overview" is open (the first visit opens it); "?" in the header replays it.
+  // "?tour" in the address starts it once for anyone, seen or not (widgets/Tour/seen.ts)
+  const [forced, setForced] = useState(() => tourForced(window.location.search));
+  const client = !!project?.can && !project.can.review;
+  const tourReady = (client || forced) && !notice && !loading && info && curtain.phase === "idle"
+    && !feedback && !changes && !wizard && !choosing && !studio && !menu;
+  useEffect(() => {
+    if (!tourReady || (!forced && tourSeen())) return;
+    // The splash is still leaving over everything (shared/splash.ts): the tour comes after it
+    const wait = setTimeout(() => {
+      setTour(true);
+      if (forced) {
+        setForced(false);
+        window.history.replaceState(window.history.state, "", withoutTourParam(window.location.href));
+      }
+    }, document.getElementById("splash") ? SPLASH_OUT_MS : 0);
+    return () => clearTimeout(wait);
+  }, [tourReady, forced]);
+  const closeTour = useCallback(() => { markTourSeen(); setTour(false); }, []);
+
   // Download: sheet PNG (the whole sheet, at most A3 150 dpi) and the project DXF. A drawing with
   // options puts it in their first row, any other screen gets a row of its own
   const download = project && current && !estimate && !info && !workTab && (
@@ -639,12 +666,17 @@ export function Viewer({ account = null }: { account?: Account | null }) {
 
   return (
     <div className={css.app}>
-      <AlphaNotice onFeedback={openFeedback} />
+      <AlphaNotice onFeedback={openFeedback} onClose={() => setNotice(false)} />
       {feedback && (
         <Feedback project={feedbackProject} sheet={feedbackSheet} sheetTitle={feedbackSheetTitle} onClose={() => setFeedback(false)} />
       )}
       {changes && <Changelog onClose={() => setChanges(false)} />}
       {choosing && <RebuildModal />}
+      {tour && (
+        <Tour onClose={closeTour}
+              facts={{ sheets: navSections.length > 0, canAnswer: project?.can?.answer === true, openQuestions: openQs,
+                       canChoose: project?.can?.choose_variant === true, setupTotal: setup?.total ?? 0 }} />
+      )}
       {wizard && project && (
         <Wizard key={current} start={wizardStart} project={project} variants={variants} ceiling={overview?.ceiling ?? null} scene={scene}
                 reserve={overview?.panel?.reserve ?? null} master={overview?.panel?.master ?? null} onApply={applyWizard} onClose={() => setWizard(false)}
@@ -670,7 +702,7 @@ export function Viewer({ account = null }: { account?: Account | null }) {
           </span>
         </Button>
         {/* Sheet tabs: the active one is underlined, the line is cut in under it (shared/underline.ts) */}
-        <nav ref={tabBar.ref} className={css.sheets} aria-label={t("app.sheets")}>
+        <nav ref={tabBar.ref} className={css.sheets} aria-label={t("app.sheets")} data-tour="sheets">
           {/* Every built project has this tab: a build without the overview (old code) shows a hint to rebuild */}
           {project?.artifact && pages.length > 0 && (
             <button aria-current={info ? "page" : undefined} data-label={t("overview.tab")} onClick={() => { if (!info) curtain.go(openInfo); }}>{t("overview.tab")}</button>
@@ -693,7 +725,8 @@ export function Viewer({ account = null }: { account?: Account | null }) {
           )}
           <span key={tabBar.cut} className={css.underline} style={tabBar.style} aria-hidden="true" />
         </nav>
-        <IconButton variant="framed" className={css.more} label={t("app.more")} aria-expanded={more} onClick={() => setMore(!more)}>⋯</IconButton>
+        <IconButton variant="framed" className={css.more} label={t("app.more")} aria-expanded={more} data-tour="questions-menu"
+                    onClick={() => setMore(!more)}>⋯</IconButton>
         {/* On a phone: the "⋯" menu; choosing an action closes it */}
         <div className={cx(css.actions, more && css.open)} onClick={() => setMore(false)}>
           {project && (
@@ -702,14 +735,24 @@ export function Viewer({ account = null }: { account?: Account | null }) {
                 const n = k === "questions" ? openQs : 0;
                 return {
                   value: k,
+                  buttonProps: k === "questions" ? { "data-tour": "questions" } : undefined,
                   ariaLabel: n ? t("app.openCount", { name: t(`drawer.${k}`), n }) : undefined,
                   label: <span className={css.tabName}>{t(`drawer.${k}`)}{n > 0 && <span className={css.count} aria-hidden="true">{n}</span>}</span>,
                 };
               })} />
           )}
         </div>
-        {/* Without a project the welcome screen covers the header and has its own gear */}
-        {current && settings}
+        {/* Without a project the welcome screen covers the header and has its own gear; "?" before
+            it replays the client tour, pressed while the tour is open (a second press closes it) */}
+        {current && (
+          <div className={css.tools}>
+            {client && (
+              <IconButton variant="framed" className={css.help} label={t("tour.help")} pressed={tour} data-tour="help"
+                          onClick={() => (tour ? closeTour() : setTour(true))}>?</IconButton>
+            )}
+            {settings}
+          </div>
+        )}
       </header>
       {/* The second menu level: the sheets of the open section (shared/domains.ts) */}
       {subItems.length > 1 && (
