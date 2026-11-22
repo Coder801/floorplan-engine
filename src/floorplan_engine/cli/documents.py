@@ -79,7 +79,7 @@ def build(
         if path.suffix == ".xlsx":
             typer.echo(f"  {path} — смета (и .md, .csv рядом)")
         elif path.name == WORK_SCOPE_MD:
-            typer.echo(f"  {path} — состав работ: что входит в позиции сметы и работы вне сметы")
+            typer.echo(f"  {path} — состав работ: что входит в позиции сметы и чем работа сдаётся")
     if result.plumbing_estimate:
         typer.echo(f"  {result.plumbing_estimate[-1]} — смета сантехники (и .md, .csv рядом)")
     if result.sewer_routes is not None:

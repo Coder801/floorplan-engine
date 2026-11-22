@@ -212,10 +212,8 @@ def test_estimate_work_rows_carry_their_scope() -> None:
     scope = cable.as_dict()["scope"]
     assert isinstance(scope, dict) and set(scope) == {"includes", "result"}
     assert "раскладка кабеля по трассе" in scope["includes"]
-    # work the estimate does not have: one list for the table, not under every row
-    outside = table.as_dict()["outside"]
-    assert isinstance(outside, list) and "монтаж светильников" in outside
-    assert "раскладка кабеля по трассе" not in outside
+    # no "work outside the estimate" list (decision 2026-11-22)
+    assert "outside" not in table.as_dict()
     # materials, section rows and totals have no scope
     material = next(r for r in table.rows if len(r.cells) > 1 and r.cells[1] == "Подрозетник")
     assert material.scope is None and "scope" not in material.as_dict()

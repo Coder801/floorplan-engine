@@ -1,20 +1,19 @@
 """Work scope: what the price of an estimate work item covers, so there are no "hidden services".
 
-The catalogue (work_scope.yaml next to this module) has three parts for every `work.*` item of
+The catalogue (work_scope.yaml next to this module) has two parts for every `work.*` item of
 the estimate (estimate.LINES):
 
 - includes — operations inside the item's price;
-- excludes — what a client may expect but the price does not cover; `ref` names the estimate
-  items where it is paid, no `ref` means it is not in the estimate at all. A document does not
-  list them under every item (decision 2026-11-22: a "not included" list per item reads as
-  hostile and mostly repeats the other items of the same estimate): what this estimate has
-  elsewhere is not printed, the rest goes once into "Work outside the estimate"
-  (outside_scope);
 - result — the state the work is handed over in, something the client can check.
 
+There is no "not included" list (decision 2026-11-22): first it was printed under every item
+and read as hostile, then it went once into a "Work outside the estimate" section, and that
+section was removed too. What is not in the item's composition is extra work, agreed before it
+is done (the "extra" line of the appendix).
+
 The catalogue has no prices and changes no quantities: it only describes the items the estimate
-already has. Code checks it: unknown keys and references are errors (ScopeCatalog), every work
-item must have a scope (missing_scope, a test).
+already has. Code checks it: unknown keys are errors (ScopeCatalog), every work item must have
+a scope (missing_scope, a test).
 
 For a project the scope goes next to the estimate: out/work-scope.md (an appendix that can be
 attached to a contract) and a second sheet in out/estimate.xlsx.
@@ -64,13 +63,6 @@ TEXT: dict[str, dict[str, str]] = {
         "узгоджуються до виконання.",
     },
     "includes": {"ru": "Входит", "uk": "Входить"},
-    "outside": {"ru": "Работы вне сметы", "uk": "Роботи поза кошторисом"},
-    "outside_intro": {
-        "ru": "Этих работ в смете нет: их выполняет другой подрядчик или они согласуются "
-        "до начала работ.",
-        "uk": "Цих робіт у кошторисі немає: їх виконує інший підрядник або вони узгоджуються "
-        "до початку робіт.",
-    },
     "result": {"ru": "Результат", "uk": "Результат"},
     "col_work": {"ru": "Работа", "uk": "Робота"},
     "note_scope": {
@@ -94,15 +86,8 @@ class Phrase(StrictModel):
         return self.ru if language == "ru" else self.uk
 
 
-class Excluded(Phrase):
-    ref: tuple[str, ...] = Field(
-        default=(), description="Позиции сметы, где это оплачивается; пусто — в смету не входит"
-    )
-
-
 class WorkScope(StrictModel):
     includes: tuple[Phrase, ...] = Field(min_length=1)
-    excludes: tuple[Excluded, ...] = ()
     result: Phrase
 
 
@@ -112,16 +97,10 @@ class ScopeCatalog(StrictModel):
     items: dict[str, WorkScope]
 
     @model_validator(mode="after")
-    def _refs(self) -> ScopeCatalog:
-        for key, scope in self.items.items():
+    def _keys(self) -> ScopeCatalog:
+        for key in self.items:
             if not key.startswith(WORK_PREFIX) or key not in LINES:
                 raise ValueError(f"{key}: нет такой работы в смете")
-            for k, item in enumerate(scope.excludes):
-                for ref in item.ref:
-                    if not ref.startswith(WORK_PREFIX) or ref not in LINES:
-                        raise ValueError(f"{key}.excludes[{k}].ref: нет работы {ref} в смете")
-                    if ref == key:
-                        raise ValueError(f"{key}.excludes[{k}].ref: ссылка на саму позицию")
         return self
 
 
@@ -152,27 +131,6 @@ class ScopeEntry:
     qty: float
     includes: tuple[str, ...]
     result: str
-
-
-def outside_scope(
-    est: Estimate, language: Language, catalog: ScopeCatalog | None = None
-) -> tuple[str, ...]:
-    """Work a client may expect that this estimate does not have, once each, in estimate order:
-    an excluded operation with no `ref`, or one whose referenced items are all absent from this
-    estimate (no conduit, no insulation test). What another item of the estimate pays for is
-    not listed: the item itself says it."""
-    catalog = catalog or load_scope()
-    present = {split_key(ln.key)[0] for ln in est.lines}
-    out: dict[str, None] = {}
-    for section in SECTIONS:
-        for ln in est.lines:
-            scope = catalog.items.get(split_key(ln.key)[0])
-            if ln.section != section or scope is None:
-                continue
-            for item in scope.excludes:
-                if not present.intersection(item.ref):
-                    out.setdefault(item.of(language))
-    return tuple(out)
 
 
 def scope_entries(
@@ -210,13 +168,11 @@ def write_scope_markdown(
     entries: tuple[ScopeEntry, ...],
     path: Path,
     title: str,
-    outside: Sequence[str],
     language: Language,
     terms: Sequence[str] = (),
 ) -> Path:
     """The appendix: the rule about extra work, then every work item with what it includes and
-    its result; outside — work this estimate does not have (outside_scope), one section after
-    the items; terms — the section of items agreed with the client apart from the work
+    its result; terms — the section of items agreed with the client apart from the work
     (terms.terms_scope_markdown)."""
 
     def t(key: str) -> str:
@@ -233,9 +189,6 @@ def write_scope_markdown(
             out += [f"### {e.no}. {e.name} — {_qty(e)}", "", f"**{t('includes')}:**", ""]
             out += [f"- {x}" for x in e.includes]
             out += ["", f"**{t('result')}:** {e.result}", ""]
-    if outside:
-        out += [f"## {t('outside')}", "", t("outside_intro"), ""]
-        out += [f"- {x}" for x in outside] + [""]
     out += terms
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("\n".join(out) + "\n", encoding="utf-8")
@@ -244,12 +197,10 @@ def write_scope_markdown(
 
 def scope_sheet(
     entries: tuple[ScopeEntry, ...],
-    outside: Sequence[str],
     language: Language,
     terms: Sequence[Sequence[str]] = (),
 ) -> Callable[[Workbook], None]:
     """A sheet with the same scope for the estimate workbook (estimate.write_xlsx, extra);
-    outside — work this estimate does not have (outside_scope), a block after the items;
     terms — rows of the items agreed apart from the work (terms.terms_scope_sheet)."""
 
     def t(key: str) -> str:
@@ -292,12 +243,6 @@ def scope_sheet(
                 )
                 for cell in ws[ws.max_row]:
                     cell.alignment = wrap
-        if outside:
-            ws.append(["", t("outside")])
-            ws.cell(ws.max_row, 2).font = Font(bold=True)
-            ws.append(["", t("outside_intro")])
-            for x in outside:
-                ws.append(["", f"• {x}"])
         for k, row in enumerate(terms):
             ws.append(list(row))
             if k == 0:

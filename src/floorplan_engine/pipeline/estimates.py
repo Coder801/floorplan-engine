@@ -43,7 +43,6 @@ from floorplan_engine.electrical.wiring import END_ALLOWANCE, RESERVE, estimate_
 from floorplan_engine.electrical.wiring_model import CHASE_NARROW, HOLE_CABLES, Wiring
 from floorplan_engine.electrical.work_scope import (
     WORK_SCOPE_MD,
-    outside_scope,
     scope_entries,
     scope_sheet,
     write_scope_markdown,
@@ -97,7 +96,6 @@ def write_plumbing_estimate(
     notes += [
         plumbing_estimate_text("note_pipes", lang, pct=round(PLUMBING_RESERVE * 100)),
         plumbing_estimate_text("note_input", lang),
-        plumbing_estimate_text("note_excluded", lang),
         estimate_text("note_consumables", lang),
     ]
     status = assessment.status(Stage.PLUMBING)
@@ -176,7 +174,6 @@ def write_estimate(
         notes.append(note)
     title = estimate_text("title", lang, name=plan.name)
     scope = scope_entries(est, lang)
-    left_out = outside_scope(est, lang)
     out = project / OUT_DIR
     files = [
         write_markdown(
@@ -194,14 +191,13 @@ def write_estimate(
             title,
             notes,
             lang,
-            scope_sheet(scope, left_out, lang, terms_scope_sheet(terms, est.currency, lang)),
+            scope_sheet(scope, lang, terms_scope_sheet(terms, est.currency, lang)),
             terms_sheet_tail(terms, lang),
         ),
         write_scope_markdown(
             scope,
             out / WORK_SCOPE_MD,
             scope_text("title", lang, name=plan.name),
-            left_out,
             lang,
             terms_scope_markdown(terms, est.currency, lang),
         ),
@@ -280,7 +276,6 @@ def _estimate_notes(
     wet = sum(1 for b in wiring.boxes if b.wet)
     if wet:
         notes.append(estimate_text("note_wet", lang, n=wet))
-    notes.append(estimate_text("note_excluded", lang))
     notes.append(estimate_text("note_consumables", lang))
     notes.append(scope_text("note_scope", lang, f=WORK_SCOPE_MD, s=scope_text("sheet", lang)))
     if wiring.height_assumed:

@@ -22,6 +22,7 @@ from floorplan_engine.pipeline import (
     save_wizard,
 )
 from floorplan_engine.validation.issues import QuestionState
+from tests.conftest import make_flat
 from tests.electrical.test_estimate import RECT
 from tests.electrical.test_variants import _project
 
@@ -353,8 +354,10 @@ def test_terms_go_after_the_estimate_and_into_the_work_scope(project: Path) -> N
     assert "**Всего со сопутствующими:" in md
     assert "- Не обговорено с заказчиком: подъём и занос материалов," in md
     assert "- Расходники на инструмент (диски, буры, коронки, свёрла) входят в цену работ" in md
+    assert "Вне сметы" not in md  # the note and the section are gone (decision 2026-11-22)
     scope = (project / "out" / "work-scope.md").read_text("utf-8")
     assert "Договорённость: студия, фиксированная сумма — 1 500 грн" in scope
+    assert "вне сметы" not in scope
 
 
 def test_terms_errors_name_the_field(project: Path) -> None:
@@ -364,3 +367,19 @@ def test_terms_errors_name_the_field(project: Path) -> None:
     assert [(i.path, i.message) for i in issues] == [
         ("terms.delivery", "этот пункт не оплачивается процентом")
     ]
+
+
+def test_plumbing_estimate_has_no_outside_note(tmp_path: Path) -> None:
+    """The plumbing estimate keeps its notes but has no "Вне сметы: …" line (2026-11-22)."""
+    (tmp_path / "room.yaml").write_text(
+        yaml.safe_dump(make_flat().model_dump(mode="json"), allow_unicode=True), "utf-8"
+    )
+    plumbing = {
+        "risers": [{"id": "r1", "room": "bath", "at": [150, 150]}],
+        "fixtures": [{"id": "wc", "room": "bath", "type": "wc", "wall": "w4", "offset": 600}],
+    }
+    (tmp_path / "plumbing.yaml").write_text(yaml.safe_dump(plumbing), "utf-8")
+    assert build_project(tmp_path).built
+    md = (tmp_path / "out" / "plumbing-estimate.md").read_text("utf-8")
+    assert "Узел ввода" in md and "Расходники на инструмент" in md
+    assert "Вне сметы" not in md
