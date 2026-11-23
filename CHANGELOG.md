@@ -1,3 +1,9 @@
+## v0.18.0 (2026-11-23)
+
+### Feat
+
+- **admin**: icon actions and stable tables in the admin
+
 ## v0.17.0 (2026-11-23)
 
 ### Feat
