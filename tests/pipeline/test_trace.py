@@ -6,8 +6,13 @@ from pathlib import Path
 
 import pytest
 import yaml
+from shapely.geometry import Polygon, box
 
+from floorplan_engine.electrical.routing import Grid, RouteTrace
+from floorplan_engine.electrical.wiring_model import Run
+from floorplan_engine.model.geometry import Vec
 from floorplan_engine.pipeline.trace import (
+    TracedLine,
     TraceError,
     line_note,
     trace_file,
@@ -64,3 +69,29 @@ def test_no_plan_is_an_error(tmp_path: Path) -> None:
     (project / "room.yaml").write_text(yaml.safe_dump({"name": "x"}), "utf-8")
     with pytest.raises(TraceError, match="План"):
         trace_wiring(project)
+
+
+def test_line_note_tells_wall_from_opening_and_ready_hole() -> None:
+    """The summary says how the line crossed into the next room: through a drillable wall, above
+    an opening (a band on the ceiling, decision 2026-11-23) or into a hole a line before it made."""
+    area = box(0, 0, 3000, 1000)
+    grid = Grid.of(area)
+    cells = tuple(grid.center(grid.nearest_free(Vec(x, 500))) for x in range(250, 2800, 100))
+    wall, opening = box(1000, 0, 1100, 1000), box(2000, 0, 2100, 1000)
+    run = Run("wire_1", "QF1", "3x2.5", False, "board", "s1", cells, 2500.0, 0.0, 0.0, 0.0)
+
+    def note(
+        walls: tuple[Polygon, ...], passes: tuple[Polygon, ...], opened: frozenset[int]
+    ) -> str:
+        g = Grid(grid.x0, grid.y0, grid.nx, grid.ny, grid.free, grid.inner, opened=opened)
+        search = RouteTrace(
+            area, walls, g, 0, 1, {}, cells[0], cells[-1], cells, cells, 2500.0, False, passes
+        )
+        return line_note(TracedLine(run, search, 1, False))
+
+    plain = note((), (), frozenset())
+    assert "сквозь стену" not in plain and "через проём" not in plain and "отверстию" not in plain
+    assert "сквозь стену" in note((wall,), (), frozenset())
+    assert "через проём" in note((), (opening,), frozenset())
+    both = note((wall,), (opening,), frozenset({grid.index(cells[8])}))
+    assert "сквозь стену" in both and "через проём" in both and "по готовому отверстию" in both

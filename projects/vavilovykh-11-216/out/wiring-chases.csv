@@ -45,10 +45,9 @@ point,hall,w7,228,1.80,3,narrow,ceiling,power,hall_switch_5
 point,hall,w7,2052,1.20,4,wide,ceiling,power,hall_pass_switch_3 hall_switch_6
 point,hall,w7,2088,2.40,2,narrow,ceiling,power,hall_socket_14
 point,loggia,w1,329,3.02,1,narrow,ceiling,low,loggia_data_1
-point,loggia,w1,249,1.82,4,wide,ceiling,power,loggia_pass_switch_1 loggia_socket_1 loggia_switch_1
-point,loggia,w1,329,3.02,2,narrow,ceiling,power,loggia_socket_2
-point,loggia,w2,1230,1.80,4,wide,ceiling,power,loggia_outlet_1 loggia_switch_2
-point,loggia,w2,1230,2.40,2,narrow,ceiling,power,loggia_socket_3
+point,loggia,w1,249,1.82,4,wide,ceiling,power,loggia_pass_switch_1 loggia_socket_1
+point,loggia,w1,289,3.02,4,wide,ceiling,power,loggia_switch_1 loggia_socket_2
+point,loggia,w2,1195,2.40,4,wide,ceiling,power,loggia_switch_2 loggia_socket_3 loggia_outlet_1
 point,wardrobe,w4,832,2.40,1,narrow,ceiling,power,wardrobe_socket_1
 point,wardrobe,w4,1309,0.80,2,wide,ceiling,power,wardrobe_socket_2 wardrobe_socket_3
 board,hall,w1,300,1.00,4,wide,ceiling,low,

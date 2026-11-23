@@ -12,6 +12,8 @@ from dataclasses import replace
 from shapely.geometry import LineString, Point, Polygon
 
 from floorplan_engine.electrical.routing import (
+    WALL_HOLE_SHARE,
+    below_ceiling,
     opening_strip,
 )
 from floorplan_engine.electrical.wiring_model import (
@@ -36,7 +38,8 @@ from floorplan_engine.model.schema import (
 
 CHASE_SHARE = 150.0  # mm along the wall: closer drops share a chase
 CHASE_CABLES = 4  # cables per chase, at most
-WALL_HOLE_SHARE = 300.0  # mm: lines crossing a wall closer than this share a hole
+# Lines crossing a wall closer than routing.WALL_HOLE_SHARE (300 mm) share a hole; the routing
+# follows the same rule, so a line goes into a hole already made rather than beside it
 
 # A drop to a point: wall offset, rise, point id, turn past an opening (offset and height)
 _Drop = tuple[float, float, str, tuple[float, float] | None]
@@ -212,13 +215,19 @@ def _shared(key: ChaseKey, group: Sequence[_Drop]) -> Chase:
     )
 
 
-def passages(geoms: Sequence[RoomGeometry]) -> list[tuple[str, Polygon]]:
+def passages(
+    geoms: Sequence[RoomGeometry], ceiling: float | None = None
+) -> list[tuple[str, Polygon]]:
     """Doors and openings between rooms: id and position on the plan. The pair "door in one
-    room, opening in the neighbour at the same spot" is one pass with the door id."""
+    room, opening in the neighbour at the same spot" is one pass with the door id. With ceiling,
+    only openings lower than it (routing.below_ceiling): above an opening up to the ceiling there
+    is no wall, so a ceiling route makes no hole there."""
     out: list[tuple[str, Polygon]] = []
     for g in geoms:
         for op in g.room.openings:
             if op.type is OpeningType.WINDOW:
+                continue
+            if ceiling is not None and not below_ceiling(op, ceiling):
                 continue
             strip = opening_strip(g, op)
             same = next(

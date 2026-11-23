@@ -9,10 +9,29 @@ once from a source (panel, box) to all its targets at once.
 Walls (decision 2026-11-11): a wall between two rooms of the flat that is not load-bearing and no
 thicker than WALL_DRILL_MAX (or explicitly `partition: true`) may be drilled (drillable_walls).
 Its band plus CLEARANCE on each side is open, a pass across it costs about WALL_PASS_COST
-whatever the thickness (spread over the cells across the band), so a door stays the first choice
-and a wall is crossed only when the way round through the door is longer than that; running along
-a wall inside its band costs several times the cable and is not worth it. Load-bearing walls,
-outer walls and thick walls (shafts, pylons, boxes) are never crossed.
+whatever the thickness (spread over the cells across the band); running along a wall inside its
+band costs several times the cable and is not worth it. Load-bearing walls, outer walls and thick
+walls (shafts, pylons, boxes) are never crossed: a room behind one is reached only through an
+opening.
+
+Openings cost like a wall on the ceiling (decision 2026-11-23, ceiling_passes): a route on the
+ceiling passes a door or an opening above it, through the same wall the estimate drills
+(chases.wall_holes), so on the ceiling plane the strip of every door and opening whose top is
+lower than the ceiling (below_ceiling; a door without a height is DOOR_TOP_MM) costs WALL_PASS_COST
+too, as a drillable wall (less PASS_FAVOUR, half a grid step, so an exact tie goes through the
+opening); a door and the opening of the neighbour at the same spot are one band (the cost is the
+maximum per cell, not a sum). An opening up to the ceiling is free, and on the floor every
+opening is free: there is no wall under a door. So a route takes the opening only when it is
+shorter that way with the pass counted, otherwise it goes straight through a drillable wall.
+
+A ready hole is free (decision 2026-11-23, holes): where a line of the build has already crossed a
+band on the same plane and circuit (wiring._route_runs routes lines one after another and passes
+the crossings on), the cells of the band within WALL_HOLE_SHARE of that crossing cost a residual
+per cell instead of the pass, so the next lines follow into the same hole, as the estimate counts
+them (one hole for lines closer than WALL_HOLE_SHARE). The residual is HOLE_CELL_COST for a hole
+made by a line of the same source (own) and twice that for any other line's hole: it only decides
+ties, so that a route leaves the band at once instead of running along it, and that cables of one
+box or flush box leave it together rather than split between two holes at the same length.
 
 Any angle (any_angle: economy, docs/wiring-variants.md): the search goes in eight directions
 without a turn penalty, then the path is pulled tight (pull): corners are cut where a straight
@@ -44,15 +63,21 @@ import math
 from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
 from contextvars import ContextVar
-from dataclasses import dataclass
+from dataclasses import dataclass, field, replace
 
 import numpy as np
 import shapely
-from shapely.geometry import Polygon
+from shapely.geometry import LineString, Polygon
 from shapely.geometry.base import BaseGeometry
 
 from floorplan_engine.electrical import trace
-from floorplan_engine.model.geometry import RoomGeometry, Vec, WallSegment, point_in_polygon
+from floorplan_engine.model.geometry import (
+    DOOR_TOP_MM,
+    RoomGeometry,
+    Vec,
+    WallSegment,
+    point_in_polygon,
+)
 from floorplan_engine.model.schema import Opening, OpeningType
 
 STEP = 100.0  # mm: grid step
@@ -66,6 +91,15 @@ DIRS8 = ((1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0), (-1, -1), (0, -1), (1, -1))
 BEND_COST = TURN_COST / 2  # mm: penalty for a 45° bend
 WALL_DRILL_MAX = 300.0  # mm: thicker non-bearing walls (shafts, pylons, boxes) are not drilled
 WALL_PASS_COST = 1000.0  # mm: one pass through a drillable wall weighs as this much cable
+WALL_HOLE_SHARE = 300.0  # mm: lines crossing a wall closer than this share a hole (wall_holes)
+# mm: an opening band costs this much less than a wall, half a grid step: at equal length a route
+# takes the opening rather than a new hole in the wall; any longer way round still loses
+PASS_FAVOUR = STEP / 2
+# mm: a band cell at a ready hole of the same source; twice that at another line's hole. A
+# tie-breaker only: the route leaves the band at once and follows the lines of its own source
+HOLE_CELL_COST = 1.0
+# A ready hole: the piece of a routed line across a band of a wall or an opening (crossings)
+Crossing = tuple[Vec, Vec]
 APART = 150.0  # mm: a low-voltage cable runs no closer than this beside a power cable
 APART_COST = 3000.0  # mm: one grid step beside a power cable closer than APART weighs this much
 PANEL_FREE = 300.0  # mm: around the panel a low-voltage cable need not keep APART (2026-11-18)
@@ -147,7 +181,7 @@ def drillable(seg: WallSegment) -> bool:
 
 def drillable_walls(geoms: Sequence[RoomGeometry]) -> list[Polygon]:
     """Walls between rooms that a route may cross (drillable), without doors and openings: those
-    are free passes anyway."""
+    are bands of their own (ceiling_passes) or free passes (floor)."""
     openings = [
         opening_strip(g, op)
         for g in geoms
@@ -155,6 +189,41 @@ def drillable_walls(geoms: Sequence[RoomGeometry]) -> list[Polygon]:
         if op.type is not OpeningType.WINDOW
     ]
     return wall_strips(geoms, drillable, openings)
+
+
+def below_ceiling(op: Opening, ceiling: float) -> bool:
+    """A door or an opening with wall above it: its top (DOOR_TOP_MM without a height) is lower
+    than the ceiling, so a ceiling route passing it drills that wall (decision 2026-11-23)."""
+    if op.type is OpeningType.WINDOW:
+        return False
+    top = op.height if op.height is not None else DOOR_TOP_MM
+    return top < ceiling
+
+
+def ceiling_passes(geoms: Sequence[RoomGeometry], ceiling: float) -> list[Polygon]:
+    """Strips of doors and openings lower than the ceiling, merged: on the ceiling plane each is
+    a band that costs WALL_PASS_COST to cross, like a drillable wall (decision 2026-11-23). A door
+    and the opening of the neighbour at the same spot merge into one band."""
+    strips = [
+        opening_strip(g, op) for g in geoms for op in g.room.openings if below_ceiling(op, ceiling)
+    ]
+    return _polygons(shapely.unary_union(strips)) if strips else []
+
+
+def crossings(path: Sequence[Vec], bands: Sequence[Polygon]) -> list[Crossing]:
+    """Pieces of a route across the bands (walls or openings), each as its two ends: the holes the
+    route makes, in path order."""
+    if len(path) < 2 or not bands:
+        return []
+    line = LineString([v.as_tuple() for v in path])
+    out: list[Crossing] = []
+    for band in bands:
+        cut = line.intersection(band)
+        for piece in getattr(cut, "geoms", [cut]):
+            if isinstance(piece, LineString) and piece.length > 1.0:
+                (x0, y0), (x1, y1) = piece.coords[0], piece.coords[-1]
+                out.append((Vec(x0, y0), Vec(x1, y1)))
+    return out
 
 
 def room_area(g: RoomGeometry) -> BaseGeometry:
@@ -171,12 +240,14 @@ class Grid:
     ny: int
     free: list[bool]
     inner: BaseGeometry | None = None  # area at least CLEARANCE from walls, for pull
-    penalty: dict[int, float] | None = None  # extra cost to enter a cell, mm (plumbing)
+    penalty: dict[int, float] | None = None  # extra cost to enter a cell, mm (wall bands, plumbing)
     mult: list[float] | None = None  # cost per mm of a step into the cell (sewer: cheaper by walls)
     tag: list[int] | None = None  # cell kind for pruning in the search (sewer, network)
     # Cells closer than APART to a power cable going along x and along y (apart_cells): a step
     # the same way there costs APART_COST more
     apart: tuple[frozenset[int], frozenset[int]] | None = None
+    # Band cells at a ready hole (HOLE_CELL_COST instead of the pass): the route is free there
+    opened: frozenset[int] = field(default_factory=frozenset)
 
     @classmethod
     def of(cls, area: BaseGeometry) -> Grid:
@@ -530,10 +601,14 @@ class End:
 class Router:
     """Routes from one source to many targets in a given area. any_angle allows any angle
     (economy): the shortest path is pulled tight instead of running at 90°. walls are bands of
-    drillable walls (drillable_walls): open, but a pass costs WALL_PASS_COST per cell; the pull
-    stays in the area itself, so it does not cut through a wall where the search did not.
-    beside are the routes of power cables a low-voltage route keeps APART from (apart_cells),
-    except within PANEL_FREE of calm (the panel); at any angle they are not looked at."""
+    drillable walls (drillable_walls) and passes the strips of openings lower than the ceiling
+    (ceiling_passes, only for a router of the ceiling plane): open, but a pass costs
+    WALL_PASS_COST per cell; the pull stays in the area itself, so it does not cut through a wall
+    where the search did not. holes are crossings of lines already routed on this plane and
+    circuit (crossings): the band within WALL_HOLE_SHARE of each is free; own are those of them
+    made by lines of the same source, cheaper by the tie-break (HOLE_CELL_COST). beside are the
+    routes of power cables a low-voltage route keeps APART from (apart_cells), except within
+    PANEL_FREE of calm (the panel); at any angle they are not looked at."""
 
     def __init__(
         self,
@@ -543,22 +618,42 @@ class Router:
         walls: Sequence[Polygon] = (),
         beside: Sequence[Sequence[Vec]] = (),
         calm: Vec | None = None,
+        passes: Sequence[Polygon] = (),
+        holes: Sequence[Crossing] = (),
+        own: Sequence[Crossing] = (),
     ) -> None:
         self.area = area
-        self.walls = walls
+        self.walls = tuple(walls)
+        self.passes = tuple(passes)
+        self.holes = tuple(holes)
+        self.own = tuple(c for c in own if c in self.holes)
         self.source = source
         self.any_angle = any_angle
-        beside = () if any_angle else beside
-        calm = calm if beside else None
+        self.beside = () if any_angle else tuple(tuple(path) for path in beside)
+        self.calm = calm if self.beside else None
+        inputs = _Inputs(
+            area,
+            source,
+            any_angle,
+            self.walls,
+            self.beside,
+            self.calm,
+            self.passes,
+            self.holes,
+            self.own,
+        )
         memo = _MEMO.get()
         if memo is None:
-            found = _searched(area, source, any_angle, walls, beside, calm)
+            found = _searched(inputs)
         else:
-            key = _search_key(area, source, any_angle, walls, beside, calm)
-            found = memo.get(key) or memo.setdefault(
-                key, _searched(area, source, any_angle, walls, beside, calm)
-            )
+            key = inputs.key()
+            found = memo.searches.get(key) or memo.searches.setdefault(key, _searched(inputs))
         self.grid, self.start, self.prev, self.dist = found
+
+    @property
+    def bands(self) -> tuple[Polygon, ...]:
+        """What a route pays to cross: drillable walls and, on the ceiling, openings."""
+        return (*self.walls, *self.passes)
 
     def apart_from(self, beside: Sequence[Sequence[Vec]], calm: Vec | None = None) -> Router:
         """The same router for a low-voltage cable that keeps APART from the given power
@@ -566,7 +661,52 @@ class Router:
         keep from (or at any angle)."""
         if not beside or self.any_angle:
             return self
-        return Router(self.area, self.source, self.any_angle, self.walls, beside, calm)
+        return Router(
+            self.area,
+            self.source,
+            self.any_angle,
+            self.walls,
+            beside,
+            calm,
+            self.passes,
+            self.holes,
+            self.own,
+        )
+
+    def with_holes(self, holes: Sequence[Crossing], own: Sequence[Crossing] = ()) -> Router:
+        """The same router with these ready holes (own: those made by lines of its source); itself
+        when it has no bands to open or already has them."""
+        holes, own = tuple(holes), tuple(c for c in own if c in holes)
+        if not self.bands or (holes, own) == (self.holes, self.own):
+            return self
+        return Router(
+            self.area,
+            self.source,
+            self.any_angle,
+            self.walls,
+            self.beside,
+            self.calm,
+            self.passes,
+            holes,
+            own,
+        )
+
+    def rebased(self, source: End, beside: Sequence[Sequence[Vec]] = ()) -> Router:
+        """The same area, bands and holes from another source, kept APART from beside (box leads,
+        wiring._via_lead) instead of its own; itself when nothing changes."""
+        if source == self.source and not beside and not self.beside:
+            return self
+        return Router(
+            self.area,
+            source,
+            self.any_angle,
+            self.walls,
+            beside,
+            None,
+            self.passes,
+            self.holes,
+            self.own,
+        )
 
     def cost(self, node: Vec) -> float:
         """Route cost to the point (with turns); infinity if unreachable."""
@@ -591,7 +731,7 @@ class Router:
             trace.emit(
                 RouteTrace(
                     self.area,
-                    tuple(self.walls),
+                    self.walls,
                     self.grid,
                     self.start,
                     cell,
@@ -602,6 +742,9 @@ class Router:
                     tuple(out),
                     self.cost(target.node),
                     self.any_angle,
+                    self.passes,
+                    self.holes,
+                    self.own,
                 )
             )
         return out
@@ -625,6 +768,9 @@ class RouteTrace:
     path: tuple[Vec, ...]  # the route as returned
     cost: float  # search cost to the target, mm of cable with turn and wall penalties
     any_angle: bool
+    passes: tuple[Polygon, ...] = ()  # openings lower than the ceiling (a ceiling router)
+    holes: tuple[Crossing, ...] = ()  # ready holes the router saw
+    own: tuple[Crossing, ...] = ()  # those of them made by lines of the same source
 
     def cell_cost(self, idx: int) -> float:
         """Cheapest search cost to the cell over its directions; infinity if unreached."""
@@ -636,91 +782,172 @@ class RouteTrace:
     @property
     def wall_cells(self) -> int:
         """Path cells in the band of a drillable wall: more than 0 means the route goes through
-        a wall."""
-        penalty = self.grid.penalty or {}
-        return sum(1 for c in self.cells if self.grid.index(c) in penalty)
+        a wall (paid or through a ready hole)."""
+        return self._in_band(self.walls)
+
+    @property
+    def pass_cells(self) -> int:
+        """Path cells in the band of an opening lower than the ceiling: the route passes above a
+        door or an opening."""
+        return self._in_band(self.passes)
+
+    @property
+    def hole_cells(self) -> int:
+        """Path cells in a band at a ready hole: the route followed a line routed before."""
+        return sum(1 for c in self.cells if self.grid.index(c) in self.grid.opened)
+
+    def _in_band(self, strips: Sequence[Polygon]) -> int:
+        if not strips or not self.cells:
+            return 0
+        zone = shapely.unary_union(list(strips)).buffer(CLEARANCE)
+        hit = shapely.contains_xy(zone, [c.x for c in self.cells], [c.y for c in self.cells])
+        return int(sum(bool(h) for h in hit))
+
+
+@dataclass(frozen=True)
+class _Inputs:
+    """What a search depends on; equal inputs give the same search (search_memo)."""
+
+    area: BaseGeometry
+    source: End
+    any_angle: bool
+    walls: tuple[Polygon, ...]
+    beside: tuple[tuple[Vec, ...], ...]
+    calm: Vec | None
+    passes: tuple[Polygon, ...]
+    holes: tuple[Crossing, ...]
+    own: tuple[Crossing, ...]
+
+    def key(self) -> tuple[object, ...]:
+        return (
+            self.area.wkb,
+            self.source.node.as_tuple(),
+            self.source.vertical_wall,
+            self.any_angle,
+            tuple(w.wkb for w in self.walls),
+            tuple(tuple(p.as_tuple() for p in path) for path in self.beside),
+            None if self.calm is None else self.calm.as_tuple(),
+            tuple(p.wkb for p in self.passes),
+            tuple((a.as_tuple(), b.as_tuple()) for a, b in self.holes),
+            tuple((a.as_tuple(), b.as_tuple()) for a, b in self.own),
+        )
+
+    def grid_key(self) -> tuple[object, ...]:
+        """What the base grid depends on: the area and its bands, before holes and power beside."""
+        return (
+            self.area.wkb,
+            tuple(w.wkb for w in self.walls),
+            tuple(p.wkb for p in self.passes),
+        )
 
 
 # A searched router: grid, start cell, state parents and costs. Read only after the search, so
 # routers with the same inputs share it.
 _Search = tuple["Grid", int, dict[int, int], dict[int, float]]
-_MEMO: ContextVar[dict[tuple[object, ...], _Search] | None] = ContextVar(
-    "routing_memo", default=None
-)
+
+
+@dataclass
+class _Memo:
+    """Searches by their inputs and base grids (free cells and band penalties) by area and bands:
+    a search with new holes or power beside reuses the grid and only runs Dijkstra again."""
+
+    searches: dict[tuple[object, ...], _Search] = field(default_factory=dict)
+    grids: dict[tuple[object, ...], Grid] = field(default_factory=dict)
+
+
+_MEMO: ContextVar[_Memo | None] = ContextVar("routing_memo", default=None)
 
 
 @contextmanager
 def search_memo() -> Iterator[None]:
-    """Remember router searches by their exact inputs (area, source, angle, walls, power routes
-    beside) until the block ends: one build routes the chosen variant and its neighbours, and most
-    of their routers are the same (variant_block). Outside the block nothing is remembered, so a
-    long-running service holds no searches between builds; a nested block uses the outer one."""
+    """Remember router searches by their exact inputs (area, source, angle, walls, openings,
+    holes, power routes beside) until the block ends: one build routes the chosen variant and its
+    neighbours, and most of their routers are the same (variant_block). Outside the block nothing
+    is remembered, so a long-running service holds no searches between builds; a nested block uses
+    the outer one."""
     if _MEMO.get() is not None:
         yield
         return
-    token = _MEMO.set({})
+    token = _MEMO.set(_Memo())
     try:
         yield
     finally:
         _MEMO.reset(token)
 
 
-def _search_key(
-    area: BaseGeometry,
-    source: End,
-    any_angle: bool,
-    walls: Sequence[Polygon],
-    beside: Sequence[Sequence[Vec]],
-    calm: Vec | None,
-) -> tuple[object, ...]:
-    return (
-        area.wkb,
-        source.node.as_tuple(),
-        source.vertical_wall,
-        any_angle,
-        tuple(w.wkb for w in walls),
-        tuple(tuple(p.as_tuple() for p in path) for path in beside),
-        None if calm is None else calm.as_tuple(),
-    )
-
-
-def _searched(
-    area: BaseGeometry,
-    source: End,
-    any_angle: bool,
-    walls: Sequence[Polygon],
-    beside: Sequence[Sequence[Vec]],
-    calm: Vec | None = None,
-) -> _Search:
-    if walls:
-        grid = Grid.of(shapely.unary_union([area, *walls]))
-        grid.inner = Grid.of(area).inner
-        grid.penalty = _wall_penalty(grid, walls)
-    else:
-        grid = Grid.of(area)
-    if beside:
-        grid.apart = apart_cells(grid, beside, calm)
-    start = grid.nearest_free(source.node, open_only=True)
-    search = grid.search_any if any_angle else grid.search
+def _searched(inputs: _Inputs) -> _Search:
+    base = _base_grid(inputs)
+    grid = replace(base, penalty=None if base.penalty is None else dict(base.penalty))
+    if inputs.holes and grid.penalty:
+        grid.opened = _opened(grid, inputs.holes)
+        for k in grid.opened:
+            grid.penalty[k] = 2 * HOLE_CELL_COST
+        if inputs.own:
+            for k in _opened(grid, inputs.own):
+                grid.penalty[k] = HOLE_CELL_COST
+    if inputs.beside:
+        grid.apart = apart_cells(grid, inputs.beside, inputs.calm)
+    start = grid.nearest_free(inputs.source.node, open_only=True)
+    search = grid.search_any if inputs.any_angle else grid.search
     prev, dist = search(start)
     return grid, start, prev, dist
 
 
-def _wall_penalty(grid: Grid, walls: Sequence[Polygon]) -> dict[int, float]:
-    """Free cells in the band of a wall widened by CLEARANCE on each side: WALL_PASS_COST spread
-    over the cells across the band, so a pass costs about the same through any thickness."""
+def _base_grid(inputs: _Inputs) -> Grid:
+    """Grid of the area with its bands open and their pass penalties, shared by every search over
+    the same area and bands (search_memo): read only, a search copies the penalties it changes."""
+    memo = _MEMO.get()
+    key = inputs.grid_key()
+    if memo is not None and key in memo.grids:
+        return memo.grids[key]
+    if inputs.walls:
+        grid = Grid.of(shapely.unary_union([inputs.area, *inputs.walls]))
+        grid.inner = Grid.of(inputs.area).inner
+    else:
+        grid = Grid.of(inputs.area)
+    if inputs.walls or inputs.passes:
+        grid.penalty = _wall_penalty(grid, inputs.walls)
+        for k, cost in _wall_penalty(grid, inputs.passes, WALL_PASS_COST - PASS_FAVOUR).items():
+            grid.penalty[k] = max(grid.penalty.get(k, 0.0), cost)
+    if memo is not None:
+        memo.grids[key] = grid
+    return grid
+
+
+def _wall_penalty(
+    grid: Grid, walls: Sequence[Polygon], pass_cost: float = WALL_PASS_COST
+) -> dict[int, float]:
+    """Free cells in the band of a wall widened by CLEARANCE on each side: pass_cost spread over
+    the cells across the band, so a pass costs about the same through any thickness. Where bands
+    overlap (a door strip and the wall it sits in) the cost is the maximum, not a sum."""
     idx = [k for k, ok in enumerate(grid.free) if ok]
     xs = [grid.center(k).x for k in idx]
     ys = [grid.center(k).y for k in idx]
     out: dict[int, float] = {}
     for wall in walls:
         thickness = 2 * wall.area / wall.length  # a long thin band (or an L of two)
-        cost = WALL_PASS_COST * STEP / (thickness + 2 * CLEARANCE)
+        cost = pass_cost * STEP / (thickness + 2 * CLEARANCE)
         inside = shapely.contains_xy(wall.buffer(CLEARANCE), xs, ys)
         for k, hit in zip(idx, inside, strict=True):
             if hit:
                 out[k] = max(out.get(k, 0.0), cost)
     return out
+
+
+def _opened(grid: Grid, holes: Sequence[Crossing]) -> frozenset[int]:
+    """Band cells within WALL_HOLE_SHARE of a ready hole (the crossing piece of a routed line):
+    free for the next lines, as the estimate counts them in the same hole."""
+    if not holes:
+        return frozenset()
+    assert grid.penalty is not None
+    idx = sorted(grid.penalty)
+    zone = shapely.unary_union([LineString([a.as_tuple(), b.as_tuple()]) for a, b in holes]).buffer(
+        WALL_HOLE_SHARE
+    )
+    xs = [grid.center(k).x for k in idx]
+    ys = [grid.center(k).y for k in idx]
+    hit = shapely.contains_xy(zone, xs, ys)
+    return frozenset(k for k, h in zip(idx, hit, strict=True) if h)
 
 
 def apart_cells(

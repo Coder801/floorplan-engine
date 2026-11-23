@@ -107,10 +107,14 @@ switch: it drives the contactor coil, not a light.
 Wall passes (wall_holes): a ceiling route passes into a neighbouring room above a door or
 opening, so the wall above it is drilled; one hole per entry into a room (more than
 HOLE_CABLES cables: a large one), power and low-voltage in separate holes. A floor route passes
-under the opening with no drilling. If the way round through a door is long, a route goes
-straight through a drillable wall (routing.drillable_walls: not load-bearing, not outer, no
-thicker than WALL_DRILL_MAX; decision 2026-11-11), at the ceiling or at the floor; such holes
-are counted the same way.
+under the opening with no drilling. A route goes straight through a drillable wall
+(routing.drillable_walls: not load-bearing, not outer, no thicker than WALL_DRILL_MAX; decision
+2026-11-11), at the ceiling or at the floor, when that is shorter; such holes are counted the
+same way. The search prices the passes as the estimate counts them (decision 2026-11-23,
+routing.py): on the ceiling an opening lower than the ceiling costs the same pass as a wall, on
+the floor an opening is free, and a hole already made by a line of the build is free for the
+next lines of its plane and circuit within WALL_HOLE_SHARE, so lines of one source into a room
+go through one hole (_route_runs: lines are routed one after another, in a fixed order).
 """
 
 from __future__ import annotations
@@ -159,8 +163,12 @@ from floorplan_engine.electrical.loads import DEFAULT_MARK, LOW_TYPES, POWER_TYP
 from floorplan_engine.electrical.master import CONTROL_ID, CONTROL_MARK, master_point
 from floorplan_engine.electrical.panel import scheme_of
 from floorplan_engine.electrical.routing import (
+    WALL_HOLE_SHARE,
+    Crossing,
     End,
     Router,
+    ceiling_passes,
+    crossings,
     drillable_walls,
     fit_path,
     free_area,
@@ -314,14 +322,39 @@ class _Context:
     geoms: dict[str, RoomGeometry]
     anchors: dict[str, Anchor]
     board: Board
-    from_board: Router
+    board_end: End  # where the panel's cables start
     free: BaseGeometry  # the whole flat with openings, for branches to switches behind a door
     any_angle: bool = False  # ceiling and floor routes at any angle (routing.py)
     rooms: dict[str, str] = field(default_factory=dict)  # room of each point
     media: Board | None = None  # low-voltage cabinet (source "media")
-    from_media: Router | None = None
+    media_end: End | None = None
     walls: Sequence[Polygon] = ()  # drillable walls (routing.drillable_walls)
+    passes: Sequence[Polygon] = ()  # openings lower than the ceiling (routing.ceiling_passes)
     points: dict[str, ElectricalPoint] = field(default_factory=dict)
+    # Routers from the panel and the cabinet by plane, without ready holes (from_source)
+    routers: dict[tuple[str, Route], Router] = field(default_factory=dict, repr=False)
+
+    def bands(self, route: Route) -> tuple[Polygon, ...]:
+        """What a route of the plane pays to cross: drillable walls on both planes, openings
+        lower than the ceiling on the ceiling only (decision 2026-11-23)."""
+        return (*self.walls, *self.passes) if route == "ceiling" else tuple(self.walls)
+
+    def flat_router(self, end: End, route: Route, holes: Sequence[Crossing] = ()) -> Router:
+        """Router through the whole flat from the end on the plane: via openings and drillable
+        walls, with the ready holes of the plane."""
+        passes = self.passes if route == "ceiling" else ()
+        return Router(self.free, end, self.any_angle, self.walls, passes=passes, holes=holes)
+
+    def from_source(self, source: str, route: Route) -> Router:
+        """Router from the panel ("board") or the low-voltage cabinet ("media") on the plane,
+        without ready holes: the costs the topology is chosen by (what is nearest to the panel)
+        and the first search of the lines from it."""
+        key = (source, route)
+        if key not in self.routers:
+            end = self.media_end if source == "media" else self.board_end
+            assert end is not None  # "media" only with a cabinet (_low_link)
+            self.routers[key] = self.flat_router(end, route)
+        return self.routers[key]
 
     def drop(self, pid: str, route: Route) -> tuple[Anchor, float] | None:
         """Where the cable goes down to a wall point beside an opening (detours.py): the route
@@ -388,15 +421,14 @@ def box_wiring(
         # At the wall, not at the stacked symbol: the cable ends where the point really is
         {p.id: point_anchor(p, geoms) for p in elec.points},
         elec.board,
-        Router(free, anchor_end(board_anchor(elec.board, geoms)), any_angle, walls),
+        anchor_end(board_anchor(elec.board, geoms)),
         free,
         any_angle,
         {p.id: p.room for p in elec.points},
         elec.media,
-        None
-        if elec.media is None
-        else Router(free, anchor_end(board_anchor(elec.media, geoms)), any_angle, walls),
+        None if elec.media is None else anchor_end(board_anchor(elec.media, geoms)),
         walls,
+        ceiling_passes(list(geoms.values()), plan.ceiling_height),
         {p.id: p for p in elec.points},
     )
     boxes: list[JunctionBox] = []
@@ -447,7 +479,7 @@ def box_wiring(
     if elec.plaster == "before":
         chases = before_plaster(chases)
     chases = with_material(chases, plan)
-    holes = wall_holes(runs, passages(list(geoms.values())), walls)
+    holes = wall_holes(runs, passages(list(geoms.values()), ctx.ceiling), walls)
     return Wiring(
         ctx.ceiling,
         height_assumed,
@@ -739,7 +771,8 @@ def _group_links(
 
     def chain(part: Sequence[ElectricalPoint]) -> None:
         """Daisy chain: the point nearest to the panel from it, then from point to point."""
-        left = sorted(part, key=lambda p: (ctx.from_board.cost(ctx.anchors[p.id].node), p.id))
+        from_board = ctx.from_source("board", route)
+        left = sorted(part, key=lambda p: (from_board.cost(ctx.anchors[p.id].node), p.id))
         prev = left.pop(0)
         direct(prev)
         while left:
@@ -911,7 +944,10 @@ def _box_feeders(
     if len(made) < 2:
         return {}
     lines = {b.id: len(part) + 1 for b, part in made}
-    left = sorted((b for b, _ in made), key=lambda b: (ctx.from_board.cost(b.anchor.node), b.id))
+    left = sorted(
+        (b for b, _ in made),
+        key=lambda b: (ctx.from_source("board", b.route).cost(b.anchor.node), b.id),
+    )
     fed = [left.pop(0)]
     out: dict[str, JunctionBox] = {}
     while left:
@@ -962,8 +998,16 @@ def _light_chains(
     def loop(p: ElectricalPoint) -> bool:
         return p.ceiling is not None and p.type in LAMP_TYPES
 
+    def plane(p: ElectricalPoint) -> Route:
+        """Plane of a line from the panel to the point: the ceiling for a ceiling point."""
+        return "ceiling" if route == "ceiling" or p.ceiling is not None else "floor"
+
+    def from_board(p: ElectricalPoint) -> float:
+        """Cost from the panel to the point on the plane its line would take."""
+        return ctx.from_source("board", plane(p)).cost(ctx.anchors[p.id].node)
+
     def board_link(p: ElectricalPoint, cable: str, cable_assumed: bool) -> None:
-        way: Route = "ceiling" if route == "ceiling" or p.ceiling is not None else "floor"
+        way = plane(p)
         up = ctx.board.height if way == "floor" else max(ceiling - ctx.board.height, 0.0)
         ends = (LIGHT_LOOP if loop(p) else END_ALLOWANCE) + ctx.tail("board")
         down = _rise(p, ceiling, way)
@@ -998,14 +1042,14 @@ def _light_chains(
         reach: dict[str, Router] = {}
 
         def near(p: ElectricalPoint) -> tuple[float, str]:
-            return ctx.from_board.cost(ctx.anchors[p.id].node), p.id
+            return from_board(p), p.id
 
         def gap(a: ElectricalPoint, b: ElectricalPoint) -> float:
             if a.room == b.room:
                 return (ctx.anchors[a.id].node - ctx.anchors[b.id].node).length()
             if a.id not in reach:
                 end = anchor_end(ctx.anchors[a.id])
-                reach[a.id] = Router(ctx.free, end, ctx.any_angle, ctx.walls)
+                reach[a.id] = ctx.flat_router(end, route)
             return reach[a.id].cost(ctx.anchors[b.id].node)
 
         root = min([p for p in part if p.type in SWITCH_TYPES] or part, key=near)
@@ -1053,7 +1097,7 @@ def _light_chains(
         merged = [x for g in joined for x in g] + [s]
         sets = [g for g in sets if g not in joined] + [merged]
     for g in sets:
-        g.sort(key=lambda x: (ctx.from_board.cost(ctx.anchors[x.id].node), x.id))
+        g.sort(key=lambda x: (from_board(x), x.id))
         start(g[0])
         for a, b in itertools.pairwise(g):
             point_link(a, b, PASS_MARK, True)
@@ -1064,7 +1108,7 @@ def _light_chains(
         chain(s, on[s.id], TWO_KEY_MARK if two else mark, two or assumed)
     free = [p for p in lamps.values() if p.id not in taken]
     if free:
-        first = min(free, key=lambda p: (ctx.from_board.cost(ctx.anchors[p.id].node), p.id))
+        first = min(free, key=lambda p: (from_board(p), p.id))
         taken.add(first.id)
         start(first)
         chain(first, [p.id for p in free], mark, assumed)
@@ -1169,10 +1213,11 @@ def _box_height(box: JunctionBox, ceiling: float) -> float:
 
 
 def _nearest_box(ctx: _Context, boxes: Sequence[JunctionBox], target: Anchor) -> JunctionBox | None:
-    """Group box with the shorter path to the point through the flat (via openings)."""
+    """Group box with the shorter path to the point through the flat (via openings) on the box's
+    plane."""
     best: tuple[float, JunctionBox] | None = None
     for b in boxes:
-        cost = Router(ctx.free, anchor_end(b.anchor), ctx.any_angle, ctx.walls).cost(target.node)
+        cost = ctx.flat_router(anchor_end(b.anchor), b.route).cost(target.node)
         if best is None or cost < best[0]:
             best = (cost, b)
     return None if best is None else best[1]
@@ -1203,7 +1248,7 @@ def _box_spot(
         return None
     reach = branch_reach(g, targets, ctx.any_angle)
     if route == "floor":
-        return place_box(g, ctx.from_board, reach, taken, avoid)
+        return place_box(g, ctx.from_source("board", "floor"), reach, taken, avoid)
     return place_ceiling_box(g, reach, targets, taken, sheet(BOX_SIZE_MM), avoid)
 
 
@@ -1228,6 +1273,11 @@ def _apart(
     return [r if f"wire:{r.id}" in edited else again.get(r.id, r) for r in runs]
 
 
+def _lay(ln: _Link) -> Circuit:
+    """Circuit the line is laid with (Run.lay): power with the 12 V LED lines, low voltage apart."""
+    return "power" if ln.led else ln.circuit
+
+
 def _route_runs(
     ctx: _Context,
     links: Sequence[_Link],
@@ -1238,14 +1288,27 @@ def _route_runs(
     only inside its room. A wall point past an opening is reached where its drop goes down
     beside the opening (_Context.drop); the turn to the point adds to the rise. With beside (the
     power lines already routed) only the internet and TV lines are routed, apart from the power
-    routes of their plane (_apart); the line ids are the same."""
+    routes of their plane (_apart); the line ids are the same.
+
+    Lines are routed one after another in a fixed order (decision 2026-11-23), because a line
+    that crosses a wall or an opening band leaves a hole the next lines of its plane and circuit
+    go through for free (routing.Router holes, within WALL_HOLE_SHARE): by source, the panel first,
+    then the low-voltage cabinet, the boxes in their order, then the points of chains by id; within
+    a source the farthest target first by the search cost with the holes made before the source
+    began (not by its own lines: the order is fixed when the source starts), equal costs by line
+    number. So the line that has to pay a new hole goes first and the nearer ones follow it into
+    that hole; a line that already has a ready hole on its way is near, whatever it would have
+    paid without it. At equal length a line prefers a hole made by its own source (Router own),
+    so the cables of one box or flush box leave it together. The order changes only which line
+    pays the pass, not the ids: wire_{k + 1}
+    is the k-th link, as before. A router is searched again only when the holes of its plane and
+    circuit have changed since its last line; a hole within WALL_HOLE_SHARE of one already made
+    is the same hole and changes nothing."""
     todo = [(k, ln) for k, ln in enumerate(links) if beside is None or _comms(ln.circuit, ln.led)]
-    sources = {ln.source for _, ln in todo}
     beside_paths: dict[Route, list[tuple[Vec, ...]]] = {"ceiling": [], "floor": []}
     for r in beside or ():
         beside_paths[r.route].append(r.path)
-    apart: dict[tuple[int, Route], Router] = {}
-    board = ctx.from_board.source.node  # no APART within PANEL_FREE of it
+    board = ctx.board_end.node  # no APART within PANEL_FREE of it
     routes = {ln.source: ln.route for ln in links}
     drops = {
         (pid, route): spot
@@ -1261,45 +1324,76 @@ def _route_runs(
         spot = drops.get((src, routes[src]))
         return spot[0] if spot is not None else ctx.anchors[src]
 
-    routers = {
-        b.id: Router(room_area(ctx.geoms[b.room]), anchor_end(b.anchor), ctx.any_angle)
-        for b in boxes
-        if b.id in sources
-    }
-    # Branch to a switch behind a door, and a light chain into the next room: through the whole
-    # flat via the opening
     box_anchors = {b.id: b.anchor for b in boxes}
-    wide = {
-        src: Router(
-            ctx.free,
-            anchor_end(box_anchors.get(src) or source_anchor(src)),
-            ctx.any_angle,
-            ctx.walls,
-        )
-        for src in {ln.source for _, ln in todo if ln.cross}
-    }
-    for src in sorted(sources - set(routers) - {"board", "media"}):  # a daisy chain
-        area = room_area(ctx.geoms[ctx.rooms[src]])
-        routers[src] = Router(area, anchor_end(source_anchor(src)), ctx.any_angle)
-    runs: list[Run] = []
-    ways: list[tuple[Router, End] | None] = []  # each run's router and target, for _one_side
-    for k, ln in todo:
-        if ln.source == "board":
-            router = ctx.from_board
-        elif ln.source == "media" and ctx.from_media is not None:
-            router = ctx.from_media
-        else:
-            router = wide[ln.source] if ln.cross else routers[ln.source]
+    box_rooms = {b.id: b.room for b in boxes}
+    # Routing order of the sources: the panel, the cabinet, the boxes, the points of chains
+    rank = {"board": 0, "media": 1, **{b.id: 2 + k for k, b in enumerate(boxes)}}
+    rest = sorted({ln.source for _, ln in todo} - set(rank))
+    rank |= {src: len(rank) + k for k, src in enumerate(rest)}
+    plain: dict[tuple[str, Route, bool], Router] = {}
+
+    def router_of(src: str, plane: Route, wide: bool) -> Router:
+        """Router of the source on the plane without ready holes: the panel and the cabinet
+        through the whole flat; a box or a chain point inside its room, or through the whole flat
+        via the openings for a branch to a switch behind a door and a light chain into the next
+        room (wide); in the apart stage, kept off the power routes of the plane."""
+        key = (src, plane, wide)
+        if key in plain:
+            return plain[key]
+        if src in ("board", "media"):
+            router = ctx.from_source(src, plane)
+        elif wide:
+            router = ctx.flat_router(anchor_end(box_anchors.get(src) or source_anchor(src)), plane)
+        elif src in box_anchors:
+            router = Router(room_area(ctx.geoms[box_rooms[src]]), anchor_end(box_anchors[src]),
+                            ctx.any_angle)  # fmt: skip
+        else:  # a daisy chain
+            area = room_area(ctx.geoms[ctx.rooms[src]])
+            router = Router(area, anchor_end(source_anchor(src)), ctx.any_angle)
         if beside is not None:
-            key = (id(router), ln.route)
-            if key not in apart:
-                apart[key] = router.apart_from(beside_paths[ln.route], board)
-            router = apart[key]
+            router = router.apart_from(beside_paths[plane], board)
+        plain[key] = router
+        return router
+
+    def target_of(ln: _Link) -> tuple[End, tuple[Anchor, float] | None]:
         end = drops.get((ln.target, ln.route)) if ln.target_rise > 0 else None
+        return anchor_end(end[0] if end else ln.target_anchor), end
+
+    holes: dict[tuple[Route, Circuit], list[tuple[Crossing, str]]] = {}  # with the source
+    opened: dict[tuple[str, Route, bool, Circuit, int], Router] = {}
+
+    def current(ln: _Link) -> Router:
+        """The line's router with the holes made so far on its plane and circuit; searched again
+        only when they changed since the last line of this source."""
+        wide = ln.source not in ("board", "media") and ln.cross
+        made = holes.setdefault((ln.route, _lay(ln)), [])
+        key = (ln.source, ln.route, wide, _lay(ln), len(made))
+        router = opened.get(key)
+        if router is None:
+            own = [c for c, src in made if src == ln.source]
+            router = router_of(ln.source, ln.route, wide).with_holes([c for c, _ in made], own)
+            opened[key] = router
+        return router
+
+    def order(item: tuple[int, _Link]) -> tuple[float, int]:
+        k, ln = item
+        return 0.0 if ln.wall else -current(ln).cost(target_of(ln)[0].node), k
+
+    by_source: dict[str, list[tuple[int, _Link]]] = {}
+    for k, ln in todo:
+        by_source.setdefault(ln.source, []).append((k, ln))
+    found: dict[int, tuple[Run, tuple[Router, End] | None]] = {}
+    # Sorted when the source's turn comes: by the holes the sources before it made
+    queue = (
+        (k, ln)
+        for src in sorted(by_source, key=rank.__getitem__)
+        for k, ln in sorted(by_source[src], key=order)
+    )
+    for k, ln in queue:
+        router = current(ln)
+        target, end = target_of(ln)
         start = drops.get((ln.source, ln.route)) if ln.source_rise > 0 else None
         path: tuple[Vec, ...]
-        target = anchor_end(end[0] if end else ln.target_anchor)
-        ways.append(None if ln.wall else (router, target))
         if ln.wall:  # one frame: the cable does not leave the wall, no lane on the route grid
             path = (ctx.anchors[ln.source].node, ln.target_anchor.node)
         else:
@@ -1312,34 +1406,39 @@ def _route_runs(
                 stage="main" if beside is None else "apart",
             ):
                 path = tuple(router.route(target))
-        runs.append(
-            Run(
-                id=f"wire_{k + 1}",
-                group=ln.group,
-                mark=ln.mark,
-                mark_assumed=ln.mark_assumed,
-                source=ln.source,
-                target=ln.target,
-                path=path,
-                plan_mm=length(path),
-                rise_start_mm=ln.source_rise + _turn(ctx, ln.source, start),
-                rise_end_mm=ln.target_rise + _turn(ctx, ln.target, end),
-                ends_mm=END_ALLOWANCE + ctx.tail(ln.source) if ln.ends is None else ln.ends,
-                route=ln.route,
-                circuit=ln.circuit,
-                end_drop=end[1] if end else None,
-                start_drop=start[1] if start else None,
-                led=ln.led,
-            )
+            made = holes[(ln.route, _lay(ln))]
+            for a, b in crossings(path, router.bands):
+                mid = (a + b) * 0.5
+                if all(((c + d) * 0.5 - mid).length() >= WALL_HOLE_SHARE for (c, d), _ in made):
+                    made.append(((a, b), ln.source))
+        run = Run(
+            id=f"wire_{k + 1}",
+            group=ln.group,
+            mark=ln.mark,
+            mark_assumed=ln.mark_assumed,
+            source=ln.source,
+            target=ln.target,
+            path=path,
+            plan_mm=length(path),
+            rise_start_mm=ln.source_rise + _turn(ctx, ln.source, start),
+            rise_end_mm=ln.target_rise + _turn(ctx, ln.target, end),
+            ends_mm=END_ALLOWANCE + ctx.tail(ln.source) if ln.ends is None else ln.ends,
+            route=ln.route,
+            circuit=ln.circuit,
+            end_drop=end[1] if end else None,
+            start_drop=start[1] if start else None,
+            led=ln.led,
         )
-    return _one_side(boxes, runs, ways, ctx.any_angle) if beside is None else runs
+        found[k] = (run, None if ln.wall else (router, target))
+    runs = [found[k][0] for k, _ in todo]
+    ways = [found[k][1] for k, _ in todo]  # each run's router and target, for _one_side
+    return _one_side(boxes, runs, ways) if beside is None else runs
 
 
 def _one_side(
     boxes: Sequence[JunctionBox],
     runs: Sequence[Run],
     ways: Sequence[tuple[Router, End] | None],
-    any_angle: bool,
 ) -> list[Run]:
     """A box on the ceiling (floor) with 2 to ONE_SIDE_MAX cables takes them all from one side
     (decision 2026-11-18): the cables run together, straight, BOX_LEAD_MM out of that side and
@@ -1367,7 +1466,7 @@ def _one_side(
                 r = out[k]
                 start = (nodes[r.source], here[r.source]) if r.source in here else None
                 end = (here[r.target], nodes[r.target]) if r.target in here else None
-                via = _via_lead(start, end, *way, any_angle)
+                via = _via_lead(start, end, *way)
                 if via is None:
                     break
                 vias[k] = via
@@ -1404,7 +1503,6 @@ def _via_lead(
     end: tuple[Vec, Vec] | None,
     router: Router,
     target: End,
-    any_angle: bool,
 ) -> _Via | None:
     """A cable through the leads of its boxes (_one_side): start is (box, lead) when it leaves a
     box from a side, end is (lead, box) when it comes into one; otherwise the run's own router
@@ -1418,13 +1516,8 @@ def _via_lead(
         [Point(end[1].as_tuple())] if end else []
     )
     for beside in ((), tuple(stubs)):
-        if start is not None:
-            begin = End(start[1], False)
-            used = Router(router.area, begin, any_angle, router.walls, beside)
-        elif beside:
-            used = Router(router.area, router.source, any_angle, router.walls, beside)
-        else:
-            used = router
+        begin = End(start[1], False) if start is not None else router.source
+        used = router.rebased(begin, beside)
         rest = used.route(to)
         line = (
             LineString([v.as_tuple() for v in rest]) if len(rest) > 1 else Point(rest[0].as_tuple())

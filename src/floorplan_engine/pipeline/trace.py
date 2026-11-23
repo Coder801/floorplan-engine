@@ -7,10 +7,12 @@ search is kept: lines are routed again while boxes move off passing lines (round
 and TV once more apart from power (stage "apart"); the last search is the final route unless the
 line has a manual route.
 
-The SVG has layers (g id) that can be switched off in the browser: rooms, drillable walls, the
-grid of the focused line (free cells, wall bands, cells beside power, search cost), all lines,
-the focused lines (grid path before pull dashed, final route solid), boxes and their moves.
-Hovering a line shows its id, group, ends and costs.
+The SVG has layers (g id) that can be switched off in the browser: rooms, drillable walls and
+the openings a ceiling route pays to pass (routing.ceiling_passes), the grid of the focused line
+(free cells, wall bands, band cells at a ready hole, cells beside power, search cost), all
+lines, the focused lines (grid path before pull dashed, final route solid), boxes and their
+moves. Hovering a line shows its id, group, ends and costs; the summary line says whether the
+line went through a wall, above an opening or into a hole made by a line before it.
 """
 
 from __future__ import annotations
@@ -63,6 +65,7 @@ class WiringTrace:
     walls: tuple[Polygon, ...]  # drillable walls (as the board router saw them)
     lines: tuple[TracedLine, ...]
     moves: tuple[BoxMove, ...]
+    passes: tuple[Polygon, ...] = ()  # openings a ceiling route pays to pass (ceiling_passes)
 
 
 def trace_wiring(project: Path) -> WiringTrace:
@@ -83,6 +86,7 @@ def trace_wiring(project: Path) -> WiringTrace:
     count: dict[str, int] = {}
     moves: list[BoxMove] = []
     walls: tuple[Polygon, ...] = ()
+    passes: tuple[Polygon, ...] = ()
     for e in events:
         if isinstance(e.payload, BoxMove):
             moves.append(e.payload)
@@ -93,12 +97,13 @@ def trace_wiring(project: Path) -> WiringTrace:
                 count[line] = count.get(line, 0) + 1
                 if e.labels.get("source") == "board":
                     walls = e.payload.walls
+                    passes = passes or e.payload.passes
     lines = tuple(
         TracedLine(r, last.get(r.id), count.get(r.id, 0), f"wire:{r.id}" in wiring.edited)
         for r in wiring.runs
     )
     rooms = tuple(tuple(c.vertices) for c in report.contours.values())
-    return WiringTrace(rooms, wiring, walls, lines, tuple(moves))
+    return WiringTrace(rooms, wiring, walls, lines, tuple(moves), passes)
 
 
 def trace_file(project: Path, tags: Sequence[str]) -> Path:
@@ -119,6 +124,10 @@ def line_note(t: TracedLine) -> str:
         parts.append(f"цена поиска {t.search.cost:.0f}")
         if t.search.wall_cells:
             parts.append("сквозь стену")
+        if t.search.pass_cells:
+            parts.append("через проём")
+        if t.search.hole_cells:
+            parts.append("по готовому отверстию")
     if t.routed > 1:
         parts.append(f"поисков {t.routed}")
     if t.manual:
@@ -148,7 +157,8 @@ def trace_svg(tr: WiringTrace, focus: Sequence[TracedLine], cost: bool = False) 
     out.append(
         _layer(
             "walls",
-            [_area(w, 'fill="#f5a623" fill-opacity="0.35" stroke="none"') for w in tr.walls],
+            [_area(w, 'fill="#f5a623" fill-opacity="0.35" stroke="none"') for w in tr.walls]
+            + [_area(w, 'fill="#f5a623" fill-opacity="0.15" stroke="none"') for w in tr.passes],
         )
     )
     out.append(
@@ -248,8 +258,9 @@ def _focus(t: TracedLine) -> list[str]:
 
 
 def _grid(s: RouteTrace, cost: bool) -> list[str]:
-    """Free cells of the search grid: wall bands orange, cells beside power cyan; with cost each
-    reached cell is painted from blue (cheap) to red (dear) by its search cost."""
+    """Free cells of the search grid: wall and opening bands orange, band cells at a ready hole
+    green, cells beside power cyan; with cost each reached cell is painted from blue (cheap) to
+    red (dear) by its search cost."""
     g = s.grid
     penalty = g.penalty or {}
     beside = (g.apart[0] | g.apart[1]) if g.apart is not None else frozenset()
@@ -266,6 +277,8 @@ def _grid(s: RouteTrace, cost: bool) -> list[str]:
         if cost and top > 0 and math.isfinite(spent := s.cell_cost(k)):
             hue = 240 - 240 * spent / top
             fill = f'fill="hsl({hue:.0f},80%,60%)" fill-opacity="0.55"'
+        elif k in g.opened:
+            fill = 'fill="#2ca02c" fill-opacity="0.5"'
         elif k in penalty:
             fill = 'fill="#f5a623" fill-opacity="0.6"'
         elif k in beside:
@@ -312,13 +325,14 @@ def _move(m: BoxMove, avoid: bool) -> list[str]:
 def _legend(x0: float, top: float, focus: Sequence[TracedLine], cost: bool) -> list[str]:
     rows = [
         "серые / синие / жёлтые — силовые / слаботочка / 12 В LED; штрих — по полу",
-        "оранжевое — стены, которые можно сверлить; фиолетовое — перенос коробки с чужих трасс "
+        "оранжевое — стены, которые можно сверлить, бледнее — проёмы ниже потолка (по потолку "
+        "проход стоит как стена); фиолетовое — перенос коробки с чужих трасс "
         "(с --point <коробка> — и зона, от которой она уходила)",
     ]
     if focus:
         rows.append(
             "красная — итоговая трасса; синий пунктир — путь по сетке до натяжки; "
-            "голубые клетки — рядом с силовым кабелем"
+            "голубые клетки — рядом с силовым кабелем; зелёные — готовое отверстие"
         )
     if cost:
         rows.append("клетки: цена поиска от источника, синие — дёшево, красные — дорого")

@@ -32,6 +32,7 @@ from floorplan_engine.electrical.bundles import bundles, lane_paths, lanes, offs
 from floorplan_engine.electrical.chases import wall_chases, with_conduit
 from floorplan_engine.electrical.estimate import PriceList, build_estimate
 from floorplan_engine.electrical.panel import LineClass
+from floorplan_engine.electrical.routing import WALL_HOLE_SHARE
 from floorplan_engine.electrical.routing import length as length_of
 from floorplan_engine.electrical.wiring import (
     BOX_LEAD_MM,
@@ -372,6 +373,61 @@ def test_bearing_or_thick_wall_is_not_drilled(partition: dict[str, Any]) -> None
     (run,) = w.runs
     assert all(1200 <= y <= 2000 for y in _crossings(run))
     assert w.holes and not [h for h in w.holes if h.passage.startswith("wall:")]
+
+
+def _two_lines_into_room_b(route: str | None = None) -> Any:
+    """Panel in a at y 300 (facing the wall, the door at y 1200…2000 is a detour); s1 on the top
+    wall of b far to the right, s2 on the right wall of b at y 1500, facing the door; each a
+    direct line of its own group."""
+    pts = [
+        {"id": "s1", "room": "b", "type": "socket", "wall": "w2", "offset": 2700, "height": 300,
+         "group": "QF1"},
+        {"id": "s2", "room": "b", "type": "socket", "wall": "w3", "offset": 1500, "height": 300,
+         "group": "QF2"},
+    ]  # fmt: skip
+    data: dict[str, Any] = {
+        "points": pts,
+        "board": {"room": "a", "wall": "w1", "offset": 300, "height": 1700},
+    }
+    if route is not None:
+        data["cables"] = [
+            {"id": f"c{k}", "from": "board", "to": [p["id"]], "group": p["group"],
+             "cable": "3x2.5", "route": route}
+            for k, p in enumerate(pts)
+        ]  # fmt: skip
+    return _wiring(_two_rooms_with_door(), Electrical.model_validate(data))
+
+
+def test_lines_of_one_source_follow_into_one_hole() -> None:
+    """Decision 2026-11-23: the far line (s1) pays a hole through the wall at the panel's height;
+    the nearer s2, whose own way lay above the door (an opening lower than the ceiling costs the
+    pass too), is as short through that ready hole and takes it: one hole in the estimate, none
+    above the door."""
+    w = _two_lines_into_room_b()
+    by_target = {r.target: r for r in w.runs}
+    at = {t: _crossings(r) for t, r in by_target.items()}
+    assert len(at["s1"]) == 1 and len(at["s2"]) == 1
+    assert abs(at["s1"][0] - at["s2"][0]) < WALL_HOLE_SHARE
+    assert not any(1200 <= y <= 2000 for ys in at.values() for y in ys)
+    (hole,) = w.holes
+    assert hole.passage.startswith("wall:0:ceiling:") and set(hole.runs) == set(by_target_ids(w))
+    # Routed again, the same: the order within the panel is fixed, not by hash or dict order
+    assert [r.path for r in _two_lines_into_room_b().runs] == [r.path for r in w.runs]
+    assert [r.id for r in w.runs] == ["wire_1", "wire_2"]  # ids by link, whatever the order
+
+
+def by_target_ids(w: Wiring) -> list[str]:
+    return [r.id for r in w.runs]
+
+
+def test_on_the_floor_the_opening_is_free() -> None:
+    """The same two lines on the floor: under the door there is no wall, so the opening costs
+    nothing and both lines go through it (the way round through the wall would pay a hole); no
+    hole in the estimate."""
+    w = _two_lines_into_room_b("floor")
+    at = {r.target: _crossings(r) for r in w.runs}
+    assert all(1200 <= y <= 2000 for ys in at.values() for y in ys) and all(at.values())
+    assert w.holes == ()
 
 
 def test_fillet_rounds_right_angles() -> None:

@@ -1,25 +1,40 @@
 """Route: polyline simplification and axis length; grid search (cost and pruning); the jog at a
-route's end slid back; the search memo of a build."""
+route's end slid back; openings and ready holes as bands (decision 2026-11-23); the search memo
+of a build."""
 
 from __future__ import annotations
 
+import itertools
+import math
+
 import pytest
-from shapely.geometry import box
+import shapely
+from shapely.geometry import Polygon, box
+from shapely.geometry.base import BaseGeometry
 
 from floorplan_engine.electrical.routing import (
     APART,
+    HOLE_CELL_COST,
     PANEL_FREE,
+    PASS_FAVOUR,
+    STEP,
+    WALL_HOLE_SHARE,
+    WALL_PASS_COST,
     End,
     Grid,
     Router,
     apart_cells,
+    below_ceiling,
     beside_mm,
+    ceiling_passes,
+    crossings,
     length,
     search_memo,
     simplify,
     slide_jog,
 )
 from floorplan_engine.model.geometry import Vec
+from tests.conftest import make_plan
 
 
 def _v(*pts: tuple[float, float]) -> list[Vec]:
@@ -281,3 +296,170 @@ def test_route_is_traced_only_while_recording() -> None:
 def test_grid_index_inverts_center() -> None:
     grid = Grid.of(box(0, 0, 1000, 700))
     assert all(grid.index(grid.center(k)) == k for k in range(len(grid.free)))
+
+
+def _two_rooms() -> tuple[BaseGeometry, list[Polygon], list[Polygon]]:
+    """Rooms 0…3000 and 3100…6100 with a 100 partition at x 3000…3100 and a door at y 1200…2000:
+    the free area, the drillable wall bands beside the door and the door strip, as
+    free_area, drillable_walls and ceiling_passes give them."""
+    door = box(3000, 1200, 3100, 2000)
+    area = shapely.unary_union([box(0, 0, 3000, 3000), box(3100, 0, 6100, 3000), door])
+    walls = [box(3000, 0, 3100, 1199), box(3000, 2001, 3100, 3000)]
+    return area, walls, [door]
+
+
+def test_opening_costs_like_a_wall_on_the_ceiling_and_is_free_on_the_floor() -> None:
+    """Decision 2026-11-23: on the ceiling plane the strip of a door lower than the ceiling is a
+    band that costs the pass; the floor router (no passes) crosses it for nothing."""
+    area, walls, passes = _two_rooms()
+    source, target = End(Vec(75, 1500), True), Vec(5000, 1500)
+    floor = Router(area, source, walls=walls)
+    ceiling = Router(area, source, walls=walls, passes=passes)
+    assert floor.bands == tuple(walls) and ceiling.bands == (*walls, *passes)
+    extra = ceiling.cost(target) - floor.cost(target)
+    assert WALL_PASS_COST / 2 < extra < WALL_PASS_COST  # the band's cells across the door
+
+    def in_door(router: Router) -> list[int]:
+        return [
+            k
+            for k in (router.grid.penalty or {})
+            if 3000 < router.grid.center(k).x < 3100 and 1200 < router.grid.center(k).y < 2000
+        ]
+
+    assert in_door(ceiling) and not in_door(floor)
+    # A pass through the door and a pass through the wall cost the same, less PASS_FAVOUR
+    through_wall = Router(area, End(Vec(75, 300), True), walls=walls, passes=passes).cost(
+        Vec(5000, 300)
+    )
+    through_door = ceiling.cost(target)
+    assert 0 < through_wall - through_door <= PASS_FAVOUR
+
+
+def test_tie_goes_through_the_opening_not_a_new_hole() -> None:
+    """A target reachable through the door and through the wall at the same length: the opening
+    wins by PASS_FAVOUR."""
+    area, walls, passes = _two_rooms()
+    router = Router(area, End(Vec(75, 1500), True), walls=walls, passes=passes)
+    path = router.route(End(Vec(6025, 500), True))
+    crossed = [a.y for a, b in itertools.pairwise(path) if a.x < 3000 < 3100 < b.x]
+    assert crossed and all(1200 <= y <= 2000 for y in crossed)
+
+
+def test_ready_hole_makes_the_band_free_within_share() -> None:
+    """A line routed before crossed the wall at y 300: the next line through the same spot pays
+    HOLE_CELL_COST per cell instead of the pass; a hole farther than WALL_HOLE_SHARE changes
+    nothing."""
+    area, walls, passes = _two_rooms()
+    source, target = End(Vec(75, 300), True), Vec(5000, 300)
+    paid = Router(area, source, walls=walls, passes=passes)
+    free = Router(
+        area, source, walls=walls, passes=passes, holes=[(Vec(3000, 300), Vec(3100, 300))]
+    )
+    far = Router(area, source, walls=walls, passes=passes, holes=[(Vec(3000, 900), Vec(3100, 900))])
+    saved = paid.cost(target) - free.cost(target)
+    assert WALL_PASS_COST / 2 < saved < WALL_PASS_COST
+    assert far.cost(target) == paid.cost(target)
+    assert free.grid.opened and all(
+        math.hypot(free.grid.center(k).x - 3050, free.grid.center(k).y - 300)
+        < WALL_HOLE_SHARE + STEP
+        for k in free.grid.opened
+    )
+    # Another line's hole: twice the residual of an own one (the tie-break), still no pass
+    assert all(free.grid.penalty[k] == 2 * HOLE_CELL_COST for k in free.grid.opened)  # type: ignore[index]
+    # A target the door and the hole reach at the same length now goes through the hole
+    through_hole = free.route(End(Vec(5000, 1500), False))
+    crossed = [a.y for a, b in itertools.pairwise(through_hole) if a.x < 3000 < 3100 < b.x]
+    assert len(crossed) == 1 and abs(crossed[0] - 300) < STEP
+
+
+def test_tie_between_two_ready_holes_goes_through_the_own_one() -> None:
+    """A target as near through a hole another line made (the door) as through a hole of the same
+    source (the wall): the own hole wins, so the cables of one source leave it together."""
+    area, walls, passes = _two_rooms()
+    # From the top wall of a to the bottom wall of b: down, across and down again, the same
+    # length and turns through the hole at y 600 and the one at y 1500; a new hole would pay
+    source, target = End(Vec(1500, 2925), False), End(Vec(4500, 75), False)
+    wall_hole, door_hole = (Vec(3000, 600), Vec(3100, 600)), (Vec(3000, 1500), Vec(3100, 1500))
+    holes = [wall_hole, door_hole]
+
+    def crossed(router: Router) -> float:
+        (y,) = [a.y for a, b in itertools.pairwise(router.route(target)) if a.x < 3000 < 3100 < b.x]
+        return y
+
+    own_wall = Router(area, source, walls=walls, passes=passes, holes=holes, own=[wall_hole])
+    own_door = Router(area, source, walls=walls, passes=passes, holes=holes, own=[door_hole])
+    assert abs(crossed(own_wall) - 600) <= WALL_HOLE_SHARE  # anywhere in the hole's zone
+    assert abs(crossed(own_door) - 1500) <= WALL_HOLE_SHARE
+    assert own_wall.own == (wall_hole,) and own_door.cost(target.node) == own_wall.cost(target.node)
+    # own that is not a hole is dropped; a different own is a different search
+    assert Router(area, source, walls=walls, own=[wall_hole]).own == ()
+    assert own_wall.dist is not own_door.dist
+
+
+def test_with_holes_and_rebased_keep_the_bands() -> None:
+    area, walls, passes = _two_rooms()
+    plain = Router(area, End(Vec(75, 300), True))
+    assert plain.with_holes([(Vec(3000, 300), Vec(3100, 300))]) is plain  # no bands to open
+    router = Router(area, End(Vec(75, 300), True), walls=walls, passes=passes)
+    assert router.with_holes(()) is router
+    hole = (Vec(3000, 300), Vec(3100, 300))
+    opened = router.with_holes([hole], [hole])
+    assert opened is not router and opened.walls == router.walls and opened.passes == router.passes
+    assert opened.with_holes(opened.holes, opened.own) is opened
+    assert opened.with_holes(opened.holes) is not opened  # no longer its own hole
+    moved = opened.rebased(End(Vec(500, 500), False))
+    assert (moved.holes, moved.own) == (opened.holes, opened.own) and moved.bands == opened.bands
+    assert moved.rebased(moved.source) is moved
+    apart = opened.apart_from([[Vec(0, 0), Vec(1000, 0)]])
+    assert (apart.holes, apart.own) == (opened.holes, opened.own)
+
+
+def test_crossings_are_the_pieces_across_the_bands() -> None:
+    _, walls, passes = _two_rooms()
+    path = [Vec(250, 300), Vec(5000, 300), Vec(5000, 1500), Vec(2000, 1500)]
+    found = crossings(path, [*walls, *passes])
+    assert [(round(a.x), round(a.y), round(b.x), round(b.y)) for a, b in found] == [
+        (3000, 300, 3100, 300),
+        (3100, 1500, 3000, 1500),
+    ]
+    assert crossings(path, []) == [] and crossings(path[:1], walls) == []
+
+
+def test_below_ceiling_and_ceiling_passes() -> None:
+    """A door with its top under the ceiling is a band on the ceiling; one up to the ceiling and a
+    window are not; a door without a height is DOOR_TOP_MM high."""
+    from floorplan_engine.model.geometry import DOOR_TOP_MM, room_geometries
+    from floorplan_engine.validation.plan import validate_plan
+
+    plan = make_plan(
+        [{"length": 3000}, {"length": 4000}, {"length": 3000}, {"length": 4000}],
+        [
+            {"wall": "w1", "type": "door", "offset": 500, "width": 900},
+            {"wall": "w2", "type": "door", "offset": 500, "width": 900, "height": 2700},
+            {"wall": "w3", "type": "opening", "offset": 500, "width": 1200, "height": 2200},
+            {"wall": "w4", "type": "window", "offset": 500, "width": 1200, "height": 1400},
+        ],
+    )
+    (o1, o2, o3, o4) = plan.rooms[0].openings
+    ceiling = plan.ceiling_height
+    assert ceiling > DOOR_TOP_MM
+    assert below_ceiling(o1, ceiling) and below_ceiling(o3, ceiling)
+    assert not below_ceiling(o2, ceiling) and not below_ceiling(o4, ceiling)
+    _, contours = validate_plan(plan)
+    geoms = list(room_geometries(plan, contours))
+    strips = ceiling_passes(geoms, ceiling)
+    assert len(strips) == 2
+    assert not ceiling_passes(geoms, DOOR_TOP_MM)  # a ceiling at the door tops: nothing above
+
+
+def test_search_memo_shares_the_base_grid_between_hole_states() -> None:
+    area, walls, passes = _two_rooms()
+    source = End(Vec(75, 300), True)
+    hole = [(Vec(3000, 300), Vec(3100, 300))]
+    with search_memo():
+        a = Router(area, source, walls=walls, passes=passes)
+        b = Router(area, source, walls=walls, passes=passes, holes=hole)
+        c = Router(area, source, walls=walls, passes=passes, holes=hole)
+    assert a.dist is not b.dist and b.dist is c.dist
+    assert a.grid.free is b.grid.free  # the same base grid, only the penalties differ
+    assert a.grid.penalty is not b.grid.penalty
