@@ -7,6 +7,10 @@
 - lines are routed one after another, in a fixed order (decision 2026-11-23, route_runs),
   because a line that crosses a wall or an opening band leaves a hole the next lines of its
   plane and circuit go through for free (routing.Router holes, within WALL_HOLE_SHARE);
+- a 12 V LED line from the panel is searched with a heavier metre (Link.weight, routing.Router
+  weight, decision 2026-11-23): it takes a pass or a turn sooner than a detour; the order of the
+  lines is by the cost without the weight, so a 230 V line changes only when it goes into a hole
+  the LED line made;
 - a box on the ceiling (floor) with 2 to ONE_SIDE_MAX cables takes them all from one side
   (decision 2026-11-18, _one_side): they leave it together, straight, for BOX_LEAD_MM and part
   only there, so the cables lie evenly; boxes with more cables keep their routes;
@@ -182,7 +186,7 @@ def route_runs(
                 plane=ln.route,
                 stage="main" if beside is None else "apart",
             ):
-                path = tuple(router.route(target))
+                path = tuple(router.weighted(ln.weight).route(target))
             routers.note_holes(ln, path, router.bands)
         found[k] = (_run_of(ctx, k, ln, path, start, end), None if ln.wall else (router, target))
     runs = [found[k][0] for k, _ in todo]

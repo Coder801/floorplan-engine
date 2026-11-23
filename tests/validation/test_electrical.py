@@ -239,3 +239,29 @@ def test_low_voltage_cable_errors_name_the_field() -> None:
     assert loop.startswith("cables[2].to[0]: кольцо слаботочных линий: d1 → d2 → d3 → d1")
     (self_fed,) = _low([{"id": "c1", "from": "d1", "to": ["d1"]}])
     assert self_fed.startswith("cables[0].to[0]: кольцо слаботочных линий: d1 → d1")
+
+
+@pytest.mark.parametrize("supply", ["room", "board"])
+def test_long_led_strip_is_a_warning_on_its_entry(supply: str) -> None:
+    """A strip of exactly STRIP_MAX_M passes; a longer one is a warning, panel or not."""
+    plan = make_plan([{"length": 6000}, {"length": 4000}, {"length": 6000}, {"length": 4000}])
+    _, contours = validate_plan(plan)
+    strips = [
+        {"id": "s_max", "room": "r", "wall": "w2", "start": 0, "end": 4000},
+        {"id": "s_ok", "room": "r", "wall": "w1", "start": 500, "end": 5500},
+        {"id": "s_long", "room": "r", "wall": "w3", "start": 0, "end": 5600},
+    ]
+    elec = Electrical.model_validate({"led_supply": supply, "led_strips": strips})
+    found = [
+        (i.path, i.message)
+        for i in validate_electrical(elec, plan, contours)
+        if i.severity is Severity.WARNING
+    ]
+    assert found == [
+        (
+            "led_strips[2]",
+            "LED-лента s_long (Комната, стена w3): 5,6 м — у ленты 12 В длиннее 5 м от одного "
+            "конца тускнеет дальний конец и греется ввод; питание с двух концов или из середины, "
+            "лента 24 В или участки со своим блоком",
+        )
+    ]

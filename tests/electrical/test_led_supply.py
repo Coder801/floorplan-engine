@@ -7,15 +7,21 @@ from typing import Any
 
 import pytest
 
+from floorplan_engine.electrical import wiring as wiring_module
 from floorplan_engine.electrical.estimate import build_estimate, quantities
 from floorplan_engine.electrical.led_supply import (
     DROP_MAX,
+    LED_LENGTH_MAX,
+    LED_LENGTH_PER_A,
     SECTIONS,
     STRIP_DEFAULT_M,
+    STRIP_MAX_M,
     STRIP_W_PER_M,
     drop,
     led_lines,
     led_loads,
+    length_weight,
+    long_strips,
     section_for,
     supply_for,
 )
@@ -48,6 +54,17 @@ def test_strip_goes_to_the_nearest_output_on_its_wall_others_to_the_first() -> N
     assert loads["led2"].strips == ("s_w1",) and loads["led2"].metres == 1.0
     assert loads["led1"].strips == ("s_w2",) and loads["led1"].metres == 1.5
     assert not loads["led1"].metres_assumed
+
+
+@pytest.mark.parametrize("supply", ["room", "board"])
+def test_strip_longer_than_the_max_is_long_in_either_supply_mode(supply: str) -> None:
+    top = STRIP_MAX_M * 1000
+    strips = [
+        {"id": "s_max", "room": "r", "wall": "w2", "start": 0, "end": top},
+        {"id": "s_long", "room": "r", "wall": "w4", "start": 0, "end": top + 100},
+    ]
+    found = long_strips(_elec(supply, led_strips=strips))
+    assert [(k, s.id) for k, s in found] == [(1, "s_long")]
 
 
 def test_output_without_a_strip_gets_the_default_five_metres() -> None:
@@ -162,3 +179,24 @@ def test_panel_data_gives_the_viewer_the_led_box_and_its_lines() -> None:
     assert line["cable"].startswith("2x") and line["length"] > 0 and "drop_ok" in line
     no_wiring = panel_data(panel, {}, "ЩР", "ru")["led"]
     assert isinstance(no_wiring, dict) and "cable" not in no_wiring["lines"][0]
+
+
+def test_length_weight_grows_with_the_current_up_to_the_cap() -> None:
+    assert length_weight(0.0) == 1.0
+    assert length_weight(6.0) == pytest.approx(1 + 6 * LED_LENGTH_PER_A)
+    assert length_weight(100.0) == LED_LENGTH_MAX
+
+
+def test_only_the_12_v_lines_are_routed_with_the_weight(monkeypatch: pytest.MonkeyPatch) -> None:
+    """With the weight off (1 for every line) the 230 V lines route exactly as with it on: only
+    the LED lines may change."""
+    plan = make_plan(RECT, [DOOR])
+    _, contours = validate_plan(plan)
+    elec = _elec()
+    weighted = box_wiring(plan, contours, elec)
+    monkeypatch.setattr(wiring_module, "length_weight", lambda current: 1.0)
+    plain = box_wiring(plan, contours, elec)
+    assert weighted is not None and plain is not None
+    power = [(r.id, r.path) for r in weighted.runs if not r.led]
+    assert power == [(r.id, r.path) for r in plain.runs if not r.led]
+    assert sum(r.led for r in weighted.runs) == 2

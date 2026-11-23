@@ -14,6 +14,13 @@ output needs and how its 12 V line is sized. Model only, no drawing.
   goes by the voltage drop: the smallest of SECTIONS with a drop within DROP_MAX at the strip
   current; if even the largest is not enough, the largest and a remark (24 V strip or a supply
   at the strip).
+- The 12 V line is routed with a heavier metre (length_weight): 1 + LED_LENGTH_PER_A per ampere
+  of the strip, at most LED_LENGTH_MAX (assumption), so the router (routing.Router weight) takes a
+  shorter path at the cost of a turn or a wall pass rather than a detour that needs a thicker
+  cable.
+- A strip itself, in either led_supply mode: a 12 V strip fed from one end longer than
+  STRIP_MAX_M (assumption) dims at the far end and overheats at the feed — `long_strips`, a
+  warning of the electrical check.
 """
 
 from __future__ import annotations
@@ -27,12 +34,15 @@ from floorplan_engine.model.schema import Electrical, ElectricalPoint, LedStrip,
 
 STRIP_DEFAULT_M = 5.0  # strip at an output not described in the model, m (assumption)
 STRIP_W_PER_M = 14.4  # 12 V strip power, W/m (assumption: 5050, 60 LEDs per metre)
+STRIP_MAX_M = 5.0  # 12 V strip fed from one end, m (assumption): longer — dim end, hot feed
 LED_V = 12.0  # strip and supply output voltage, V
 PSU_MARGIN = 1.25  # a supply is loaded to at most 80 %
 PSU_SERIES = tuple(sorted(LED_PSU_MODULES))  # W
 SECTIONS = (1.5, 2.5, 4.0, 6.0)  # copper two-core 12 V line, mm²
 DROP_MAX = 0.05  # voltage drop on the 12 V line, share of LED_V
 RHO = 0.0175  # copper resistivity, Ω·mm²/m
+LED_LENGTH_PER_A = 0.1  # routing: a metre of 12 V line weighs 10 % more per ampere (assumption)
+LED_LENGTH_MAX = 2.0  # routing: at most twice a metre of 230 V line (assumption)
 
 
 @dataclass(frozen=True)
@@ -79,6 +89,17 @@ def led_outputs(elec: Electrical) -> list[ElectricalPoint]:
     return [p for p in elec.points if p.type is PointType.LED_OUTPUT and p.group]
 
 
+def strip_metres(strip: LedStrip) -> float:
+    """Strip length, m."""
+    return (strip.end - strip.start) / 1000
+
+
+def long_strips(elec: Electrical) -> list[tuple[int, LedStrip]]:
+    """Strips longer than STRIP_MAX_M with their index in led_strips, in either led_supply
+    mode and with or without a panel."""
+    return [(k, s) for k, s in enumerate(elec.led_strips) if strip_metres(s) > STRIP_MAX_M + 1e-9]
+
+
 def strip_owners(elec: Electrical, outputs: Sequence[ElectricalPoint]) -> dict[str, list[LedStrip]]:
     """Strips by output: on the output's wall, to the nearest output there; the rest of the room,
     to its first output. A room without an output keeps its strips to itself."""
@@ -115,7 +136,7 @@ def led_loads(elec: Electrical) -> list[LedLoad]:
     out: list[LedLoad] = []
     for p in outputs:
         strips = owners[p.id]
-        metres = sum(s.end - s.start for s in strips) / 1000 if strips else STRIP_DEFAULT_M
+        metres = sum(strip_metres(s) for s in strips) if strips else STRIP_DEFAULT_M
         power = p.power if p.power is not None else metres * STRIP_W_PER_M
         supply, oversize = supply_for(power)
         assert p.group is not None
@@ -134,6 +155,12 @@ def led_loads(elec: Electrical) -> list[LedLoad]:
             )
         )
     return out
+
+
+def length_weight(current: float) -> float:
+    """Routing cost of a millimetre of the 12 V line against a 230 V one: the more current, the
+    more a longer route costs in cross-section and voltage drop."""
+    return min(1.0 + LED_LENGTH_PER_A * current, LED_LENGTH_MAX)
 
 
 def drop(length_mm: float, current: float, section: float) -> float:

@@ -46,6 +46,12 @@ its wall — a zigzag where the elevations round every turn with the cable's rad
 slid back along the route to the farthest spot from which the route runs on the point's line,
 and disappears if the whole piece is clear.
 
+Length weight (decision 2026-11-23, Router weight): a step costs its length × weight, the
+penalties (turn, pass, hole, apart) stay as they are. 1 for every line but a 12 V LED line from
+the panel: its cross-section goes by the voltage drop over its length (led_supply.section_for), so
+a metre of it weighs more (led_supply.length_weight) and the route takes a pass or a turn sooner
+than a detour.
+
 Low-voltage apart from power (decision 2026-11-13, apart_cells): an internet or TV cable keeps
 APART from a power cable running the same way and crosses it at 90°. A step along a power piece
 closer than APART costs APART_COST more, a step across it costs nothing extra, so the route goes
@@ -306,14 +312,16 @@ class Grid:
                 return best
         raise ValueError("на плане нет свободного места для трассы")
 
-    def search_any(self, start: int) -> tuple[dict[int, int], dict[int, float]]:
+    def search_any(
+        self, start: int, weight: float = 1.0
+    ) -> tuple[dict[int, int], dict[int, float]]:
         """Dijkstra in eight directions with no turn penalty (any_angle): the state is a cell
         (direction 0), as in search, so path and cost are shared. Diagonal steps only if both
-        neighbouring cells are free: wall corners are not cut."""
+        neighbouring cells are free: wall corners are not cut. A step costs its length × weight."""
         dist: dict[int, float] = {start * 4: 0.0}
         prev: dict[int, int] = {start * 4: -1}
         heap: list[tuple[float, int]] = [(0.0, start * 4)]
-        diagonal = STEP * math.sqrt(2)
+        diagonal, straight = STEP * math.sqrt(2) * weight, STEP * weight
         while heap:
             cost, state = heapq.heappop(heap)
             if cost > dist.get(state, float("inf")):
@@ -330,7 +338,7 @@ class Grid:
                     continue
                 nxt = jy * self.nx + jx
                 ns = nxt * 4
-                c = cost + (diagonal if dx and dy else STEP)
+                c = cost + (diagonal if dx and dy else straight)
                 if self.penalty is not None:
                     c += self.penalty.get(nxt, 0.0)
                 if c < dist.get(ns, float("inf")):
@@ -357,8 +365,10 @@ class Grid:
             i = j
         return out
 
-    def search(self, start: int) -> tuple[dict[int, int], dict[int, float]]:
-        """Dijkstra over states (cell, direction): state parents and costs."""
+    def search(self, start: int, weight: float = 1.0) -> tuple[dict[int, int], dict[int, float]]:
+        """Dijkstra over states (cell, direction): state parents and costs. A step costs
+        STEP × weight plus the turn and the cell penalties."""
+        straight = STEP * weight
         dist: dict[int, float] = {}
         prev: dict[int, int] = {}
         heap: list[tuple[float, int]] = []
@@ -380,7 +390,7 @@ class Grid:
                 nxt = jy * self.nx + jx
                 if not self.free[nxt]:
                     continue
-                c = cost + STEP + (TURN_COST if nd != d else 0.0)
+                c = cost + straight + (TURN_COST if nd != d else 0.0)
                 if self.penalty is not None:
                     c += self.penalty.get(nxt, 0.0)
                 if self.apart is not None:
@@ -609,7 +619,8 @@ class Router:
     circuit (crossings): the band within WALL_HOLE_SHARE of each is free; own are those of them
     made by lines of the same source, cheaper by the tie-break (HOLE_CELL_COST). beside are the
     routes of power cables a low-voltage route keeps APART from (apart_cells), except within
-    PANEL_FREE of calm (the panel); at any angle they are not looked at."""
+    PANEL_FREE of calm (the panel); at any angle they are not looked at. weight is the cost of a
+    millimetre of route (1; more for a 12 V LED line, weighted)."""
 
     def __init__(
         self,
@@ -622,8 +633,10 @@ class Router:
         passes: Sequence[Polygon] = (),
         holes: Sequence[Crossing] = (),
         own: Sequence[Crossing] = (),
+        weight: float = 1.0,
     ) -> None:
         self.area = area
+        self.weight = weight
         self.walls = tuple(walls)
         self.passes = tuple(passes)
         self.holes = tuple(holes)
@@ -642,6 +655,7 @@ class Router:
             self.passes,
             self.holes,
             self.own,
+            weight,
         )
         memo = _MEMO.get()
         if memo is None:
@@ -672,6 +686,7 @@ class Router:
             self.passes,
             self.holes,
             self.own,
+            self.weight,
         )
 
     def with_holes(self, holes: Sequence[Crossing], own: Sequence[Crossing] = ()) -> Router:
@@ -690,6 +705,7 @@ class Router:
             self.passes,
             holes,
             own,
+            self.weight,
         )
 
     def rebased(self, source: End, beside: Sequence[Sequence[Vec]] = ()) -> Router:
@@ -707,6 +723,25 @@ class Router:
             self.passes,
             self.holes,
             self.own,
+            self.weight,
+        )
+
+    def weighted(self, weight: float) -> Router:
+        """The same router with a millimetre of route costing weight; itself if it already
+        does."""
+        if weight == self.weight:
+            return self
+        return Router(
+            self.area,
+            self.source,
+            self.any_angle,
+            self.walls,
+            self.beside,
+            self.calm,
+            self.passes,
+            self.holes,
+            self.own,
+            weight,
         )
 
     def cost(self, node: Vec) -> float:
@@ -767,7 +802,7 @@ class RouteTrace:
     end: Vec
     cells: tuple[Vec, ...]  # cell centres of the found path, before pull and the end joins
     path: tuple[Vec, ...]  # the route as returned
-    cost: float  # search cost to the target, mm of cable with turn and wall penalties
+    cost: float  # search cost to the target, mm of cable × weight with turn and wall penalties
     any_angle: bool
     passes: tuple[Polygon, ...] = ()  # openings lower than the ceiling (a ceiling router)
     holes: tuple[Crossing, ...] = ()  # ready holes the router saw
@@ -818,6 +853,7 @@ class _Inputs:
     passes: tuple[Polygon, ...]
     holes: tuple[Crossing, ...]
     own: tuple[Crossing, ...]
+    weight: float = 1.0
 
     def key(self) -> tuple[object, ...]:
         return (
@@ -831,6 +867,7 @@ class _Inputs:
             tuple(p.wkb for p in self.passes),
             tuple((a.as_tuple(), b.as_tuple()) for a, b in self.holes),
             tuple((a.as_tuple(), b.as_tuple()) for a, b in self.own),
+            self.weight,
         )
 
     def grid_key(self) -> tuple[object, ...]:
@@ -890,7 +927,7 @@ def _searched(inputs: _Inputs) -> _Search:
         grid.apart = apart_cells(grid, inputs.beside, inputs.calm)
     start = grid.nearest_free(inputs.source.node, open_only=True)
     search = grid.search_any if inputs.any_angle else grid.search
-    prev, dist = search(start)
+    prev, dist = search(start, inputs.weight)
     return grid, start, prev, dist
 
 

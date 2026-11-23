@@ -105,6 +105,9 @@ class Link:
     ends: float | None = None  # cable at both ends, mm; None: END_ALLOWANCE and the source tail
     led: bool = False  # 12 V line from an LED supply in the panel
     wall: bool = False  # a jumper between mechanisms of one frame: straight along the wall
+    weight: float = (
+        1.0  # cost of a millimetre of route (routing.Router weight): more for a LED line
+    )
 
 
 @dataclass(frozen=True)

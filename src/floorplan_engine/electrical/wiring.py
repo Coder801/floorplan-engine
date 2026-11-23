@@ -78,6 +78,7 @@ from floorplan_engine.electrical.chases import (
 from floorplan_engine.electrical.floor_heating import heating_zones
 from floorplan_engine.electrical.frames import entries
 from floorplan_engine.electrical.groups import group_key
+from floorplan_engine.electrical.led_supply import led_loads, length_weight
 from floorplan_engine.electrical.loads import LOW_TYPES
 from floorplan_engine.electrical.low_links import led_link, led_sections, low_feeds, low_link
 from floorplan_engine.electrical.master import CONTROL_ID, CONTROL_MARK, master_point
@@ -174,8 +175,9 @@ def _topology(
     master: ElectricalPoint | None,
 ) -> tuple[list[JunctionBox], list[Link]]:
     """All lines before routing, with the boxes they go through: the groups in their order, the
-    master switch control cable, low-voltage points without a group, 12 V LED lines; the boxes sized
-    by their final number of lines."""
+    master switch control cable, low-voltage points without a group, 12 V LED lines (a metre of
+    such a line weighs more in the search, by the strip current: led_supply.length_weight); the
+    boxes sized by their final number of lines."""
     boxes: list[JunctionBox] = []
     links: list[Link] = []
     for group in sorted({p.group for p in grouped if p.group}, key=group_key):
@@ -185,7 +187,8 @@ def _topology(
         links.append(_control_link(ctx, elec, master))
     feeds = low_feeds(elec)
     links += [low_link(ctx, elec, p, feeds.get(p.id)) for p in low]
-    links += [led_link(ctx, elec, p) for p in led]
+    weights = {ld.point: length_weight(ld.current) for ld in led_loads(elec)} if led else {}
+    links += [led_link(ctx, elec, p, weights[p.id]) for p in led]
     return sized(boxes, links), links
 
 

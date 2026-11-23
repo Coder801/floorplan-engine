@@ -14,7 +14,8 @@ output gets a 12 V line of its own from the panel (Run.led, low-voltage chases),
 group of the output; its switch stays in the group as before. The supplies stand in a box
 under the panel (decision 2026-11-13), the line starts at the panel; its cross-section goes
 by the voltage drop over its final length (led_supply.section_for, led_sections), LED_MARK at
-least.
+least. The line is routed with a heavier metre (decision 2026-11-23, led_supply.length_weight,
+Link.weight): the search takes a pass or a turn sooner than a detour that needs a thicker cable.
 With supplies at the strip ("room") the output is a light point of the group, through its box
 (wiring_links.py).
 """
@@ -91,16 +92,18 @@ def low_link(ctx: Context, elec: Electrical, p: ElectricalPoint, cable: Cable | 
     return Link(group, mark, assumed, source, p.id, ctx.anchors[p.id], up, down, route, "low")
 
 
-def led_link(ctx: Context, elec: Electrical, p: ElectricalPoint) -> Link:
+def led_link(ctx: Context, elec: Electrical, p: ElectricalPoint, weight: float) -> Link:
     """LED output fed from a supply in the panel: a 12 V line of its own from the panel along the
     electrical route, in the group of the output (its breaker feeds the supply). Low voltage, so
-    it does not share chases with 230 V cables."""
+    it does not share chases with 230 V cables. weight is the routing cost of a millimetre of the
+    line (led_supply.length_weight of the strip current)."""
     assert p.group is not None
     route: Route = "floor" if elec.route == "floor" else "ceiling"
     up = ctx.source_rise(route)
     down = rise(p, ctx.ceiling, route)
     anchor = ctx.anchors[p.id]
-    return Link(p.group, LED_MARK, True, "board", p.id, anchor, up, down, route, "low", led=True)
+    return Link(p.group, LED_MARK, True, "board", p.id, anchor, up, down, route, "low", led=True,
+                weight=weight)  # fmt: skip
 
 
 def led_sections(runs: Sequence[Run], elec: Electrical) -> list[Run]:

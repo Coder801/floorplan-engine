@@ -1,6 +1,7 @@
 """Electrical check (electrical.yaml): references to rooms and walls, anchoring points to walls
 and heights (a point above the ceiling is a warning), the panel, switch `controls`, groups
-spanning several rooms in standard and proper modes."""
+spanning several rooms in standard and proper modes, LED strips too long for 12 V from one end
+(a warning)."""
 
 from __future__ import annotations
 
@@ -16,7 +17,9 @@ from floorplan_engine.electrical.floor_heating import (
     heating_zones,
 )
 from floorplan_engine.electrical.heating_auto import HEATING_ROOMS, NONE, Place, parse_place
+from floorplan_engine.electrical.led_supply import STRIP_MAX_M, long_strips, strip_metres
 from floorplan_engine.electrical.low_links import is_low
+from floorplan_engine.electrical.panel_text import text
 from floorplan_engine.model.geometry import (
     Contour,
     Vec,
@@ -228,6 +231,7 @@ def validate_electrical(
             )
             if i.severity is Severity.ERROR
         ]
+    issues += _check_strip_length(elec, plan, file)
     for k, ch in enumerate(elec.cable_channels):
         path = f"cable_channels[{k}]"
         issues += check_wall_anchor(plan, ch.room, ch.wall, ch.offset, path, file)
@@ -270,6 +274,29 @@ def validate_electrical(
                 )
     issues += _check_low_cables(elec, file)
     return issues
+
+
+def _check_strip_length(elec: Electrical, plan: Plan, file: str) -> list[Issue]:
+    """A 12 V strip longer than STRIP_MAX_M from one end is a warning, in either led_supply
+    mode and with or without a panel."""
+    rooms = {r.id: r.name for r in plan.rooms}
+    return [
+        Issue(
+            file,
+            f"led_strips[{k}]",
+            text(
+                "w_led_long",
+                "ru",
+                s=s.id,
+                room=rooms.get(s.room, s.room),
+                wall=s.wall,
+                m=f"{strip_metres(s):.1f}".replace(".", ","),
+                max=f"{STRIP_MAX_M:g}",
+            ),
+            Severity.WARNING,
+        )
+        for k, s in long_strips(elec)
+    ]
 
 
 def _check_low_cables(elec: Electrical, file: str) -> list[Issue]:

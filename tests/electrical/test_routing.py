@@ -463,3 +463,19 @@ def test_search_memo_shares_the_base_grid_between_hole_states() -> None:
     assert a.dist is not b.dist and b.dist is c.dist
     assert a.grid.free is b.grid.free  # the same base grid, only the penalties differ
     assert a.grid.penalty is not b.grid.penalty
+
+
+def test_weighted_route_drills_the_wall_instead_of_a_detour() -> None:
+    """Decision 2026-11-23: a metre of a 12 V LED line weighs more (Router weight), the penalties
+    do not. From (1500, 1000) to (3400, 1100) a 230 V route takes the door above (3000 mm, no
+    pass); at weight 2 the detour costs more than the pass, and the route drills the wall."""
+    area, walls, _ = _two_rooms()
+    source, target = End(Vec(1500, 1000), False), End(Vec(3400, 1100), False)
+    plain = Router(area, source, walls=walls)
+    heavy = plain.weighted(2.0)
+    assert plain.weighted(1.0) is plain and heavy.weighted(2.0) is heavy
+    around, through = plain.route(target), heavy.route(target)
+    assert length(around) == 3000 and max(p.y for p in around) > 1200  # through the door
+    assert length(through) == 2300 and max(p.y for p in through) < 1200  # through the wall
+    # The weight keeps the holes and the bands
+    assert heavy.with_holes(crossings(through, heavy.bands)).weight == 2.0
