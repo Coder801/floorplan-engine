@@ -12,7 +12,7 @@ from floorplan_engine.electrical.panel import build_panel
 from floorplan_engine.electrical.wiring import box_wiring
 from floorplan_engine.model.schema import Electrical
 from floorplan_engine.validation.plan import validate_plan
-from tests.electrical.test_wiring import _two_rooms_with_door
+from tests.electrical.conftest import two_rooms_with_door
 
 
 def _socket(pid: str, room: str, offset: float, group: str = "QF1") -> dict[str, Any]:
@@ -66,7 +66,7 @@ def _elec(**extra: Any) -> Electrical:
 
 
 def _split(elec: Electrical) -> Electrical:
-    plan = _two_rooms_with_door()
+    plan = two_rooms_with_door()
     issues, contours = validate_plan(plan)
     assert not issues
     return split_by_lines(plan, contours, elec)
@@ -93,7 +93,7 @@ def test_proper_gives_each_board_line_own_group() -> None:
 
 
 def test_premium_panel_and_wiring_agree_line_per_breaker() -> None:
-    plan = _two_rooms_with_door()
+    plan = two_rooms_with_door()
     _, contours = validate_plan(plan)
     out = split_by_lines(plan, contours, _elec(panel={"scheme": "premium", "backup": "none"}))
     wiring = box_wiring(plan, contours, out)

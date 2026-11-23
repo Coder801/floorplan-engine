@@ -36,9 +36,10 @@ from floorplan_engine.electrical.led_supply import (
     led_mark,
     section_for,
 )
+from floorplan_engine.electrical.low_links import LED_MARK
 from floorplan_engine.electrical.panel import build_panel, busbars, device_name
 from floorplan_engine.electrical.pricing import MockPriceService, Prices, mock_price
-from floorplan_engine.electrical.wiring import LED_MARK, RESERVE, box_wiring
+from floorplan_engine.electrical.wiring import RESERVE, box_wiring
 from floorplan_engine.model.schema import Electrical, Plan
 from floorplan_engine.pipeline import build_project, estimate_project
 from floorplan_engine.validation.plan import validate_plan

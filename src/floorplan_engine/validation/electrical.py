@@ -16,7 +16,7 @@ from floorplan_engine.electrical.floor_heating import (
     heating_zones,
 )
 from floorplan_engine.electrical.heating_auto import HEATING_ROOMS, NONE, Place, parse_place
-from floorplan_engine.electrical.wiring import is_low
+from floorplan_engine.electrical.low_links import is_low
 from floorplan_engine.model.geometry import (
     Contour,
     Vec,
@@ -274,7 +274,7 @@ def validate_electrical(
 
 def _check_low_cables(elec: Electrical, file: str) -> list[Issue]:
     """Cables without a group that name internet and TV points without a group (low-voltage
-    topology, wiring.low_feeds): only such points in `to`, the source is board, media or such a
+    topology, low_links.low_feeds): only such points in `to`, the source is board, media or such a
     point, a point is fed once, no ring."""
     issues: list[Issue] = []
     points = {p.id: p for p in elec.points}

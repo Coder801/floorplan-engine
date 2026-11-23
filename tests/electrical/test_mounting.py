@@ -45,9 +45,9 @@ from floorplan_engine.electrical.mounting import (
 from floorplan_engine.electrical.wiring_model import Run, Wiring
 from floorplan_engine.model.geometry import Vec
 from tests.conftest import make_plan
+from tests.electrical.conftest import RECT, four_sockets
+from tests.electrical.conftest import wiring_of as _plan_wiring
 from tests.electrical.test_estimate import _wiring
-from tests.electrical.test_wiring import RECT, _sockets
-from tests.electrical.test_wiring import _wiring as _plan_wiring
 
 
 def _run(path: list[Vec], rise_start: float = 0.0, rise_end: float = 0.0, **kw: Any) -> Run:
@@ -225,7 +225,7 @@ def test_bend_rows_by_type_without_unknown() -> None:
 
 def _chain(loop: str, route: str = "floor", conduit: str = "none") -> Any:
     """Four sockets in a daisy chain on one wall."""
-    elec = _sockets(distribution="loop", route=route, conduit=conduit, loop_conduit=loop)
+    elec = four_sockets(distribution="loop", route=route, conduit=conduit, loop_conduit=loop)
     return _plan_wiring(make_plan(walls=RECT), elec)
 
 
@@ -278,7 +278,7 @@ def test_shared_needs_conduit_on_the_drops() -> None:
 def test_conduit_joints_by_metres_of_each_diameter() -> None:
     """A joint coupling per CONDUIT_JOINT_EVERY of conduit of a diameter, rounded up."""
     wiring = _chain("separate")
-    elec = _sockets(distribution="loop", route="floor")
+    elec = four_sockets(distribution="loop", route="floor")
     q = quantities(wiring, elec)
     for d, mm in conduit_lengths(wiring, "none").items():
         assert q[f"conduit_joint.{d}"] == math.ceil(mm / CONDUIT_JOINT_EVERY)
@@ -287,9 +287,9 @@ def test_conduit_joints_by_metres_of_each_diameter() -> None:
 def test_no_conduit_entries_in_the_estimate() -> None:
     """Conduit goes into flush boxes, junction boxes and the panel through knock-outs: the
     estimate has no separate entry fittings."""
-    wiring = _plan_wiring(make_plan(walls=RECT), _sockets(route="floor"))
+    wiring = _plan_wiring(make_plan(walls=RECT), four_sockets(route="floor"))
     assert wiring.boxes
-    q = quantities(wiring, _sockets(route="floor"))
+    q = quantities(wiring, four_sockets(route="floor"))
     assert not any(k.startswith("conduit_entry") for k in q)
 
 

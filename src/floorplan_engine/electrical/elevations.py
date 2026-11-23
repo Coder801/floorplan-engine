@@ -35,7 +35,7 @@ from floorplan_engine.electrical.frames import (
 from floorplan_engine.electrical.mounting import PRACTICE, BendSize, bend_size, bundle_radii, spots
 from floorplan_engine.electrical.point_numbers import number_points, point_name
 from floorplan_engine.electrical.routing import opening_strip
-from floorplan_engine.electrical.wiring_model import Chase, Route, Run, Wiring
+from floorplan_engine.electrical.wiring_model import Chase, JunctionBox, Route, Run, Wiring
 from floorplan_engine.model.geometry import (
     DOOR_TOP_MM,
     WINDOW_HEIGHT_MM,
@@ -47,11 +47,14 @@ from floorplan_engine.model.geometry import (
     room_geometries,
 )
 from floorplan_engine.model.schema import (
+    Conduit,
     Electrical,
+    ElectricalPoint,
     OpeningType,
     Plan,
     PointType,
     Room,
+    Wall,
 )
 from floorplan_engine.model.texts import Language, tr
 from floorplan_engine.model.wall_names import (
@@ -177,6 +180,10 @@ WaterMap = Mapping[tuple[str, str], Sequence[WaterView]]  # (room, wall) → sup
 _View = TypeVar(
     "_View", OpeningView, PointView, BoxView, ChaseView, FixingView, CableView, BoardView, WaterView
 )
+_Spot = tuple[
+    str, str, float, float
+]  # on a wall: room, wall, x from the wall start, y from the floor
+_Doors = Sequence[tuple[Polygon, Vec]]  # doors of the flat: place on the plan and the hinge point
 
 
 @dataclass(frozen=True)
@@ -258,12 +265,33 @@ class WallElevation:
 
 @dataclass
 class _Wall:
+    """The electrical items of one wall (or of a surface, once its parts are joined), in the
+    order they were placed: the elevation sorts them."""
+
     points: list[PointView] = field(default_factory=list)
     boxes: list[BoxView] = field(default_factory=list)
     chases: list[ChaseView] = field(default_factory=list)
     fixings: list[FixingView] = field(default_factory=list)
     cables: list[CableView] = field(default_factory=list)
     board: BoardView | None = None
+
+
+_Walls = defaultdict[tuple[str, str], _Wall]  # (room, wall) → its items
+
+
+@dataclass(frozen=True)
+class _Flat:
+    """What every elevation of the flat shares: the model, the room geometries, the surface
+    names, the sheet numbers of the points, the doors (the opening on the far side of a door is
+    that door) and the ceiling height with whether it is assumed."""
+
+    elec: Electrical
+    geoms: dict[str, RoomGeometry]
+    names: dict[tuple[str, str], WallName]
+    numbers: dict[str, int]
+    doors: _Doors
+    ceiling: float
+    assumed: bool
 
 
 def wall_elevations(
@@ -278,12 +306,33 @@ def wall_elevations(
     by room and wall walk order."""
     ceiling = wiring.ceiling_height if wiring is not None else ceiling_default
     assumed = wiring.height_assumed if wiring is not None else True
-    numbers = number_points(plan, elec)
     geoms = {g.room.id: g for g in room_geometries(plan, contours)}
-    names = surface_names(plan, contours)
-    doors = _doors(geoms)
-    walls: dict[tuple[str, str], _Wall] = defaultdict(_Wall)
+    flat = _Flat(
+        elec,
+        geoms,
+        surface_names(plan, contours),
+        number_points(plan, elec),
+        _doors(geoms),
+        ceiling,
+        assumed,
+    )
+    walls = _model_items(elec, flat.numbers)
+    if wiring is not None:
+        _wiring_items(walls, wiring, elec, geoms, ceiling)
 
+    out: list[WallElevation] = []
+    for room in plan.rooms:
+        for chain in surfaces(room):
+            e = _surface_elevation(room, chain, walls, water or {}, flat)
+            if e is not None:
+                out.append(e)
+    return out
+
+
+def _model_items(elec: Electrical, numbers: Mapping[str, int]) -> _Walls:
+    """Points and the panel from the model, by (room, wall): a point off the walls (on the
+    ceiling, in the floor) is not on any elevation."""
+    walls: _Walls = defaultdict(_Wall)
     for p in elec.points:
         if p.wall is None or p.offset is None or p.height is None:
             continue
@@ -295,126 +344,217 @@ def wall_elevations(
         walls[(b.room, b.wall)].board = BoardView(
             b.name, b.offset, b.height, b.width, BOARD_HEIGHT_MM
         )
+    return walls
 
-    box_at: dict[str, tuple[str, str, float, float]] = {}  # box on a wall: room, wall, x, y
 
-    def walls_in(route: Route) -> bool:
-        """Drops in conduit: from the floor always, from the ceiling with conduit in the walls."""
-        return route == "floor" or elec.conduit_level == "walls"
+def _in_conduit(route: Route, conduit: Conduit) -> bool:
+    """Drops in conduit: from the floor always, from the ceiling with conduit in the walls."""
+    return route == "floor" or conduit == "walls"
 
-    if wiring is not None:
-        box_chases = {(c.room, c.route) for c in wiring.chases if c.kind == "box"}
-        for box in wiring.boxes:
-            g = geoms.get(box.room)
-            seg = box_wall(g, box.anchor) if g is not None else None
-            if g is None or seg is None:
-                continue  # on the ceiling, not on a wall
-            x = (box.anchor.pos - seg.start).dot(seg.direction)
-            y = box.rise_mm if box.route == "floor" else ceiling - box.rise_mm
-            side = _box_side(box.size)
-            walls[(box.room, seg.id)].boxes.append(BoxView(box.id, box.label, x, y, side))
-            lines = sum(1 for r in wiring.runs if box.id in (r.source, r.target))
-            walls[(box.room, seg.id)].fixings += _drop_fixings(
-                x, box.rise_mm, box.route, ceiling, max(lines, 1), walls_in(box.route)
+
+def _wiring_items(
+    walls: _Walls,
+    wiring: Wiring,
+    elec: Electrical,
+    geoms: Mapping[str, RoomGeometry],
+    ceiling: float,
+) -> None:
+    """What wiring.py placed on the walls: the boxes with their fixings and chases, the fixings
+    on the cable drops, the cables along the walls and the chases."""
+    box_at = _box_items(walls, wiring, elec, geoms, ceiling)
+    for c in wiring.drops:
+        if c.wall and c.kind != "channel":
+            walls[(c.room, c.wall)].fixings += _drop_fixings(
+                c.offset,
+                _vertical(c),
+                c.route,
+                ceiling,
+                max(c.cables, 1),
+                _in_conduit(c.route, elec.conduit_level),
             )
-            box_at[box.id] = (box.room, seg.id, x, y)
-            # Chase from the box to the route plane: none if cable goes in before the plaster
-            if (box.room, box.route) in box_chases:
-                y0, y1 = (0.0, y) if box.route == "floor" else (y, ceiling)
-                walls[(box.room, seg.id)].chases.append(ChaseView(x, y0, y1, 1, False, False))
-        for c in wiring.drops:
-            if c.wall and c.kind != "channel":
-                walls[(c.room, c.wall)].fixings += _drop_fixings(
-                    c.offset, _vertical(c), c.route, ceiling, max(c.cables, 1), walls_in(c.route)
+    _cable_items(walls, wiring, elec, box_at, ceiling)
+    for c in wiring.chases:
+        if c.wall:  # at a box: drawn with the box
+            walls[(c.room, c.wall)].chases += _chase_views(c, ceiling)
+
+
+def _box_items(
+    walls: _Walls,
+    wiring: Wiring,
+    elec: Electrical,
+    geoms: Mapping[str, RoomGeometry],
+    ceiling: float,
+) -> dict[str, _Spot]:
+    """Junction boxes on the walls (box_wall; a box on the ceiling is not on an elevation) with
+    the fixings of the lines into them and the chase to the route plane (none if the cable goes in
+    before the plaster: no box chases). Returns where each box stands."""
+    box_at: dict[str, _Spot] = {}
+    box_chases = {(c.room, c.route) for c in wiring.chases if c.kind == "box"}
+    for box in wiring.boxes:
+        g = geoms.get(box.room)
+        seg = box_wall(g, box.anchor) if g is not None else None
+        if g is None or seg is None:
+            continue  # on the ceiling, not on a wall
+        x = (box.anchor.pos - seg.start).dot(seg.direction)
+        y = box.rise_mm if box.route == "floor" else ceiling - box.rise_mm
+        wall = walls[(box.room, seg.id)]
+        wall.boxes.append(BoxView(box.id, box.label, x, y, _box_side(box.size)))
+        lines = sum(1 for r in wiring.runs if box.id in (r.source, r.target))
+        wall.fixings += _drop_fixings(
+            x,
+            box.rise_mm,
+            box.route,
+            ceiling,
+            max(lines, 1),
+            _in_conduit(box.route, elec.conduit_level),
+        )
+        box_at[box.id] = (box.room, seg.id, x, y)
+        if (box.room, box.route) in box_chases:
+            y0, y1 = (0.0, y) if box.route == "floor" else (y, ceiling)
+            wall.chases.append(ChaseView(x, y0, y1, 1, False, False))
+    return box_at
+
+
+def _cable_items(
+    walls: _Walls,
+    wiring: Wiring,
+    elec: Electrical,
+    box_at: Mapping[str, _Spot],
+    ceiling: float,
+) -> None:
+    """The cables along the walls, by line (_cables), then the bend radii of their turns past the
+    openings, by wall (turn_radii: the cables turning at one corner bend as a bundle)."""
+    points = {p.id: p for p in elec.points}
+    entries = dict(wiring.entries)
+    for r in wiring.runs:
+        for wall_key, cable in _cables(r, elec, points, box_at, ceiling, entries):
+            walls[wall_key].cables.append(cable)
+    by_id = {run.id: run for run in wiring.runs}
+    for wall in walls.values():
+        wall.cables = turn_radii(
+            wall.cables,
+            {
+                run.id: (
+                    run.route != "floor",
+                    bend_size(run.mark, _in_conduit(run.route, elec.conduit_level)),
                 )
-        for r in wiring.runs:
-            for wall_key, cable in _cables(r, elec, box_at, ceiling, dict(wiring.entries)):
-                walls[wall_key].cables.append(cable)
-        by_id = {run.id: run for run in wiring.runs}
-        for wall_view in walls.values():
-            wall_view.cables = turn_radii(
-                wall_view.cables,
-                {
-                    run.id: (run.route != "floor", bend_size(run.mark, walls_in(run.route)))
-                    for c in wall_view.cables
-                    if (run := by_id.get(c.run)) is not None
-                },
-            )
-        for c in wiring.chases:
-            if not c.wall:
-                continue  # at a box: drawn higher up
-            low = c.circuit != "power"
-            if c.span is not None:
-                y0, y1 = c.span
-            elif c.route == "floor":
-                y0, y1 = 0.0, _vertical(c)
-            else:
-                y0, y1 = ceiling - _vertical(c), ceiling
-            walls[(c.room, c.wall)].chases.append(
-                ChaseView(c.offset, y0, y1, c.cables, c.wide, low)
-            )
-            if c.bend is not None:
-                x, y = c.bend
-                walls[(c.room, c.wall)].chases.append(
-                    ChaseView(c.offset, y, y, c.cables, c.wide, low, x)
-                )
+                for c in wall.cables
+                if (run := by_id.get(c.run)) is not None
+            },
+        )
 
-    out: list[WallElevation] = []
-    for room in plan.rooms:
-        g = geoms[room.id]
-        for chain in surfaces(room):
-            parts = [room.walls[k] for k in chain]
-            shifts = _shifts([wall.length for wall in parts])
-            here = [walls.get((room.id, wall.id)) for wall in parts]
-            wet = [tuple((water or {}).get((room.id, wall.id), ())) for wall in parts]
-            if all(w is None for w in here) and not any(wet):
-                continue
-            w = _Wall()
-            water_views: list[WaterView] = []
-            openings: list[OpeningView] = []
-            back: list[PointView] = []
-            behind_rooms: list[tuple[str, str | None]] = []
-            for wall, dx, part, part_wet, k in zip(parts, shifts, here, wet, chain, strict=True):
-                seg = g.contour.segments[k]
-                if part is not None:
-                    w.points += [_moved(v, dx) for v in part.points]
-                    w.boxes += [_moved(v, dx) for v in part.boxes]
-                    w.chases += [_moved(v, dx) for v in part.chases]
-                    w.fixings += [_moved(v, dx) for v in part.fixings]
-                    w.cables += [_moved(v, dx) for v in part.cables]
-                    if part.board is not None:
-                        w.board = _moved(part.board, dx)
-                water_views += [_moved(v, dx) for v in part_wet]
-                openings += [_moved(v, dx) for v in _openings(g, wall.id, ceiling, doors)]
-                back += [_moved(v, dx) for v in _back_points(seg, room.id, geoms, elec, numbers)]
-                for near in behind(g, seg, list(geoms.values())):
-                    code = names[(near.room, near.wall)].code if near.wall else None
-                    item = (near.name, code)
-                    if item not in behind_rooms:
-                        behind_rooms.append(item)
-            out.append(
-                WallElevation(
-                    room.id,
-                    room.name,
-                    parts[0].id,
-                    chain[0] + 1,
-                    sum(wall.length for wall in parts),
-                    ceiling,
-                    assumed,
-                    tuple(openings),
-                    tuple(sorted(_blocks(w.points), key=lambda p: (p.x, p.y))),
-                    tuple(sorted(w.boxes, key=lambda b: b.x)),
-                    tuple(sorted(w.chases, key=lambda c: (c.x, c.y0))),
-                    w.board,
-                    tuple(behind_rooms),
-                    tuple(sorted(_blocks(_unique(back)), key=lambda p: (p.x, p.y))),
-                    tuple(sorted(water_views, key=lambda v: v.x)),
-                    names[(room.id, parts[0].id)],
-                    _merged_fixings(w.fixings),
-                    tuple(sorted(w.cables, key=lambda c: (c.x, c.run))),
-                    tuple(wall.id for wall in parts),
-                )
-            )
+
+def _chase_views(c: Chase, ceiling: float) -> list[ChaseView]:
+    """A wall chase on the elevation: its vertical part (a channel between its heights; else from
+    the route plane: the ceiling down or the floor up) and, past an opening, the turn along the
+    wall at the bend height."""
+    low = c.circuit != "power"
+    if c.span is not None:
+        y0, y1 = c.span
+    elif c.route == "floor":
+        y0, y1 = 0.0, _vertical(c)
+    else:
+        y0, y1 = ceiling - _vertical(c), ceiling
+    out = [ChaseView(c.offset, y0, y1, c.cables, c.wide, low)]
+    if c.bend is not None:
+        x, y = c.bend
+        out.append(ChaseView(c.offset, y, y, c.cables, c.wide, low, x))
+    return out
+
+
+def _surface_elevation(
+    room: Room,
+    chain: Sequence[int],
+    walls: Mapping[tuple[str, str], _Wall],
+    water: WaterMap,
+    flat: _Flat,
+) -> WallElevation | None:
+    """The elevation of one surface of the room (chain: walk indices of its walls, from 0): the
+    items of its parts moved along to the start of each part, the openings, what is behind and
+    the outlets of the far side. None for a surface with nothing electrical and no water."""
+    g = flat.geoms[room.id]
+    parts = [room.walls[k] for k in chain]
+    shifts = _shifts([wall.length for wall in parts])
+    here = [walls.get((room.id, wall.id)) for wall in parts]
+    wet = [tuple(water.get((room.id, wall.id), ())) for wall in parts]
+    if all(w is None for w in here) and not any(wet):
+        return None
+    w = _joined(here, shifts)
+    segs = [g.contour.segments[k] for k in chain]
+    back = [
+        _moved(v, dx)
+        for seg, dx in zip(segs, shifts, strict=True)
+        for v in _back_points(seg, room.id, flat.geoms, flat.elec, flat.numbers)
+    ]
+    water_views = [
+        _moved(v, dx) for part_wet, dx in zip(wet, shifts, strict=True) for v in part_wet
+    ]
+    return WallElevation(
+        room.id,
+        room.name,
+        parts[0].id,
+        chain[0] + 1,
+        sum(wall.length for wall in parts),
+        flat.ceiling,
+        flat.assumed,
+        tuple(_surface_openings(g, parts, flat.ceiling, flat.doors)),
+        tuple(sorted(_blocks(w.points), key=lambda p: (p.x, p.y))),
+        tuple(sorted(w.boxes, key=lambda b: b.x)),
+        tuple(sorted(w.chases, key=lambda c: (c.x, c.y0))),
+        w.board,
+        tuple(_behind_rooms(g, segs, flat.geoms, flat.names)),
+        tuple(sorted(_blocks(_unique(back)), key=lambda p: (p.x, p.y))),
+        tuple(sorted(water_views, key=lambda v: v.x)),
+        flat.names[(room.id, parts[0].id)],
+        _merged_fixings(w.fixings),
+        tuple(sorted(w.cables, key=lambda c: (c.x, c.run))),
+        tuple(wall.id for wall in parts),
+    )
+
+
+def _joined(parts: Sequence[_Wall | None], shifts: Sequence[float]) -> _Wall:
+    """The items of a surface's parts in one plane: each part's items moved along by the start of
+    the part (the panel: from the last part that has one)."""
+    w = _Wall()
+    for part, dx in zip(parts, shifts, strict=True):
+        if part is None:
+            continue
+        w.points += [_moved(v, dx) for v in part.points]
+        w.boxes += [_moved(v, dx) for v in part.boxes]
+        w.chases += [_moved(v, dx) for v in part.chases]
+        w.fixings += [_moved(v, dx) for v in part.fixings]
+        w.cables += [_moved(v, dx) for v in part.cables]
+        if part.board is not None:
+            w.board = _moved(part.board, dx)
+    return w
+
+
+def _surface_openings(
+    g: RoomGeometry, parts: Sequence[Wall], ceiling: float, doors: _Doors
+) -> list[OpeningView]:
+    """Openings of a surface: those of each part (_openings) moved along to the part's start."""
+    return [
+        _moved(o, dx)
+        for part, dx in zip(parts, _shifts([wall.length for wall in parts]), strict=True)
+        for o in _openings(g, part.id, ceiling, doors)
+    ]
+
+
+def _behind_rooms(
+    g: RoomGeometry,
+    segs: Sequence[WallSegment],
+    geoms: Mapping[str, RoomGeometry],
+    names: Mapping[tuple[str, str], WallName],
+) -> list[tuple[str, str | None]]:
+    """What is behind a surface, without repeats: the neighbouring room's name and the code of
+    its wall on the far side (None where no wall of it faces this one)."""
+    out: list[tuple[str, str | None]] = []
+    for seg in segs:
+        for near in behind(g, seg, list(geoms.values())):
+            code = names[(near.room, near.wall)].code if near.wall else None
+            item = (near.name, code)
+            if item not in out:
+                out.append(item)
     return out
 
 
@@ -493,10 +633,30 @@ def _merged_fixings(fixings: Sequence[FixingView]) -> tuple[FixingView, ...]:
     return tuple(FixingView(x, y, n) for (x, y), n in sorted(best.items()))
 
 
+def _line_end(
+    end: str,
+    elec: Electrical,
+    points: Mapping[str, ElectricalPoint],
+    boxes: Mapping[str, _Spot],
+) -> _Spot | None:
+    """Where a line ends on a wall: the panel ("board"), a wall point or a box on a wall; None for
+    a point off the walls (on the ceiling, in the floor) and for a box on the ceiling."""
+    if end == "board":
+        b = elec.board
+        return (b.room, b.wall, b.offset, b.height) if b is not None else None
+    p = points.get(end)
+    if p is not None:
+        if p.wall is None or p.offset is None or p.height is None:
+            return None
+        return (p.room, p.wall, p.offset, p.height)
+    return boxes.get(end)
+
+
 def _cables(
     r: Run,
     elec: Electrical,
-    boxes: Mapping[str, tuple[str, str, float, float]],
+    points: Mapping[str, ElectricalPoint],
+    boxes: Mapping[str, _Spot],
     ceiling: float,
     entries: Mapping[str, float],
 ) -> list[tuple[tuple[str, str], CableView]]:
@@ -505,27 +665,14 @@ def _cables(
     floor for a floor route). A drop to a mechanism goes to its frame entry (entries,
     frames.py: the side of the block) and stops at the box top (bottom), not at its middle."""
     plane = 0.0 if r.route == "floor" else ceiling
-    points = {p.id: p for p in elec.points}
     out: list[tuple[tuple[str, str], CableView]] = []
-
-    def at(end: str) -> tuple[str, str, float, float] | None:
-        if end == "board":
-            b = elec.board
-            return (b.room, b.wall, b.offset, b.height) if b is not None else None
-        p = points.get(end)
-        if p is not None:
-            if p.wall is None or p.offset is None or p.height is None:
-                return None
-            return (p.room, p.wall, p.offset, p.height)
-        return boxes.get(end)
-
     for end, rise, drop in (
         (r.target, r.rise_end_mm, r.end_drop),
         (r.source, r.rise_start_mm, r.start_drop),
     ):
         if rise <= 0:
             continue
-        spot = at(end)
+        spot = _line_end(end, elec, points, boxes)
         if spot is None:
             continue
         room, wall, x, y = spot
@@ -569,6 +716,198 @@ def turn_radii(
     ]
 
 
+@dataclass(frozen=True)
+class _Links:
+    """What the viewer shows on an elevation beside the geometry: the names of the points in the
+    project language, the group colours and where the wiring line to a point or box comes from
+    (the panel, the media panel, a box or the previous point of a chain)."""
+
+    lang: Language
+    points: Mapping[str, ElectricalPoint]
+    boxes: Mapping[str, JunctionBox]
+    board: str  # the panel name
+    media: str | None  # the media panel name, if any
+    feeds: Mapping[str, str]  # line target → its source
+    colors: Mapping[str, int]  # group → colour
+
+    def fed(self, target: str) -> str | None:
+        """Where the line to target comes from, in words; None without a line."""
+        src = self.feeds.get(target)
+        if src is None:
+            return None
+        if src == "board":
+            return self.board
+        if src == "media" and self.media is not None:
+            return self.media
+        if src in self.boxes:
+            return self.boxes[src].label
+        return point_name(self.points[src], self.lang)
+
+    def color(self, group: str | None) -> str | None:
+        c = self.colors.get(group or "")
+        return f"#{c:06x}" if c is not None else None
+
+
+def _links(
+    plan: Plan, elec: Electrical, wiring: Wiring | None, colors: Mapping[str, int]
+) -> _Links:
+    return _Links(
+        plan.language,
+        {p.id: p for p in elec.points},
+        {b.id: b for b in wiring.boxes} if wiring is not None else {},
+        elec.board.name if elec.board is not None else "board",
+        elec.media.name if elec.media is not None else None,
+        {r.target: r.source for r in wiring.runs} if wiring is not None else {},
+        colors,
+    )
+
+
+def _r(v: float) -> float:
+    return round(v, 1)
+
+
+def _point_shape(p: PointView) -> dict[str, Any]:
+    """Place and frame of a point: x, y, posts and, in a shared frame, its slot and the block."""
+    return {
+        "x": _r(p.x),
+        "y": _r(p.y),
+        "posts": p.posts,
+        **({"slot": p.slot, "block": p.block} if p.block else {}),
+    }
+
+
+def _point_item(pv: PointView, links: _Links) -> dict[str, Any]:
+    """A point of the wall with its sheet number, name, group and where its line comes from."""
+    p = links.points[pv.id]
+    return {
+        "id": pv.id,
+        "key": f"point:{pv.id}",
+        "n": pv.number,
+        "type": pv.type.value,
+        "name": point_name(p, links.lang),
+        **_point_shape(pv),
+        "group": p.group,
+        "color": links.color(p.group),
+        "from": links.fed(pv.id),
+    }
+
+
+def _box_item(b: BoxView, links: _Links) -> dict[str, Any]:
+    """A junction box with its group and where its line comes from."""
+    group = links.boxes[b.id].group if b.id in links.boxes else None
+    return {
+        "id": b.id,
+        "key": f"box:{b.id}",
+        "label": b.label,
+        "x": _r(b.x),
+        "y": _r(b.y),
+        "size": _r(b.size),
+        "group": group,
+        "color": links.color(group),
+        "from": links.fed(b.id),
+    }
+
+
+def _cable_item(c: CableView, links: _Links) -> dict[str, Any]:
+    """A cable along the wall, keyed as on the wiring sheet (wire:<run>), in its group colour."""
+    return {
+        "key": f"wire:{c.run}",
+        "x": _r(c.x),
+        "y0": _r(c.y0),
+        "y1": _r(c.y1),
+        **({"x1": _r(c.x1)} if c.x1 is not None else {}),
+        **({"r": _r(c.radius)} if c.radius is not None else {}),
+        "color": links.color(c.group),
+    }
+
+
+def _elevation_content(e: WallElevation, links: _Links) -> dict[str, Any]:
+    """What is on the wall, as data: openings, chases, fixings, cables, boxes, points, water, the
+    outlets of the far side and the panel. Object keys match the sheets (point:<id>, box:<id>,
+    board:board)."""
+    data: dict[str, Any] = {
+        "key": f"elevation:{e.key}",
+        "length": _r(e.length),
+        "openings": [
+            {
+                "kind": o.kind,
+                **({"hinge": o.hinge} if o.hinge else {}),
+                "x0": _r(o.x0),
+                "x1": _r(o.x1),
+                "y0": _r(o.y0),
+                "y1": _r(o.y1),
+                "assumed": o.assumed,
+            }
+            for o in e.openings
+        ],
+        "chases": [
+            {
+                "x": _r(c.x),
+                "y0": _r(c.y0),
+                "y1": _r(c.y1),
+                "wide": c.wide,
+                "low": c.low,
+                **({"x1": _r(c.x1)} if c.x1 is not None else {}),
+            }
+            for c in e.chases
+        ],
+        "fixings": [
+            {"x": _r(f.x), "y": _r(f.y), **({"n": f.count} if f.count > 1 else {})}
+            for f in e.fixings
+        ],
+        "cables": [_cable_item(c, links) for c in e.cables],
+        "boxes": [_box_item(b, links) for b in e.boxes],
+        "points": [_point_item(p, links) for p in e.points],
+        "water": [
+            {
+                "fixture": v.fixture,
+                "key": f"fixture:{v.fixture}",
+                "name": v.names.get(links.lang, v.fixture),
+                "n": v.number,
+                "kind": v.kind,
+                "x": _r(v.x),
+                "y": _r(v.y),
+                "d": v.d,
+                "assumed": v.assumed,
+            }
+            for v in e.water
+        ],
+        "back": [
+            {"id": p.id, "n": p.number, "type": p.type.value, **_point_shape(p)} for p in e.back
+        ],
+    }
+    if e.board is not None:
+        b = e.board
+        data["board"] = {
+            "key": "board:board",
+            "name": b.name,
+            "x": _r(b.x),
+            "y": _r(b.y),
+            "width": _r(b.width),
+            "height": _r(b.height),
+        }
+    return data
+
+
+def _bare_surface(
+    room: Room, k: int, g: RoomGeometry, ceiling: float, doors: _Doors
+) -> WallElevation:
+    """The surface of wall k (walk index from 0) with nothing on it but its openings: a corner
+    neighbour of an elevation that has no elevation of its own."""
+    chain = next(c for c in surfaces(room) if k in c)
+    parts = [room.walls[j] for j in chain]
+    return WallElevation(
+        room.id,
+        room.name,
+        parts[0].id,
+        0,
+        sum(w.length for w in parts),
+        ceiling,
+        True,
+        tuple(_surface_openings(g, parts, ceiling, doors)),
+    )
+
+
 def elevation_data(
     plan: Plan,
     contours: dict[str, Contour],
@@ -583,180 +922,27 @@ def elevation_data(
     Object keys match the sheets (point:<id>, box:<id>, board:board). Also the inner face on the
     plan (face: where to stand to see the wall, for a mini map) and the neighbouring walls at the
     corners (left, right: inner turn angle and what is on the neighbouring wall, for isometry)."""
-    lang = plan.language
-    points = {p.id: p for p in elec.points}
-    boxes = {b.id: b for b in wiring.boxes} if wiring is not None else {}
-    board = elec.board.name if elec.board is not None else "board"
-    feeds = {r.target: r.source for r in wiring.runs} if wiring is not None else {}
-
-    def fed(target: str) -> str | None:
-        src = feeds.get(target)
-        if src is None:
-            return None
-        if src == "board":
-            return board
-        if src == "media" and elec.media is not None:
-            return elec.media.name
-        return boxes[src].label if src in boxes else point_name(points[src], lang)
-
-    def color(group: str | None) -> str | None:
-        c = colors.get(group or "")
-        return f"#{c:06x}" if c is not None else None
-
-    def r(v: float) -> float:
-        return round(v, 1)
-
-    def content(e: WallElevation) -> dict[str, Any]:
-        pts = []
-        for pv in e.points:
-            p = points[pv.id]
-            pts.append(
-                {
-                    "id": pv.id,
-                    "key": f"point:{pv.id}",
-                    "n": pv.number,
-                    "type": pv.type.value,
-                    "name": point_name(p, lang),
-                    "x": r(pv.x),
-                    "y": r(pv.y),
-                    "posts": pv.posts,
-                    **({"slot": pv.slot, "block": pv.block} if pv.block else {}),
-                    "group": p.group,
-                    "color": color(p.group),
-                    "from": fed(pv.id),
-                }
-            )
-        data: dict[str, Any] = {
-            "key": f"elevation:{e.key}",
-            "length": r(e.length),
-            "openings": [
-                {
-                    "kind": o.kind,
-                    **({"hinge": o.hinge} if o.hinge else {}),
-                    "x0": r(o.x0),
-                    "x1": r(o.x1),
-                    "y0": r(o.y0),
-                    "y1": r(o.y1),
-                    "assumed": o.assumed,
-                }
-                for o in e.openings
-            ],
-            "chases": [
-                {
-                    "x": r(c.x),
-                    "y0": r(c.y0),
-                    "y1": r(c.y1),
-                    "wide": c.wide,
-                    "low": c.low,
-                    **({"x1": r(c.x1)} if c.x1 is not None else {}),
-                }
-                for c in e.chases
-            ],
-            "fixings": [
-                {"x": r(f.x), "y": r(f.y), **({"n": f.count} if f.count > 1 else {})}
-                for f in e.fixings
-            ],
-            "cables": [
-                {
-                    "key": f"wire:{c.run}",
-                    "x": r(c.x),
-                    "y0": r(c.y0),
-                    "y1": r(c.y1),
-                    **({"x1": r(c.x1)} if c.x1 is not None else {}),
-                    **({"r": r(c.radius)} if c.radius is not None else {}),
-                    "color": color(c.group),
-                }
-                for c in e.cables
-            ],
-            "boxes": [
-                {
-                    "id": b.id,
-                    "key": f"box:{b.id}",
-                    "label": b.label,
-                    "x": r(b.x),
-                    "y": r(b.y),
-                    "size": r(b.size),
-                    "group": boxes[b.id].group if b.id in boxes else None,
-                    "color": color(boxes[b.id].group if b.id in boxes else None),
-                    "from": fed(b.id),
-                }
-                for b in e.boxes
-            ],
-            "points": pts,
-            "water": [
-                {
-                    "fixture": v.fixture,
-                    "key": f"fixture:{v.fixture}",
-                    "name": v.names.get(lang, v.fixture),
-                    "n": v.number,
-                    "kind": v.kind,
-                    "x": r(v.x),
-                    "y": r(v.y),
-                    "d": v.d,
-                    "assumed": v.assumed,
-                }
-                for v in e.water
-            ],
-            "back": [
-                {
-                    "id": p.id,
-                    "n": p.number,
-                    "type": p.type.value,
-                    "x": r(p.x),
-                    "y": r(p.y),
-                    "posts": p.posts,
-                    **({"slot": p.slot, "block": p.block} if p.block else {}),
-                }
-                for p in e.back
-            ],
-        }
-        if e.board is not None:
-            b = e.board
-            data["board"] = {
-                "key": "board:board",
-                "name": b.name,
-                "x": r(b.x),
-                "y": r(b.y),
-                "width": r(b.width),
-                "height": r(b.height),
-            }
-        return data
-
+    links = _links(plan, elec, wiring, colors)
     elevations = wall_elevations(plan, contours, elec, wiring, water=water)
     ceiling = elevations[0].height if elevations else 2700.0
     # Every wall of a surface leads to its elevation: a corner neighbour may be any part of it
-    done = {(e.room, wall): content(e) for e in elevations for wall in e.parts or (e.wall,)}
+    done = {
+        (e.room, wall): _elevation_content(e, links)
+        for e in elevations
+        for wall in e.parts or (e.wall,)
+    }
     geoms = {g.room.id: g for g in room_geometries(plan, contours)}
     doors = _doors(geoms)
 
     def neighbour(room: Room, k: int, turn: float) -> dict[str, Any]:
         """Neighbouring surface at a corner (k is the walk index of its wall, from 0): the angle
-        and what is on it. A surface without electrical items has openings only."""
-        n = len(room.walls)
-        wall = room.walls[k % n]
-        side = done.get((room.id, wall.id))
+        and what is on it, without the far side. A surface without electrical items has openings
+        only."""
+        k %= len(room.walls)
+        side = done.get((room.id, room.walls[k].id))
         if side is None:
-            chain = next(c for c in surfaces(room) if k % n in c)
-            parts = [room.walls[j] for j in chain]
-            openings = [
-                _moved(o, dx)
-                for part, dx in zip(parts, _shifts([w.length for w in parts]), strict=True)
-                for o in _openings(geoms[room.id], part.id, ceiling, doors)
-            ]
-            side = content(
-                WallElevation(
-                    room.id,
-                    room.name,
-                    parts[0].id,
-                    0,
-                    sum(w.length for w in parts),
-                    ceiling,
-                    True,
-                    tuple(openings),
-                )
-            )
-        side = {key: v for key, v in side.items() if key != "back"}
-        return {"turn": turn, **side}
+            side = _elevation_content(_bare_surface(room, k, geoms[room.id], ceiling, doors), links)
+        return {"turn": turn, **{key: v for key, v in side.items() if key != "back"}}
 
     out: list[dict[str, Any]] = []
     for e in elevations:
@@ -765,20 +951,22 @@ def elevation_data(
         last = (k + max(len(e.parts), 1) - 1) % len(room.walls)
         segs = geoms[e.room].contour.segments
         start, end = segs[k].start, segs[last].end
-        data = {
-            **done[(e.room, e.wall)],
-            "title": e.title,
-            "behind": behind_text(e, lang),
-            "height": r(e.height),
-            "height_assumed": e.height_assumed,
-            "top": r(e.top),
-            # Inner face on the plan (model mm, like the 3D scene): the start is the left corner
-            "face": [[r(start.x), r(start.y)], [r(end.x), r(end.y)]],
-            # Corners to neighbouring surfaces: left to the previous in the walk, right to the next
-            "left": neighbour(room, k - 1, room.walls[k - 1].turn),
-            "right": neighbour(room, last + 1, room.walls[last].turn),
-        }
-        out.append(data)
+        out.append(
+            {
+                **done[(e.room, e.wall)],
+                "title": e.title,
+                "behind": behind_text(e, plan.language),
+                "height": _r(e.height),
+                "height_assumed": e.height_assumed,
+                "top": _r(e.top),
+                # Inner face on the plan (model mm, like the 3D scene): the start is the left corner
+                "face": [[_r(start.x), _r(start.y)], [_r(end.x), _r(end.y)]],
+                # Corners to neighbouring surfaces: left to the previous in the walk, right to the
+                # next
+                "left": neighbour(room, k - 1, room.walls[k - 1].turn),
+                "right": neighbour(room, last + 1, room.walls[last].turn),
+            }
+        )
     return out
 
 
@@ -791,9 +979,9 @@ def behind_text(e: WallElevation, language: Language) -> str:
 def _back_points(
     seg: WallSegment,
     room: str,
-    geoms: dict[str, RoomGeometry],
+    geoms: Mapping[str, RoomGeometry],
     elec: Electrical,
-    numbers: dict[str, int],
+    numbers: Mapping[str, int],
 ) -> list[PointView]:
     """Outlets of neighbouring rooms on the far side of wall seg: a point on the neighbour's wall
     along the same face, in this wall's coordinates (offset from its left corner, view from
@@ -850,9 +1038,7 @@ def _doors(geoms: Mapping[str, RoomGeometry]) -> list[tuple[Polygon, Vec]]:
     return out
 
 
-def _openings(
-    g: RoomGeometry, wall: str, ceiling: float, doors: Sequence[tuple[Polygon, Vec]]
-) -> tuple[OpeningView, ...]:
+def _openings(g: RoomGeometry, wall: str, ceiling: float, doors: _Doors) -> tuple[OpeningView, ...]:
     """Openings of a wall. The opening on the other side of a door is that door, seen from here."""
     seg = g.contour.segment(wall)
     out: list[OpeningView] = []

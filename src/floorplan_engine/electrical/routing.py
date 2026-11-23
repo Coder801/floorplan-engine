@@ -25,13 +25,14 @@ opening is free: there is no wall under a door. So a route takes the opening onl
 shorter that way with the pass counted, otherwise it goes straight through a drillable wall.
 
 A ready hole is free (decision 2026-11-23, holes): where a line of the build has already crossed a
-band on the same plane and circuit (wiring._route_runs routes lines one after another and passes
-the crossings on), the cells of the band within WALL_HOLE_SHARE of that crossing cost a residual
-per cell instead of the pass, so the next lines follow into the same hole, as the estimate counts
-them (one hole for lines closer than WALL_HOLE_SHARE). The residual is HOLE_CELL_COST for a hole
-made by a line of the same source (own) and twice that for any other line's hole: it only decides
-ties, so that a route leaves the band at once instead of running along it, and that cables of one
-box or flush box leave it together rather than split between two holes at the same length.
+band on the same plane and circuit (wiring_routes.route_runs routes lines one after another and
+passes the crossings on), the cells of the band within WALL_HOLE_SHARE of that crossing cost a
+residual per cell instead of the pass, so the next lines follow into the same hole, as the
+estimate counts them (one hole for lines closer than WALL_HOLE_SHARE). The residual is
+HOLE_CELL_COST for a hole made by a line of the same source (own) and twice that for any other
+line's hole: it only decides ties, so that a route leaves the band at once instead of running
+along it, and that cables of one box or flush box leave it together rather than split between two
+holes at the same length.
 
 Any angle (any_angle: economy, docs/wiring-variants.md): the search goes in eight directions
 without a turn penalty, then the path is pulled tight (pull): corners are cut where a straight
@@ -693,7 +694,7 @@ class Router:
 
     def rebased(self, source: End, beside: Sequence[Sequence[Vec]] = ()) -> Router:
         """The same area, bands and holes from another source, kept APART from beside (box leads,
-        wiring._via_lead) instead of its own; itself when nothing changes."""
+        wiring_routes._via_lead) instead of its own; itself when nothing changes."""
         if source == self.source and not beside and not self.beside:
             return self
         return Router(
@@ -718,7 +719,7 @@ class Router:
         self, target: End, before: Sequence[Vec] = (), after: Sequence[Vec] = ()
     ) -> list[Vec]:
         """The route to target; before and after are straight pieces added at its ends (the lead
-        out of a box, wiring._one_side), kept in the route and its trace."""
+        out of a box, wiring_routes._one_side), kept in the route and its trace."""
         cell = self.grid.nearest_free(target.node, open_only=True)
         cells = self.grid.path(self.prev, self.dist, cell)
         middle = self.grid.pull(cells) if self.any_angle else cells

@@ -27,8 +27,9 @@ from shapely.geometry import Polygon
 from shapely.geometry.base import BaseGeometry
 
 from floorplan_engine.electrical import trace
+from floorplan_engine.electrical.box_spots import BoxMove
 from floorplan_engine.electrical.routing import STEP, RouteTrace, search_memo
-from floorplan_engine.electrical.wiring import BoxMove, estimate_wiring
+from floorplan_engine.electrical.wiring import estimate_wiring
 from floorplan_engine.electrical.wiring_model import JunctionBox, Run, Wiring
 from floorplan_engine.model.geometry import Vec
 from floorplan_engine.model.intake import Stage

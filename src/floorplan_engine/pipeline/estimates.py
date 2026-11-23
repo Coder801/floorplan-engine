@@ -39,7 +39,8 @@ from floorplan_engine.electrical.terms import (
     terms_scope_sheet,
     terms_sheet_tail,
 )
-from floorplan_engine.electrical.wiring import END_ALLOWANCE, RESERVE, estimate_wiring
+from floorplan_engine.electrical.wiring import RESERVE, estimate_wiring
+from floorplan_engine.electrical.wiring_context import END_ALLOWANCE
 from floorplan_engine.electrical.wiring_model import CHASE_NARROW, HOLE_CABLES, Wiring
 from floorplan_engine.electrical.work_scope import (
     WORK_SCOPE_MD,

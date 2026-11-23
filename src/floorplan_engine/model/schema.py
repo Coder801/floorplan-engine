@@ -306,7 +306,7 @@ class MediaBox(Board):
 class Cable(StrictModel):
     """Cable of a group; without a group, low-voltage topology (decision 2026-11-17): `to` are
     internet and TV points without a group, each fed by a line of its own from `from` (board,
-    media or a low point), see wiring.low_feeds."""
+    media or a low point), see low_links.low_feeds."""
 
     id: str = Field(pattern=ID_PATTERN)
     from_: str = Field(alias="from", description="board, media или id точки")
@@ -750,7 +750,7 @@ class Electrical(StrictModel):
 class WireEdit(StrictModel):
     """Line route dragged in the viewer: points in model mm, from source to target.
     from / to are a check: if the line with this id now goes differently, the edit is not applied.
-    Slanted pieces only in economy: checked by the build (wiring._manual_runs)."""
+    Slanted pieces only in economy: checked by the build (wiring_routes.manual_runs)."""
 
     from_: str = Field(alias="from", description="board или id коробки")
     to: str = Field(description="id коробки или точки")

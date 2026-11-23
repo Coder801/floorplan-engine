@@ -560,3 +560,21 @@ def test_two_parts_in_one_plane_are_one_elevation() -> None:
     assert data["elevation:r.w1"]["right"]["key"] == "elevation:r.w3"
     assert data["elevation:r.w3"]["left"]["key"] == "elevation:r.w1"
     assert data["elevation:r.w3"]["left"]["length"] == 4000
+
+
+def test_chase_views_vertical_part_and_turn_past_an_opening() -> None:
+    """A chase on the elevation is its vertical part from the route plane (a cable channel:
+    between its heights) and, past an opening, the turn along the wall at the bend height."""
+    from floorplan_engine.electrical.elevations import _chase_views
+    from floorplan_engine.electrical.wiring_model import Chase
+
+    # 1700 mm with a 600 mm turn: the drop itself is 1100 mm from the ceiling
+    drop = Chase("point", "r", "w1", 1000, 1700, 3, bend=(1600, 1200))
+    assert [(c.x, c.y0, c.y1, c.x1, c.wide, c.low) for c in _chase_views(drop, 2700)] == [
+        (1000, 1600, 2700, None, True, False),
+        (1000, 1200, 1200, 1600, True, False),
+    ]
+    rise = Chase("point", "r", "w1", 500, 300, 1, route="floor", circuit="low")
+    assert [(c.x, c.y0, c.y1, c.low) for c in _chase_views(rise, 2700)] == [(500, 0, 300, True)]
+    channel = Chase("channel", "r", "w1", 500, 800, 2, span=(300, 1100))
+    assert [(c.y0, c.y1, c.x1) for c in _chase_views(channel, 2700)] == [(300, 1100, None)]

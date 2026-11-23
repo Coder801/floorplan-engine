@@ -6,7 +6,7 @@ scope() blocks around it (line id, group, routing round), so a router deep in ro
 not need to know which line it routes.
 
 Payloads are typed dataclasses defined next to their producers (routing.RouteTrace,
-wiring.BoxMove); a reader picks them with isinstance.
+box_spots.BoxMove); a reader picks them with isinstance.
 """
 
 from __future__ import annotations

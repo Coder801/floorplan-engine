@@ -16,7 +16,7 @@ from floorplan_engine.model.geometry import DOOR_TOP_MM, WINDOW_SILL_MM
 from floorplan_engine.model.schema import Electrical
 from floorplan_engine.validation.plan import validate_plan
 from tests.conftest import make_plan
-from tests.electrical.test_wiring import DOOR, RECT, _elec, _two_rooms_with_door
+from tests.electrical.conftest import DOOR, RECT, base_elec, two_rooms_with_door
 
 WINDOW = {"wall": "w3", "type": "window", "offset": 1000, "width": 1200}
 
@@ -24,7 +24,7 @@ WINDOW = {"wall": "w3", "type": "window", "offset": 1000, "width": 1200}
 def _scene(cables: list[dict[str, Any]] | None = None) -> tuple[dict[str, Any], Any]:
     plan = make_plan(RECT, [DOOR, WINDOW])
     _, contours = validate_plan(plan)
-    elec = _elec(cables)
+    elec = base_elec(cables)
     wiring = box_wiring(plan, contours, elec)
     assert wiring is not None
     return build_scene(plan, contours, elec, wiring), wiring
@@ -94,7 +94,7 @@ def test_window_with_given_height_keeps_lintel() -> None:
     window = {**WINDOW, "sill": 700, "height": 1300}
     plan = make_plan(RECT, [DOOR, window])
     _, contours = validate_plan(plan)
-    elec = _elec(None)
+    elec = base_elec(None)
     wiring = box_wiring(plan, contours, elec)
     assert wiring is not None
     scene = build_scene(plan, contours, elec, wiring)
@@ -191,7 +191,7 @@ def test_corner_does_not_give_wall_a_foreign_normal() -> None:
 
 
 def test_slab_covers_rooms_walls_and_openings_without_holes() -> None:
-    plan = _two_rooms_with_door()
+    plan = two_rooms_with_door()
     _, contours = validate_plan(plan)
     elec = Electrical.model_validate(
         {
@@ -217,7 +217,7 @@ def test_wire_to_a_socket_under_a_window_turns_beside_it() -> None:
     window = {"wall": "w3", "type": "window", "offset": 300, "width": 1000, "sill": 700}
     plan = make_plan(RECT, [DOOR, {**window, "height": 2000}])
     _, contours = validate_plan(plan)
-    elec = _elec()
+    elec = base_elec()
     wiring = box_wiring(plan, contours, elec)
     assert wiring is not None
     run = next(r for r in wiring.runs if r.target == "s2")  # w3 at 500, h 300

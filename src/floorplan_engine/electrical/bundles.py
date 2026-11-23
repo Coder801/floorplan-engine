@@ -7,7 +7,7 @@ along it, so cables leaving the panel already lie in the order of their turns an
 Cables that never part (the same way to one drop) keep their order by the way they go, not by
 the axis (decision 2026-11-18, _tie): the later line to the left, so they do not cross at a turn.
 Pure geometry, shared by the wiring drawing (lanes, length labels), the box placement
-(wiring._clear_boxes: a box keeps off the lanes of other lines), the fixings
+(box_spots.clear_boxes: a box keeps off the lanes of other lines), the fixings
 (electrical/mounting.plan_fixings: the clips of a bundle go in one line) and the 3D scene."""
 
 from __future__ import annotations
