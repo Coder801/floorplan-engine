@@ -18,7 +18,7 @@ import { label } from "@/shared/i18n";
 import { rowKind, totals } from "@/shared/estimate";
 import { expand, rowPicked, rowSelection } from "@/shared/page";
 import { refreshPalette, screenColor } from "@/shared/palette";
-import { toggledGroups, useView, view } from "@/shared/store";
+import { toggledGroups, useView, view, type WallLayers } from "@/shared/store";
 import ui from "@/shared/styles/ui.module.scss";
 import { Button } from "@/ui/Button";
 import { Dot } from "@/ui/Dot";
@@ -36,6 +36,7 @@ interface Props {
   page: Page | null;
   drawing: Drawing | null;     // the drawing the sheet belongs to
   wall?: Elevation | null;      // elevation: what is on the wall, instead of tables and layers
+  wallHas?: WallLayers;         // wall layers the project's services have (shared/domains.ts wallLayersOn)
   ceiling?: CeilingData | null; // a ceiling (floor) view: its lines, the sheet tables on their own tab
   estimate?: SideTable | null;  // "Estimate" tab: totals and notes instead of tables and layers
   onWiring?: (key: string) => void;  // from a wall elevation to the wiring sheet, to the object's line
@@ -55,7 +56,7 @@ const VARIANT_STAGES = new Set(["electrical", "lighting", "wiring"]);
 export const hasLayers = (page: Page | null) =>
   !!page && !page.panel && page.items.some((it) => !SHEET_ONLY.has(it.l));
 
-export function SidePanel({ tab, onTab, page, drawing, wall, ceiling, estimate, onWiring, variant, summary, summaryTitle, layers = true, children }: Props) {
+export function SidePanel({ tab, onTab, page, drawing, wall, wallHas, ceiling, estimate, onWiring, variant, summary, summaryTitle, layers = true, children }: Props) {
   const { t } = useTranslation();
   const all: readonly SideTab[] = ceiling ? CEILING_TABS : SIDE_TABS;
   const tabs: SideTab[] = wall || estimate || summary ? [] : all.filter((k) => k !== "layers" || (layers && hasLayers(page)));
@@ -84,7 +85,7 @@ export function SidePanel({ tab, onTab, page, drawing, wall, ceiling, estimate, 
           </p>
         )}
         {summary ? summary
-          : wall ? <WallItems wall={wall} onWiring={onWiring} />
+          : wall ? <WallItems wall={wall} has={wallHas} onWiring={onWiring} />
           : estimate ? <EstimateTotals table={estimate} />
           : shown === "layers" ? <Layers page={page} drawing={drawing} />
           : ceiling && shown === "lines" ? <CeilingLines key={ceiling.key} ceiling={ceiling} />

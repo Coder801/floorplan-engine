@@ -2,7 +2,7 @@
 // "Electrical": points by electrical sheet number (kind, offset, height, group and where the
 // wiring line comes from), boxes and the panel; "Water": water outlets and drains by the
 // "Plumbing" sheet number. The eye hides the layer on the elevation (store.wallLayers), the
-// rows stay, faint.
+// rows stay, faint. A layer of a service switched off for the project (has) is not listed.
 // Row ↔ elevation object (store.hover / lit / pinned); "On wiring" opens the wiring sheet at
 // this line.
 
@@ -18,13 +18,17 @@ import { Text } from "@/ui/Text";
 import { type Row, wallRows } from "./rows";
 import css from "./WallItems.module.scss";
 
-export function WallItems({ wall, onWiring }: { wall: Elevation; onWiring?: (key: string) => void }) {
+const ALL: WallLayers = { electrical: true, water: true };
+
+export function WallItems({ wall, has = ALL, onWiring }: { wall: Elevation; has?: WallLayers; onWiring?: (key: string) => void }) {
   const { t } = useTranslation();
   const { hover, lit, pinned, wallLayers } = useView((s) => s);
-  const rows = useMemo(() => wallRows(wall, {
+  const all = useMemo(() => wallRows(wall, {
     from: (f) => t("wall.from", { from: f }), box: t("wall.box"), board: t("wall.board"),
     kind: { cold: t("wall.kind.cold"), hot: t("wall.kind.hot"), sewer: t("wall.kind.sewer") },
   }, WATER), [wall, t]);
+  const rows = { electrical: has.electrical ? all.electrical : [], water: has.water ? all.water : [] };
+  const chases = has.electrical && wall.chases.length > 0;
   const on = (k: string) => k === hover || k === pinned || !!lit?.has(k);
 
   // Object under the cursor or pinned: scroll to its row
@@ -78,7 +82,7 @@ export function WallItems({ wall, onWiring }: { wall: Elevation; onWiring?: (key
       </Text>
       {rows.electrical.length === 0 && rows.water.length === 0 ? <Text tone="muted">{t("wall.onlyChases")}</Text> : (
         <>
-          {(rows.electrical.length > 0 || wall.chases.length > 0) && section("electrical", rows.electrical, true)}
+          {(rows.electrical.length > 0 || chases) && section("electrical", rows.electrical, true)}
           {rows.water.length > 0 && section("water", rows.water, false)}
         </>
       )}

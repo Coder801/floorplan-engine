@@ -80,6 +80,30 @@ describe("Viewer", () => {
     expect(screen.getByRole("link", { name: "Скачать Excel" })).toHaveAttribute("href", `${P}/out/estimate.xlsx`);
   });
 
+  it("a switched-off service drops its section and estimate; a place left on its sheet goes back to the plan", async () => {
+    localStorage.setItem("place:p1", JSON.stringify({ sheet: 1, estimate: false, info: false, work: false }));
+    serve({ [`GET ${P}`]: project({ services: ["plumbing"], files: ["estimate.xlsx"] }) });
+    location.hash = "#p1";
+    render(<Viewer />);
+    expect(await screen.findByText("Чертёж: План")).toBeInTheDocument();
+    const tabs = screen.getByRole("navigation", { name: "Листы" });
+    expect(within(tabs).getByRole("button", { name: "План" })).toHaveAttribute("aria-current", "page");
+    expect(within(tabs).queryByRole("button", { name: "Электрика" })).toBeNull();
+    expect(within(tabs).queryByRole("button", { name: "Смета" })).toBeNull();
+  });
+
+  it("with no sheet of the switched-on services only the overview stays", async () => {
+    serve({
+      [`GET ${P}`]: project({ services: [] }),
+      [`GET ${P}/sheets`]: manifest({ pages: [sheets[1]] }),
+    });
+    location.hash = "#p1";
+    render(<Viewer />);
+    expect(await screen.findByRole("heading", { level: 1, name: "Общие сведения" })).toBeInTheDocument();
+    const tabs = screen.getByRole("navigation", { name: "Листы" });
+    expect(within(tabs).getAllByRole("button").map((b) => b.textContent)).toEqual(["Общие сведения"]);
+  });
+
   it("a question is answered from the header panel and the project is read again", async () => {
     const user = userEvent.setup();
     const sent = serve({ [`POST ${P}/answers`]: { built: true, rebuilt: false } });

@@ -3,9 +3,12 @@
 // level under the header. A tab outside every domain (plan, furniture) is a section of its own.
 // Each domain has its own elevations (decision 2026-11-18): its own tab with only its walls; the
 // wall engine is one, the tab picks the layers seen on the wall (WALL_LAYERS).
+// A domain is a service of the project (decision 2026-11-23): the admin ticks the services, the
+// viewer drops the sheets, wall layers and overview blocks of those switched off (servicePages…).
 
 import type { WallLayers } from "./store";
-import type { SheetTab } from "./tabs";
+import { VIEWS, type SheetTab } from "./tabs";
+import type { ManifestPage, Overview } from "./types";
 
 // Domains in menu order; stages are tab topics (SheetTab.stage). A new domain is a row here
 export const DOMAINS: readonly { key: string; stages: readonly string[] }[] = [
@@ -79,3 +82,38 @@ export function sectionOf(all: readonly Section[], tab: SheetTab | null): Sectio
 
 // Wall layers of an elevations sheet by its topic
 export const wallLayersOf = (stage: string | undefined): WallLayers | null => WALL_LAYERS[stage ?? ""] ?? null;
+
+// Services of a project: a service key is a domain key ("demolition" has no sheets yet). An old
+// server sends no list: every service is on
+export type Services = readonly string[] | undefined;
+export const serviceOn = (services: Services, domain: string): boolean => !services || services.includes(domain);
+
+// The domain of a sheet topic; the views of the "Electrical" tab (lighting, wiring) are electrical
+export const domainOf = (stage: string | undefined): string | null => {
+  const st = stage && VIEWS.has(stage) ? "electrical" : stage ?? "";
+  return DOMAINS.find((d) => d.stages.includes(st))?.key ?? null;
+};
+
+// A sheet the services show: a sheet outside every domain (plan, furniture) always
+export const stageOn = (services: Services, stage: string | undefined): boolean => {
+  const d = domainOf(stage);
+  return d === null || serviceOn(services, d);
+};
+
+// Manifest pages of the switched-on services: what the viewer has as sheets (tabs, one drawing,
+// elevations, estimate). May be empty: the viewer then stays on "Overview"
+export const servicePages = (pages: readonly ManifestPage[], services: Services): ManifestPage[] =>
+  pages.filter((pg) => stageOn(services, pg.stage));
+
+// Wall layers the services have: a layer of a switched-off service is neither drawn nor listed
+export const wallLayersOn = (services: Services): WallLayers =>
+  ({ electrical: serviceOn(services, "electrical"), water: serviceOn(services, "plumbing") });
+
+// The overview without the blocks of switched-off services: points and panel are electrical,
+// plumbing (with its estimate, so not in the project total) is plumbing
+export function serviceOverview(overview: Overview, services: Services): Overview {
+  const out = { ...overview };
+  if (!serviceOn(services, "electrical")) { delete out.points; delete out.panel; }
+  if (!serviceOn(services, "plumbing")) delete out.plumbing;
+  return out;
+}

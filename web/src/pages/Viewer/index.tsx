@@ -11,7 +11,9 @@ import { Welcome } from "@/pages/Welcome";
 import { base, enc, getManifest, getPage, getProject, isProject, listProjects, reviewAnswer, saveAnswer, saveWizard, type ReviewOutcome, type WizardBody } from "@/shared/api";
 import { CEILING_TABS, isWallStage, NARROW_PX, SIDE_TABS, stickersPdf, type DrawerTab, type PanelMode, type SideTab, type Theme } from "@/shared/consts";
 import { cx } from "@/shared/cx";
-import { heldBack, placeAmongViews, sectionOf, sections, wallLayersOf, withComingSoon, type Section } from "@/shared/domains";
+import {
+  heldBack, placeAmongViews, sectionOf, sections, serviceOn, serviceOverview, servicePages, wallLayersOf, wallLayersOn, withComingSoon, type Section,
+} from "@/shared/domains";
 import { label, pageTitle } from "@/shared/i18n";
 import { modeDrawerTabs, modeTabs, rememberMode, savedMode, stageShown, type UiMode } from "@/shared/mode";
 import { applyTheme, remember, remembered, savedTheme } from "@/shared/palette";
@@ -106,7 +108,8 @@ export function Viewer({ account = null }: { account?: Account | null }) {
   const [studio, setStudio] = useState(studioFromHash);  // the open studio settings section
   const outside = useRef(studioFromHash() ? "" : location.hash.slice(1));  // where the settings were opened from
   const [project, setProject] = useState<Project | null>(null);
-  const [pages, setPages] = useState<ManifestPage[]>([]);
+  const [pages, setPages] = useState<ManifestPage[]>([]);  // sheets of the switched-on services (shared/domains.ts)
+  const [sceneSheet, setSceneSheet] = useState<number | undefined>();  // the wiring page: the 3D scene, whatever the services
   const [sheet, setSheet] = useState<number | null>(null);
   const [page, setPage] = useState<Page | null>(null);
   const [loaded, setLoaded] = useState<number | null>(null);  // the sheet whose page is currently in page
@@ -205,7 +208,7 @@ export function Viewer({ account = null }: { account?: Account | null }) {
       setError(null);       // only an old failure, for example sheets read in the middle of a rebuild
     } else {
       placed.current = null;
-      setProject(null); setPages([]); setPage(null); setLoaded(null); setDrawn([]); setElevs([]); setScene(null);
+      setProject(null); setPages([]); setSceneSheet(undefined); setPage(null); setLoaded(null); setDrawn([]); setElevs([]); setScene(null);
       setError(null); setSource(null); setEstimate(false); setInfo(false); setOverview(null); setWorkTab(false); setTask(null);
       setRefreshing(false); setShown(reloadsRef.current); setWizard(false); setPanelMode("front"); setHasLow(false);
       questionsMemory.current = { drafts: {} };
@@ -222,17 +225,20 @@ export function Viewer({ account = null }: { account?: Account | null }) {
         if (!p.artifact) { setRefreshing(false); return; }
         const m = await getManifest(current);
         if (!alive) return;
-        // The point schedule is for print; in the viewer it is in the side panel of the electrical sheet
-        const shown = m.pages.filter((pg) => pg.stage !== "points");
+        // The point schedule is for print; in the viewer it is in the side panel of the electrical sheet.
+        // Sheets of a switched-off service are not there at all (decision 2026-11-23)
+        const shown = servicePages(m.pages.filter((pg) => pg.stage !== "points"), p.services);
         setPages(shown);
+        setSceneSheet(m.pages.find((pg) => pg.stage === "wiring")?.index);
         setVariants(m.variants ?? null);
         setOverview(m.overview ?? null);
         const saved = savedPlace(current);
         const has = (i: unknown) => shown.some((pg) => pg.index === i);
         setSheet((s) => (has(saved?.sheet) ? saved!.sheet : has(s) ? s : shown[0]?.index ?? null));
         setEstimate(!!saved?.estimate && shown.some((pg) => (pg.stage === "wiring" || pg.stage === "plumbing") && pg.index === saved.sheet));
-        // The first visit to a project opens "Overview"; after that, where you were
-        setInfo(saved === null || saved.info);
+        // The first visit to a project opens "Overview"; after that, where you were; with no sheet
+        // of the switched-on services, "Overview" is all there is
+        setInfo(saved === null || saved.info || shown.length === 0);
         placed.current = current;
       } catch (e) {
         if (alive) { setError((e as Error).message); setRefreshing(false); }
@@ -252,9 +258,11 @@ export function Viewer({ account = null }: { account?: Account | null }) {
     [pages, sheetStage]);
   // A hint jumps from a point to its wall: the electrical elevations
   const pointWallSheet = pages.find((pg) => pg.stage === "elevations")?.index;
-  const sceneSheet = pages.find((pg) => pg.stage === "wiring")?.index;
+  // The wiring sheet (with the electrical estimate); the scene comes from it even with electrical
+  // switched off (sceneSheet: the mini map of the plumbing elevations, the wizard)
+  const wiringSheet = pages.find((pg) => pg.stage === "wiring")?.index;
   // The plumbing estimate is on the "Plumbing" page; without wiring the "Estimate" tab opens it
-  const estimateSheet = sceneSheet ?? pages.find((pg) => pg.stage === "plumbing")?.index;
+  const estimateSheet = wiringSheet ?? pages.find((pg) => pg.stage === "plumbing")?.index;
 
   // The setup wizard shows the flat in 3D on the ceiling step: the scene loads when it opens
   useEffect(() => {
@@ -315,8 +323,8 @@ export function Viewer({ account = null }: { account?: Account | null }) {
     return true;
   };
   // From an elevation to the wiring sheet, straight to the line of a point or box (store.goto)
-  const toWiring = sceneSheet === undefined ? undefined : (key: string) => {
-    if (openSheet(sceneSheet)) view.set({ goto: { key, stage: "wiring" } });
+  const toWiring = wiringSheet === undefined ? undefined : (key: string) => {
+    if (openSheet(wiringSheet)) view.set({ goto: { key, stage: "wiring" } });
   };
   // From a question to its object, or to the "Panel" tab; on a narrow screen the panel covers
   // the drawing, so it closes (what was typed stays in questionsMemory)
@@ -406,8 +414,10 @@ export function Viewer({ account = null }: { account?: Account | null }) {
     }
   };
   const openWizard = (step?: StepId) => { setWizardStart(step); setWizard(true); };
+  // Services of the project: the wizard and the wiring variants are electrical
+  const electricalOn = serviceOn(project?.services, "electrical");
   const setup = useMemo(() => {
-    if (!project) return null;
+    if (!project || !serviceOn(project.services, "electrical")) return null;
     return setupProgress(setupOf(project, variants, overview?.ceiling.height ?? null, overview?.panel?.reserve ?? null,
                                  overview?.panel?.master ?? null));
   }, [project, variants, overview]);
@@ -512,8 +522,11 @@ export function Viewer({ account = null }: { account?: Account | null }) {
   const onWalls = sheet !== null && elevSheets.includes(sheet) && !info && !estimate && !workTab && !source;
   useEffect(() => { if (!onWalls) setAllWalls(false); }, [onWalls]);
   // One wall engine for every section: the elevations sheet picks the layers
-  const wallLayers = onWalls ? wallLayersOf(sheetStage) : null;
-  const wallLayersKey = wallLayers ? sheetStage : null;
+  // (a layer of a switched-off service stays off: wallLayersOn)
+  const wallsHave = wallLayersOn(project?.services);
+  const ofSheet = onWalls ? wallLayersOf(sheetStage) : null;
+  const wallLayers = ofSheet && { electrical: ofSheet.electrical && wallsHave.electrical, water: ofSheet.water && wallsHave.water };
+  const wallLayersKey = wallLayers ? `${sheetStage}|${wallsHave.electrical}|${wallsHave.water}` : null;
   useEffect(() => { if (wallLayers) view.set({ wallLayers }); }, [wallLayersKey]);  // eslint-disable-line react-hooks/exhaustive-deps
   const openWall = (index: number) => {
     const next = walls[index];
@@ -554,7 +567,7 @@ export function Viewer({ account = null }: { account?: Account | null }) {
   const tabBar = useUnderline<HTMLElement>(`${info ? "info" : estimate ? "estimate" : workTab ? "work" : section?.key ?? "-"}|${navSections.length}|${t("overview.tab")}|${!!openEstimate}|${!!project?.work}`);
   const subBar = useUnderline<HTMLElement>(`${subItems.findIndex((it) => it.current)}|${subItems.map((it) => it.label).join("|")}`);
   // Wiring variant as a line in the sheet side panel: "По группам проекта · По потолку · Через коробки"
-  const activeVariant = variants ? parseKey(variants.active) : null;
+  const activeVariant = variants && electricalOn ? parseKey(variants.active) : null;
   const variantLabel = activeVariant
     ? [t(`wizard.steps.breakers.options.${breakersOf(activeVariant.mode)}.name`), t(`variant.routes.${activeVariant.route}`), t(`variant.distributions.${activeSummary(variants!)?.distribution ?? "boxes"}`)].join(" · ")
     : null;
@@ -615,7 +628,8 @@ export function Viewer({ account = null }: { account?: Account | null }) {
   }
   else if (project && !project.artifact) main = <EmptyState>{t("app.noArtifact")}</EmptyState>;
   else if (info && project) {
-    main = <OverviewStage overview={overview} variants={variants} project={project} openQuestions={openQs}
+    main = <OverviewStage overview={overview && serviceOverview(overview, project.services)}
+                          variants={electricalOn ? variants : null} project={project} openQuestions={openQs}
                           canChoose={project.can?.choose_variant ?? true} refreshing={refreshing || choosing}
                           onEstimate={openEstimate} onDrawer={(k) => { setDrawer(k); setClosing(false); }}
                           onWizard={setup?.total ? () => openWizard() : undefined} setup={setup ?? undefined} />;
@@ -707,7 +721,7 @@ export function Viewer({ account = null }: { account?: Account | null }) {
         {/* Sheet tabs: the active one is underlined, the line is cut in under it (shared/underline.ts) */}
         <nav ref={tabBar.ref} className={css.sheets} aria-label={t("app.sheets")} data-tour="sheets">
           {/* Every built project has this tab: a build without the overview (old code) shows a hint to rebuild */}
-          {project?.artifact && pages.length > 0 && (
+          {project?.artifact && (pages.length > 0 || info) && (
             <button aria-current={info ? "page" : undefined} data-label={t("overview.tab")} onClick={() => { if (!info) curtain.go(openInfo); }}>{t("overview.tab")}</button>
           )}
           {navSections.map((s) => {
@@ -817,7 +831,7 @@ export function Viewer({ account = null }: { account?: Account | null }) {
       </main>
       <SidePanel tab={side} onTab={showSide} page={source ? null : page} drawing={source ? null : drawing}
                  estimate={estimate && !source ? page?.estimate ?? null : null}
-                 wall={!source && !loading ? wall?.data ?? null : null} onWiring={toWiring}
+                 wall={!source && !loading ? wall?.data ?? null : null} wallHas={wallsHave} onWiring={toWiring}
                  ceiling={!source && !loading ? wall?.ceiling ?? null : null}
                  layers={mode === "engineering"}
                  variant={variantLabel ? { label: variantLabel, onOpen: openInfo } : null}

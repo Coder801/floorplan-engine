@@ -26,6 +26,13 @@ describe("WallItems", () => {
     expect(within(water).getByText("Мойка")).toBeInTheDocument();
   });
 
+  it("a layer of a service switched off for the project is not listed", () => {
+    render(<WallItems wall={elevation()} has={{ electrical: true, water: false }} />);
+    expect(screen.getByRole("heading", { name: /Электрика/ })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: /Вода/ })).toBeNull();
+    expect(screen.queryByText("Мойка")).toBeNull();
+  });
+
   it("the eye hides a layer on the elevation", async () => {
     render(<WallItems wall={elevation()} />);
     await userEvent.click(screen.getByRole("button", { name: "Скрыть: Вода" }));

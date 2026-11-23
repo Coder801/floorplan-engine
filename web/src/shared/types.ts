@@ -53,6 +53,9 @@ export interface ProjectSummary {
   open_questions: number;
   waiting_answers?: number;  // client answers waiting for the studio; missing on an old server
   preview: boolean;  // out/preview.svg exists: the plan preview from the model
+  // Services switched on for the project (electrical, plumbing, demolition; set in the admin):
+  // the sections of the others are hidden (shared/domains.ts). Missing on an old server: all on
+  services?: string[];
 }
 
 export interface Project extends ProjectSummary {
