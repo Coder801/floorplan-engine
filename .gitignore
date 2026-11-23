@@ -20,5 +20,8 @@ data/
 # Отладка трассировки (floorplan-engine trace): не результат проекта
 projects/*/out/debug/
 
+# PNG листов (floorplan-engine render-artifact): проверка глазами, сборка их не пишет (решение 2026-10-23)
+projects/*/out/artifact/
+
 # Копии базы
 *.dump
