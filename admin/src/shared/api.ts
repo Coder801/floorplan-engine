@@ -54,6 +54,8 @@ export const addProjectMember = (id: string, user: string, role: string) =>
   call<ProjectDetail>("POST", `${A}/projects/${q(id)}/members`, { user, role });
 export const removeProjectMember = (id: string, user: string) =>
   call<ProjectDetail>("DELETE", `${A}/projects/${q(id)}/members/${q(user)}`);
+export const setProjectServices = (id: string, services: string[]) =>
+  call<ProjectDetail>("PUT", `${A}/projects/${q(id)}/services`, { services });
 export const projectInvite = (id: string, role: string, email: string | null, days: number) =>
   call<{ url: string }>("POST", `${A}/projects/${q(id)}/invites`, { role, email, days });
 export const revokeInvite = (invite: string) => call<{ ok: boolean }>("DELETE", `${A}/invites/${q(invite)}`);

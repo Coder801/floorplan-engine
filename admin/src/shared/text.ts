@@ -16,6 +16,14 @@ export const PROJECT_ROLES = ["client", "installer"];
 // Access code kinds (access_codes.issue_code): a view code, a client code (answers and the wizard)
 export const CODE_ROLES = ["viewer", "client_code"];
 
+// Services of a project, in catalogue order (decision 2026-11-23): the viewer hides the sections of
+// those switched off. A service that is not built yet is marked "soon" and changes nothing so far
+export const SERVICES: { key: string; label: string; soon?: boolean }[] = [
+  { key: "electrical", label: "Электрика" },
+  { key: "plumbing", label: "Сантехника" },
+  { key: "demolition", label: "Монтаж/демонтаж", soon: true },
+];
+
 export const STATE: Record<string, string> = {
   active: "действует", accepted: "принято", revoked: "отозван", expired: "истёк",
 };
@@ -36,6 +44,7 @@ export const ACTION: Record<string, string> = {
   admin_block: "заблокирован", admin_unblock: "разблокирован", admin_logout: "сеансы завершены",
   admin_member_add: "добавлен участник", admin_member_role: "роль изменена",
   admin_member_remove: "участник убран", admin_invite_revoke: "приглашение отозвано",
+  admin_project_services: "сервисы проекта изменены",
 };
 
 export const word = (dict: Record<string, string>, key: string | null | undefined) =>

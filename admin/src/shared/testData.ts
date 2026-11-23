@@ -27,12 +27,12 @@ export const studioDetail = (over: Partial<StudioDetail> = {}): StudioDetail => 
 
 export const projectRow = (over: Partial<ProjectRow> = {}): ProjectRow => ({
   id: "p1", name: "Квартира на Нагорной", slug: "nahirna-16", studio: { id: "s1", name: "Ампер" },
-  state: "active", created: "2026-10-05T10:00:00Z", members: 1, ...over,
+  state: "active", created: "2026-10-05T10:00:00Z", services: ["electrical", "plumbing"], members: 1, ...over,
 });
 
 export const projectDetail = (over: Partial<ProjectDetail> = {}): ProjectDetail => ({
   id: "p1", name: "Квартира на Нагорной", slug: "nahirna-16", studio: { id: "s1", name: "Ампер" },
-  state: "active", created: "2026-10-05T10:00:00Z", members: [], codes: [], invites: [], support: [], ...over,
+  state: "active", created: "2026-10-05T10:00:00Z", services: ["electrical", "plumbing"], members: [], codes: [], invites: [], support: [], ...over,
 });
 
 export const invite = (over: Partial<InviteRow> = {}): InviteRow => ({

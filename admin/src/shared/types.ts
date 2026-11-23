@@ -38,6 +38,8 @@ export interface ProjectBrief {
   studio: { id: string; name: string };
   state: string;
   created: string | null;
+  // Services switched on for the project (SERVICES keys); an old server may send none
+  services?: string[];
 }
 
 export interface Summary { studios: number; personal: number; users: number; projects: number; sessions: number }

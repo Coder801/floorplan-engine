@@ -1,10 +1,10 @@
-// Projects: list; detail with members (client, outside installer), access codes (shown once),
+// Projects: list; detail with services (ticks; the viewer hides the sections of those off), members (client, outside installer), access codes (shown once),
 // invite links and support access. Every section has its own add button.
 import { useMemo, useState } from "react";
 import * as api from "@/shared/api";
 import { ago, contact, date, who } from "@/shared/format";
 import { href } from "@/shared/route";
-import { CODE_ROLES, PROJECT_ROLES, ROLE, word } from "@/shared/text";
+import { CODE_ROLES, PROJECT_ROLES, ROLE, SERVICES, word } from "@/shared/text";
 import type { ProjectDetail } from "@/shared/types";
 import { IssueForm, OneTime, PersonPicker } from "@/components/dialogs";
 import { Confirm, ErrorLine, Section, Status, css, cx, useAction, useLoad } from "@/components/ui";
@@ -28,12 +28,17 @@ export function ProjectList({ id, version }: { id: string | null; version: numbe
           <a key={p.id} href={href("projects", p.id)} className={cx(css.row, p.id === id && css.on)}>
             <div className={css.rowTop}><span className={css.mono}>{p.slug}</span><span className={css.muted}>{p.members} уч.</span></div>
             <div className={css.rowSub}>{p.name} · «{p.studio.name}»</div>
+            {p.services && <div className={css.rowSub}>{serviceNames(p.services)}</div>}
           </a>
         ))}
       </div>
     </>
   );
 }
+
+// Switched-on services in short, in catalogue order
+const serviceNames = (on: readonly string[]) =>
+  SERVICES.filter((s) => on.includes(s.key)).map((s) => s.label).join(", ") || "без сервисов";
 
 type Dialogs = "member" | "code" | "invite" | "support" | null;
 
@@ -46,6 +51,8 @@ export function ProjectView({ id, onChanged }: { id: string; onChanged: () => vo
   if (detail.error) return <ErrorLine error={detail.error} />;
   if (!p) return <div className={css.muted}>Загрузка…</div>;
   const update = (d: ProjectDetail) => { detail.set(d); onChanged(); };
+  // An old server sends no services: every service is on
+  const on = p.services ?? SERVICES.map((s) => s.key);
   const issued = (title: string) => (v: string | null) => {
     setOpen(null);
     if (v) { setSecret({ title, value: v }); detail.reload(); }
@@ -61,6 +68,20 @@ export function ProjectView({ id, onChanged }: { id: string; onChanged: () => vo
         <a className={css.link} href={`/#${encodeURIComponent(p.id)}`} target="_blank" rel="noreferrer">открыть в просмотре ↗</a>
       </div>
       <ErrorLine error={action.error} />
+
+      <Section title="Сервисы">
+        <div className={css.checks}>
+          {SERVICES.map((s) => (
+            <label key={s.key} className={css.check}>
+              <input type="checkbox" checked={on.includes(s.key)} disabled={action.busy}
+                onChange={(e) => action.run(() => api.setProjectServices(id,
+                  e.target.checked ? SERVICES.map((x) => x.key).filter((k) => k === s.key || on.includes(k)) : on.filter((k) => k !== s.key)), update)} />
+              {s.label}
+              {s.soon && <span className={css.muted}>(скоро: пока не строится)</span>}
+            </label>
+          ))}
+        </div>
+      </Section>
 
       <Section title={`Участники (${p.members.length})`}
         action={<button className={css.primary} onClick={() => setOpen("member")}>+ Добавить</button>}>

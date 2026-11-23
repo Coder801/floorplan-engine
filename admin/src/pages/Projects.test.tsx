@@ -22,6 +22,7 @@ describe("ProjectList", () => {
     await user.type(screen.getByPlaceholderText("Папка, название или студия"), "вольт");
     expect(screen.queryByRole("link", { name: /nahirna-16/ })).toBeNull();
     expect(screen.getByRole("link", { name: /dacha/ })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /dacha/ })).toHaveTextContent("Электрика, Сантехника");
   });
 });
 
@@ -36,6 +37,44 @@ describe("ProjectView", () => {
     expect(screen.getByText("Кодов нет")).toBeInTheDocument();
     expect(screen.getByText("Приглашений нет")).toBeInTheDocument();
     expect(screen.getByText("Доступа поддержки нет")).toBeInTheDocument();
+  });
+
+  it("ticks a service and saves the list at once, in catalogue order", async () => {
+    const user = userEvent.setup();
+    const sent = stubApi({
+      [DETAIL]: projectDetail({ services: ["plumbing"] }),
+      "PUT /api/admin/projects/p1/services": projectDetail({ services: ["electrical", "plumbing"] }),
+    });
+    const onChanged = vi.fn();
+    render(<ProjectView id="p1" onChanged={onChanged} />);
+    const electrical = await screen.findByRole("checkbox", { name: "Электрика" });
+    expect(electrical).not.toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Сантехника" })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: /Монтаж\/демонтаж.*скоро/ })).not.toBeChecked();
+    await user.click(electrical);
+    expect(sent.at(-1)).toMatchObject({ method: "PUT", body: { services: ["electrical", "plumbing"] } });
+    expect(await screen.findByRole("checkbox", { name: "Электрика" })).toBeChecked();
+    expect(onChanged).toHaveBeenCalledOnce();
+  });
+
+  it("unticks a service; a refusal is shown and the tick stays", async () => {
+    const user = userEvent.setup();
+    const sent = stubApi({
+      [DETAIL]: projectDetail(),
+      "PUT /api/admin/projects/p1/services": fail(409, "нужен хотя бы один сервис"),
+    });
+    render(<ProjectView id="p1" onChanged={vi.fn()} />);
+    await user.click(await screen.findByRole("checkbox", { name: "Сантехника" }));
+    expect(sent.at(-1)?.body).toEqual({ services: ["electrical"] });
+    expect(await screen.findByRole("alert")).toHaveTextContent("нужен хотя бы один сервис");
+    expect(screen.getByRole("checkbox", { name: "Сантехника" })).toBeChecked();
+  });
+
+  it("an old server without services: every tick is on", async () => {
+    stubApi({ [DETAIL]: projectDetail({ services: undefined }) });
+    render(<ProjectView id="p1" onChanged={vi.fn()} />);
+    expect(await screen.findByRole("checkbox", { name: "Электрика" })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Сантехника" })).toBeChecked();
   });
 
   it("shows a load error and nothing else", async () => {
