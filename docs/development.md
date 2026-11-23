@@ -73,6 +73,7 @@ Postgres (`TEST_REQUIRE_DB=1`) и покрытием (`--cov`, ниже 90 % —
 docker compose up -d db mail
 uv run python scripts/server.py backup          # копия сервера в ~/shtroba-backups (нужен railway ssh)
 uv run python scripts/local.py restore          # стирает локальную базу и data/objects, миграции
+uv run python scripts/local.py update           # после релиза или pull: миграции и пересборка всех проектов
 uv run floorplan-engine dev                     # http://127.0.0.1:5173, админка — /admin/
 ```
 
@@ -104,10 +105,14 @@ uv run floorplan-engine dev                     # http://127.0.0.1:5173, адм�
   пока не сделан `git merge main` в `develop`. Пуш: `git push origin main develop --follow-tags`.
 
 - **Всё одной командой** (после `/commit`, из своего терминала — пуш идёт по вашим ключам):
-  `uv run python scripts/flow.py ship --increment patch --rebuild` — `feature` → `develop`
+  `uv run python scripts/flow.py ship --increment patch` — `feature` → `develop`
   (забытый чистый worktree с `develop` убирается сам), проверки, релиз, вопрос «выпустить и
-  запушить?», пуш, ожидание выкладки, пересборка проектов на сервере. `--dry-run` — только план,
-  `--yes` — без вопроса.
+  запушить?», бэкап сервера (`server.py backup`), если с прошлого тега есть новая миграция (сервер
+  применит её при старте), пуш, ожидание выкладки и пересборка проектов на сервере, затем
+  локальная копия — `scripts/local.py update`: миграции и пересборка всех проектов локальной базы
+  (решение 2026-11-23: без этого просмотр падал на новой колонке и показывал сборки старым кодом).
+  Не удался бэкап — пуша нет, релиз остаётся локально. `--dry-run` — только план, `--yes` — без
+  вопроса, `--no-backup`, `--no-rebuild`, `--no-local` — пропустить шаг.
 - **Сервер** (`scripts/server.py`, нужен `railway` с привязанным проектом): `check` — версия,
   число файлов в хранилище, диск (должен быть том, а не `overlay`) и переменные без значений; `rebuild [имена…] [--wait]` — пересобрать проекты текущим
   кодом; `send <проект> room.yaml` — файлы модели новой версией (любые, что хранит база, кроме

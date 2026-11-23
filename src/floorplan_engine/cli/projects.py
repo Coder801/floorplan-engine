@@ -109,9 +109,12 @@ def project_build(
         list[str] | None, typer.Argument(help="Имена проектов; без них — все проекты студии")
     ] = None,
     owner: OwnerOpt = None,
+    every: Annotated[
+        bool, typer.Option("--all", help="Все проекты базы, всех студий (локальная копия)")
+    ] = False,
 ) -> None:
     """Пересобрать проекты из базы текущим кодом: последняя версия модели, новая сборка в
-    хранилище. Модель не меняется. Без имён нужен --owner."""
+    хранилище. Модель не меняется. Без имён нужен --owner или --all."""
     from sqlalchemy import select
 
     from floorplan_engine.service import project_store as ps
@@ -121,6 +124,8 @@ def project_build(
     failed = False
     with database() as db:
         studio = _owner_studio(db, owner)
+        if slugs and every:
+            fail("Укажите имена проектов или --all, не вместе")
         if slugs:
             targets = [find_project(db, slug, studio) for slug in slugs]
             for slug, target in zip(slugs, targets, strict=True):
@@ -129,8 +134,10 @@ def project_build(
         elif studio is not None:
             query = select(Project).where(Project.studio_id == studio.id).order_by(Project.slug)
             targets = list(db.scalars(query))
+        elif every:
+            targets = list(db.scalars(select(Project).order_by(Project.slug, Project.id)))
         else:
-            fail("Укажите имена проектов или --owner")
+            fail("Укажите имена проектов, --owner или --all")
         store = store_from_env()
         for target in targets:
             assert target is not None

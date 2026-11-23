@@ -96,7 +96,7 @@ uv run floorplan-engine access revoke-code projects/kv42 <id>          # ото�
 ```bash
 uv run floorplan-engine project push projects/kv42 [--owner <email>]   # папку — в базу новой версией
 uv run floorplan-engine project pull kv42 [--to projects] [--force]    # из базы — в папку
-uv run floorplan-engine project build [kv42 …] [--owner <email>]       # пересобрать из базы текущим кодом
+uv run floorplan-engine project build [kv42 …] [--owner <email> | --all]  # пересобрать из базы текущим кодом
 uv run floorplan-engine project import projects --owner <email>        # перенести папку проектов и студию в базу
 uv run floorplan-engine studio push|pull projects --owner <email>      # прайс и профиль студии ↔ база
 ```
@@ -116,7 +116,7 @@ uv run python scripts/server.py backup [--to папка]                    # д
 uv run python scripts/flow.py feature <имя>                            # ветка feature/<имя> от develop
 uv run python scripts/flow.py integrate [--keep]                       # feature → develop
 uv run python scripts/flow.py release [--dry-run] [--increment patch]  # develop → main: версия, CHANGELOG, тег
-uv run python scripts/flow.py ship [--increment patch] [--rebuild]     # всё после /commit: вливание, проверки, релиз, пуш, пересборка
+uv run python scripts/flow.py ship [--increment patch]                 # всё после /commit: вливание, проверки, релиз, бэкап при миграции, пуш, пересборка на сервере и локально
 git push origin main develop --follow-tags                             # пуш релиза — вручную
 ```
 

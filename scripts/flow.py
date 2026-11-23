@@ -8,6 +8,11 @@ There are no release branches.
                                                     # fast-forward; branch is deleted (--keep: not)
   uv run python scripts/flow.py release [--dry-run] # develop → main fast-forward, cz bump
                                                     # (version, CHANGELOG, tag), develop ← main
+  uv run python scripts/flow.py ship [--increment patch] [--dry-run] [--yes]
+                                                    # всё после /commit: вливание, проверки,
+                                                    # релиз, бэкап сервера при миграциях, пуш,
+                                                    # пересборка на сервере, локальная копия
+                                                    # (--no-backup, --no-rebuild, --no-local)
 
 Push by hand: `git push origin develop`, after a release `git push origin main develop
 --follow-tags`. The script does not resolve rebase conflicts: it stops and leaves the rest to
@@ -34,6 +39,7 @@ CHECKS = (  # the verify skill, step 1; admin/ is checked by CI
     "uv run lint-imports",
     "cd web && npm run check && npm test && npm run build",
 )
+MIGRATIONS = "migrations"  # новая миграция с прошлого тега — бэкап сервера перед пушем
 NAME_RE = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
 
 
@@ -158,25 +164,61 @@ def run_checks(cwd: Path) -> None:
             raise FlowError(f"проверка не прошла: {check}")
 
 
+def last_tag(cwd: Path) -> str | None:
+    """The latest release tag on main; None before the first release."""
+    r = subprocess.run(
+        ["git", "describe", "--tags", "--abbrev=0", MAIN], cwd=cwd, capture_output=True, text=True
+    )
+    return r.stdout.strip() if r.returncode == 0 else None
+
+
+def new_migrations(cwd: Path, since: str | None) -> list[str]:
+    """Migration files added or changed on develop since the tag (all of them before the first
+    release): the server applies them on start, so it is backed up before the push."""
+    if since is None:
+        out = git("ls-files", "--", MIGRATIONS, cwd=cwd)
+    else:
+        out = git("diff", "--name-only", since, DEVELOP, "--", MIGRATIONS, cwd=cwd)
+    return [line for line in out.splitlines() if line.endswith(".py")]
+
+
+def run_script(name: str, *args: str, cwd: Path) -> int:
+    """Another script of scripts/ in this environment (server.py, local.py); its exit code."""
+    script = Path(__file__).with_name(name)
+    return subprocess.run([sys.executable, str(script), *args], cwd=cwd).returncode
+
+
 def ship(
     cwd: Path,
     increment: str | None = None,
     dry_run: bool = False,
     yes: bool = False,
-    rebuild: bool = False,
+    rebuild: bool = True,
+    backup: bool = True,
+    local: bool = True,
 ) -> None:
-    """Everything after /commit: feature → develop, checks, release, push, rebuild on the server.
-    The push happens after one question (--yes: without it)."""
+    """Everything after /commit: feature → develop, checks, release, a server backup when the
+    release brings a migration, push, rebuild on the server once the version is out, then the
+    local copy (migrations and rebuild, scripts/local.py update). The push happens after one
+    question (--yes: without it)."""
     branch = current_branch(cwd)
     feature_branch = branch.startswith(FEATURE)
     if not feature_branch and branch != DEVELOP:
         raise FlowError(f"нужна ветка {FEATURE}<имя> или {DEVELOP}, сейчас — «{branch}»")
     if not is_clean(cwd):
         raise FlowError("есть незакоммиченные изменения: сначала закоммитьте (/commit)")
+    since = last_tag(cwd)
+    steps = [f"{branch} → {DEVELOP}", "проверки", "релиз"]
+    steps += ["бэкап сервера при новой миграции"] if backup else []
+    steps += [f"push {MAIN} {DEVELOP}"]
+    steps += ["пересборка на сервере"] if rebuild else []
+    steps += ["локальная копия"] if local else []
     if dry_run:
-        print(f"flow: {branch} → {DEVELOP} → проверки → релиз → push {MAIN} {DEVELOP}")
+        print("flow: " + " → ".join(steps))
         if not feature_branch:
             release(cwd, dry_run=True, increment=increment)
+            if backup and (found := new_migrations(cwd, since)):
+                print(f"flow: миграции с {since or 'начала'}: {', '.join(found)} — будет бэкап")
         return
     free_develop(cwd)
     if feature_branch:
@@ -186,11 +228,18 @@ def ship(
     if not yes and input(f"Выпустить и запушить {MAIN}, {DEVELOP}? [y/N] ").lower() != "y":
         raise FlowError(f"отменено на {DEVELOP}: ветка влита, релиза и пуша нет")
     release(cwd, increment=increment)
+    if backup and (found := new_migrations(cwd, since)):
+        print(f"flow: новые миграции ({', '.join(found)}) — бэкап сервера перед пушем", flush=True)
+        if run_script("server.py", "backup", cwd=cwd) != 0:
+            raise FlowError(
+                "бэкап не удался: релиз готов локально, пуша нет — повторите "
+                "scripts/server.py backup и запушьте сами или снова ship (--no-backup — без него)"
+            )
     git("push", "origin", MAIN, DEVELOP, "--follow-tags", cwd=cwd)
-    if rebuild:
-        server = [sys.executable, str(Path(__file__).with_name("server.py")), "rebuild", "--wait"]
-        if subprocess.run(server, cwd=cwd).returncode != 0:
-            raise FlowError("релиз выложен, но пересборка не удалась: scripts/server.py rebuild")
+    if rebuild and run_script("server.py", "rebuild", "--wait", cwd=cwd) != 0:
+        raise FlowError("релиз выложен, но пересборка не удалась: scripts/server.py rebuild")
+    if local and run_script("local.py", "update", cwd=cwd) != 0:
+        raise FlowError("сервер обновлён, локальная копия — нет: scripts/local.py update")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -207,13 +256,14 @@ def main(argv: list[str] | None = None) -> int:
         choices=("patch", "minor"),
         help="задать шаг версии, а не считать по коммитам",
     )
-    p = sub.add_parser("ship", help="всё после /commit: вливание, проверки, релиз, пуш")
+    p = sub.add_parser("ship", help="всё после /commit: вливание, проверки, релиз, пуш, пересборка")
     p.add_argument("--dry-run", action="store_true", help="только показать план и версию")
     p.add_argument("--increment", choices=("patch", "minor"), help="шаг версии")
     p.add_argument("--yes", action="store_true", help="пушить, не спрашивая")
-    p.add_argument(
-        "--rebuild", action="store_true", help="дождаться выкладки и пересобрать проекты"
-    )
+    p.add_argument("--rebuild", action="store_true", help=argparse.SUPPRESS)  # теперь по умолчанию
+    p.add_argument("--no-rebuild", action="store_true", help="не пересобирать на сервере")
+    p.add_argument("--no-backup", action="store_true", help="без бэкапа при новой миграции")
+    p.add_argument("--no-local", action="store_true", help="не обновлять локальную копию")
     args = parser.parse_args(argv)
     cwd = Path(git("rev-parse", "--show-toplevel", cwd=Path.cwd()))
     try:
@@ -222,7 +272,15 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "integrate":
             print(f"{integrate(cwd, keep=args.keep)} → {DEVELOP}; пуш: git push origin {DEVELOP}")
         elif args.command == "ship":
-            ship(cwd, args.increment, args.dry_run, args.yes, args.rebuild)
+            ship(
+                cwd,
+                args.increment,
+                args.dry_run,
+                args.yes,
+                rebuild=not args.no_rebuild,
+                backup=not args.no_backup,
+                local=not args.no_local,
+            )
         else:
             release(cwd, dry_run=args.dry_run, increment=args.increment)
             if not args.dry_run:

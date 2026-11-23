@@ -88,3 +88,33 @@ def test_objects_replace_the_local_folder_not_the_mirror(tmp_path: Path) -> None
         local.restore_objects(mirror, mirror)
     with pytest.raises(local.LocalError, match="нет зеркала"):
         local.restore_objects(tmp_path / "нет", dest)
+
+
+def test_update_migrates_then_rebuilds_every_project(monkeypatch: pytest.MonkeyPatch) -> None:
+    """After a release: database up, migrations, then every project rebuilt; stops at a failed
+    step and never runs against a database that is not local."""
+    calls: list[list[str]] = []
+    code = {"alembic": 0}
+
+    def run(command: list[str], **kw: Any) -> subprocess.CompletedProcess[bytes]:
+        calls.append(command)
+        failed = any(a in code and code[a] for a in command)
+        return subprocess.CompletedProcess(command, 1 if failed else 0, b"", b"")
+
+    monkeypatch.setattr(local.subprocess, "run", run)
+    monkeypatch.setattr(local, "load_env", lambda _: None)
+    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://u:p@localhost:5433/fe")
+    local.update()
+    assert calls[0][:2] == ["docker", "compose"] and calls[0][-1] == "db"
+    assert calls[1][-3:] == ["alembic", "upgrade", "head"]
+    assert calls[2][-3:] == ["project", "build", "--all"]
+    calls.clear()
+    code["alembic"] = 1
+    with pytest.raises(local.LocalError, match="миграции"):
+        local.update()
+    assert len(calls) == 2  # no rebuild after failed migrations
+    monkeypatch.setenv("DATABASE_URL", "postgresql://u:p@db.proxy.rlwy.net:41234/railway")
+    calls.clear()
+    with pytest.raises(local.LocalError, match="только локальную"):
+        local.update()
+    assert calls == []

@@ -356,3 +356,27 @@ def test_project_build_rebuilds_the_studio_projects(
         assert len(builds) == 3
     missing = runner.invoke(app, [*args, "nope"])
     assert missing.exit_code == 1 and "Проекта nope" in missing.output
+
+
+def test_project_build_all_rebuilds_every_project_of_the_database(
+    pg: Engine, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`project build --all` (local copy after a release, scripts/local.py update): every
+    project of every studio, no owner needed; names and --all together are refused."""
+    from floorplan_engine.service.db.session import make_sessions
+
+    root = tmp_path / "seed"
+    _seed(root, tmp_path, monkeypatch)
+    runner = CliRunner()
+    assert runner.invoke(app, _import_args(root)).exit_code == 0
+    with make_sessions(pg)() as db:
+        other = sync.ensure_owner(db, "other@example.com")
+        db.add(Project(studio_id=other.id, name="empty", slug="empty"))
+        db.commit()
+    every = runner.invoke(app, ["project", "build", "--all"])
+    assert every.exit_code == 0, every.output
+    assert "kv: версия 1, сборка: built" in every.output and "empty: модели нет" in every.output
+    both = runner.invoke(app, ["project", "build", "--all", "kv"])
+    assert both.exit_code == 1 and "--all" in both.output
+    none = runner.invoke(app, ["project", "build"])
+    assert none.exit_code == 1 and "--all" in none.output

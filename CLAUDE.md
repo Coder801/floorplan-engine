@@ -24,6 +24,7 @@ uv run floorplan-engine serve --data data/projects           # API сервис�
 uv run floorplan-engine dev                                  # просмотр одной командой: API + страница http://127.0.0.1:5173 + админка /admin/, всё перезагружается при правках
 docker compose up -d db mail && uv run alembic upgrade head  # база (Postgres 18, как на сервере; docs/database.md) и Mailpit (письма — http://127.0.0.1:8025)
 uv run python scripts/local.py restore                       # копию сервера (server.py backup) — в локальную базу и data/objects
+uv run python scripts/local.py update                        # после релиза или pull: миграции и пересборка всех проектов локальной базы
 docker compose --profile prod up --build                     # боевой образ локально: http://127.0.0.1:8080 (docs/development.md, «Локально как на сервере»)
 uv run floorplan-engine view                                 # только API просмотра projects/ (8000); пишет answers.yaml и variant.yaml
 uv run floorplan-engine access link projects/<имя> --owner <email>  # связать папку с базой (вход)
@@ -31,7 +32,7 @@ uv run floorplan-engine access invite projects/<имя> --role client  # ссы�
 uv run floorplan-engine access code projects/<имя> --label "Иван" [--role client_code]  # код доступа без учётки: просмотр или заказчик — настраивает проект (codes, revoke-code)
 uv run floorplan-engine project push projects/<имя> [--owner <email>]   # папку — в базу: новая версия модели, исходники, сборка (правда — база)
 uv run floorplan-engine project pull <имя> [--to projects] [--force]    # из базы — в папку: модель, исходники, out/ последней сборки
-uv run floorplan-engine project build [<имя>…] [--owner <email>]         # пересобрать из базы текущим кодом: модель не меняется, без имён — все проекты студии
+uv run floorplan-engine project build [<имя>…] [--owner <email> | --all]  # пересобрать из базы текущим кодом: модель не меняется, без имён — все проекты студии или базы
 uv run floorplan-engine project import projects --owner <email>         # перенести папку проектов и прайс/профиль студии в базу (studio push|pull — только студия)
 cd web && npm install && npm run dev                    # только страница просмотра (API — view)
 cd web && npm run build                                 # сборка фронта в web/dist (выкладка — README в web/)
@@ -47,7 +48,7 @@ uv run floorplan-engine preview projects/<имя>               # PNG листо
 uv run floorplan-engine trace projects/<имя> [--line wire_3 | --group QF3 | --point box_6] [--cost]  # отладка трасс: SVG сетки поиска и путей в out/debug/
 TEST_REQUIRE_DB=1 uv run pytest --cov && uv run mypy && uv run ruff check . && uv run ruff format --check . && uv run lint-imports
 uv run python scripts/flow.py feature <имя> | integrate | release [--dry-run]  # ветки и релиз: develop → feature → develop → main (docs/development.md)
-uv run python scripts/flow.py ship [--increment patch] [--rebuild]  # всё после /commit: вливание, проверки, релиз, пуш, пересборка
+uv run python scripts/flow.py ship [--increment patch] [--no-backup|--no-rebuild|--no-local]  # всё после /commit: вливание, проверки, релиз, бэкап при миграции, пуш, пересборка на сервере и локально
 uv run python scripts/server.py check | rebuild [имена] [--wait] | send <проект> room.yaml | backup  # боевой сервер через railway ssh; backup — база и файлы в ~/shtroba-backups
 ```
 

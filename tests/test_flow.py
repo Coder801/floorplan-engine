@@ -163,19 +163,66 @@ def _with_origin(repo: Path, tmp_path: Path) -> Path:
     return origin
 
 
+def _scripts(monkeypatch: pytest.MonkeyPatch, origin: Path, fail: str = "") -> list[str]:
+    """server.py and local.py stand-ins: the calls in order, with whether origin had the release
+    tag at that moment (a backup must come before the push)."""
+    calls: list[str] = []
+
+    def run_script(name: str, *args: str, cwd: Path) -> int:
+        pushed = run(origin, "tag") != ""
+        calls.append(f"{name} {' '.join(args)}" + (" (после пуша)" if pushed else ""))
+        return 1 if fail and fail in name + " " + " ".join(args) else 0
+
+    monkeypatch.setattr(flow, "run_script", run_script)
+    return calls
+
+
 def test_ship_integrates_releases_and_pushes(
     repo: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     origin = _with_origin(repo, tmp_path)
     monkeypatch.setattr(flow, "CHECKS", ("true",))
+    calls = _scripts(monkeypatch, origin)
     flow.feature("zoom", repo)
     commit(repo, "feat: zoom", "zoom.txt")
     flow.ship(repo, increment="patch", yes=True)
+    # No migration: no backup; then the server rebuild and the local copy, after the push
+    assert calls == ["server.py rebuild --wait (после пуша)", "local.py update (после пуша)"]
     assert flow.current_branch(repo) == "develop"
     assert not flow.branch_exists("feature/zoom", repo)
     assert run(origin, "tag") == "v0.1.1"
     assert run(origin, "rev-parse", "main") == run(repo, "rev-parse", "main")
     assert run(origin, "rev-parse", "develop") == run(repo, "rev-parse", "develop")
+
+
+def test_ship_backs_up_the_server_before_pushing_a_migration(
+    repo: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    origin = _with_origin(repo, tmp_path)
+    monkeypatch.setattr(flow, "CHECKS", ())
+    commit(repo, "feat: zoom", "zoom.txt")
+    flow.release(repo)  # v0.2.0 is out; the next release brings a migration
+    calls = _scripts(monkeypatch, origin)
+    (repo / "migrations" / "versions").mkdir(parents=True)
+    commit(repo, "feat: services", "migrations/versions/0018_services.py")
+    assert flow.new_migrations(repo, "v0.2.0") == ["migrations/versions/0018_services.py"]
+    flow.ship(repo, yes=True, local=False)
+    assert calls == ["server.py backup", "server.py rebuild --wait (после пуша)"]
+
+
+def test_ship_does_not_push_when_the_backup_fails(
+    repo: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    origin = _with_origin(repo, tmp_path)
+    monkeypatch.setattr(flow, "CHECKS", ())
+    calls = _scripts(monkeypatch, origin, fail="backup")
+    (repo / "migrations").mkdir()
+    commit(repo, "feat: services", "migrations/0001_init.py")
+    with pytest.raises(flow.FlowError, match="бэкап не удался"):
+        flow.ship(repo, yes=True)
+    assert calls == ["server.py backup"]
+    assert run(repo, "tag") == "v0.2.0"  # released locally
+    assert run(origin, "for-each-ref") == ""  # nothing pushed
 
 
 def test_ship_stops_on_a_failed_check(

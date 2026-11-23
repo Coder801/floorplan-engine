@@ -1,11 +1,16 @@
 """Локальная копия боевых данных (docs/development.md, «Локально как на сервере»).
 
     uv run python scripts/local.py restore [--from ~/shtroba-backups] [--dump файл] [--yes]
+    uv run python scripts/local.py update     # после релиза: миграции и пересборка всех проектов
 
 Берёт копию из `scripts/server.py backup`: последний дамп базы — в локальную базу из
 `docker compose` (DATABASE_URL из .env, только localhost; база стирается целиком), затем
 миграции до текущего кода; зеркало хранилища — в SHTROBA_OBJECTS (по умолчанию data/objects,
 папка заменяется). Зеркало копии не трогается: локальные правки пишутся в свою папку.
+
+`update` — локальная копия догоняет новый код (его в конце зовёт `flow.py ship`): поднимает базу
+из `docker compose`, применяет миграции и пересобирает все проекты базы (`project build --all`).
+Без него после релиза просмотр падает на новой колонке или показывает сборку старым кодом.
 
 pg_restore — из образа postgres:18, как и pg_dump в backup: локальный клиент может быть старше
 дампа. Пароль — через окружение, не аргументом (виден в ps).
@@ -94,6 +99,29 @@ def restore_objects(mirror: Path, dest: Path) -> int:
     return sum(1 for p in dest.rglob("*") if p.is_file())
 
 
+def update_steps() -> list[tuple[str, list[str]]]:
+    """Шаги update по порядку: база, миграции, пересборка; команда CLI — из того же окружения."""
+    cli = str(Path(sys.executable).with_name("floorplan-engine"))
+    return [
+        ("база", ["docker", "compose", "up", "-d", "--wait", "db"]),
+        ("миграции", [sys.executable, "-m", "alembic", "upgrade", "head"]),
+        ("пересборка", [cli, "project", "build", "--all"]),
+    ]
+
+
+def update() -> None:
+    """Миграции и пересборка всех проектов локальной базы текущим кодом; только локальная база."""
+    load_env(ROOT / ".env")
+    local_url(database_url())
+    for name, command in update_steps():
+        shown = " ".join([Path(command[0]).name, *command[1:]])
+        print(f"local: {name}: {shown}", flush=True)
+        if subprocess.run(command, cwd=ROOT).returncode != 0:
+            raise LocalError(f"шаг «{name}» не прошёл")
+    if os.environ.get("SHTROBA_STORAGE", "").lower() != "db":
+        print("ВНИМАНИЕ: в .env нет SHTROBA_STORAGE=db — просмотр возьмёт проекты из папки")
+
+
 def restore(folder: Path, dump: Path | None, yes: bool) -> None:
     load_env(ROOT / ".env")
     url = local_url(database_url())
@@ -118,9 +146,13 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--from", dest="folder", type=Path, default=BACKUP_DIR, help="папка копии")
     p.add_argument("--dump", type=Path, help="дамп базы (по умолчанию — последний в копии)")
     p.add_argument("--yes", action="store_true", help="не спрашивать")
+    sub.add_parser("update", help="миграции и пересборка всех проектов текущим кодом")
     args = parser.parse_args(argv)
     try:
-        restore(args.folder.expanduser(), args.dump, yes=args.yes)
+        if args.command == "update":
+            update()
+        else:
+            restore(args.folder.expanduser(), args.dump, yes=args.yes)
     except LocalError as e:
         print(f"local: {e}", file=sys.stderr)
         return 1
