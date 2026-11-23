@@ -142,3 +142,37 @@ def test_block_ends_sessions(auth: Auth, tmp_path: Path) -> None:
     assert r.status_code == 200 and r.json()["active"] is False and r.json()["sessions"] == []
     assert _client(auth, tmp_path, user).get("/api/auth/me").json()["user"] is None
     assert [u["email"] for u in boss.get("/api/admin/users?q=USER").json()] == ["user@example.com"]
+
+
+def test_project_services_from_admin(auth: Auth, tmp_path: Path) -> None:
+    """Services of a project (db/services.py): all by default, the admin ticks them, an unknown
+    key is a rule broken (409), an empty list is allowed, the change is in the audit log."""
+    owner = _login(auth, "owner")
+    with auth.db() as db:
+        o = acc.session_user(db, owner)
+        assert o is not None
+        acc.set_account_type(db, o, "pro")
+        pid = str(acc.create_project_for(db, o, "Кв 1", "kv1").id)
+    boss = _client(auth, tmp_path, _login(auth, "boss"))
+    base = f"/api/admin/projects/{pid}"
+
+    assert boss.get(base).json()["services"] == ["electrical", "plumbing", "demolition"]
+    assert boss.get("/api/admin/projects").json()[0]["services"] == [
+        "electrical", "plumbing", "demolition"
+    ]  # fmt: skip
+    r = boss.put(f"{base}/services", json={"services": ["plumbing", "electrical", "plumbing"]})
+    assert r.status_code == 200 and r.json()["services"] == ["electrical", "plumbing"]
+    assert boss.get("/api/admin/projects").json()[0]["services"] == ["electrical", "plumbing"]
+
+    bad = boss.put(f"{base}/services", json={"services": ["electrical", "roof"]})
+    assert bad.status_code == 409 and "неизвестный сервис roof" in bad.json()["detail"]
+    assert boss.get(base).json()["services"] == ["electrical", "plumbing"]  # unchanged
+
+    assert boss.put(f"{base}/services", json={"services": []}).json()["services"] == []
+    missing = boss.put("/api/admin/projects/not-an-id/services", json={"services": []})
+    assert missing.status_code == 404
+    assert boss.put(f"{base}/services", json={}).status_code == 422
+
+    log = boss.get(f"/api/admin/events?project={pid}").json()
+    changes = [e["payload"]["services"] for e in log if e["action"] == "admin_project_services"]
+    assert changes == [[], ["electrical", "plumbing"]]  # newest first

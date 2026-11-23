@@ -74,6 +74,8 @@ def test_list_and_project(root: Path) -> None:
     assert item["name"] == "kv1" and item["title"] == "Квартира 1"
     assert item["id"] == "kv1"  # the key in addresses: the folder name here
     assert item["open_questions"] == 1 and item["stale"] is False
+    # No database — no admin ticks: every service of the catalog (db/services.py)
+    assert item["services"] == ["electrical", "plumbing", "demolition"]
 
     p = client.get("/api/projects/kv1").json()
     assert p["answers"] == {"q1": 850, "q2": {"accept": True}}
@@ -82,6 +84,7 @@ def test_list_and_project(root: Path) -> None:
     assert p["sources"] == ["план.pdf"]
     assert p["model"] == ["room.yaml", "answers.yaml"]
     assert p["work"] is False  # installation by tasks lives only in the database
+    assert p["services"] == ["electrical", "plumbing", "demolition"]
 
     assert client.get("/api/projects/kv1/sheets").json()["pages"][0]["name"] == "01 План"
     assert client.get("/api/projects/kv1/sheets/1").json() == PAGE

@@ -98,6 +98,7 @@ def test_project_sheets_and_files_from_storage(
     client.cookies.set(COOKIE, tokens["a"])
     [card] = client.get("/api/projects").json()
     assert (card["id"], card["name"], card["stale"], card["preview"]) == (pid, "kv", False, True)
+    assert card["services"] == ["electrical", "plumbing", "demolition"]  # None in the row — all
     p = client.get(f"/api/projects/{pid}").json()
     assert p["artifact"] and p["dxf"] == "project.dxf" and p["sources"] == ["plan.pdf"]
     assert p["model"] == ["room.yaml", "electrical.yaml"]
@@ -314,3 +315,19 @@ def test_answers_need_the_right(
     client.cookies.set(COOKIE, tokens["b"])
     url = f"/api/projects/{tokens['id']}/answers"
     assert client.post(url, json={"id": "q1", "answer": 1}).status_code == 404
+
+
+def test_services_of_the_project_in_the_card(
+    setup: tuple[TestClient, LocalObjectStore, dict[str, str]], auth: Auth
+) -> None:
+    """The admin's ticks (Project.services) reach the card and the project, in catalog order."""
+    client, _, tokens = setup
+    pid = tokens["id"]
+    with auth.db() as db:
+        project = db.get(Project, uuid.UUID(pid))
+        assert project is not None
+        project.services = ["plumbing", "electrical"]
+    client.cookies.set(COOKIE, tokens["a"])
+    [card] = client.get("/api/projects").json()
+    assert card["services"] == ["electrical", "plumbing"]
+    assert client.get(f"/api/projects/{pid}").json()["services"] == ["electrical", "plumbing"]

@@ -259,9 +259,15 @@ def test_migration_fills_the_tables(pg: Engine, tmp_path: Path) -> None:
     conftest.migrate(pg, "0016", down=True)
     try:
         with Session(pg) as db:
-            project = repo.create_project(db, repo.create_studio(db, "С").id, "Кв")
-            pid = project.id
-            # Only the columns 0016 has
+            # Only the columns 0016 has: the model of today has more (project.services, 0018)
+            pid = uuid.uuid4()
+            db.execute(
+                text(
+                    "INSERT INTO project (id, studio_id, name, state, message, round, created_at,"
+                    " updated_at) VALUES (:id, :s, 'Кв', 'created', '', 0, now(), now())"
+                ),
+                {"id": pid, "s": repo.create_studio(db, "С").id},
+            )
             for number, answers in ((1, ANSWERS), (2, "answers:\n  q1: 160\n")):
                 db.execute(
                     text(

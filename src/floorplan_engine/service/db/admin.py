@@ -42,6 +42,7 @@ from floorplan_engine.service.db.models import (
     SupportGrant,
     UserSession,
 )
+from floorplan_engine.service.db.services import SERVICES, normalize, unknown
 
 EVENTS_LIMIT = 200
 
@@ -109,6 +110,8 @@ def project_brief(project: Project) -> dict[str, Any]:
         "slug": project.slug,
         "studio": {"id": str(project.studio_id), "name": project.studio.name},
         "state": project.state,
+        # Enabled services in catalog order (db/services.py): None in the row — all
+        "services": normalize(project.services),
         "created": _time(project.created_at),
     }
 
@@ -509,6 +512,26 @@ def remove_project_member(
     session.flush()
     audit(
         session, "admin_member_remove", user=admin, project=project, payload={"user": str(user.id)}
+    )
+
+
+def set_services(session: Session, admin: AppUser, project: Project, services: list[str]) -> None:
+    """Enabled services of a project (decision 2026-11-23): keys of the catalog, an empty list
+    is allowed (nothing on). Stored in catalog order without repeats."""
+    bad = unknown(services)
+    if bad:
+        raise AccessError(
+            f"services: неизвестный сервис {', '.join(bad)}; допустимы: {', '.join(SERVICES)}"
+        )
+    chosen = normalize(services)
+    project.services = chosen
+    session.flush()
+    audit(
+        session,
+        "admin_project_services",
+        user=admin,
+        project=project,
+        payload={"services": chosen},
     )
 
 

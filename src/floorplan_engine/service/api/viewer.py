@@ -77,6 +77,7 @@ from floorplan_engine.service.api.viewer_db import (
     wizard_body,
 )
 from floorplan_engine.service.db import access as acc
+from floorplan_engine.service.db.services import SERVICES
 from floorplan_engine.service.objects import ObjectStore
 from floorplan_engine.validation.answers_file import build_digest
 from floorplan_engine.validation.issues import (
@@ -174,6 +175,8 @@ def _summary(project: Path, client: bool = False) -> dict[str, Any]:
         # The model was edited after the build: the sheets show the old state
         "stale": _stale(project, built, report),
         "stages": report.get("stages", []),
+        # No database — no admin ticks: all services (db/services.py)
+        "services": list(SERVICES),
         **question_counts(questions),
         # Plan preview for the card: GET /api/projects/{name}/out/preview.svg
         "preview": (project / OUT_DIR / PREVIEW_FILE).exists(),

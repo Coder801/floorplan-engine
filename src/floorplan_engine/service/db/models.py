@@ -209,6 +209,9 @@ class Project(Base):
     state: Mapped[str] = mapped_column(String(20), default="created")
     message: Mapped[str] = mapped_column(Text, default="")
     round: Mapped[int] = mapped_column(Integer, default=0)
+    # Enabled services (decision 2026-11-23, db/services.py): keys of services.SERVICES;
+    # None — all of them (projects made before the column lose nothing)
+    services: Mapped[list[str] | None] = mapped_column(JSONB(none_as_null=True), nullable=True)
     created_at: Mapped[datetime] = _created()
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, onupdate=now)
     studio: Mapped[Studio] = relationship(back_populates="projects")

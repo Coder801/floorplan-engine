@@ -136,6 +136,7 @@ erDiagram
     string state "created … built"
     text message
     int round
+    jsonb services "включённые сервисы; null — все (0018)"
     timestamp created_at
     timestamp updated_at
   }
@@ -585,8 +586,9 @@ erDiagram
 | `service/db/email_codes.py` | Код на почту: выдать (`issue_code`, частота), проверить (`check_code`, срок, попытки) |
 | `service/db/access_codes.py` | Код доступа к проекту: выдать (`issue_code`), постоянный из окружения (`ensure_code`), вход (`use_code`), проверка на каждом запросе (`active_code`), список и отзыв (`list_codes`, `revoke_code`) |
 | `service/db/telegram_login.py`, `service/api/telegram.py` | Вход через Telegram: билеты (`issue_ticket`, `bind_chat`, `confirm_phone`, `claim_ticket`, номер — `normalize_phone`); бот — клиент Bot API, разбор обновлений (`handle_update`), вебхук или опрос |
-| `service/db/admin.py`, `service/api/admin.py` | Админка платформы: виды (студии, пользователи, проекты, журнал) и изменения (участники, роли, приглашения, коды, поддержка, блокировка) по правилам `access.py`; API `/api/admin/*` — только действующий суперпользователь (иначе 403), нарушение правила — 409 с причиной |
+| `service/db/admin.py`, `service/api/admin.py` | Админка платформы: виды (студии, пользователи, проекты, журнал) и изменения (участники, роли, приглашения, коды, поддержка, блокировка, сервисы проекта) по правилам `access.py`; API `/api/admin/*` — только действующий суперпользователь (иначе 403), нарушение правила — 409 с причиной |
 | `service/api/mail.py` | Письмо с кодом на языке страницы: SMTP или лог (локально) |
+| `service/db/services.py` | Сервисы проекта (решение 2026-11-23): каталог `SERVICES` (`electrical`, `plumbing`, `demolition`), `normalize` — включённые в порядке каталога (`None` — все), `unknown` — ключи не из каталога |
 | `service/db/feedback.py`, `service/api/feedback.py` | Отзывы о сервисе: создание (`create`: вид, текст, контекст `clean_context`, фото, частота `check_rate`), список для админки с фильтрами и счётчиками (`listing`), отметка и заметка (`update`, в журнал); маршруты `POST /api/feedback` и `/api/admin/feedback…`, только в режиме базы; письмо о новом отзыве на `FEEDBACK_NOTIFY_EMAIL` |
 | `service/api/auth.py` | Веб: настройки из окружения (`AuthConfig.from_env`), Google через Authlib, код на почту (`/api/auth/email/start`, `/verify`), код доступа (`/api/auth/code`, подбор — `CodeLimiter`), маршруты `/api/auth/*` и `/api/invites/*`, проверка доступа к `/api/projects/{имя}/…` (нет входа — 401, чужой проект — 404, нет права — 403) |
 | `web/src/pages/Gate`, `widgets/TelegramLogin`, `widgets/EmailLogin`, `widgets/CodeLogin`, `shared/auth.ts` | Экран входа (Telegram, Google, код на почту, код доступа к проекту), выбор «кто вы», принятие приглашения, «Выйти» |
@@ -609,6 +611,16 @@ erDiagram
 просмотр. Состояние приглашения, кода и доступа поддержки API отдаёт словом (`active`,
 `accepted`, `revoked`, `expired`), людей и студии из журнала — с именами. Устройство фронта —
 `admin/README.md`.
+
+**Сервисы проекта** (решение 2026-11-23, миграция `0018`): у проекта — список включённых
+сервисов `project.services` (jsonb): `electrical` (электрика, тёплый пол входит в неё),
+`plumbing` (сантехника), `demolition` (монтаж и демонтаж — пока не реализован: галочка есть,
+на сборку и просмотр не влияет). Каталог и порядок — `service/db/services.py` (`SERVICES`,
+`normalize`). `NULL` — все сервисы: проекты, заведённые до колонки, ничего не теряют; пустой
+список — ни одного. Галочки ставит админ (`PUT /api/admin/projects/{id}/services`, в журнал —
+`admin_project_services`), просмотр получает `services` в карточке проекта и скрывает разделы
+выключенных; просмотр папок базы не знает и отдаёт весь каталог. API — `docs/service-api.md`,
+«Сервисы проекта».
 
 **Папки студий** (решение 2026-11-03): у каждой студии свои файлы — проекты, прайс
 `prices.yaml` и профиль `studio.yaml` — в своей папке корня просмотра (`access.studio_folder`,

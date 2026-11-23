@@ -1,7 +1,7 @@
 """Platform admin API /api/admin/* (decision 2026-11-03, docs/database.md, "Admin"): CRUD over
-studios, users, projects, members, invites, access codes and support for the superuser. The
-admin page is its own front (admin/). Access: Auth.check lets only an active superuser in (the
-rest get 403); rules and views live in db/admin.py.
+studios, users, projects, members, invites, access codes, support and project services for the
+superuser. The admin page is its own front (admin/). Access: Auth.check lets only an active
+superuser in (the rest get 403); rules and views live in db/admin.py.
 
 Errors: a broken rule (AccessError) gives 409 with the reason, an unknown id gives 404.
 """
@@ -53,6 +53,10 @@ class SupportIn(BaseModel):
     user: str
     reason: str = Field(min_length=1, max_length=500)
     hours: int = Field(default=acc.SUPPORT_HOURS, ge=1, le=24 * 30)
+
+
+class ServicesIn(BaseModel):
+    services: list[str]
 
 
 class ActiveIn(BaseModel):
@@ -202,6 +206,15 @@ def _project_routes(r: APIRouter, call: _Call, invite_url: Callable[[str], str])
         def run(db: Session, admin: AppUser) -> dict[str, Any]:
             project = adm.get(db, Project, project_id)
             adm.remove_project_member(db, admin, project, adm.get(db, AppUser, user_id))
+            return adm.project_detail(db, project)
+
+        return call(request, run)
+
+    @r.put("/projects/{project_id}/services")
+    def set_services(request: Request, project_id: str, body: ServicesIn) -> dict[str, Any]:
+        def run(db: Session, admin: AppUser) -> dict[str, Any]:
+            project = adm.get(db, Project, project_id)
+            adm.set_services(db, admin, project, body.services)
             return adm.project_detail(db, project)
 
         return call(request, run)

@@ -58,6 +58,7 @@ from floorplan_engine.service.db.models import (
     Project,
     Source,
 )
+from floorplan_engine.service.db.services import normalize
 from floorplan_engine.service.objects import ObjectStore
 from floorplan_engine.validation.answers_file import build_digest, with_pending_text
 from floorplan_engine.validation.issues import WIRING_FILE, Issue
@@ -212,6 +213,8 @@ def summary(session: Session, project: Project, client: bool = False) -> dict[st
         # The model was changed after the build: the sheets show the old state
         "stale": built_on is not None and latest is not None and _stale(built_on, latest, report),
         "stages": report.get("stages", []),
+        # Enabled services (db/services.py): the viewer hides the sections of the rest
+        "services": normalize(project.services),
         **question_counts(questions),
         "preview": build is not None and ps.build_file(session, build, PREVIEW_FILE) is not None,
     }
