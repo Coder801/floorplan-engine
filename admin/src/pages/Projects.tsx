@@ -1,4 +1,4 @@
-// Projects: list; detail with services (ticks; the viewer hides the sections of those off), members (client, outside installer), access codes (shown once),
+// Projects: list; detail with services (ticks; the viewer hides the sections of those off), members (client, outside installer), access codes (the code stays in the list to copy while it works),
 // invite links and support access. Every section has its own add button.
 import { useMemo, useState } from "react";
 import * as api from "@/shared/api";
@@ -7,7 +7,7 @@ import { href } from "@/shared/route";
 import { CODE_ROLES, PROJECT_ROLES, ROLE, SERVICES, word } from "@/shared/text";
 import type { ProjectDetail } from "@/shared/types";
 import { IssueForm, OneTime, PersonPicker } from "@/components/dialogs";
-import { Confirm, ErrorLine, Section, Status, css, cx, useAction, useLoad } from "@/components/ui";
+import { Confirm, CopyButton, ErrorLine, Section, Status, css, cx, useAction, useLoad } from "@/components/ui";
 
 export function ProjectList({ id, version }: { id: string | null; version: number }) {
   const list = useLoad(api.projects, [version]);
@@ -107,11 +107,15 @@ export function ProjectView({ id, onChanged }: { id: string; onChanged: () => vo
         {p.codes.length === 0 && <div className={css.empty}>Кодов нет</div>}
         {p.codes.length > 0 && (
           <table>
-            <thead><tr><th>Кому</th><th>Вид</th><th>Статус</th><th>Входов</th><th>Выдан</th><th>До</th><th>Последний вход</th><th /></tr></thead>
+            <thead><tr><th>Кому</th><th>Код</th><th>Вид</th><th>Статус</th><th>Входов</th><th>Выдан</th><th>До</th><th>Последний вход</th><th /></tr></thead>
             <tbody>
               {p.codes.map((c) => (
                 <tr key={c.id}>
-                  <td>{c.label || "—"}</td><td>{word(ROLE, c.role)}</td><td><Status state={c.state} /></td>
+                  <td>{c.label || "—"}</td>
+                  <td className={css.mono}>
+                    {c.code ? <span className={css.copy}>{c.code}<CopyButton value={c.code} /></span> : "—"}
+                  </td>
+                  <td>{word(ROLE, c.role)}</td><td><Status state={c.state} /></td>
                   <td className={css.mono}>{c.uses}</td>
                   <td className={css.mono}>{date(c.created, false)}</td>
                   <td className={css.mono}>{date(c.expires, false)}</td>

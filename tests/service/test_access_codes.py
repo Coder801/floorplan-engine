@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from floorplan_engine.service.db import access as acc
 from floorplan_engine.service.db import access_codes as codes
-from floorplan_engine.service.db.models import AppUser, AuditEvent
+from floorplan_engine.service.db.models import AppUser
 
 
 def _user(db: Session, name: str, kind: acc.AccountType) -> AppUser:
@@ -37,6 +37,7 @@ def test_issue_use_and_viewer_role(db: Session) -> None:
 
     row = codes.use_code(db, code.lower().replace("-", " "))  # however it is typed
     assert row.project_id == kv1.id and row.uses == 1 and row.label == "Иван"
+    assert row.code == code.replace("-", "")  # kept, so the admin can copy it
     who = acc.Principal(None, code_project=row.project_id)
     assert who.by_code and not who.visitor
     assert acc.project_role(db, who, kv1) == "viewer"
@@ -105,31 +106,3 @@ def test_issue_needs_invite_right(db: Session) -> None:
         codes.issue_code(db, kv1, other)
     with pytest.raises(acc.AccessError, match="Срок"):
         codes.issue_code(db, kv1, studio, days=0)
-
-
-def test_ensure_fixed_code(db: Session) -> None:
-    """Permanent code (SHTROBA_ACCESS_CODES): written with a known value, a repeat does not
-    duplicate
-    it, a revoked one comes back, the same code on another project is an error."""
-    studio = _user(db, "studio", "pro")
-    kv1 = acc.create_project_for(db, studio, "Кв 1", "kv1")
-    kv2 = acc.create_project_for(db, studio, "Кв 2", "kv2")
-    row = codes.ensure_code(db, kv1, "abcd-2345")
-    assert codes.use_code(db, "ABCD-2345").id == row.id
-    assert row.expires_at.date() > (acc.now() + timedelta(days=365)).date()
-
-    def fixes() -> int:
-        return db.query(AuditEvent).filter_by(action="code_fix").count()
-
-    assert fixes() == 1
-    assert codes.ensure_code(db, kv1, "ABCD2345").id == row.id
-    assert len(codes.list_codes(db, kv1)) == 1 and fixes() == 1  # a valid code: nothing written
-    codes.revoke_code(db, kv1, str(row.id))
-    with pytest.raises(acc.AccessError, match="не подходит"):
-        codes.use_code(db, "ABCD-2345")
-    assert codes.ensure_code(db, kv1, "ABCD-2345").revoked_at is None and fixes() == 2
-    assert codes.use_code(db, "ABCD-2345").id == row.id
-    with pytest.raises(acc.AccessError, match="другому проекту"):
-        codes.ensure_code(db, kv2, "ABCD-2345")
-    with pytest.raises(acc.AccessError, match="не подходит"):
-        codes.ensure_code(db, kv2, "ABCD-234")

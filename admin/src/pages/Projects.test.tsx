@@ -147,7 +147,7 @@ describe("ProjectView", () => {
     const sent = stubApi({
       [DETAIL]: projectDetail({
         codes: [
-          { id: "c1", label: "Иван", role: "viewer", state: "active", uses: 2, created: null, expires: null, last_used: null },
+          { id: "c1", label: "Иван", role: "viewer", state: "active", code: "ABCD-2345", uses: 2, created: null, expires: null, last_used: null },
           { id: "c2", label: "", role: "viewer", state: "expired", uses: 0, created: null, expires: null, last_used: null },
         ],
         invites: [invite({ id: "i1" }), invite({ id: "i2", state: "accepted", accepted_by: ivan })],
@@ -166,6 +166,24 @@ describe("ProjectView", () => {
     await user.click(code);
     await user.click(screen.getByRole("button", { name: "Да" }));
     expect(await screen.findByText("Кодов нет")).toBeInTheDocument();
+  });
+
+  it("copies an active code from the list; an old code without a value shows a dash", async () => {
+    const user = userEvent.setup();
+    stubApi({
+      [DETAIL]: projectDetail({
+        codes: [
+          { id: "c1", label: "Иван", role: "viewer", state: "active", code: "ABCD-2345", uses: 0, created: null, expires: null, last_used: null },
+          { id: "c2", label: "Пётр", role: "viewer", state: "active", code: null, uses: 0, created: null, expires: null, last_used: null },
+        ],
+      }),
+    });
+    render(<ProjectView id="p1" onChanged={vi.fn()} />);
+    expect(await screen.findByText("ABCD-2345")).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Скопировать" })).toHaveLength(1);
+    await user.click(screen.getByRole("button", { name: "Скопировать" }));
+    expect(await screen.findByRole("button", { name: "Скопировано" })).toBeInTheDocument();
+    expect(await navigator.clipboard.readText()).toBe("ABCD-2345");
   });
 
   it("opens support access for 72 hours with a reason and can take it back", async () => {

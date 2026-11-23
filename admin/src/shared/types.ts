@@ -77,6 +77,7 @@ export interface CodeRow {
   label: string;
   role: string;  // viewer | client_code
   state: State;
+  code?: string | null;  // "XXXX-XXXX" to copy, only while active; none for codes issued before 2026-11-23
   uses: number;
   created: string | null;
   expires: string | null;

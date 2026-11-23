@@ -284,6 +284,7 @@ class AccessCode(Base):
     id: Mapped[uuid.UUID] = _id()
     project_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("project.id", ondelete="CASCADE"))
     code_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    code: Mapped[str | None] = mapped_column(String(16))
     label: Mapped[str] = mapped_column(String(200), default="")
     role: Mapped[str] = mapped_column(String(20), default="viewer", server_default="viewer")
     created_by: Mapped[uuid.UUID | None] = mapped_column(

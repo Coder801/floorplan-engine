@@ -371,47 +371,6 @@ def test_owner_login_adopts_project_folders(pg: Engine, root: Path) -> None:
         assert len(db.query(Project).all()) == 4  # logging in again duplicates nothing
 
 
-def test_fixed_codes_from_env() -> None:
-    """SHTROBA_ACCESS_CODES: "folder=CODE" comma-separated, the code as in the database; a
-    malformed entry is an error.
-    """
-    config = AuthConfig.from_env({**ENV, "SHTROBA_ACCESS_CODES": " kv1=abcd-2345, kv2=WXYZ 6789 ,"})
-    assert config is not None and config.fixed_codes == (("kv1", "ABCD2345"), ("kv2", "WXYZ6789"))
-    for bad in ("kv1", "=ABCD-2345", "kv1=ABCD-234O"):
-        with pytest.raises(ConfigError, match="SHTROBA_ACCESS_CODES"):
-            AuthConfig.from_env({**ENV, "SHTROBA_ACCESS_CODES": bad})
-
-
-def test_fixed_codes_seeded_at_startup(pg: Engine, root: Path) -> None:
-    """A permanent code goes to the database on server start: a project without a row is written as
-    "no owner", the code opens only that project; a restart duplicates nothing."""
-    engine = pg
-    config = AuthConfig(SECRET, "http://t", fixed_codes=(("kv1", "ABCD2345"),))
-    app = create_viewer(root, Auth(config, make_sessions(engine)))
-    for _ in range(2):  # two starts, one code row
-        with TestClient(app) as client:
-            r = client.post("/api/auth/code", json={"code": "abcd-2345"})
-            assert r.status_code == 200 and r.json()["project"] == "kv1"
-            assert {p["name"] for p in client.get("/api/projects").json()} == {"kv1"}
-    auth = Auth(config, make_sessions(engine))
-    with auth.db() as db:
-        kv1 = acc.project_by_slug(db, "kv1")
-        assert kv1 is not None and len(access_codes.list_codes(db, kv1)) == 1
-
-
-def test_fixed_codes_skip_unknown_folder_and_taken_code(pg: Engine, root: Path) -> None:
-    """No folder (a typo in SHTROBA_ACCESS_CODES) or the code already belongs to another project: no
-    project row is created, the other codes are written."""
-    codes = (("kv-typo", "ABCD2345"), ("kv1", "WXYZ6789"), ("kv2", "WXYZ6789"))
-    config = AuthConfig(SECRET, "http://t", fixed_codes=codes)
-    app = create_viewer(root, Auth(config, make_sessions(pg)))
-    with TestClient(app) as client:
-        assert client.post("/api/auth/code", json={"code": "WXYZ-6789"}).json()["project"] == "kv1"
-        assert client.post("/api/auth/code", json={"code": "ABCD-2345"}).status_code != 200
-    with Auth(config, make_sessions(pg)).db() as db:
-        assert {p.slug for p in db.query(Project).all()} == {"kv1"}
-
-
 def test_studios_have_own_folders_and_price_lists(auth: Auth, root: Path) -> None:
     """The studio that took the root sees the root projects; another studio sees only the
     projects in its own folder (<root>/<studio id>/) and edits its own price list there — neither

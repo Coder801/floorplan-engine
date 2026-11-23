@@ -18,12 +18,8 @@ Environment:
                                is no "Log in with Telegram" button. Over https the bot uses the
                                webhook <SHTROBA_PUBLIC_URL>/api/auth/telegram/webhook, over http
                                (locally) the server polls the Bot API itself
-  A project access code (db/access_codes.py) needs no setup: it is issued by the command
-  `floorplan-engine access code projects/<name>`, login is /api/auth/code.
-  SHTROBA_ACCESS_CODES         permanent access codes "folder=CODE", comma-separated
-                               (kv42=ABCD-2345): on start the service writes them to the database
-                               (a project without a row gets "no owner"), a revoked one works
-                               again; for tests, until codes are issued from the viewer
+  A project access code (db/access_codes.py) needs no setup: it is issued in the admin or by the
+  command `floorplan-engine access code projects/<name>`, login is /api/auth/code.
   SHTROBA_SUPERUSERS           e-mails or phones ("+380…") of platform owners, comma-separated
   SHTROBA_OWNER                e-mail or phone of the owner of folder projects: when they log in
                                and choose "Firm", folders without a database row move into their
@@ -53,7 +49,6 @@ from urllib.parse import quote
 from authlib.integrations.starlette_client import OAuth, OAuthError
 from fastapi import APIRouter, Body, FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, RedirectResponse, Response
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 from starlette.concurrency import run_in_threadpool
 from starlette.middleware.sessions import SessionMiddleware
@@ -94,7 +89,6 @@ class AuthConfig:
     visitor: bool = False
     dev_login: bool = False  # "Log in for development" as the first superuser
     owner: str | None = None  # SHTROBA_OWNER: whose project folders have no database row
-    fixed_codes: tuple[tuple[str, str], ...] = ()  # SHTROBA_ACCESS_CODES: (folder, code)
     feedback_to: str | None = None  # FEEDBACK_NOTIFY_EMAIL: notice of new product feedback
 
     @property
@@ -139,17 +133,6 @@ class AuthConfig:
             raise ConfigError(
                 "SHTROBA_DEV_LOGIN — нужен SHTROBA_SUPERUSERS: вход под первым адресом"
             )
-        fixed: list[tuple[str, str]] = []
-        for item in env.get("SHTROBA_ACCESS_CODES", "").split(","):
-            if not item.strip():
-                continue
-            slug, sep, code = item.partition("=")
-            try:
-                if not sep or not slug.strip():
-                    raise acc.AccessError("нужно «папка=КОД»")
-                fixed.append((slug.strip(), access_codes.normalize_code(code)))
-            except acc.AccessError as exc:
-                raise ConfigError(f"SHTROBA_ACCESS_CODES — «{item.strip()}»: {exc}") from exc
         return cls(
             secret=secret,
             public_url=public,
@@ -159,7 +142,6 @@ class AuthConfig:
             visitor=visitor,
             dev_login=dev,
             owner=identity(env["SHTROBA_OWNER"]) if env.get("SHTROBA_OWNER", "").strip() else None,
-            fixed_codes=tuple(fixed),
             feedback_to=env.get("FEEDBACK_NOTIFY_EMAIL", "").strip() or None,
         )
 
@@ -288,32 +270,6 @@ class Auth:
         owner = self.config.owner
         if owner and self.folders is not None and owner in (user.email, user.phone):
             acc.adopt_folders(db, owner, self.folders())
-
-    def seed_codes(self) -> None:
-        """On server start: permanent codes from SHTROBA_ACCESS_CODES go to the database
-        (access_codes.ensure_code); a project missing from the database gets a "no owner" row. If
-        there is no folder with that name or the code belongs to another project: a warning and
-        nothing in the database (an error inside `db()` also rolls back the created project). If two
-        processes start at once, the second hits a uniqueness violation: the first has already
-        written the code."""
-        folders = None if self.folders is None else set(self.folders())
-        for slug, code in self.config.fixed_codes:
-            if folders is not None and slug not in folders:
-                log.warning("SHTROBA_ACCESS_CODES %s: папки проекта нет — код пропущен", slug)
-                continue
-            try:
-                with self.db() as db:
-                    project = acc.project_by_slug(db, slug)
-                    if project is None:
-                        project = acc.create_project_unowned(db, slug, slug)
-                    access_codes.ensure_code(db, project, code)
-            except acc.AccessError as exc:
-                log.warning("SHTROBA_ACCESS_CODES %s: %s", slug, exc)
-                continue
-            except IntegrityError:
-                log.info("Постоянный код доступа к проекту %s записал другой процесс", slug)
-                continue
-            log.info("Постоянный код доступа к проекту %s — в базе", slug)
 
     # --- Telegram ------------------------------------------------------------------------
 
@@ -477,8 +433,6 @@ class Auth:
         )
         app.include_router(self.router())
         app.include_router(admin_router(self))
-        if self.config.fixed_codes:
-            app.router.on_startup.append(self.seed_codes)
         if self.telegram is not None:
             app.router.on_startup.append(self.start_telegram)
 

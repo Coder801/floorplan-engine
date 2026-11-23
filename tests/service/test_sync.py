@@ -22,7 +22,6 @@ from floorplan_engine.service.objects import LocalObjectStore
 from tests.electrical.test_variants import _project
 from tests.service import conftest
 
-CODE = "ABCD-2345"
 STUDIO_PRICES = "# студия\ncurrency: грн\nitems:\n  work.chase: 321\n"
 
 
@@ -285,7 +284,7 @@ def test_import_only_new_moves_a_blank_unowned_row_to_the_owner(
     _seed(root, tmp_path, monkeypatch)
     with make_sessions(pg)() as db:
         blank = acc.create_project_unowned(db, "kv", "kv")
-        access_codes.ensure_code(db, blank, CODE)
+        code = access_codes.issue_code(db, blank)
         db.commit()
         pid = blank.id
     result = CliRunner().invoke(app, _import_args(root))
@@ -294,7 +293,7 @@ def test_import_only_new_moves_a_blank_unowned_row_to_the_owner(
         project = db.get(Project, pid)
         assert project is not None and project.studio_id == acc.own_studio(db, _owner(db)).id  # type: ignore[union-attr]
         assert repo.latest_model(db, pid) is not None
-        assert access_codes.use_code(db, CODE).project_id == pid
+        assert access_codes.use_code(db, code).project_id == pid
 
 
 def test_import_only_new_merges_a_blank_duplicate_into_the_real_project(
@@ -313,7 +312,7 @@ def test_import_only_new_merges_a_blank_duplicate_into_the_real_project(
         assert real is not None
         pid = real.id
         blank = acc.create_project_unowned(db, "kv", "kv")
-        access_codes.ensure_code(db, blank, CODE)
+        code = access_codes.issue_code(db, blank)
         db.commit()
     result = runner.invoke(app, _import_args(root, "--no-build"))
     assert result.exit_code == 0, result.output
@@ -321,7 +320,7 @@ def test_import_only_new_merges_a_blank_duplicate_into_the_real_project(
     with make_sessions(pg)() as db:
         rows = db.scalars(select(Project).where(Project.slug == "kv")).all()
         assert [p.id for p in rows] == [pid]
-        assert access_codes.use_code(db, CODE).project_id == pid
+        assert access_codes.use_code(db, code).project_id == pid
         latest = repo.latest_model(db, pid)
         assert latest is not None and latest.version == 1
 

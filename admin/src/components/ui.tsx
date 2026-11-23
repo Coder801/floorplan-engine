@@ -1,5 +1,5 @@
 // Small shared parts: status word with a dot, in-place confirmation, an error line, a dialog,
-// a section header, loading of one request.
+// a section header, a copy button, loading of one request.
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { STATE, word } from "@/shared/text";
 import css from "./ui.module.scss";
@@ -26,6 +26,16 @@ export function Confirm({ label, question, onYes, disabled }: {
       <button className={css.danger} onClick={() => { setAsking(false); onYes(); }}>Да</button>
       <button onClick={() => setAsking(false)}>Нет</button>
     </span>
+  );
+}
+
+/** Copy a value to the clipboard; the button says "Скопировано" once it is done. */
+export function CopyButton({ value, label = "Скопировать" }: { value: string; label?: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button title={value} onClick={() => navigator.clipboard.writeText(value).then(() => setCopied(true))}>
+      {copied ? "Скопировано" : label}
+    </button>
   );
 }
 

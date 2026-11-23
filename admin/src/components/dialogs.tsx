@@ -1,11 +1,11 @@
-// Dialogs: pick a person from the database (members, support), and show a one-time code or invite
-// link — the API never returns them again.
+// Dialogs: pick a person from the database (members, support), and show a freshly issued code or
+// invite link — the link is never returned again, the code stays in the project's list.
 import { useEffect, useState } from "react";
 import * as api from "@/shared/api";
 import { contact, who } from "@/shared/format";
 import { ACCOUNT, ROLE, word } from "@/shared/text";
 import type { UserRow } from "@/shared/types";
-import { Dialog, ErrorLine, Segmented, css, cx, useAction } from "./ui";
+import { CopyButton, Dialog, ErrorLine, Segmented, css, cx, useAction } from "./ui";
 
 /** Search people (250 ms after typing stops), pick one and a role; the server decides, and its
  *  409 reason stays in the dialog. unfit says why a person cannot be picked (greyed out). */
@@ -57,18 +57,18 @@ export function PersonPicker({ title, roles, unfit, onPick, onClose, onInvite, e
   );
 }
 
-/** A code or a link, shown once: big, with a copy button. */
+/** A freshly issued code or link: big, with a copy button. A link is shown once; a code stays
+ *  in the project's list while it works (decision 2026-11-23). */
 export function OneTime({ title, value, onClose }: { title: string; value: string; onClose: () => void }) {
-  const [copied, setCopied] = useState(false);
   const link = value.includes("://");
   return (
     <Dialog title={title} onClose={onClose}>
       <div className={cx(css.reveal, link && css.small)}>{value}</div>
-      <div className={css.muted}>Показывается один раз: в списках потом его не будет.</div>
+      <div className={css.muted}>
+        {link ? "Показывается один раз: в списках потом её не будет." : "Скопировать можно и потом — в списке кодов, пока код действует."}
+      </div>
       <div className={css.actions}>
-        <button onClick={() => navigator.clipboard.writeText(value).then(() => setCopied(true))}>
-          {copied ? "Скопировано" : "Скопировать"}
-        </button>
+        <CopyButton value={value} />
         <button className={css.primary} onClick={onClose}>Скопировал, закрыть</button>
       </div>
     </Dialog>

@@ -49,6 +49,7 @@ $mono: "IBM Plex Mono", ui-monospace, monospace;
 .primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
 .danger { color: var(--critical); }
 .actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; align-items: center; }
+.copy { display: inline-flex; gap: 8px; align-items: center; white-space: nowrap; }
 // A table cell with buttons stays a cell: flex on <td> takes it out of the table and the row
 // slides; the buttons sit right, one line, and the in-place confirmation keeps its own flex.
 td.actions { display: table-cell; text-align: right; white-space: nowrap; width: 1%; }

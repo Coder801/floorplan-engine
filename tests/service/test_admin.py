@@ -105,8 +105,10 @@ def test_project_access_from_admin(auth: Auth, tmp_path: Path) -> None:
     assert len(code) == 9 and code[4] == "-"
     detail = boss.get(base).json()
     assert detail["codes"][0]["label"] == "Иван" and detail["codes"][0]["state"] == "active"
+    assert detail["codes"][0]["code"] == code  # kept, to copy from the list
     revoked = boss.delete(f"{base}/codes/{detail['codes'][0]['id']}").json()
     assert revoked["codes"][0]["state"] == "revoked"
+    assert revoked["codes"][0]["code"] is None  # a dead code is not shown
 
     boss.post(f"{base}/invites", json={"role": "installer", "email": "i@x.io"})
     invite = boss.get(base).json()["invites"][0]

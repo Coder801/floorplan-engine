@@ -28,6 +28,7 @@ from floorplan_engine.service.db.access import (
     studio_folder,
     user_space,
 )
+from floorplan_engine.service.db.access_codes import format_code
 from floorplan_engine.service.db.models import (
     AccessCode,
     AppUser,
@@ -49,6 +50,22 @@ EVENTS_LIMIT = 200
 
 def _time(t: datetime | None) -> str | None:
     return aware(t).isoformat() if t is not None else None
+
+
+def _code(c: AccessCode) -> dict[str, Any]:
+    """Access code row; the code itself, to copy, only while it works (decision 2026-11-23)."""
+    state = _state(c.expires_at, c.revoked_at)
+    return {
+        "id": str(c.id),
+        "label": c.label,
+        "role": c.role,
+        "state": state,
+        "code": format_code(c.code) if c.code and state == "active" else None,
+        "uses": c.uses,
+        "created": _time(c.created_at),
+        "expires": _time(c.expires_at),
+        "last_used": _time(c.last_used_at),
+    }
 
 
 def _state(
@@ -278,19 +295,7 @@ def project_detail(session: Session, project: Project) -> dict[str, Any]:
         "members": [
             {"user": user_brief(u), "role": m.role, "since": _time(m.created_at)} for m, u in rows
         ],
-        "codes": [
-            {
-                "id": str(c.id),
-                "label": c.label,
-                "role": c.role,
-                "state": _state(c.expires_at, c.revoked_at),
-                "uses": c.uses,
-                "created": _time(c.created_at),
-                "expires": _time(c.expires_at),
-                "last_used": _time(c.last_used_at),
-            }
-            for c in codes
-        ],
+        "codes": [_code(c) for c in codes],
         "invites": [_invite(session, i) for i in invites],
         "support": [
             {

@@ -82,6 +82,7 @@ describe("OneTime", () => {
     const onClose = vi.fn();
     render(<OneTime title="Код доступа" value="K7Q-2MX" onClose={onClose} />);
     expect(screen.getByRole("dialog", { name: "Код доступа" })).toHaveTextContent("K7Q-2MX");
+    expect(screen.getByText(/в списке кодов/)).toBeInTheDocument();  // a code stays in the list
     await user.click(screen.getByRole("button", { name: "Скопировать" }));
     expect(await screen.findByRole("button", { name: "Скопировано" })).toBeInTheDocument();
     expect(await navigator.clipboard.readText()).toBe("K7Q-2MX");
