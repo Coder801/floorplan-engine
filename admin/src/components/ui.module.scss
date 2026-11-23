@@ -24,7 +24,7 @@ $mono: "IBM Plex Mono", ui-monospace, monospace;
   display: grid; grid-template-rows: auto minmax(0, 1fr); min-height: 0;
 }
 .listHead { display: grid; gap: 6px; padding: 10px; border-bottom: 1px solid var(--line); }
-.listBody { overflow: auto; }
+.listBody { overflow: auto; scrollbar-gutter: stable; }
 .row {
   display: block; padding: 8px 10px; border-bottom: 1px solid var(--line); text-decoration: none;
   &:hover { background: var(--soft); }
@@ -32,7 +32,8 @@ $mono: "IBM Plex Mono", ui-monospace, monospace;
 }
 .rowTop { display: flex; justify-content: space-between; gap: 8px; }
 .rowSub { color: var(--muted); font-size: 12px; }
-.detail { overflow: auto; padding: 16px 20px 40px; min-width: 0; }
+// The scrollbar's place is kept: a list growing past the screen does not narrow the page
+.detail { overflow: auto; scrollbar-gutter: stable; padding: 16px 20px 40px; min-width: 0; }
 .title { font-size: 18px; font-weight: 600; margin: 0; }
 .meta { color: var(--muted); display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 4px 0 12px; }
 .section { margin-top: 20px; }
@@ -49,10 +50,11 @@ $mono: "IBM Plex Mono", ui-monospace, monospace;
 .primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
 .danger { color: var(--critical); }
 .actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; align-items: center; }
-.copy { display: inline-flex; gap: 8px; align-items: center; white-space: nowrap; }
-// A table cell with buttons stays a cell: flex on <td> takes it out of the table and the row
-// slides; the buttons sit right, one line, and the in-place confirmation keeps its own flex.
-td.actions { display: table-cell; text-align: right; white-space: nowrap; width: 1%; }
+.copy { display: inline-flex; gap: 4px; align-items: center; white-space: nowrap; max-width: 100%; }
+// A table cell with buttons stays a cell (flex on <td> takes it out of the table): icon buttons
+// right, one line, in the fixed-width last column (Cols, W.act); the focus ring is not clipped.
+td.actions { display: table-cell; text-align: right; white-space: nowrap; overflow: visible; text-overflow: clip; }
+td.actions > * + * { margin-left: 4px; }
 .status { white-space: nowrap; }
 // A row of checkboxes with their labels (project services)
 .checks { display: flex; flex-wrap: wrap; gap: 6px 16px; padding: 6px 0; }
@@ -80,7 +82,7 @@ td.actions { display: table-cell; text-align: right; white-space: nowrap; width:
   width: min(520px, 94vw); max-height: 86vh; overflow: auto; background: var(--panel);
   border: 1px solid var(--line); border-radius: 10px; padding: 16px; display: grid; gap: 10px;
 }
-.dialogHead { display: flex; justify-content: space-between; align-items: center; font-weight: 600; }
+.dialogHead { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-weight: 600; }
 .segmented {
   display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden;
   button { border: 0; border-radius: 0; min-height: 28px; }
@@ -126,6 +128,7 @@ td.actions { display: table-cell; text-align: right; white-space: nowrap; width:
 .full { display: block; max-width: 100%; max-height: 76vh; margin: 0 auto; }
 .feedActions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .note { flex: 1 1 200px; }
+.next { flex: none; min-width: 120px; }
 .pager { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
 .gate { display: grid; place-items: center; text-align: center; gap: 8px; }
 .payload { margin: 4px 0 0; font: 11px/1.4 $mono; color: var(--muted); white-space: pre-wrap; }
@@ -137,3 +140,45 @@ td.actions { display: table-cell; text-align: right; white-space: nowrap; width:
 }
 .back { display: none; }
 @media (max-width: 1100px) { .back { display: inline-block; margin-bottom: 8px; } }
+
+// Buttons (components/buttons.tsx, icons.tsx): Tabler outline icons in the colour of the text;
+// a square icon button of a fixed size; a text button with an icon; a tooltip and an in-place
+// confirmation float over the page (position: fixed), so nothing around them moves.
+.icon {
+  display: block; flex: none; width: 16px; height: 16px;
+  fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
+}
+.iconBtn {
+  display: inline-grid; place-items: center; vertical-align: middle; flex: none;
+  width: 28px; height: 28px; min-height: 0; padding: 0;
+  border: 1px solid transparent; background: none; color: var(--text);
+  &:hover:not(:disabled) { background: var(--soft); }
+  &.framed { width: 30px; height: 30px; border-color: var(--line); background: var(--raise); }
+  &.danger { color: var(--critical); }
+  &.done { color: var(--ok); }
+}
+.btn {
+  display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
+  .icon { width: 14px; height: 14px; }
+}
+.iconBtn, .btn, .pop button {
+  &:focus-visible { outline: 2px solid var(--hl); outline-offset: 1px; }
+}
+.tip {
+  position: fixed; z-index: 30; max-width: 240px; pointer-events: none;
+  padding: 3px 8px; border-radius: 4px; font-size: 12px; line-height: 1.4; white-space: nowrap;
+  color: var(--text); background: var(--raise); border: 1px solid var(--line);
+  box-shadow: 0 2px 8px rgb(0 0 0 / .12);
+}
+.pop {
+  position: fixed; z-index: 20; display: grid; gap: 8px; width: max-content;
+  padding: 10px 12px; border-radius: 8px; text-align: left; white-space: normal;
+  background: var(--panel); border: 1px solid var(--line); box-shadow: 0 6px 20px rgb(0 0 0 / .18);
+}
+.popText { overflow-wrap: anywhere; }
+.popActions { display: flex; gap: 6px; justify-content: flex-end; button { min-width: 56px; } }
+// Seen only by screen readers (the "Скопировано" announcement)
+.sr {
+  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden;
+  clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}

@@ -120,10 +120,11 @@ describe("ProjectView", () => {
       "POST /api/admin/projects/p1/members": projectDetail({ members: [{ user: person({ id: "u4", name: "Заказчик" }), role: "client", since: null }] }),
     });
     render(<ProjectView id="p1" onChanged={vi.fn()} />);
-    await user.click(await screen.findByRole("button", { name: "+ Добавить" }));
-    expect(await screen.findByRole("button", { name: /Сотрудник.*в студии проекта/ })).toBeDisabled();
-    await user.click(screen.getByRole("button", { name: /Заказчик/ }));
-    await user.click(screen.getByRole("button", { name: "Добавить" }));
+    await user.click(await screen.findByRole("button", { name: "Добавить" }));
+    const picker = screen.getByRole("dialog", { name: "Участник проекта nahirna-16" });
+    expect(await within(picker).findByRole("button", { name: /Сотрудник.*в студии проекта/ })).toBeDisabled();
+    await user.click(within(picker).getByRole("button", { name: /Заказчик/ }));
+    await user.click(within(picker).getByRole("button", { name: "Добавить" }));
     expect(sent.at(-1)).toMatchObject({ method: "POST", body: { user: "u4", role: "client" } });
     expect(await screen.findByText("Участники (1)")).toBeInTheDocument();
     expect(screen.queryByRole("dialog")).toBeNull();
@@ -133,7 +134,7 @@ describe("ProjectView", () => {
     const user = userEvent.setup();
     const sent = stubApi({ [DETAIL]: projectDetail(), "POST /api/admin/projects/p1/codes": { code: "K7Q-2MX" } });
     render(<ProjectView id="p1" onChanged={vi.fn()} />);
-    await user.click(await screen.findByRole("button", { name: "+ Выдать" }));
+    await user.click(await screen.findByRole("button", { name: "Выдать" }));
     const form = screen.getByRole("dialog", { name: "Код доступа к проекту" });
     await user.click(within(form).getByRole("button", { name: "заказчик" }));
     await user.type(within(form).getByPlaceholderText("Кому (подпись в списке)"), "Иван");
@@ -160,7 +161,10 @@ describe("ProjectView", () => {
     expect(screen.getAllByRole("button", { name: "Отозвать" })).toHaveLength(2);
     const [code, link] = screen.getAllByRole("button", { name: "Отозвать" });
     await user.click(link);
-    expect(screen.getByText("Отозвать ссылку?")).toBeInTheDocument();
+    // the question floats over the table: the button stays, the rows keep their cells
+    expect(screen.getByRole("dialog", { name: "Отозвать ссылку?" })).toHaveTextContent("Отозвать ссылку?");
+    expect(link).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getAllByRole("button", { name: "Отозвать" })).toHaveLength(2);
     await user.click(screen.getByRole("button", { name: "Да" }));
     expect(sent.some((r) => r.method === "DELETE" && r.path === "/api/admin/invites/i1")).toBe(true);
     await user.click(code);
@@ -180,9 +184,10 @@ describe("ProjectView", () => {
     });
     render(<ProjectView id="p1" onChanged={vi.fn()} />);
     expect(await screen.findByText("ABCD-2345")).toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: "Скопировать" })).toHaveLength(1);
-    await user.click(screen.getByRole("button", { name: "Скопировать" }));
+    expect(screen.getAllByRole("button", { name: /^Скопировать/ })).toHaveLength(1);
+    await user.click(screen.getByRole("button", { name: "Скопировать код ABCD-2345" }));
     expect(await screen.findByRole("button", { name: "Скопировано" })).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("Скопировано");
     expect(await navigator.clipboard.readText()).toBe("ABCD-2345");
   });
 
@@ -196,13 +201,13 @@ describe("ProjectView", () => {
       "DELETE /api/admin/projects/p1/support/u1": projectDetail(),
     });
     render(<ProjectView id="p1" onChanged={vi.fn()} />);
-    await user.click(await screen.findByRole("button", { name: "+ Открыть доступ" }));
+    await user.click(await screen.findByRole("button", { name: "Открыть доступ" }));
     await user.click(await screen.findByRole("button", { name: /Иван/ }));
     await user.type(screen.getByRole("textbox", { name: "Причина" }), "лист пустой");
-    await user.click(screen.getByRole("button", { name: "Добавить" }));
+    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Добавить" }));
     expect(sent.at(-1)?.body).toEqual({ user: "u1", reason: "лист пустой", hours: 72 });
     expect(await screen.findByText("«лист пустой»")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Снять" }));
+    await user.click(screen.getByRole("button", { name: "Снять доступ" }));
     await user.click(screen.getByRole("button", { name: "Да" }));
     expect(await screen.findByText("Доступа поддержки нет")).toBeInTheDocument();
   });
@@ -211,8 +216,8 @@ describe("ProjectView", () => {
     const user = userEvent.setup();
     const sent = stubApi({ [DETAIL]: projectDetail(), "POST /api/admin/projects/p1/invites": { url: "https://shtroba.app/i/xyz" } });
     render(<ProjectView id="p1" onChanged={vi.fn()} />);
-    await user.click(await screen.findByRole("button", { name: "+ Ссылка" }));
-    await user.click(screen.getByRole("button", { name: "Выдать" }));
+    await user.click(await screen.findByRole("button", { name: "Ссылка" }));
+    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Выдать" }));
     expect(sent.find((r) => r.method === "POST")?.body).toEqual({ role: "client", email: null, days: 7 });
     expect(await screen.findByRole("dialog", { name: "Ссылка-приглашение" })).toHaveTextContent("https://shtroba.app/i/xyz");
     expect(sent.filter((r) => r.path === "/api/admin/projects/p1")).toHaveLength(2);

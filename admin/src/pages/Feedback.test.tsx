@@ -43,7 +43,7 @@ describe("Feedback", () => {
     expect(screen.getByRole("button", { name: "просмотрен 1" })).toBeInTheDocument();
     expect(onChanged).toHaveBeenCalledOnce();
 
-    expect(within(card).queryByRole("button", { name: "Сохранить" })).toBeNull();
+    expect(within(card).getByRole("button", { name: "Сохранить" })).toBeDisabled();
     await user.type(within(card).getByPlaceholderText("Заметка для себя"), "починено в 0.10");
     await user.click(within(card).getByRole("button", { name: "Сохранить" }));
     expect(sent.at(-1)).toMatchObject({ method: "PATCH", body: { admin_note: "починено в 0.10" } });

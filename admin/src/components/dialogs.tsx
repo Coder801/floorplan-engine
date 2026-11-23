@@ -5,7 +5,8 @@ import * as api from "@/shared/api";
 import { contact, who } from "@/shared/format";
 import { ACCOUNT, ROLE, word } from "@/shared/text";
 import type { UserRow } from "@/shared/types";
-import { CopyButton, Dialog, ErrorLine, Segmented, css, cx, useAction } from "./ui";
+import { CopyButton } from "./buttons";
+import { Dialog, ErrorLine, Segmented, css, cx, useAction } from "./ui";
 
 /** Search people (250 ms after typing stops), pick one and a role; the server decides, and its
  *  409 reason stays in the dialog. unfit says why a person cannot be picked (greyed out). */
@@ -68,7 +69,7 @@ export function OneTime({ title, value, onClose }: { title: string; value: strin
         {link ? "Показывается один раз: в списках потом её не будет." : "Скопировать можно и потом — в списке кодов, пока код действует."}
       </div>
       <div className={css.actions}>
-        <CopyButton value={value} />
+        <CopyButton value={value} framed />
         <button className={css.primary} onClick={onClose}>Скопировал, закрыть</button>
       </div>
     </Dialog>

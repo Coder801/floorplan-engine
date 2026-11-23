@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { agentOf, applyChange, authorOf, contextOf, nextStatus } from "./feedback";
 import { ago, contact, date, who } from "./format";
+import { popPlace, tipPlace } from "./place";
 import { href, parse } from "./route";
 
 describe("route", () => {
@@ -78,5 +79,20 @@ describe("feedback", () => {
     expect(page.counts.new).toBe(2);  // the old page is not changed
     // A note only: the counts stay
     expect(applyChange(page, { ...item("b", "new"), admin_note: "x" }).counts).toEqual(page.counts);
+  });
+});
+
+describe("place", () => {
+  const button = { left: 500, right: 528, top: 100, bottom: 128 };
+  it("puts a tooltip centred under the button, inside the screen, above it at the bottom", () => {
+    expect(tipPlace(button, 80, 1000, 800)).toEqual({ left: 474, top: 134 });
+    expect(tipPlace({ ...button, left: 0, right: 28 }, 80, 1000, 800).left).toBe(8);
+    expect(tipPlace({ ...button, left: 972, right: 1000 }, 80, 1000, 800).left).toBe(912);
+    expect(tipPlace({ ...button, top: 770, bottom: 798 }, 80, 1000, 800)).toEqual({ left: 474, bottom: 36 });
+  });
+  it("puts a confirmation under the button with the right edges together, above it at the bottom", () => {
+    expect(popPlace(button, 1000, 800)).toEqual({ right: 472, maxWidth: 520, top: 134 });
+    expect(popPlace({ ...button, left: 990, right: 1018 }, 1000, 800).right).toBe(8);
+    expect(popPlace({ ...button, top: 740, bottom: 768 }, 1000, 800)).toMatchObject({ bottom: 66 });
   });
 });

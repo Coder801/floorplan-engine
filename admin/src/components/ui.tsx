@@ -1,43 +1,38 @@
-// Small shared parts: status word with a dot, in-place confirmation, an error line, a dialog,
-// a section header, a copy button, loading of one request.
+// Small shared parts: status word with a dot, an error line, column widths of a table, a dialog,
+// a section header, loading of one request. Buttons (icon, copy, in-place confirmation) — buttons.tsx.
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { STATE, word } from "@/shared/text";
+import { Icon } from "./icons";
 import css from "./ui.module.scss";
 
 export const cx = (...names: (string | false | null | undefined)[]) => names.filter(Boolean).join(" ");
 
 export function Status({ state, label }: { state: string; label?: string }) {
-  return <span className={css.status}><i className={cx(css.dot, css[state])} />{label ?? word(STATE, state)}</span>;
+  const text = label ?? word(STATE, state);
+  return <span className={css.status} title={text}><i className={cx(css.dot, css[state])} />{text}</span>;
 }
 
 export function ErrorLine({ error }: { error: string | null }) {
   return error ? <div className={css.error} role="alert">{error}</div> : null;
 }
 
-/** A dangerous action asks right where it is: "Убрать? [Да] [Нет]", no modal. */
-export function Confirm({ label, question, onYes, disabled }: {
-  label: string; question: string; onYes: () => void; disabled?: boolean;
-}) {
-  const [asking, setAsking] = useState(false);
-  if (!asking) return <button className={css.danger} disabled={disabled} onClick={() => setAsking(true)}>{label}</button>;
-  return (
-    <span className={css.actions}>
-      <span>{question}</span>
-      <button className={css.danger} onClick={() => { setAsking(false); onYes(); }}>Да</button>
-      <button onClick={() => setAsking(false)}>Нет</button>
-    </span>
-  );
+/** Column widths of a table (table-layout: fixed): a number is pixels, null shares the rest. The
+ *  widths do not follow the content, so a table keeps its columns when rows change. */
+export function Cols({ w }: { w: (number | null)[] }) {
+  return <colgroup>{w.map((x, i) => <col key={i} style={x === null ? undefined : { width: x }} />)}</colgroup>;
 }
 
-/** Copy a value to the clipboard; the button says "Скопировано" once it is done. */
-export function CopyButton({ value, label = "Скопировать" }: { value: string; label?: string }) {
-  const [copied, setCopied] = useState(false);
-  return (
-    <button title={value} onClick={() => navigator.clipboard.writeText(value).then(() => setCopied(true))}>
-      {copied ? "Скопировано" : label}
-    </button>
-  );
-}
+/** Widths of the usual columns, px (mono 12 px, padding 8 + 8 included). */
+export const W = {
+  day: 112,    // "до 03.11.2026"
+  time: 156,   // "до 03.11.2026 14:05"
+  ago: 96,     // "5 мин", or a date
+  num: 72,     // a count
+  role: 136,   // "хозяин квартиры"
+  status: 116, // "действует"
+  slug: 160,   // a project folder
+  act: 48,     // one icon button (28) with the cell's padding
+};
 
 export function Dialog({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
   useEffect(() => {
@@ -48,7 +43,7 @@ export function Dialog({ title, onClose, children }: { title: string; onClose: (
   return (
     <div className={css.backdrop} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className={css.dialog} role="dialog" aria-label={title}>
-        <div className={css.dialogHead}>{title}<button onClick={onClose} aria-label="Закрыть">×</button></div>
+        <div className={css.dialogHead}>{title}<button type="button" className={css.iconBtn} onClick={onClose} aria-label="Закрыть"><Icon name="x" /></button></div>
         {children}
       </div>
     </div>

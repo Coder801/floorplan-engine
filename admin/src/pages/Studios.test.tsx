@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { fail, stubApi } from "@/shared/testApi";
@@ -63,7 +63,7 @@ describe("StudioView", () => {
     expect(await screen.findByText("В «Моём ремонте» только владелец.")).toBeInTheDocument();
     expect(screen.getByText("владелец")).toBeInTheDocument();
     expect(screen.queryByRole("combobox")).toBeNull();
-    expect(screen.queryByRole("button", { name: "+ Добавить" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Добавить" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Убрать" })).toBeNull();
     expect(screen.getByText("Проектов нет")).toBeInTheDocument();
   });
@@ -87,11 +87,11 @@ describe("StudioView", () => {
       "POST /api/admin/studios/s1/members": studioDetail({ members: [{ user: person({ id: "u4", name: "Свободный" }), role: "designer", since: null }] }),
     });
     render(<StudioView id="s1" onChanged={vi.fn()} />);
-    await user.click(await screen.findByRole("button", { name: "+ Добавить" }));
+    await user.click(await screen.findByRole("button", { name: "Добавить" }));
     expect(await screen.findByRole("button", { name: /Клиент.*— хозяин квартиры/ })).toBeDisabled();
     expect(screen.getByRole("button", { name: /Чужой.*уже в «Вольт»/ })).toBeDisabled();
     await user.click(screen.getByRole("button", { name: /Свободный/ }));
-    await user.click(screen.getByRole("button", { name: "Добавить" }));
+    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Добавить" }));
     expect(sent.at(-1)?.body).toEqual({ user: "u4", role: "owner" });
     expect(await screen.findByText("Участники (1)")).toBeInTheDocument();
   });
@@ -106,7 +106,7 @@ describe("StudioView", () => {
     render(<StudioView id="s1" onChanged={vi.fn()} />);
     await user.click(await screen.findByRole("button", { name: "Ссылка" }));
     await user.type(screen.getByPlaceholderText("Почта (для списка)"), "new@example.com");
-    await user.click(screen.getByRole("button", { name: "Выдать" }));
+    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Выдать" }));
     expect(sent.find((r) => r.method === "POST")?.body).toEqual({ role: "designer", email: "new@example.com", days: 7 });
     expect(await screen.findByRole("dialog", { name: "Ссылка-приглашение" })).toHaveTextContent("https://shtroba.app/i/st");
     await user.click(screen.getByRole("button", { name: "Скопировал, закрыть" }));

@@ -7,7 +7,8 @@ import { href } from "@/shared/route";
 import { CODE_ROLES, PROJECT_ROLES, ROLE, SERVICES, word } from "@/shared/text";
 import type { ProjectDetail } from "@/shared/types";
 import { IssueForm, OneTime, PersonPicker } from "@/components/dialogs";
-import { Confirm, CopyButton, ErrorLine, Section, Status, css, cx, useAction, useLoad } from "@/components/ui";
+import { Button, Confirm, CopyButton } from "@/components/buttons";
+import { Cols, ErrorLine, Section, Status, W, css, cx, useAction, useLoad } from "@/components/ui";
 
 export function ProjectList({ id, version }: { id: string | null; version: number }) {
   const list = useLoad(api.projects, [version]);
@@ -84,17 +85,17 @@ export function ProjectView({ id, onChanged }: { id: string; onChanged: () => vo
       </Section>
 
       <Section title={`Участники (${p.members.length})`}
-        action={<button className={css.primary} onClick={() => setOpen("member")}>+ Добавить</button>}>
+        action={<Button icon="plus" variant="primary" aria-haspopup="dialog" onClick={() => setOpen("member")}>Добавить</Button>}>
         {p.members.length === 0 && <div className={css.empty}>Только студия проекта</div>}
-        <table><tbody>
+        <table><Cols w={[null, null, W.role, W.day, W.act]} /><tbody>
           {p.members.map((m) => (
             <tr key={m.user.id}>
-              <td><a className={css.link} href={href("users", m.user.id)}>{who(m.user)}</a></td>
-              <td className={css.muted}>{contact(m.user)}</td>
+              <td title={who(m.user)}><a className={css.link} href={href("users", m.user.id)}>{who(m.user)}</a></td>
+              <td className={css.muted} title={contact(m.user)}>{contact(m.user)}</td>
               <td>{word(ROLE, m.role)}</td>
               <td className={css.mono}>с {date(m.since, false)}</td>
               <td className={css.actions}>
-                <Confirm label="Убрать" question={`Убрать ${who(m.user)}?`}
+                <Confirm label="Убрать" icon="userMinus" question={`Убрать ${who(m.user)}?`}
                   onYes={() => action.run(() => api.removeProjectMember(id, m.user.id), update)} />
               </td>
             </tr>
@@ -103,17 +104,18 @@ export function ProjectView({ id, onChanged }: { id: string; onChanged: () => vo
       </Section>
 
       <Section title={`Коды доступа (${p.codes.length})`}
-        action={<button onClick={() => setOpen("code")}>+ Выдать</button>}>
+        action={<Button icon="plus" aria-haspopup="dialog" onClick={() => setOpen("code")}>Выдать</Button>}>
         {p.codes.length === 0 && <div className={css.empty}>Кодов нет</div>}
         {p.codes.length > 0 && (
           <table>
+            <Cols w={[null, 150, 104, W.status, W.num, 96, 96, 96, W.act]} />
             <thead><tr><th>Кому</th><th>Код</th><th>Вид</th><th>Статус</th><th>Входов</th><th>Выдан</th><th>До</th><th>Последний вход</th><th /></tr></thead>
             <tbody>
               {p.codes.map((c) => (
                 <tr key={c.id}>
-                  <td>{c.label || "—"}</td>
+                  <td title={c.label || undefined}>{c.label || "—"}</td>
                   <td className={css.mono}>
-                    {c.code ? <span className={css.copy}>{c.code}<CopyButton value={c.code} /></span> : "—"}
+                    {c.code ? <span className={css.copy}><span title={c.code}>{c.code}</span><CopyButton value={c.code} label={`Скопировать код ${c.code}`} /></span> : "—"}
                   </td>
                   <td>{word(ROLE, c.role)}</td><td><Status state={c.state} /></td>
                   <td className={css.mono}>{c.uses}</td>
@@ -121,7 +123,7 @@ export function ProjectView({ id, onChanged }: { id: string; onChanged: () => vo
                   <td className={css.mono}>{date(c.expires, false)}</td>
                   <td className={css.mono}>{ago(c.last_used)}</td>
                   <td className={css.actions}>
-                    {c.state === "active" && <Confirm label="Отозвать" question="Отозвать код?"
+                    {c.state === "active" && <Confirm label="Отозвать" icon="ban" question="Отозвать код?"
                       onYes={() => action.run(() => api.revokeCode(id, c.id), update)} />}
                   </td>
                 </tr>
@@ -132,13 +134,13 @@ export function ProjectView({ id, onChanged }: { id: string; onChanged: () => vo
       </Section>
 
       <Section title={`Приглашения (${p.invites.length})`}
-        action={<button onClick={() => setOpen("invite")}>+ Ссылка</button>}>
+        action={<Button icon="link" aria-haspopup="dialog" onClick={() => setOpen("invite")}>Ссылка</Button>}>
         {p.invites.length === 0 && <div className={css.empty}>Приглашений нет</div>}
-        <table><tbody>
+        <table><Cols w={[W.role, null, 200, W.day, W.act]} /><tbody>
           {p.invites.map((i) => (
             <tr key={i.id}>
               <td>{word(ROLE, i.role)}</td>
-              <td className={css.muted}>{i.email ?? "—"}</td>
+              <td className={css.muted} title={i.email ?? undefined}>{i.email ?? "—"}</td>
               <td><Status state={i.state} label={i.state === "accepted" ? `принял ${who(i.accepted_by)}` : undefined} /></td>
               <td className={css.mono}>до {date(i.expires, false)}</td>
               <td className={css.actions}>
@@ -151,17 +153,17 @@ export function ProjectView({ id, onChanged }: { id: string; onChanged: () => vo
       </Section>
 
       <Section title={`Поддержка (${p.support.length})`}
-        action={<button onClick={() => setOpen("support")}>+ Открыть доступ</button>}>
+        action={<Button icon="plus" aria-haspopup="dialog" onClick={() => setOpen("support")}>Открыть доступ</Button>}>
         {p.support.length === 0 && <div className={css.empty}>Доступа поддержки нет</div>}
-        <table><tbody>
+        <table><Cols w={[null, null, W.status, W.time, W.act]} /><tbody>
           {p.support.map((g, n) => (
             <tr key={`${g.user.id}-${n}`}>
-              <td><a className={css.link} href={href("users", g.user.id)}>{who(g.user)}</a></td>
-              <td className={css.muted}>«{g.reason}»</td>
+              <td title={who(g.user)}><a className={css.link} href={href("users", g.user.id)}>{who(g.user)}</a></td>
+              <td className={css.muted} title={g.reason}>«{g.reason}»</td>
               <td><Status state={g.state} /></td>
               <td className={css.mono}>до {date(g.expires)}</td>
               <td className={css.actions}>
-                {g.state === "active" && <Confirm label="Снять" question="Снять доступ?"
+                {g.state === "active" && <Confirm label="Снять доступ" question="Снять доступ поддержки?"
                   onYes={() => action.run(() => api.revokeSupport(id, g.user.id), update)} />}
               </td>
             </tr>

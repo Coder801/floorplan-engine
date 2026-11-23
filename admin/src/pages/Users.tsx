@@ -7,7 +7,8 @@ import { ago, contact, date, who } from "@/shared/format";
 import { href } from "@/shared/route";
 import { ACCOUNT, KIND, ROLE, word } from "@/shared/text";
 import type { UserDetail } from "@/shared/types";
-import { Confirm, ErrorLine, Section, Status, css, cx, useAction, useLoad } from "@/components/ui";
+import { Button, Confirm } from "@/components/buttons";
+import { Cols, ErrorLine, Section, Status, W, css, cx, useAction, useLoad } from "@/components/ui";
 
 export function UserList({ id, version }: { id: string | null; version: number }) {
   const [q, setQ] = useState("");
@@ -68,12 +69,12 @@ export function UserView({ id, me, onChanged }: { id: string; me: string; onChan
         <a className={css.link} href={href("events", null, { user: u.id })}>журнал</a>
       </div>
       <div className={css.actions} style={{ justifyContent: "flex-start" }}>
-        <Confirm label="Завершить сеансы" question="Выкинуть из всех сеансов?" disabled={u.sessions.length === 0}
+        <Confirm text icon="logout" label="Завершить сеансы" question="Выкинуть из всех сеансов?" disabled={u.sessions.length === 0}
           onYes={() => action.run(() => api.logout(id), update)} />
         {u.active
-          ? <Confirm label="Заблокировать" question="Заблокировать и выкинуть?" disabled={self}
+          ? <Confirm text icon="lock" label="Заблокировать" question="Заблокировать и выкинуть?" disabled={self}
               onYes={() => action.run(() => api.setActive(id, false), update)} />
-          : <button onClick={() => action.run(() => api.setActive(id, true), update)}>Разблокировать</button>}
+          : <Button icon="lockOpen" disabled={action.busy} onClick={() => action.run(() => api.setActive(id, true), update)}>Разблокировать</Button>}
       </div>
       <ErrorLine error={action.error} />
 
@@ -85,11 +86,11 @@ export function UserView({ id, me, onChanged }: { id: string; me: string; onChan
       </Section>
       <Section title={`Проекты по приглашению (${u.projects.length})`}>
         {u.projects.length === 0 && <div className={css.empty}>Нет</div>}
-        <table><tbody>
+        <table><Cols w={[W.slug, null, W.role, null]} /><tbody>
           {u.projects.map((p) => (
             <tr key={p.id}>
-              <td><a className={css.link} href={href("projects", p.id)}><span className={css.mono}>{p.slug}</span></a></td>
-              <td>{p.name}</td><td>{word(ROLE, p.role)}</td><td className={css.muted}>«{p.studio.name}»</td>
+              <td title={p.slug ?? undefined}><a className={css.link} href={href("projects", p.id)}><span className={css.mono}>{p.slug}</span></a></td>
+              <td title={p.name}>{p.name}</td><td>{word(ROLE, p.role)}</td><td className={css.muted} title={p.studio.name}>«{p.studio.name}»</td>
             </tr>
           ))}
         </tbody></table>
@@ -99,10 +100,10 @@ export function UserView({ id, me, onChanged }: { id: string; me: string; onChan
       </Section>
       <Section title={`Сеансы (${u.sessions.length})`}>
         {u.sessions.length === 0 && <div className={css.empty}>Нет действующих</div>}
-        <table><tbody>
+        <table><Cols w={[null, W.time, W.ago]} /><tbody>
           {u.sessions.map((s) => (
             <tr key={s.id}>
-              <td className={css.muted} style={{ maxWidth: 360, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.agent || "—"}</td>
+              <td className={css.muted} title={s.agent || undefined}>{s.agent || "—"}</td>
               <td className={css.mono}>с {date(s.created)}</td><td className={css.mono}>{ago(s.seen)}</td>
             </tr>
           ))}

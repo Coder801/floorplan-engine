@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
-import { Confirm, Dialog, ErrorLine, Section, Segmented, Status, useAction, useLoad } from "./ui";
+import { Cols, Dialog, ErrorLine, Section, Segmented, Status, W, useAction, useLoad } from "./ui";
 
 describe("Status", () => {
   it("says the state in words, or the given label", () => {
@@ -21,25 +21,14 @@ describe("ErrorLine", () => {
   });
 });
 
-describe("Confirm", () => {
-  it("asks in place; yes runs the action, no only closes the question", async () => {
-    const user = userEvent.setup();
-    const onYes = vi.fn();
-    render(<Confirm label="Убрать" question="Убрать Ивана?" onYes={onYes} />);
-    await user.click(screen.getByRole("button", { name: "Убрать" }));
-    expect(screen.getByText("Убрать Ивана?")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Нет" }));
-    expect(onYes).not.toHaveBeenCalled();
-    expect(screen.queryByText("Убрать Ивана?")).toBeNull();
-    await user.click(screen.getByRole("button", { name: "Убрать" }));
-    await user.click(screen.getByRole("button", { name: "Да" }));
-    expect(onYes).toHaveBeenCalledOnce();
-    expect(screen.getByRole("button", { name: "Убрать" })).toBeInTheDocument();
-  });
-
-  it("a disabled action does not ask", () => {
-    render(<Confirm label="Заблокировать" question="?" onYes={() => {}} disabled />);
-    expect(screen.getByRole("button", { name: "Заблокировать" })).toBeDisabled();
+describe("Cols", () => {
+  it("gives the columns their widths, null takes the rest", () => {
+    const { container } = render(<table><Cols w={[null, W.day, W.act]} /><tbody><tr><td>a</td><td>b</td><td>c</td></tr></tbody></table>);
+    const cols = container.querySelectorAll("col");
+    expect(cols).toHaveLength(3);
+    expect(cols[0].getAttribute("style")).toBeNull();
+    expect(cols[1]).toHaveStyle({ width: `${W.day}px` });
+    expect(cols[2]).toHaveStyle({ width: `${W.act}px` });
   });
 });
 

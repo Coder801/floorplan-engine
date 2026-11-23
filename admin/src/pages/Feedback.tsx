@@ -2,7 +2,7 @@
 // filter with counts, a kind filter and a search over the text and the author; each message with
 // the date, kind, author, project, text, what the page attached and the screenshots (a click opens
 // one full size). The status moves in one click (new → seen → done, or any by the segmented), the
-// note is saved by a button. A change stays in place even if it leaves the filter.
+// note is saved by a button (greyed out until the note changes). A change stays in place even if it leaves the filter.
 import { useEffect, useState } from "react";
 import * as api from "@/shared/api";
 import { agentOf, applyChange, authorOf, contextOf, FEEDBACK_KINDS, FEEDBACK_STATUSES, nextStatus } from "@/shared/feedback";
@@ -69,6 +69,7 @@ function FeedbackCard({ item, onChanged, onPhoto }: {
   const action = useAction();
   const [note, setNote] = useState(item.admin_note ?? "");
   const next = nextStatus(item.status);
+  const edited = note !== (item.admin_note ?? "");
   const save = (change: { status?: FeedbackStatus; admin_note?: string }) =>
     void action.run(() => api.updateFeedback(item.id, change), onChanged);
   const context = contextOf(item.context);
@@ -95,10 +96,12 @@ function FeedbackCard({ item, onChanged, onPhoto }: {
       <div className={css.feedActions}>
         <Segmented options={FEEDBACK_STATUSES} value={item.status} label={(s) => word(FEEDBACK_STATUS, s)}
                    onChange={(s) => { if (s !== item.status) save({ status: s as FeedbackStatus }); }} />
-        {next && <button className={css.primary} disabled={action.busy} onClick={() => save({ status: next })}>→ {word(FEEDBACK_STATUS, next)}</button>}
-        <input className={css.note} placeholder="Заметка для себя" value={note} onChange={(e) => setNote(e.target.value)}
-               onKeyDown={(e) => { if (e.key === "Enter" && note !== (item.admin_note ?? "")) save({ admin_note: note }); }} />
-        {note !== (item.admin_note ?? "") && <button disabled={action.busy} onClick={() => save({ admin_note: note })}>Сохранить</button>}
+        {/* the next step and "Сохранить" keep their places, so the note field does not change width */}
+        {next ? <button className={cx(css.primary, css.next)} disabled={action.busy} onClick={() => save({ status: next })}>→ {word(FEEDBACK_STATUS, next)}</button>
+              : <span className={css.next} aria-hidden="true" />}
+        <input className={css.note} placeholder="Заметка для себя" aria-label="Заметка для себя" value={note} onChange={(e) => setNote(e.target.value)}
+               onKeyDown={(e) => { if (e.key === "Enter" && edited) save({ admin_note: note }); }} />
+        <button disabled={action.busy || !edited} onClick={() => save({ admin_note: note })}>Сохранить</button>
       </div>
       <ErrorLine error={action.error} />
     </article>

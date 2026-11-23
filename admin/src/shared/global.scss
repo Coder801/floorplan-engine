@@ -40,10 +40,17 @@ input, select {
   min-height: 30px; padding: 0 8px; border-radius: 6px;
   background: var(--raise); border: 1px solid var(--line);
 }
-table { border-collapse: collapse; width: 100%; }
+// Tables keep their columns: fixed layout with widths from <colgroup> (components/ui.tsx, Cols),
+// a long text ends with "…" (the full one in title), numbers and dates in tabular figures, and
+// a row is as tall with an icon button as without one.
+table { border-collapse: collapse; width: 100%; table-layout: fixed; }
 th {
   text-align: left; font-weight: 500; color: var(--muted); font-size: 11px;
   text-transform: uppercase; letter-spacing: .04em; padding: 4px 8px;
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid var(--line); vertical-align: bottom;
 }
-td { padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+td {
+  height: 41px; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: middle;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-variant-numeric: tabular-nums;
+}
+td select { max-width: 100%; }

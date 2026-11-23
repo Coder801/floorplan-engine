@@ -7,7 +7,8 @@ import { href } from "@/shared/route";
 import { BUSINESS, KIND, ROLE, STUDIO_ROLES, word } from "@/shared/text";
 import type { StudioDetail, StudioRow } from "@/shared/types";
 import { IssueForm, OneTime, PersonPicker } from "@/components/dialogs";
-import { Confirm, ErrorLine, Section, Status, css, cx, useAction, useLoad } from "@/components/ui";
+import { Button, Confirm } from "@/components/buttons";
+import { Cols, ErrorLine, Section, Status, W, css, cx, useAction, useLoad } from "@/components/ui";
 
 export function StudioList({ id, version }: { id: string | null; version: number }) {
   const list = useLoad(api.studios, [version]);
@@ -65,15 +66,15 @@ export function StudioView({ id, onChanged }: { id: string; onChanged: () => voi
 
       <Section title={`Участники (${s.members.length})`}
         action={firm && <span className={css.actions}>
-          <button onClick={() => setInviting(true)}>Ссылка</button>
-          <button className={css.primary} onClick={() => setAdding(true)}>+ Добавить</button>
+          <Button icon="link" aria-haspopup="dialog" onClick={() => setInviting(true)}>Ссылка</Button>
+          <Button icon="plus" variant="primary" aria-haspopup="dialog" onClick={() => setAdding(true)}>Добавить</Button>
         </span>}>
         {!firm && <div className={css.muted}>{s.kind === "personal" ? "В «Моём ремонте» только владелец." : "У проектов без владельца участников нет."}</div>}
-        <table><tbody>
+        <table><Cols w={[null, null, 156, W.day, W.act]} /><tbody>
           {s.members.map((m) => (
             <tr key={m.user.id}>
-              <td><a className={css.link} href={href("users", m.user.id)}>{who(m.user)}</a></td>
-              <td className={css.muted}>{contact(m.user)}</td>
+              <td title={who(m.user)}><a className={css.link} href={href("users", m.user.id)}>{who(m.user)}</a></td>
+              <td className={css.muted} title={contact(m.user)}>{contact(m.user)}</td>
               <td>
                 {firm ? (
                   <select value={m.role} disabled={action.busy}
@@ -84,7 +85,7 @@ export function StudioView({ id, onChanged }: { id: string; onChanged: () => voi
               </td>
               <td className={css.mono}>с {date(m.since, false)}</td>
               <td className={css.actions}>
-                {firm && <Confirm label="Убрать" question={`Убрать ${who(m.user)}?`}
+                {firm && <Confirm label="Убрать" icon="userMinus" question={`Убрать ${who(m.user)}?`}
                   onYes={() => action.run(() => api.removeStudioMember(id, m.user.id), update)} />}
               </td>
             </tr>
@@ -95,11 +96,11 @@ export function StudioView({ id, onChanged }: { id: string; onChanged: () => voi
 
       <Section title={`Проекты (${s.projects.length})`}>
         {s.projects.length === 0 && <div className={css.empty}>Проектов нет</div>}
-        <table><tbody>
+        <table><Cols w={[W.slug, null, W.day]} /><tbody>
           {s.projects.map((p) => (
             <tr key={p.id}>
-              <td><a className={css.link} href={href("projects", p.id)}><span className={css.mono}>{p.slug}</span></a></td>
-              <td>{p.name}</td>
+              <td title={p.slug ?? undefined}><a className={css.link} href={href("projects", p.id)}><span className={css.mono}>{p.slug}</span></a></td>
+              <td title={p.name}>{p.name}</td>
               <td className={css.mono}>{date(p.created, false)}</td>
             </tr>
           ))}
@@ -108,11 +109,11 @@ export function StudioView({ id, onChanged }: { id: string; onChanged: () => voi
 
       {s.invites.length > 0 && (
         <Section title="Приглашения в студию">
-          <table><tbody>
+          <table><Cols w={[W.role, null, 200, W.day, W.act]} /><tbody>
             {s.invites.map((i) => (
               <tr key={i.id}>
                 <td>{word(ROLE, i.role)}</td>
-                <td className={css.muted}>{i.email ?? "—"}</td>
+                <td className={css.muted} title={i.email ?? undefined}>{i.email ?? "—"}</td>
                 <td><Status state={i.state} label={i.state === "accepted" ? `принял ${who(i.accepted_by)}` : undefined} /></td>
                 <td className={css.mono}>до {date(i.expires, false)}</td>
                 <td className={css.actions}>

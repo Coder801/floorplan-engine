@@ -6,27 +6,28 @@ import { date, who } from "@/shared/format";
 import { href } from "@/shared/route";
 import { ACTION, word } from "@/shared/text";
 import type { EventRow } from "@/shared/types";
-import { ErrorLine, css, useLoad } from "@/components/ui";
+import { Cols, ErrorLine, css, useLoad } from "@/components/ui";
 
 export function EventTable({ rows, compact }: { rows: EventRow[]; compact?: boolean }) {
   const [open, setOpen] = useState<string | null>(null);
   return (
     <table>
+      <Cols w={compact ? [136, 180, null, 220] : [136, 180, null, 220, 150]} />
       <thead><tr><th>Когда</th><th>Кто</th><th>Что</th><th>Кого</th>{!compact && <th>Проект</th>}</tr></thead>
       <tbody>
         {rows.map((e) => (
           <tr key={e.id} onClick={() => setOpen(open === e.id ? null : e.id)} style={{ cursor: "pointer" }}>
             <td className={css.mono}>{date(e.at)}</td>
-            <td>{e.user ? <a className={css.link} href={href("users", e.user.id)} onClick={(ev) => ev.stopPropagation()}>{who(e.user)}</a> : "—"}</td>
+            <td title={e.user ? who(e.user) : undefined}>{e.user ? <a className={css.link} href={href("users", e.user.id)} onClick={(ev) => ev.stopPropagation()}>{who(e.user)}</a> : "—"}</td>
             <td>
               {word(ACTION, e.action)}
               {open === e.id && <pre className={css.payload}>{JSON.stringify(e.payload, null, 2)}</pre>}
             </td>
-            <td>
+            <td title={[e.subject && who(e.subject), e.studio && `«${e.studio.name}»`].filter(Boolean).join(" ") || undefined}>
               {e.subject ? <a className={css.link} href={href("users", e.subject.id)} onClick={(ev) => ev.stopPropagation()}>{who(e.subject)}</a> : ""}
               {e.studio ? <a className={css.link} href={href("studios", e.studio.id)} onClick={(ev) => ev.stopPropagation()}> «{e.studio.name}»</a> : ""}
             </td>
-            {!compact && <td className={css.mono}>{e.project ?? ""}</td>}
+            {!compact && <td className={css.mono} title={e.project ?? undefined}>{e.project ?? ""}</td>}
           </tr>
         ))}
       </tbody>
