@@ -275,6 +275,7 @@ export interface TableRow {
   group?: string;         // QF group of a row of "Groups": the row has an eye (filter3d)
   marker?: "square";      // icon without colour: a panel device not on a group line
   scope?: WorkScope;      // estimate work row: what its price covers (the row unfolds)
+  guess?: boolean;        // estimate material subtotal: the sum is provisional (prices not at market yet)
 }
 
 // Work scope of an estimate row, in the project language (electrical/work_scope.py): operations

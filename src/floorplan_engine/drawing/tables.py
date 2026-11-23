@@ -46,9 +46,18 @@ class Mark:
     color: int  # true color, 0xRRGGBB
 
 
-# Cell: ready text, text with a coloured dot, or a function that fills the
+@dataclass(frozen=True)
+class Guess:
+    """Provisional amount (estimate.provisional): on the sheet the text is followed by mark; the
+    viewer gets the plain text and the row flag guess (epd/side.from_table)."""
+
+    text: str
+    mark: str
+
+
+# Cell: ready text, text with a coloured dot, a provisional amount, or a function that fills the
 # MTEXT host (AutoCAD field)
-Cell = str | Mark | Callable[[MText], None]
+Cell = str | Mark | Guess | Callable[[MText], None]
 MARK_R = 1.1  # dot radius on the sheet, mm
 
 
@@ -95,6 +104,8 @@ def _cell(layout: BaseLayout, cell: Cell, col: Column, x0: float, y_mid: float) 
         at = Vec(x + MARK_R + CELL_PAD / 2, y_mid)
         add_text(layout, cell.text, at, TEXT_DIM_MM, A_TEXT.name, align=_LEFT, scale=1.0)
         return
+    if isinstance(cell, Guess):
+        cell = cell.text + cell.mark
     if isinstance(cell, str):
         if col.align == "left":
             at, align = Vec(x0 + CELL_PAD, y_mid), TextEntityAlignment.MIDDLE_LEFT

@@ -11,17 +11,21 @@ export function rowKind(row: TableRow): RowKind {
   return !row.cells[0] && filled === 2 && !!row.cells[row.cells.length - 1] ? "subtotal" : "line";
 }
 
+// One line of the side panel totals: a section or "Total"; guess — a provisional sum (TableRow.guess)
+export interface EstimateTotal { name: string; value: string; guess: boolean }
+
 // Totals for the side panel: sections and "Total" (a bill of quantities without prices has no totals).
 // In the table a section total is a plain "Total" under its heading; here, in a list, it is named
-// by its section (the heading without the note after the dash: "— prices are a placeholder")
-export function totals(rows: readonly TableRow[], total?: readonly string[]): [string, string][] {
-  const out: [string, string][] = [];
+// by its section. Builds before TableRow.guess wrote the note into the heading ("Materials — prices
+// are a placeholder"): the part after the dash is dropped
+export function totals(rows: readonly TableRow[], total?: readonly string[]): EstimateTotal[] {
+  const out: EstimateTotal[] = [];
   let section = "";
   for (const r of rows) {
     const kind = rowKind(r);
     if (kind === "section") section = (r.cells[1] ?? "").split(" — ")[0];
-    else if (kind === "subtotal") out.push([section || r.cells[1], r.cells[r.cells.length - 1]]);
+    else if (kind === "subtotal") out.push({ name: section || r.cells[1], value: r.cells[r.cells.length - 1], guess: !!r.guess });
   }
-  if (total && total[total.length - 1]) out.push([total[1], total[total.length - 1]]);
+  if (total && total[total.length - 1]) out.push({ name: total[1], value: total[total.length - 1], guess: false });
   return out;
 }

@@ -52,7 +52,6 @@
   dt { color: var(--muted); }
   dd { margin: 0; font-weight: 600; }
 }
-.guess { font-weight: 400; color: var(--muted); font-style: italic; }
 .side { @include pairs(var(--space-2) var(--space-3)); }
 
 // Side panel of the tab: setup progress and questions (OverviewSummary)

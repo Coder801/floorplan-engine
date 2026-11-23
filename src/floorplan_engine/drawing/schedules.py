@@ -7,9 +7,25 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from floorplan_engine.drawing.layers import TEXT_DIM_MM, text_width
-from floorplan_engine.drawing.tables import CELL_PAD, TEXT_GAP, Column, Mark, Table, name_width
+from floorplan_engine.drawing.tables import (
+    CELL_PAD,
+    TEXT_GAP,
+    Cell,
+    Column,
+    Guess,
+    Mark,
+    Table,
+    name_width,
+)
 from floorplan_engine.electrical.colors import group_colors
-from floorplan_engine.electrical.estimate import SECTIONS, Estimate, format_number, section_title
+from floorplan_engine.electrical.estimate import (
+    PROVISIONAL_MARK,
+    SECTIONS,
+    Estimate,
+    format_number,
+    provisional,
+    section_title,
+)
 from floorplan_engine.electrical.estimate import text as estimate_text
 from floorplan_engine.electrical.groups import ASSUMED, GroupRow, group_rows
 from floorplan_engine.electrical.groups import text as groups_text
@@ -149,14 +165,15 @@ def estimate_table(
     est: Estimate, language: Language, priced: bool, title: str | None = None
 ) -> Table:
     """Estimate on the sheet: sections (rough and finish materials, rough and finishing work), their
-    totals and "Total"; without a price list, a bill of quantities (quantities only). title is a
+    totals and "Total"; without a price list, a bill of quantities (quantities only). The total of a
+    materials section is a Guess cell while it is provisional (estimate.provisional). title is a
     custom title (plumbing estimate); none means electrical."""
 
     def t(key: str, **values: object) -> str:
         return estimate_text(key, language, **values)
 
     names = [ln.name for ln in est.lines]
-    names += [section_title(sec, language, priced) for sec in SECTIONS]
+    names += [section_title(sec, language) for sec in SECTIONS]
     # Name column width from font metrics: the table column on the sheet is as wide as the title
     # block
     name_w = max(text_width(n, TEXT_DIM_MM) for n in names) + 2 * CELL_PAD + TEXT_GAP
@@ -171,12 +188,12 @@ def estimate_table(
             Column(t("col_price", c=est.currency), 17.0),
             Column(t("col_sum", c=est.currency), 21.0),
         ]
-    rows: list[tuple[str, ...]] = []
+    rows: list[tuple[Cell, ...]] = []
     for section in SECTIONS:
         lines = [ln for ln in est.lines if ln.section == section]
         if not lines:
             continue
-        heading = section_title(section, language, priced)
+        heading = section_title(section, language)
         rows.append(("", heading, "", "", *(("", "") if priced else ())))
         for k, ln in enumerate(lines, 1):
             qty = format_number(ln.qty, 1).removesuffix(",0")
@@ -190,8 +207,11 @@ def estimate_table(
             )
             rows.append((str(k), ln.name, ln.unit, qty, *money))
         if priced:
-            # Plain "Total": the section heading is right above, its name is not repeated
-            rows.append(("", t("subtotal"), "", "", "", format_number(est.subtotal(section))))
+            # Plain "Total": the section heading is right above, its name is not repeated; the
+            # total of materials priced by the placeholder is provisional (decision 2026-11-23)
+            amount = format_number(est.subtotal(section))
+            cell: Cell = Guess(amount, PROVISIONAL_MARK) if provisional(section, priced) else amount
+            rows.append(("", t("subtotal"), "", "", "", cell))
     total = ("", t("total"), "", "", "", format_number(est.total)) if priced else None
     if title is None:
         title = t("sheet_title") if priced else t("sheet_volumes")

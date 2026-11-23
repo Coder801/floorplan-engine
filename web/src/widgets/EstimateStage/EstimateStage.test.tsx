@@ -29,6 +29,19 @@ describe("EstimateStage", () => {
     expect(screen.getAllByText("Цены — прайс студии")).toHaveLength(2);
   });
 
+  it("a provisional subtotal (guess) has the warning mark on its sum, other sums do not", () => {
+    const rows = [
+      { cells: ["", "Материалы", "", ""], section: true },
+      { cells: ["1", "Кабель", "м", "3 200"] },
+      { cells: ["", "Итого", "", "3 200"], guess: true },
+    ];
+    render(<EstimateStage items={[{ table: { ...electrical, rows }, xlsx: null }]} />);
+    const marks = screen.getAllByRole("img", { name: "Цена условная: материалы пока не по рыночным ценам" });
+    expect(marks).toHaveLength(1);
+    expect(marks[0].parentElement).toHaveTextContent("3 200!");
+    expect(screen.getAllByRole("row", { name: /Итого/ }).at(-1)).not.toHaveTextContent("!");
+  });
+
   it("does not show work outside the estimate, even if an old build has it", () => {
     render(<EstimateStage items={[{ table: legacy, xlsx: null }]} />);
     expect(screen.queryByRole("heading", { name: "Работы вне сметы" })).toBeNull();

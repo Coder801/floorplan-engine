@@ -1,0 +1,4 @@
+// The value and its "!" in the warning text colour (--warn-text: readable on paper and panels in
+// both themes); the sign is bold and keeps to the value, the line does not break between them
+.value { color: var(--warn-text); white-space: nowrap; cursor: help; }
+.sign { margin-left: 2px; font-weight: 700; }

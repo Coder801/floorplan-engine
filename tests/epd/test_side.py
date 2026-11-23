@@ -7,6 +7,8 @@ import json
 import zipfile
 from pathlib import Path
 
+import pytest
+
 from floorplan_engine.drawing.tables import Column, Table
 from floorplan_engine.electrical.panel import build_panel
 from floorplan_engine.epd.artifact import export_artifact
@@ -218,6 +220,31 @@ def test_estimate_work_rows_carry_their_scope() -> None:
     material = next(r for r in table.rows if len(r.cells) > 1 and r.cells[1] == "Подрозетник")
     assert material.scope is None and "scope" not in material.as_dict()
     assert all(r.scope is None for r in table.rows if r.section)
+
+
+def test_estimate_material_totals_carry_guess(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Contract with the viewer (decision 2026-11-23): the total row of each materials section
+    has "guess": true while material prices are a placeholder; its amount is plain text, work
+    totals and the grand total get no flag, a bill of quantities neither."""
+    import floorplan_engine.electrical.estimate as estimate_module
+    from floorplan_engine.electrical.estimate import PriceList
+    from floorplan_engine.electrical.pricing import Prices
+
+    plan, contours, elec, wiring = _model()
+    prices = Prices(PriceList.model_validate({"items": {"socket_box": 20}}))
+
+    def totals() -> list[dict[str, object]]:
+        table = side_tables(plan, contours, elec, wiring, prices)["estimate"][0]
+        return [r.as_dict() for r in table.rows if r.cells[1] == "Итого"]
+
+    rows = totals()
+    assert [r.get("guess") for r in rows] == [True, True, None, None]
+    cells = rows[0]["cells"]
+    assert isinstance(cells, list) and not cells[-1].endswith("!")  # the mark is the viewer's
+    volumes = side_tables(plan, contours, elec, wiring)["estimate"][0]
+    assert not any(r.guess for r in volumes.rows)
+    monkeypatch.setattr(estimate_module, "MATERIAL_PRICES_MOCK", False)
+    assert not any("guess" in r for r in totals())
 
 
 def test_room_table_has_a_row_per_zone() -> None:

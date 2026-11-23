@@ -218,6 +218,16 @@ describe("WorkCard", () => {
     expect(onClose).toHaveBeenCalledOnce();
   });
 
+  it("a materials sum is marked provisional; a task without materials has no mark", () => {
+    const { unmount } = open(task("cable"), CLIENT);
+    const mark = screen.getByRole("img", { name: "Цена условная: материалы пока не по рыночным ценам" });
+    expect(mark.parentElement).toHaveTextContent(/грн!$/);
+    expect(mark.closest("dl")).not.toHaveTextContent("имитация");
+    unmount();
+    open(task("insulation"), CLIENT);
+    expect(screen.queryByRole("img", { name: /Цена условная/ })).toBeNull();
+  });
+
   it("before approval the client only reads: ticks come later, no status buttons", () => {
     open(draftState("proposed", CLIENT).tasks[1], CLIENT, { state: draftState("proposed", CLIENT) });
     expect(screen.getByText("Отмечать пункты можно после утверждения плана.")).toBeInTheDocument();

@@ -34,7 +34,6 @@
 .paid { @include type(small); color: var(--ok); }
 // Work and materials under a sum
 .split { @include type(small); color: var(--muted); font-variant-numeric: tabular-nums; }
-.guess { font-weight: 400; color: var(--muted); font-style: italic; }
 
 @media (max-width: $phone) {
   .list { padding: var(--space-3) var(--space-3) var(--space-10); }

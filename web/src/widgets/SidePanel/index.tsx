@@ -23,6 +23,7 @@ import ui from "@/shared/styles/ui.module.scss";
 import { Button } from "@/ui/Button";
 import { Dot } from "@/ui/Dot";
 import { IconButton } from "@/ui/IconButton";
+import { Provisional } from "@/ui/Provisional";
 import type { CeilingData, Elevation, Page, SideTable } from "@/shared/types";
 import { EyeToggle } from "@/ui/EyeToggle";
 import { useHoldTip } from "@/ui/HoldTip";
@@ -206,7 +207,10 @@ function EstimateTotals({ table }: { table: SideTable }) {
     <>
       <dl className={css.totals}>
         {sums.length
-          ? sums.map(([name, value], i) => [<dt key={`n${i}`}>{name}</dt>, <dd key={`v${i}`}>{value}</dd>])
+          ? sums.map(({ name, value, guess }, i) => [
+              <dt key={`n${i}`}>{name}</dt>,
+              <dd key={`v${i}`}>{guess ? <Provisional label={t("estimate.provisional")}>{value}</Provisional> : value}</dd>,
+            ])
           : [<dt key="n">{t("estimate.items")}</dt>, <dd key="v">{items}</dd>]}
       </dl>
       {!!table.notes?.length && <ul className={css.notes}>{table.notes.map((n, i) => <li key={i}>{n}</li>)}</ul>}

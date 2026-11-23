@@ -4,7 +4,9 @@
 // (extensions/theme-defaults/themes/2026-dark.json): editor background #121314, side panels
 // #191A1B, widgets #202122, borders #2A2B2C, button accent #297AA0. "Sinka" — a muted blueprint,
 // deep blue with pale lines — is a third set of colours, not offered yet. --signal is the marking yellow of the main action only;
-// --hl is the red-orange pencil of selection (international orange, not a terracotta).
+// --hl is the red-orange pencil of selection (international orange, not a terracotta). --warn is the
+// warning yellow of marks and fills; --warn-text the same warning as text (on white paper the
+// yellow is unreadable, so the light theme darkens it to amber): a provisional price (ui/Provisional).
 
 @mixin dark {
   --bg: #121314; --panel: #191a1b; --raise: #202122; --text: #bfbfbf; --muted: #8c8c8c;
@@ -12,7 +14,7 @@
   --signal: #ffd400; --signal-text: #121314; --signal-line: #ffd400;
   --hl: #48a0c7; --hl-row: #1d3946; --pin: #e3b341; --badge: #d43a2f;
   --paper: #121314; --ink: #d4d4d4; --shade: #060606;
-  --critical: #f48771; --major: #cd861a; --warn: #e3b341; --minor: #8c8c8c; --ok: #86cf86;
+  --critical: #f48771; --major: #cd861a; --warn: #e3b341; --warn-text: #e3b341; --minor: #8c8c8c; --ok: #86cf86;
   color-scheme: dark;
 }
 
@@ -24,7 +26,7 @@
   --signal: #ffd400; --signal-text: #0e1a2b; --signal-line: #ffd400;
   --hl: #ff6a2b; --hl-row: #3d2c33; --pin: #e3b341; --badge: #e5402f;
   --paper: #10203a; --ink: #dfe8f5; --shade: #060d18;
-  --critical: #ff8f7a; --major: #e0a030; --warn: #e3b341; --minor: #8192ab; --ok: #7fd49a;
+  --critical: #ff8f7a; --major: #e0a030; --warn: #e3b341; --warn-text: #e3b341; --minor: #8192ab; --ok: #7fd49a;
   color-scheme: dark;
 }
 
@@ -50,7 +52,7 @@
   --signal: #ffd400; --signal-text: #14213a; --signal-line: #14213a;
   --hl: #e63c00; --hl-row: #ffe7dc; --pin: #1d5fd0; --badge: #c62828;
   --paper: #ffffff; --ink: none; --shade: #a9b3c2;
-  --critical: #b3261e; --major: #9a5b00; --warn: #f0b429; --minor: #5a667e; --ok: #2e6b45;
+  --critical: #b3261e; --major: #9a5b00; --warn: #f0b429; --warn-text: #8a5d00; --minor: #5a667e; --ok: #2e6b45;
   color-scheme: light;
 }
 :root[data-theme="dark"] { @include dark; }

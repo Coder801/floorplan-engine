@@ -15,7 +15,9 @@ describe("WorkList", () => {
     expect(items[0]).toHaveTextContent("оплачено");
     expect(items[0]).toHaveTextContent(/работа .+ · материалы /);
     const sums = screen.getByRole("banner").querySelector("dl")!;
-    expect(sums).toHaveTextContent(/Работы.*Материалы.*цены пока имитация.*Итого/);
+    expect(sums).toHaveTextContent(/Работы.*Материалы.*Итого/);
+    expect(sums).not.toHaveTextContent("имитация");
+    expect(within(sums).getByRole("img", { name: "Цена условная: материалы пока не по рыночным ценам" }).parentElement).toHaveTextContent(/грн!$/);
     expect(screen.getByRole("button", { name: /Распаечные коробки/ })).toHaveTextContent("Примите работу →");
     expect(screen.getByRole("button", { name: /Ниша под роутер/ })).toHaveTextContent("Согласуйте доп. работу →");
     expect(screen.getByText("Ждут вашего решения: 2")).toBeInTheDocument();

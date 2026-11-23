@@ -24,7 +24,7 @@ from floorplan_engine.drawing.schedules import (
     groups_table,
     points_table,
 )
-from floorplan_engine.drawing.tables import Mark, Table
+from floorplan_engine.drawing.tables import Guess, Mark, Table
 from floorplan_engine.drawing.wiring import wiring_notes
 from floorplan_engine.electrical.colors import group_colors
 from floorplan_engine.electrical.estimate import build_estimate
@@ -89,6 +89,7 @@ class SideRow:
     marker: str | None = None  # icon of an uncoloured first cell: square = off-line device
     group: str | None = None  # QF group of a "Groups" row: its eye in the viewer
     scope: ScopeEntry | None = None  # work scope of an estimate row: it unfolds in the viewer
+    guess: bool = False  # provisional amount (materials total priced by the placeholder)
 
     def as_dict(self) -> dict[str, object]:
         out: dict[str, object] = {"cells": list(self.cells)}
@@ -109,6 +110,8 @@ class SideRow:
             out["keys"] = list(self.keys)
         if self.section:
             out["section"] = True
+        if self.guess:
+            out["guess"] = True
         return out
 
 
@@ -142,8 +145,8 @@ def from_table(
     builder (room_table)."""
 
     def cells(row: Sequence[object]) -> tuple[str, ...]:
-        assert all(isinstance(c, str | Mark) for c in row), "ячейка-поле: соберите отдельно"
-        return tuple(c.text if isinstance(c, Mark) else str(c) for c in row)
+        assert all(isinstance(c, str | Mark | Guess) for c in row), "ячейка-поле: соберите отдельно"
+        return tuple(c.text if isinstance(c, Mark | Guess) else str(c) for c in row)
 
     rows = []
     for k, row in enumerate(table.rows):
@@ -155,6 +158,7 @@ def from_table(
                 keys[k] if k < len(keys) else (),
                 section=sum(1 for c in texts if c) == 1 and not texts[0],
                 color=f"#{mark.color:06x}" if mark is not None else None,
+                guess=any(isinstance(c, Guess) for c in row),
             )
         )
     return SideTable(

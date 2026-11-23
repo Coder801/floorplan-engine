@@ -107,6 +107,7 @@ ESTIMATE_XLSX = "estimate.xlsx"
 XLSX_MONEY = "#,##0.00"
 XLSX_QTY = "#,##0.0##"
 XLSX_EDIT_FILL = "FFF4D6"  # cells edited by hand: price and quantity
+XLSX_GUESS_FILL = "FFE066"  # provisional amount: total of materials priced by the placeholder
 # Conduit fittings (decision 2026-11-11): a joint coupling per this many mm of conduit of a
 # diameter (roll ends and offcuts; the conduit itself is counted in metres, not rolls); an
 # entry at every conduit end at a junction box or the panel, a flush box takes it without one
@@ -125,8 +126,11 @@ Section = Literal["material", "material_rough", "material_finish", "rough", "fin
 MATERIAL_SECTIONS: tuple[Section, ...] = ("material", "material_rough", "material_finish")
 SECTIONS: tuple[Section, ...] = (*MATERIAL_SECTIONS, "rough", "finish")  # order in the estimate
 # Decision 2026-11-12: material prices are not market prices yet (price lists and the price
-# service are a placeholder), so the materials section says so everywhere the estimate is shown
+# service are a placeholder). Decision 2026-11-23: the section heading stays plain, the total of
+# each materials section is marked as provisional instead: "!" after the amount in Markdown and on
+# the sheet, a yellow cell in Excel, the row flag guess in the viewer
 MATERIAL_PRICES_MOCK = True
+PROVISIONAL_MARK = " !"
 WORK_PREFIX = "work."  # work items (services); the rest of LINES are materials
 
 # Estimate items: key → section, unit, name (ru, uk). Keys with a parameter:
@@ -422,20 +426,8 @@ FIXTURES = {
 }
 TEXT: dict[str, dict[str, str]] = {
     "material": {"ru": "Материалы", "uk": "Матеріали"},
-    "material_mock": {
-        "ru": "Материалы — цены пока имитация",
-        "uk": "Матеріали — ціни поки що імітація",
-    },
     "material_rough": {"ru": "Черновые материалы", "uk": "Чорнові матеріали"},
-    "material_rough_mock": {
-        "ru": "Черновые материалы — цены пока имитация",
-        "uk": "Чорнові матеріали — ціни поки що імітація",
-    },
     "material_finish": {"ru": "Чистовые материалы", "uk": "Чистові матеріали"},
-    "material_finish_mock": {
-        "ru": "Чистовые материалы — цены пока имитация",
-        "uk": "Чистові матеріали — ціни поки що імітація",
-    },
     "rough": {"ru": "Черновые работы", "uk": "Чорнові роботи"},
     "finish": {"ru": "Чистовые работы", "uk": "Чистові роботи"},
     "work": {"ru": "Работы", "uk": "Роботи"},
@@ -574,11 +566,15 @@ TEXT: dict[str, dict[str, str]] = {
 }
 
 
-def section_title(section: Section, language: Language, priced: bool = True) -> str:
-    """Section heading in the estimate; material prices are marked as a placeholder while
-    MATERIAL_PRICES_MOCK is on (a bill of quantities without prices gets no mark)."""
-    mock = section in MATERIAL_SECTIONS and priced and MATERIAL_PRICES_MOCK
-    return text(f"{section}_mock" if mock else section, language)
+def section_title(section: Section, language: Language) -> str:
+    """Section heading in the estimate: plain, without a mark (decision 2026-11-23)."""
+    return text(section, language)
+
+
+def provisional(section: Section, priced: bool) -> bool:
+    """The section total is provisional: a materials section of a priced estimate while
+    MATERIAL_PRICES_MOCK is on (a bill of quantities and the grand total get no mark)."""
+    return priced and MATERIAL_PRICES_MOCK and section in MATERIAL_SECTIONS
 
 
 def text(key: str, language: Language, **values: object) -> str:
@@ -1077,7 +1073,7 @@ def write_markdown(
         if not rows:
             continue
         out += [
-            f"## {section_title(section, language, est.has_prices)}",
+            f"## {section_title(section, language)}",
             "",
             t("head", c=est.currency),
             "|---|---|---|---|---:|---:|",
@@ -1087,7 +1083,9 @@ def write_markdown(
             total = format_number(ln.total) if ln.total is not None else "—"
             qty = format_number(ln.qty, 1).removesuffix(",0")
             out.append(f"| {k} | {ln.name} | {ln.unit} | {qty} | {price} | {total} |")
-        out += [f"| | **{t('subtotal')}** | | | | **{format_number(est.subtotal(section))}** |", ""]
+        mark = PROVISIONAL_MARK if provisional(section, est.has_prices) else ""
+        amount = f"**{format_number(est.subtotal(section))}**{mark}"
+        out += [f"| | **{t('subtotal')}** | | | | {amount} |", ""]
     out += [f"**{t('total')}: {format_number(est.total)} {est.currency}**", ""]
     out += tail
     if est.unpriced:
@@ -1130,7 +1128,8 @@ def write_xlsx(
     tail: Callable[[Worksheet, Mapping[str, str]], None] | None = None,
 ) -> Path:
     """Estimate in Excel: sections, row sum as a formula "qty × price", section totals and "Total"
-    as formulas, prices and quantities highlighted (they get edited). An item without a price has
+    as formulas, prices and quantities highlighted (they get edited), the total of a materials
+    section in yellow while it is provisional (provisional). An item without a price has
     an empty price with a note; once a price is entered it counts in the totals. extra adds its
     own sheets after the estimate (the work scope, work_scope.scope_sheet); tail adds rows after
     "Total" (the agreed terms, terms.terms_sheet_tail) and gets the cells of the section
@@ -1161,13 +1160,14 @@ def write_xlsx(
         cell.font = Font(bold=True)
         cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
     edit = PatternFill("solid", start_color=XLSX_EDIT_FILL, end_color=XLSX_EDIT_FILL)
+    guess = PatternFill("solid", start_color=XLSX_GUESS_FILL, end_color=XLSX_GUESS_FILL)
     grey = Font(color="999999", size=8)
     subtotals: dict[str, str] = {}
     for section in SECTIONS:
         rows = [ln for ln in est.lines if ln.section == section]
         if not rows:
             continue
-        ws.append(["", section_title(section, language, est.has_prices)])
+        ws.append(["", section_title(section, language)])
         ws.cell(ws.max_row, 2).font = Font(bold=True)
         first = ws.max_row + 1
         for k, ln in enumerate(rows, 1):
@@ -1189,6 +1189,8 @@ def write_xlsx(
         ws.cell(total_row, 2).font = Font(bold=True)
         ws.cell(total_row, 6).font = Font(bold=True)
         ws.cell(total_row, 6).number_format = XLSX_MONEY
+        if provisional(section, est.has_prices):
+            ws.cell(total_row, 6).fill = guess
         subtotals[section] = f"F{total_row}"
     ws.append([])
     ws.append(

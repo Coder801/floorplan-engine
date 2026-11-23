@@ -10,6 +10,7 @@ import type { WorkState } from "@/shared/types";
 import { behalfText, money, ordered, planNeed, progressOf, splitText, taskNeed, type WorkRun } from "@/shared/work";
 import { Card } from "@/ui/Card";
 import { Heading } from "@/ui/Heading";
+import { Provisional } from "@/ui/Provisional";
 import { Text } from "@/ui/Text";
 import { WorkPlanActions } from "@/widgets/WorkPlanActions";
 import { WorkStatusBadge } from "@/widgets/WorkStatusBadge";
@@ -37,7 +38,7 @@ export function WorkList({ state, run, busy, open, onOpen }: Props) {
         <Heading level={1}>{t("work.title")}</Heading>
         <dl className={css.sums}>
           <dt>{t("work.card.work")}</dt><dd>{m(plan.totals.work)}</dd>
-          <dt>{t("work.card.materials")}</dt><dd>{m(plan.totals.material)} <span className={css.guess}>{t("work.card.materialsMock")}</span></dd>
+          <dt>{t("work.card.materials")}</dt><dd><Provisional label={t("estimate.provisional")}>{m(plan.totals.material)}</Provisional></dd>
           <dt>{t("work.card.total")}</dt><dd>{m(plan.totals.total)}</dd>
           {(plan.state === "approved" || plan.state === "closed") && (
             <>

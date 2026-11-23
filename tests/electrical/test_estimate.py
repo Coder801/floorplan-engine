@@ -10,6 +10,8 @@ from typing import Any
 import pytest
 import yaml
 
+import floorplan_engine.electrical.estimate as estimate_module
+from floorplan_engine.drawing.tables import Guess
 from floorplan_engine.electrical.estimate import (
     CHASE_KEYS,
     HINTS,
@@ -233,9 +235,9 @@ def test_estimate_table_with_and_without_prices() -> None:
     table = estimate_table(priced, "uk", priced=True)
     assert table.title == "Кошторис електрики" and len(table.columns) == 6
     names = [r[1] for r in table.rows]
-    # Material prices are a placeholder for now (decision 2026-11-12): the section says so
-    assert names[0] == "Чорнові матеріали — ціни поки що імітація"
-    assert "Чистові матеріали — ціни поки що імітація" in names
+    # Section headings are plain (decision 2026-11-23): the mark is on the materials totals
+    assert names[0] == "Чорнові матеріали"
+    assert "Чистові матеріали" in names
     assert "Чорнові роботи" in names and "Чистові роботи" in names
     # A section total is a plain "Total": the section name is in the heading right above it
     assert names.count("Разом") == 4
@@ -250,26 +252,61 @@ def test_estimate_table_with_and_without_prices() -> None:
     assert volumes.title == "Відомість обсягів електрики"
     assert len(volumes.columns) == 4 and volumes.total is None  # no prices and no totals
     assert not any(str(r[1]).startswith("Разом") for r in volumes.rows)
-    assert volumes.rows[0][1] == "Чорнові матеріали"  # no prices, nothing to mark
+    assert volumes.rows[0][1] == "Чорнові матеріали"
+    assert not any(isinstance(c, Guess) for r in volumes.rows for c in r)  # nothing to mark
 
 
-def test_section_title_marks_material_prices_as_placeholder(tmp_path: Path) -> None:
-    from floorplan_engine.electrical.estimate import section_title, write_markdown
+def _subtotals(table: Any) -> list[Any]:
+    """Amount cells of the section totals of an estimate sheet table, in section order."""
+    return [r[5] for r in table.rows if r[1] in ("Разом", "Итого")]
 
-    assert section_title("material", "ru") == "Материалы — цены пока имитация"
-    assert section_title("material", "ru", priced=False) == "Материалы"
-    assert section_title("material_finish", "ru") == "Чистовые материалы — цены пока имитация"
-    assert section_title("material_rough", "uk", priced=False) == "Чорнові матеріали"
+
+def test_estimate_table_marks_material_totals_as_provisional(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """While material prices are a placeholder, each materials total is a Guess cell: " !" on
+    the sheet; work totals and the grand total stay plain (decision 2026-11-23)."""
+    from floorplan_engine.drawing.schedules import estimate_table
+
+    wiring, elec = _wiring()
+    est = build_estimate(
+        wiring, elec, PriceList.model_validate({"items": {"socket_box": 20}}), "uk"
+    )
+    cells = _subtotals(estimate_table(est, "uk", priced=True))
+    assert [isinstance(c, Guess) for c in cells] == [True, True, False, False]
+    assert cells[0].mark == " !" and cells[0].text == format_number(est.subtotal("material_rough"))
+    table = estimate_table(est, "uk", priced=True)
+    assert table.total is not None and isinstance(table.total[5], str)
+    monkeypatch.setattr(estimate_module, "MATERIAL_PRICES_MOCK", False)
+    assert not any(isinstance(c, Guess) for c in _subtotals(estimate_table(est, "uk", True)))
+
+
+def test_section_titles_are_plain_and_markdown_marks_material_totals(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from floorplan_engine.electrical.estimate import provisional, section_title, write_markdown
+
+    assert section_title("material", "ru") == "Материалы"
+    assert section_title("material_finish", "ru") == "Чистовые материалы"
+    assert section_title("material_rough", "uk") == "Чорнові матеріали"
     assert section_title("rough", "ru") == "Черновые работы"
+    assert provisional("material", True) and provisional("material_finish", True)
+    assert not provisional("material", False) and not provisional("rough", True)
     wiring, elec = _wiring()
     priced = build_estimate(
         wiring, elec, PriceList.model_validate({"items": {"socket_box": 20}}), "ru"
     )
     md = write_markdown(priced, tmp_path / "e.md", "Смета", [], "ru").read_text(encoding="utf-8")
-    assert "## Черновые материалы — цены пока имитация" in md
+    assert "## Черновые материалы\n" in md and "имитация" not in md
+    totals = [ln for ln in md.splitlines() if ln.startswith("| | **Итого**")]
+    assert [ln.endswith("** ! |") for ln in totals] == [True, True, False, False]
+    assert not any(ln.startswith("**Всего") and "!" in ln for ln in md.splitlines())
     volumes = build_estimate(wiring, elec, PriceList(), "ru")
     md = write_markdown(volumes, tmp_path / "v.md", "Смета", [], "ru").read_text(encoding="utf-8")
-    assert "## Черновые материалы\n" in md
+    assert "## Черновые материалы\n" in md and " ! |" not in md
+    monkeypatch.setattr(estimate_module, "MATERIAL_PRICES_MOCK", False)
+    md = write_markdown(priced, tmp_path / "o.md", "Смета", [], "ru").read_text(encoding="utf-8")
+    assert " ! |" not in md
 
 
 def test_estimate_on_wiring_sheet(tmp_path: Path) -> None:
@@ -291,6 +328,8 @@ def test_estimate_on_wiring_sheet(tmp_path: Path) -> None:
     }
     wiring_tab = next(name for name in texts if name.endswith("Проводка"))
     assert "Смета электрики" in texts[wiring_tab]  # the plan language defaults to ru
+    # Materials totals are provisional on the sheet: " !" after the amount (decision 2026-11-23)
+    assert any(t.endswith(" !") for t in texts[wiring_tab])
     assert not any("Смета электрики" in t for name, t in texts.items() if name != wiring_tab)
 
 
@@ -346,6 +385,32 @@ def test_xlsx_formulas_give_estimate_total(tmp_path: Path) -> None:
     path = write_xlsx(est, tmp_path / "e.xlsx", "Кошторис", ["примітка"], "uk")
     assert _eval_xlsx(path) == pytest.approx(est.total)
     assert est.unpriced > 0  # items without a price are in the workbook but not in the total
+
+
+def test_xlsx_material_totals_are_yellow(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A provisional materials total keeps its SUM formula and gets the yellow fill; work totals
+    and "Total" do not (decision 2026-11-23)."""
+    from openpyxl import load_workbook
+
+    from floorplan_engine.electrical.estimate import XLSX_GUESS_FILL, write_xlsx
+
+    def fills(est: Estimate, name: str) -> list[bool]:
+        ws = load_workbook(write_xlsx(est, tmp_path / name, "Кошторис", [], "uk")).active
+        assert ws is not None
+        rows = [
+            r for r in range(1, ws.max_row + 1) if ws[f"B{r}"].value in ("Разом", "Усього, грн")
+        ]
+        assert all(str(ws[f"F{r}"].value).startswith("=") for r in rows)  # still formulas
+        return [str(ws[f"F{r}"].fill.start_color.rgb).endswith(XLSX_GUESS_FILL) for r in rows]
+
+    wiring, elec = _wiring()
+    priced = build_estimate(
+        wiring, elec, PriceList.model_validate({"items": {"work.cable": 30}}), "uk"
+    )
+    assert fills(priced, "p.xlsx") == [True, True, False, False, False]
+    assert not any(fills(build_estimate(wiring, elec, PriceList(), "uk"), "v.xlsx"))
+    monkeypatch.setattr(estimate_module, "MATERIAL_PRICES_MOCK", False)
+    assert not any(fills(priced, "o.xlsx"))
 
 
 def test_studio_prices_used_when_project_has_none(tmp_path: Path) -> None:
