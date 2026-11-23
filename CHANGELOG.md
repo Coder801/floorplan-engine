@@ -1,3 +1,11 @@
+## v0.17.0 (2026-11-23)
+
+### Feat
+
+- **admin**: copy issued access codes in the admin; drop env codes
+- **electrical**: mark mock material totals as provisional
+- **deploy**: ship backs up, rebuilds and updates the local copy
+
 ## v0.16.0 (2026-11-23)
 
 ### Feat
