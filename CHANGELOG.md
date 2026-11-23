@@ -1,3 +1,17 @@
+## v0.16.0 (2026-11-23)
+
+### Feat
+
+- **electrical**: weigh 12 V LED lines in routing and warn on long strips
+- **viewer**: hide sections of services switched off for the project
+- **admin**: add service checkboxes to the project card
+- **service**: add per-project services switched in the admin
+- **electrical**: cost ceiling passes and reuse routed holes
+
+### Refactor
+
+- **electrical**: split wiring and break up long elevation functions
+
 ## v0.15.1 (2026-11-22)
 
 ### Refactor
