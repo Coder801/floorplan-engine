@@ -227,14 +227,25 @@ items:
 
 def test_price_page_and_edit(root: Path) -> None:
     (root / "prices.yaml").write_text(
-        "# прайс\ncurrency: грн\nitems:\n  work.chase: 200  # узкая\n", "utf-8"
+        "# прайс\ncurrency: грн\nitems:\n  work.chase: 200  # узкая\n"
+        '  cable.3x1.5: { price: 45, name: "Кабель ВВГнг 3×1,5" }\n',
+        "utf-8",
     )
     (root / "market.yaml").write_text(MARKET, "utf-8")
     client = TestClient(create_viewer(root))
     page = client.get("/api/prices").json()
     assert page["editable"] is True and page["issues"] == []
     rows = {r["key"]: r for r in page["rows"]}
-    assert all(k.startswith("work.") for k in rows)
+    # Works first, then materials (decision 2026-11-25); a key with a parameter from the file is
+    # a row of its own after its base item, under its own name
+    kinds = [r["kind"] for r in page["rows"]]
+    assert kinds == sorted(kinds, key=lambda k: k != "work") and "material" in kinds
+    assert all((r["kind"] == "work") == k.startswith("work.") for k, r in rows.items())
+    keys = list(rows)
+    assert keys.index("cable.3x1.5") == keys.index("cable") + 1
+    assert rows["cable.3x1.5"]["price"] == 45
+    assert rows["cable.3x1.5"]["name"]["uk"] == "Кабель ВВГнг 3×1,5"
+    assert rows["socket"]["kind"] == "material" and rows["socket"]["price"] is None
     chase = rows["work.chase"]
     assert chase["price"] == 200 and chase["service"] is None
     assert chase["market"]["median"] == 100 and chase["market"]["n"] == 2
@@ -251,8 +262,13 @@ def test_price_page_and_edit(root: Path) -> None:
     assert "# прайс" in text and "work.chase: 150  # узкая" in text and "work.cable: 25" in text
     assert {r["key"]: r["price"] for r in saved.json()["rows"]}["work.cable"] == 25
 
-    # Only works; a price is a number not below 0; the file is unchanged on errors
-    assert client.post("/api/prices", json={"items": {"socket": 10}}).status_code == 422
+    # Materials too, a key with a parameter too; an unknown key or a price below 0 is refused
+    # and the file is unchanged on errors
+    assert client.post("/api/prices", json={"items": {"socket": 60}}).status_code == 200
+    assert client.post("/api/prices", json={"items": {"cable.3x2.5": 70}}).status_code == 200
+    text = (root / "prices.yaml").read_text("utf-8")
+    assert "socket: 60" in text and "cable.3x2.5: 70" in text
+    assert client.post("/api/prices", json={"items": {"no.such": 10}}).status_code == 422
     assert client.post("/api/prices", json={"items": {"work.chase": -1}}).status_code == 422
     assert (root / "prices.yaml").read_text("utf-8") == text
 

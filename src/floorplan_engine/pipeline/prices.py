@@ -1,4 +1,10 @@
-"""Price lists: the project's or the studio's, the market sample, the studio price page."""
+"""Price lists: the studio's with the project's on top, the market sample, the studio price page.
+
+Layers by key (decision 2026-11-25): the studio list (prices.yaml next to the projects, edited on
+the studio price page) is the base, the project list (prices.yaml in the project folder) changes
+only the keys it names, the price service fills the rest (pricing.Prices). Before, a project list
+replaced the studio one as a whole, so a studio edit never reached a project that had one. A
+project list should hold only the project's exceptions."""
 
 from __future__ import annotations
 
@@ -16,6 +22,7 @@ from floorplan_engine.electrical.estimate import (
     PriceList,
     PriceSource,
     edit_price_items,
+    split_key,
     unknown_keys,
 )
 from floorplan_engine.electrical.market import (
@@ -51,24 +58,56 @@ def sheet_inputs(
     elec = report.electrical if elec_status is not None and elec_status.status.builds else None
     if elec is None and plumbing_of(assessment) is None:
         return None, None, []
-    price_path = find_prices(project)
-    own, issues = load_prices(price_path) if price_path is not None else (None, [])
+    own, issues = load_price_layers(project)
     return elec, Prices(own, service), issues
 
 
+def price_files(project: Path) -> list[Path]:
+    """The price lists of the project that exist, bottom layer first: the studio list
+    (prices.yaml in the folder above the projects, next to studio.yaml), then the project's own
+    (prices.yaml in its folder)."""
+    return [p for p in (project.parent / PRICES_FILE, project / PRICES_FILE) if p.is_file()]
+
+
 def find_prices(project: Path) -> Path | None:
-    """Estimate price list: the project's own (prices.yaml in its folder), otherwise the shared
-    studio list (prices.yaml in the folder above the projects, next to studio.yaml); None if
-    neither exists."""
-    for path in (project / PRICES_FILE, project.parent / PRICES_FILE):
-        if path.is_file():
-            return path
-    return None
+    """The price list named in the estimate notes: the project's own if it has one (it is the
+    top layer), otherwise the studio list; None if neither exists."""
+    files = price_files(project)
+    return files[-1] if files else None
+
+
+def load_price_layers(project: Path) -> tuple[PriceList | None, list[Issue]]:
+    """The estimate price list of the project: the studio list with the project's on top, key
+    by key (merge_prices). An error in either list stops it: None and the errors, as one list
+    did before; no list — None without errors."""
+    merged: PriceList | None = None
+    for path in price_files(project):
+        layer, issues = load_prices(path)
+        if layer is None:
+            return None, issues
+        merged = layer if merged is None else merge_prices(merged, layer)
+    return merged, []
+
+
+def merge_prices(base: PriceList, top: PriceList) -> PriceList:
+    """top over base: its items and terms win key by key, the rest of base stays; currency, date
+    and note — top's if it sets them."""
+    head: dict[str, Any] = {
+        f: getattr(top, f) for f in ("currency", "date", "note") if f in top.model_fields_set
+    }
+    return base.model_copy(
+        update={
+            **head,
+            "items": {**base.items, **top.items},
+            "terms": {**base.terms, **top.terms},
+        }
+    )
 
 
 def load_prices(path: Path) -> tuple[PriceList | None, list[Issue]]:
-    """Project price list; errors come with a field path, an unknown item key and a decision on
-    terms the catalogue does not allow (terms.term_issues) are also errors."""
+    """One price list file (the studio's or a project's); errors come with a field path, an
+    unknown item key and a decision on terms the catalogue does not allow (terms.term_issues) are
+    also errors."""
     data, issues = load_yaml(path)
     if data is None:
         return None, issues
@@ -84,7 +123,7 @@ def load_prices(path: Path) -> tuple[PriceList | None, list[Issue]]:
 
 
 NEW_PRICES = (
-    "# Общий прайс студии для сметы: берётся, если у проекта нет своего prices.yaml.\n"
+    "# Общий прайс студии для сметы; prices.yaml проекта меняет только свои ключи.\n"
     "# Цены — за единицу позиции; ключи — LINES в electrical/estimate.py.\n"
     "currency: грн\n"
     "items:\n"
@@ -102,27 +141,38 @@ def load_market(path: Path) -> tuple[MarketSample | None, list[Issue]]:
 
 
 def price_page(root: Path, market_root: Path | None = None) -> dict[str, Any]:
-    """Studio price page (viewer, GET /api/prices): electrical works in estimate order — the
-    studio price from root/prices.yaml next to the market spread from market.yaml (in
-    market_root, by default in root: the sample is shared by all studios), the period of the
-    market prices and its sources. Errors of either file — in issues."""
+    """Studio price page (viewer, GET /api/prices): the electrical estimate items in estimate
+    order — works (kind "work") and materials (kind "material", decision 2026-11-25: the page shows
+    every item the price list can hold) — the studio price from root/prices.yaml next to the
+    market spread from market.yaml (in market_root, by default in root: the sample is shared by
+    all studios), the period of the market prices and its sources. A key with a parameter the
+    file names (cable.3x1.5, work.chase.brick) is a row of its own after its base item. Errors of
+    either file — in issues."""
     prices_path = root / PRICES_FILE
     own, issues = load_prices(prices_path) if prices_path.is_file() else (None, [])
     market, market_issues = load_market((market_root or root) / MARKET_FILE)
     issues = [*issues, *market_issues]
     rows = []
-    for key, (section, unit, ru, uk) in LINES.items():
-        if not key.startswith(WORK_PREFIX):
-            continue
+    for key in _page_keys(own):
+        base, param = split_key(key)
+        section, unit, ru, uk = LINES[base]
         price = own.price(key) if own is not None else None
         item = market.items.get(key) if market is not None else None
         spread = item_spread(market, key) if market is not None else None
+        name = {"ru": ru, "uk": uk}
+        if param:
+            name = (
+                {"ru": price.name, "uk": price.name}
+                if price is not None and price.name
+                else {lang: f"{text} {param}" for lang, text in name.items()}
+            )
         rows.append(
             {
                 "key": key,
+                "kind": "work" if base.startswith(WORK_PREFIX) else "material",
                 "section": section,
                 "unit": unit,
-                "name": {"ru": ru, "uk": uk},
+                "name": name,
                 "hint": HINTS.get(key),
                 "price": price.price if price is not None else None,
                 # no studio price — the estimate takes the price service's (a mock for now)
@@ -162,9 +212,25 @@ def price_page(root: Path, market_root: Path | None = None) -> dict[str, Any]:
     }
 
 
+def _page_keys(own: PriceList | None) -> list[str]:
+    """Rows of the price page: every electrical item (LINES) in estimate order, works first; after
+    each, the keys with a parameter the price list names (cable.3x1.5 after cable). Retired keys
+    are not shown."""
+    named = [k for k in (own.items if own is not None else {}) if split_key(k)[1]]
+    out: list[str] = []
+    for work in (True, False):
+        for key in LINES:
+            if key.startswith(WORK_PREFIX) != work:
+                continue
+            out.append(key)
+            out += [k for k in named if split_key(k)[0] == key]
+    return out
+
+
 def save_prices(root: Path, changes: dict[str, Any]) -> list[Issue]:
     """Studio price page edits → root/prices.yaml: {"items": {key: price | None}, "date"?};
-    only works (work.*), None removes the price. Comments and other keys of the file stay
+    any electrical estimate item, works and materials, a key with a parameter too (its base in
+    LINES); None removes the price. Comments and other keys of the file stay
     (estimate.edit_price_items). Errors come with a field path; the file then is unchanged."""
     path = root / PRICES_FILE
     items = changes.get("items", {})
@@ -172,8 +238,8 @@ def save_prices(root: Path, changes: dict[str, Any]) -> list[Issue]:
         return [Issue(PRICES_FILE, "items", "ожидается словарь «ключ: цена»")]
     bad = []
     for key, value in items.items():
-        if not key.startswith(WORK_PREFIX) or key not in LINES:
-            bad.append(Issue(PRICES_FILE, f"items.{key}", "нет такой работы в смете"))
+        if not isinstance(key, str) or split_key(key)[0] not in LINES:
+            bad.append(Issue(PRICES_FILE, f"items.{key}", "нет такой позиции в смете"))
         elif value is not None and (
             isinstance(value, bool) or not isinstance(value, int | float) or value < 0
         ):

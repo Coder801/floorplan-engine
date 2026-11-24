@@ -57,7 +57,7 @@ from floorplan_engine.model.plumbing import Plumbing
 from floorplan_engine.model.schema import Electrical
 from floorplan_engine.pipeline.assessment import Assessment, assess_project, price_service
 from floorplan_engine.pipeline.files import OUT_DIR, PLUMBING_ESTIMATE_FILES
-from floorplan_engine.pipeline.prices import find_prices, load_prices
+from floorplan_engine.pipeline.prices import find_prices, load_price_layers, load_prices
 from floorplan_engine.plumbing.estimate import RESERVE as PLUMBING_RESERVE
 from floorplan_engine.plumbing.estimate import build_estimate as build_plumbing_estimate
 from floorplan_engine.plumbing.estimate import text as plumbing_estimate_text
@@ -116,9 +116,9 @@ def write_plumbing_estimate(
 def estimate_project(
     project: Path, prices_path: Path | None = None, prices_from: PriceSource | None = None
 ) -> EstimateResult:
-    """Electrical estimate: quantities from the model, prices from the project prices.yaml,
-    otherwise from the shared studio list (find_prices) or from prices_path, on top of the price
-    service (prices_from; None means the mock). Writes out/estimate.md, estimate.csv and
+    """Electrical estimate: quantities from the model, prices from the studio list with the
+    project's prices.yaml on top (load_price_layers) or from prices_path alone, on top of the
+    price service (prices_from; None means the mock). Writes out/estimate.md, estimate.csv and
     estimate.xlsx."""
     assessment = assess_project(project)
     result = EstimateResult(assessment)
@@ -132,13 +132,17 @@ def estimate_project(
     if wiring is None:
         result.issues.append(Issue("electrical.yaml", "board", "нет щита или точек с группами"))
         return result
-    path = prices_path or find_prices(project)
     own: PriceList | None = None
-    if path is not None and path.exists():
-        own, issues = load_prices(path)
-        if own is None:
-            result.issues += issues
-            return result
+    if prices_path is not None:
+        path: Path | None = prices_path if prices_path.exists() else None
+        own, issues = load_prices(prices_path) if path is not None else (None, [])
+    else:
+        path = find_prices(project)
+        own, issues = load_price_layers(project)
+    if issues:
+        result.issues += issues
+        return result
+    if own is not None:
         result.prices = path
     prices = Prices(own, price_service(prices_from))
     panel = build_panel(report.plan, report.electrical)

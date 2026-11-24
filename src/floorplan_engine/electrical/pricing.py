@@ -190,8 +190,9 @@ class MockPriceService:
 
 @dataclass(frozen=True)
 class Prices:
-    """Estimate prices: the studio or project price list (own, may be missing) on top of the price
-    service (service). An own key, even without a rating (`diff`), beats an exact service price
+    """Estimate prices: the price list (own: the studio list with the project's on top, key by
+    key — pipeline.prices.load_price_layers; may be missing) on top of the price service
+    (service). An own key, even without a rating (`diff`), beats an exact service price
     (`diff.C16 30 мА`)."""
 
     own: PriceList | None = None
