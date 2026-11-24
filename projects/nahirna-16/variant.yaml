@@ -1,4 +1,14 @@
-# Вариант проводки, выбранный в просмотре (docs/wiring-variants.md).
+# Вариант проводки и настройки монтажа из просмотра (docs/wiring-variants.md).
 mode: standard
 route: ceiling
 distribution: boxes
+path: right
+conduit: none
+light_wiring: chain
+led_supply: room
+plaster: before
+rough_light: false
+panel_labels: true
+insulation_test: true
+protection_test: false
+loop_conduit: separate
