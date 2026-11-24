@@ -684,6 +684,8 @@ export const ru = {
       edit: "Изменить", save: "Сохранить",
       blockedPhoto: "Сначала добавьте фото: без него задачу не сдать.",
       blockedWaiting: "Ждёт: {{list}}. Начать раньше может только студия.",
+      blockedChecks: "Сначала отметьте все пункты критерия приёмки: не отмечено {{n}} из {{m}}.",
+      tabs: "Разделы карточки", tab: { work: "Работа", lines: "Позиции", feed: "Лента", settings: "Настройки" }, attention: "требует внимания",
       returnComment: "Что исправить", returnSend: "Вернуть с комментарием",
       photos: "Фото и протоколы", noPhotos: "Фото пока нет", upload: "Загрузить фото или PDF", shoot: "Сфотографировать",
       pick: "Выбрать файлы", uploading: "Загружаем {{name}}…", deletePhoto: "Удалить фото", deletePhotoAsk: "Удалить {{name}}?",

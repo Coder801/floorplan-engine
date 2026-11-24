@@ -1,13 +1,22 @@
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { stubApi } from "@/shared/testApi";
 import type { WorkRun } from "@/shared/work";
-import { draftState, workState } from "@/widgets/WorkStage/mock";
+import { draftState, INSTALLER, workState } from "@/widgets/WorkStage/mock";
 import { WorkBoard } from "./index";
 
 // A run that sends the request to the stubbed API, like useWork does
 const live = (): WorkRun => vi.fn(async (call) => { await call("p1"); return true; });
+
+// jsdom has no DataTransfer: a stub with what the tile touches
+const dataTransfer = () => ({ setData: vi.fn(), effectAllowed: "", dropEffect: "" });
+const column = (name: string) => screen.getByRole("region", { name });
+const tile = (col: string, name: RegExp) => within(column(col)).getByRole("button", { name });
+const drag = (from: HTMLElement, to: HTMLElement) => {
+  fireEvent.dragStart(from, { dataTransfer: dataTransfer() });
+  fireEvent.dragOver(to, { dataTransfer: dataTransfer() });
+};
 
 describe("WorkBoard", () => {
   it("shows the approved plan with progress and tasks by status; a tile opens its card", async () => {
@@ -61,6 +70,66 @@ describe("WorkBoard", () => {
     expect(screen.getByText(/Черновик из сметы/)).toBeInTheDocument();
     expect(screen.getAllByText(/^работа .+ · материалы /).length).toBeGreaterThan(1);
     expect(screen.getByRole("button", { name: "Отправить заказчику" })).toBeInTheDocument();
+  });
+
+  describe("drag and drop between the columns", () => {
+    it("a plain transition is sent at once; the tile waits for the answer", async () => {
+      const sent = stubApi({ "POST /api/projects/p1/work/tasks/water/status": workState() });
+      render(<WorkBoard state={workState()} run={live()} busy={false} open={null} onOpen={vi.fn()} />);
+      const water = tile("К работе", /Водопровод/);
+      expect(water).toHaveAttribute("draggable", "true");
+      drag(water, column("В работе"));
+      expect(column("В работе")).toHaveAttribute("data-drop", "ok");
+      expect(column("В работе")).toHaveAttribute("data-over");
+      expect(column("На приёмке")).not.toHaveAttribute("data-drop");
+      expect(water).toHaveClass(/dragging/);
+      fireEvent.drop(column("В работе"));
+      expect(water).toHaveAttribute("aria-busy", "true");
+      expect(sent).toEqual([{ method: "POST", path: "/api/projects/p1/work/tasks/water/status", body: { to: "in_progress" } }]);
+      await vi.waitFor(() => expect(water).not.toHaveAttribute("aria-busy"));
+    });
+
+    it("a transition with a comment or for the client opens the card with the intent", () => {
+      const sent = stubApi({});
+      const onOpen = vi.fn();
+      render(<WorkBoard state={workState()} run={live()} busy={false} open={null} onOpen={onOpen} />);
+      drag(tile("На приёмке", /Распаечные коробки/), column("Возвращено"));
+      expect(column("Возвращено")).toHaveAttribute("data-drop", "card");
+      expect(column("Принято")).toHaveAttribute("data-drop", "card");   // the studio accepts for the client
+      fireEvent.drop(column("Возвращено"));
+      expect(onOpen).toHaveBeenCalledWith("boxes", "returned");
+      expect(sent).toHaveLength(0);
+    });
+
+    it("a blocked column is a warning target: the drop opens the card, nothing is sent", () => {
+      const sent = stubApi({});
+      const onOpen = vi.fn();
+      render(<WorkBoard state={workState({ can: INSTALLER, assignees: [] })} run={live()} busy={false} open={null} onOpen={onOpen} />);
+      const insulation = tile("К работе", /Замер изоляции/);   // waits for other tasks: the installer cannot start it
+      drag(insulation, column("В работе"));
+      expect(column("В работе")).toHaveAttribute("data-drop", "blocked");
+      fireEvent.drop(column("В работе"));
+      expect(onOpen).toHaveBeenCalledWith("insulation", "in_progress");
+      expect(sent).toHaveLength(0);
+    });
+
+    it("a column no button leads to takes nothing; a tile without a transition is not draggable", () => {
+      const sent = stubApi({});
+      const onOpen = vi.fn();
+      render(<WorkBoard state={workState({ can: INSTALLER, assignees: [] })} run={live()} busy={false} open={null} onOpen={onOpen} />);
+      drag(tile("К работе", /Водопровод/), column("Принято"));
+      expect(column("Принято")).not.toHaveAttribute("data-drop");
+      fireEvent.drop(column("Принято"));
+      expect(onOpen).not.toHaveBeenCalled();
+      expect(sent).toHaveLength(0);
+      expect(tile("На приёмке", /Распаечные коробки/)).toHaveAttribute("draggable", "false");   // the installer does not accept
+      expect(tile("Принято", /Штробы/)).toHaveAttribute("draggable", "false");
+    });
+
+    it("a plan not approved yet has one column: nothing drags", () => {
+      render(<WorkBoard state={draftState("draft")} run={live()} busy={false} open={null} onOpen={vi.fn()} />);
+      for (const b of within(column("Предложено")).getAllByRole("button")) expect(b).toHaveAttribute("draggable", "false");
+    });
   });
 
   it("warns when the model changed after the plan", () => {

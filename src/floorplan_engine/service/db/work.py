@@ -443,9 +443,11 @@ def change_status(
     body: Mapping[str, Any] | None = None,
 ) -> WorkTask:
     """A status change by the rules of docs/work-tasks.md: only in an approved plan; a task with
-    photo: required is handed in only with a photo; returned only with a comment; a task waiting
-    for others is started only by the studio; the studio agrees, accepts or returns only for the
-    client, with on_behalf in body. Goes to the task feed and the journal."""
+    photo: required is handed in only with a photo; returned only with a comment; accepted only
+    with every item of the acceptance criterion ticked (decision 2026-11-24; a task without a
+    criterion — as is); a task waiting for others is started only by the studio; the studio
+    agrees, accepts or returns only for the client, with on_behalf in body. Goes to the task feed
+    and the journal."""
     if to not in STATUSES:
         raise WorkError(f"to: одно из {', '.join(STATUSES)}", 422)
     if comment is not None and not isinstance(comment, str):
@@ -470,6 +472,14 @@ def change_status(
         raise WorkError(f"сдать задачу «{task.title}» можно только с фото")
     if to == "returned" and not text:
         raise WorkError("comment: вернуть задачу можно только с комментарием", 422)
+    if to == "accepted" and task.result:
+        ticked = {int(k) for k in task.checked} & set(range(len(task.result)))
+        left = len(task.result) - len(ticked)
+        if left:
+            raise WorkError(
+                f"принять задачу «{task.title}» можно только с отмеченным критерием приёмки: "
+                f"не отмечено {left} из {len(task.result)}"
+            )
     confirm = on_behalf(actor, right, body)
     before_status, task.status = task.status, to
     feed(task, actor, "return" if to == "returned" else "status", text, to, confirm)

@@ -446,7 +446,10 @@
   новый формат — новым адаптером.
   `objects.py` — файлы по ключу из базы (`ObjectStore`; пока папка на volume —
   `LocalObjectStore`, R2/S3 потом; ключи — `source_key`, `build_key`, фото задач —
-  `work_photo_key`, фото отзывов — `feedback_photo_key`; всё проекта — под `project_prefix`); `project_store.py` —
+  `work_photo_key`, фото отзывов — `feedback_photo_key`; всё проекта — под `project_prefix`);
+  `photos.py` — фото перед хранилищем (`shrink`): длинная сторона до 3000 px, JPEG и WebP с
+  качеством 85, формат прежний, поворот по EXIF — в пиксели, GPS убран; мелкое, не картинка
+  (HEIC, PDF) или не меньше после сжатия — оригиналом; `project_store.py` —
   проект из базы: последняя версия модели (`intake.yaml` и `answers.yaml` — из таблиц вопросов),
   прайс и профиль студии — во временную папку (`workdir`), сборка ядром и `out/` — в хранилище (`build`: строки `build`, `build_file`; одна
   сборка проекта за раз — блокировка Postgres; удаление проекта с файлами — `delete_project`); `sync.py` — папка ↔ база (`push`, `pull`,

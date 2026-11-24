@@ -270,7 +270,7 @@ roof; допустимы: electrical, plumbing, demolition», проект не 
 | POST | `/work/tasks/{id}/status` | по переходу | `{to, comment?, on_behalf?, note?}` | переходы ниже; только в утверждённом плане; `on_behalf` — ниже |
 | PATCH | `/work/tasks/{id}/lines/{line}` | work_do — `fact_qty`, work_manage — `price` | `{fact_qty?, price?}` | `null` — как в плане / без цены; факт — пока задача не принята, цена — пока сумма не согласована |
 | POST | `/work/tasks/{id}/lines` | work_manage | `{title, kind: work\|material, unit?, qty, price?, key?}` | своя строка, пока сумма не согласована |
-| POST | `/work/tasks/{id}/photos` | work_do или work_accept | multipart: `file`, `caption?` | JPEG, PNG, WebP, HEIC/HEIF, PDF (протокол), до 15 МБ; только в утверждённом плане |
+| POST | `/work/tasks/{id}/photos` | work_do или work_accept | multipart: `file`, `caption?` | JPEG, PNG, WebP, HEIC/HEIF, PDF (протокол), до 15 МБ; только в утверждённом плане. JPEG, PNG и WebP сохраняются сжатыми (`service/photos.py`): длинная сторона до 3000 px, качество 85, GPS убран; `size` — после сжатия |
 | GET | `/work/photos/{id}` | view | — | файл с его `content-type` |
 | DELETE | `/work/photos/{id}` | автор (до приёмки задачи) или work_manage | — | фото с кода доступа удаляет только студия: у кода нет учётки |
 | POST | `/work/tasks/{id}/comments` | work_do или work_accept | `{text}` | комментарий в ленту задачи |
@@ -282,8 +282,11 @@ roof; допустимы: electrical, plumbing, demolition», проект не 
 Переходы статуса (`to`) и право: `proposed → todo` — work_accept (доп. работа согласована);
 `todo → in_progress` — work_do, но если задача ждёт непринятые (`waiting`), — только
 work_manage; `in_progress → review`, `returned → review` — work_do, при `photo: required` нужно
-хотя бы одно фото; `review → accepted` — work_accept; `review → returned` — work_accept, только с
-`comment`; `returned → in_progress` — work_do. Каждый переход — запись в ленте задачи
+хотя бы одно фото; `review → accepted` — work_accept, только когда отмечены все пункты критерия
+приёмки (`checked` покрывает весь `result`; без критерия — как есть; иначе `409 принять задачу
+«…» можно только с отмеченным критерием приёмки: не отмечено N из M`, решение 2026-11-24, и для
+студии за заказчика тоже); `review → returned` — work_accept, только с `comment`;
+`returned → in_progress` — work_do. Каждый переход — запись в ленте задачи
 (`comments`, `kind: status` или `return`) и в журнале (`audit_event`: `work_status`; ещё
 `work_plan_<action>`, `work_plan_create`, `work_task_add`, `work_task_delete`,
 `work_task_merge`, `work_lines_move`, `work_check`, `work_photo`, `work_photo_delete`,
@@ -414,7 +417,7 @@ multipart:
 | `text` | 1…4000 знаков, пробелы по краям убираются |
 | `context` | необязательно: JSON-объект строкой — `sheet`, `path`, `version`, `viewport: {width, height}`, `lang`…; ключи любые, но не больше 20, ключ до 40 знаков, строки до 500, вложенность — один уровень, не скаляры отбрасываются; `user_agent` — из заголовка запроса, если страница его не прислала |
 | `project` | необязательно: ключ проекта (id или имя, как в адресах просмотра) |
-| `photos` | необязательно, повторяется: до 3 файлов JPEG, PNG, WebP, до 15 МБ каждый |
+| `photos` | необязательно, повторяется: до 3 файлов JPEG, PNG, WebP, до 15 МБ каждый; сохраняются сжатыми, как фото задачи |
 
 Ответ — `{"id": "…"}`. Кто может: вошедший пользователь или вход по коду доступа; без входа —
 `401`, отладочный гость — `403`. Проект, которого автор не видит, — `404` (как у остальных

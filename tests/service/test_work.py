@@ -77,6 +77,7 @@ def test_plan_life_and_close(world: World) -> None:
         world.status(task, "in_progress", world.owner)
         world.photo(task, world.installer)
         world.status(task, "review", world.installer)
+        world.tick(task, world.installer)
         world.status(task, "accepted", world.client)
     with fails(409, "не оплачены"):
         work.plan_action(world.db, world.project, plan, "close", world.owner)
@@ -131,6 +132,7 @@ def test_status_rules(world: World) -> None:
         world.status(cable, "returned", world.client)
     world.status(cable, "returned", world.client, "кабель не закреплён у окна")
     world.status(cable, "review", world.installer)
+    world.tick(cable, world.installer)
     world.status(cable, "accepted", world.code)
     world.status(chases, "in_progress", world.installer)  # optional photo: hand in without
     world.status(chases, "review", world.installer)
@@ -148,6 +150,35 @@ def test_status_rules(world: World) -> None:
         select(AuditEvent).where(AuditEvent.action == "work_plan_approve")
     ).one()
     assert coded.user_id == world.users["c"].id
+
+
+def test_acceptance_needs_the_whole_checklist(world: World) -> None:
+    """Decision 2026-11-24: review → accepted only with every item of the criterion ticked, for
+    the client, the code and the studio for the client alike; a task without a criterion — as is."""
+    plan, chases, cable = world.approved()
+    chases.result = ["штроба выбрана", "мусор убран", "глубина 25 мм"]
+    world.status(chases, "in_progress", world.installer)
+    world.status(chases, "review", world.installer)
+    refused = "принять задачу «Штробы» можно только с отмеченным критерием приёмки: не отмечено "
+    with fails(409, refused + "3 из 3"):
+        world.status(chases, "accepted", world.client)
+    work.set_check(world.db, world.project, plan, chases, {"index": 1, "checked": True}, world.code)
+    with fails(409, refused + "2 из 3"):
+        world.status(chases, "accepted", world.code)
+    with fails(409, refused + "2 из 3"):  # the studio for the client — the same rule
+        world.status(chases, "accepted", world.owner, None, {"on_behalf": "phone"})
+    assert chases.status == "review"
+    world.tick(chases, world.installer)
+    assert chases.checked == [0, 1, 2]
+    world.status(chases, "accepted", world.client)
+    assert chases.status == "accepted"
+    # No criterion: accepted as before
+    cable.result = []
+    world.status(cable, "in_progress", world.owner)
+    world.photo(cable, world.installer)
+    world.status(cable, "review", world.installer)
+    world.status(cable, "accepted", world.client)
+    assert cable.status == "accepted"
 
 
 def test_draft_plan_has_no_work(world: World) -> None:
@@ -236,6 +267,7 @@ def test_studio_acts_for_the_client_only_with_a_channel(world: World) -> None:
     with fails(422, "это не действие заказчика"):
         world.status(chases, "review", world.installer, body={"on_behalf": "phone"})
     world.status(chases, "review", world.installer)
+    world.tick(chases, world.installer)
     with fails(422, "on_behalf"):
         world.status(chases, "accepted", world.owner)
     with fails(422, "on_behalf"):  # the reason is checked first
@@ -456,6 +488,11 @@ def test_api_by_role(api: tuple[Auth, LocalObjectStore, dict[str, Any]], tmp_pat
     task = next(t for t in returned.json()["tasks"] if t["id"] == cable["id"])
     assert task["status"] == "returned" and task["comments"][-1]["kind"] == "return"
     assert inst.post(f"{task_url}/status", json={"to": "review"}).status_code == 200
+    for index in range(len(cable["result"])):  # accepted only with the checklist ticked
+        assert (
+            inst.patch(f"{task_url}/checks", json={"index": index, "checked": True}).status_code
+            == 200
+        )
     assert client.post(f"{task_url}/status", json={"to": "accepted"}).status_code == 200
 
     line = cable["lines"][0]
@@ -583,6 +620,10 @@ def test_api_ticks_merge_and_acting_for_the_client(
     status = f"{url}/tasks/{task['id']}/status"
     assert owner.post(status, json={"to": "in_progress"}).status_code == 200
     assert inst.post(status, json={"to": "review"}).status_code == 200
+    half = client.post(status, json={"to": "accepted"})  # the rest of the checklist is not ticked
+    assert half.status_code == 409 and "не отмечено" in half.json()["detail"]
+    for index in range(1, len(task["result"])):
+        assert inst.patch(checks, json={"index": index, "checked": True}).status_code == 200
     assert owner.post(status, json={"to": "accepted"}).status_code == 422
     done = owner.post(status, json={"to": "accepted", "on_behalf": "telegram"}).json()
     feed = done["tasks"][0]["comments"]

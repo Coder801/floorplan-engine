@@ -5,7 +5,7 @@
 // the page's (useWork.ts): every write replaces the whole state; the card is in the side panel.
 
 import { useTranslation } from "react-i18next";
-import type { WorkState } from "@/shared/types";
+import type { WorkState, WorkStatus } from "@/shared/types";
 import { emptyOf, layoutOf, type WorkRun } from "@/shared/work";
 import { Card } from "@/ui/Card";
 import { ErrorState } from "@/ui/ErrorState";
@@ -23,7 +23,7 @@ interface Props {
   busy: boolean;
   run: WorkRun;
   open: string | null;
-  onOpen: (task: string) => void;
+  onOpen: (task: string, intent?: WorkStatus) => void;   // intent: a drop on the board the card finishes
 }
 
 export function WorkStage({ state, error, busy, run, open, onOpen }: Props) {

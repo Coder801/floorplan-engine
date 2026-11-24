@@ -1,0 +1,30 @@
+@use "@/shared/styles/mixins" as *;
+
+// The bar is a line of names over a rule; the chosen one is written in the text colour and
+// underlined with the accent (the pencil line of a drawing, no fill). Narrower than the names —
+// the bar scrolls sideways without a visible scrollbar, as the sheet tabs of the header
+.tabs { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-3); min-width: 0; }
+.bar {
+  display: flex; gap: var(--space-1);
+  overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch;
+  box-shadow: inset 0 -1px var(--line);
+  &::-webkit-scrollbar { display: none; }
+}
+.tab {
+  @include type(body);
+  @include bare-button;
+  @include focus-ring;
+  display: inline-flex; align-items: center; gap: var(--space-1); flex: none;
+  min-height: var(--control-h); padding: 0 var(--space-2);
+  color: var(--muted); white-space: nowrap; cursor: pointer;
+  box-shadow: inset 0 -2px transparent;
+  transition: color var(--t) var(--ease), box-shadow var(--t) var(--ease);
+  &:hover { color: var(--text); }
+  &:focus-visible { outline-offset: -2px; }
+  @media (prefers-reduced-motion: reduce) { transition: none; }
+}
+.on { color: var(--text); font-weight: 500; box-shadow: inset 0 -2px var(--accent); }
+.count { @include type(small); color: var(--muted); font-variant-numeric: tabular-nums; }
+// The mark: a dot in the warning colour, raised to the top of the name
+.mark { width: 6px; height: 6px; border-radius: 50%; background: var(--major); align-self: start; margin-top: 10px; }
+.panel { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-3); min-width: 0; }

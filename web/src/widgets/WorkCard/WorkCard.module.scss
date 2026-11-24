@@ -15,13 +15,17 @@
 
 // max-content rows: the lines table scrolls sideways (a scroll container may shrink to zero), and
 // in an overflowing body an auto row would collapse it
-// The sections follow one rhythm: the grid gap, the caps label one step more above it
+// The sections of a tab follow one rhythm: the grid gap, the caps label one step more above it
 .body { display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; grid-auto-rows: max-content; gap: var(--space-3); }
-.body > h3 { margin: var(--space-3) 0 0; }
+.pane { grid-auto-rows: max-content; }
+.pane > h3 { margin: var(--space-3) 0 0; }
+.pane > h3:first-child { margin-top: 0; }
 
 .top { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .heading { display: grid; gap: var(--space-1); justify-items: start; }
 .description { white-space: pre-wrap; }
+// "Assignee: name" on one line; the studio's Select in place of the name
+.assignee { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-3); }
 
 .error {
   display: grid; grid-template-columns: 1fr auto; align-items: start; gap: var(--space-2);

@@ -683,6 +683,8 @@ export const uk: Messages = {
       edit: "Змінити", save: "Зберегти",
       blockedPhoto: "Спершу додайте фото: без нього задачу не здати.",
       blockedWaiting: "Чекає: {{list}}. Почати раніше може лише студія.",
+      blockedChecks: "Спершу позначте всі пункти критерію приймання: не позначено {{n}} з {{m}}.",
+      tabs: "Розділи картки", tab: { work: "Робота", lines: "Позиції", feed: "Стрічка", settings: "Налаштування" }, attention: "потребує уваги",
       returnComment: "Що виправити", returnSend: "Повернути з коментарем",
       photos: "Фото й протоколи", noPhotos: "Фото поки немає", upload: "Завантажити фото або PDF", shoot: "Сфотографувати",
       pick: "Вибрати файли", uploading: "Завантажуємо {{name}}…", deletePhoto: "Видалити фото", deletePhotoAsk: "Видалити {{name}}?",

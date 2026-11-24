@@ -683,6 +683,8 @@ export const en: Messages = {
       edit: "Edit", save: "Save",
       blockedPhoto: "Add a photo first: the task cannot be handed in without one.",
       blockedWaiting: "Waits for: {{list}}. Only the studio can start it earlier.",
+      blockedChecks: "Tick every point of the acceptance criteria first: {{n}} of {{m}} not ticked.",
+      tabs: "Card sections", tab: { work: "Work", lines: "Lines", feed: "Feed", settings: "Settings" }, attention: "needs attention",
       returnComment: "What to fix", returnSend: "Return with a comment",
       photos: "Photos and reports", noPhotos: "No photos yet", upload: "Upload a photo or PDF", shoot: "Take a photo",
       pick: "Choose files", uploading: "Uploading {{name}}…", deletePhoto: "Delete the photo", deletePhotoAsk: "Delete {{name}}?",

@@ -261,7 +261,7 @@ stateDiagram-v2
 | POST | `/api/projects/{key}/work/tasks/{id}/status` | по переходу | `{to, comment?, on_behalf?, note?}` |
 | PATCH | `/api/projects/{key}/work/tasks/{id}/lines/{line}` | work_do (факт), work_manage (цена) | `{fact_qty?, price?}` |
 | POST | `/api/projects/{key}/work/tasks/{id}/lines` | work_manage | своя строка |
-| POST | `/api/projects/{key}/work/tasks/{id}/photos` | work_do, work_accept | multipart, до 15 МБ, jpeg/png/webp/heic, pdf (протокол) |
+| POST | `/api/projects/{key}/work/tasks/{id}/photos` | work_do, work_accept | multipart, до 15 МБ, jpeg/png/webp/heic, pdf (протокол); фото хранится сжатым — до 3000 px, качество 85 (`service/photos.py`) |
 | GET | `/api/projects/{key}/work/photos/{id}` | view | файл |
 | DELETE | `/api/projects/{key}/work/photos/{id}` | автор, work_manage | |
 | POST | `/api/projects/{key}/work/tasks/{id}/comments` | work_do, work_accept | `{text}` |

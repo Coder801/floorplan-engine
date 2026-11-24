@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest";
 import i18n from "./i18n";
 import type { WorkCan, WorkPhoto, WorkPlan, WorkPlanState, WorkState, WorkStatus, WorkTask, WorkTotals } from "./types";
 import {
-  actsForClient, afterOf, allDone, behalfText, boardColumns, byColumn, byDomain, canDeletePhoto, canMoveLines, cardRights,
-  day, emptyOf, feedOf, layoutOf, mergeBlock, mergeTargets, modelChanged, money, needsBehalf, numberOf, parseAmount,
-  planActions, planNeed, progressOf, shiftTo, splitText, statusButtons, taskNeed, ticked, today,
+  actsForClient, afterOf, allDone, behalfText, boardColumns, byColumn, byDomain, canDeletePhoto, canDrag, canMoveLines, cardRights,
+  checksLeft, day, dropTargets, emptyOf, feedOf, layoutOf, mergeBlock, mergeTargets, modelChanged, money, needsBehalf, numberOf,
+  parseAmount, planActions, planNeed, progressOf, shiftTo, splitText, statusButtons, taskNeed, ticked, today,
 } from "./work";
 
 const CAN = {
@@ -154,11 +154,49 @@ describe("кнопки статуса — по таблице переходов
     expect(statusButtons(task(waiting), plan("approved"), CAN.installer)[0].blocked).toBe("waiting");
     expect(statusButtons(task(waiting), plan("approved"), CAN.studio)[0].blocked).toBeNull();
   });
+  it("принять без всех галочек нельзя (решение 2026-11-24); без критерия — можно", () => {
+    const three = { status: "review" as const, result: ["a", "b", "c"] };
+    expect(checksLeft(task({ ...three, checked: [0, 2] }))).toBe(1);
+    expect(checksLeft(task({ ...three, checked: [0, 1, 2] }))).toBe(0);
+    expect(checksLeft(task({ status: "review" }))).toBe(0);
+    const [accept, ret] = statusButtons(task({ ...three, checked: [0, 2] }), plan("approved"), CAN.client);
+    expect(accept.blocked).toBe("checks");
+    expect(ret.blocked).toBeNull();   // вернуть можно всегда
+    expect(statusButtons(task({ ...three, checked: [2, 1, 0] }), plan("approved"), CAN.studio)[0].blocked).toBeNull();
+    expect(statusButtons(task({ status: "review" }), plan("approved"), CAN.client)[0].blocked).toBeNull();
+  });
   it("что нужно от заказчика по задаче", () => {
     expect(taskNeed(task({ status: "review" }), plan("approved"), CAN.client)).toBe("acceptWork");
     expect(taskNeed(task({ status: "proposed", extra: true }), plan("approved"), CAN.client)).toBe("agreeExtra");
     expect(taskNeed(task({ status: "proposed" }), plan("proposed"), CAN.client)).toBeNull();
     expect(taskNeed(task({ status: "review" }), plan("approved"), CAN.installer)).toBeNull();
+  });
+});
+
+describe("перетаскивание плитки по колонкам", () => {
+  const targets = (status: WorkStatus, can: WorkCan, over: Partial<WorkTask> = {}) => {
+    const all = dropTargets(task({ status, ...over }), plan("approved"), can);
+    return Object.fromEntries(Object.entries(all).filter(([, v]) => v));
+  };
+  it("колонка принимает плитку только туда, куда ведёт кнопка карточки", () => {
+    expect(targets("todo", CAN.installer)).toEqual({ in_progress: "ok" });
+    expect(targets("returned", CAN.installer)).toEqual({ review: "ok", in_progress: "ok" });
+    expect(targets("review", CAN.installer)).toEqual({});
+    expect(targets("accepted", CAN.studio)).toEqual({});
+  });
+  it("с комментарием или за заказчика — через карточку, заблокированное — тоже, с подсказкой", () => {
+    expect(targets("review", CAN.client)).toEqual({ accepted: "ok", returned: "card" });
+    expect(targets("review", CAN.studio)).toEqual({ accepted: "card", returned: "card" });
+    expect(targets("review", CAN.client, { result: ["a"] })).toEqual({ accepted: "blocked", returned: "card" });
+    expect(targets("in_progress", CAN.installer, { photo: "required" })).toEqual({ review: "blocked" });
+    expect(targets("todo", CAN.installer, { waiting: [{ id: "x", title: "Штробы" }] })).toEqual({ in_progress: "blocked" });
+  });
+  it("тянет тот, у кого есть хоть один переход; до утверждения плана — никто", () => {
+    expect(canDrag(task({ status: "todo" }), plan("approved"), CAN.installer)).toBe(true);
+    expect(canDrag(task({ status: "todo" }), plan("approved"), CAN.client)).toBe(false);
+    expect(canDrag(task({ status: "review" }), plan("approved"), CAN.installer)).toBe(false);
+    expect(canDrag(task({ status: "proposed" }), plan("proposed"), CAN.studio)).toBe(false);
+    expect(Object.values(dropTargets(task(), plan("draft"), CAN.studio)).every((v) => v === null)).toBe(true);
   });
 });
 

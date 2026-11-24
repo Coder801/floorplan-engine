@@ -2,7 +2,8 @@
 // studio on a returned task, the installer on one that needs a photo, the client on review with
 // ticks, the studio on review (accept / return ask the client's channel), a draft task (order,
 // "after", lines to move, merge), an extra task with nowhere to merge, an accepted task whose feed
-// says the studio accepted it for the client, and a server refusal
+// says the studio accepted it for the client, a server refusal, and the card opened by a drop on
+// the board with an intent (the return form is already open)
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { CLIENT, draftState, INSTALLER, noRun, TASKS, workState } from "@/widgets/WorkStage/mock";
 import { WorkCard } from ".";
@@ -43,4 +44,7 @@ export const CycleRefused: Story = {
 export const ExtraWork: Story = { args: { task: pick("niche") } };
 export const Accepted: Story = { args: { task: pick("chases") } };
 export const Refused: Story = { args: { task: pick("insulation"), state: workState({ can: INSTALLER, assignees: [] }), error: "задача ждёт: Прокладка кабеля — начать раньше может только студия" } };
+export const ReturnIntent: Story = {
+  args: { task: { ...pick("cable"), status: "review" }, state: workState({ can: CLIENT, assignees: [] }), me: null, intent: "returned" },
+};
 export const Dark: Story = { globals: { theme: "dark" } };

@@ -9,6 +9,8 @@ import { WorkCard } from "./index";
 
 const W = "/api/projects/p1/work";
 const task = (id: string) => TASKS.find((t) => t.id === id)!;
+// The card's tabs under the top: "Work" is open by default
+const tab = (name: RegExp) => userEvent.click(screen.getByRole("tab", { name }));
 const ask = vi.fn(() => true);
 beforeEach(() => { ask.mockReset().mockReturnValue(true); vi.stubGlobal("confirm", ask); });
 
@@ -33,7 +35,6 @@ describe("WorkCard", () => {
     open(task("cable"), INSTALLER);
     expect(screen.getByRole("dialog", { name: "Прокладка кабеля" })).toBeInTheDocument();
     expect(screen.getByText("Возвращено")).toBeInTheDocument();
-    expect(screen.getByText("В спальне кабель к бра не закреплён, на фото не видно маркировку.")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Сдать" }));
     expect(sent.at(-1)?.body).toEqual({ to: "review" });
 
@@ -43,6 +44,7 @@ describe("WorkCard", () => {
     expect(criterion).toBeChecked();
     expect(sent.at(-1)?.body).toEqual({ index: 1, checked: true });
 
+    await tab(/Позиции/);
     const fact = screen.getByRole("textbox", { name: "Факт: Прокладка кабеля" });
     expect(fact).toHaveValue("615");
     await user.clear(fact);
@@ -51,6 +53,8 @@ describe("WorkCard", () => {
     // no prices for the installer
     expect(screen.queryByRole("textbox", { name: /^Цена:/ })).toBeNull();
 
+    await tab(/Лента/);
+    expect(screen.getByText("В спальне кабель к бра не закреплён, на фото не видно маркировку.")).toBeInTheDocument();
     await user.type(screen.getByRole("textbox", { name: "Комментарий" }), "Закрепил");
     await user.click(screen.getByRole("button", { name: "Отправить" }));
     expect(sent.at(-1)?.body).toEqual({ text: "Закрепил" });
@@ -107,13 +111,14 @@ describe("WorkCard", () => {
     });
     open(task("niche"), STUDIO);
     expect(screen.getByText("доп. работа")).toBeInTheDocument();
-    await user.click(screen.getAllByRole("button", { name: "Изменить" })[0]);  // the title; the second is "after"
+    await user.click(screen.getByRole("button", { name: "Изменить" }));
     const title = screen.getByRole("textbox", { name: "Название" });
     await user.clear(title);
     await user.type(title, "Ниша 300×200");
     await user.click(screen.getByRole("button", { name: "Сохранить" }));
     expect(sent.at(-1)?.body).toMatchObject({ title: "Ниша 300×200" });
 
+    await tab(/Позиции/);
     const price = screen.getByRole("textbox", { name: "Цена: Ниша в ГКЛ" });
     await user.clear(price);
     await user.type(price, "abc");
@@ -136,6 +141,7 @@ describe("WorkCard", () => {
 
     await user.click(screen.getByRole("checkbox", { name: "Материалы в цене задачи" }));
     expect(sent.at(-1)?.body).toEqual({ materials_included: false });
+    await tab(/Настройки/);
     expect(screen.getByRole("button", { name: "Объединить с…" })).toHaveAccessibleDescription("Некуда влить: у остальных задач сумма уже согласована.");
   });
 
@@ -143,6 +149,7 @@ describe("WorkCard", () => {
     const user = userEvent.setup();
     const sent = stubApi({ [`DELETE ${W}/tasks/niche`]: workState() });
     const { onClose } = open(task("niche"), STUDIO);
+    await tab(/Настройки/);
     ask.mockReturnValueOnce(false);
     await user.click(screen.getByRole("button", { name: "Удалить задачу" }));
     expect(ask).toHaveBeenCalledWith("Удалить задачу «Ниша под роутер в коридоре»?");
@@ -158,6 +165,7 @@ describe("WorkCard", () => {
     await user.click(screen.getByRole("button", { name: "Исполнитель" }));
     await user.click(screen.getByRole("option", { name: /Петро/ }));
     expect(sent.at(-1)?.body).toEqual({ assignee_id: "u-petro" });
+    await tab(/Настройки/);
     await user.selectOptions(screen.getByDisplayValue("обязательно"), "не нужно");
     expect(sent.at(-1)?.body).toEqual({ photo: "none" });
   });
@@ -166,6 +174,7 @@ describe("WorkCard", () => {
     const user = userEvent.setup();
     const sent = stubApi({ [`POST ${W}/tasks/cable/payments`]: workState(), [`DELETE ${W}/payments/pay2`]: workState() });
     open(task("cable"), STUDIO);
+    await tab(/Позиции/);
     const pay = screen.getByRole("button", { name: "Отметить оплату" });
     expect(pay).toBeDisabled();
     await user.click(screen.getByRole("button", { name: /^Остаток:/ }));
@@ -210,6 +219,7 @@ describe("WorkCard", () => {
     expect(alert).toHaveTextContent("409: задача уже принята");
     await user.click(within(alert).getByRole("button", { name: "Закрыть" }));
     expect(onError).toHaveBeenCalledOnce();
+    await tab(/Лента/);
     await user.click(screen.getByRole("textbox", { name: "Комментарий" }));
     await user.keyboard("{Escape}");
     expect(onClose).not.toHaveBeenCalled();
@@ -218,13 +228,15 @@ describe("WorkCard", () => {
     expect(onClose).toHaveBeenCalledOnce();
   });
 
-  it("a materials sum is marked provisional; a task without materials has no mark", () => {
+  it("a materials sum is marked provisional; a task without materials has no mark", async () => {
     const { unmount } = open(task("cable"), CLIENT);
+    await tab(/Позиции/);
     const mark = screen.getByRole("img", { name: "Цена условная: материалы пока не по рыночным ценам" });
     expect(mark.parentElement).toHaveTextContent(/грн$/);
     expect(mark.closest("dl")).not.toHaveTextContent("имитация");
     unmount();
     open(task("insulation"), CLIENT);
+    await tab(/Позиции/);
     expect(screen.queryByRole("img", { name: /Цена условная/ })).toBeNull();
   });
 
@@ -233,5 +245,68 @@ describe("WorkCard", () => {
     expect(screen.getByText("Отмечать пункты можно после утверждения плана.")).toBeInTheDocument();
     expect(screen.getByRole("checkbox", { name: "кабель лежит по трассе и закреплён" })).toBeDisabled();
     expect(screen.queryByRole("button", { name: "Принять" })).toBeNull();
+  });
+
+  it("tabs: the top stays, one tab is rendered at a time; the client has no settings", async () => {
+    open(task("cable"), CLIENT, { me: null });
+    expect(screen.getByRole("tablist", { name: "Разделы карточки" })).toBeInTheDocument();
+    const names = screen.getAllByRole("tab").map((x) => x.textContent);
+    expect(names[0]).toBe("Работа");
+    expect(names[1]).toMatch(/^Позиции47\s320,20\sгрн$/);   // the task sum
+    expect(names[2]).toBe("Лента3");                        // the number of entries
+    expect(names).toHaveLength(3);
+    expect(screen.queryByRole("tab", { name: "Настройки" })).toBeNull();
+    // "Work" is open: the criterion and the photos; the lines and the feed are not in the DOM
+    expect(screen.getByRole("tab", { name: "Работа" })).toHaveAttribute("aria-selected", "true");   // the photo is there: no mark
+    expect(screen.getByRole("checkbox", { name: "концы промаркированы" })).toBeInTheDocument();
+    expect(screen.queryByRole("textbox", { name: "Комментарий" })).toBeNull();
+    expect(screen.queryByRole("table")).toBeNull();
+    expect(screen.queryByDisplayValue("обязательно")).toBeNull();   // the photo rule is a setting of the studio
+    await tab(/Лента/);
+    expect(screen.getByText("Закреплю завтра утром, пришлю фото.")).toBeInTheDocument();
+    expect(screen.queryByRole("checkbox", { name: "концы промаркированы" })).toBeNull();
+    // the top is still there
+    expect(screen.getByRole("heading", { level: 1, name: "Прокладка кабеля" })).toBeInTheDocument();
+    expect(screen.getByText("Исполнитель").parentElement).toHaveTextContent("ИсполнительПетро");
+  });
+
+  it("the studio has the settings tab: photo rule, order, merge, delete", async () => {
+    open(task("niche"), STUDIO);
+    await tab(/Настройки/);
+    expect(screen.getByDisplayValue("по желанию")).toBeInTheDocument();
+    expect(screen.getByText("Порядок")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Объединить с…" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Удалить задачу" })).toBeInTheDocument();
+  });
+
+  it("accepting waits for every point of the criterion to be ticked", () => {
+    open({ ...task("cable"), status: "review" }, CLIENT, { me: null });
+    const accept = screen.getByRole("button", { name: "Принять" });
+    expect(accept).toBeDisabled();
+    expect(accept).toHaveAccessibleDescription("Сначала отметьте все пункты критерия приёмки: не отмечено 1 из 3.");
+    expect(screen.getByRole("button", { name: "Вернуть" })).toBeEnabled();
+    expect(screen.getByRole("tab", { name: "Работа — требует внимания" })).toBeInTheDocument();
+  });
+
+  it("an intent from the board opens the return form, or the confirm dialog for the studio", async () => {
+    const sent = stubApi({ [`POST ${W}/tasks/boxes/status`]: workState() });
+    const { onIntent, unmount } = open(task("boxes"), CLIENT, { me: null, intent: "returned", onIntent: vi.fn() });
+    expect(screen.getByRole("textbox", { name: "Что исправить" })).toBeInTheDocument();
+    expect(onIntent).toHaveBeenCalledOnce();
+    expect(sent).toHaveLength(0);
+    unmount();
+    open(task("boxes"), STUDIO, { intent: "accepted" });
+    expect(screen.getByRole("dialog", { name: "Как заказчик подтвердил?" })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("radio", { name: "По звонку" }));
+    await userEvent.click(screen.getByRole("button", { name: "Подтвердить за заказчика" }));
+    expect(sent[0].body).toEqual({ to: "accepted", on_behalf: "phone" });
+  });
+
+  it("an intent for a blocked transition presses nothing: the hint says why", () => {
+    const sent = stubApi({});
+    open({ ...task("cable"), status: "review" }, CLIENT, { me: null, intent: "accepted" });
+    expect(sent).toHaveLength(0);
+    expect(screen.queryByRole("textbox", { name: "Что исправить" })).toBeNull();
+    expect(screen.getByText(/Сначала отметьте все пункты/)).toBeInTheDocument();
   });
 });

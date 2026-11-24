@@ -112,15 +112,21 @@ const TRANSITIONS: { from: WorkStatus; to: WorkStatus; right: keyof WorkCan; act
 export type StatusAction = "agree" | "take" | "handIn" | "accept" | "return" | "retake";
 
 // A status button: blocked — shown disabled with a hint (photo: the task needs a photo first;
-// waiting: other tasks are not accepted yet, only the studio may start it); comment — only with one
+// waiting: other tasks are not accepted yet, only the studio may start it; checks: not every
+// point of the acceptance criterion is ticked, the task is not accepted without that — decision
+// 2026-11-24); comment — only with one
+export type StatusBlock = "photo" | "waiting" | "checks";
 export interface StatusButton {
   to: WorkStatus;
   action: StatusAction;
   primary: boolean;
   comment: boolean;
   behalf: boolean;    // the studio does it for the client: ask the client's channel first
-  blocked: "photo" | "waiting" | null;
+  blocked: StatusBlock | null;
 }
+
+// Points of the acceptance criterion not ticked yet: a task without a criterion has none
+export const checksLeft = (task: WorkTask) => task.result.filter((_, i) => !task.checked.includes(i)).length;
 
 export function statusButtons(task: WorkTask, plan: WorkPlan | null, can: WorkCan): StatusButton[] {
   if (plan?.state !== "approved") return [];
@@ -132,9 +138,26 @@ export function statusButtons(task: WorkTask, plan: WorkPlan | null, can: WorkCa
     behalf: needsBehalf(tr.action, can),
     blocked: tr.to === "review" && task.photo === "required" && !task.photos.length ? "photo"
       : tr.from === "todo" && tr.to === "in_progress" && task.waiting.length > 0 && !can.work_manage ? "waiting"
+      : tr.from === "review" && tr.to === "accepted" && checksLeft(task) > 0 ? "checks"
       : null,
   }));
 }
+
+// --- Drag and drop on the board -----------------------------------------------------------------
+// A tile dragged to another column changes the status by the same rules as the card's buttons: the
+// column is a target only if a button leads there. ok — send at once; card — open the card with the
+// intent (a comment is needed, or the studio acts for the client and says the client's channel);
+// blocked — open the card, where the hint says why it is not possible yet. Drag is an enhancement:
+// the buttons of the card stay for the keyboard and touch
+export type DropKind = "ok" | "card" | "blocked";
+export type DropTargets = Record<WorkStatus, DropKind | null>;
+export function dropTargets(task: WorkTask, plan: WorkPlan | null, can: WorkCan): DropTargets {
+  const out = Object.fromEntries(STATUSES.map((s) => [s, null])) as DropTargets;
+  for (const b of statusButtons(task, plan, can)) out[b.to] = b.blocked ? "blocked" : b.comment || b.behalf ? "card" : "ok";
+  return out;
+}
+// Only who has a transition for the task drags it
+export const canDrag = (task: WorkTask, plan: WorkPlan | null, can: WorkCan) => statusButtons(task, plan, can).length > 0;
 
 // What the client is asked for: approve the plan, accept a task, agree to an extra one
 export type ClientNeed = "approvePlan" | "acceptWork" | "agreeExtra";

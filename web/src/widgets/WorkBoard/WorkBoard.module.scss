@@ -38,7 +38,17 @@
 .column {
   display: grid; grid-template-rows: auto 1fr; gap: var(--space-2); min-width: 0;
   padding: var(--space-3); border-radius: var(--radius-lg); background: var(--soft);
+  outline: 2px solid transparent; outline-offset: -2px;
+  transition: outline-color var(--t) var(--ease), background-color var(--t) var(--ease);
+  @media (prefers-reduced-motion: reduce) { transition: none; }
 }
+// A tile is being dragged: the columns it may go to are outlined dashed — the accent for a
+// transition (sent at once or through the card), the warning colour for one the card will say is
+// blocked; the column under the pointer — solid
+.column[data-drop] { outline-style: dashed; outline-color: color-mix(in srgb, var(--accent) 45%, transparent); }
+.column[data-drop="blocked"] { outline-color: color-mix(in srgb, var(--warn) 60%, transparent); }
+.column[data-drop][data-over] { outline-style: solid; outline-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, var(--soft)); }
+.column[data-drop="blocked"][data-over] { outline-color: var(--warn); background: color-mix(in srgb, var(--warn) 10%, var(--soft)); }
 .columnTitle { @include type(subheading); display: flex; align-items: center; gap: var(--space-2); }
 .count { margin-left: auto; color: var(--muted); font-weight: 400; font-variant-numeric: tabular-nums; }
 .dot {
@@ -52,10 +62,14 @@
 .tiles { display: grid; gap: var(--space-2); align-content: start; }
 .none { margin: var(--space-1) 2px; }
 
-// A tile is a button: tags | title | waiting | who · sum | marks
+// A tile is a button: tags | title | waiting | who · sum | marks. One that can be dragged shows a
+// grab cursor; the dragged one fades; one whose status is being sent waits
 .tile {
   gap: var(--space-2); border-radius: var(--radius-md);
   &.open { border-color: var(--hl); box-shadow: inset 3px 0 var(--hl); }
+  &[draggable="true"] { cursor: grab; }
+  &.dragging { opacity: .4; }
+  &.moving { opacity: .6; cursor: progress; }
 }
 .tags { display: flex; flex-wrap: wrap; gap: var(--space-1); &:empty { display: none; } }
 .need.need { background: var(--accent); color: var(--accent-text); }

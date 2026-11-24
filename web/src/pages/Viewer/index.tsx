@@ -22,7 +22,7 @@ import { useUnderline } from "@/shared/underline";
 import { resetSelection, useView, view } from "@/shared/store";
 import ui from "@/shared/styles/ui.module.scss";
 import { ELECTRICAL_VIEW, sheetTabs, shownView as viewShown, tabOf, tabViews, viewSheet, type SheetTab, type TabView } from "@/shared/tabs";
-import type { ManifestPage, Overview, Page, Project, ProjectSummary, Scene, Variants } from "@/shared/types";
+import type { ManifestPage, Overview, Page, Project, ProjectSummary, Scene, Variants, WorkStatus } from "@/shared/types";
 import { RESERVE_KEY, type Answer, type QuestionsMemory } from "@/shared/questions";
 import { RELEASES } from "@/shared/changelog";
 import { watchRebuild } from "@/shared/rebuild";
@@ -133,6 +133,7 @@ export function Viewer({ account = null }: { account?: Account | null }) {
   const [workTab, setWorkTab] = useState(false);  // "Tasks" tab: installation by tasks (database mode, project.work)
   const [hasLow, setHasLow] = useState(false);  // the project has low voltage: known once its drawing is loaded
   const [task, setTask] = useState<string | null>(null);  // the task whose card is open
+  const [intent, setIntent] = useState<WorkStatus | null>(null);  // a drop on the board the card finishes (comment, channel)
   const [feedback, setFeedback] = useState(false);  // "Leave feedback" is open (widgets/Feedback)
   const [changes, setChanges] = useState(false);    // "What's new" is open (widgets/Changelog)
   const [overview, setOverview] = useState<Overview | null>(null);
@@ -352,7 +353,9 @@ export function Viewer({ account = null }: { account?: Account | null }) {
   };
   const work = useWork(current, workTab && !!project?.work);
   const shownTask = workTab ? work.state?.tasks.find((tk) => tk.id === task) ?? null : null;
-  const closeTask = useCallback(() => setTask(null), []);
+  const openTask = useCallback((id: string, to?: WorkStatus) => { setTask(id); setIntent(to ?? null); }, []);
+  const closeTask = useCallback(() => { setTask(null); setIntent(null); }, []);
+  const intentUsed = useCallback(() => setIntent(null), []);
   const showSide = (tab: SideTab) => { setSide(tab); remember("side", tab); };
   // The same button closes (the panel slides away), another one opens its panel
   const toggleDrawer = (tab: DrawerTab) => {
@@ -626,7 +629,7 @@ export function Viewer({ account = null }: { account?: Account | null }) {
   else if (error) main = <ErrorState>{error}</ErrorState>;
   else if (source && project) main = <SourceView project={project} file={source} onBack={() => setSource(null)} />;
   else if (workTab && project) {
-    main = <WorkStage state={work.state} error={work.error} busy={work.busy} run={work.run} open={shownTask?.id ?? null} onOpen={setTask} />;
+    main = <WorkStage state={work.state} error={work.error} busy={work.busy} run={work.run} open={shownTask?.id ?? null} onOpen={openTask} />;
   }
   else if (project && !project.artifact) main = <EmptyState>{t("app.noArtifact")}</EmptyState>;
   else if (info && project) {
@@ -843,7 +846,8 @@ export function Viewer({ account = null }: { account?: Account | null }) {
                                                              onDrawer={(k) => { setDrawer(k); setClosing(false); }} /> : undefined}>
         {shownTask && work.state && (
           <WorkCard key={shownTask.id} task={shownTask} state={work.state} run={work.run} busy={work.busy} error={work.error}
-                    onError={work.clearError} me={account?.id ?? null} onClose={closeTask} onOpen={setTask} />
+                    onError={work.clearError} me={account?.id ?? null} onClose={closeTask} onOpen={openTask}
+                    intent={intent} onIntent={intentUsed} />
         )}
         {drawer && project && (
           <Drawer tab={drawer} project={project} shownSource={source} onSource={showSource}

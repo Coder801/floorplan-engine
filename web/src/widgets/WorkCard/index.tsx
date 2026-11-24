@@ -1,14 +1,18 @@
 // Task card of the "Tasks" tab: over the side panel, like the header drawer; on a narrow screen —
-// the whole screen. Status and the buttons of the role and status (shared/work.ts, statusButtons:
-// "Return" asks for a comment, "Hand in" waits for a photo when one is required), what it waits
-// for, assignee, order and "after" (widgets/WorkOrder), description, acceptance criterion as a
-// checklist (ticks are kept), lines plan / fact / price / sum (the studio moves selected lines to
-// another task), totals, "Merge with…" (widgets/WorkMerge), photos with upload, the feed (with the
-// client's channel when the studio acted for the client), payments. The client's actions by the
-// studio ask "how did the client confirm?" first (widgets/WorkConfirm). Every write goes through run
-// and the whole state comes back (shared/api.ts). Titles, lines and criteria are in the project language.
+// the whole screen. The top is always in view: status, title and description, the buttons of the
+// role and status (shared/work.ts, statusButtons: "Return" asks for a comment, "Hand in" waits for
+// a photo when one is required, "Accept" — for every point of the criterion ticked), what it waits
+// for, the assignee. Under it — tabs (ui/Tabs): "Work" — the acceptance criterion as a checklist
+// (ticks are kept) and photos with upload; "Lines" — plan / fact / price / sum (the studio moves
+// selected lines to another task), totals, payments; "Feed" — comments (with the client's channel
+// when the studio acted for the client); "Settings" (the studio) — the photo rule, order and "after"
+// (widgets/WorkOrder), "Merge with…" (widgets/WorkMerge), delete. The client's actions by the
+// studio ask "how did the client confirm?" first (widgets/WorkConfirm). A drop of the tile on the
+// board opens the card with an intent — the status button it stands for is pressed at once. Every
+// write goes through run and the whole state comes back (shared/api.ts). Titles, lines and
+// criteria are in the project language.
 
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   addWorkComment, addWorkLine, addWorkPayment, deleteWorkPayment, deleteWorkPhoto, deleteWorkTask, editWorkLine,
@@ -27,12 +31,13 @@ import { Tag } from "@/ui/Tag";
 import { Text } from "@/ui/Text";
 import { TextArea } from "@/ui/TextArea";
 import { TextField } from "@/ui/TextField";
-import type { WorkLine, WorkOnBehalf, WorkPhotoRule, WorkState, WorkTask } from "@/shared/types";
+import type { WorkLine, WorkOnBehalf, WorkPhotoRule, WorkState, WorkStatus, WorkTask } from "@/shared/types";
 import {
-  behalfText, canDeletePhoto, canMoveLines, cardRights, day, feedOf, fileSize, isPdf, isPicture, mergeTargets, moment,
-  money, numberOf, parseAmount, PHOTO_MAX, qty, statusButtons, taskNeed, ticked, today, type StatusButton, type WorkRun,
+  behalfText, canDeletePhoto, canMoveLines, cardRights, checksLeft, day, feedOf, fileSize, isPdf, isPicture, mergeTargets,
+  moment, money, numberOf, parseAmount, PHOTO_MAX, qty, statusButtons, taskNeed, ticked, today, type StatusButton, type WorkRun,
 } from "@/shared/work";
 import { Select } from "@/ui/Select";
+import { Tabs, type Tab } from "@/ui/Tabs";
 import { WorkConfirm } from "@/widgets/WorkConfirm";
 import { WorkMerge } from "@/widgets/WorkMerge";
 import { WorkOrder } from "@/widgets/WorkOrder";
@@ -49,9 +54,14 @@ interface Props {
   me: string | null;          // the logged-in user id: own photos are deleted by their author
   onClose: () => void;
   onOpen?: (task: string) => void;  // open another task: the target after a merge
+  intent?: WorkStatus | null;       // start the transition to this status (a drop on the board)
+  onIntent?: () => void;            // the intent was consumed: the page forgets it
 }
 
-export function WorkCard({ task, state, run, busy, error, onError, me, onClose, onOpen }: Props) {
+// The tabs under the top; "settings" only for the studio
+type CardTab = "work" | "lines" | "feed" | "settings";
+
+export function WorkCard({ task, state, run, busy, error, onError, me, onClose, onOpen, intent = null, onIntent }: Props) {
   const { t } = useTranslation();
   const plan = state.plan;
   const rights = cardRights(task, plan, state.can);
@@ -59,6 +69,21 @@ export function WorkCard({ task, state, run, busy, error, onError, me, onClose, 
   const targets = mergeTargets(task, state);
   const cur = plan?.currency ?? "";
   const m = (v: number) => money(v, cur, locale());
+  const [picked, setPicked] = useState<CardTab>("work");
+
+  // The "Work" tab asks for attention: a required photo is missing, or the task is on review
+  // with points of the criterion not ticked
+  const attention = (task.photo === "required" && !task.photos.length && task.status !== "accepted")
+    || (task.status === "review" && checksLeft(task) > 0);
+  const settings = rights.manage || rights.remove || rights.money;
+  const tabs: Tab<CardTab>[] = [
+    { value: "work", label: t("work.card.tab.work"), mark: attention,
+      ariaLabel: attention ? `${t("work.card.tab.work")} — ${t("work.card.attention")}` : undefined },
+    { value: "lines", label: t("work.card.tab.lines"), count: m(task.total) },
+    { value: "feed", label: t("work.card.tab.feed"), count: task.comments.length || undefined },
+    ...(settings ? [{ value: "settings" as const, label: t("work.card.tab.settings") }] : []),
+  ];
+  const tab = tabs.some((x) => x.value === picked) ? picked : "work";
 
   // Esc closes the card, unless a field is being typed in
   useEffect(() => {
@@ -94,85 +119,92 @@ export function WorkCard({ task, state, run, busy, error, onError, me, onClose, 
           </div>
         )}
         {need && <Text weight="bold">{t(`work.need.${need}`)}</Text>}
-        <StatusButtons task={task} buttons={statusButtons(task, plan, state.can)} run={run} busy={busy} />
+        <StatusButtons task={task} buttons={statusButtons(task, plan, state.can)} run={run} busy={busy} intent={intent} onIntent={onIntent} />
         {task.waiting.length > 0 && task.status !== "accepted" && (
           <Text tone="major">{t("work.waiting", { list: task.waiting.map((w) => w.title).join(", ") })}</Text>
         )}
+        <div className={css.assignee}>
+          <span className={css.label}>{t("work.assignee")}</span>
+          {rights.manage && state.assignees.length > 0 ? (
+            <Select label={t("work.assignee")} value={task.assignee?.id ?? ""}
+                    options={[{ value: "", label: t("work.nobody") },
+                              ...state.assignees.map((a) => ({ value: a.id, label: a.name }))]}
+                    onChange={(v) => { if (!busy) void run((key) => editWorkTask(key, task.id, { assignee_id: v || null })); }} />
+          ) : <span>{task.assignee?.name ?? <span className="muted">{t("work.nobody")}</span>}</span>}
+        </div>
 
-        <dl className={css.pairs}>
-          <dt>{t("work.assignee")}</dt>
-          <dd>
-            {rights.manage && state.assignees.length > 0 ? (
-              <Select label={t("work.assignee")} value={task.assignee?.id ?? ""}
-                      options={[{ value: "", label: t("work.nobody") },
-                                ...state.assignees.map((a) => ({ value: a.id, label: a.name }))]}
-                      onChange={(v) => { if (!busy) void run((key) => editWorkTask(key, task.id, { assignee_id: v || null })); }} />
-            ) : (task.assignee?.name ?? <span className="muted">{t("work.nobody")}</span>)}
-          </dd>
-          <dt>{t("work.card.photoRuleLabel")}</dt>
-          <dd>
-            {rights.manage ? (
-              <select className={css.inline} value={task.photo} disabled={busy}
-                      onChange={(e) => void run((key) => editWorkTask(key, task.id, { photo: e.target.value as WorkPhotoRule }))}>
-                {(["required", "optional", "none"] as const).map((p) => <option key={p} value={p}>{t(`work.photoRule.${p}`)}</option>)}
-              </select>
-            ) : t(`work.photoRule.${task.photo}`)}
-          </dd>
-        </dl>
-        <WorkOrder task={task} state={state} run={run} busy={busy} editable={rights.manage} />
-
-        {task.result.length > 0 && (
-          <>
-            <Title level={3} size="caps">{t("work.card.result")}</Title>
-            <Checklist key={task.id} task={task} run={run} busy={busy} editable={rights.tick}
-                       later={!rights.tick && (plan?.state === "draft" || plan?.state === "proposed") && (state.can.work_do || state.can.work_accept)} />
-          </>
-        )}
-
-        <Title level={3} size="caps">{t("work.card.lines")}</Title>
-        <Lines task={task} state={state} currency={cur} run={run} busy={busy} fact={rights.fact} price={rights.money}
-               move={rights.money && canMoveLines(task, targets) ? targets : []} />
-        {rights.money && <LineForm task={task} run={run} busy={busy} />}
-        <dl className={css.totals}>
-          <dt>{t("work.card.work")}</dt><dd>{m(task.work_total)}</dd>
-          <dt>
-            {t("work.card.materials")}
-            {!task.materials_included && <span className="muted"> · {t("work.card.notIncluded")}</span>}
-          </dt>
-          <dd className={cx(!task.materials_included && "muted")}>
-            {task.material_total > 0 ? <Provisional label={t("estimate.provisional")}>{m(task.material_total)}</Provisional> : m(task.material_total)}
-          </dd>
-          <dt className={css.grand}>{t("work.card.total")}</dt><dd className={css.grand}>{m(task.total)}</dd>
-          {(task.paid > 0 || rights.payments) && (
+        <Tabs tabs={tabs} value={tab} onChange={setPicked} label={t("work.card.tabs")} panelClassName={css.pane}>
+          {tab === "work" && (
             <>
-              <dt>{t("work.card.paid")}</dt>
-              <dd className={cx(task.settled && task.total > 0 && css.ok)}>{m(task.paid)}</dd>
+              {task.result.length > 0 && (
+                <>
+                  <Title level={3} size="caps">{t("work.card.result")}</Title>
+                  <Checklist key={task.id} task={task} run={run} busy={busy} editable={rights.tick}
+                             later={!rights.tick && (plan?.state === "draft" || plan?.state === "proposed") && (state.can.work_do || state.can.work_accept)} />
+                </>
+              )}
+              <Title level={3} size="caps">{t("work.card.photos")}</Title>
+              <Photos task={task} state={state} run={run} busy={busy} me={me} upload={rights.photos} onError={onError} />
             </>
           )}
-        </dl>
-        {task.unpriced > 0 && <Text size="small" tone="major">{t("work.card.unpricedNote", { n: task.unpriced })}</Text>}
-        {rights.money && (
-          <Checkbox checked={task.materials_included} disabled={busy} label={t("work.card.materialsIncluded")}
-                    onChange={(on) => void run((key) => editWorkTask(key, task.id, { materials_included: on }))} />
-        )}
-
-        <Title level={3} size="caps">{t("work.card.photos")}</Title>
-        <Photos task={task} state={state} run={run} busy={busy} me={me} upload={rights.photos} onError={onError} />
-
-        <Title level={3} size="caps">{t("work.card.feed")}</Title>
-        <Feed task={task} run={run} busy={busy} write={rights.comment} />
-
-        {(task.payments.length > 0 || rights.payments) && (
-          <>
-            <Title level={3} size="caps">{t("work.card.payments")}</Title>
-            <Payments task={task} currency={cur} run={run} busy={busy} add={rights.payments} remove={rights.unpay} />
-          </>
-        )}
-
-        {rights.money && <WorkMerge task={task} state={state} run={run} busy={busy} onMerged={(into) => (onOpen ? onOpen(into) : onClose())} />}
-        {rights.remove && (
-          <Button variant="danger" className={css.danger} disabled={busy} onClick={remove}>{t("work.card.remove")}</Button>
-        )}
+          {tab === "lines" && (
+            <>
+              <Title level={3} size="caps">{t("work.card.lines")}</Title>
+              <Lines task={task} state={state} currency={cur} run={run} busy={busy} fact={rights.fact} price={rights.money}
+                     move={rights.money && canMoveLines(task, targets) ? targets : []} />
+              {rights.money && <LineForm task={task} run={run} busy={busy} />}
+              <dl className={css.totals}>
+                <dt>{t("work.card.work")}</dt><dd>{m(task.work_total)}</dd>
+                <dt>
+                  {t("work.card.materials")}
+                  {!task.materials_included && <span className="muted"> · {t("work.card.notIncluded")}</span>}
+                </dt>
+                <dd className={cx(!task.materials_included && "muted")}>
+                  {task.material_total > 0 ? <Provisional label={t("estimate.provisional")}>{m(task.material_total)}</Provisional> : m(task.material_total)}
+                </dd>
+                <dt className={css.grand}>{t("work.card.total")}</dt><dd className={css.grand}>{m(task.total)}</dd>
+                {(task.paid > 0 || rights.payments) && (
+                  <>
+                    <dt>{t("work.card.paid")}</dt>
+                    <dd className={cx(task.settled && task.total > 0 && css.ok)}>{m(task.paid)}</dd>
+                  </>
+                )}
+              </dl>
+              {task.unpriced > 0 && <Text size="small" tone="major">{t("work.card.unpricedNote", { n: task.unpriced })}</Text>}
+              {rights.money && (
+                <Checkbox checked={task.materials_included} disabled={busy} label={t("work.card.materialsIncluded")}
+                          onChange={(on) => void run((key) => editWorkTask(key, task.id, { materials_included: on }))} />
+              )}
+              {(task.payments.length > 0 || rights.payments) && (
+                <>
+                  <Title level={3} size="caps">{t("work.card.payments")}</Title>
+                  <Payments task={task} currency={cur} run={run} busy={busy} add={rights.payments} remove={rights.unpay} />
+                </>
+              )}
+            </>
+          )}
+          {tab === "feed" && <Feed task={task} run={run} busy={busy} write={rights.comment} />}
+          {tab === "settings" && (
+            <>
+              <dl className={css.pairs}>
+                <dt>{t("work.card.photoRuleLabel")}</dt>
+                <dd>
+                  {rights.manage ? (
+                    <select className={css.inline} value={task.photo} disabled={busy}
+                            onChange={(e) => void run((key) => editWorkTask(key, task.id, { photo: e.target.value as WorkPhotoRule }))}>
+                      {(["required", "optional", "none"] as const).map((p) => <option key={p} value={p}>{t(`work.photoRule.${p}`)}</option>)}
+                    </select>
+                  ) : t(`work.photoRule.${task.photo}`)}
+                </dd>
+              </dl>
+              <WorkOrder task={task} state={state} run={run} busy={busy} editable={rights.manage} />
+              {rights.money && <WorkMerge task={task} state={state} run={run} busy={busy} onMerged={(into) => (onOpen ? onOpen(into) : onClose())} />}
+              {rights.remove && (
+                <Button variant="danger" className={css.danger} disabled={busy} onClick={remove}>{t("work.card.remove")}</Button>
+              )}
+            </>
+          )}
+        </Tabs>
       </div>
     </section>
   );
@@ -216,22 +248,33 @@ function Heading({ task, run, busy, editable }: { task: WorkTask; run: WorkRun; 
 // Status buttons: the first is the main one; "Return" opens a comment field first; a blocked one
 // is disabled and says why. The studio doing the client's step (agree, accept, return) is asked
 // the client's channel before sending (WorkConfirm); the dialog closes after the answer either way —
-// a refusal is said in the card
-function StatusButtons({ task, buttons, run, busy }: { task: WorkTask; buttons: StatusButton[]; run: WorkRun; busy: boolean }) {
+// a refusal is said in the card. An intent (the tile dropped on a column of the board) presses the
+// button of that status once; a blocked one is not pressed — the hint under the buttons says why
+function StatusButtons({ task, buttons, run, busy, intent, onIntent }: {
+  task: WorkTask; buttons: StatusButton[]; run: WorkRun; busy: boolean; intent: WorkStatus | null; onIntent?: () => void;
+}) {
   const { t } = useTranslation();
   const [returning, setReturning] = useState(false);
   const [comment, setComment] = useState("");
   const [asking, setAsking] = useState<{ button: StatusButton; comment?: string } | null>(null);
   const hintId = useId();
+  const used = useRef<WorkStatus | null>(null);
   useEffect(() => { setReturning(false); setComment(""); setAsking(null); }, [task.id, task.status]);
-  if (!buttons.length) return null;
-  const blocked = buttons.find((b) => b.blocked);
   const send = (b: StatusButton, text?: string, onBehalf?: WorkOnBehalf) => run((key) => setWorkStatus(key, task.id, b.to, text, onBehalf));
   const press = (b: StatusButton) => {
     if (b.comment) { setReturning(true); return; }
     if (b.behalf) { setAsking({ button: b }); return; }
     void send(b);
   };
+  useEffect(() => {
+    if (!intent || used.current === intent) return;
+    used.current = intent;
+    const b = buttons.find((x) => x.to === intent);
+    if (b && !b.blocked && !busy) press(b);
+    onIntent?.();
+  });  // every render: the intent is consumed once (used), the rest is read fresh
+  if (!buttons.length) return null;
+  const blocked = buttons.find((b) => b.blocked);
   const sendBack = async (ev: React.FormEvent) => {
     ev.preventDefault();
     if (!comment.trim()) return;
@@ -257,8 +300,8 @@ function StatusButtons({ task, buttons, run, busy }: { task: WorkTask; buttons: 
       </div>
       {blocked && (
         <Text id={hintId} size="small" tone="major">
-          {blocked.blocked === "photo"
-            ? t("work.card.blockedPhoto")
+          {blocked.blocked === "photo" ? t("work.card.blockedPhoto")
+            : blocked.blocked === "checks" ? t("work.card.blockedChecks", { n: checksLeft(task), m: task.result.length })
             : t("work.card.blockedWaiting", { list: task.waiting.map((w) => w.title).join(", ") })}
         </Text>
       )}
