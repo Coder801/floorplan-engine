@@ -20,6 +20,10 @@
   question, panel_master_place). It is a control device, not a light switch: no guessed link to
   lights (lighting.switch_links), and its control cable (CONTROL_MARK) runs from the panel as a
   line of its own whatever group the source gave it (wiring.py); it counts in the estimate.
+- Turned off (`panel.master: false`, the answer "no" in the wizard; decision 2026-11-25): the
+  master switch point of the source is dropped from the model with its links (cable `to`,
+  switch `controls`; a cable left without points is dropped too). Otherwise it would stay as an
+  ordinary switch of its group: wired, on the plan and on the elevations, though nobody wants it.
 """
 
 from __future__ import annotations
@@ -74,7 +78,10 @@ def placed_by_code(elec: Electrical) -> bool:
 def with_master_switch(plan: Plan, elec: Electrical) -> Electrical:
     """The model with the master switch point: with `panel.master: true` and no such point, one is
     put on the panel wall next to it, on the side the wall has room for, at HEIGHT (its note ends
-    with "*": an assumption). Unchanged without the master switch, the panel or its wall."""
+    with "*": an assumption). With `panel.master: false` the source's master switch points are
+    dropped (without_master_switch). Unchanged without the panel or its wall."""
+    if elec.panel.master is False:
+        return without_master_switch(elec)
     if not master_on(elec) or elec.board is None:
         return elec
     if any(is_master(p) for p in elec.points) or any(p.id == POINT_ID for p in elec.points):
@@ -98,3 +105,24 @@ def with_master_switch(plan: Plan, elec: Electrical) -> Electrical:
         note=NOTE[plan.language] + "*",
     )
     return elec.model_copy(update={"points": [*elec.points, point]})
+
+
+def without_master_switch(elec: Electrical) -> Electrical:
+    """The model without the master switch points and the links to them: ids out of cable `to`
+    and switch `controls`, a cable without points left is dropped. Unchanged if there are none."""
+    gone = {p.id for p in elec.points if is_master(p)}
+    if not gone:
+        return elec
+    points = [
+        p.model_copy(update={"controls": [c for c in p.controls if c not in gone]})
+        if gone & set(p.controls)
+        else p
+        for p in elec.points
+        if p.id not in gone
+    ]
+    cables = [
+        c.model_copy(update={"to": [t for t in c.to if t not in gone]}) if gone & set(c.to) else c
+        for c in elec.cables
+        if c.from_ not in gone and set(c.to) - gone
+    ]
+    return elec.model_copy(update={"points": points, "cables": cables})

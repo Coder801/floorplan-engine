@@ -17,6 +17,7 @@ from floorplan_engine.electrical.master import (
     master_point,
     placed_by_code,
     with_master_switch,
+    without_master_switch,
 )
 from floorplan_engine.electrical.panel import build_panel
 from floorplan_engine.electrical.panel_questions import GROUPS_FIELD, panel_questions
@@ -263,3 +264,53 @@ def test_answers_turn_master_on_with_groups(tmp_path: Path) -> None:
     assert setup.master is True and setup.master_off == ["QF1"] and setup.reserve == []
     assert report.question_states["panel_master_off"] == "answered"
     assert master_point(report.electrical) is not None
+
+
+def _with_master_cables(panel: dict[str, Any]) -> Electrical:
+    """The source has a master switch in the light group QF1, in a cable with the sconce and in a
+    cable of its own, and a switch that names it in controls."""
+    noted = [
+        _pt("m", "switch", "QF1", 2600, height=900, note="майстер-вимикач"),
+        _pt("k1", "switch", "QF1", 2800, height=900, controls=["l1", "m"]),
+    ]
+    data = _elec(panel, noted).model_dump(mode="json", by_alias=True, exclude_none=True)
+    data["cables"] = [
+        {"id": "c1", "from": "board", "to": ["l1", "m", "k1"], "group": "QF1", "cable": "3x1.5"},
+        {"id": "c2", "from": "board", "to": ["m"], "group": "QF1", "cable": "3x1.5"},
+    ]
+    return Electrical.model_validate(data)
+
+
+def test_master_no_drops_the_source_point() -> None:
+    """Decision 2026-11-25: "no" to the master switch drops its point from the model with the
+    links to it, so it is neither wired nor drawn as an ordinary switch of its group."""
+    plan = _plan("uk")
+    elec = with_master_switch(plan, _with_master_cables({"master": False}))
+    ids = {p.id for p in elec.points}
+    assert "m" not in ids and {"l1", "k1"} <= ids
+    assert [(c.id, c.to) for c in elec.cables] == [("c1", ["l1", "k1"])]
+    assert next(p for p in elec.points if p.id == "k1").controls == ["l1"]
+    wiring = box_wiring(plan, validate_plan(plan)[1], elec)
+    assert wiring is not None and not any(r.target == "m" for r in wiring.runs)
+    # Unset or "yes": the point stays; nothing to drop — the model as it is
+    src = _with_master_cables({})
+    assert with_master_switch(plan, src) is src
+    assert master_point(with_master_switch(plan, src)) is not None
+    plain = _elec({"master": False})
+    assert without_master_switch(plain) is plain
+
+
+def test_answer_no_removes_the_point_from_the_built_model(tmp_path: Path) -> None:
+    """The wizard answer "no" (answers.yaml) reaches the model the elevations are drawn from."""
+    project = tmp_path / "p"
+    project.mkdir()
+    plan = {"name": "T", "default_wall_thickness": 100, "source": "text", "rooms": ROOMS}
+    elec = _with_master_cables({}).model_dump(mode="json", by_alias=True, exclude_none=True)
+    (project / "room.yaml").write_text(yaml.safe_dump(plan, allow_unicode=True), "utf-8")
+    (project / "electrical.yaml").write_text(yaml.safe_dump(elec, allow_unicode=True), "utf-8")
+    (project / "answers.yaml").write_text(yaml.safe_dump({"answers": {"panel_master": "no"}}))
+    report = validate_project(project)
+    assert not report.errors
+    assert report.electrical is not None
+    assert report.electrical.panel.master is False
+    assert "m" not in {p.id for p in report.electrical.points}

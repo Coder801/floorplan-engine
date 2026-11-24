@@ -1,6 +1,6 @@
 {
   "project": "Квартира 71 м²",
-  "answers_digest": "44136fa355b3678a",
+  "answers_digest": "af3fe5902cf87a55",
   "stages": [
     {
       "stage": "plan",
@@ -41,15 +41,11 @@
     },
     {
       "stage": "panel",
-      "status": "questions",
+      "status": "ready",
       "builds": true,
       "reason": "",
-      "weight": 3,
-      "questions": [
-        "panel_phases",
-        "panel_input",
-        "panel_master"
-      ]
+      "weight": 0,
+      "questions": []
     }
   ],
   "questions": [
@@ -197,7 +193,7 @@
       "option_labels": {},
       "assumption": 1.0,
       "severity": "minor",
-      "state": "open"
+      "state": "answered"
     },
     {
       "id": "panel_input",
@@ -212,7 +208,7 @@
       "option_labels": {},
       "assumption": 63.0,
       "severity": "minor",
-      "state": "open"
+      "state": "answered"
     },
     {
       "id": "panel_master",
@@ -232,7 +228,7 @@
       },
       "assumption": "yes",
       "severity": "minor",
-      "state": "open"
+      "state": "answered"
     }
   ],
   "issues": [
@@ -256,13 +252,13 @@
     },
     {
       "file": "electrical.yaml",
-      "path": "points[68]",
+      "path": "points[67]",
       "severity": "warning",
       "message": "тёплый пол «auto_entry_floor_reg» (зона по регулятору): в floor_heating зоны нет — построена кодом: Кухня-вітальня, коридор, передпокій* (допущение: помещение по подписи или месту регулятора); уточните по дизайну или задайте heating_rooms"
     },
     {
       "file": "electrical.yaml",
-      "path": "points[68]",
+      "path": "points[67]",
       "severity": "warning",
       "message": "тёплый пол «auto_entry_floor_reg» (зона по регулятору): одной змейкой покрыта не вся зона: 2 из 3 участков — разбейте зону на две записи floor_heating или поправьте exclude"
     },
@@ -271,12 +267,6 @@
       "path": "groups.QF17",
       "severity": "warning",
       "message": "QF17: Регулятор ТП (2,16 кВт) в общей группе — нужна своя линия"
-    },
-    {
-      "file": "electrical.yaml",
-      "path": "panel",
-      "severity": "warning",
-      "message": "Вводной автомат 63 А — допущение: уточните по техусловиям (panel.input)"
     },
     {
       "file": "plumbing.yaml",
