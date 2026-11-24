@@ -1,3 +1,9 @@
+## v0.20.1 (2026-11-25)
+
+### Fix
+
+- **electrical**: drop master switch point when master is answered no
+
 ## v0.20.0 (2026-11-24)
 
 ### Feat
