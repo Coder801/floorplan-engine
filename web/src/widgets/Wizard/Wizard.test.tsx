@@ -36,7 +36,7 @@ describe("Wizard", () => {
     expect(screen.getByText("Обязательный шаг: влияет на цену")).toBeInTheDocument();
     const recalc = screen.getByRole("button", { name: "Пересчитать" });
     expect(recalc).toBeDisabled();
-    expect(screen.queryByRole("button", { name: "Назад" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Назад" })).toBeDisabled();
 
     const cards = screen.getByRole("radiogroup", { name: "Сколько фаз на вводе?" });
     expect(within(cards).getByRole("radio", { name: /Одна фаза.*сейчас в проекте/ })).not.toBeChecked();

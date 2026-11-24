@@ -78,10 +78,10 @@ export function ReportDialog({ projectKey, onClose }: Props) {
       </Stack>
       {!parts.size && <Text size="small" tone="muted">{t("report.nothing")}</Text>}
       {error && <Text size="small" tone="critical" role="alert">{t("report.pdfFailed", { error })}</Text>}
+      <Button type="submit" variant="primary" block className={css.pdf} disabled={!parts.size || busy}>
+        {busy ? t("report.pdfBusy") : t("report.pdf")}
+      </Button>
       <Stack direction="row" gap={2} wrap={false} className={css.buttons}>
-        <Button type="submit" variant="primary" disabled={!parts.size || busy}>
-          {busy ? t("report.pdfBusy") : t("report.pdf")}
-        </Button>
         <Button onClick={open} disabled={!parts.size || busy}>{t("report.open")}</Button>
         <Button onClick={onClose}>{t("report.cancel")}</Button>
       </Stack>

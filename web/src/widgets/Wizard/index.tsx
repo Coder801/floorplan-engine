@@ -324,9 +324,9 @@ export function Wizard({ project, variants, ceiling, scene = null, reserve, mast
         </section>
 
         <footer className={css.foot}>
-          {/* Back is gone on the first step and "next" on the last; the empty cell keeps the other in place */}
+          {/* Back is disabled on the first step and "next" is gone on the last; the empty cell keeps back in place */}
           <div className={css.nav}>
-            {first ? <span /> : <Button onClick={() => go(at === DONE ? steps.length - 1 - index : -1)}>{t("wizard.back")}</Button>}
+            <Button disabled={first} onClick={() => go(at === DONE ? steps.length - 1 - index : -1)}>{t("wizard.back")}</Button>
             {step ? (
               <Button disabled={invalid(step, picks[step.id])} onClick={() => next(step)}>
                 {isPicked(picks[step.id]) || shownGroups(step) !== undefined || isRequired(step.id) ? t("wizard.next") : t("wizard.skip")}

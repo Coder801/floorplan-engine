@@ -39,7 +39,7 @@
   grid-area: foot; display: flex; justify-content: space-between; gap: var(--space-2); padding: var(--space-3) var(--space-6);
   border-top: 1px solid var(--line);
 }
-// Back and "next" are the same size ("next" and "skip" too), and one stays put when the other is gone
+// Back and "next" are the same size ("next" and "skip" too), and back is disabled on the first step, "next" is gone on the last
 .nav { display: grid; grid-template-columns: repeat(2, minmax(128px, 1fr)); gap: var(--space-2); }
 .primary { min-width: 168px; }
 

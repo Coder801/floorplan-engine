@@ -1,5 +1,5 @@
-// "Estimate for print" is a Modal (like WorkConfirm); here only its content. The buttons fill the
-// dialog width, half each; on a phone the Modal is a sheet at the bottom, the buttons are big
+// "Estimate for print" is a Modal (like WorkConfirm); here only its content. "Download PDF" takes
+// the whole width above "Open" and "Cancel", which fill the width half each; on a phone the Modal is a sheet at the bottom, the buttons are big
 // targets
 
 @use "@/shared/styles/mixins" as *;
@@ -8,5 +8,5 @@
 .buttons > * { flex: 1 1 0; min-width: 0; }
 
 @media (max-width: $phone) {
-  .buttons > * { min-height: var(--control-h-lg); }
+  .pdf, .buttons > * { min-height: var(--control-h-lg); }
 }
