@@ -26,7 +26,7 @@ from pathlib import Path
 from typing import Annotated, Any, Literal
 
 from fastapi import Body, FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, PlainTextResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -48,6 +48,7 @@ from floorplan_engine.service import project_store as ps
 from floorplan_engine.service import sync
 from floorplan_engine.service.api.auth import Auth
 from floorplan_engine.service.api.feedback import install_feedback_routes
+from floorplan_engine.service.api.report import result_page, result_pdf
 from floorplan_engine.service.api.work import install_work_routes
 from floorplan_engine.service.db import access as acc
 from floorplan_engine.service.db import repositories as repo
@@ -320,6 +321,20 @@ def _read_routes(
             if page is None:
                 raise HTTPException(404, f"листа {index} нет")
             return Response(zf.read(page["file"]), media_type="application/json")
+
+    @app.get("/api/projects/{key}/result")
+    def result(
+        request: Request, key: str, parts: str | None = None, orientation: str = "portrait"
+    ) -> HTMLResponse:
+        with artifact(request, key) as zf:
+            return result_page(zf, check_manifest(zf), parts, orientation)
+
+    @app.get("/api/projects/{key}/result.pdf")
+    def result_as_pdf(
+        request: Request, key: str, parts: str | None = None, orientation: str = "portrait"
+    ) -> Response:
+        with artifact(request, key) as zf:
+            return result_pdf(zf, check_manifest(zf), parts, orientation)
 
     @app.get("/api/projects/{key}/out/{rel:path}")
     def out_file(request: Request, key: str, rel: str) -> Response:

@@ -610,13 +610,15 @@ export function Viewer({ account = null }: { account?: Account | null }) {
   }, [tourReady, forced]);
   const closeTour = useCallback(() => { markTourSeen(); setTour(false); }, []);
 
-  // Download: sheet PNG (the whole sheet, at most A3 150 dpi) and the project DXF. A drawing with
+  // Download: sheet PNG (the whole sheet, at most A3 150 dpi), the project DXF and the estimate for
+  // print (electrical service only, widgets/ReportDialog). A drawing with
   // options puts it in their first row, any other screen gets a row of its own
   const download = project && current && !estimate && !info && !workTab && (
     <DownloadMenu
       onPng={page && !source && !loading ? () => downloadSheetPng(page, `${project.name}-${page.name}.png`) : null}
       dxf={project.dxf ? { href: `${base(current)}/out/${enc(project.dxf)}`, name: project.dxf } : null}
-      withDxf={mode === "engineering"} />
+      withDxf={mode === "engineering"}
+      report={electricalOn ? (project.artifact ? current : null) : undefined} />
   );
   let downloadInStage = false;
   let main: React.ReactNode;

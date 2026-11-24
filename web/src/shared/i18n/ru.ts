@@ -178,6 +178,20 @@ export const ru = {
   download: {
     download: "Скачать", sheet: "Лист для альбома", dxf: "Проект для AutoCAD",
     allSheets: "все листы", notBuilt: "Проект не собран",
+    paused: "Временно недоступно",
+    report: "Смета для печати",
+  },
+  report: {
+    title: "Смета для печати",
+    lead: "Отчёт на листах A4: скачайте PDF или откройте в новой вкладке. Отметьте, что в него войдёт.",
+    electrical: "Электрика",
+    part: {
+      plan: "План электрики", material_rough: "Черновые материалы", material_finish: "Чистовые материалы",
+      work_rough: "Черновые работы", work_finish: "Чистовые работы", panel: "Однолинейная схема щита",
+    },
+    orientation: "Ориентация листа", portrait: "Книжная", landscape: "Альбомная",
+    open: "Открыть", cancel: "Отмена", nothing: "Отметьте хотя бы один раздел",
+    pdf: "Скачать PDF", pdfBusy: "Готовим PDF…", pdfFailed: "Не удалось сделать PDF: {{error}}",
   },
   gate: {
     role: { client: "хозяин квартиры", installer: "монтажник", designer: "проектировщик" },

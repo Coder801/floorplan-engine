@@ -75,7 +75,7 @@ plugins = ["pydantic.mypy"]
 files = ["src", "tests", "scripts"]
 
 [[tool.mypy.overrides]]
-module = ["authlib.*", "ezdxf.*", "matplotlib.*", "pypdfium2.*", "rapidocr_onnxruntime.*", "svgelements.*"]
+module = ["authlib.*", "ezdxf.*", "fontTools.*", "matplotlib.*", "pypdfium2.*", "rapidocr_onnxruntime.*", "svgelements.*"]
 ignore_missing_imports = true
 
 [tool.pydantic-mypy]

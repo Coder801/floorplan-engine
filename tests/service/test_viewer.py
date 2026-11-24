@@ -5,6 +5,7 @@ import os
 import zipfile
 from pathlib import Path
 
+import httpx
 import pytest
 from fastapi.testclient import TestClient
 
@@ -91,6 +92,59 @@ def test_list_and_project(root: Path) -> None:
     assert client.get("/api/projects/kv1/sheets/2").status_code == 404
     assert client.get("/api/projects/kv1/source/план.pdf").content == b"%PDF"
     assert client.get("/api/projects/kv1/model/room.yaml").text == "name: Кв\n"
+
+
+def test_result_report(root: Path) -> None:
+    client = TestClient(create_viewer(root))
+    response = client.get("/api/projects/kv1/result")
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/html")
+    # No wiring sheet in this build: the report says so instead of failing
+    assert "В сборке нет листа проводки" in response.text
+    assert client.get("/api/projects/kv1/result?parts=plan,photos").status_code == 400
+    landscape = client.get("/api/projects/kv1/result?orientation=landscape")
+    assert "size: A4 landscape" in landscape.text
+    assert client.get("/api/projects/kv1/result?orientation=square").status_code == 400
+    assert client.get("/api/projects/nope/result").status_code == 404
+
+
+def test_result_pdf_goes_through_the_service(root: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The PDF is the report page printed by the service: the same HTML, the orientation, a
+    download named after the project and the document; no service — 503."""
+    sent: dict[str, object] = {}
+
+    def fake_post(url: str, json: dict[str, object], timeout: float) -> httpx.Response:
+        sent.update(json, url=url)
+        return httpx.Response(200, content=b"%PDF-1.7 fake")
+
+    client = TestClient(create_viewer(root))
+    monkeypatch.delenv("SHTROBA_PDF_URL", raising=False)
+    assert client.get("/api/projects/kv1/result.pdf").status_code == 503
+    monkeypatch.setenv("SHTROBA_PDF_URL", "http://pdf.local/")
+    monkeypatch.setattr(httpx, "post", fake_post)
+    response = client.get("/api/projects/kv1/result.pdf?parts=panel&orientation=landscape")
+    assert response.status_code == 200 and response.content.startswith(b"%PDF")
+    assert response.headers["content-type"] == "application/pdf"
+    disposition = response.headers["content-disposition"]
+    assert 'filename="report.pdf"' in disposition and "filename*=UTF-8''" in disposition
+    assert sent["url"] == "http://pdf.local/generate-pdf-html"
+    assert sent["orientation"] == "landscape"
+    assert str(sent["filename"]).endswith("Однолинейная схема щита.pdf")
+    html = client.get("/api/projects/kv1/result?parts=panel&orientation=landscape").text
+    assert sent["html"] == html
+    assert client.get("/api/projects/kv1/result.pdf?parts=photos").status_code == 400
+
+
+def test_result_pdf_service_failure_is_502(root: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def broken(url: str, json: dict[str, object], timeout: float) -> httpx.Response:
+        raise httpx.ConnectError("refused")
+
+    monkeypatch.setenv("SHTROBA_PDF_URL", "http://pdf.local")
+    monkeypatch.setattr(httpx, "post", broken)
+    client = TestClient(create_viewer(root))
+    assert client.get("/api/projects/kv1/result.pdf").status_code == 502
+    monkeypatch.setattr(httpx, "post", lambda *a, **k: httpx.Response(500, content=b"{}"))
+    assert client.get("/api/projects/kv1/result.pdf").status_code == 502
 
 
 def test_stale_after_model_edit(root: Path) -> None:

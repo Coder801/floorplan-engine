@@ -15,6 +15,8 @@ GET /api/projects/{name}/source/{path}  a source from source/
 GET /api/projects/{name}/model/{file}   model YAML
 GET /api/projects/{name}/sheets         sheet manifest from out/project.epd
 GET /api/projects/{name}/sheets/{n}     sheet n (1, 2…): vector primitives for canvas
+GET /api/projects/{name}/result         estimate report as HTML for the PDF (api/report.py)
+GET /api/projects/{name}/result.pdf     the same report printed to PDF (api/pdf.py)
 POST /api/projects/{name}/answers       one answer → answers.yaml and rebuild (not for text)
 POST /api/projects/{name}/answers/review the developer takes a client answer into account or
                                         sends it back with a comment
@@ -42,7 +44,7 @@ from typing import Annotated, Any
 
 import yaml
 from fastapi import Body, FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, PlainTextResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, Response
 
 from floorplan_engine import BRAND, __version__
 from floorplan_engine.electrical.estimate import PRICES_FILE
@@ -64,6 +66,7 @@ from floorplan_engine.pipeline import (
     save_wizard,
 )
 from floorplan_engine.service.api.auth import Auth
+from floorplan_engine.service.api.report import result_page, result_pdf
 from floorplan_engine.service.api.viewer_db import (
     answer_body,
     answer_note,
@@ -270,6 +273,20 @@ def _read_routes(
                 raise HTTPException(404, f"листа {index} нет")
             # The page is already JSON: return it as is, without parsing or rebuilding
             return Response(zf.read(page["file"]), media_type="application/json")
+
+    @app.get("/api/projects/{name}/result")
+    def result(
+        request: Request, name: str, parts: str | None = None, orientation: str = "portrait"
+    ) -> HTMLResponse:
+        with artifact(request, name) as zf:
+            return result_page(zf, check_manifest(zf), parts, orientation)
+
+    @app.get("/api/projects/{name}/result.pdf")
+    def result_as_pdf(
+        request: Request, name: str, parts: str | None = None, orientation: str = "portrait"
+    ) -> Response:
+        with artifact(request, name) as zf:
+            return result_pdf(zf, check_manifest(zf), parts, orientation)
 
 
 def _note(auth: Auth | None, request: Request) -> AnswerNote:

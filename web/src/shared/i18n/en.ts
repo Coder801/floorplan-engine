@@ -177,6 +177,20 @@ export const en: Messages = {
   download: {
     download: "Download", sheet: "Sheet for the album", dxf: "Project for AutoCAD",
     allSheets: "all sheets", notBuilt: "Project not built",
+    paused: "Temporarily unavailable",
+    report: "Estimate for print",
+  },
+  report: {
+    title: "Estimate for print",
+    lead: "The report on A4 pages: download a PDF or open it in a new tab. Tick what goes into it.",
+    electrical: "Electrical",
+    part: {
+      plan: "Electrical plan", material_rough: "Rough-in materials", material_finish: "Finish materials",
+      work_rough: "Rough-in work", work_finish: "Finish work", panel: "Panel single-line diagram",
+    },
+    orientation: "Page orientation", portrait: "Portrait", landscape: "Landscape",
+    open: "Open", cancel: "Cancel", nothing: "Tick at least one section",
+    pdf: "Download PDF", pdfBusy: "Making the PDF…", pdfFailed: "Could not make the PDF: {{error}}",
   },
   gate: {
     role: { client: "apartment owner", installer: "installer", designer: "designer" },

@@ -177,6 +177,20 @@ export const uk: Messages = {
   download: {
     download: "Завантажити", sheet: "Аркуш для альбому", dxf: "Проєкт для AutoCAD",
     allSheets: "усі аркуші", notBuilt: "Проєкт не зібрано",
+    paused: "Тимчасово недоступно",
+    report: "Кошторис для друку",
+  },
+  report: {
+    title: "Кошторис для друку",
+    lead: "Звіт на аркушах A4: завантажте PDF або відкрийте в новій вкладці. Позначте, що до нього ввійде.",
+    electrical: "Електрика",
+    part: {
+      plan: "План електрики", material_rough: "Чорнові матеріали", material_finish: "Чистові матеріали",
+      work_rough: "Чорнові роботи", work_finish: "Чистові роботи", panel: "Однолінійна схема щита",
+    },
+    orientation: "Орієнтація аркуша", portrait: "Книжкова", landscape: "Альбомна",
+    open: "Відкрити", cancel: "Скасувати", nothing: "Позначте хоча б один розділ",
+    pdf: "Завантажити PDF", pdfBusy: "Готуємо PDF…", pdfFailed: "Не вдалося зробити PDF: {{error}}",
   },
   gate: {
     role: { client: "власник квартири", installer: "монтажник", designer: "проєктувальник" },
