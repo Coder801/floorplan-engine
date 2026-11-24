@@ -27,6 +27,7 @@ from floorplan_engine.electrical.estimate import (
     derived_quote,
     edit_price_items,
     format_number,
+    parse_number,
     quantities,
     split_key,
     unknown_keys,
@@ -587,6 +588,12 @@ def test_empty_estimate_is_zero() -> None:
 )
 def test_num_format(value: float, digits: int, text: str) -> None:
     assert format_number(value, digits) == text
+    assert parse_number(text) == round(value, digits)
+
+
+@pytest.mark.parametrize("text", ["—", "", "нет цены"])
+def test_parse_number_no_price(text: str) -> None:
+    assert parse_number(text) is None
 
 
 def test_panel_from_board_sheet_priced_by_kind() -> None:
@@ -956,9 +963,9 @@ def test_wide_chase_priced_from_narrow_in_the_same_material() -> None:
     assert quote.price is not None and quote.price.price == 170
 
 
-def test_thermostat_is_one_row_without_a_price() -> None:
-    """A floor heating controller: its own item by point, never priced by the mock and out of the
-    total; no flush box, frame or fitting work is counted for it (its work comes later)."""
+def test_thermostat_is_one_row_by_point() -> None:
+    """A floor heating controller: its own item by point, priced by the mock (2026-11-24); no flush
+    box, frame or fitting work is counted for it (its work comes later)."""
     plan = make_plan(RECT, [DOOR])
     _, contours = validate_plan(plan)
     reg = [_pt("t1", "thermostat", 2000, 1500, "QF5"), _pt("t2", "thermostat", 2800, 1500, "QF5")]
@@ -974,16 +981,16 @@ def test_thermostat_is_one_row_without_a_price() -> None:
     est = build_estimate(wiring, elec, prices, "ru")
     row = next(ln for ln in est.lines if ln.key == "thermostat")
     assert (row.name, row.unit, row.qty) == ("Регулятор тёплого пола", "шт", 2)
-    assert row.price is None and row.total is None and row.section == "material_finish"
-    assert est.unpriced == 1
+    assert row.price == 3000 and row.total == 6000 and row.section == "material_finish"
+    assert est.unpriced == 0
     assert est.total == pytest.approx(sum(ln.total for ln in est.lines if ln.total is not None))
     assert build_estimate(wiring, elec, prices, "uk").lines[est.lines.index(row)].name == (
         "Регулятор теплої підлоги"
     )
-    # A studio price list may price it: then it is in the total like any other item
+    # A studio price list beats the mock like for any other item
     own = PriceList.model_validate({"items": {"thermostat": 1000}})
     priced = build_estimate(wiring, elec, Prices(own, MockPriceService()), "ru")
-    assert priced.unpriced == 0 and priced.total == pytest.approx(est.total + 2000)
+    assert priced.unpriced == 0 and priced.total == pytest.approx(est.total - 4000)
 
 
 @pytest.mark.usefixtures("heating_released")

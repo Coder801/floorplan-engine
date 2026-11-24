@@ -70,6 +70,9 @@ MOCK_PRICES: dict[str, float] = {
     "sconce": 1200,
     "led_output": 150,
     "outlet": 150,
+    # Programmable floor heating controller with a floor sensor, no Wi-Fi: Rozetka and Epicentr
+    # 2026-11 span 1500-4800 UAH, a typical mid-range one ~3000 (decision 2026-11-24)
+    "thermostat": 3000,
     "led_strip": 250,
     "led_psu": 450,
     "led_psu_din": 1300,
@@ -93,15 +96,16 @@ MOCK_PRICES: dict[str, float] = {
     "work.insulation_test": 150,
     "work.protection_test": 150,  # as the insulation test: per power group, with a report
 }
-# Items the mock deliberately has no price for (decision 2026-11-14): a floor heating controller
-# is other work than a switch or an output (a chase for the cable and the sensor tube, laying in
-# the screed), its items and prices come with the floor heating section. Until then the row
-# stays in the estimate with its quantity, "no price", out of the total
-UNPRICED = frozenset(
-    {"thermostat", "heating_cable", "heating_sensor", "heating_conduit", "work.floor_heating"}
-)
+# Items the mock deliberately has no price for (decision 2026-11-14): the floor heating cable,
+# sensor, tube and laying get their prices with the floor heating section; the controller itself
+# has a mock price since 2026-11-24. Until then the row stays in the estimate with its quantity,
+# "no price", out of the total
+UNPRICED = frozenset({"heating_cable", "heating_sensor", "heating_conduit", "work.floor_heating"})
 # Narrow chase by wall material, UAH per metre (Kyiv 2026-11); a wide one is × 1.5 (DERIVED_PRICES)
 CHASE_PRICES = {"concrete": 200.0, "claydite": 150.0, "brick": 120.0, "aerated": 90.0}
+# Low-voltage cable by mark, UAH per metre: copper UTP cat.6, a 305 m reel 6800-9900 UAH
+# (Rozetka, Prom, Vencon 2026-11: ~22-32 per metre; CCA is cheaper but not for fixed wiring)
+CABLE_MARK_PRICES = {"UTP cat.6": 28.0}
 CABLE_PER_MM2 = 10.0  # UAH per metre per mm² of total conductor section: 3×1.5 → 45, 3×2.5 → 75
 BOX_PRICES = {"80": 40.0, "100x100": 60.0, "150x110": 110.0, "190x140": 180.0}
 CONDUIT_PRICES = {16: 10.0, 20: 14.0, 25: 20.0, 32: 30.0}  # PVC conduit, UAH per metre
@@ -135,6 +139,8 @@ def mock_price(key: str) -> float | None:
 
 def _mock_price(base: str, param: str) -> float | None:
     if base == "cable":
+        if param in CABLE_MARK_PRICES:
+            return CABLE_MARK_PRICES[param]
         m = re.fullmatch(r"(\d+)x([\d.,]+)", param.replace("×", "x"))
         if m is None:
             return None

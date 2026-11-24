@@ -1,7 +1,7 @@
 ﻿section;key;name;unit;qty;price;total
 material_rough;cable.3x1.5;Кабель ВВГнг 3×1,5;м;360,8;45;16236,00
 material_rough;cable.3x2.5;Кабель ВВГнг 3×2,5;м;309,1;70;21637,00
-material_rough;cable.UTP cat.6;Кабель UTP cat.6;м;23,5;;
+material_rough;cable.UTP cat.6;Кабель UTP cat.6;м;23,5;28;658,00
 material_rough;socket_box;Підрозетник;шт;70;20;1400,00
 material_rough;junction_box.80;Коробка розподільча Ø80;шт;5;60;300,00
 material_rough;junction_box.100x100;Коробка розподільча 100×100;шт;13;60;780,00
@@ -35,7 +35,7 @@ material_finish;pendant;Світильник підвісний;шт;3;1500;4500
 material_finish;sconce;Бра;шт;11;1200;13200,00
 material_finish;led_output;Вивід для підсвітки;шт;8;150;1200,00
 material_finish;outlet;Вивід кабелю до техніки;шт;6;150;900,00
-material_finish;thermostat;Регулятор теплої підлоги;шт;2;;
+material_finish;thermostat;Регулятор теплої підлоги;шт;2;3000;6000,00
 material_finish;led_strip;LED-підсвітка;м;6,35;250;1587,50
 material_finish;led_psu;Блок живлення LED 12 В;шт;8;450;3600,00
 rough;work.cable;Прокладання кабелю;м;602,9;34;20498,60

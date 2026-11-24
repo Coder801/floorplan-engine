@@ -31,6 +31,8 @@ def test_mock_knows_every_line_and_is_deterministic() -> None:
         ("cable.3x1.5", 45),  # 10 UAH per mm² of total cross-section
         ("cable.3x2.5", 75),
         ("cable.5x6", 300),
+        ("cable.UTP cat.6", 28),  # low-voltage cable by mark
+        ("thermostat", 3000),
         ("cable.abc", None),
         ("frame.1", 60),
         ("frame.4", 180),
@@ -93,10 +95,10 @@ def test_estimate_marks_service_lines_and_notes() -> None:
 
 
 def test_mock_leaves_floor_heating_without_a_price() -> None:
-    """Prices are not invented: the floor heating controller, cable, sensor and their work are
-    the items the mock skips (a section length as the key parameter too)."""
+    """Prices are not invented: the floor heating cable, sensor and their work are the items the
+    mock skips (a section length as the key parameter too); the controller has a price."""
     heating = {"heating_cable", "heating_sensor", "heating_conduit", "work.floor_heating"}
-    assert {"thermostat", *heating} == UNPRICED and set(LINES) >= UNPRICED
-    for key in ("thermostat", *heating, "heating_cable.27"):
+    assert heating == UNPRICED and set(LINES) >= UNPRICED
+    for key in (*heating, "heating_cable.27"):
         assert mock_price(key) is None
         assert MockPriceService().lookup(key).price is None

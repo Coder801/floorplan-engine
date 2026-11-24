@@ -1054,6 +1054,14 @@ def format_number(x: float, digits: int = 2) -> str:
     return text.removesuffix(",00") if digits else text
 
 
+def parse_number(value: str) -> float | None:
+    """Back from format_number ("1 587,50" → 1587.5); "—" or other text (no price) → None."""
+    try:
+        return float(value.replace(" ", "").replace("\u00a0", "").replace(",", "."))
+    except ValueError:
+        return None
+
+
 def write_markdown(
     est: Estimate,
     path: Path,
