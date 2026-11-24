@@ -1,3 +1,11 @@
+## v0.20.0 (2026-11-24)
+
+### Feat
+
+- **viewer**: work board with tabs, cards and stage widgets
+- **service**: shrink photos before storage
+- **electrical**: drill partitions inside one room for cables
+
 ## v0.19.1 (2026-11-24)
 
 ### Fix
