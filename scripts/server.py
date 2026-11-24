@@ -53,6 +53,10 @@ MODEL_FILES = (
 )
 # Их пишет и просмотр: на сервере могут быть ответы и выбор, которых нет в папке
 VIEWER_FILES = ("answers.yaml", "variant.yaml")
+# Свой прайс проекта: только исключения поверх прайса студии (решение 2026-11-25). Нет файла в
+# папке — send удаляет прайс проекта на сервере, смета берёт прайс студии
+PRICES_FILE = "prices.yaml"
+SEND_FILES = (*MODEL_FILES, PRICES_FILE)
 DB_SERVICE = "Postgres"  # сервис базы в проекте Railway
 PG_IMAGE = "postgres:18"  # pg_dump не старше сервера быть не может, 18 снимает и 17
 BACKUP_DIR = Path.home() / "shtroba-backups"  # данные клиентов: вне репозитория
@@ -165,31 +169,43 @@ def between(out: str) -> str:
     return out.split(FILE_START, 1)[1].split(FILE_END, 1)[0]
 
 
-def write_files(project: str, files: dict[str, str]) -> None:
+def write_files(project: str, files: dict[str, str | None]) -> None:
+    """Файлы — в папку проекта с сервера и push оттуда; None удаляет файл (прайс проекта). Push
+    собирает только новую версию модели: если менялся один прайс, проект пересобирается сам."""
     folder = f'"$w"/{shlex.quote(project)}'
     body = ""
     for name, text in files.items():
+        path = f"{folder}/{shlex.quote(name)}"
+        if text is None:
+            body += f"rm -f {path}\n"
+            continue
         packed = base64.b64encode(text.encode("utf-8")).decode("ascii")
-        body += f"echo {packed} | base64 -d > {folder}/{shlex.quote(name)}\n"
-    remote(_pulled(project, f"{body}floorplan-engine project push {folder}\n"))
+        body += f"echo {packed} | base64 -d > {path}\n"
+    body += f"floorplan-engine project push {folder}\n"
+    if set(files) == {PRICES_FILE}:
+        body += f"floorplan-engine project build {shlex.quote(project)}\n"
+    remote(_pulled(project, body))
 
 
 def send(project: str, names: list[str], yes: bool = False) -> None:
-    """Файлы модели из projects/<проект> — на сервер новой версией, разница — до записи."""
-    if bad := sorted(set(names) - set(MODEL_FILES)):
-        raise ServerError(f"{', '.join(bad)}: можно только {', '.join(MODEL_FILES)}")
+    """Файлы модели из projects/<проект> — на сервер новой версией, разница — до записи;
+    prices.yaml — прайс проекта: нет его в папке — на сервере он удаляется."""
+    if bad := sorted(set(names) - set(SEND_FILES)):
+        raise ServerError(f"{', '.join(bad)}: можно только {', '.join(SEND_FILES)}")
     folder = ROOT / "projects" / project
-    changed: dict[str, str] = {}
+    changed: dict[str, str | None] = {}
     for name in names:
         path = folder / name
-        if not path.is_file():
+        if not path.is_file() and name != PRICES_FILE:
             raise ServerError(f"нет файла {path}")
-        ours = path.read_text(encoding="utf-8")
+        ours = path.read_text(encoding="utf-8") if path.is_file() else None
         theirs = read_file(project, name)
-        if ours == theirs:
+        if (ours or "") == theirs:
             print(f"{name}: совпадает с сервером")
             continue
         changed[name] = ours
+        if ours is None:
+            print(f"{name}: в папке нет — прайс проекта на сервере удалится, смета — по студии")
         if name in VIEWER_FILES:
             print(
                 f"ВНИМАНИЕ: {name} пишет и просмотр (ответы, вариант проводки) — что записано "
@@ -199,7 +215,7 @@ def send(project: str, names: list[str], yes: bool = False) -> None:
             "".join(
                 difflib.unified_diff(
                     theirs.splitlines(keepends=True),
-                    ours.splitlines(keepends=True),
+                    (ours or "").splitlines(keepends=True),
                     f"сервер/{name}",
                     f"папка/{name}",
                 )
@@ -341,9 +357,9 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("rebuild", help="пересобрать проекты текущим кодом")
     p.add_argument("names", nargs="*", help="имена; без них — все проекты владельца")
     p.add_argument("--wait", action="store_true", help="дождаться выкладки этой версии")
-    p = sub.add_parser("send", help="файл модели — на сервер новой версией")
+    p = sub.add_parser("send", help="файл модели или прайс проекта — на сервер")
     p.add_argument("project")
-    p.add_argument("files", nargs="+", help=", ".join(MODEL_FILES))
+    p.add_argument("files", nargs="+", help=", ".join(SEND_FILES))
     p.add_argument("--yes", action="store_true", help="не спрашивать")
     p = sub.add_parser("backup", help="копия базы и файлов хранилища на этот компьютер")
     p.add_argument("--to", type=Path, default=BACKUP_DIR, help=f"папка (по умолчанию {BACKUP_DIR})")

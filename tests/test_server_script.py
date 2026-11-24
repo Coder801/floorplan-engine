@@ -355,3 +355,28 @@ def test_dump_needs_docker(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> N
     monkeypatch.setattr(server.shutil, "which", lambda _: None)
     with pytest.raises(server.ServerError, match="нужен Docker"):
         server.dump_database("postgresql://x", tmp_path / "x.dump")
+
+
+def test_send_removes_the_project_prices_missing_in_the_folder(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Decision 2026-11-25: prices.yaml is the project's exceptions; no file in the folder — the
+    server's project list is removed and the project rebuilt (push alone builds only a new model
+    version)."""
+    _project(tmp_path, monkeypatch, "x: 1\n")
+    calls = _server_file(monkeypatch, "items:\n  work.cable: 30\n")
+    server.send("kv42", ["prices.yaml"], yes=True)
+    assert 'rm -f "$w"/kv42/prices.yaml' in calls[-1]
+    assert calls[-1].index("project push") < calls[-1].index("project build kv42")
+    calls = _server_file(monkeypatch, "")  # none on the server either: nothing to do
+    server.send("kv42", ["prices.yaml"], yes=True)
+    assert not any("project push" in c for c in calls)
+
+
+def test_send_model_file_does_not_rebuild_twice(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _project(tmp_path, monkeypatch, "окно: 2000\n")
+    calls = _server_file(monkeypatch, "окно: 1400\n")
+    server.send("kv42", ["room.yaml"], yes=True)
+    assert "project build" not in calls[-1]
