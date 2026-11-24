@@ -279,7 +279,8 @@ export const en: Messages = {
   },
   prices: {
     title: "Studio prices · electrical",
-    lead: "Works: the studio price next to the {{region}} market. Project estimates take prices from here at the next build.",
+    lead: "Works and materials: the studio price, for works next to the {{region}} market. Project estimates take prices from here at the next build.",
+    materials: "Materials", material: "Material",
     leave: "Some prices are not saved. Leave without saving?",
     work: "Work", unit: "Unit", studio: "Studio price, {{currency}}", market: "Market, {{region}}: min · median · max",
     noMarket: "Market", vsMedian: "Vs median", priceOf: "Price: {{name}}",

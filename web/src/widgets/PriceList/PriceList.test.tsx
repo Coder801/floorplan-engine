@@ -69,6 +69,26 @@ describe("PriceList", () => {
     expect(screen.getByText("в смете — имитация")).toBeInTheDocument();
   });
 
+  it("shows materials in a table of their own, editable the same way", async () => {
+    const user = userEvent.setup();
+    const cable = priceRow({ key: "cable.3x1.5", kind: "material", section: "material_rough", unit: "м",
+                             name: { ru: "Кабель ВВГнг 3×1,5", uk: "Кабель ВВГнг 3×1,5" }, price: 45, market: null });
+    const box = priceRow({ key: "socket", kind: "material", section: "material_finish",
+                           name: { ru: "Розетка", uk: "Розетка" }, price: null, service: 90, market: null });
+    const sent = stubApi({ "GET /api/prices": pricePage({ rows: [priceRow({ kind: "work" }), cable, box] }),
+                           "POST /api/prices": pricePage() });
+    render(<PriceList />);
+    const heading = await screen.findByRole("heading", { name: "Материалы" });
+    const table = heading.nextElementSibling as HTMLElement;
+    expect(within(table).getByRole("columnheader", { name: "Материал" })).toBeInTheDocument();
+    expect(within(table).getByRole("textbox", { name: "Цена: Кабель ВВГнг 3×1,5" })).toHaveValue("45");
+    expect(within(table).getByRole("textbox", { name: "Цена: Розетка" })).toHaveAttribute("placeholder", "90");
+    expect(within(table).queryByText("нет в прайсах")).toBeNull();  // no market columns for materials
+    await user.type(within(table).getByRole("textbox", { name: "Цена: Розетка" }), "60");
+    await user.click(screen.getByRole("button", { name: "Сохранить" }));
+    expect(sent.at(-1)?.body).toEqual({ items: { socket: 60 } });
+  });
+
   it("shows a load error", async () => {
     stubApi({ "GET /api/prices": fail(403, "Только студия") });
     render(<PriceList />);

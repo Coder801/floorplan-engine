@@ -614,8 +614,8 @@ export interface Elevation extends ElevWall {
   right?: ElevSide;       // neighbour at the right corner (next)
 }
 
-// Studio price page (GET /api/prices, pipeline.price_page): electrical works, the studio price
-// (prices.yaml next to the projects) and the market spread (market.yaml)
+// Studio price page (GET /api/prices, pipeline.price_page): electrical works and materials, the
+// studio price (prices.yaml next to the projects) and, for works, the market spread (market.yaml)
 export interface MarketQuote { source: string; price: number; text: string }
 export interface MarketSpread {
   n: number; min: number; q1: number; median: number; q3: number; max: number;
@@ -623,8 +623,9 @@ export interface MarketSpread {
   quotes: MarketQuote[];      // by price, cheapest first
 }
 export interface PriceRow {
-  key: string;                // estimate item key, work.*
-  section: "rough" | "finish";
+  key: string;                // estimate item key: work.* or a material; with a parameter — cable.3x1.5
+  kind?: "work" | "material"; // missing on an older server: works only
+  section: "rough" | "finish" | "material_rough" | "material_finish";
   unit: string;
   name: { ru: string; uk: string };
   hint: { ru: string; uk: string } | null;

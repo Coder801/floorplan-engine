@@ -1,7 +1,9 @@
 // Studio price list, a section of the studio settings (#@studio/prices): electrical works with
 // the studio price and the market spread (min — median — max of public price lists,
-// market.yaml) and a footnote on the period and sources. The studio edits its prices here →
-// prices.yaml next to the projects (POST /api/prices); estimates take them at the next build.
+// market.yaml), then the materials with the studio price alone (decision 2026-11-25: every item
+// the price list holds), and a footnote on the period and sources. The studio edits its prices
+// here → prices.yaml next to the projects (POST /api/prices); estimates take them at the next
+// build, a project's own prices.yaml changes only the keys it names.
 
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -55,6 +57,27 @@ export function PriceList({ onDirty }: { onDirty?: (dirty: boolean) => void }) {
 
   const name = (r: PriceRow) => (lng === "uk" ? r.name.uk : r.name.ru);
   const market = data?.market ?? null;
+  // An older server sends works only, without kind
+  const works = data?.rows.filter((r) => (r.kind ?? "work") === "work") ?? [];
+  const materials = data?.rows.filter((r) => r.kind === "material") ?? [];
+
+  // The studio price cell: an input for the studio, the number for others; no own price — the
+  // service's one as the placeholder and a note
+  const priceCell = (r: PriceRow) => {
+    const value = draft[r.key] ?? (r.price === null ? "" : String(r.price));
+    return (
+      <td className={css.num}>
+        {data?.editable ? (
+          <input className={css.input} inputMode="decimal" value={value} aria-label={t("prices.priceOf", { name: name(r) })}
+                 placeholder={r.service === null ? "—" : money(r.service, lng)}
+                 onChange={(e) => edit(r.key, e.target.value)} />
+        ) : r.price !== null ? money(r.price, lng) : "—"}
+        {r.price === null && r.service !== null && !(r.key in draft) && (
+          <div className={cx(css.basis, "muted")} title={t("prices.serviceNote")}>{t("prices.service")}</div>
+        )}
+      </td>
+    );
+  };
   const period = market ? periodText(market.period, lng) : "";
 
   return (
@@ -81,8 +104,7 @@ export function PriceList({ onDirty }: { onDirty?: (dirty: boolean) => void }) {
                 </tr>
               </thead>
               <tbody>
-                {data.rows.map((r) => {
-                  const value = draft[r.key] ?? (r.price === null ? "" : String(r.price));
+                {works.map((r) => {
                   const current = r.key in changes ? changes[r.key] : r.price;
                   const dev = deviation(current, r.market?.median);
                   const shown = open === r.key && r.market;
@@ -94,16 +116,7 @@ export function PriceList({ onDirty }: { onDirty?: (dirty: boolean) => void }) {
                           {r.market?.basis && <div className={cx(css.basis, "muted")}>{r.market.basis}</div>}
                         </td>
                         <td className="muted">{r.unit}</td>
-                        <td className={css.num}>
-                          {data.editable ? (
-                            <input className={css.input} inputMode="decimal" value={value} aria-label={t("prices.priceOf", { name: name(r) })}
-                                   placeholder={r.service === null ? "—" : money(r.service, lng)}
-                                   onChange={(e) => edit(r.key, e.target.value)} />
-                          ) : r.price !== null ? money(r.price, lng) : "—"}
-                          {r.price === null && r.service !== null && !(r.key in draft) && (
-                            <div className={cx(css.basis, "muted")} title={t("prices.serviceNote")}>{t("prices.service")}</div>
-                          )}
-                        </td>
+                        {priceCell(r)}
                         <td className={css.num}>
                           {r.market && (
                             <span className={css.medianCell}>
@@ -153,6 +166,30 @@ export function PriceList({ onDirty }: { onDirty?: (dirty: boolean) => void }) {
                 })}
               </tbody>
             </table>
+
+            {materials.length > 0 && (
+              <>
+                <Heading level={3} size="caps" className={css.subhead}>{t("prices.materials")}</Heading>
+                <table className={cx(css.table, css.materials)}>
+                  <thead>
+                    <tr>
+                      <th>{t("prices.material")}</th>
+                      <th>{t("prices.unit")}</th>
+                      <th className={css.num}>{t("prices.studio", { currency: data.currency })}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {materials.map((r) => (
+                      <tr key={r.key} className={cx(r.key in draft && css.changed)}>
+                        <td>{name(r)}</td>
+                        <td className="muted">{r.unit}</td>
+                        {priceCell(r)}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </>
+            )}
 
             {data.editable && (
               <div className={css.actions}>

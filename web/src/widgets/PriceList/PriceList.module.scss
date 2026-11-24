@@ -1,5 +1,6 @@
 // Studio price list (a settings section): a table of works with the studio price, the market
-// median and spread bar and the deviation; the period footnote and sources below
+// median and spread bar and the deviation; a table of materials with the studio price; the
+// period footnote and sources below
 
 @use "@/shared/styles/mixins" as *;
 
@@ -18,6 +19,8 @@
 }
 .num { text-align: right !important; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .spreadHead { min-width: 300px; }
+.subhead { margin: var(--space-6) 0 var(--space-3); }
+.materials { max-width: 720px; }
 .basis { @include type(small); font-size: 11px; margin-top: 2px; }
 .changed td { background: var(--soft); }
 .far { color: var(--critical); font-weight: 500; }
