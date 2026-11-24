@@ -89,11 +89,16 @@ def partition_strips(
     the floor under it, network.Network.under): a band through the whole wall thickness, without
     windows (a glass partition is not a pass) and without doors (passing them costs more,
     door_strips). The bands themselves: routing.wall_strips."""
-    return wall_strips(geoms, _is_partition, doors, inner)
+    return wall_strips(geoms, _inner_partition if inner else _is_partition, doors, inner)
 
 
 def _is_partition(seg: WallSegment) -> bool:
     return not seg.bearing and (seg.thickness <= PARTITION_MAX or seg.partition)
+
+
+def _inner_partition(seg: WallSegment) -> bool:
+    """A wall inside a room pipes go under: only one said to be a partition (plasterboard)."""
+    return seg.partition and not seg.bearing
 
 
 def riser_center(r: Riser, geoms: dict[str, RoomGeometry]) -> Vec:

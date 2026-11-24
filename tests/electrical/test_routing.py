@@ -18,6 +18,7 @@ from floorplan_engine.electrical.routing import (
     PANEL_FREE,
     PASS_FAVOUR,
     STEP,
+    WALL_DRILL_MAX,
     WALL_HOLE_SHARE,
     WALL_PASS_COST,
     End,
@@ -28,6 +29,7 @@ from floorplan_engine.electrical.routing import (
     beside_mm,
     ceiling_passes,
     crossings,
+    drillable_walls,
     length,
     search_memo,
     simplify,
@@ -479,3 +481,35 @@ def test_weighted_route_drills_the_wall_instead_of_a_detour() -> None:
     assert length(through) == 2300 and max(p.y for p in through) < 1200  # through the wall
     # The weight keeps the holes and the bands
     assert heavy.with_holes(crossings(through, heavy.bands)).weight == 2.0
+
+
+@pytest.mark.parametrize("thickness", [100, 400])
+def test_partition_inside_one_room_is_drillable(thickness: int) -> None:
+    """Decision 2026-11-24: a wall with the same room on both sides (the partition of an entrance
+    hall inside the kitchen-living room, 1900 long from the outer wall) is drilled by the same
+    rule as a wall between rooms: one band through its thickness, both sides merged; a thick one
+    (a box) is not. Room 6000×4000 with the partition at x 2950…3050, y 0…1900."""
+    from floorplan_engine.model.geometry import room_geometries
+    from floorplan_engine.validation.plan import validate_plan
+
+    stub = {"thickness": thickness}
+    plan = make_plan(
+        [
+            {"length": 4000},
+            {"length": 6000},
+            {"length": 4000},
+            {"length": 2950},
+            {"length": 1900, "turn": 270, **stub},
+            {"length": 100, "turn": 270, **stub},
+            {"length": 1900, **stub},
+            {"length": 2950},
+        ]
+    )
+    _, contours = validate_plan(plan)
+    geoms = list(room_geometries(plan, contours))
+    bands = drillable_walls(geoms)
+    if thickness > WALL_DRILL_MAX:
+        assert bands == []
+        return
+    assert len(bands) == 1
+    assert bands[0].bounds == pytest.approx((2950, 0, 3050, 1900))

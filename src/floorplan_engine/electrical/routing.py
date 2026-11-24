@@ -8,6 +8,10 @@ once from a source (panel, box) to all its targets at once.
 
 Walls (decision 2026-11-11): a wall between two rooms of the flat that is not load-bearing and no
 thicker than WALL_DRILL_MAX (or explicitly `partition: true`) may be drilled (drillable_walls).
+So may a partition inside one room (decision 2026-11-24): a wall with the same room on both
+sides, such as the partition of an entrance hall that is part of the kitchen-living room, by the
+same rule; the box it ends at (thicker than WALL_DRILL_MAX, or with nothing of the flat behind)
+stays solid.
 Its band plus CLEARANCE on each side is open, a pass across it costs about WALL_PASS_COST
 whatever the thickness (spread over the cells across the band); running along a wall inside its
 band costs several times the cable and is not worth it. Load-bearing walls, outer walls and thick
@@ -141,9 +145,10 @@ def wall_strips(
 ) -> list[Polygon]:
     """Bands of walls between rooms of the flat through the whole wall thickness, for walls that
     accept() lets through; without windows and without the blocked bands (openings). inner=True
-    means walls inside one room (the same room on both sides). Outer walls (no room beyond) are
-    never in. A shared wall is described in both rooms, so its bands are merged: one wall, one
-    band."""
+    means walls inside one room (the same room on both sides) instead: which of them pass is up
+    to accept() too. Outer walls (no room beyond) are never in. A shared wall is described in both
+    rooms (a partition inside a room — twice, once per side), so its bands are merged: one wall,
+    one band."""
     cut = shapely.unary_union(list(blocked)).buffer(1.0) if blocked else None
     out: list[Polygon] = []
     for g in geoms:
@@ -154,8 +159,7 @@ def wall_strips(
             beyond = [o for o in geoms if point_in_polygon(probe, o.contour.vertices)]
             if not beyond:
                 continue
-            within = all(o is g for o in beyond)
-            if within != inner or (within and not seg.partition):
+            if all(o is g for o in beyond) != inner:
                 continue
             out_v = seg.outward * seg.thickness
             strip: BaseGeometry = Polygon(
@@ -187,15 +191,18 @@ def drillable(seg: WallSegment) -> bool:
 
 
 def drillable_walls(geoms: Sequence[RoomGeometry]) -> list[Polygon]:
-    """Walls between rooms that a route may cross (drillable), without doors and openings: those
-    are bands of their own (ceiling_passes) or free passes (floor)."""
+    """Walls a route may cross (drillable): between rooms and inside one room (decision
+    2026-11-24), without doors and openings: those are bands of their own (ceiling_passes) or
+    free passes (floor)."""
     openings = [
         opening_strip(g, op)
         for g in geoms
         for op in g.room.openings
         if op.type is not OpeningType.WINDOW
     ]
-    return wall_strips(geoms, drillable, openings)
+    between = wall_strips(geoms, drillable, openings)
+    inside = wall_strips(geoms, drillable, openings, inner=True)
+    return _polygons(shapely.unary_union(between + inside)) if inside else between
 
 
 def below_ceiling(op: Opening, ceiling: float) -> bool:
