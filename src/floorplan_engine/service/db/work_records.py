@@ -32,6 +32,7 @@ from floorplan_engine.service.db.work import (
     text_field,
 )
 from floorplan_engine.service.objects import ObjectStore, work_photo_key
+from floorplan_engine.service.photos import shrink
 
 PHOTO_TYPES = {
     "image/jpeg": "jpg",
@@ -73,7 +74,7 @@ def add_photo(
     actor: Actor,
 ) -> WorkPhoto:
     """A photo or a PDF report to an approved plan's task, up to PHOTO_MAX; the file goes to
-    storage under projects/<project>/work/<task>/."""
+    storage under projects/<project>/work/<task>/, a photo shrunk (service/photos.py)."""
     if not (actor.can("work_do") or actor.can("work_accept")):
         raise WorkError("нет права на это действие", 403)
     check_open(plan)
@@ -86,6 +87,7 @@ def add_photo(
         raise WorkError(f"файл больше {PHOTO_MAX // (1024 * 1024)} МБ", 413)
     if not data:
         raise WorkError("файл пустой", 422)
+    data = shrink(data, content_type).data
     photo_id = uuid.uuid4()
     key = work_photo_key(project.id, task.id, photo_id, ext)
     store.put(key, data)

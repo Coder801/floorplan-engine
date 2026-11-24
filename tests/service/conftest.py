@@ -198,6 +198,13 @@ class World:
     ) -> None:
         work.change_status(self.db, self.project, self.plan(), task, to, comment, actor, body)
 
+    def tick(self, task: WorkTask, actor: work.Actor) -> None:
+        """Tick every item of the acceptance criterion: a task is accepted only with all."""
+        for index in range(len(task.result)):
+            work.set_check(
+                self.db, self.project, self.plan(), task, {"index": index, "checked": True}, actor
+            )
+
     def photo(self, task: WorkTask, actor: work.Actor, data: bytes = PNG) -> None:
         records.add_photo(
             self.db,

@@ -23,6 +23,7 @@ from floorplan_engine.service.db.access import Principal, audit, aware, now
 from floorplan_engine.service.db.models import AccessCode, AppUser, Feedback, Project
 from floorplan_engine.service.db.work_records import PHOTO_MAX as WORK_PHOTO_MAX
 from floorplan_engine.service.objects import ObjectStore, feedback_photo_key
+from floorplan_engine.service.photos import shrink
 
 KINDS = ("bug", "idea", "other")
 STATUSES = ("new", "seen", "done")
@@ -182,13 +183,14 @@ def create(
     for photo, ext in zip(photos, exts, strict=True):
         photo_id = uuid.uuid4()
         key = feedback_photo_key(row.id, photo_id, ext)
-        store.put(key, photo.data)
+        data = shrink(photo.data, photo.content_type).data
+        store.put(key, data)
         stored.append(
             {
                 "id": str(photo_id),
                 "key": key,
                 "content_type": photo.content_type.split(";")[0].strip().lower(),
-                "size": len(photo.data),
+                "size": len(data),
                 "file_name": photo.file_name[:200],
             }
         )

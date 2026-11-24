@@ -3,6 +3,10 @@ and size, who deletes them, comments and payments with their rules."""
 
 from __future__ import annotations
 
+import io
+import random
+
+from PIL import Image
 from sqlalchemy import select
 
 from floorplan_engine.service.db import work
@@ -52,6 +56,31 @@ def test_photos(world: World) -> None:
     assert not world.store.exists(key) and chases.photos == [theirs]
     records.delete_photo(world.db, world.store, world.project, plan, theirs, world.owner)
     assert chases.photos == []
+
+
+def test_photo_is_shrunk_before_storage(world: World) -> None:
+    plan, chases, _ = world.approved()
+    noise = random.Random(1).randbytes(4000 * 600 * 3)
+    buffer = io.BytesIO()
+    Image.frombytes("RGB", (4000, 600), noise).save(buffer, "JPEG", quality=98)
+    data = buffer.getvalue()
+    records.add_photo(
+        world.db,
+        world.store,
+        world.project,
+        plan,
+        chases,
+        data,
+        "wall.jpg",
+        "image/jpeg",
+        "",
+        world.installer,
+    )
+    (photo,) = chases.photos
+    stored = world.store.get(photo.object_key)
+    assert photo.object_key.endswith(".jpg") and photo.content_type == "image/jpeg"
+    assert photo.size == len(stored) < len(data)
+    assert Image.open(io.BytesIO(stored)).size == (3000, 450)
 
 
 def test_comments_and_payments(world: World) -> None:

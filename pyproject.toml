@@ -47,6 +47,7 @@ service = [
     "itsdangerous>=2.2.0",
     "opencv-python-headless>=5.0.0.93",
     "pdfplumber>=0.11.10",
+    "pillow>=13.0.0",
     "psycopg[binary]>=3.3.6",
     "python-multipart>=0.0.32",
     "rapidocr-onnxruntime>=1.4.4",
