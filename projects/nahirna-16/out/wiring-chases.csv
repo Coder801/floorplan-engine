@@ -7,11 +7,11 @@ point,bath,w6,1450,0.20,1,narrow,ceiling,power,bath_hood
 point,bath,w7,2150,2.10,1,narrow,ceiling,power,bath_towel
 point,bath,w9,274,1.50,1,narrow,ceiling,power,bath_floor_reg
 point,bath2,w1,620,2.90,1,narrow,ceiling,power,bath2_led_1
-point,bath2,w2,1024,2.70,2,narrow,ceiling,power,bath2_socket_2 bath2_socket_1
+point,bath2,w2,1096,2.70,2,narrow,ceiling,power,bath2_socket_2 bath2_socket_1
 point,bath2,w2,1320,0.20,1,narrow,ceiling,power,bath2_hood
 point,bath2,w3,916,2.10,1,narrow,ceiling,power,bath2_switch_1
 point,bath2,w3,1914,2.70,1,narrow,ceiling,power,bath2_socket_3
-point,bath2,w4,341,2.70,1,narrow,ceiling,power,bath2_socket_4
+point,bath2,w4,199,2.70,1,narrow,ceiling,power,bath2_socket_4
 point,bedroom,w1,1394,2.10,1,narrow,ceiling,power,bedroom_switch_1
 point,bedroom,w2,360,1.90,2,narrow,ceiling,power,bedroom_ac bedroom_sconce_1
 point,bedroom,w2,466,2.25,2,narrow,ceiling,power,bedroom_socket_1 bedroom_switch_2
@@ -38,7 +38,7 @@ point,living,w3,2006,2.90,2,narrow,ceiling,power,kitchen_led_1 kitchen_socket_3
 point,living,w4,456,1.90,1,narrow,ceiling,power,kitchen_socket_4
 point,living,w4,2534,2.70,3,wide,ceiling,power,kitchen_socket_7 kitchen_socket_5 kitchen_socket_6
 point,living,w4,3570,2.75,1,narrow,ceiling,power,kitchen_ac
-point,living,w5,6041,2.70,1,narrow,ceiling,power,living_socket_1
+point,living,w5,5899,2.70,1,narrow,ceiling,power,living_socket_1
 point,living,w6,2046,1.80,1,narrow,ceiling,low,living_data_1
 point,living,w6,1176,2.89,1,narrow,ceiling,power,living_socket_2
 point,living,w6,1831,2.60,2,narrow,ceiling,power,living_socket_3 living_socket_4
