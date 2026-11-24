@@ -522,6 +522,13 @@ class PanelSetup(StrictModel):
     backup_power: float | None = Field(
         default=None, gt=0, description="Мощность инвертора или генератора, кВт"
     )
+    demand: float | None = Field(
+        default=None,
+        gt=0,
+        le=1,
+        description="Коэффициент спроса Kс квартиры — только от студии или из техусловий; "
+        "не задан — по установленной мощности (0,8 до 10 кВт … 0,5 выше 25 кВт, допущение)",
+    )
     battery_voltage: Literal[12, 24, 48] | None = Field(
         default=None, description="Напряжение АКБ инвертора, В; не задано — 48 (допущение)"
     )

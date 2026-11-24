@@ -246,7 +246,7 @@ class PanelGroup:
     purpose_assumed: bool
     loads: tuple[Load, ...]
     cable: str  # group cable types, comma-separated; without one in the model the assumed type
-    section: float | None  # smallest cross-section from the model; None for an assumed cable
+    section: float | None  # smallest cross-section, model or assumed cable; None: unreadable
     breaker: Breaker
     rcd: str | None  # "30 мА": RCBO or behind an RCD
     wet: bool
@@ -498,7 +498,10 @@ def panel_groups(
             continue  # low-voltage: not in the panel
         loads = [ld for p in points if (ld := point_load(p, places[p.id], lang)) is not None]
         marks = sorted({c.cable for c in elec.cables if c.group == g})
-        sections = [s for m in marks if (s := cable_section(m)) is not None]
+        # No cable in the model: the one the wiring lays (an assumption, "*" in the tables) is
+        # the cable of the group all the same — the breaker is checked against it too
+        cable = ", ".join(marks) or assumed_mark(elec, g, points)
+        sections = [s for m in marks or [cable] if (s := cable_section(m)) is not None]
         section = min(sections) if sections else None
         kind = _kind(points, loads, section)
         three = is_three_phase(elec, g, loads)
@@ -538,7 +541,7 @@ def panel_groups(
             purpose or composed_purpose(points, places, lang),
             purpose is None,
             tuple(loads),
-            ", ".join(marks) or assumed_mark(elec, g, points),
+            cable,
             section,
             breaker,
             rcd,

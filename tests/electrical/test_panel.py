@@ -357,6 +357,9 @@ def test_panel_data_carries_catalog_models_and_texts() -> None:
     assert qf1["model"]["width"] == 35.0  # 2 modules of 17.5 mm
     assert data["groups"]["QF1"]["color"] == "#4e79a7"  # type: ignore[index]
     assert "автомат на групу, резерв: інвертор*" in data["texts"]["title"]  # type: ignore[index]
+    assert data["earthing"] == "TN-C-S" and data["npe_relay"] is None
+    tn_s = panel_data(panel, {}, "ЩР", "uk", earthing="TN-S", npe_relay=True)
+    assert tn_s["earthing"] == "TN-S" and tn_s["npe_relay"] is True
 
 
 def test_answers_to_panel_questions_apply_to_model(tmp_path: Path) -> None:
@@ -455,8 +458,9 @@ def test_smallest_enclosure_that_fits() -> None:
     assert all(sum(d.modules for d in r) <= enc.per_row for r in rows)
 
 
-def test_enclosure_rails_stay_at_12_modules_unless_asked() -> None:
-    # 16 modules of shared devices and 26 breakers fit 4 × 18 but not 4 × 12: not 18 by itself
+def test_enclosure_takes_18_module_rails_before_an_on_site_box() -> None:
+    # 16 modules of shared devices and 26 breakers fit 4 × 18 but not 4 × 12: one catalogue
+    # panel with wider rails, no remark; more than 72 modules — an on-site box and a remark
     common = [
         Device("QS1", DeviceKind.INPUT, "C63 2P", ""),
         Device("KV1", DeviceKind.RELAY, "63 А", ""),
@@ -468,10 +472,13 @@ def test_enclosure_rails_stay_at_12_modules_unless_asked() -> None:
     ]
     devices = [*common, *_breakers(26)]
     enc, rows, note = choose_enclosure(devices)
-    assert enc.per_row == 12 and note is not None  # on-site enclosure, more rails
-    assert all(sum(d.modules for d in r) <= 12 for r in rows)
-    enc, _, note = choose_enclosure(devices, "VS418PD")  # asked: an 18-module panel stays
+    assert enc.article == "VS318PD" and note is None  # 3 × 18: the smallest that takes them
+    assert all(sum(d.modules for d in r) <= 18 for r in rows)
+    enc, _, note = choose_enclosure(devices, "VS418PD")  # asked: the same panel
     assert enc.article == "VS418PD" and note is None
+    enc, rows, note = choose_enclosure([*common, *_breakers(70)])
+    assert enc.per_row == 12 and not enc.article and note is not None  # on-site, more rails
+    assert all(sum(d.modules for d in r) <= 12 for r in rows)
 
 
 def test_asked_enclosure_and_fallbacks() -> None:
@@ -670,7 +677,8 @@ def test_reserve_groups_gather_the_lines_of_a_model_group() -> None:
 
 def test_group_without_cable_gets_the_wiring_assumption() -> None:
     """No cable in the model: the panel takes the type the wiring lays (light 3x1.5, sockets
-    3x2.5, a heavy load by its breaker) and marks it as assumed; the breaker check stays off."""
+    3x2.5, a heavy load by its breaker), marks it as assumed and checks the breaker against it
+    all the same; one note for the panel instead of one per group."""
     points = [
         _pt("l1", "light", "QF1", ceiling=[500, 500], height=None, wall=None, offset=None),
         _pt("s1", "socket", "QF2"),
@@ -688,7 +696,11 @@ def test_group_without_cable_gets_the_wiring_assumption() -> None:
     assert groups["QF3"].cable == heavy_cable(
         _elec(points, {}), "QF3", [p for p in _elec(points, {}).points if p.group == "QF3"]
     )
-    assert groups["QF2"].section is None  # the breaker is not checked against an assumption
+    assert groups["QF2"].section == 2.5 and groups["QF1"].section == 1.5
+    texts = [w.text["ru"] for w in panel.warnings]
+    assert not any("нет марки кабеля" in t or "не прочитать сечение" in t for t in texts)
+    assert sum("приняты типовые" in t for t in texts) == 1
+    assert any("(3 групп)" in t for t in texts)
 
 
 def test_short_device_names_for_the_panel_table() -> None:
@@ -980,3 +992,23 @@ def test_standard_three_phase_rcbo_and_shared_rcd_on_one_phase() -> None:
     assert set(rcd.feeds) == {"QF2", "QF4"} and rcd.phase in ("L1", "L2", "L3")  # kitchen
     assert by_id["QF2"].phase == by_id["QF4"].phase == rcd.phase
     assert by_id["QF5"].kind is by_id["QF6"].kind is DeviceKind.BREAKER  # lighting, no RCD
+
+
+def test_demand_factor_from_the_model_and_the_input_remark() -> None:
+    """A big flat on a 63 A input: with the code's demand factor the remark is a question to the
+    supply terms (minor, with Kс and the installed power); with panel.demand set by the studio
+    the design current follows it — gone when it fits, major when it still does not."""
+    points = [
+        _pt(f"o{i}", "outlet", f"QF{i}", note=f"прибор {i}", power=3500) for i in range(1, 11)
+    ]
+    assumed = build_panel(_plan(), _elec(points, {}))
+    assert assumed is not None and assumed.demand == 0.5 and assumed.demand_assumed
+    total = [w for w in assumed.warnings if "panel.demand" in w.text["ru"]]
+    assert len(total) == 1 and total[0].severity == "minor"
+    assert "Kс 0,50 от 35,00 кВт" in total[0].text["ru"]
+    fits = build_panel(_plan(), _elec(points, {}, panel={"demand": 0.4}))
+    assert fits is not None and fits.demand == 0.4 and not fits.demand_assumed
+    assert not any("panel.demand" in w.text["ru"] for w in fits.warnings)
+    over = build_panel(_plan(), _elec(points, {}, panel={"demand": 0.6}))
+    assert over is not None
+    assert [w.severity for w in over.warnings if "panel.demand" in w.text["ru"]] == ["major"]

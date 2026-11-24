@@ -262,7 +262,7 @@
       "id": "panel_input",
       "stage": "panel",
       "audience": "studio",
-      "text": "Вступний автомат за техумовами? Зараз 63 А (припущення); розрахунковий струм квартири 82,6 А",
+      "text": "Вступний автомат за техумовами? Зараз 63 А (припущення); розрахунковий струм квартири 66,1 А",
       "target": "panel.input",
       "also": [],
       "answer": "value",
@@ -486,177 +486,15 @@
     },
     {
       "file": "electrical.yaml",
-      "path": "groups.QF1",
-      "severity": "warning",
-      "message": "QF1: нет марки кабеля — автомат подобран без проверки по сечению"
-    },
-    {
-      "file": "electrical.yaml",
-      "path": "groups.QF2",
-      "severity": "warning",
-      "message": "QF2: нет марки кабеля — автомат подобран без проверки по сечению"
-    },
-    {
-      "file": "electrical.yaml",
-      "path": "groups.QF3",
-      "severity": "warning",
-      "message": "QF3: нет марки кабеля — автомат подобран без проверки по сечению"
-    },
-    {
-      "file": "electrical.yaml",
-      "path": "groups.QF4",
-      "severity": "warning",
-      "message": "QF4: нет марки кабеля — автомат подобран без проверки по сечению"
-    },
-    {
-      "file": "electrical.yaml",
-      "path": "groups.QF5",
-      "severity": "warning",
-      "message": "QF5: нет марки кабеля — автомат подобран без проверки по сечению"
-    },
-    {
-      "file": "electrical.yaml",
-      "path": "groups.QF6",
-      "severity": "warning",
-      "message": "QF6: нет марки кабеля — автомат подобран без проверки по сечению"
-    },
-    {
-      "file": "electrical.yaml",
-      "path": "groups.QF7",
-      "severity": "warning",
-      "message": "QF7: нет марки кабеля — автомат подобран без проверки по сечению"
-    },
-    {
-      "file": "electrical.yaml",
-      "path": "groups.QF8",
-      "severity": "warning",
-      "message": "QF8: нет марки кабеля — автомат подобран без проверки по сечению"
-    },
-    {
-      "file": "electrical.yaml",
-      "path": "groups.QF9",
-      "severity": "warning",
-      "message": "QF9: нет марки кабеля — автомат подобран без проверки по сечению"
-    },
-    {
-      "file": "electrical.yaml",
-      "path": "groups.QF10",
-      "severity": "warning",
-      "message": "QF10: нет марки кабеля — автомат подобран без проверки по сечению"
-    },
-    {
-      "file": "electrical.yaml",
-      "path": "groups.QF11",
-      "severity": "warning",
-      "message": "QF11: нет марки кабеля — автомат подобран без проверки по сечению"
-    },
-    {
-      "file": "electrical.yaml",
-      "path": "groups.QF12",
-      "severity": "warning",
-      "message": "QF12: нет марки кабеля — автомат подобран без проверки по сечению"
-    },
-    {
-      "file": "electrical.yaml",
-      "path": "groups.QF13",
-      "severity": "warning",
-      "message": "QF13: нет марки кабеля — автомат подобран без проверки по сечению"
-    },
-    {
-      "file": "electrical.yaml",
-      "path": "groups.QF14",
-      "severity": "warning",
-      "message": "QF14: нет марки кабеля — автомат подобран без проверки по сечению"
-    },
-    {
-      "file": "electrical.yaml",
-      "path": "groups.QF15",
-      "severity": "warning",
-      "message": "QF15: нет марки кабеля — автомат подобран без проверки по сечению"
-    },
-    {
-      "file": "electrical.yaml",
-      "path": "groups.QF16",
-      "severity": "warning",
-      "message": "QF16: нет марки кабеля — автомат подобран без проверки по сечению"
-    },
-    {
-      "file": "electrical.yaml",
-      "path": "groups.QF17",
-      "severity": "warning",
-      "message": "QF17: нет марки кабеля — автомат подобран без проверки по сечению"
-    },
-    {
-      "file": "electrical.yaml",
-      "path": "groups.QF18",
-      "severity": "warning",
-      "message": "QF18: нет марки кабеля — автомат подобран без проверки по сечению"
-    },
-    {
-      "file": "electrical.yaml",
-      "path": "groups.QF19",
-      "severity": "warning",
-      "message": "QF19: нет марки кабеля — автомат подобран без проверки по сечению"
-    },
-    {
-      "file": "electrical.yaml",
-      "path": "groups.QF20",
-      "severity": "warning",
-      "message": "QF20: нет марки кабеля — автомат подобран без проверки по сечению"
-    },
-    {
-      "file": "electrical.yaml",
-      "path": "groups.QF21",
-      "severity": "warning",
-      "message": "QF21: нет марки кабеля — автомат подобран без проверки по сечению"
-    },
-    {
-      "file": "electrical.yaml",
-      "path": "groups.QF23",
-      "severity": "warning",
-      "message": "QF23: нет марки кабеля — автомат подобран без проверки по сечению"
-    },
-    {
-      "file": "electrical.yaml",
-      "path": "groups.QF24",
-      "severity": "warning",
-      "message": "QF24: нет марки кабеля — автомат подобран без проверки по сечению"
-    },
-    {
-      "file": "electrical.yaml",
-      "path": "groups.QF25",
-      "severity": "warning",
-      "message": "QF25: нет марки кабеля — автомат подобран без проверки по сечению"
-    },
-    {
-      "file": "electrical.yaml",
-      "path": "groups.QF26",
-      "severity": "warning",
-      "message": "QF26: нет марки кабеля — автомат подобран без проверки по сечению"
-    },
-    {
-      "file": "electrical.yaml",
-      "path": "groups.QF27",
-      "severity": "warning",
-      "message": "QF27: нет марки кабеля — автомат подобран без проверки по сечению"
-    },
-    {
-      "file": "electrical.yaml",
       "path": "panel",
       "severity": "warning",
-      "message": "Расчётный ток квартиры 75,8 А больше вводного автомата 63 А"
+      "message": "Марок кабелей в модели нет (26 групп): приняты типовые, помечены * — если проложен другой кабель, задайте его в cables"
     },
     {
       "file": "electrical.yaml",
       "path": "panel",
       "severity": "warning",
       "message": "LED: длина ленты не описана у bedroom_led_output_1, loggia_led_output_1, bath_led_output_1, bath_led_output_2 — принято 5 м на вывод, блок питания по ней; уточните ленту (led_strips) или мощность вывода (power)"
-    },
-    {
-      "file": "electrical.yaml",
-      "path": "panel",
-      "severity": "warning",
-      "message": "60 модулей не помещаются ни в один щит каталога — корпус по месту: нужен щит больше или два щита"
     }
   ]
 }

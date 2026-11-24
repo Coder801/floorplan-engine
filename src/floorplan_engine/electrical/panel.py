@@ -47,7 +47,8 @@ electrical/panel_questions.py, labels in electrical/panel_text.py.
 - Enclosure is a real catalogue panel (`panel.enclosure`, or the smallest with 12-module
   rails that fits the devices; 18-module rails only when asked, decision 2026-11-13): rails by
   device kind (`panel_rows`), a device is never split between rails and never sticks out of
-  the enclosure; if nothing fits, an on-site enclosure with 12-module rails and a remark.
+  the enclosure; 18-module rails when no 12-module panel takes the devices (decision
+  2026-11-25); if nothing fits, an on-site enclosure with 12-module rails and a remark.
 """
 
 from __future__ import annotations
@@ -187,6 +188,7 @@ class BoardPanel:
     led: LedBox | None = None  # LED supplies box under the panel; None with supplies at the strip
     phases: int = 1  # 1 — 230 V, 3 — 400 V
     phases_assumed: bool = True  # not set in the model
+    demand_assumed: bool = True  # demand factor by installed power, not from the model
 
     @property
     def calculated(self) -> float:
@@ -541,7 +543,8 @@ def build_panel(plan: Plan, elec: Electrical) -> BoardPanel | None:
     if phases == 3:
         groups = assign_phases(groups, elec, scheme)
     installed = sum(g.power for g in groups)
-    demand = demand_factor(installed / 1000)
+    # Demand factor from the studio (panel.demand) or by installed power, an assumption
+    demand = setup.demand if setup.demand is not None else demand_factor(installed / 1000)
     inp = Breaker("C", setup.input or INPUT_A, setup.input is None)
     # Voltage relay in every scheme (decision 2026-11-01): protects both the flat and the
     # inverter input from a lost neutral
@@ -567,7 +570,6 @@ def build_panel(plan: Plan, elec: Electrical) -> BoardPanel | None:
     main = [g for g in groups if not g.reserved]
     reserved = [g for g in groups if g.reserved]
     master = any(g.master for g in groups)
-    demand = demand_factor(sum(g.power for g in groups) / 1000)
     contactors = _master_devices(groups, demand, three, backup is not None, inp.rating, lang)
     # The main bus contactor after the shared devices; the backup one heads the backup bus
     devices += [d for d in contactors if not d.reserve]
@@ -623,6 +625,7 @@ def build_panel(plan: Plan, elec: Electrical) -> BoardPanel | None:
         setup.backup_power,
         phases=phases,
         phases_assumed=setup.phases is None,
+        demand_assumed=setup.demand is None,
     )
     enclosure, rows, fit_note = choose_enclosure(panel.devices, setup.enclosure)
     dc = build_dc(elec, lang) if backup == "inverter" else None
@@ -765,14 +768,14 @@ def choose_enclosure(
 ) -> tuple[Enclosure, list[list[Device]], Warning | None]:
     """Enclosure and devices by its rails. If an article is given and the devices fit, use it;
     otherwise the smallest catalogue panel with 12-module rails they fit in (fewer modules, then
-    lower; an 18-module one only when asked), with a remark if the given one did not fit; if
-    nothing fits, an on-site enclosure with 12-module rails and a remark."""
+    lower), then — when no such panel takes them — the smallest with wider rails (decision
+    2026-11-25: one catalogue panel of 18-module rails before an on-site box), with a remark if
+    the given one did not fit; if nothing fits, an on-site enclosure with 12-module rails and a
+    remark."""
     asked = ENCLOSURE_BY_ARTICLE.get(article) if article else None
-    # Chosen by itself: rails of at most 12 modules (the narrowest catalogue ones); a wider
-    # panel only when it is asked for (panel.enclosure)
+    # Chosen by itself: the narrowest catalogue rails (12 modules) first, wider ones after
     narrow = min(e.per_row for e in ENCLOSURES)
-    fits = [e for e in ENCLOSURES if e.per_row == narrow]
-    order = sorted(fits, key=lambda e: (e.modules, e.height))
+    order = sorted(ENCLOSURES, key=lambda e: (e.per_row != narrow, e.modules, e.height))
     if asked is not None:
         order.insert(0, asked)
     for enc in order:
@@ -834,8 +837,8 @@ def weak_spots(panel: BoardPanel, relay: bool, npe: bool | None = True) -> list[
         elif g.current > b.rating:
             msg = _both("w_overload", g=g.group, i=amps(g.current), r=b.rating)
             out.append(Warning("major", msg, g.group))
-        if g.section is None:
-            out.append(Warning("minor", _both("w_no_cable", g=g.group), g.group))
+        if g.section is None:  # a mark the code cannot read ("ВВГнг" without a section)
+            out.append(Warning("minor", _both("w_no_cable", g=g.group, c=g.cable), g.group))
         elif g.section in CABLE_LIMITS:
             rec, top = CABLE_LIMITS[g.section]
             c = g.cable
@@ -865,14 +868,25 @@ def weak_spots(panel: BoardPanel, relay: bool, npe: bool | None = True) -> list[
                     "major", _both("w_select", g=g.group, r=b.rating, i=panel.input.rating), g.group
                 )
             )
+    assumed = [g.group for g in panel.groups if g.cable_assumed]
+    if assumed:  # one note for the panel, not one per group: the tables mark each cable with *
+        out.append(Warning("minor", _both("w_cables_assumed", n=len(assumed))))
     calc_a = panel.design_current
     loads = panel.phase_loads
+    # The design current rests on the demand factor: assumed by the code — a question to the
+    # supply terms (minor); set by the studio (panel.demand) and still above the input — major
+    over = {
+        "i": amps(calc_a),
+        "r": panel.input.rating,
+        "k": f"{panel.demand:.2f}".replace(".", ","),
+        "p": kw(panel.installed),
+    }
+    severity = "minor" if panel.demand_assumed else "major"
     if loads and calc_a > panel.input.rating:
         worst = max(PHASES, key=lambda p: (loads[p], p))
-        msg = _both("w_total_phase", p=worst, i=amps(calc_a), r=panel.input.rating)
-        out.append(Warning("major", msg))
+        out.append(Warning(severity, _both("w_total_phase", ph=worst, **over)))
     elif calc_a > panel.input.rating:
-        out.append(Warning("major", _both("w_total", i=amps(calc_a), r=panel.input.rating)))
+        out.append(Warning(severity, _both("w_total", **over)))
     if loads and unbalance(loads) > UNBALANCE:
         spread = " · ".join(f"{p} {kw(loads[p])}" for p in PHASES)
         msg = _both("w_unbalance", s=spread, k=round(unbalance(loads) * 100))

@@ -4,7 +4,7 @@ material_rough;cable.3x1.5;Кабель ВВГнг 3×1,5;м;224,9;45;10120,50
 material_rough;cable.3x2.5;Кабель ВВГнг 3×2,5;м;361;70;25270,00
 material_rough;cable.3x6;Кабель ВВГнг 3×6;м;11,5;180;2070,00
 material_rough;cable.4x1.5;Кабель ВВГнг 4×1,5;м;61;60;3660,00
-material_rough;cable.UTP cat.6;Кабель UTP cat.6;м;46,1;;
+material_rough;cable.UTP cat.6;Кабель UTP cat.6;м;46,1;28;1290,80
 material_rough;conduit.20;Гофротруба ПВХ Ø20;м;315,9;14;4422,60
 material_rough;conduit.25;Гофротруба ПВХ Ø25;м;68,8;20;1376,00
 material_rough;conduit.32;Гофротруба ПВХ Ø32;м;141,6;30;4248,00
@@ -51,7 +51,7 @@ material_finish;pendant;Світильник підвісний;шт;2;1500;3000
 material_finish;sconce;Бра;шт;3;1200;3600,00
 material_finish;led_output;Вивід для підсвітки;шт;5;150;750,00
 material_finish;outlet;Вивід кабелю до техніки;шт;8;150;1200,00
-material_finish;thermostat;Регулятор теплої підлоги;шт;4;;
+material_finish;thermostat;Регулятор теплої підлоги;шт;4;3000;12000,00
 material_finish;led_strip;LED-підсвітка;м;4,42;250;1105,00
 rough;work.cable;Прокладання кабелю;м;663,4;34;22555,60
 rough;work.conduit;Укладання кабелю в гофротрубу;м;663,4;15;9951,00
