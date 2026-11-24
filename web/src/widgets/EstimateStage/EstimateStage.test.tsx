@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import type { SideTable } from "@/shared/types";
@@ -38,8 +38,8 @@ describe("EstimateStage", () => {
     render(<EstimateStage items={[{ table: { ...electrical, rows }, xlsx: null }]} />);
     const marks = screen.getAllByRole("img", { name: "Цена условная: материалы пока не по рыночным ценам" });
     expect(marks).toHaveLength(1);
-    expect(marks[0].parentElement).toHaveTextContent("3 200!");
-    expect(screen.getAllByRole("row", { name: /Итого/ }).at(-1)).not.toHaveTextContent("!");
+    expect(marks[0].parentElement).toHaveTextContent("3 200");
+    expect(within(screen.getAllByRole("row", { name: /Итого/ }).at(-1)!).queryByRole("img")).toBeNull();
   });
 
   it("does not show work outside the estimate, even if an old build has it", () => {

@@ -221,7 +221,7 @@ describe("WorkCard", () => {
   it("a materials sum is marked provisional; a task without materials has no mark", () => {
     const { unmount } = open(task("cable"), CLIENT);
     const mark = screen.getByRole("img", { name: "Цена условная: материалы пока не по рыночным ценам" });
-    expect(mark.parentElement).toHaveTextContent(/грн!$/);
+    expect(mark.parentElement).toHaveTextContent(/грн$/);
     expect(mark.closest("dl")).not.toHaveTextContent("имитация");
     unmount();
     open(task("insulation"), CLIENT);
