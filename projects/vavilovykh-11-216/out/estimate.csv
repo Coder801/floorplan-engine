@@ -53,7 +53,7 @@ material_finish;led_output;Вивід для підсвітки;шт;5;150;750,0
 material_finish;outlet;Вивід кабелю до техніки;шт;8;150;1200,00
 material_finish;thermostat;Регулятор теплої підлоги;шт;4;3000;12000,00
 material_finish;led_strip;LED-підсвітка;м;4,42;250;1105,00
-rough;work.cable;Прокладання кабелю;м;663,4;34;22555,60
+rough;work.cable;Прокладання кабелю;м;663,4;45;29853,00
 rough;work.conduit;Укладання кабелю в гофротрубу;м;663,4;15;9951,00
 rough;work.chase;Штроба вузька, 1–2 кабелі;м;49,9;120;5988,00
 rough;work.chase_wide;Штроба широка, 3–4 кабелі;м;51,3;180;9234,00

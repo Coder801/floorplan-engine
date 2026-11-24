@@ -17,7 +17,7 @@ items:
   # Механизмы и рамки — по выбранной серии, впишите цены:
   # socket, switch1, switch2, pass_switch, data, tv, frame.1 … frame.4
   # Работы
-  work.cable: 34                 # по потолку на креплениях, без гофры; с маркировкой концов
+  work.cable: 45                 # по потолку на креплениях, без гофры; с маркировкой концов
   # Штроба узкая, 1–2 кабеля, по материалу стены (material в room.yaml); широкая — ×1,5
   work.chase.concrete: 200
   work.chase.claydite: 150
