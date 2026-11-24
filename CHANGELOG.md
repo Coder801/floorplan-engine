@@ -1,3 +1,9 @@
+## v0.19.1 (2026-11-24)
+
+### Fix
+
+- **viewer**: keep back button on first step and put PDF button above
+
 ## v0.19.0 (2026-11-24)
 
 ### Feat
