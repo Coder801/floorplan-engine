@@ -1,3 +1,11 @@
+## v0.21.0 (2026-11-25)
+
+### Feat
+
+- **deploy**: let server send remove a project price list
+- **viewer**: show materials on the studio price page
+- **core**: layer project price list over studio prices
+
 ## v0.20.1 (2026-11-25)
 
 ### Fix
