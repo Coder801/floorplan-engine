@@ -2,7 +2,7 @@
 material_rough;cable.3x1.5;Кабель ВВГнг 3×1,5;м;179;45;8055,00
 material_rough;cable.3x2.5;Кабель ВВГнг 3×2,5;м;218,5;70;15295,00
 material_rough;cable.3x4;Кабель ВВГнг 3×4;м;13;120;1560,00
-material_rough;cable.UTP cat.6;Кабель UTP cat.6;м;30,9;;
+material_rough;cable.UTP cat.6;Кабель UTP cat.6;м;30,9;28;865,20
 material_rough;socket_box;Підрозетник;шт;60;20;1200,00
 material_rough;junction_box.80;Коробка розподільча Ø80;шт;3;60;180,00
 material_rough;junction_box.100x100;Коробка розподільча 100×100;шт;9;60;540,00
@@ -37,10 +37,10 @@ material_finish;downlight;Світильник точковий;шт;18;350;6300
 material_finish;pendant;Світильник підвісний;шт;3;1500;4500,00
 material_finish;sconce;Бра;шт;2;1200;2400,00
 material_finish;led_output;Вивід для підсвітки;шт;4;150;600,00
-material_finish;thermostat;Регулятор теплої підлоги;шт;2;;
+material_finish;thermostat;Регулятор теплої підлоги;шт;2;3000;6000,00
 material_finish;led_strip;LED-підсвітка;м;7,84;250;1960,00
 material_finish;led_psu;Блок живлення LED 12 В;шт;4;450;1800,00
-rough;work.cable;Прокладання кабелю;м;383,9;34;13052,60
+rough;work.cable;Прокладання кабелю;м;383,9;45;17275,50
 rough;work.chase;Штроба вузька, 1–2 кабелі;м;49,6;120;5952,00
 rough;work.chase_wide;Штроба широка, 3–4 кабелі;м;16,9;180;3042,00
 rough;work.wall_hole;Свердління проходу крізь стіну;шт;10;100;1000,00
