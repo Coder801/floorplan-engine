@@ -1,3 +1,16 @@
+## v0.19.0 (2026-11-24)
+
+### Feat
+
+- **viewer**: print the estimate report as A4 HTML and PDF
+- **viewer**: mark provisional values with a warning triangle
+- **viewer**: add single-line panel diagram data to the .epd
+- **electrical**: price floor heating controller and UTP cable
+
+### Fix
+
+- **electrical**: check breaker against assumed cable and set demand factor
+
 ## v0.18.0 (2026-11-23)
 
 ### Feat
