@@ -40,10 +40,14 @@ def panel_data(
     name: str,
     language: Language,
     wiring: Wiring | None = None,
+    earthing: str = "TN-C-S",
+    npe_relay: bool | None = None,
 ) -> dict[str, object]:
     """Panel for the viewer (key `panel` of an .epd page): devices in order with their catalogue
     model, groups with load, totals and weak spots, in the project language. The viewer does the
-    rail layout and the drawing. wiring gives the LED box its 12 V lines (length, cable, drop)."""
+    rail layout and the drawing. wiring gives the LED box its 12 V lines (length, cable, drop);
+    earthing and npe_relay (the N–PE link in backup mode: yes, no, None — not known) are from the
+    panel setup of the model, for the single-line diagram."""
     lines = led_lines(wiring, panel.led.loads) if panel.led is not None else {}
     drops = [
         {"severity": "major", "text": _drop_text(line, language), "group": ld.group}
@@ -76,6 +80,8 @@ def panel_data(
             else {}
         ),
         "scheme": panel.scheme,
+        "earthing": earthing,
+        "npe_relay": npe_relay,
         "input": {"label": panel.input.label, "assumed": panel.input.assumed},
         "enclosure": panel.enclosure.as_dict() if panel.enclosure is not None else None,
         "devices": devices,
@@ -83,6 +89,7 @@ def panel_data(
         "totals": {
             "installed": round(panel.installed),
             "demand": panel.demand,
+            "demand_assumed": panel.demand_assumed,
             "calculated": round(calc),
             "current": round(panel.design_current, 1),
             "modules": panel.modules,
