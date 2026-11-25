@@ -54,6 +54,26 @@ def test_plan_from_the_draft(world: World) -> None:
         work.create_plan(world.db, world.project, world.build, DRAFT, world.owner)
 
 
+def test_plan_skips_tasks_of_switched_off_services(world: World) -> None:
+    """Decision 2026-11-25: plumbing ticked off in the admin page — its draft tasks do not make
+    the plan; nothing left of the switched-on services — no draft."""
+    water = {**DRAFT["tasks"][0], "key": "plumbing.water", "domain": "plumbing", "after": []}
+    draft = {**DRAFT, "tasks": [*DRAFT["tasks"], water]}
+    world.project.services = ["electrical"]
+    assert [t["key"] for t in work.service_tasks(world.project, draft)] == [
+        "electrical.chases",
+        "electrical.cable",
+    ]
+    world.project.services = ["plumbing"]
+    with fails(409, "нет черновика"):
+        work.create_plan(world.db, world.project, world.build, DRAFT, world.owner)
+    world.project.services = ["electrical"]
+    plan = work.create_plan(world.db, world.project, world.build, draft, world.owner)
+    assert [t.domain for t in plan.tasks] == ["electrical", "electrical"]
+    world.project.services = None  # a project from before the ticks: every service
+    assert len(work.service_tasks(world.project, draft)) == 3
+
+
 def test_plan_life_and_close(world: World) -> None:
     work.create_plan(world.db, world.project, world.build, DRAFT, world.owner)
     plan = world.plan()

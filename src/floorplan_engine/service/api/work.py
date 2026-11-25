@@ -187,7 +187,10 @@ def work_state(
     out: dict[str, Any] = {
         "plan": None,
         "tasks": [],
-        "draft_available": draft_of(session, store, ps.latest_build(session, project)) is not None,
+        # Only tasks of switched-on services make a plan (work.service_tasks)
+        "draft_available": bool(
+            work.service_tasks(project, draft_of(session, store, ps.latest_build(session, project)))
+        ),
         "model_version": latest.version if latest is not None else None,
         "assignees": [
             p

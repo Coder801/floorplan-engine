@@ -39,6 +39,7 @@ from floorplan_engine.service.db.models import (
     WorkPlan,
     WorkTask,
 )
+from floorplan_engine.service.db.services import normalize
 
 PLAN_STATES = ("draft", "proposed", "approved", "closed")
 STATUSES = ("proposed", "todo", "in_progress", "review", "returned", "accepted")
@@ -268,17 +269,28 @@ def parse_line(position: int, data: Mapping[str, Any], where: str) -> WorkLine:
     )
 
 
+def service_tasks(project: Project, draft: object) -> list[dict[str, Any]]:
+    """The draft's tasks of the project's switched-on services (decision 2026-11-25,
+    db/services.py): a service ticked off in the admin page gives no tasks, as it gives no viewer
+    sheets. A task's `after` naming a dropped one waits for nothing (waiting finds no such task)."""
+    tasks = draft.get("tasks") if isinstance(draft, dict) else None
+    if not isinstance(tasks, list):
+        return []
+    on = set(normalize(project.services))
+    return [t for t in tasks if isinstance(t, dict) and t.get("domain") in on]
+
+
 def create_plan(
     session: Session, project: Project, build: Build | None, draft: object, actor: Actor
 ) -> WorkPlan:
-    """A draft plan from the .epd work_plan of a build: its tasks in the draft's order, all
-    proposed until the client approves the plan."""
+    """A draft plan from the .epd work_plan of a build: its tasks of the switched-on services
+    (service_tasks) in the draft's order, all proposed until the client approves the plan."""
     actor.need("work_manage")
     if session.scalar(
         select(WorkPlan.id).where(WorkPlan.project_id == project.id, WorkPlan.state != "closed")
     ):
         raise WorkError("у проекта уже есть план работ")
-    tasks = draft.get("tasks") if isinstance(draft, dict) else None
+    tasks = service_tasks(project, draft)
     if build is None or not isinstance(draft, dict) or not tasks:
         raise WorkError("в последней сборке нет черновика задач — пересоберите проект")
     plan = WorkPlan(
