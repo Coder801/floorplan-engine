@@ -12,11 +12,6 @@ items:
   junction_box: 60
   junction_box_ip: 120           # IP44 у санвузлах
   crimp: 8                       # гильза ГМЛ + термоусадка на соединение
-  # Клеммы Wago 221 для соединений в подрозетниках (шлейф, свет цепочкой), Киев 2026-11:
-  # 412 — Vencon 17–18; 413 — Electroportal 21,5, Elektronom 21, Karat 21,8; 415 — SVL 25,85, Maxilogic 31,4
-  wago.412: 18
-  wago.413: 22
-  wago.415: 28
   board_enclosure: { price: 6000, name: "Корпус щита вбудований, 5 рядів, 60 мод." }
   breaker: 140                   # класс Schneider Easy9
   # Механизмы и рамки — по выбранной серии, впишите цены:
