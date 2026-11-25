@@ -9,9 +9,6 @@ material_rough;junction_box.100x100;Коробка розподільча 100×1
 material_rough;junction_box_ip.100x100;Коробка розподільча IP44 100×100;шт;2;120;240,00
 material_rough;junction_box.150x110;Коробка розподільча 150×110;шт;1;60;60,00
 material_rough;crimp;Гільза і термоусадка (опресування);шт;24;8;192,00
-material_rough;wago.412;Клема важільна Wago 221-412;шт;12;18;216,00
-material_rough;wago.413;Клема важільна Wago 221-413;шт;21;22;462,00
-material_rough;wago.415;Клема важільна Wago 221-415;шт;4;28;112,00
 material_rough;cable_pad;Площадка під монтажний пістолет з дюбель-цвяхом і стяжкою;шт;1325;5;6625,00
 material_rough;board_enclosure;Корпус щита вбудований, 5 рядів, 60 мод.;шт;1;6000;6000,00
 material_finish;input.C63 2P;Вступний автомат, C63 2P;шт;1;850;850,00
@@ -45,7 +42,7 @@ rough;work.wall_hole;Свердління проходу крізь стіну;�
 rough;work.wall_hole_large;Свердління великого проходу крізь стіну (коронкою);шт;1;250;250,00
 rough;work.socket_box;Свердління і встановлення підрозетника;шт;69;140;9660,00
 rough;work.junction_box;Монтаж коробки з опресуванням;шт;8;250;2000,00
-rough;work.splice;З'єднання в підрозетнику клемами Wago;шт;13;75;975,00
+rough;work.splice;З'єднання N і PE в підрозетнику вимикача;шт;13;75;975,00
 rough;work.board_install;Встановлення щита;шт;1;1500;1500,00
 rough;work.insulation_test;Вимірювання опору ізоляції з протоколом;гр.;17;150;2550,00
 finish;work.board_module;Збирання щита;мод.;30;100;3000,00
