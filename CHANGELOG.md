@@ -1,3 +1,9 @@
+## v0.22.1 (2026-11-25)
+
+### Fix
+
+- **electrical**: no joints for looped sockets, only in switch flush boxes
+
 ## v0.22.0 (2026-11-25)
 
 ### Feat
