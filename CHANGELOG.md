@@ -1,3 +1,9 @@
+## v0.22.2 (2026-11-25)
+
+### Fix
+
+- **electrical**: name switch flush-box joints, drop clamp lines from the estimate
+
 ## v0.22.1 (2026-11-25)
 
 ### Fix
