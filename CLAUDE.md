@@ -49,7 +49,7 @@ uv run floorplan-engine trace projects/<имя> [--line wire_3 | --group QF3 | -
 TEST_REQUIRE_DB=1 uv run pytest --cov && uv run mypy && uv run ruff check . && uv run ruff format --check . && uv run lint-imports
 uv run python scripts/flow.py feature <имя> | integrate | release [--dry-run]  # ветки и релиз: develop → feature → develop → main (docs/development.md)
 uv run python scripts/flow.py ship [--increment patch] [--no-backup|--no-rebuild|--no-local]  # всё после /commit: вливание, проверки, релиз, бэкап при миграции, пуш, пересборка на сервере и локально
-uv run python scripts/server.py check | rebuild [имена] [--wait] | send <проект> room.yaml | backup  # боевой сервер через railway ssh; backup — база и файлы в ~/shtroba-backups
+uv run python scripts/server.py check | rebuild [имена] [--wait] | send <проект> room.yaml | studio-prices [--pull] [--yes] [--rebuild] | backup  # боевой сервер через railway ssh; studio-prices — projects/prices.yaml ↔ прайс студии; backup — база и файлы в ~/shtroba-backups
 ```
 
 Slash-команды: `/plan`, `/electrical`, `/check`, `/review`, `/commit`, `/release` (в `.claude/commands/`).
