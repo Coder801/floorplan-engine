@@ -6,6 +6,7 @@
 
 .list { min-width: 0; }
 .head { display: grid; gap: var(--space-1); margin-bottom: var(--space-4); }
+.splice { max-width: 720px; margin-bottom: var(--space-6); }
 .issue {
   margin-bottom: var(--space-3); padding: var(--space-2) var(--space-3); border-radius: var(--radius);
   background: var(--soft); color: var(--critical);

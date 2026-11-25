@@ -3,7 +3,7 @@
 import i18n from "@/shared/i18n";
 import type { Answer } from "./questions";
 import type {
-  FeedbackBody, Manifest, Page, PricePage, Project, ProjectSummary, WorkDomain, WorkOnBehalf, WorkPhotoRule, WorkState, WorkStatus,
+  FeedbackBody, Manifest, Page, PricePage, Project, ProjectSummary, SpliceMethod, WorkDomain, WorkOnBehalf, WorkPhotoRule, WorkState, WorkStatus,
 } from "./types";
 import { FORMAT_VERSION } from "./version";
 
@@ -95,10 +95,12 @@ async function answerResult(r: Response): Promise<AnswerResult> {
 // Studio price page: works, own price and the market (pipeline.price_page)
 export const getPrices = () => get<PricePage>("/api/prices");
 
-// Studio price edits → prices.yaml next to the projects; null removes the price
-export async function savePrices(items: Record<string, number | null>): Promise<PricePage> {
+// Studio price edits → prices.yaml next to the projects; null removes the price. splice — the
+// joint method of switch flush boxes, sent only when it changed (no items then — only it)
+export async function savePrices(items: Record<string, number | null>, splice?: SpliceMethod): Promise<PricePage> {
+  const body = { ...(Object.keys(items).length || !splice ? { items } : {}), ...(splice ? { splice } : {}) };
   const r = await fetch("/api/prices", {
-    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ items }),
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
   });
   if (!r.ok) throw new Error(`${r.status}: ${await detail(r)}`);
   return (await r.json()) as PricePage;

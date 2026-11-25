@@ -290,6 +290,10 @@ export const en: Messages = {
     places: { below: "cheaper than all lists", low: "in the market's lower quarter", mid: "in the market's middle half", high: "in the market's upper quarter", above: "dearer than all lists" },
     invalid: "A price is a number not below 0", saved: "Saved to prices.yaml — estimates are recalculated at the build",
     reset: "Reset", save: "Save", saving: "Saving…",
+    splice: {
+      title: "Joints in switch flush boxes", wago: "Wago clamps", crimp: "Crimping",
+      hint: "Changes the flush box joint work and its price in the estimate, and the estimate note. Looped sockets are not affected: they use jumpers through the double terminals. Estimates are recalculated at the next build.",
+    },
     footnote: "{{region}} market: {{n}} public price lists of studios, masters and platforms, prices for {{period}}; collected {{collected}}.",
     undated: "Undated on the page: {{n}}.", undatedOnly: "unknown period",
     method: "Prices are labour without materials, concrete walls; the median, not the mean: price lists differ several-fold.",

@@ -89,6 +89,38 @@ describe("PriceList", () => {
     expect(sent.at(-1)?.body).toEqual({ items: { socket: 60 } });
   });
 
+  it("the joint method of switch flush boxes: saved alone or with the prices; an older server means Wago", async () => {
+    const user = userEvent.setup();
+    const sent = stubApi({ "GET /api/prices": pricePage(), "POST /api/prices": pricePage({ splice: "crimp" }) });
+    const onDirty = vi.fn();
+    render(<PriceList onDirty={onDirty} />);
+    const group = await screen.findByRole("radiogroup", { name: "Соединения в подрозетниках выключателей" });
+    expect(within(group).getByRole("radio", { name: "Клеммы Wago" })).toBeChecked();
+    expect(screen.getByText(/Меняет работу «соединение в подрозетнике»/)).toBeInTheDocument();
+    const save = screen.getByRole("button", { name: "Сохранить" });
+    await user.click(within(group).getByRole("radio", { name: "Опрессовка" }));
+    expect(onDirty).toHaveBeenLastCalledWith(true);
+    await user.click(within(group).getByRole("radio", { name: "Клеммы Wago" }));  // back to the saved one
+    expect(save).toBeDisabled();
+    await user.click(within(group).getByRole("radio", { name: "Опрессовка" }));
+    await user.click(save);
+    expect(sent.at(-1)?.body).toEqual({ splice: "crimp" });
+    expect(await screen.findByText("Сохранено в prices.yaml — сметы пересчитаются при сборке")).toBeInTheDocument();
+    expect(within(group).getByRole("radio", { name: "Опрессовка" })).toBeChecked();
+    // With a price edit — one request
+    await user.click(within(group).getByRole("radio", { name: "Клеммы Wago" }));
+    await user.type(screen.getByRole("textbox", { name: /Цена:/ }), "5");
+    await user.click(save);
+    expect(sent.at(-1)?.body).toEqual({ items: { "work.socket": 1005 }, splice: "wago" });
+  });
+
+  it("the joint method read-only without the right to edit", async () => {
+    stubApi({ "GET /api/prices": pricePage({ editable: false, splice: "crimp" }) });
+    render(<PriceList />);
+    expect(await screen.findByText("Опрессовка")).toBeInTheDocument();
+    expect(screen.queryByRole("radiogroup")).toBeNull();
+  });
+
   it("shows a load error", async () => {
     stubApi({ "GET /api/prices": fail(403, "Только студия") });
     render(<PriceList />);

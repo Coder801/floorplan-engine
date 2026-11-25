@@ -1,5 +1,5 @@
 // Joint marks of the wiring sheet (decision 2026-11-25): a point whose flush box joins wires
-// (looped sockets, lights in a chain; key splice of its card) gets a small dot on the top right
+// (switches of lights in a chain; key splice of its card) gets a small dot on the top right
 // corner of its symbol — the joint dot of a circuit diagram. SheetView draws it on screen, the
 // legend shows the same dot on the symbol. Pure functions; the printed sheet has no mark
 

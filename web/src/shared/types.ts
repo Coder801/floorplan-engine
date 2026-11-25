@@ -269,11 +269,12 @@ export interface SpliceJoint {
   sleeves: number;        // crimp sleeves: 1 with crimp, 0 with wago
 }
 
-// Flush box of a point where wires are joined (looped sockets, lights in a chain; decision
-// 2026-11-25): how, the cables in and out (as in BoxData) and the joints. A cable of out that is
-// not in the joint of a conductor runs on from the device terminals (the switched wire, travellers)
+// Flush box of a point where wires are joined (switches of lights in a chain; decision
+// 2026-11-25: looped sockets have none, their jumpers go through the double terminals): how, the
+// cables in and out (as in BoxData) and the joints. A cable of out that is not in the joint of a
+// conductor runs on from the device terminals (the switched wire, travellers)
 export interface SpliceData {
-  method: "wago" | "crimp";  // the studio setting in its price list
+  method: SpliceMethod;      // the studio setting in its price list
   deep_mm: number;           // the flush box is at least this deep
   in: BoxFeed | null;
   out: BoxBranch[];
@@ -646,6 +647,9 @@ export interface MarketSpread {
   basis: string;              // what is compared: wall material, unit
   quotes: MarketQuote[];      // by price, cheapest first
 }
+// How wires are joined in the flush boxes of switches (the studio's price list, key splice):
+// Wago 221 clamps or crimp sleeves with heat shrink
+export type SpliceMethod = "wago" | "crimp";
 export interface PriceRow {
   key: string;                // estimate item key: work.* or a material; with a parameter — cable.3x1.5
   kind?: "work" | "material"; // missing on an older server: works only
@@ -669,6 +673,7 @@ export interface PricePage {
   currency: string;
   date: string;
   note: string;
+  splice?: SpliceMethod;   // missing on an older server: "wago"
   rows: PriceRow[];
   market: { region: string; collected: string; currency: string; period: MarketPeriod; sources: MarketSource[] } | null;
   issues: string[];

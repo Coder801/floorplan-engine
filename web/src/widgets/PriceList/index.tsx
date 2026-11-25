@@ -3,22 +3,27 @@
 // market.yaml), then the materials with the studio price alone (decision 2026-11-25: every item
 // the price list holds), and a footnote on the period and sources. The studio edits its prices
 // here → prices.yaml next to the projects (POST /api/prices); estimates take them at the next
-// build, a project's own prices.yaml changes only the keys it names.
+// build, a project's own prices.yaml changes only the keys it names. Above the tables — how wires
+// are joined in the flush boxes of switches (splice: Wago clamps or crimping), saved with the
+// prices by the same button.
 
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { getPrices, savePrices } from "@/shared/api";
 import { cx } from "@/shared/cx";
 import { deviation, monthText, periodText, place } from "@/shared/market";
-import type { MarketSpread, PricePage, PriceRow } from "@/shared/types";
+import type { MarketSpread, PricePage, PriceRow, SpliceMethod } from "@/shared/types";
 import { Button } from "@/ui/Button";
 import { EmptyState } from "@/ui/EmptyState";
 import { ErrorState } from "@/ui/ErrorState";
 import { Heading } from "@/ui/Heading";
+import { SegmentedControl } from "@/ui/SegmentedControl";
+import { Stack } from "@/ui/Stack";
 import { Text } from "@/ui/Text";
 import css from "./PriceList.module.scss";
 
 const money = (v: number, lng: string) => v.toLocaleString(lng, { maximumFractionDigits: 1 });
+const SPLICE: SpliceMethod[] = ["wago", "crimp"];
 
 // onDirty — whether there are unsaved prices (the settings page asks before leaving)
 export function PriceList({ onDirty }: { onDirty?: (dirty: boolean) => void }) {
@@ -30,9 +35,11 @@ export function PriceList({ onDirty }: { onDirty?: (dirty: boolean) => void }) {
   const [open, setOpen] = useState<string | null>(null);           // row with its quotes shown
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [splice, setSplice] = useState<SpliceMethod | null>(null);  // chosen, not saved yet
 
   useEffect(() => { getPrices().then(setData).catch((e: Error) => setError(e.message)); }, []);
-  useEffect(() => { onDirty?.(Object.keys(draft).length > 0); }, [draft, onDirty]);
+  const dirty = Object.keys(draft).length > 0 || splice !== null;
+  useEffect(() => { onDirty?.(dirty); }, [dirty, onDirty]);
 
   const names = useMemo(() => new Map(data?.market?.sources.map((s) => [s.id, s]) ?? []), [data]);
   const changes = useMemo(() => {
@@ -48,12 +55,15 @@ export function PriceList({ onDirty }: { onDirty?: (dirty: boolean) => void }) {
 
   const save = () => {
     setBusy(true); setError(null);
-    savePrices(changes)
-      .then((d) => { setData(d); setDraft({}); setSaved(true); })
+    savePrices(changes, splice ?? undefined)
+      .then((d) => { setData(d); setDraft({}); setSplice(null); setSaved(true); })
       .catch((e: Error) => setError(e.message))
       .finally(() => setBusy(false));
   };
   const edit = (key: string, text: string) => { setSaved(false); setDraft((d) => ({ ...d, [key]: text })); };
+  // An older server sends no splice: the build joins with Wago then
+  const savedSplice: SpliceMethod = data?.splice ?? "wago";
+  const pickSplice = (m: SpliceMethod) => { setSaved(false); setSplice(m === savedSplice ? null : m); };
 
   const name = (r: PriceRow) => (lng === "uk" ? r.name.uk : r.name.ru);
   const market = data?.market ?? null;
@@ -92,6 +102,14 @@ export function PriceList({ onDirty }: { onDirty?: (dirty: boolean) => void }) {
         {data && (
           <>
             {data.issues.map((m) => <div key={m} className={css.issue}>{m}</div>)}
+            <Stack as="section" gap={2} align="start" className={css.splice} aria-labelledby="splice-title">
+              <Heading level={3} size="caps" id="splice-title">{t("prices.splice.title")}</Heading>
+              {data.editable ? (
+                <SegmentedControl label={t("prices.splice.title")} value={splice ?? savedSplice} onChange={pickSplice}
+                                  options={SPLICE.map((m) => ({ value: m, label: t(`prices.splice.${m}`) }))} />
+              ) : <Text weight="medium">{t(`prices.splice.${savedSplice}`)}</Text>}
+              <Text size="small" tone="muted">{t("prices.splice.hint")}</Text>
+            </Stack>
             <table className={css.table}>
               <thead>
                 <tr>
@@ -194,11 +212,11 @@ export function PriceList({ onDirty }: { onDirty?: (dirty: boolean) => void }) {
             {data.editable && (
               <div className={css.actions}>
                 {invalid && <Text as="span" tone="critical">{t("prices.invalid")}</Text>}
-                {saved && !Object.keys(draft).length && <Text as="span" size="small" tone="muted">{t("prices.saved")}</Text>}
-                <Button disabled={busy || !Object.keys(draft).length} onClick={() => { setDraft({}); setSaved(false); }}>
+                {saved && !dirty && <Text as="span" size="small" tone="muted">{t("prices.saved")}</Text>}
+                <Button disabled={busy || !dirty} onClick={() => { setDraft({}); setSplice(null); setSaved(false); }}>
                   {t("prices.reset")}
                 </Button>
-                <Button variant="primary" disabled={busy || invalid || !Object.keys(changes).length} onClick={save}>
+                <Button variant="primary" disabled={busy || invalid || (!Object.keys(changes).length && splice === null)} onClick={save}>
                   {busy ? t("prices.saving") : t("prices.save")}
                 </Button>
               </div>
