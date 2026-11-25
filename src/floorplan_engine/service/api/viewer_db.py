@@ -30,7 +30,7 @@ from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, Res
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from floorplan_engine.electrical.estimate import PRICES_FILE
+from floorplan_engine.electrical.price_list import PRICES_FILE
 from floorplan_engine.epd.artifact import FORMAT_VERSION, MANIFEST
 from floorplan_engine.epd.thumbnail import PREVIEW_FILE
 from floorplan_engine.model.intake import ANSWERS_FILE, INTAKE_FILE, AnswerNote, Stage

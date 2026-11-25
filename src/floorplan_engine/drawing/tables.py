@@ -48,8 +48,8 @@ class Mark:
 
 @dataclass(frozen=True)
 class Guess:
-    """Provisional amount (estimate.provisional): on the sheet the text is followed by mark; the
-    viewer gets the plain text and the row flag guess (epd/side.from_table)."""
+    """Provisional amount (estimate_texts.provisional): on the sheet the text is followed by
+    mark; the viewer gets the plain text and the row flag guess (epd/side.from_table)."""
 
     text: str
     mark: str

@@ -4,7 +4,7 @@ from typing import Any
 
 import pytest
 
-from floorplan_engine.electrical import estimate
+from floorplan_engine.electrical import estimate_quantities
 from floorplan_engine.electrical.wiring import box_wiring
 from floorplan_engine.electrical.wiring_model import Wiring
 from floorplan_engine.model.schema import Electrical, Plan
@@ -15,7 +15,7 @@ from floorplan_engine.sheets import stages
 def heating_released(monkeypatch: pytest.MonkeyPatch) -> None:
     """Floor heating switched on as after its release (floor_heating.RELEASED): the sheet and
     the estimate rows; the tests of the held-back feature itself keep running."""
-    monkeypatch.setattr(estimate, "HEATING_RELEASED", True)
+    monkeypatch.setattr(estimate_quantities, "HEATING_RELEASED", True)
     monkeypatch.setattr(stages, "HEATING_RELEASED", True)
 
 

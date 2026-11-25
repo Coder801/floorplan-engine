@@ -28,7 +28,7 @@ from floorplan_engine.drawing.tables import Guess, Mark, Table
 from floorplan_engine.drawing.wiring import wiring_notes
 from floorplan_engine.electrical.colors import group_colors
 from floorplan_engine.electrical.estimate import build_estimate
-from floorplan_engine.electrical.estimate import text as estimate_text
+from floorplan_engine.electrical.estimate_texts import text as estimate_text
 from floorplan_engine.electrical.floor_heating import heating_zones
 from floorplan_engine.electrical.groups import group_rows
 from floorplan_engine.electrical.groups import text as groups_text

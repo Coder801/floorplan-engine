@@ -47,7 +47,7 @@ from fastapi import Body, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, Response
 
 from floorplan_engine import BRAND, __version__
-from floorplan_engine.electrical.estimate import PRICES_FILE
+from floorplan_engine.electrical.price_list import PRICES_FILE
 from floorplan_engine.epd.thumbnail import PREVIEW_FILE
 from floorplan_engine.model.furniture import FURNITURE_FILE
 from floorplan_engine.model.intake import ANSWERS_FILE, INTAKE_FILE, AnswerNote

@@ -8,9 +8,7 @@ from pathlib import Path
 from ezdxf.filemanagement import readfile
 
 from floorplan_engine.drawing.titleblock import FORMATS
-from floorplan_engine.electrical.estimate import (
-    PriceSource,
-)
+from floorplan_engine.electrical.price_list import PriceSource
 from floorplan_engine.model.schema import SheetFormat
 from floorplan_engine.pipeline.assessment import (
     Assessment,

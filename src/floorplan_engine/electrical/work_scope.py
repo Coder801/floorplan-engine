@@ -1,7 +1,7 @@
 """Work scope: what the price of an estimate work item covers, so there are no "hidden services".
 
 The catalogue (work_scope.yaml next to this module) has two parts for every `work.*` item of
-the estimate (estimate.LINES):
+the estimate (estimate_items.LINES):
 
 - includes — operations inside the item's price;
 - result — the state the work is handed over in, something the client can check.
@@ -31,16 +31,16 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font
 from pydantic import Field, model_validator
 
-from floorplan_engine.electrical.estimate import (
+from floorplan_engine.electrical.estimate import Estimate
+from floorplan_engine.electrical.estimate_items import (
     LINES,
     SECTIONS,
     WORK_PREFIX,
-    Estimate,
     Section,
-    format_number,
     split_key,
 )
-from floorplan_engine.electrical.estimate import text as estimate_text
+from floorplan_engine.electrical.estimate_texts import format_number
+from floorplan_engine.electrical.estimate_texts import text as estimate_text
 from floorplan_engine.model.schema import StrictModel
 from floorplan_engine.model.texts import Language
 
@@ -200,7 +200,7 @@ def scope_sheet(
     language: Language,
     terms: Sequence[Sequence[str]] = (),
 ) -> Callable[[Workbook], None]:
-    """A sheet with the same scope for the estimate workbook (estimate.write_xlsx, extra);
+    """A sheet with the same scope for the estimate workbook (estimate_files.write_xlsx, extra);
     terms — rows of the items agreed apart from the work (terms.terms_scope_sheet)."""
 
     def t(key: str) -> str:

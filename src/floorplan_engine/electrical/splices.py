@@ -1,7 +1,7 @@
 """Joints in flush boxes (decisions 2026-11-25): where light in a chain (light_wiring chain) joins
 wires in a switch flush box, which conductor joins how many wires, and what with. One
-calculation for the estimate (estimate.quantities: clamps or sleeves and the work), the point
-card in the viewer (epd/box_card.splice_card) and the "Points" table
+calculation for the estimate (estimate_quantities.quantities: clamps or sleeves and the work),
+the point card in the viewer (epd/box_card.splice_card) and the "Points" table
 (drawing/schedules.points_table), so the drawing and the estimate cannot drift apart.
 
 Sockets in a loop (distribution loop) have no joints (the user's decision, 2026-11-25): the
@@ -12,7 +12,7 @@ with one chase for both (shared) both come down into the first flush box and the
 pulled through the block to the last (wiring.through_block adds that length to its line).
 
 A switch has no N and PE terminals, so they are joined in its flush box, and the phase too when
-it branches on. How is a studio setting, `splice` in its price list (estimate.PriceList): wago —
+it branches on. How is a studio setting, `splice` in its price list (price_list.PriceList): wago —
 Wago 221 lever clamps (the default: a flush box has little room, a clamp opens for the
 insulation test); crimp — sleeves with heat shrink (permanent, no springs, but harder to fit in
 a flush box and it does not open for the test). A flush box with a joint must be deep,

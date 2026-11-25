@@ -226,8 +226,8 @@ def test_estimate_material_totals_carry_guess(monkeypatch: pytest.MonkeyPatch) -
     """Contract with the viewer (decision 2026-11-23): the total row of each materials section
     has "guess": true while material prices are a placeholder; its amount is plain text, work
     totals and the grand total get no flag, a bill of quantities neither."""
-    import floorplan_engine.electrical.estimate as estimate_module
-    from floorplan_engine.electrical.estimate import PriceList
+    import floorplan_engine.electrical.estimate_texts as estimate_texts
+    from floorplan_engine.electrical.price_list import PriceList
     from floorplan_engine.electrical.pricing import Prices
 
     plan, contours, elec, wiring = _model()
@@ -243,7 +243,7 @@ def test_estimate_material_totals_carry_guess(monkeypatch: pytest.MonkeyPatch) -
     assert isinstance(cells, list) and not cells[-1].endswith("!")  # the mark is the viewer's
     volumes = side_tables(plan, contours, elec, wiring)["estimate"][0]
     assert not any(r.guess for r in volumes.rows)
-    monkeypatch.setattr(estimate_module, "MATERIAL_PRICES_MOCK", False)
+    monkeypatch.setattr(estimate_texts, "MATERIAL_PRICES_MOCK", False)
     assert not any("guess" in r for r in totals())
 
 

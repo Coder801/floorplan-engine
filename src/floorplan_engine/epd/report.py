@@ -48,15 +48,9 @@ from pathlib import Path
 from typing import Any, Literal, cast, get_args
 
 from floorplan_engine import BRAND
-from floorplan_engine.electrical.estimate import (
-    MATERIAL_SECTIONS,
-    SECTIONS,
-    Section,
-    format_number,
-    parse_number,
-    section_title,
-)
-from floorplan_engine.electrical.estimate import text as estimate_text
+from floorplan_engine.electrical.estimate_items import MATERIAL_SECTIONS, SECTIONS, Section
+from floorplan_engine.electrical.estimate_texts import format_number, parse_number, section_title
+from floorplan_engine.electrical.estimate_texts import text as estimate_text
 from floorplan_engine.electrical.panel_text import DEVICE_LEGEND
 from floorplan_engine.epd.single_line import assumed_any, single_line_svgs
 from floorplan_engine.model.texts import Language

@@ -5,7 +5,9 @@ from __future__ import annotations
 
 import pytest
 
-from floorplan_engine.electrical.estimate import LINES, PriceList, build_estimate
+from floorplan_engine.electrical.estimate import build_estimate
+from floorplan_engine.electrical.estimate_items import LINES
+from floorplan_engine.electrical.price_list import PriceList
 from floorplan_engine.electrical.pricing import (
     UNPRICED,
     MockPriceService,

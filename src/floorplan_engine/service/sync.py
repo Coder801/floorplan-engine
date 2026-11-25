@@ -24,7 +24,7 @@ import yaml
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
-from floorplan_engine.electrical.estimate import PRICES_FILE
+from floorplan_engine.electrical.price_list import PRICES_FILE
 from floorplan_engine.pipeline import OUT_DIR
 from floorplan_engine.service import project_store as ps
 from floorplan_engine.service.db import access as acc

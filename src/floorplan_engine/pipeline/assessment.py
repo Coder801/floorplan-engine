@@ -8,9 +8,7 @@ from pathlib import Path
 from ezdxf.document import Drawing
 from ezdxf.filemanagement import readfile
 
-from floorplan_engine.electrical.estimate import (
-    PriceSource,
-)
+from floorplan_engine.electrical.price_list import PriceSource
 from floorplan_engine.electrical.pricing import MockPriceService
 from floorplan_engine.model.furniture import Furniture
 from floorplan_engine.model.intake import (

@@ -23,9 +23,10 @@ from floorplan_engine.drawing.wiring import (
 from floorplan_engine.electrical.boxes import BOX_SIZE_MM, box_square
 from floorplan_engine.electrical.bundles import bundles, lanes, offset_path, segments
 from floorplan_engine.electrical.chases import wall_chases, with_conduit
-from floorplan_engine.electrical.estimate import PriceList, build_estimate
+from floorplan_engine.electrical.estimate import build_estimate
 from floorplan_engine.electrical.frames import POST_PITCH_MM
 from floorplan_engine.electrical.panel import LineClass
+from floorplan_engine.electrical.price_list import PriceList
 from floorplan_engine.electrical.wiring import box_wiring
 from floorplan_engine.electrical.wiring_context import END_ALLOWANCE
 from floorplan_engine.electrical.wiring_model import (

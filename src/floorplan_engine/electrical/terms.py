@@ -288,7 +288,7 @@ def terms_scope_markdown(rows: tuple[TermRow, ...], currency: str, language: Lan
 def terms_sheet_tail(
     rows: tuple[TermRow, ...], language: Language
 ) -> Callable[[Worksheet, Mapping[str, str]], None]:
-    """The same block on the estimate sheet, after "Total" (estimate.write_xlsx, tail): a
+    """The same block on the estimate sheet, after "Total" (estimate_files.write_xlsx, tail): a
     percent of materials is a formula from the material subtotal, so editing a price updates it;
     cells — the estimate cells by name (a section, "total")."""
 

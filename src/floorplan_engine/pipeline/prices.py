@@ -14,23 +14,20 @@ from typing import Any
 
 import yaml
 
-from floorplan_engine.electrical.estimate import (
-    HINTS,
-    LINES,
-    PRICES_FILE,
-    WORK_PREFIX,
-    PriceList,
-    PriceSource,
-    edit_price_items,
-    split_key,
-    unknown_keys,
-)
+from floorplan_engine.electrical.estimate_items import HINTS, LINES, WORK_PREFIX, split_key
 from floorplan_engine.electrical.market import (
     MARKET_FILE,
     MarketSample,
     item_spread,
     period,
     used_sources,
+)
+from floorplan_engine.electrical.price_list import (
+    PRICES_FILE,
+    PriceList,
+    PriceSource,
+    edit_price_items,
+    unknown_keys,
 )
 from floorplan_engine.electrical.pricing import Prices, mock_price
 from floorplan_engine.electrical.splices import DEFAULT_SPLICE, Splice
@@ -127,7 +124,7 @@ def load_prices(path: Path) -> tuple[PriceList | None, list[Issue]]:
 
 NEW_PRICES = (
     "# Общий прайс студии для сметы; prices.yaml проекта меняет только свои ключи.\n"
-    "# Цены — за единицу позиции; ключи — LINES в electrical/estimate.py.\n"
+    "# Цены — за единицу позиции; ключи — LINES в electrical/estimate_items.py.\n"
     "currency: грн\n"
     "items:\n"
 )
@@ -251,7 +248,7 @@ def save_prices(root: Path, changes: dict[str, Any]) -> list[Issue]:
     "splice"?: "wago" | "crimp"}; any electrical estimate item, works and materials, a key with a
     parameter too (its base in LINES); None removes the price; splice — joints in switch flush
     boxes (PriceList.splice). Comments and other keys of the file stay
-    (estimate.edit_price_items). Errors come with a field path; the file then is unchanged."""
+    (price_list.edit_price_items). Errors come with a field path; the file then is unchanged."""
     path = root / PRICES_FILE
     items = changes.get("items", {})
     if not isinstance(items, dict):

@@ -10,41 +10,28 @@ from typing import Any
 import pytest
 import yaml
 
-import floorplan_engine.electrical.estimate as estimate_module
+import floorplan_engine.electrical.estimate_texts as estimate_texts
 from floorplan_engine.drawing.tables import Guess
-from floorplan_engine.electrical.estimate import (
+from floorplan_engine.electrical.estimate import Estimate, Line, build_estimate
+from floorplan_engine.electrical.estimate_items import (
     CHASE_KEYS,
     HINTS,
     LINES,
     SECTIONS,
-    Estimate,
-    Line,
-    Price,
-    PriceList,
     Section,
-    build_estimate,
-    cable_title,
-    derived_quote,
-    edit_price_items,
-    format_number,
-    parse_number,
-    quantities,
     split_key,
+)
+from floorplan_engine.electrical.estimate_quantities import quantities
+from floorplan_engine.electrical.estimate_texts import format_number
+from floorplan_engine.electrical.panel import build_panel, busbars, device_name
+from floorplan_engine.electrical.price_list import (
+    PriceList,
     unknown_keys,
 )
-from floorplan_engine.electrical.led_supply import (
-    LED_V,
-    STRIP_DEFAULT_M,
-    STRIP_W_PER_M,
-    led_mark,
-    section_for,
-)
-from floorplan_engine.electrical.low_links import LED_MARK
-from floorplan_engine.electrical.panel import build_panel, busbars, device_name
 from floorplan_engine.electrical.pricing import MockPriceService, Prices, mock_price
-from floorplan_engine.electrical.splices import Splice, back_box_joints
+from floorplan_engine.electrical.splices import back_box_joints
 from floorplan_engine.electrical.wiring import RESERVE, box_wiring
-from floorplan_engine.model.schema import Electrical, Plan
+from floorplan_engine.model.schema import Electrical
 from floorplan_engine.pipeline import build_project, estimate_project
 from floorplan_engine.validation.plan import validate_plan
 from tests.conftest import make_plan, room_wiring
@@ -86,28 +73,6 @@ def _wiring() -> tuple[Any, Electrical]:
     wiring = box_wiring(plan, contours, elec)
     assert wiring is not None
     return wiring, elec
-
-
-def test_quantities_from_model() -> None:
-    wiring, elec = _wiring()
-    q = quantities(wiring, elec)
-    for mark, m in wiring.by_mark().items():
-        assert q[f"cable.{mark}"] == pytest.approx(round(m * (1 + RESERVE), 1))
-    assert q["socket_box"] == 4  # 2 + 1 sockets + a switch
-    assert q["frame.1"] == 2 and q["frame.2"] == 1
-    assert q["switch2"] == 1 and q["socket"] == 3
-    boxes = len(wiring.boxes)
-    assert sum(v for k, v in q.items() if k.startswith("junction_box.")) == boxes
-    assert all(f"junction_box.{b.size}" in q for b in wiring.boxes)  # by size
-    assert q["crimp"] == 3 * boxes + 2  # two-key switch from a box
-    assert q["breaker"] == 2
-    narrow, wide = wiring.chase_length(wide=False), wiring.chase_length(wide=True)
-    assert narrow + wide == pytest.approx(wiring.chase_mm)
-    assert q["work.chase"] == pytest.approx(round(narrow / 1000, 1))
-    assert q.get("work.chase_wide", 0) == pytest.approx(round(wide / 1000, 1))
-    assert "work.marking" not in q  # end marking is part of work.cable
-    assert q["work.insulation_test"] == 2  # per power group
-    assert q["work.cable"] == pytest.approx(round(sum(r.length_mm for r in wiring.runs) / 1000, 1))
 
 
 def test_prices_and_unpriced_lines() -> None:
@@ -201,33 +166,6 @@ def test_estimate_project_writes_tables(tmp_path: Path) -> None:
     assert not (project / "out" / "work-scope.md").exists()
 
 
-def test_wet_boxes_and_wall_holes_in_estimate() -> None:
-    data = make_plan(RECT, [DOOR]).model_dump()
-    data["rooms"][0]["wet"] = True
-    plan = Plan.model_validate(data)
-    _, contours = validate_plan(plan)
-    elec = Electrical.model_validate(ELEC)
-    wiring = box_wiring(plan, contours, elec)
-    assert wiring is not None
-    q = quantities(wiring, elec)
-    ip = sum(v for k, v in q.items() if k.startswith("junction_box_ip."))
-    assert ip == len(wiring.boxes) and not any(k.startswith("junction_box.") for k in q)
-    holes = q.get("work.wall_hole", 0) + q.get("work.wall_hole_large", 0)
-    assert holes == len(wiring.holes)
-
-
-def test_large_hole_costs_two_and_a_half_times() -> None:
-    """A large hole (core drill) is priced from an ordinary one × 2.5, unless the price
-    list names it itself; the price service mock follows the same rule."""
-    own = PriceList.model_validate({"items": {"work.wall_hole": 200}})
-    quote = derived_quote(Prices(own, MockPriceService()), "work.wall_hole_large")
-    assert quote.price is not None and quote.price.price == 500 and not quote.service
-    named = PriceList.model_validate({"items": {"work.wall_hole_large": 260}})
-    quote = derived_quote(Prices(named, MockPriceService()), "work.wall_hole_large")
-    assert quote.price is not None and quote.price.price == 260
-    assert mock_price("work.wall_hole_large") == 2.5 * (mock_price("work.wall_hole") or 0)
-
-
 def test_estimate_table_with_and_without_prices() -> None:
     from floorplan_engine.drawing.schedules import estimate_table
 
@@ -279,36 +217,8 @@ def test_estimate_table_marks_material_totals_as_provisional(
     assert cells[0].mark == " !" and cells[0].text == format_number(est.subtotal("material_rough"))
     table = estimate_table(est, "uk", priced=True)
     assert table.total is not None and isinstance(table.total[5], str)
-    monkeypatch.setattr(estimate_module, "MATERIAL_PRICES_MOCK", False)
+    monkeypatch.setattr(estimate_texts, "MATERIAL_PRICES_MOCK", False)
     assert not any(isinstance(c, Guess) for c in _subtotals(estimate_table(est, "uk", True)))
-
-
-def test_section_titles_are_plain_and_markdown_marks_material_totals(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    from floorplan_engine.electrical.estimate import provisional, section_title, write_markdown
-
-    assert section_title("material", "ru") == "Материалы"
-    assert section_title("material_finish", "ru") == "Чистовые материалы"
-    assert section_title("material_rough", "uk") == "Чорнові матеріали"
-    assert section_title("rough", "ru") == "Черновые работы"
-    assert provisional("material", True) and provisional("material_finish", True)
-    assert not provisional("material", False) and not provisional("rough", True)
-    wiring, elec = _wiring()
-    priced = build_estimate(
-        wiring, elec, PriceList.model_validate({"items": {"socket_box": 20}}), "ru"
-    )
-    md = write_markdown(priced, tmp_path / "e.md", "Смета", [], "ru").read_text(encoding="utf-8")
-    assert "## Черновые материалы\n" in md and "имитация" not in md
-    totals = [ln for ln in md.splitlines() if ln.startswith("| | **Итого**")]
-    assert [ln.endswith("** ! |") for ln in totals] == [True, True, False, False]
-    assert not any(ln.startswith("**Всего") and "!" in ln for ln in md.splitlines())
-    volumes = build_estimate(wiring, elec, PriceList(), "ru")
-    md = write_markdown(volumes, tmp_path / "v.md", "Смета", [], "ru").read_text(encoding="utf-8")
-    assert "## Черновые материалы\n" in md and " ! |" not in md
-    monkeypatch.setattr(estimate_module, "MATERIAL_PRICES_MOCK", False)
-    md = write_markdown(priced, tmp_path / "o.md", "Смета", [], "ru").read_text(encoding="utf-8")
-    assert " ! |" not in md
 
 
 def test_estimate_on_wiring_sheet(tmp_path: Path) -> None:
@@ -342,77 +252,6 @@ def test_box_price_falls_back_to_size_free_key() -> None:
     boxes = [ln for ln in est.lines if ln.key.startswith("junction_box.")]
     assert boxes and all(ln.price == 60 for ln in boxes)
     assert all("×" in ln.name or "Ø" in ln.name for ln in boxes)  # size in the name
-
-
-def _eval_xlsx(path: Path) -> float:
-    """Recompute the "Total" of the estimate workbook from its formulas (no Excel at hand)."""
-    import re
-
-    from openpyxl import load_workbook
-
-    ws = load_workbook(path).active
-    assert ws is not None
-    values: dict[str, float] = {}
-
-    def cell(ref: str) -> float:
-        if ref in values:
-            return values[ref]
-        v = ws[ref].value
-        if isinstance(v, str) and v.startswith("=IF("):
-            r = re.findall(r"\d+", v)[0]
-            price = ws[f"E{r}"].value
-            out = 0.0 if price is None else float(ws[f"D{r}"].value) * float(price)
-        elif isinstance(v, str) and v.startswith("=SUM("):
-            a, b = (int(x) for x in re.findall(r"F(\d+)", v))
-            out = sum(cell(f"F{k}") for k in range(a, b + 1))
-        elif isinstance(v, str) and v.startswith("="):
-            out = sum(cell(ref) for ref in re.findall(r"F\d+", v))
-        else:
-            out = float(v or 0)
-        values[ref] = out
-        return out
-
-    grand = next(
-        r for r in range(1, ws.max_row + 1) if str(ws[f"B{r}"].value or "").startswith("Усього")
-    )
-    return cell(f"F{grand}")
-
-
-def test_xlsx_formulas_give_estimate_total(tmp_path: Path) -> None:
-    wiring, elec = _wiring()
-    prices = PriceList.model_validate({"items": {"cable.3x2.5": 70, "work.cable": 30}})
-    est = build_estimate(wiring, elec, prices, "uk")
-    from floorplan_engine.electrical.estimate import write_xlsx
-
-    path = write_xlsx(est, tmp_path / "e.xlsx", "Кошторис", ["примітка"], "uk")
-    assert _eval_xlsx(path) == pytest.approx(est.total)
-    assert est.unpriced > 0  # items without a price are in the workbook but not in the total
-
-
-def test_xlsx_material_totals_are_yellow(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """A provisional materials total keeps its SUM formula and gets the yellow fill; work totals
-    and "Total" do not (decision 2026-11-23)."""
-    from openpyxl import load_workbook
-
-    from floorplan_engine.electrical.estimate import XLSX_GUESS_FILL, write_xlsx
-
-    def fills(est: Estimate, name: str) -> list[bool]:
-        ws = load_workbook(write_xlsx(est, tmp_path / name, "Кошторис", [], "uk")).active
-        assert ws is not None
-        rows = [
-            r for r in range(1, ws.max_row + 1) if ws[f"B{r}"].value in ("Разом", "Усього, грн")
-        ]
-        assert all(str(ws[f"F{r}"].value).startswith("=") for r in rows)  # still formulas
-        return [str(ws[f"F{r}"].fill.start_color.rgb).endswith(XLSX_GUESS_FILL) for r in rows]
-
-    wiring, elec = _wiring()
-    priced = build_estimate(
-        wiring, elec, PriceList.model_validate({"items": {"work.cable": 30}}), "uk"
-    )
-    assert fills(priced, "p.xlsx") == [True, True, False, False, False]
-    assert not any(fills(build_estimate(wiring, elec, PriceList(), "uk"), "v.xlsx"))
-    monkeypatch.setattr(estimate_module, "MATERIAL_PRICES_MOCK", False)
-    assert not any(fills(priced, "o.xlsx"))
 
 
 def test_studio_prices_used_when_project_has_none(tmp_path: Path) -> None:
@@ -468,69 +307,6 @@ def test_studio_splice_setting_reaches_every_project(tmp_path: Path) -> None:
     (tmp_path / "prices.yaml").write_text("splice: solder\n", "utf-8")
     broken, issues = load_price_layers(project)
     assert broken is None and issues and issues[0].path == "splice"
-
-
-@pytest.mark.parametrize(
-    ("key", "expected"),
-    [
-        ("cable.3x1.5", ("cable", "3x1.5")),
-        ("frame.2", ("frame", "2")),
-        ("cable", ("cable", "")),
-        ("cable.", ("cable.", "")),
-        ("work.cable", ("work.cable", "")),
-        ("socket", ("socket", "")),
-        ("", ("", "")),
-    ],
-)
-def test_split_key(key: str, expected: tuple[str, str]) -> None:
-    assert split_key(key) == expected
-
-
-def test_unknown_keys_lists_only_foreign_keys_in_order() -> None:
-    prices = PriceList.model_validate(
-        {
-            "items": {
-                "socket": 1,
-                "sokcet": 2,
-                "cable.3x2.5": 3,
-                "work.cable": 4,
-                "work.unknown": 5,
-                "frame.3": 6,
-            }
-        }
-    )
-    assert unknown_keys(prices) == ["sokcet", "work.unknown"]
-
-
-def test_unknown_keys_skips_retired_items() -> None:
-    # an old price list with end marking, now part of work.cable, still loads
-    prices = PriceList.model_validate({"items": {"work.marking": 10, "work.cable": 34}})
-    assert unknown_keys(prices) == []
-
-
-def test_unknown_keys_empty_price_list() -> None:
-    assert unknown_keys(PriceList()) == []
-
-
-def test_price_number_becomes_price_without_name() -> None:
-    prices = PriceList.model_validate({"items": {"socket": 120, "crimp": 2.5}})
-    assert prices.price("socket") == Price(price=120)
-    assert prices.price("crimp") == Price(price=2.5)
-
-
-def test_price_object_keeps_own_name() -> None:
-    prices = PriceList.model_validate({"items": {"socket": {"price": 99, "name": "Розетка X"}}})
-    p = prices.price("socket")
-    assert p is not None and p.price == 99 and p.name == "Розетка X"
-
-
-def test_price_missing_key_is_none() -> None:
-    assert PriceList().price("socket") is None
-
-
-def test_price_list_defaults() -> None:
-    prices = PriceList()
-    assert prices.currency == "грн" and prices.items == {} and prices.board_kit == []
 
 
 def _line(section: Section, qty: float, price: float | None, key: str = "k") -> Line:
@@ -614,30 +390,6 @@ def test_works_split_into_rough_and_finish() -> None:
 def test_empty_estimate_is_zero() -> None:
     est = Estimate((), "грн")
     assert est.subtotal("material") == 0 and est.total == 0 and est.unpriced == 0
-
-
-@pytest.mark.parametrize(
-    ("value", "digits", "text"),
-    [
-        (10, 2, "10"),
-        (1234.5, 2, "1 234,50"),
-        (1234567.891, 2, "1 234 567,89"),
-        (0.25, 2, "0,25"),
-        (0, 2, "0"),
-        (1234567, 0, "1 234 567"),
-        (5, 0, "5"),
-        (2.75, 1, "2,8"),
-        (3.0, 1, "3,0"),
-    ],
-)
-def test_num_format(value: float, digits: int, text: str) -> None:
-    assert format_number(value, digits) == text
-    assert parse_number(text) == round(value, digits)
-
-
-@pytest.mark.parametrize("text", ["—", "", "нет цены"])
-def test_parse_number_no_price(text: str) -> None:
-    assert parse_number(text) is None
 
 
 def test_panel_from_board_sheet_priced_by_kind() -> None:
@@ -770,21 +522,6 @@ def test_gun_fixing_names_and_mock_prices() -> None:
     assert unknown_keys(PriceList.model_validate({"items": {"cable_fixing": 2}})) == []
 
 
-def test_rough_light_per_room_with_lights() -> None:
-    wiring, elec = _wiring()
-    keys = ("rough_holder", "rough_lamp", "rough_switch", "work.rough_light", "work.rough_switch")
-    assert not set(keys) & set(quantities(wiring, elec))
-    q = quantities(wiring, elec.model_copy(update={"rough_light": True}))
-    assert [q[k] for k in keys] == [1] * 5  # one room
-
-
-def test_rough_light_without_lights_is_not_in_the_estimate() -> None:
-    wiring, elec = _wiring()
-    sockets = [p for p in elec.points if p.type.value == "socket"]
-    q = quantities(wiring, elec.model_copy(update={"rough_light": True, "points": sockets}))
-    assert "rough_holder" not in q and "work.rough_switch" not in q
-
-
 def test_extra_options_panel_labels_and_insulation_test() -> None:
     """Both on by default: panel labels at a fixed price right after the assembly, an insulation
     test per power group; the variant can drop each of them."""
@@ -818,156 +555,6 @@ def test_extra_options_panel_labels_and_insulation_test() -> None:
 LED = _pt("led1", "led_output", 2000, 1500, "QF1")
 
 
-def _led_wiring(supply: str) -> tuple[Any, Electrical]:
-    plan = make_plan(RECT, [DOOR])
-    _, contours = validate_plan(plan)
-    points = [*ELEC["points"], LED]
-    elec = Electrical.model_validate({**ELEC, "points": points, "led_supply": supply})
-    wiring = box_wiring(plan, contours, elec)
-    assert wiring is not None
-    return wiring, elec
-
-
-def test_led_supply_at_the_strip_is_fed_from_the_room_box() -> None:
-    wiring, elec = _led_wiring("room")
-    run = next(r for r in wiring.runs if r.target == "led1")
-    assert run.source != "board" and run.mark == "3x1.5"
-    q = quantities(wiring, elec)
-    assert q["led_psu"] == q["work.led_psu"] == 1
-    assert "led_psu_din" not in q and "work.led_psu_din" not in q
-
-
-def test_led_supply_in_the_panel_gives_a_12v_line_of_its_own() -> None:
-    wiring, elec = _led_wiring("board")
-    run = next(r for r in wiring.runs if r.target == "led1")
-    assert (run.source, run.circuit, run.group, run.led) == ("board", "low", "QF1", True)
-    # The 12 V line goes by the voltage drop: the default 5 m strip draws 6 A
-    current = STRIP_DEFAULT_M * STRIP_W_PER_M / LED_V
-    assert run.mark == led_mark(section_for(run.length_mm, current)) != LED_MARK
-    q = quantities(wiring, elec)
-    assert q["led_psu_din"] == q["work.led_psu_din"] == 1 and "led_psu" not in q
-    assert q[f"cable.{run.mark}"] > 0
-    assert q["work.board_install"] == 2  # the LED supplies box is a second panel
-    assert q["work.insulation_test"] == 2  # the 12 V line is no power group of its own
-    assert mock_price("led_psu_din") and mock_price("work.led_psu_din")
-
-
-def test_no_led_outputs_no_supplies() -> None:
-    wiring, elec = _wiring()
-    q = quantities(wiring, elec.model_copy(update={"led_supply": "board"}))
-    assert not {"led_psu", "led_psu_din", "work.led_psu", "work.led_psu_din"} & set(q)
-
-
-def test_before_plaster_leaves_no_chase_work() -> None:
-    plan = make_plan(RECT, [DOOR])
-    _, contours = validate_plan(plan)
-    elec = Electrical.model_validate({**ELEC, "plaster": "before"})
-    wiring = box_wiring(plan, contours, elec)
-    assert wiring is not None
-    q = quantities(wiring, elec)
-    assert "work.chase" not in q and "work.chase_wide" not in q and q["work.cable"] > 0
-
-
-def test_conduit_floor_always_ceiling_only_premium() -> None:
-    """Conduit (docs/wiring-variants.md): on the floor always, the whole line; on the ceiling in
-    premium, only the ceiling part; the diameter follows the cable cross-section."""
-    from floorplan_engine.electrical.estimate import conduit_mm
-    from floorplan_engine.electrical.mounting import conduit_diameter
-
-    assert [conduit_diameter(m) for m in ("3x1.5", "3x2.5", "3x4", "5x10", "UTP")] == [
-        20,
-        20,
-        25,
-        32,
-        20,
-    ]
-    wiring, elec = _wiring()
-    run = wiring.runs[0]
-    assert conduit_mm(run, "none") == 0  # ceiling: no conduit unless chosen
-    assert conduit_mm(run, "ceiling") == run.plan_mm  # the ceiling part
-    assert conduit_mm(run, "walls") == run.length_mm  # and the drops in the walls
-    assert not any(k.startswith("conduit.") for k in quantities(wiring, elec))
-    proper = quantities(wiring, elec.model_copy(update={"mode": "proper"}))
-    assert any(k.startswith("conduit.") for k in proper) and proper["work.conduit"] > 0
-
-    floor_elec = elec.model_copy(update={"route": "floor"})
-    plan = make_plan(RECT, [DOOR])
-    _, contours = validate_plan(plan)
-    floor = box_wiring(plan, contours, floor_elec)
-    assert floor is not None and any(r.route == "floor" for r in floor.runs)
-    q = quantities(floor, floor_elec)
-    total = sum(v for k, v in q.items() if k.startswith("conduit."))
-    # on the floor the whole line with margin; lighting runs on the ceiling (no conduit in
-    # standard). Lines lying together share a conduit (2026-11-13): their stretch counts once
-    from floorplan_engine.electrical.mounting import plan_conduits, source_conduits
-
-    on_floor = [r for r in floor.runs if r.route == "floor"]
-    shared = [*plan_conduits(floor, "none"), *source_conduits(floor, "none")]
-    saved = sum(p.length * (len(p.runs) - 1) for p in shared)
-    assert saved > 0
-    expected = (sum(r.length_mm for r in on_floor) - saved) / 1000 * (1 + RESERVE)
-    assert total == pytest.approx(expected, abs=0.3)
-
-
-PRICES_TEXT = """# прайс студии
-currency: грн
-items:
-  # Материалы
-  socket_box: 20
-  board_enclosure: { price: 6000, name: "Корпус" }
-  work.cable: 30                 # по потолку
-  # work.mechanism — впишите цену
-board_kit: []
-"""
-
-
-def test_edit_price_items_keeps_comments() -> None:
-    out = edit_price_items(
-        PRICES_TEXT,
-        {"work.cable": 25.5, "board_enclosure": 6500, "socket_box": None, "work.mechanism": 90},
-    )
-    cable = "  work.cable: 25.5                 # по потолку"
-    assert cable in out
-    assert 'board_enclosure: { price: 6500, name: "Корпус" }' in out
-    assert "socket_box" not in out
-    assert "# прайс студии" in out and "# work.mechanism — впишите цену" in out
-    # A new key goes after the last value of items, before the next section
-    lines = out.splitlines()
-    assert lines.index("  work.mechanism: 90") < lines.index("board_kit: []")
-    assert lines.index("  work.mechanism: 90") > lines.index(
-        "  work.cable: 25.5                 # по потолку"
-    )
-
-
-def test_edit_price_items_without_items_section() -> None:
-    assert edit_price_items("currency: грн\n", {"work.chase": 100}) == (
-        "currency: грн\nitems:\n  work.chase: 100\n"
-    )
-
-
-@pytest.mark.parametrize(
-    ("mark", "title"),
-    [
-        ("3x6", "ВВГнг 3×6"),
-        ("3x2.5", "ВВГнг 3×2,5"),
-        ("5х2,5", "ВВГнг 5×2,5"),
-        ("ВВГнг-LS 3x2.5", "ВВГнг-LS 3x2.5"),
-        ("UTP cat.6", "UTP cat.6"),
-        ("RG-6", "RG-6"),
-    ],
-)
-def test_cable_title_adds_the_brand_to_a_bare_section(mark: str, title: str) -> None:
-    assert cable_title(mark) == title
-
-
-def test_split_key_with_work_parameter() -> None:
-    assert split_key("work.chase.brick") == ("work.chase", "brick")
-    assert split_key("work.chase_wide.concrete") == ("work.chase_wide", "concrete")
-    assert split_key("work.chase") == ("work.chase", "")
-    assert split_key("work.cable") == ("work.cable", "")
-    assert split_key("cable.3x1.5") == ("cable", "3x1.5")
-
-
 def test_chases_split_by_wall_material() -> None:
     """Chase metres by wall material: the wall's own one, otherwise the plan default; a chase
     without a known material stays work.chase, priced as brick with a note (Kyiv 2026-11)."""
@@ -996,15 +583,6 @@ def test_chases_split_by_wall_material() -> None:
     assert wiring is not None
     keys = {k for k in quantities(wiring, elec) if split_key(k)[0] in CHASE_KEYS}
     assert "work.chase" not in keys and "work.chase.aerated" in keys
-
-
-def test_wide_chase_priced_from_narrow_in_the_same_material() -> None:
-    own = PriceList.model_validate({"items": {"work.chase.brick": 100}})
-    quote = derived_quote(Prices(own, MockPriceService()), "work.chase_wide.brick")
-    assert quote.price is not None and quote.price.price == 150 and not quote.service
-    named = PriceList.model_validate({"items": {"work.chase_wide.brick": 170}})
-    quote = derived_quote(Prices(named, MockPriceService()), "work.chase_wide.brick")
-    assert quote.price is not None and quote.price.price == 170
 
 
 def test_thermostat_is_one_row_by_point() -> None:
@@ -1071,50 +649,6 @@ def test_floor_heating_rows_by_zone_without_prices() -> None:
     assert "heating_sensor" not in quantities(*_wiring())
 
 
-def test_floor_heating_zone_without_a_layout_buys_no_cable() -> None:
-    """A zone with an empty heated area has no route: no section, no sensor, no work — the
-    report already says why (a remark on the zone)."""
-    plan = make_plan(RECT, [DOOR])
-    _, contours = validate_plan(plan)
-    reg = _pt("t1", "thermostat", 2000, 1500, "QF5")
-    whole = {"at": [0, 0], "size": [6000, 6000]}
-    fh = [{"id": "fh1", "room": "r", "thermostat": "t1", "length": 20, "exclude": [whole]}]
-    elec = Electrical.model_validate(
-        {**ELEC, "points": [*ELEC["points"], reg], "floor_heating": fh}
-    )
-    wiring = box_wiring(plan, contours, elec)
-    assert wiring is not None
-    (zone,) = wiring.heating
-    assert zone.route is None and zone.length == 20
-    q = quantities(wiring, elec)
-    assert not [k for k in q if "heating" in k]
-
-
-def test_floor_heating_is_not_in_the_estimate_until_its_release() -> None:
-    """Floor heating is held back (floor_heating.RELEASED, decision 2026-11-22): a zone is laid,
-    but the estimate buys no section, sensor, conduit or laying work."""
-    plan = make_plan(RECT, [DOOR])
-    _, contours = validate_plan(plan)
-    reg = _pt("t1", "thermostat", 2000, 1500, "QF5")
-    fh = [{"id": "fh1", "room": "r", "thermostat": "t1"}]
-    elec = Electrical.model_validate(
-        {**ELEC, "points": [*ELEC["points"], reg], "floor_heating": fh}
-    )
-    wiring = box_wiring(plan, contours, elec)
-    assert wiring is not None and wiring.heating
-    q = quantities(wiring, elec)
-    assert not [k for k in q if "heating" in k]
-
-
-def test_boxes_keep_crimps_and_no_splice_work() -> None:
-    """Through junction boxes nothing changes: crimps as before, no splice work."""
-    wiring, elec = _wiring()
-    q = quantities(wiring, elec)
-    assert q["crimp"] == 3 * len(wiring.boxes) + 2
-    assert back_box_joints(wiring, elec) == {}
-    assert "work.splice" not in q
-
-
 def _two_switches() -> list[dict[str, Any]]:
     """Light in a chain where one switch feeds the other: panel → k2 → k1 → l1 (test_splices)."""
     return [
@@ -1141,10 +675,10 @@ def test_switch_joint_work_without_clamp_lines_with_note(tmp_path: Path) -> None
     assert "уточнюється" in (work.hint or "") and "Wago" in (work.hint or "")
     assert not any(k.startswith("wago") for k in by_key) and "crimp" not in by_key
     assert "wago" not in LINES
-    note = estimate_module.text("note_splice", "ru")
+    note = estimate_texts.text("note_splice", "ru")
     assert "Wago 221" in note and "отдельной строкой" in note and "60 мм" in note
     assert "без соединений" in note and "1.7.144" not in note
-    assert "опресування" in estimate_module.text("note_splice", "uk")
+    assert "опресування" in estimate_texts.text("note_splice", "uk")
 
 
 def test_crimp_splice_counts_only_its_own_work() -> None:
@@ -1167,20 +701,8 @@ def test_crimp_splice_counts_only_its_own_work() -> None:
         "Соединение N и PE в подрозетнике выключателя опрессовкой",
     )
     assert "crimp" not in by_key and "work.splice" not in by_key
-    note = estimate_module.text("note_splice_crimp", "uk")
+    note = estimate_texts.text("note_splice_crimp", "uk")
     assert "60 мм" in note and "без пружин" in note and "окремим рядком" in note
-
-
-def test_socket_loop_buys_no_clamps_and_no_splice_work() -> None:
-    """Sockets in a loop (decision 2026-11-25): double terminals and jumpers, no joints — no
-    sleeves, no splice work, whatever the studio's setting."""
-    sockets = [_pt(f"s{k}", "socket", 600 + 1000 * k, 300, "QF2", count=2) for k in range(3)]
-    wiring, elec = room_wiring(sockets, distribution="loop")
-    assert not wiring.boxes and back_box_joints(wiring, elec) == {}
-    splices: tuple[Splice, ...] = ("wago", "crimp")
-    for splice in splices:
-        q = quantities(wiring, elec, splice)
-        assert not {"crimp", "work.splice", "work.splice_crimp"} & set(q)
 
 
 def test_splice_defaults_to_wago_without_a_studio_setting() -> None:
@@ -1194,29 +716,3 @@ def test_splice_defaults_to_wago_without_a_studio_setting() -> None:
     assert crimp.splice == "crimp" and PriceList.model_validate({"splice": "wago"}).splice == "wago"
     with pytest.raises(ValueError):
         PriceList.model_validate({"splice": "solder"})
-
-
-def test_old_wago_prices_are_ignored() -> None:
-    """A price list saved before 2026-11-25 may name the clamps: not an error, the price is not
-    used (RETIRED)."""
-    prices = PriceList.model_validate(
-        {"items": {"wago": 20, "wago.412": 18, "wago.413": 22, "wago.415": 28, "nope": 1}}
-    )
-    assert unknown_keys(prices) == ["nope"]
-
-
-def test_crimp_splice_leaves_box_crimps_as_they_are() -> None:
-    """Light in a chain with sockets through boxes: box crimps as before; the switch joints are
-    the work only, whatever the method."""
-    points = [
-        {"id": "l1", "room": "r", "type": "downlight", "ceiling": [1000, 1500], "group": "QF1"},
-        {"id": "l2", "room": "r", "type": "downlight", "ceiling": [2000, 1500], "group": "QF1"},
-        _pt("k1", "switch", 2500, 900, "QF1"),
-        _pt("s1", "socket", 500, 300, "QF2"),
-        _pt("s2", "socket", 1500, 300, "QF2"),
-    ]
-    wiring, elec = room_wiring(points, light_wiring="chain")
-    assert wiring.boxes
-    q = quantities(wiring, elec, "crimp")
-    assert q["crimp"] == 3 * len(wiring.boxes) == quantities(wiring, elec, "wago")["crimp"]
-    assert q["work.junction_box"] == len(wiring.boxes) and q["work.splice_crimp"] == 1

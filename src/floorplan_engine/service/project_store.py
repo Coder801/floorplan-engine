@@ -22,7 +22,7 @@ import yaml
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
-from floorplan_engine.electrical.estimate import PRICES_FILE
+from floorplan_engine.electrical.price_list import PRICES_FILE
 from floorplan_engine.pipeline import OUT_DIR, AuditError, build_project
 from floorplan_engine.service.db import questions
 from floorplan_engine.service.db import repositories as repo

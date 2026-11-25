@@ -18,18 +18,17 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 
 from floorplan_engine.electrical.boxes import BOX_TITLES
-from floorplan_engine.electrical.estimate import (
+from floorplan_engine.electrical.estimate import Estimate
+from floorplan_engine.electrical.estimate_items import LINES, split_key
+from floorplan_engine.electrical.estimate_texts import text as estimate_text
+from floorplan_engine.electrical.price_list import (
     DERIVED_PRICES,
-    LINES,
     PRICES_FILE,
-    Estimate,
     Price,
     PriceList,
     PriceSource,
     Quote,
-    split_key,
 )
-from floorplan_engine.electrical.estimate import text as estimate_text
 from floorplan_engine.electrical.splices import Splice
 from floorplan_engine.model.texts import Language
 

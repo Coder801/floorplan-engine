@@ -303,7 +303,7 @@ def fixing_spans(run: Run, conduit: Conduit) -> list[tuple[bool, Surface, float]
     """Fixed stretches of a line: (in conduit, surface, mm). The plan part lies on the ceiling
     or, for a floor route, on the floor; the rises go along the walls; the ends inside boxes and
     the panel are not fixed. In conduit: on the floor always, on the ceiling as chosen, the
-    rises with conduit in the walls (estimate.conduit_mm)."""
+    rises with conduit in the walls (estimate_quantities.conduit_mm)."""
     on_floor = run.route == "floor"
     plan_in = on_floor or conduit in ("ceiling", "walls")
     wall_in = on_floor or conduit == "walls"

@@ -18,11 +18,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import get_args
 
-from floorplan_engine.electrical.estimate import PriceSource, build_estimate, conduit_lengths
+from floorplan_engine.electrical.estimate import build_estimate
+from floorplan_engine.electrical.estimate_quantities import conduit_lengths
 from floorplan_engine.electrical.lines import split_by_lines
 from floorplan_engine.electrical.low_links import is_low
 from floorplan_engine.electrical.master import with_master_switch
 from floorplan_engine.electrical.panel import build_panel
+from floorplan_engine.electrical.price_list import PriceSource
 from floorplan_engine.electrical.wiring import estimate_wiring
 from floorplan_engine.model.geometry import Contour
 from floorplan_engine.model.schema import (

@@ -2,7 +2,7 @@
 сметы").
 
 The template is data (stages.yaml next to this module, plumbing/stages.yaml for plumbing): every
-estimate item, by its base key (estimate.split_key: `work.chase.brick` goes as `work.chase`),
+estimate item, by its base key (estimate_items.split_key: `work.chase.brick` goes as `work.chase`),
 belongs to exactly one stage. Unknown keys and keys in two stages are errors (StageCatalog);
 every key of LINES must have a stage (unstaged, a test), like missing_scope of the work scope.
 
@@ -26,7 +26,8 @@ from typing import Any, Literal
 import yaml
 from pydantic import Field, ValidationInfo, model_validator
 
-from floorplan_engine.electrical.estimate import LINES, WORK_PREFIX, Estimate, split_key
+from floorplan_engine.electrical.estimate import Estimate
+from floorplan_engine.electrical.estimate_items import LINES, WORK_PREFIX, split_key
 from floorplan_engine.electrical.work_scope import Phrase, load_scope
 from floorplan_engine.model.schema import StrictModel
 from floorplan_engine.model.texts import Language
