@@ -1,11 +1,11 @@
 ﻿section;key;name;unit;qty;price;total
 material_rough;cable.2x4;Кабель ВВГнг 2×4;м;58,2;80;4656,00
 material_rough;cable.3x1.5;Кабель ВВГнг 3×1,5;м;224,9;45;10120,50
-material_rough;cable.3x2.5;Кабель ВВГнг 3×2,5;м;361;70;25270,00
+material_rough;cable.3x2.5;Кабель ВВГнг 3×2,5;м;362,5;70;25375,00
 material_rough;cable.3x6;Кабель ВВГнг 3×6;м;11,5;180;2070,00
 material_rough;cable.4x1.5;Кабель ВВГнг 4×1,5;м;61;60;3660,00
 material_rough;cable.UTP cat.6;Кабель UTP cat.6;м;46,1;28;1290,80
-material_rough;conduit.20;Гофротруба ПВХ Ø20;м;315,9;14;4422,60
+material_rough;conduit.20;Гофротруба ПВХ Ø20;м;317,3;14;4442,20
 material_rough;conduit.25;Гофротруба ПВХ Ø25;м;68,8;20;1376,00
 material_rough;conduit.32;Гофротруба ПВХ Ø32;м;141,6;30;4248,00
 material_rough;conduit_joint.20;Муфта з'єднувальна для гофри Ø20;шт;6;5;30,00
@@ -13,8 +13,8 @@ material_rough;conduit_joint.25;Муфта з'єднувальна для гоф
 material_rough;conduit_joint.32;Муфта з'єднувальна для гофри Ø32;шт;3;10;30,00
 material_rough;socket_box;Підрозетник;шт;81;20;1620,00
 material_rough;wago.412;Клема важільна Wago 221-412;шт;24;18;432,00
-material_rough;wago.413;Клема важільна Wago 221-413;шт;56;22;1232,00
-material_rough;wago.415;Клема важільна Wago 221-415;шт;42;28;1176,00
+material_rough;wago.413;Клема важільна Wago 221-413;шт;17;22;374,00
+material_rough;wago.415;Клема важільна Wago 221-415;шт;3;28;84,00
 material_rough;conduit_clip.20;Кліпса для гофри Ø20 з дюбель-цвяхом під монтажний пістолет;шт;432;5;2160,00
 material_rough;conduit_clip.25;Кліпса для гофри Ø25 з дюбель-цвяхом під монтажний пістолет;шт;116;6;696,00
 material_rough;conduit_clip.32;Кліпса для гофри Ø32 з дюбель-цвяхом під монтажний пістолет;шт;297;8;2376,00
@@ -55,14 +55,14 @@ material_finish;led_output;Вивід для підсвітки;шт;5;150;750,0
 material_finish;outlet;Вивід кабелю до техніки;шт;8;150;1200,00
 material_finish;thermostat;Регулятор теплої підлоги;шт;4;3000;12000,00
 material_finish;led_strip;LED-підсвітка;м;4,42;250;1105,00
-rough;work.cable;Прокладання кабелю;м;663,4;45;29853,00
-rough;work.conduit;Укладання кабелю в гофротрубу;м;663,4;15;9951,00
+rough;work.cable;Прокладання кабелю;м;664,6;45;29907,00
+rough;work.conduit;Укладання кабелю в гофротрубу;м;664,6;15;9969,00
 rough;work.chase;Штроба вузька, 1–2 кабелі;м;49,9;120;5988,00
 rough;work.chase_wide;Штроба широка, 3–4 кабелі;м;51,3;180;9234,00
 rough;work.wall_hole;Свердління проходу крізь стіну;шт;9;100;900,00
 rough;work.wall_hole_large;Свердління великого проходу крізь стіну (коронкою);шт;2;250;500,00
 rough;work.socket_box;Свердління і встановлення підрозетника;шт;81;140;11340,00
-rough;work.splice;З'єднання в підрозетнику клемами Wago;шт;42;75;3150,00
+rough;work.splice;З'єднання в підрозетнику клемами Wago;шт;18;75;1350,00
 rough;work.board_install;Встановлення щита;шт;2;1500;3000,00
 finish;work.board_module;Збирання щита;мод.;60;100;6000,00
 finish;work.panel_labels;Маркування апаратів щита наліпками;щит;1;600;600,00
