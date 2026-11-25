@@ -5,7 +5,9 @@ from typing import Any
 import pytest
 
 from floorplan_engine.electrical import estimate
-from floorplan_engine.model.schema import Plan
+from floorplan_engine.electrical.wiring import box_wiring
+from floorplan_engine.electrical.wiring_model import Wiring
+from floorplan_engine.model.schema import Electrical, Plan
 from floorplan_engine.sheets import stages
 
 
@@ -85,3 +87,26 @@ def make_flat() -> Plan:
             ],
         }
     )
+
+
+def wall_point(
+    pid: str, kind: str, offset: float, height: float, group: str, **extra: Any
+) -> dict[str, Any]:
+    """A point on wall w3 of room "r" (make_plan)."""
+    return {"id": pid, "room": "r", "type": kind, "wall": "w3", "offset": offset,
+            "height": height, "group": group, **extra}  # fmt: skip
+
+
+def room_wiring(points: list[dict[str, Any]], **extra: Any) -> tuple[Wiring, Electrical]:
+    """Wiring of points in one room 3000×4000 with a door on w2 and the panel on w1 (offset 500,
+    height 1700); extra — Electrical options (distribution, light_wiring…)."""
+    from floorplan_engine.validation.plan import validate_plan
+
+    walls = [{"length": 3000}, {"length": 4000}, {"length": 3000}, {"length": 4000}]
+    plan = make_plan(walls, [{"wall": "w2", "type": "door", "offset": 1000, "width": 900}])
+    _, contours = validate_plan(plan)
+    board = {"room": "r", "wall": "w1", "offset": 500, "height": 1700}
+    elec = Electrical.model_validate({"points": points, "board": board, **extra})
+    wiring = box_wiring(plan, contours, elec)
+    assert wiring is not None
+    return wiring, elec

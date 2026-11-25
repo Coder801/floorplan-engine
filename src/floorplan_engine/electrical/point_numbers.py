@@ -12,7 +12,7 @@ model: add a point and the numbers after it shift.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
 from floorplan_engine.model.schema import Electrical, ElectricalPoint, Plan, PointType
@@ -24,6 +24,7 @@ TEXT: dict[str, dict[str, str]] = {
     "point": {"ru": "Точка", "uk": "Точка"},
     "height": {"ru": "Высота, мм", "uk": "Висота, мм"},
     "count": {"ru": "Шт.", "uk": "Шт."},
+    "splice": {"ru": "Соединение", "uk": "З'єднання"},
     "ceiling": {"ru": "потолок", "uk": "стеля"},
     "posts": {"ru": "{n}-постовая", "uk": "{n}-постова"},
 }
@@ -107,16 +108,22 @@ class PointRow:
     height: str
     count: int  # posts (devices) over all points of the row
     point_ids: tuple[str, ...]
+    # Joints in the flush boxes of the row's points (splices.splice_cell); "" — none
+    splice: str = ""
 
 
-def point_rows(plan: Plan, elec: Electrical) -> list[PointRow]:
-    """Table rows: identical points (kind, height, note) together, ordered by first number."""
+def point_rows(
+    plan: Plan, elec: Electrical, splices: Mapping[str, str] | None = None
+) -> list[PointRow]:
+    """Table rows: identical points (kind, height, joint in the flush box) together, ordered by
+    first number; splices is the joint cell by point id (splices.splice_cells)."""
     lang = plan.language
     numbers = number_points(plan, elec)
-    groups: dict[tuple[str, str], list[ElectricalPoint]] = {}
+    cells = splices or {}
+    groups: dict[tuple[str, str, str], list[ElectricalPoint]] = {}
     for p in sorted(elec.points, key=lambda p: numbers[p.id]):
         height = text("ceiling", lang) if p.ceiling is not None else f"{p.height or 0:g}"
-        groups.setdefault((point_name(p, lang), height), []).append(p)
+        groups.setdefault((point_name(p, lang), height, cells.get(p.id, "")), []).append(p)
     return [
         PointRow(
             ranges([numbers[p.id] for p in pts]),
@@ -124,6 +131,7 @@ def point_rows(plan: Plan, elec: Electrical) -> list[PointRow]:
             height,
             sum(p.count for p in pts),
             tuple(p.id for p in pts),
+            splice,
         )
-        for (name, height), pts in groups.items()
+        for (name, height, splice), pts in groups.items()
     ]

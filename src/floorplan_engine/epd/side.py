@@ -9,7 +9,7 @@ only for wiring, on the plan only for the plan; and the legend for the viewer ba
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
 
 from floorplan_engine.drawing.electrical import legend_rows, wiring_legend_rows
@@ -38,6 +38,7 @@ from floorplan_engine.electrical.mounting import text as mounting_text
 from floorplan_engine.electrical.panel import BoardPanel, build_panel, color_of
 from floorplan_engine.electrical.point_numbers import point_rows
 from floorplan_engine.electrical.pricing import Prices, price_notes
+from floorplan_engine.electrical.splices import DEFAULT_SPLICE, splice_cells
 from floorplan_engine.electrical.wiring_model import Wiring
 from floorplan_engine.electrical.work_scope import ScopeEntry, scope_entries
 from floorplan_engine.model.geometry import Contour
@@ -279,12 +280,14 @@ def heating_side_table(
     return side
 
 
-def points_side_table(plan: Plan, elec: Electrical) -> SideTable | None:
-    """Points: row → points with these numbers."""
-    table = points_table(plan, elec)
+def points_side_table(
+    plan: Plan, elec: Electrical, splices: Mapping[str, str] | None = None
+) -> SideTable | None:
+    """Points: row → points with these numbers; splices — the joint cells (points_table)."""
+    table = points_table(plan, elec, splices)
     if table is None:
         return None
-    keys = [tuple(f"point:{p}" for p in r.point_ids) for r in point_rows(plan, elec)]
+    keys = [tuple(f"point:{p}" for p in r.point_ids) for r in point_rows(plan, elec, splices)]
     return from_table(table, keys)
 
 
@@ -375,7 +378,9 @@ def side_tables(
     out = {"plan": [room_table(plan, contours)]}
     if elec is not None:
         # "Electrical": "Points" has kind, height and count; the legend is a badge on the drawing
-        points = points_side_table(plan, elec)
+        method = (prices.splice if prices is not None else None) or DEFAULT_SPLICE
+        cells = splice_cells(quantities or wiring, elec, method, lang)
+        points = points_side_table(plan, elec, cells)
         out["electrical"] = [points] if points is not None else []
         lighting = lighting_side_table(plan, elec)
         out["lighting"] = [lighting] if lighting is not None else []

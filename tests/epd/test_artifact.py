@@ -11,6 +11,8 @@ from ezdxf.document import Drawing
 from ezdxf.filemanagement import readfile
 from numpy.typing import NDArray
 
+from floorplan_engine.electrical.splices import back_box_joints
+from floorplan_engine.electrical.wiring import box_wiring
 from floorplan_engine.epd.artifact import (
     FORMAT_NAME,
     FORMAT_VERSION,
@@ -20,12 +22,12 @@ from floorplan_engine.epd.artifact import (
     read_artifact,
     render_page_png,
 )
-from floorplan_engine.epd.objects import ObjectInfo
+from floorplan_engine.epd.objects import ObjectInfo, describe_objects
 from floorplan_engine.model.schema import Electrical, Plan
 from floorplan_engine.sheets.document import build_project_document
 from floorplan_engine.validation.issues import parse_model
 from floorplan_engine.validation.plan import validate_plan
-from tests.conftest import make_plan
+from tests.conftest import make_plan, wall_point
 
 
 def _vertices(d: str, height: float) -> NDArray[np.float64]:
@@ -189,3 +191,30 @@ def test_block_entities_on_layer_0_take_their_entity_layer(tmp_path: Path) -> No
     dims = [i for i in pages[0]["items"] if str(i.get("o", "")).startswith("dimension:")]
     assert dims and {i["l"] for i in dims} == {"A-DIMS"}
     assert not [i for p in pages for i in p["items"] if i["l"] == "0" and "o" in i]
+
+
+def test_wiring_page_gets_cards_of_points_with_joints(tmp_path: Path) -> None:
+    """The wiring page shows no point cards, except a flush box with joints (decision
+    2026-11-25): its card with the splice key, so the viewer can mark it and draw its joints."""
+    plan = make_plan(RECT, [{"wall": "w2", "type": "door", "offset": 1000, "width": 900}])
+    _, contours = validate_plan(plan)
+    sockets = [wall_point(f"s{k}", "socket", 600 + 1000 * k, 300, "QF2") for k in range(3)]
+    board = {"room": "r", "wall": "w1", "offset": 500, "height": 1700}
+    elec = Electrical.model_validate({"points": sockets, "board": board, "distribution": "loop"})
+    wiring = box_wiring(plan, contours, elec)
+    assert wiring is not None
+    joints = back_box_joints(wiring, elec)
+    assert len(joints) == 2
+    doc = build_project_document(plan, contours, elec, today=date(2026, 10, 20))
+    path = tmp_path / "project.dxf"
+    doc.saveas(path, encoding="utf-8")
+    objects = describe_objects(plan, contours, elec, wiring)
+    _, pages = read_artifact(
+        export_artifact(readfile(path), plan, tmp_path / "p.epd", objects=objects)
+    )
+    page = next(p for p in pages if p.get("stage") == "wiring")
+    points = {k for k in page["objects"] if k.startswith("point:")}
+    assert points == {f"point:{pid}" for pid in joints}
+    drawn = {item["o"] for item in page["items"] if "o" in item}
+    assert points <= drawn  # the symbol is on the sheet: the viewer marks it there
+    assert all(page["objects"][k]["splice"]["method"] == "wago" for k in points)

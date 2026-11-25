@@ -240,6 +240,10 @@ def _estimate_notes(
         ),
         estimate_text("note_crimp", lang),
     ]
+    if any(ln.key.startswith("wago.") for ln in est.lines):
+        notes.append(estimate_text("note_splice", lang))
+    if any(ln.key == "work.splice_crimp" for ln in est.lines):
+        notes.append(estimate_text("note_splice_crimp", lang))
     if any(ln.key.startswith("work.chase") for ln in est.lines):
         notes.append(
             estimate_text("note_chases", lang, d=f"{CHASE_SHARE:g}", k=CHASE_CABLES, n=CHASE_NARROW)

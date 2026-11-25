@@ -24,6 +24,7 @@ from floorplan_engine.electrical.estimate import (
 from floorplan_engine.electrical.panel import BoardPanel, build_panel, write_loads
 from floorplan_engine.electrical.pricing import Prices
 from floorplan_engine.electrical.routing import search_memo
+from floorplan_engine.electrical.splices import DEFAULT_SPLICE
 from floorplan_engine.electrical.wiring import box_wiring, estimate_wiring
 from floorplan_engine.electrical.wiring_model import Wiring
 from floorplan_engine.electrical.work_scope import WORK_SCOPE_MD
@@ -316,7 +317,8 @@ def _export(
             elec.panel.npe_relay,
         )
     water = water_views(*pipes) if pipes is not None else None
-    objects = describe_objects(plan, contours, elec, wiring, water, run.furniture)
+    splice = (prices.splice if prices is not None else None) or DEFAULT_SPLICE
+    objects = describe_objects(plan, contours, elec, wiring, water, run.furniture, splice)
     if pipes is not None:
         objects |= plumbing_objects(plan, *pipes)
     quantities = None

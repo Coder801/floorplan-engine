@@ -95,10 +95,12 @@ def test_estimate_marks_service_lines_and_notes() -> None:
 
 
 def test_mock_leaves_floor_heating_without_a_price() -> None:
-    """Prices are not invented: the floor heating cable, sensor and their work are the items the
-    mock skips (a section length as the key parameter too); the controller has a price."""
+    """Prices are not invented: the floor heating cable, sensor and their work, the Wago clamps
+    in flush boxes and their work are the items the mock skips (a section length or a clamp
+    model as the key parameter too); the controller has a price."""
     heating = {"heating_cable", "heating_sensor", "heating_conduit", "work.floor_heating"}
-    assert heating == UNPRICED and set(LINES) >= UNPRICED
-    for key in (*heating, "heating_cable.27"):
+    splices = {"wago", "work.splice", "work.splice_crimp"}  # 2026-11-25: no price given yet
+    assert heating | splices == UNPRICED and set(LINES) >= UNPRICED
+    for key in (*heating, *splices, "heating_cable.27", "wago.413"):
         assert mock_price(key) is None
         assert MockPriceService().lookup(key).price is None

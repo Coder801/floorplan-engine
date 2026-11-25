@@ -386,8 +386,13 @@ def export_artifact(
                 page["legend"] = legend_items(page["items"], legends[stage])
             if objects:
                 keys = {item["o"] for item in page["items"] if "o" in item}
+                drawn_points = {k for k in keys if k.startswith("point:")}
                 if stage in STAGE_OBJECTS:
                     keys = {k for k in keys if k.partition(":")[0] in STAGE_OBJECTS[stage]}
+                if stage == "wiring":  # a flush box with joints: its card (splice, 2026-11-25)
+                    keys |= {
+                        k for k in drawn_points if k in objects and objects[k].splice is not None
+                    }
                 page["objects"] = page_objects(keys, objects, plan.language)
             if tables and stage in tables:
                 page["tables"] = [t.as_dict() for t in tables[stage]]

@@ -90,10 +90,12 @@ def load_price_layers(project: Path) -> tuple[PriceList | None, list[Issue]]:
 
 
 def merge_prices(base: PriceList, top: PriceList) -> PriceList:
-    """top over base: its items and terms win key by key, the rest of base stays; currency, date
-    and note — top's if it sets them."""
+    """top over base: its items and terms win key by key, the rest of base stays; currency, date,
+    note and splice (how flush box joints are made) — top's if it sets them."""
     head: dict[str, Any] = {
-        f: getattr(top, f) for f in ("currency", "date", "note") if f in top.model_fields_set
+        f: getattr(top, f)
+        for f in ("currency", "date", "note", "splice")
+        if f in top.model_fields_set
     }
     return base.model_copy(
         update={

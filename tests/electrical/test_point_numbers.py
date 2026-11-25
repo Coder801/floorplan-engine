@@ -99,3 +99,20 @@ def test_thermostat_is_named_in_the_points_table() -> None:
     assert elec is not None
     assert point_name(elec.points[0], "ru") == "Регулятор тёплого пола: санузел"
     assert block_name(elec.points[0], "uk") == "Регулятор теплої підлоги"
+
+
+def test_joints_split_rows_and_add_a_column() -> None:
+    """Points of one kind and height with different flush box joints (decision 2026-11-25) are
+    separate rows; the "Соединение" column appears only when some point has a joint."""
+    plan = make_plan([{"length": 3000}, {"length": 4000}, {"length": 3000}, {"length": 4000}])
+    cells = {"s0": "Wago 3×413, глуб. ≥60"}
+    rows = point_rows(plan, _elec(), cells)
+    joined = next(r for r in rows if r.point_ids == ("s0",))
+    assert joined.splice == cells["s0"] and joined.count == 1
+    rest = next(r for r in rows if "s1" in r.point_ids)
+    assert rest.splice == "" and "s0" not in rest.point_ids and len(rows) == 4
+    table = points_table(plan, _elec(), cells)
+    assert table is not None and table.columns[-1].title == "Соединение"
+    assert [row[-1] for row in table.rows] == [r.splice for r in rows]
+    plain = points_table(plan, _elec())
+    assert plain is not None and len(plain.columns) == 4

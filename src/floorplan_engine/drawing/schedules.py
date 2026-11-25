@@ -4,7 +4,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 
 from floorplan_engine.drawing.layers import TEXT_DIM_MM, text_width
 from floorplan_engine.drawing.tables import (
@@ -46,21 +46,35 @@ def _numbers_width(texts: Sequence[str]) -> float:
     return max(10.0, max(text_width(t, TEXT_DIM_MM) for t in texts) + 2 * CELL_PAD + TEXT_GAP)
 
 
-def points_table(plan: Plan, elec: Electrical) -> Table | None:
-    """The "Points" table for the electrical sheet; None if there are no points."""
+def points_table(
+    plan: Plan, elec: Electrical, splices: Mapping[str, str] | None = None
+) -> Table | None:
+    """The "Points" table for the electrical sheet; None if there are no points. splices — the
+    joint in the flush box by point id (splices.splice_cells, decision 2026-11-25): with any, a
+    "Joint" column — what with and the deep flush box mark."""
     lang = plan.language
-    rows = point_rows(plan, elec)
+    rows = point_rows(plan, elec, splices)
     if not rows:
         return None
-    columns = (
+    columns = [
         Column(points_text("numbers", lang), _numbers_width([r.numbers for r in rows]), "left"),
         Column(points_text("point", lang), name_width([r.name for r in rows]), "left"),
         Column(points_text("height", lang), 22.0),
         Column(points_text("count", lang), 10.0),
+    ]
+    joined = any(r.splice for r in rows)
+    if joined:
+        texts = [points_text("splice", lang), *(r.splice for r in rows)]
+        columns.append(Column(points_text("splice", lang), name_width(texts), "left"))
+    cells = tuple(
+        (r.numbers, r.name, r.height, str(r.count), *((r.splice,) if joined else ())) for r in rows
     )
-    cells = tuple((r.numbers, r.name, r.height, str(r.count)) for r in rows)
     return Table(
-        points_text("title", lang), columns, cells, row_h=POINTS_ROW_H, header_h=POINTS_HEADER_H
+        points_text("title", lang),
+        tuple(columns),
+        cells,
+        row_h=POINTS_ROW_H,
+        header_h=POINTS_HEADER_H,
     )
 
 

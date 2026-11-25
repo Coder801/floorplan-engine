@@ -81,6 +81,7 @@ from floorplan_engine.electrical.mounting import PRACTICE, mounting_notes
 from floorplan_engine.electrical.mounting import text as mounting_text
 from floorplan_engine.electrical.panel import BoardPanel, build_panel, line_classes
 from floorplan_engine.electrical.pricing import Prices, price_notes
+from floorplan_engine.electrical.splices import DEFAULT_SPLICE, splice_cells
 from floorplan_engine.electrical.wiring import box_wiring, estimate_wiring
 from floorplan_engine.electrical.wiring_model import Wiring
 from floorplan_engine.model.furniture import Furniture
@@ -177,10 +178,13 @@ def groups_panel(
     return stacked(panel, notes_panel(lines, width=table.width)) if lines else panel
 
 
-def points_spec(plan: Plan, elec: Electrical) -> SheetSpec | None:
+def points_spec(
+    plan: Plan, elec: Electrical, splices: Mapping[str, str] | None = None
+) -> SheetSpec | None:
     """The "Points" sheet (decision 2026-10-28): numbers on the electrical plan → kind, height,
-    count. The table takes the plan's place, in columns if it is too tall."""
-    table = points_table(plan, elec)
+    count, and the joint in the flush box (splices, decision 2026-11-25). The table takes the
+    plan's place, in columns if it is too tall."""
+    table = points_table(plan, elec, splices)
     if table is None:
         return None
 
@@ -343,7 +347,8 @@ def draw_stages(
         specs.append(plumbing_spec(msp, plan, *plumbing, prices))
     if elec is not None:
         # The point schedule is an appendix at the end: stage sheet numbers do not change
-        points = points_spec(plan, elec)
+        method = (prices.splice if prices is not None else None) or DEFAULT_SPLICE
+        points = points_spec(plan, elec, splice_cells(wiring, elec, method, plan.language))
         if points is not None:
             specs.append(points)
         # Wall elevations also at the end, as many sheets as needed: electrical (each room's

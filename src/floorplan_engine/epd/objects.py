@@ -44,6 +44,7 @@ from floorplan_engine.electrical.panel import BoardPanel, build_panel
 from floorplan_engine.electrical.panel_text import amps, kw
 from floorplan_engine.electrical.point_numbers import BLOCK_TYPES, block_name, number_points
 from floorplan_engine.electrical.routing import opening_strip
+from floorplan_engine.electrical.splices import DEFAULT_SPLICE, Splice, back_box_joints, splice_cell
 from floorplan_engine.electrical.switch_links import SwitchLink, switch_links
 from floorplan_engine.electrical.wiring import RESERVE
 from floorplan_engine.electrical.wiring_model import (
@@ -53,7 +54,7 @@ from floorplan_engine.electrical.wiring_model import (
     Wiring,
     line_starts,
 )
-from floorplan_engine.epd.box_card import box_card
+from floorplan_engine.epd.box_card import box_card, splice_card
 from floorplan_engine.model.furniture import Furniture
 from floorplan_engine.model.geometry import Contour, RoomGeometry, Vec, room_geometries
 from floorplan_engine.model.schema import (
@@ -136,6 +137,7 @@ TEXT: dict[str, dict[str, str]] = {
     "dimension": {"ru": "Размеры стены {wall}", "uk": "Розміри стіни {wall}"},
     "about": {"ru": "Описание", "uk": "Опис"},
     "points": {"ru": "Точки", "uk": "Точки"},
+    "splice": {"ru": "Соединение", "uk": "З'єднання"},
     "label": {"ru": "Подпись точек", "uk": "Підпис точок"},
     "led": {"ru": "LED-подсветка", "uk": "LED-підсвітка"},
     "board": {"ru": "Щит {name}", "uk": "Щит {name}"},
@@ -177,6 +179,8 @@ class ObjectInfo:
     brief: ObjectInfo | None = None
     # Junction box: where its cables come from and go to (box_card, decision 2026-11-17)
     box: dict[str, object] | None = None
+    # Flush box of a chain point: its joints (box_card.splice_card, decision 2026-11-25)
+    splice: dict[str, object] | None = None
 
     def as_dict(self) -> dict[str, object]:
         out: dict[str, object] = {"title": self.title, "rows": [list(r) for r in self.rows]}
@@ -184,6 +188,8 @@ class ObjectInfo:
             out["block"] = self.block
         if self.box is not None:
             out["box"] = self.box
+        if self.splice is not None:
+            out["splice"] = self.splice
         if self.brief is not None:
             out["brief"] = self.brief.as_dict()
         return out
@@ -208,9 +214,11 @@ def describe_objects(
     wiring: Wiring | None = None,
     water: WaterMap | None = None,
     furniture: Furniture | None = None,
+    splice: Splice = DEFAULT_SPLICE,
 ) -> dict[str, ObjectInfo]:
     """Cards of all model objects by "type:id"; water is plumbing supplies by wall (for elevations,
-    also walls that only have plumbing); furniture is furniture.yaml."""
+    also walls that only have plumbing); furniture is furniture.yaml; splice is how the studio
+    joins wires in flush boxes (its price list), for the joints on the point cards."""
     lang = plan.language
     out: dict[str, ObjectInfo] = {}
     if furniture is not None:
@@ -268,7 +276,7 @@ def describe_objects(
                 rows.append((text("sill", lang), _mm(op.sill)))
             out[f"opening:{op.id}"] = ObjectInfo(f"{text(name, lang)} {op.id}", tuple(rows))
     if elec is not None:
-        out.update(_electrical(plan, elec, wiring, codes))
+        out.update(_electrical(plan, elec, wiring, codes, splice))
         # Elevations: name (viewer pager and hint) and what is behind the wall
         for e in wall_elevations(plan, contours, elec, wiring, water=water):
             rows = [
@@ -424,8 +432,10 @@ def _electrical(
     elec: Electrical,
     wiring: Wiring | None,
     codes: Mapping[tuple[str, str], str] | None = None,
+    splice: Splice = DEFAULT_SPLICE,
 ) -> dict[str, ObjectInfo]:
-    """Cards of electrical objects; codes are wall codes ("2.C") by (room, wall), else the id."""
+    """Cards of electrical objects; codes are wall codes ("2.C") by (room, wall), else the id.
+    A point whose flush box joins wires gets the row "Joint" and the key splice (splice_card)."""
     lang = plan.language
 
     def wall(room: str, wall_id: str | None) -> str:
@@ -460,6 +470,7 @@ def _electrical(
     # The title carries the point's number from the electrical sheet and the "Points" table, not
     # its model id (hall_socket_9): the id is a key for the files, a person does not need it
     numbers = number_points(plan, elec)
+    joints = back_box_joints(wiring, elec) if wiring is not None else {}
     for pt in elec.points:
         rows = [(text("room", lang), places[pt.id])]
         if pt.ceiling is None:
@@ -489,8 +500,13 @@ def _electrical(
                 (text("feed", lang), src),
                 (text("length", lang), f"{_m(run.length_mm)} м"),
             ]
+        fb = joints.get(pt.id)
+        card = None
+        if fb is not None and wiring is not None:
+            rows.append((text("splice", lang), splice_cell(fb, splice, lang)))
+            card = splice_card(fb, splice, wiring, numbers, points, short)
         out[f"point:{pt.id}"] = ObjectInfo(
-            f"{block_name(pt, lang)} · № {numbers[pt.id]}", tuple(rows)
+            f"{block_name(pt, lang)} · № {numbers[pt.id]}", tuple(rows), splice=card
         )
 
     if wiring is not None:

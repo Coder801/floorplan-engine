@@ -30,6 +30,7 @@ from floorplan_engine.electrical.estimate import (
     split_key,
 )
 from floorplan_engine.electrical.estimate import text as estimate_text
+from floorplan_engine.electrical.splices import Splice
 from floorplan_engine.model.texts import Language
 
 CURRENCY = "грн"
@@ -99,8 +100,20 @@ MOCK_PRICES: dict[str, float] = {
 # Items the mock deliberately has no price for (decision 2026-11-14): the floor heating cable,
 # sensor, tube and laying get their prices with the floor heating section; the controller itself
 # has a mock price since 2026-11-24. Until then the row stays in the estimate with its quantity,
-# "no price", out of the total
-UNPRICED = frozenset({"heating_cable", "heating_sensor", "heating_conduit", "work.floor_heating"})
+# "no price", out of the total. Wago clamps in flush boxes and the work of the joints there, by
+# clamps or by crimps (decision 2026-11-25), have no price either until a studio or a supplier
+# gives one; the crimp sleeves themselves are the junction box item, priced as before
+UNPRICED = frozenset(
+    {
+        "heating_cable",
+        "heating_sensor",
+        "heating_conduit",
+        "work.floor_heating",
+        "wago",
+        "work.splice",
+        "work.splice_crimp",
+    }
+)
 # Narrow chase by wall material, UAH per metre (Kyiv 2026-11); a wide one is × 1.5 (DERIVED_PRICES)
 CHASE_PRICES = {"concrete": 200.0, "claydite": 150.0, "brick": 120.0, "aerated": 90.0}
 # Low-voltage cable by mark, UAH per metre: copper UTP cat.6, a 305 m reel 6800-9900 UAH
@@ -181,6 +194,11 @@ class MockPriceService:
     currency: str = CURRENCY
     extra: Mapping[str, float] = field(default_factory=dict)
 
+    @property
+    def splice(self) -> Splice | None:
+        """The service knows prices, not how the studio works."""
+        return None
+
     def lookup(self, key: str) -> Quote:
         price = mock_price(key)
         if price is None:
@@ -208,6 +226,14 @@ class Prices:
     def priced(self) -> bool:
         """There is a price source; otherwise the estimate is a bill of quantities."""
         return self.own is not None or self.service is not None
+
+    @property
+    def splice(self) -> Splice | None:
+        """How the studio joins wires in flush boxes: from its price list (a project list may
+        set its own, merge_prices); None — not set."""
+        if self.own is not None and self.own.splice is not None:
+            return self.own.splice
+        return None if self.service is None else self.service.splice
 
     def lookup(self, key: str) -> Quote:
         if self.own is not None:

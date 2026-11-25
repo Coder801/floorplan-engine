@@ -10,6 +10,24 @@ separate product specification: the estimate without prices is the bill of quant
 - flush boxes and devices by wall device posts, frames by blocks;
 - junction boxes (IP44 in wet rooms, a separate item); crimp connections: L, N, PE in every
   box plus one per key of each switch it feeds;
+- joints in flush boxes (decision 2026-11-25, splices.back_box_joints): sockets in a daisy chain
+  (distribution loop) and light in a chain (light_wiring chain) are joined in the flush boxes
+  with Wago 221 lever clamps, by size for the wires of one conductor (221-412 for 2, 221-413 for
+  3, 221-415 for 4–5), and a work item per flush box with a splice. Why lever clamps there and
+  crimps in a junction box: a flush box is small, stiff 2.5 mm² cores with crimps and heat
+  shrink do not fold behind the device, a clamp opens again for the insulation test, and the PE
+  is not broken when the socket is taken off — the loop goes through a branch, not through the
+  device terminals (ПУЭ 1.7.144); a junction box has room, and a crimp is more reliable there.
+  A pass socket of the loop: in, out and the tap to the device — a 3-wire clamp on L, N and PE;
+  the last one takes the cable straight into the device (one device) or a clamp (a block of
+  several on one point: a clamp for more wires). A switch of the light chain: N and PE pass on
+  to what it feeds (2-wire clamps), the phase only branches when the switch feeds another
+  switch or an output; the switched wire and the travellers go straight from the device
+  terminals. Cable to a loop needs deep flush boxes (60 mm and more: a note, not an item).
+  Crimps instead of clamps are a studio setting (`splice: crimp` in its price list): a sleeve
+  with heat shrink per joint, in the crimp item with the boxes, and a work item of its own
+  (`work.splice_crimp`): no springs, so more reliable, but slower in a tight flush box and it
+  does not open for the insulation test; junction boxes are always crimped;
 - fixings shot with a mounting gun (decision 2026-11-11): conduit — clips with a nail by conduit
   diameter, cable without conduit — mounting pads with a nail and a tie; counted at the same
   spots the "Mounting" sheet draws (mounting.py: step by surface, offset from bends and boxes),
@@ -86,6 +104,14 @@ from floorplan_engine.electrical.mounting import (
     source_conduits,
 )
 from floorplan_engine.electrical.panel import BoardPanel, busbars, device_name
+from floorplan_engine.electrical.splices import (
+    DEFAULT_SPLICE,
+    WAGO_SIZES,
+    Splice,
+    back_box_joints,
+    clamp_counts,
+    sleeves,
+)
 from floorplan_engine.electrical.terms import TermDecision
 from floorplan_engine.electrical.wiring import RESERVE
 from floorplan_engine.electrical.wiring_model import Run, Wiring
@@ -163,6 +189,13 @@ LINES: dict[str, tuple[Section, str, str, str]] = {
         "шт",
         "Гильза и термоусадка (опрессовка)",
         "Гільза і термоусадка (опресування)",
+    ),
+    # Lever clamp in a flush box by model (wago.413, WAGO_SIZES); no price anywhere yet
+    "wago": (
+        "material_rough",
+        "шт",
+        "Клемма рычажная Wago 221-{n}",
+        "Клема важільна Wago 221-{n}",
     ),
     "conduit_clip": (
         "material_rough",
@@ -295,6 +328,18 @@ LINES: dict[str, tuple[Section, str, str, str]] = {
         "Монтаж коробки с опрессовкой",
         "Монтаж коробки з опресуванням",
     ),
+    "work.splice": (
+        "rough",
+        "шт",
+        "Соединение в подрозетнике клеммами Wago",
+        "З'єднання в підрозетнику клемами Wago",
+    ),
+    "work.splice_crimp": (
+        "rough",
+        "шт",
+        "Соединение в подрозетнике опрессовкой",
+        "З'єднання в підрозетнику опресуванням",
+    ),
     "work.board_install": ("rough", "шт", "Установка щита", "Встановлення щита"),
     "work.board_module": ("finish", "мод.", "Сборка щита", "Збирання щита"),
     "work.panel_labels": (
@@ -377,6 +422,25 @@ HINTS: dict[str, dict[str, str]] = {
         "uk": "За площею обігріву: розкладання за кресленням «Тепла підлога», гофра датчика, "
         "заміри",
     },
+    "wago": {
+        "ru": "221-412 — на 2 провода, 221-413 — на 3, 221-415 — на 5; соединения в "
+        "подрозетниках шлейфа розеток и света цепочкой",
+        "uk": "221-412 — на 2 дроти, 221-413 — на 3, 221-415 — на 5; з'єднання в "
+        "підрозетниках шлейфу розеток і світла ланцюжком",
+    },
+    "work.splice": {
+        "ru": "По подрозетникам, где соединяются жилы: проходные розетки шлейфа, выключатели "
+        "света цепочкой",
+        "uk": "За підрозетниками, де з'єднуються жили: прохідні розетки шлейфу, вимикачі "
+        "світла ланцюжком",
+    },
+    "work.splice_crimp": {
+        "ru": "По подрозетникам, где соединяются жилы: проходные розетки шлейфа, выключатели "
+        "света цепочкой; гильзы с термоусадкой в тесном подрозетнике — сложнее, чем в коробке",
+        "uk": "За підрозетниками, де з'єднуються жили: прохідні розетки шлейфу, вимикачі "
+        "світла ланцюжком; гільзи з термоусадкою в тісному підрозетнику — складніше, ніж у "
+        "коробці",
+    },
     "busbar": {
         "ru": "Соединяет автоматы на рейке вместо перемычек; режется по месту",
         "uk": "З'єднує автомати на рейці замість перемичок; ріжеться за місцем",
@@ -397,6 +461,7 @@ PARAM_KEYS = (
     "frame",
     "junction_box",
     "junction_box_ip",
+    "wago",
     "work.chase",
     "work.chase_wide",
     *(k.value for k in DeviceKind),
@@ -539,6 +604,43 @@ TEXT: dict[str, dict[str, str]] = {
         "ru": "Опрессовка: в каждой коробке L, N, PE и по соединению на клавишу выключателя",
         "uk": "Опресування: у кожній коробці L, N, PE і по з'єднанню на клавішу вимикача",
     },
+    "note_splice": {
+        "ru": "Соединения в подрозетниках (шлейф розеток, свет цепочкой) — клеммами Wago 221, "
+        "до штукатурки: в подрозетнике мало места, жёсткая жила 2,5 мм² с гильзой и "
+        "термоусадкой не укладывается за механизм, клемму можно раскрыть при замере изоляции, "
+        "а PE не разрывается, когда снимают розетку, — шлейф идёт отводом, не через клеммы "
+        "механизма (ПУЭ 1.7.144). У проходной розетки — по клемме на 3 провода на L, N и PE, "
+        "последняя в цепочке — кабель прямо в механизм; у выключателя дальше идут N и PE. "
+        "Подрозетники под шлейф — глубокие, от 60 мм. В распаечных коробках — опрессовка: "
+        "места хватает, соединение надёжнее. Способ соединения в подрозетниках — настройка "
+        "студии (splice в прайсе), по умолчанию клеммы",
+        "uk": "З'єднання в підрозетниках (шлейф розеток, світло ланцюжком) — клемами Wago 221, "
+        "до штукатурки: у підрозетнику мало місця, жорстка жила 2,5 мм² з гільзою і "
+        "термоусадкою не вкладається за механізм, клему можна розкрити під час вимірювання "
+        "ізоляції, а PE не розривається, коли знімають розетку, — шлейф іде відгалуженням, не "
+        "через клеми механізму (ПУЕ 1.7.144). У прохідної розетки — по клемі на 3 дроти на L, "
+        "N і PE, остання в ланцюжку — кабель прямо в механізм; у вимикача далі йдуть N і PE. "
+        "Підрозетники під шлейф — глибокі, від 60 мм. У розподільчих коробках — опресування: "
+        "місця досить, з'єднання надійніше. Спосіб з'єднання в підрозетниках — налаштування "
+        "студії (splice у прайсі), за замовчуванням клеми",
+    },
+    "note_splice_crimp": {
+        "ru": "Соединения в подрозетниках (шлейф розеток, свет цепочкой) — опрессовкой гильзами "
+        "с термоусадкой, по гильзе на соединение жилы (в позиции гильз вместе с коробками): "
+        "неразъёмное соединение без пружин надёжнее клемм, но работа дороже — в подрозетнике "
+        "тесно, гильзы с термоусадкой укладывать за механизм сложнее, нужен глубокий "
+        "подрозетник от 60 мм, а соединение не разобрать при замере изоляции. У проходной "
+        "розетки — L, N и PE отводом к механизму, не через его клеммы (ПУЭ 1.7.144); у "
+        "выключателя дальше идут N и PE. Так выбрала студия (splice: crimp в прайсе)",
+        "uk": "З'єднання в підрозетниках (шлейф розеток, світло ланцюжком) — опресуванням "
+        "гільзами з термоусадкою, по гільзі на з'єднання жили (у позиції гільз разом із "
+        "коробками): нерозбірне з'єднання без пружин надійніше за клеми, але робота дорожча — у "
+        "підрозетнику тісно, гільзи з термоусадкою вкладати за механізм складніше, потрібен "
+        "глибокий підрозетник від 60 мм, а з'єднання не розібрати під час вимірювання ізоляції. "
+        "У прохідної розетки — L, N і PE відгалуженням до механізму, не через його клеми "
+        "(ПУЕ 1.7.144); у вимикача далі йдуть N і PE. Так обрала студія (splice: crimp у "
+        "прайсі)",
+    },
     "note_consumables": {
         "ru": "Расходники на инструмент (диски, буры, коронки, свёрла) входят в цену работ и "
         "отдельно не оплачиваются",
@@ -611,6 +713,12 @@ class PriceList(StrictModel):
         description="Что обговаривается с заказчиком отдельно: кто делает и как оплачивается "
         "(пункты — electrical/terms.yaml)",
     )
+    splice: Splice | None = Field(
+        default=None,
+        description="Соединения в подрозетниках шлейфа розеток и света цепочкой: wago — клеммами "
+        "Wago 221, crimp — опрессовкой гильзами с термоусадкой; нет — wago. В распаечных "
+        "коробках — всегда опрессовка",
+    )
 
     def price(self, key: str) -> Price | None:
         item = self.items.get(key)
@@ -640,6 +748,11 @@ class PriceSource(Protocol):
 
     @property
     def currency(self) -> str: ...
+
+    @property
+    def splice(self) -> Splice | None:
+        """How wires are joined in flush boxes (Splice); None — not set, DEFAULT_SPLICE."""
+        ...
 
     def lookup(self, key: str) -> Quote: ...
 
@@ -855,8 +968,10 @@ def conduit_lengths(wiring: Wiring, conduit: Conduit) -> dict[int, float]:
     return out
 
 
-def quantities(wiring: Wiring, elec: Electrical) -> dict[str, float]:
-    """Quantities by item key (no prices)."""
+def quantities(
+    wiring: Wiring, elec: Electrical, splice: Splice = DEFAULT_SPLICE
+) -> dict[str, float]:
+    """Quantities by item key (no prices); splice — how the flush box joints are made."""
     q: dict[str, float] = {}
     for mark, m in wiring.by_mark().items():
         q[f"cable.{mark}"] = round(m * (1 + RESERVE), 1)
@@ -874,12 +989,20 @@ def quantities(wiring: Wiring, elec: Electrical) -> dict[str, float]:
         key = f"{'junction_box_ip' if b.wet else 'junction_box'}.{b.size}"
         q[key] = q.get(key, 0) + 1
     by_id = {p.id: p for p in elec.points}
-    keys = sum(
+    box_ids = {b.id for b in wiring.boxes}
+    keys = sum(  # a switch fed from a flush box is spliced there with clamps, not crimped
         by_id[r.target].keys
         for r in wiring.runs
-        if r.source != "board" and r.target in by_id and by_id[r.target].type in SWITCHES
+        if r.source in box_ids and r.target in by_id and by_id[r.target].type in SWITCHES
     )
     q["crimp"] = 3 * len(wiring.boxes) + keys
+    joints = back_box_joints(wiring, elec)  # flush boxes of a chain (splices.py)
+    if splice == "crimp":  # a sleeve with heat shrink per joint, whatever the wires
+        q["crimp"] += sleeves(joints)
+    else:
+        clamps = clamp_counts(joints)
+        for _, model in WAGO_SIZES:
+            q[f"wago.{model}"] = clamps[model]
     q.update(fixings(wiring, elec.conduit_level))
     if elec.board is not None:
         q["board_enclosure"] = 1
@@ -925,6 +1048,7 @@ def quantities(wiring: Wiring, elec: Electrical) -> dict[str, float]:
     q["work.wall_hole_large"] = sum(1 for h in wiring.holes if h.large)
     q["work.socket_box"] = posts
     q["work.junction_box"] = len(wiring.boxes)
+    q["work.splice_crimp" if splice == "crimp" else "work.splice"] = len(joints)
     if elec.board is not None:  # the LED supplies box is a second panel to mount
         q["work.board_install"] = 1 + (1 if led_outputs_of(elec) else 0)
     q["work.mechanism"] = sum(pieces.values())
@@ -979,8 +1103,9 @@ def build_estimate(
 ) -> Estimate:
     """Estimate: one item per quantity. The panel follows the "Panel" sheet set (panel): a row per
     device kind and rating, assembly by the modules of the set; no panel means one breaker per
-    group. prices is a price list or the list merged with the price service (pricing.Prices)."""
-    q = quantities(wiring, elec)
+    group. prices is a price list or the list merged with the price service (pricing.Prices);
+    its splice says how the flush box joints are made."""
+    q = quantities(wiring, elec, prices.splice or DEFAULT_SPLICE)
     if panel is not None:
         q.pop("breaker", None)
     if panel is not None and panel.led is not None:  # supplies by power, as LED box devices
