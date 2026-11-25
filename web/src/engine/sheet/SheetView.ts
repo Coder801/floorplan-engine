@@ -20,6 +20,7 @@ import { FLOOR_ALPHA, FLOOR_FADE_MS, floorPath, stepFades } from "./floors";
 import { gridStep, paintGrid, paperRings } from "./grid";
 import { boxWithin, cardFrames, inBox, isBackdrop, isTint, paint, type DrawItem } from "./paint";
 import { Pinch } from "./pinch";
+import { MARK_MIN_PX, MARK_SHARE, spliceMarks, splicePoints, type SpliceMark } from "./splices";
 import { grownBox, isSymbol, openStacks, pointStacks, symbolCenters, type Stack } from "./stacks";
 import { laneFocus } from "./walls";
 
@@ -84,6 +85,7 @@ export class SheetView {
   private opens = new Map<string, number>(); private openFrame = 0; private openAt = 0;
   private held: string | null = null;
   private readonly paper: Path2D;  // the flat: plain paper, no grid (grid.ts)
+  private marks: SpliceMark<DrawItem>[] = [];  // joint marks of this page's points (splices.ts)
 
   constructor(private readonly canvas: HTMLCanvasElement, private readonly wrap: HTMLElement,
               readonly drawing: Drawing, page: Page, index: PageIndex) {
@@ -135,6 +137,7 @@ export class SheetView {
   setPage(page: Page, index: PageIndex, redraw = true) {
     this.page = page;
     this.index = index;
+    this.marks = spliceMarks(this.items, splicePoints(page));
     this.applyView();
     if (redraw) this.draw();
   }
@@ -178,6 +181,23 @@ export class SheetView {
       ctx.beginPath(); ctx.arc(x, y, r, 0, 2 * Math.PI); ctx.fill();
       ctx.fillStyle = palette.paper;
       ctx.fillText(String(st.rest.length + 1), x, y + 0.5 / this.scale);
+    }
+    ctx.restore();
+  }
+
+  // Joint marks (wiring sheet): a dot on the corner of the symbol with a paper ring, the colour,
+  // highlight and dimming of the symbol; with its layer and group, never smaller than MARK_MIN_PX
+  private paintMarks(ctx: CanvasRenderingContext2D, off: Set<string>) {
+    if (!this.marks.length) return;
+    ctx.save();
+    for (const m of this.marks) {
+      if (off.has(m.key) || !this.shown(m.item.l)) continue;
+      const [c, alpha, k] = this.lookOf(m.item);
+      const r = Math.max(m.size * MARK_SHARE, MARK_MIN_PX / this.scale) * (k > 1 ? 1.2 : 1);
+      ctx.globalAlpha = alpha;
+      ctx.beginPath(); ctx.arc(m.at[0], m.at[1], r, 0, 2 * Math.PI);
+      ctx.fillStyle = c; ctx.fill();
+      ctx.lineWidth = 1.2 / this.scale; ctx.strokeStyle = palette.paper; ctx.stroke();
     }
     ctx.restore();
   }
@@ -423,6 +443,7 @@ export class SheetView {
     this.paintFloors(ctx);
     this.stepStacks();
     paint(ctx, items, k, (it) => this.look(it), this.shown, CABLE_MIN_PX * this.dpr, SCREEN_BOLD, LINE_MIN_PX * this.dpr);
+    this.paintMarks(ctx, skip);
     this.paintCounts(ctx);
     ctx.restore();
     // Scale bar in model mm (a sheet without a plan has none)

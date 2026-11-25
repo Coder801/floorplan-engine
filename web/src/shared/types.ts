@@ -258,11 +258,35 @@ export interface BoxData {
   out: BoxBranch[];
 }
 
+// One joint in a flush box, per conductor (only the joined ones, in the order L, N, PE): the
+// incoming cable is always in it, out lists the cables of SpliceData.out that join it too
+export interface SpliceJoint {
+  conductor: "L" | "N" | "PE";
+  wires: number;          // wires in the joint
+  out: string[];          // wire:<id> of SpliceData.out joined here
+  taps: number;           // taps to the devices of the point
+  clamps: string[];       // Wago 221 models: "412" | "413" | "415", two for more than five wires; crimp: []
+  sleeves: number;        // crimp sleeves: 1 with crimp, 0 with wago
+}
+
+// Flush box of a point where wires are joined (looped sockets, lights in a chain; decision
+// 2026-11-25): how, the cables in and out (as in BoxData) and the joints. A cable of out that is
+// not in the joint of a conductor runs on from the device terminals (the switched wire, travellers)
+export interface SpliceData {
+  method: "wago" | "crimp";  // the studio setting in its price list
+  deep_mm: number;           // the flush box is at least this deep
+  in: BoxFeed | null;
+  out: BoxBranch[];
+  devices: number;           // devices of the point (taps)
+  joints: SpliceJoint[];
+}
+
 export interface ObjectCard {
   title: string;
   rows: [string, string][];
   block?: PointBlock;  // absent in builds made before it appeared
   box?: BoxData;       // junction box (box:<id>): its cables; absent in older builds
+  splice?: SpliceData; // point (point:<id>) whose flush box joins wires; absent in older builds
   brief?: ObjectCard;  // wiring line or box: the short card of the simple interface mode
 }
 

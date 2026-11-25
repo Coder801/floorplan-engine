@@ -1,0 +1,56 @@
+// Flush box scheme: the wire column (SVG, BoxScheme/fan.ts) and the cable rows (CableLine) as in
+// BoxScheme, then the joints by conductor and a note on the method. Row heights here and ROW /
+// ROW_BRIEF in fan.ts are the same numbers: the fan ends at the middle of each row
+
+@use "@/shared/styles/mixins" as *;
+
+.scheme { display: grid; gap: var(--space-2); margin-top: var(--space-2); }
+
+// The incoming cable and the fan: one block, the line drops from under the source name
+.cables { display: grid; }
+.fan { display: grid; grid-template-columns: 84px minmax(0, 1fr); }
+.wires { display: block; overflow: visible; }
+.wire {
+  fill: none; stroke: var(--muted); stroke-width: 1.5;
+  transition: stroke-width var(--t) var(--ease);
+  &.on { stroke-width: 3; }
+  @media (prefers-reduced-motion: reduce) { transition: none; }
+}
+// The phase of this cable comes off the device terminals, not out of a joint
+.terminal { stroke-dasharray: 4 3; }
+.box { fill: var(--raise); stroke: var(--text); stroke-width: 1.5; }
+.dot { stroke: var(--raise); stroke-width: 1; }
+
+// Conductor colours: the dot in the box and the letter of a joint
+.l { fill: var(--wire-l); background: var(--wire-l); }
+.n { fill: var(--wire-n); background: var(--wire-n); }
+.pe { fill: var(--wire-pe); stroke: var(--wire-pe-2); stroke-width: 1.5;
+      background: repeating-linear-gradient(135deg, var(--wire-pe) 0 4px, var(--wire-pe-2) 4px 8px); }
+
+.outs {
+  list-style: none; margin: 0; padding: 0;
+  display: grid; grid-auto-rows: 36px; align-content: center;
+}
+
+.none { @include type(small); color: var(--muted); }
+
+// One joint: the conductor letter, what it joins, what with
+.joints { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-1); }
+.joint {
+  @include type(small);
+  display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; column-gap: var(--space-2);
+  align-items: center; min-height: 20px; padding-right: var(--space-1);
+  &:hover { background: var(--hl-row); }
+}
+.cond {
+  @include type(caps);
+  display: grid; place-items: center; height: 16px;
+  color: #fff; text-decoration: none; letter-spacing: 0;
+  &.pe { color: var(--signal-text); }
+}
+// The terminals row: a dash like the dashed cables of the fan
+.dash { align-self: center; border-top: 1.5px dashed var(--muted); }
+.parts { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1); min-width: 0; color: var(--muted); }
+.how { color: var(--text); font-weight: 600; white-space: nowrap; }
+
+.brief .outs { grid-auto-rows: 24px; }

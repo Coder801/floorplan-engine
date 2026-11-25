@@ -5,6 +5,7 @@ import { PageIndex } from "@/shared/page";
 import { resetSelection, view } from "@/shared/store";
 import { page } from "@/shared/testData";
 import { boxData } from "@/widgets/BoxScheme/mock";
+import { hallSwitch } from "@/widgets/SpliceScheme/mock";
 import { Tip } from "./index";
 
 const index = new PageIndex(page({
@@ -14,6 +15,7 @@ const index = new PageIndex(page({
     "box:b1": { title: "Коробка К1", rows: [["Типоразмер", "100×100"]], box: boxData(), brief: { title: "Коробка К1", rows: [] } },
     "box:b2": { title: "Коробка К2", rows: [["Типоразмер", "100×100"]] },
     "point:p3": { title: "Вимикач", rows: [] },
+    "point:sw": { title: "Вимикач · № 59", rows: [["З'єднання", "Wago 3×413, глиб. ≥60"]], splice: hallSwitch() },
     "wire:w1": { title: "Линия QF4", rows: [["Кабель", "3×2,5"], ["Длина", "12 м"]], brief: { title: "Линия QF4", rows: [["Откуда", "щит"]] } },
   },
 }));
@@ -71,6 +73,20 @@ describe("Tip", () => {
     render(<Tip index={index} />);
     expect(screen.getByText("Вимикач, Коридор")).toBeInTheDocument();
     expect(screen.queryByText(/3x1\.5/)).toBeNull();
+  });
+
+  it("a point with joints: the flush box scheme pinned, at the cursor only where asked", async () => {
+    view.set({ tip: { key: "point:sw", x: 0, y: 0 } });
+    const { rerender } = render(<Tip index={index} />);
+    expect(screen.getByText("Wago 3×413, глиб. ≥60")).toBeInTheDocument();
+    expect(screen.queryByRole("group", { name: /Схема подрозетника/ })).toBeNull();
+    rerender(<Tip index={index} hoverSplice />);
+    expect(screen.getByRole("group", { name: "Схема подрозетника: соединений — 3" })).toBeInTheDocument();
+    act(() => view.set({ pinned: "point:sw", tip: null }));
+    rerender(<Tip index={index} canOpen={(o) => o === "wire:w1" || o === "wire:wire_39"} />);
+    // A row opens its line, as a click on it on the sheet
+    await userEvent.click(screen.getByRole("button", { name: /Світильник точковий/ }));
+    expect(view.get().pinned).toBe("wire:wire_39");
   });
 
   it("a box of an older build: the card as before, no scheme", () => {

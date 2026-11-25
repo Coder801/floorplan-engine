@@ -79,6 +79,19 @@ describe("what is selected on a sheet", () => {
     expect(index.interactive("point:p")).toBe(false);  // not on this sheet; its own points stay as they are
   });
 
+  it("wiring: a point gets the card of its line; a point with joints its own, the line stays its chain", () => {
+    const wire = { title: "QF2: К1 → Розетка", rows: [] };
+    const joint = { title: "Розетка · № 3", rows: [], splice: { method: "wago", deep_mm: 60, in: null, out: [], devices: 1, joints: [] } } as const;
+    const index = new PageIndex({
+      stage: "wiring", objects: { "wire:w1": wire, "wire:w2": wire, "point:j": joint },
+      chains: { "point:a": ["wire:w1", "point:a"], "point:j": ["wire:w1", "point:j", "wire:w2"] },
+    } as unknown as Page);
+    expect(index.card("point:a")).toBe(wire);
+    expect(index.card("point:j")).toBe(joint);
+    expect(index.interactive("point:j")).toBe(true);
+    expect(index.chainOf("point:j")).toEqual(new Set(["point:j", "wire:w1", "wire:w2"]));
+  });
+
   it("keeps the building selectable on other sheets", () => {
     expect(onStage("plumbing").interactive("wall:a.w1")).toBe(true);
     expect(onStage("plan").interactive("dimension:a.w1")).toBe(true);

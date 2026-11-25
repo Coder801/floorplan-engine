@@ -1,0 +1,21 @@
+// Badge of a cable target: a number plate, a box square or a dot
+
+@use "@/shared/styles/mixins" as *;
+
+.badge {
+  min-width: 20px; height: 20px; padding: 0 2px;
+  display: grid; place-items: center;
+  border: 1px solid var(--muted); background: var(--muted); color: #fff;
+  @include type(caps);
+  letter-spacing: 0;
+}
+.toBox { width: 14px; min-width: 14px; height: 14px; background: none; border-color: var(--text); }
+.dot { width: 8px; min-width: 8px; height: 8px; padding: 0; border-radius: 50%; }
+
+// In a line of text: one row high
+.small {
+  display: inline-grid; vertical-align: middle;
+  min-width: 18px; height: 16px;
+  &.toBox { width: 12px; min-width: 12px; height: 12px; }
+  &.dot { width: 8px; min-width: 8px; height: 8px; }
+}

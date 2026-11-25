@@ -309,7 +309,7 @@ export const en: Messages = {
     iso: "Isometric", walls: "Walls",
     wallModes: { cut: "Cut", ghost: "Transparent", none: "No walls" },
   },
-  legend: { title: "Legend", box: "Junction box", low: "Comms lines" },
+  legend: { title: "Legend", box: "Junction box", low: "Comms lines", splice: "Joint in the flush box" },
   filter3d: {
     room: "Room", allRooms: "All rooms",
   },
@@ -365,7 +365,11 @@ export const en: Messages = {
     open: "Open: {{title}}",
   },
   tip: { close: "Close tooltip", openWall: "Wall elevation", mm: "{{v}} mm", blockAria: "Block: {{n}} posts, {{x}} mm from the wall start, {{y}} mm from the floor",
-    box: { aria: "Box {{label}} scheme: {{n}} cables out", noFeed: "feed not given", m: "{{v}} m", open: "Open: {{name}}" } },
+    box: { aria: "Box {{label}} scheme: {{n}} cables out", noFeed: "feed not given", m: "{{v}} m", open: "Open: {{name}}" },
+    splice: { aria: "Flush box scheme: {{n}} joints", open: "Show the line: {{name}}", joints: "Joints", in: "feed",
+      tap: "device", tapN: "device ×{{n}}", terminals: "From the device terminals", terminalsHint: "off terminals",
+      clamp: "Wago {{model}}", sleeve: "sleeve", wires: "wires in the joint: {{n}}", wago: "Wago 221 clamps", crimp: "crimp sleeves with heat shrink",
+      deep: "flush box ≥{{mm}} mm deep", devices: "devices: {{n}}", cond: { L: "phase", N: "neutral", PE: "earth" } } },
   overview: {
     progress: { title: "Project readiness", done: "{{done}} of {{total}} decided", all: "All decided: the estimate and panel follow your answers", open: "not decided", decided: "decided", noQuestions: "No open questions" },
     tab: "Overview", side: "In brief", title: "Overview",

@@ -1,0 +1,32 @@
+// One cable row of a scheme: badge, where it goes, and below it the cable details
+
+@use "@/shared/styles/mixins" as *;
+
+.line {
+  @include bare-button;
+  @include focus-ring;
+  @include type(small);
+  display: grid; grid-template-columns: 20px minmax(0, 1fr); grid-template-rows: 16px 16px;
+  column-gap: var(--space-2); align-items: center; align-content: center;
+  width: 100%; height: 100%; padding: 0 var(--space-1) 0 0;
+  color: var(--text); text-align: left;
+  &.on { background: var(--hl-row); }
+}
+.link { cursor: pointer; }
+.mark { grid-row: 1 / span 2; display: grid; place-items: center; }
+.name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.meta { grid-column: 2; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
+
+// The incoming cable: above the scheme, the line drops from under its name
+.source {
+  grid-template-columns: minmax(0, 1fr); height: 32px;
+  .name { font-weight: 600; }
+  .meta { grid-column: 1; }
+}
+
+// Simple mode: one line, no details
+.brief {
+  grid-template-rows: minmax(0, 1fr);
+  .mark { grid-row: 1; }
+  &.source { height: 16px; }
+}

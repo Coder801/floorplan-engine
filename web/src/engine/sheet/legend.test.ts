@@ -36,6 +36,21 @@ describe("wiringLegend", () => {
     expect(out[2].text).toBe("Коробка");
   });
 
+  it("a sheet with joints in flush boxes: a marked point symbol after the box", () => {
+    const splice = { method: "wago", deep_mm: 60, in: null, out: [], devices: 1, joints: [] } as const;
+    const sheet = { ...wiring, objects: { "point:a": { title: "Розетка", rows: [], splice } } } as unknown as Page;
+    const d = { pages: [electrical, sheet], items: [
+      { k: "s", c: "#f00", l: "W-BOX", d: "M1 1L2 1L2 2" },
+      { k: "s", c: "#0a0", l: "E-SOCKET", o: "point:a", d: "M10 10L14 10L14 14" },
+    ] } as unknown as Drawing;
+    const out = wiringLegend(d, sheet, { ...texts, splice: "Соединение в подрозетнике" });
+    expect(out.map((e) => e.key)).toEqual(["socket", "switch", "box", "splice", "wires_light"]);
+    expect(out[3].items.map((i) => i.k)).toEqual(["s", "f"]);
+    // Without the text (an older caller) or without joints — no row
+    expect(wiringLegend(d, sheet, texts).map((e) => e.key)).not.toContain("splice");
+    expect(wiringLegend(d, wiring, { ...texts, splice: "x" }).map((e) => e.key)).not.toContain("splice");
+  });
+
   it("keeps the comms family of the sheet and adds nothing absent from the drawing", () => {
     const sheet = { ...wiring, legend: [entry("wires_low", "W-TEXT")] } as unknown as Page;
     const d = { pages: [sheet], items: [{ k: "s", c: "#f00", l: "W-CABLE-LOW", d: "M0 0L5 0" }] } as unknown as Drawing;

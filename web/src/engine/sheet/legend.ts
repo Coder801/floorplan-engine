@@ -4,6 +4,7 @@
 import type { Box, Item, LegendEntry, Page } from "@/shared/types";
 import type { Drawing } from "./drawing";
 import { bbox } from "./paint";
+import { spliceIcon, splicePoints } from "./splices";
 import { systemOf, type System } from "./views";
 
 export const SYMBOL_PAD = 0.4;  // sheet mm around the icon, for the line width
@@ -25,8 +26,9 @@ export const viewBoxOf = (b: Box) => `${b[0]} ${b[1]} ${b[2] - b[0]} ${b[3] - b[
 // The legend of the wiring view is the whole drawing: point symbols of the electrical sheet, a
 // junction box, the line colour families of the wiring sheet, and the comms line when it has no
 // family of its own (a comms point without a group: one colour, not in the sheet legend). The box
-// and the comms line take their icon from the drawing itself
-export interface WiringLegendTexts { box: string; low: string }
+// and the comms line take their icon from the drawing itself; so does the joint mark (a point
+// symbol with its dot, splices.ts), when the sheet has points with joints
+export interface WiringLegendTexts { box: string; low: string; splice?: string }
 
 const LINE_W = 8;  // sheet mm: an icon line when the sheet has none to copy the length from
 
@@ -37,6 +39,9 @@ export function wiringLegend(d: Drawing, page: Page, texts: WiringLegendTexts): 
   const out: LegendEntry[] = [...points];
   const box = d.items.find((it) => it.l === "W-BOX" && it.k === "s");
   if (box) out.push({ key: "box", text: texts.box, items: [{ k: box.k, c: box.c, w: box.w, l: box.l, d: box.d }] });
+  const [joint] = splicePoints(page);
+  const icon = joint && texts.splice ? spliceIcon(d.items, joint) : [];
+  if (icon.length) out.push({ key: "splice", text: texts.splice!, items: icon });
   out.push(...wires);
   const low = d.items.find((it) => it.l.startsWith("W-CABLE-LOW") && it.k === "s");
   if (low && !wires.some((e) => e.key === "wires_low")) {

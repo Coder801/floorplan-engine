@@ -105,7 +105,8 @@ export class PageIndex {
     return found ? found[0] : null;
   }
 
-  // Object card; a point on the wiring sheet gets the card of the line to it; otherwise type and id
+  // Object card; a point on the wiring sheet gets the card of the line to it, unless the page has
+  // its own (a point whose flush box joins wires: splice, 2026-11-25); otherwise type and id
   card(o: string): ObjectCard {
     const objs = this.objects || {};
     const info = objs[o] || objs[(this.chains[o] || [])[0]] || this.other[o];

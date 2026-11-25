@@ -5,7 +5,7 @@
 
 import { lazy, type ReactNode, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { objectLayers, sceneOf, type Drawing } from "@/engine/sheet/drawing";
+import { layerShown, objectLayers, sceneOf, type Drawing } from "@/engine/sheet/drawing";
 import { legendShown, wiringLegend } from "@/engine/sheet/legend";
 import { ownLayers, viewOfLayer, wiringChains } from "@/engine/sheet/views";
 import { lightLinks } from "@/engine/three/lightLinks";
@@ -69,10 +69,19 @@ export function SheetStage({ page, drawing, language, download, onWall, lightMod
     [drawing, scene3d]);
   // The wiring view shows everything, so its legend is full: points, boxes and lines (legend.ts)
   const legend = useMemo(() => (page.stage === "wiring"
-    ? wiringLegend(drawing, page, { box: t("legend.box", { lng: language }), low: t("legend.low", { lng: language }) })
+    ? wiringLegend(drawing, page, {
+      box: t("legend.box", { lng: language }), low: t("legend.low", { lng: language }), splice: t("legend.splice", { lng: language }),
+    })
     : page.legend ?? []), [drawing, page, t, language]);
   const in3d = show3d && !!scene3d;
   const colors = useMemo(() => groupColors(drawing.pages), [drawing]);
+  // A row of a scheme in the hint opens an object only if it is seen on this view: a line of the
+  // flush box scheme on the lighting sheet, where cables are off, stays text
+  const hidden = useView((s) => s.hidden), extra = useView((s) => s.extra);
+  const canOpen = (o: string) => {
+    const l = layerOf.get(o);
+    return index.interactive(o) && (!own || !l || layerShown(own, hidden, extra, l));
+  };
 
   // The canvas is per drawing; a tab of the same drawing only calls setPage (below)
   const first = useRef({ page, index });
@@ -121,7 +130,7 @@ export function SheetStage({ page, drawing, language, download, onWall, lightMod
           <Scene3D scene={scene3d!} index={index} own={own} layerOf={layerOf} links={links} apiRef={scene} onZoom={setZoom3d} onHome={setHome} />
         </Suspense>
       )}
-      <Tip index={index} onWall={onWall} colors={colors} />
+      <Tip index={index} onWall={onWall} colors={colors} canOpen={canOpen} hoverSplice={page.stage === "wiring"} />
       {!in3d && legend.length > 0 && (
         <Legend entries={legend.filter((e) => !own || legendShown(e, own))} language={language} />
       )}

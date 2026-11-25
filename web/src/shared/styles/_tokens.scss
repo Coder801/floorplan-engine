@@ -44,6 +44,9 @@
   --shadow-pop: var(--px-s) var(--px-s) 0 var(--shade);
   --t: .1s; --t-in: .12s; --ease: cubic-bezier(.2, 0, 0, 1);
   --control-h: 36px; --control-h-lg: 44px;
+  // Conductor insulation (IEC 60446): phase brown, neutral blue, earth yellow-green — the wires
+  // themselves, the same in every theme (joints of a flush box, widgets/SpliceScheme)
+  --wire-l: #8b5a2b; --wire-n: #2f6fd0; --wire-pe: #d9b500; --wire-pe-2: #2e8b45;
 }
 
 :root {
