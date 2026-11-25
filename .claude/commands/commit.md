@@ -8,9 +8,9 @@ not commit; show what failed.
 
 Then start the `committer` subagent (Agent, subagent_type: committer) with this task: review the
 current uncommitted changes in the repository, split them into independent commits, stage the
-right files and commit using its template. It picks the branch itself following
-`docs/development.md` ("Branches and releases"): from `develop` it goes through `feature/<name>`
-and back, and it never commits to `main`.
+right files and commit using its template. It commits on the current branch (`develop` or
+`feature/<name>`; decision 2026-11-26, `flow.py ship` takes `develop` as it is) and never commits
+to `main`.
 $ARGUMENTS
 
 Do not stage, commit or push yourself. Pass the agent's full summary to the user: which commits

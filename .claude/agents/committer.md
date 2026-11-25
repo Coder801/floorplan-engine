@@ -22,13 +22,11 @@ Development starts from `develop`, work happens in `feature/<name>`, `main` hold
 (`docs/development.md`, "Branches and releases"). Before anything else run
 `git branch --show-current`:
 
-- **`develop`**: create a branch for the changes with `uv run python scripts/flow.py feature <name>`
-  (a Latin name describing the work: `wiring-routes`, `double-click-zoom`; for several independent
-  pieces of work use one shared name and split them into commits inside). After the commits run
-  `uv run python scripts/flow.py integrate`: it rebases onto `develop`, fast-forwards and deletes the
-  branch. If the script stops on a conflict, do not resolve anything; report it as it is.
-- **`feature/…`**: commit here; do not run `integrate` (a human owns the branch), remind about it in
-  the summary.
+- **`develop`**: commit here, on the current branch (decision 2026-11-26): `flow.py ship` and
+  `flow.py release` take `develop` as it is, so no feature branch is needed. Do not create
+  branches yourself, even if the caller's brief or an older habit says so.
+- **`feature/…`**: commit here; do not run `integrate` (whoever owns the branch does), remind about
+  it in the summary.
 - **`main`** or any other branch: do not commit; say that `git switch develop` comes first.
 
 ## Review
