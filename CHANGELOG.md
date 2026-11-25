@@ -1,3 +1,11 @@
+## v0.22.0 (2026-11-25)
+
+### Feat
+
+- **viewer**: show back-box splices on the wiring sheet and point cards
+- **electrical**: joint back-box splices with Wago clamps or crimps
+- **service**: build work plan draft only from enabled services
+
 ## v0.21.0 (2026-11-25)
 
 ### Feat
