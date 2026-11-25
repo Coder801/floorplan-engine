@@ -5,12 +5,18 @@
     uv run python scripts/server.py check                       # что в контейнере, без секретов
     uv run python scripts/server.py rebuild [имена…] [--wait]   # пересобрать текущим кодом
     uv run python scripts/server.py send <проект> room.yaml …   # файлы модели — новой версией
+    uv run python scripts/server.py studio-prices [--pull] [--yes] [--rebuild]  # прайс студии
     uv run python scripts/server.py backup [--to папка]         # копия базы и файлов на ноутбук
 
 Модель на сервере — правда (docs/database.md), поэтому send сначала показывает разницу с тем, что
 лежит в базе: там могут быть правки, которых нет в папке. Шлётся любой файл модели, кроме
 wiring.yaml; answers.yaml и variant.yaml пишет и просмотр — перед их разницей send предупреждает,
 что ответы и выбор, записанные на сервере и отсутствующие в папке, пропадут.
+
+studio-prices: projects/prices.yaml — прайс студии владельца ($SHTROBA_OWNER) на сервере, тоже
+после разницы с базой; --pull — наоборот, с сервера в папку. Профиль студии (studio.yaml) не
+трогается: push идёт из пустой временной папки, где лежит только prices.yaml. Сметы проектов
+сами не пересобираются — --rebuild или потом `rebuild`.
 
 backup: база — pg_dump здесь, в Docker, по публичному адресу сервиса Postgres (в контейнере
 сервиса pg_dump нет); файлы хранилища — через ssh пачками tar. Ключ файла после записи не
@@ -57,6 +63,8 @@ VIEWER_FILES = ("answers.yaml", "variant.yaml")
 # папке — send удаляет прайс проекта на сервере, смета берёт прайс студии
 PRICES_FILE = "prices.yaml"
 SEND_FILES = (*MODEL_FILES, PRICES_FILE)
+# Студия и проекты на сервере — владельца из переменной контейнера
+OWNER = '--owner "${SHTROBA_OWNER:?не задан владелец}"'
 DB_SERVICE = "Postgres"  # сервис базы в проекте Railway
 PG_IMAGE = "postgres:18"  # pg_dump не старше сервера быть не может, 18 снимает и 17
 BACKUP_DIR = Path.home() / "shtroba-backups"  # данные клиентов: вне репозитория
@@ -142,7 +150,7 @@ def rebuild(names: list[str], wait: bool = False) -> None:
         wait_for_version(version)
     elif (found := server_version()) != version:
         raise ServerError(f"на сервере {found}, здесь {version}: дождитесь выкладки (--wait)")
-    target = shlex.join(names) if names else '--owner "${SHTROBA_OWNER:?не задан владелец}"'
+    target = shlex.join(names) if names else OWNER
     remote(f"floorplan-engine project build {target}\n")
 
 
@@ -226,6 +234,67 @@ def send(project: str, names: list[str], yes: bool = False) -> None:
     if not yes and input(f"Заменить на сервере {', '.join(changed)}? [y/N] ").lower() != "y":
         raise ServerError("отменено, сервер не менялся")
     write_files(project, changed)
+
+
+def _diff(old: str, new: str, old_name: str, new_name: str) -> str:
+    return "".join(
+        difflib.unified_diff(
+            old.splitlines(keepends=True), new.splitlines(keepends=True), old_name, new_name
+        )
+    )
+
+
+def read_studio_prices() -> str:
+    """Прайс студии владельца на сервере; нет прайса — пустая строка."""
+    body = (
+        "w=$(mktemp -d)\ntrap 'rm -rf \"$w\"' EXIT\n"
+        f'floorplan-engine studio pull "$w" {OWNER} >&2\n'
+        f'echo {FILE_START}\nif [ -f "$w"/{PRICES_FILE} ]; then base64 < "$w"/{PRICES_FILE}; fi\n'
+        f"echo {FILE_END}\n"
+    )
+    return base64.b64decode(between(remote(body, capture=True))).decode("utf-8")
+
+
+def write_studio_prices(text: str) -> None:
+    """Прайс — в студию владельца на сервере. Папка для studio push — новая и пустая, в ней только
+    prices.yaml: без studio.yaml профиль студии не меняется (sync.push_studio)."""
+    packed = base64.b64encode(text.encode("utf-8")).decode("ascii")
+    remote(
+        "w=$(mktemp -d)\ntrap 'rm -rf \"$w\"' EXIT\n"
+        f'echo {packed} | base64 -d > "$w"/{PRICES_FILE}\n'
+        f'floorplan-engine studio push "$w" {OWNER}\n'
+    )
+
+
+def studio_prices(pull: bool = False, yes: bool = False, rebuild_after: bool = False) -> None:
+    """projects/prices.yaml ↔ прайс студии на сервере; разница и вопрос — до записи."""
+    path = ROOT / "projects" / PRICES_FILE
+    ours = path.read_text(encoding="utf-8") if path.is_file() else ""
+    if not pull and not ours:
+        raise ServerError(f"нет файла {path}")
+    theirs = read_studio_prices()
+    if pull and not theirs:
+        raise ServerError("у студии на сервере нет прайса: папка не менялась")
+    if ours == theirs:
+        print(f"{PRICES_FILE}: совпадает с сервером")
+        return
+    if pull:
+        print(_diff(ours, theirs, f"папка/{PRICES_FILE}", f"сервер/{PRICES_FILE}"))
+        question = f"Заменить {path} прайсом с сервера? [y/N] "
+    else:
+        print(_diff(theirs, ours, f"сервер/{PRICES_FILE}", f"папка/{PRICES_FILE}"))
+        question = "Заменить прайс студии на сервере? [y/N] "
+    if not yes and input(question).lower() != "y":
+        raise ServerError("отменено, ничего не менялось")
+    if pull:
+        path.write_text(theirs, encoding="utf-8")
+        print(f"{path}: прайс студии с сервера")
+        return
+    write_studio_prices(ours)
+    if rebuild_after:
+        rebuild([])
+    else:
+        print("Сметы на сервере — по старому прайсу до пересборки: server.py rebuild")
 
 
 def database_url(service: str = DB_SERVICE) -> str:
@@ -361,6 +430,10 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("project")
     p.add_argument("files", nargs="+", help=", ".join(SEND_FILES))
     p.add_argument("--yes", action="store_true", help="не спрашивать")
+    p = sub.add_parser("studio-prices", help="прайс студии (projects/prices.yaml) — на сервер")
+    p.add_argument("--pull", action="store_true", help="наоборот: с сервера в projects/")
+    p.add_argument("--yes", action="store_true", help="не спрашивать")
+    p.add_argument("--rebuild", action="store_true", help="после записи пересобрать проекты")
     p = sub.add_parser("backup", help="копия базы и файлов хранилища на этот компьютер")
     p.add_argument("--to", type=Path, default=BACKUP_DIR, help=f"папка (по умолчанию {BACKUP_DIR})")
     p.add_argument("--db-service", default=DB_SERVICE, help="сервис базы в Railway")
@@ -373,6 +446,8 @@ def main(argv: list[str] | None = None) -> int:
             rebuild(args.names, wait=args.wait)
         elif args.command == "backup":
             backup(args.to.expanduser(), service=args.db_service)
+        elif args.command == "studio-prices":
+            studio_prices(pull=args.pull, yes=args.yes, rebuild_after=args.rebuild)
         else:
             send(args.project, args.files, yes=args.yes)
     except ServerError as e:

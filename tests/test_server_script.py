@@ -380,3 +380,95 @@ def test_send_model_file_does_not_rebuild_twice(
     calls = _server_file(monkeypatch, "окно: 1400\n")
     server.send("kv42", ["room.yaml"], yes=True)
     assert "project build" not in calls[-1]
+
+
+def _studio(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, text: str | None) -> Path:
+    monkeypatch.setattr(server, "ROOT", tmp_path)
+    path = tmp_path / "projects" / "prices.yaml"
+    path.parent.mkdir(parents=True)
+    if text is not None:
+        path.write_text(text, encoding="utf-8")
+    return path
+
+
+def test_studio_prices_push_only_after_yes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    _studio(tmp_path, monkeypatch, "items:\n  socket_box: 25\n")
+    calls = _server_file(monkeypatch, "items:\n  socket_box: 20\n")
+    monkeypatch.setattr("builtins.input", lambda _: "n")
+    with pytest.raises(server.ServerError, match="отменено"):
+        server.studio_prices()
+    assert not any("studio push" in c for c in calls)
+    assert 'studio pull "$w" --owner "${SHTROBA_OWNER' in calls[0]
+    server.studio_prices(yes=True)
+    packed = base64.b64encode(b"items:\n  socket_box: 25\n").decode("ascii")
+    pushed = calls[-1]
+    assert packed in pushed and 'studio push "$w" --owner "${SHTROBA_OWNER' in pushed
+    # the push folder is fresh and holds only prices.yaml: the studio profile stays
+    assert "w=$(mktemp -d)" in pushed and "studio pull" not in pushed
+    assert "studio.yaml" not in pushed
+
+
+def test_studio_prices_shows_the_diff(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _studio(tmp_path, monkeypatch, "items:\n  socket_box: 25\n")
+    _server_file(monkeypatch, "items:\n  socket_box: 20\n  work.marking: 10\n")
+    server.studio_prices(yes=True)
+    out = capsys.readouterr().out
+    assert "-  work.marking: 10" in out and "+  socket_box: 25" in out
+    assert "server.py rebuild" in out
+
+
+def test_studio_prices_same_does_nothing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    _studio(tmp_path, monkeypatch, "items: {}\n")
+    calls = _server_file(monkeypatch, "items: {}\n")
+    server.studio_prices(yes=True)
+    assert len(calls) == 1
+
+
+def test_studio_prices_needs_the_local_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _studio(tmp_path, monkeypatch, None)
+    calls = _server_file(monkeypatch, "items: {}\n")
+    with pytest.raises(server.ServerError, match="нет файла"):
+        server.studio_prices(yes=True)
+    assert calls == []
+
+
+def test_studio_prices_rebuild(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    _studio(tmp_path, monkeypatch, "items: {a: 1}\n")
+    _server_file(monkeypatch, "items: {}\n")
+    rebuilt: list[list[str]] = []
+    monkeypatch.setattr(server, "rebuild", lambda names, wait=False: rebuilt.append(names))
+    server.studio_prices(yes=True, rebuild_after=True)
+    assert rebuilt == [[]]
+
+
+def test_studio_prices_pull(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    path = _studio(tmp_path, monkeypatch, "items: {}\n")
+    calls = _server_file(monkeypatch, "items:\n  socket_box: 20\n")
+    monkeypatch.setattr("builtins.input", lambda _: "n")
+    with pytest.raises(server.ServerError, match="отменено"):
+        server.studio_prices(pull=True)
+    assert path.read_text(encoding="utf-8") == "items: {}\n"
+    server.studio_prices(pull=True, yes=True)
+    assert path.read_text(encoding="utf-8") == "items:\n  socket_box: 20\n"
+    assert not any("studio push" in c for c in calls)
+
+
+def test_studio_prices_pull_without_server_prices(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = _studio(tmp_path, monkeypatch, "items: {}\n")
+    _server_file(monkeypatch, "")
+    with pytest.raises(server.ServerError, match="нет прайса"):
+        server.studio_prices(pull=True, yes=True)
+    assert path.read_text(encoding="utf-8") == "items: {}\n"
+
+
+def test_main_studio_prices(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: dict[str, bool] = {}
+    monkeypatch.setattr(server, "studio_prices", lambda **kw: seen.update(kw))
+    assert server.main(["studio-prices", "--pull", "--yes"]) == 0
+    assert seen == {"pull": True, "yes": True, "rebuild_after": False}
