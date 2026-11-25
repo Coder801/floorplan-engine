@@ -1,3 +1,11 @@
+## v0.23.0 (2026-11-26)
+
+### Feat
+
+- **viewer**: choose Wago or crimp on the studio price page
+- **service**: read and save the splice method on the studio price page API
+- **deploy**: send and pull the studio price list with server.py studio-prices
+
 ## v0.22.2 (2026-11-25)
 
 ### Fix
