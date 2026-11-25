@@ -33,6 +33,7 @@ from floorplan_engine.electrical.market import (
     used_sources,
 )
 from floorplan_engine.electrical.pricing import Prices, mock_price
+from floorplan_engine.electrical.splices import DEFAULT_SPLICE, Splice
 from floorplan_engine.electrical.terms import term_issues
 from floorplan_engine.model.intake import (
     Stage,
@@ -198,6 +199,8 @@ def price_page(root: Path, market_root: Path | None = None) -> dict[str, Any]:
         "currency": own.currency if own is not None else "грн",
         "date": own.date if own is not None else "",
         "note": own.note if own is not None else "",
+        # joints in switch flush boxes, the studio's choice; not set — the default (wago)
+        "splice": (own.splice if own is not None else None) or DEFAULT_SPLICE,
         "rows": rows,
         "market": None
         if market is None
@@ -229,10 +232,25 @@ def _page_keys(own: PriceList | None) -> list[str]:
     return out
 
 
+SPLICES: tuple[Splice, ...] = ("wago", "crimp")
+SPLICE_LINE = re.compile(r"^splice:[^#\n]*?(?P<comment>[ \t]+#.*)?$", re.M)
+
+
+def _set_splice(text: str, splice: Splice) -> str:
+    """The top-level splice line in the prices.yaml text, its comment kept; no line — it goes
+    before items (as date does)."""
+    if SPLICE_LINE.search(text):
+        return SPLICE_LINE.sub(lambda m: f"splice: {splice}{m['comment'] or ''}", text, count=1)
+    if re.search(r"^items:", text, flags=re.M):
+        return re.sub(r"^items:", f"splice: {splice}\nitems:", text, count=1, flags=re.M)
+    return f"{text}splice: {splice}\n"
+
+
 def save_prices(root: Path, changes: dict[str, Any]) -> list[Issue]:
-    """Studio price page edits → root/prices.yaml: {"items": {key: price | None}, "date"?};
-    any electrical estimate item, works and materials, a key with a parameter too (its base in
-    LINES); None removes the price. Comments and other keys of the file stay
+    """Studio price page edits → root/prices.yaml: {"items"?: {key: price | None}, "date"?,
+    "splice"?: "wago" | "crimp"}; any electrical estimate item, works and materials, a key with a
+    parameter too (its base in LINES); None removes the price; splice — joints in switch flush
+    boxes (PriceList.splice). Comments and other keys of the file stay
     (estimate.edit_price_items). Errors come with a field path; the file then is unchanged."""
     path = root / PRICES_FILE
     items = changes.get("items", {})
@@ -249,6 +267,9 @@ def save_prices(root: Path, changes: dict[str, Any]) -> list[Issue]:
     date = changes.get("date")
     if date is not None and not isinstance(date, str):
         bad.append(Issue(PRICES_FILE, "date", "ожидается строка"))
+    splice = changes.get("splice")
+    if splice is not None and splice not in SPLICES:
+        bad.append(Issue(PRICES_FILE, "splice", f"ожидается одно из: {', '.join(SPLICES)}"))
     if bad:
         return bad
     text = edit_price_items(path.read_text("utf-8") if path.is_file() else NEW_PRICES, items)
@@ -257,6 +278,8 @@ def save_prices(root: Path, changes: dict[str, Any]) -> list[Issue]:
         text, n = re.subn(r"^date:.*$", line, text, count=1, flags=re.M)
         if not n:
             text = re.sub(r"^items:", f"{line}\nitems:", text, count=1, flags=re.M)
+    if splice is not None:
+        text = _set_splice(text, splice)
     data = yaml.safe_load(text)
     parsed, issues = parse_model(PriceList, data, PRICES_FILE)
     if parsed is None:

@@ -162,6 +162,11 @@ def test_price_list_of_own_studio(
     assert page["editable"] is True and page["exists"] is False
     assert client.post("/api/prices", json={"items": {"work.chase": 111}}).status_code == 200
     assert client.post("/api/prices", json={"items": {"work.nope": 1}}).status_code == 422
+    assert page["splice"] == "wago"
+    saved = client.post("/api/prices", json={"splice": "crimp"})
+    assert saved.status_code == 200 and saved.json()["splice"] == "crimp"
+    bad = client.post("/api/prices", json={"splice": "solder"})
+    assert bad.status_code == 422 and bad.json()["detail"].startswith("splice: ")
     client.cookies.set(COOKIE, tokens["b"])
     assert client.get("/api/prices").json()["exists"] is False  # A's list is not B's
     client.cookies.set(COOKIE, tokens["client"])
@@ -169,6 +174,7 @@ def test_price_list_of_own_studio(
     with auth.db() as db:
         rows = db.query(PriceList).all()
         assert len(rows) == 1 and rows[0].text is not None and "111" in rows[0].text
+        assert "splice: crimp" in rows[0].text
 
 
 def _with_questions(auth: Auth, store: LocalObjectStore, pid: str) -> None:

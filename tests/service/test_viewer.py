@@ -273,10 +273,35 @@ def test_price_page_and_edit(root: Path) -> None:
     assert (root / "prices.yaml").read_text("utf-8") == text
 
 
+def test_price_page_splice(root: Path) -> None:
+    """Joints in switch flush boxes (PriceList.splice) are chosen on the price page: wago when
+    the file does not say; the line keeps its comment, the rest of the file stays."""
+    (root / "prices.yaml").write_text(
+        "# прайс\ncurrency: грн\nitems:\n  work.chase: 200  # узкая\n", "utf-8"
+    )
+    client = TestClient(create_viewer(root))
+    assert client.get("/api/prices").json()["splice"] == "wago"
+    saved = client.post("/api/prices", json={"splice": "crimp"})
+    assert saved.status_code == 200 and saved.json()["splice"] == "crimp"
+    text = (root / "prices.yaml").read_text("utf-8")
+    assert text == ("# прайс\ncurrency: грн\nsplice: crimp\nitems:\n  work.chase: 200  # узкая\n")
+    (root / "prices.yaml").write_text(
+        text.replace("splice: crimp", "splice: crimp  # так монтирует бригада"), "utf-8"
+    )
+    saved = client.post("/api/prices", json={"splice": "wago", "items": {"work.chase": 210}})
+    assert saved.status_code == 200 and saved.json()["splice"] == "wago"
+    text = (root / "prices.yaml").read_text("utf-8")
+    assert "splice: wago  # так монтирует бригада\n" in text and text.count("splice:") == 1
+    assert "work.chase: 210  # узкая" in text
+    bad = client.post("/api/prices", json={"splice": "solder", "items": {"work.chase": 1}})
+    assert bad.status_code == 422 and bad.json()["detail"].startswith("splice: ")
+    assert (root / "prices.yaml").read_text("utf-8") == text
+
+
 def test_price_page_without_files(root: Path) -> None:
     client = TestClient(create_viewer(root))
     page = client.get("/api/prices").json()
-    assert page["exists"] is False and page["market"] is None
+    assert page["exists"] is False and page["market"] is None and page["splice"] == "wago"
     assert client.post("/api/prices", json={"items": {"work.chase": 90}}).status_code == 200
     assert "work.chase: 90" in (root / "prices.yaml").read_text("utf-8")
 
