@@ -1,5 +1,7 @@
 // Flush boxes for the tests and the Storybook stories: the shape of the splice key of a point
-// card (docs/epd-format.md, "objects"), after the examples of the format
+// card (docs/epd-format.md, "objects"), after the examples of the format. Only switches of lights
+// in a chain have joints (decision 2026-11-25): looped sockets use jumpers through their double
+// terminals, so there is no socket example
 
 import type { SpliceData, SpliceJoint } from "@/shared/types";
 
@@ -9,18 +11,9 @@ const joint = (conductor: SpliceJoint["conductor"], out: string[], over: Partial
   conductor, wires: 1 + out.length + (over.taps ?? 1), out, taps: 1, clamps: ["413"], sleeves: 0, ...over,
 });
 
-// A socket of a loop: in, one cable on, every conductor joined with a tap to the socket
-export const socketLoop = (over: Partial<SpliceData> = {}): SpliceData => ({
-  method: "wago", deep_mm: 60,
-  in: { key: "wire:wire_15", from: "Розетка із заземленням, Спальня", from_key: "point:bedroom_socket_4", group: "QF2", mark: "3x2.5", length_m: 7 },
-  out: [{ key: "wire:wire_16", to: "Розетка із заземленням, Спальня", to_key: "point:bedroom_socket_2", kind: "point", point_type: "socket", number: 3, group: "QF2", mark: "3x2.5", length_m: 6.3 }],
-  devices: 1,
-  joints: ["L", "N", "PE"].map((c) => joint(c as SpliceJoint["conductor"], ["wire:wire_16"])),
-  ...over,
-});
-
-// A switch: the phase goes on to the outlet with a tap to the switch; the lights get the switched
-// wire from its terminals, their neutral and earth are joined
+// A switch (the example of docs/epd-format.md, key splice): the phase goes on to the outlet with
+// a tap to the switch; the lights get the switched wire from its terminals, their neutral and
+// earth are joined
 export const hallSwitch = (over: Partial<SpliceData> = {}): SpliceData => ({
   method: "wago", deep_mm: 60,
   in: { key: "wire:wire_42", from: "ЩР", from_key: "board", group: "QF7", mark: "3x1.5", length_m: 9.8 },
@@ -47,8 +40,12 @@ export const passSwitch = (over: Partial<SpliceData> = {}): SpliceData => ({
   ...over,
 });
 
-// Crimp sleeves instead of clamps, two devices in one frame
-export const crimped = (): SpliceData => socketLoop({
+// Crimp sleeves instead of clamps, a two-gang switch: the phase has a tap to each of its keys
+export const crimped = (): SpliceData => hallSwitch({
   method: "crimp", devices: 2,
-  joints: ["L", "N", "PE"].map((c) => joint(c as SpliceJoint["conductor"], ["wire:wire_16"], { taps: 2, clamps: [], sleeves: 1 })),
+  joints: [
+    joint("L", ["wire:wire_43"], { taps: 2, clamps: [], sleeves: 1 }),
+    joint("N", ["wire:wire_39", "wire:wire_43"], { taps: 0, clamps: [], sleeves: 1 }),
+    joint("PE", ["wire:wire_39", "wire:wire_43"], { taps: 0, clamps: [], sleeves: 1 }),
+  ],
 });

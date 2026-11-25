@@ -3,28 +3,24 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { resetSelection, view } from "@/shared/store";
 import { SpliceScheme } from "./index";
-import { COLORS, crimped, hallSwitch, passSwitch, socketLoop } from "./mock";
+import { COLORS, crimped, hallSwitch, passSwitch } from "./mock";
 
 beforeEach(() => resetSelection());
 
 const joint = (letter: string) => screen.getByText(letter, { selector: "abbr" }).closest("li")!;
 
 describe("SpliceScheme", () => {
-  it("a socket of a loop: the feed, the cable on and a Wago 413 per conductor", () => {
-    const { container } = render(<SpliceScheme splice={socketLoop()} colors={COLORS} />);
+  it("a switch: the feed, two cables on, a Wago 413 per conductor", () => {
+    const { container } = render(<SpliceScheme splice={hallSwitch()} colors={COLORS} />);
     const scheme = screen.getByRole("group", { name: "Схема подрозетника: соединений — 3" });
-    expect(within(scheme).getByText("QF2 · 3x2.5 · 7 м")).toBeInTheDocument();
-    expect(within(scheme).getByText("3x2.5 · 6,3 м")).toBeInTheDocument();
-    for (const c of ["L", "N", "PE"]) {
-      expect(joint(c).textContent).toBe(`${c}ввод3механизмWago 413`);
-      expect(joint(c)).toHaveAttribute("title", "проводов в соединении: 3");
-    }
-    expect(screen.queryByText("С клемм механизма")).toBeNull();
+    expect(within(scheme).getByText("QF7 · 3x1.5 · 9,8 м")).toBeInTheDocument();
+    expect(within(scheme).getByText("3x1.5 · 3,7 м")).toBeInTheDocument();
+    for (const c of ["L", "N", "PE"]) expect(joint(c)).toHaveAttribute("title", "проводов в соединении: 3");
     expect(screen.getByText("клеммы Wago 221 · подрозетник ≥60 мм")).toBeInTheDocument();
-    // The feed and one cable out in the group colour, a dot per joint in the box
+    // The feed and two cables out in the group colour, a dot per joint in the box
     const paths = [...container.querySelectorAll("path")];
-    expect(paths).toHaveLength(2);
-    expect(paths[1]).toHaveStyle({ stroke: COLORS.QF2 });
+    expect(paths).toHaveLength(3);
+    expect(paths[1]).toHaveStyle({ stroke: COLORS.QF7 });
     expect(container.querySelectorAll("circle")).toHaveLength(4);
   });
 
@@ -46,7 +42,7 @@ describe("SpliceScheme", () => {
 
   it("crimp: a sleeve per joint, two devices", () => {
     render(<SpliceScheme splice={crimped()} />);
-    expect(joint("L").textContent).toBe("Lввод3механизм ×2гильза");
+    expect(joint("L").textContent).toBe("Lввод49механизм ×2гильза");
     expect(screen.getByText("гильзы с термоусадкой · подрозетник ≥60 мм · механизмов: 2")).toBeInTheDocument();
   });
 
