@@ -43,7 +43,7 @@
 | 2 | Штробы, проходы, подрозетники (`chases`) | `work.chase`, `work.chase_wide` (обе — с материалом стены: `work.chase.brick`…), `work.wall_hole`, `work.wall_hole_large`, `work.socket_box` | `socket_box` | `optional` | 1 |
 | 3 | Прокладка кабеля (`cable`) | `work.cable` (маркировка концов входит в неё: `work.marking` снят 2026-11-11), `work.conduit` | `cable`, `conduit`, `conduit_joint`, `conduit_clip`, `cable_pad` | `required`: трассы до штукатурки | 2 |
 | 4 | Тёплый пол: кабель и датчик (`floor_heating`, с 2026-11-14) | `work.floor_heating` (м² обогрева) | `heating_cable` (секция по длине: `heating_cable.27`), `heating_sensor`, `heating_conduit` | `required`: змейка до стяжки | 3 |
-| 5 | Распаечные коробки (`boxes`) | `work.junction_box`, `work.splice` или `work.splice_crimp` (соединения в подрозетниках клеммами или опрессовкой, с 2026-11-25) | `junction_box`, `junction_box_ip`, `crimp`, `wago` (`wago.413`…) | `optional` | 3 |
+| 5 | Распаечные коробки (`boxes`) | `work.junction_box`, `work.splice` или `work.splice_crimp` (соединение N и PE в подрозетнике выключателя клеммами или опрессовкой, с 2026-11-25; клеммы и гильзы отдельной строкой не идут) | `junction_box`, `junction_box_ip`, `crimp` | `optional` | 3 |
 | 6 | Установка корпуса щита (`board`) | `work.board_install` | `board_enclosure`, `dc_enclosure` (щит АКБ) | `optional` | — |
 | 7 | Замер изоляции (`insulation`) | `work.insulation_test` | — | `required`: протокол, фото или PDF | 3, 5 |
 | 8 | Черновой свет (`rough_light`) | `work.rough_light`, `work.rough_switch` | `rough_holder`, `rough_lamp`, `rough_switch` | `none` | 3 |

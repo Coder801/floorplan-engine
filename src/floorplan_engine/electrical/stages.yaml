@@ -55,9 +55,9 @@ stages:
 
   - key: boxes
     title: { ru: "Распаечные коробки", uk: "Розподільчі коробки" }
-    # с 2026-11-25 — и соединения в подрозетниках (шлейф, свет цепочкой): клеммами Wago или опрессовкой
-    lines: [work.junction_box, junction_box, junction_box_ip, crimp, work.splice, work.splice_crimp,
-            wago]
+    # с 2026-11-25 — и соединения N и PE в подрозетниках выключателей (свет цепочкой): работа, без
+    # клемм и гильз отдельной строкой
+    lines: [work.junction_box, junction_box, junction_box_ip, crimp, work.splice, work.splice_crimp]
     photo: optional
     after: [cable]
 

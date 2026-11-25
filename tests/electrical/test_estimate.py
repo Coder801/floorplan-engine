@@ -586,7 +586,6 @@ def test_works_split_into_rough_and_finish() -> None:
         "junction_box",
         "junction_box_ip",
         "crimp",
-        "wago",
         "conduit_clip",
         "cable_pad",
         "board_enclosure",
@@ -1107,13 +1106,13 @@ def test_floor_heating_is_not_in_the_estimate_until_its_release() -> None:
     assert not [k for k in q if "heating" in k]
 
 
-def test_boxes_keep_crimps_and_no_wago() -> None:
-    """Through junction boxes nothing changes: crimps as before, no clamps, no splice work."""
+def test_boxes_keep_crimps_and_no_splice_work() -> None:
+    """Through junction boxes nothing changes: crimps as before, no splice work."""
     wiring, elec = _wiring()
     q = quantities(wiring, elec)
     assert q["crimp"] == 3 * len(wiring.boxes) + 2
     assert back_box_joints(wiring, elec) == {}
-    assert not any(k.startswith("wago") for k in q) and "work.splice" not in q
+    assert "work.splice" not in q
 
 
 def _two_switches() -> list[dict[str, Any]]:
@@ -1125,44 +1124,39 @@ def _two_switches() -> list[dict[str, Any]]:
     ]
 
 
-def test_wago_lines_without_price_with_note(tmp_path: Path) -> None:
-    """Clamps and their work are rough items with no price anywhere (pricing.UNPRICED): in the
-    estimate "no price", with the hint; the note says sockets of a loop have no joints and why
-    switches have them."""
+def test_switch_joint_work_without_clamp_lines_with_note(tmp_path: Path) -> None:
+    """Joints in switch flush boxes (decision 2026-11-25): only the work, named for the switch,
+    rough, no price anywhere (pricing.UNPRICED); no Wago clamp lines — the note says the method
+    and why; sockets of a loop have no joints."""
     wiring, elec = room_wiring(_two_switches(), light_wiring="chain")
     est = build_estimate(wiring, elec, Prices(None, MockPriceService()), "uk")
     by_key = {ln.key: ln for ln in est.lines}
-    clamp, work = by_key["wago.413"], by_key["work.splice"]
-    assert (clamp.section, clamp.price, clamp.name, clamp.qty) == (
-        "material_rough",
-        None,
-        "Клема важільна Wago 221-413",
-        1,
-    )
-    assert by_key["wago.412"].qty == 4 and (work.section, work.price, work.qty) == (
+    work = by_key["work.splice"]
+    assert (work.section, work.price, work.qty, work.name) == (
         "rough",
         None,
         2,
+        "З'єднання N і PE в підрозетнику вимикача",
     )
-    assert "221-413 — на 3" in (clamp.hint or "") and "уточнюється" in (clamp.hint or "")
+    assert "уточнюється" in (work.hint or "") and "Wago" in (work.hint or "")
+    assert not any(k.startswith("wago") for k in by_key) and "crimp" not in by_key
+    assert "wago" not in LINES
     note = estimate_module.text("note_splice", "ru")
-    assert "без соединений" in note and "перемычки" in note and "60 мм" in note
-    assert "1.7.144" not in note
+    assert "Wago 221" in note and "отдельной строкой" in note and "60 мм" in note
+    assert "без соединений" in note and "1.7.144" not in note
     assert "опресування" in estimate_module.text("note_splice", "uk")
 
 
-def test_crimp_splice_in_flush_boxes_counts_sleeves_and_its_own_work() -> None:
-    """splice crimp, a studio setting in its price list (decision 2026-11-25): the same joints as
-    with clamps, a sleeve with heat shrink per joint in the crimp item, the work —
-    work.splice_crimp; no clamps and no work.splice."""
+def test_crimp_splice_counts_only_its_own_work() -> None:
+    """splice crimp, a studio setting in its price list (decision 2026-11-25): the work —
+    work.splice_crimp, named for the switch; the sleeves of flush boxes are not itemised, crimp
+    stays for junction boxes only; no work.splice."""
     wiring, elec = room_wiring(_two_switches(), light_wiring="chain")
     joints = back_box_joints(wiring, elec)
     assert sorted(len(fb.joints) for fb in joints.values()) == [2, 3]  # k1: N, PE; k2: L, N, PE
     q = quantities(wiring, elec, "crimp")
-    assert q["crimp"] == 5 and q["work.splice_crimp"] == 2
-    assert "work.splice" not in q and not any(k.startswith("wago") for k in q)
-    wago_q = quantities(wiring, elec, "wago")
-    assert "crimp" not in wago_q and wago_q["work.splice"] == 2
+    assert q["work.splice_crimp"] == 2 and "crimp" not in q and "work.splice" not in q
+    assert quantities(wiring, elec, "wago")["work.splice"] == 2
     own = PriceList.model_validate({"splice": "crimp"})
     est = build_estimate(wiring, elec, Prices(own, MockPriceService()), "ru")
     by_key = {ln.key: ln for ln in est.lines}
@@ -1170,16 +1164,16 @@ def test_crimp_splice_in_flush_boxes_counts_sleeves_and_its_own_work() -> None:
     assert (work.section, work.price, work.name) == (
         "rough",
         None,
-        "Соединение в подрозетнике опрессовкой",
+        "Соединение N и PE в подрозетнике выключателя опрессовкой",
     )
-    assert by_key["crimp"].qty == 5 and "work.splice" not in by_key
+    assert "crimp" not in by_key and "work.splice" not in by_key
     note = estimate_module.text("note_splice_crimp", "uk")
-    assert "60 мм" in note and "без пружин" in note and "перемички" in note
+    assert "60 мм" in note and "без пружин" in note and "окремим рядком" in note
 
 
 def test_socket_loop_buys_no_clamps_and_no_splice_work() -> None:
     """Sockets in a loop (decision 2026-11-25): double terminals and jumpers, no joints — no
-    clamps, no sleeves, no splice work, whatever the studio's setting."""
+    sleeves, no splice work, whatever the studio's setting."""
     sockets = [_pt(f"s{k}", "socket", 600 + 1000 * k, 300, "QF2", count=2) for k in range(3)]
     wiring, elec = room_wiring(sockets, distribution="loop")
     assert not wiring.boxes and back_box_joints(wiring, elec) == {}
@@ -1187,7 +1181,6 @@ def test_socket_loop_buys_no_clamps_and_no_splice_work() -> None:
     for splice in splices:
         q = quantities(wiring, elec, splice)
         assert not {"crimp", "work.splice", "work.splice_crimp"} & set(q)
-        assert not any(k.startswith("wago") for k in q)
 
 
 def test_splice_defaults_to_wago_without_a_studio_setting() -> None:
@@ -1196,16 +1189,25 @@ def test_splice_defaults_to_wago_without_a_studio_setting() -> None:
     assert PriceList().splice is None and MockPriceService().splice is None
     for prices in (PriceList(), Prices(), Prices(PriceList(), MockPriceService())):
         keys = {ln.key for ln in build_estimate(wiring, elec, prices, "ru").lines}
-        assert "work.splice" in keys and "wago.413" in keys and "work.splice_crimp" not in keys
+        assert "work.splice" in keys and "work.splice_crimp" not in keys
     crimp = Prices(PriceList.model_validate({"splice": "crimp"}), MockPriceService())
     assert crimp.splice == "crimp" and PriceList.model_validate({"splice": "wago"}).splice == "wago"
     with pytest.raises(ValueError):
         PriceList.model_validate({"splice": "solder"})
 
 
-def test_crimp_splice_adds_to_box_crimps() -> None:
-    """Light in a chain with sockets through boxes: box crimps as before, plus a sleeve per
-    flush box joint."""
+def test_old_wago_prices_are_ignored() -> None:
+    """A price list saved before 2026-11-25 may name the clamps: not an error, the price is not
+    used (RETIRED)."""
+    prices = PriceList.model_validate(
+        {"items": {"wago": 20, "wago.412": 18, "wago.413": 22, "wago.415": 28, "nope": 1}}
+    )
+    assert unknown_keys(prices) == ["nope"]
+
+
+def test_crimp_splice_leaves_box_crimps_as_they_are() -> None:
+    """Light in a chain with sockets through boxes: box crimps as before; the switch joints are
+    the work only, whatever the method."""
     points = [
         {"id": "l1", "room": "r", "type": "downlight", "ceiling": [1000, 1500], "group": "QF1"},
         {"id": "l2", "room": "r", "type": "downlight", "ceiling": [2000, 1500], "group": "QF1"},
@@ -1216,5 +1218,5 @@ def test_crimp_splice_adds_to_box_crimps() -> None:
     wiring, elec = room_wiring(points, light_wiring="chain")
     assert wiring.boxes
     q = quantities(wiring, elec, "crimp")
-    assert q["crimp"] == 3 * len(wiring.boxes) + 2  # N and PE at the switch
+    assert q["crimp"] == 3 * len(wiring.boxes) == quantities(wiring, elec, "wago")["crimp"]
     assert q["work.junction_box"] == len(wiring.boxes) and q["work.splice_crimp"] == 1

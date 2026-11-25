@@ -248,7 +248,7 @@ def _estimate_notes(
         looped and prices.splice == "crimp"
     ):
         notes.append(estimate_text("note_splice_crimp", lang))
-    elif looped or any(ln.key.startswith("wago.") for ln in est.lines):
+    elif looped or any(ln.key == "work.splice" for ln in est.lines):
         notes.append(estimate_text("note_splice", lang))
     if any(ln.key.startswith("work.chase") for ln in est.lines):
         notes.append(

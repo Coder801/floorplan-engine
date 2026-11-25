@@ -100,16 +100,14 @@ MOCK_PRICES: dict[str, float] = {
 # Items the mock deliberately has no price for (decision 2026-11-14): the floor heating cable,
 # sensor, tube and laying get their prices with the floor heating section; the controller itself
 # has a mock price since 2026-11-24. Until then the row stays in the estimate with its quantity,
-# "no price", out of the total. Wago clamps in flush boxes and the work of the joints there, by
-# clamps or by crimps (decision 2026-11-25), have no price either until a studio or a supplier
-# gives one; the crimp sleeves themselves are the junction box item, priced as before
+# "no price", out of the total. The work of the joints in switch flush boxes, by clamps or by
+# crimps (decision 2026-11-25), has no price either until a studio or a supplier gives one
 UNPRICED = frozenset(
     {
         "heating_cable",
         "heating_sensor",
         "heating_conduit",
         "work.floor_heating",
-        "wago",
         "work.splice",
         "work.splice_crimp",
     }
