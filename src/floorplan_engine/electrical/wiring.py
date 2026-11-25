@@ -52,12 +52,19 @@ the floor an opening is free, and a hole already made by a line of the build is 
 next lines of its plane and circuit within WALL_HOLE_SHARE, so lines of one source into a room
 go through one hole (wiring_routes.route_runs: lines are routed one after another, in a fixed
 order).
+
+Socket loop with one chase for both cables (loop_conduit shared, after plaster; decision
+2026-11-25): both come down into the first flush box of a block and the outgoing cable is pulled
+through the block to the last one, so its line is longer by POST_PITCH_MM per post past the
+first (through_block). Two chases or before plaster the cables come in and leave at the edges
+of the block: nothing to add.
 """
 
 from __future__ import annotations
 
 import itertools
 from collections.abc import Sequence
+from dataclasses import replace
 
 import shapely
 
@@ -76,7 +83,7 @@ from floorplan_engine.electrical.chases import (
     with_material,
 )
 from floorplan_engine.electrical.floor_heating import heating_zones
-from floorplan_engine.electrical.frames import entries
+from floorplan_engine.electrical.frames import POST_PITCH_MM, entries
 from floorplan_engine.electrical.groups import group_key
 from floorplan_engine.electrical.led_supply import led_loads, length_weight
 from floorplan_engine.electrical.loads import LOW_TYPES
@@ -256,11 +263,12 @@ def _wiring(
         chases = before_plaster(chases)
     chases = with_material(chases, plan)
     holes = wall_holes(runs, passages(list(ctx.geoms.values()), ctx.ceiling), ctx.walls)
+    shared = shared_rises(runs, elec.points, elec.conduit_level, elec.loop_conduit)
     return Wiring(
         ctx.ceiling,
         height_assumed,
         tuple(boxes),
-        tuple(runs),
+        tuple(through_block(runs, elec, shared)),
         skipped,
         chases,
         holes,
@@ -269,8 +277,23 @@ def _wiring(
         tuple(notes),
         elec.plaster == "before",
         drops,
-        shared_rises(runs, elec.points, elec.conduit_level, elec.loop_conduit),
+        shared,
         heating_zones(plan, contours, elec),
         box_notes=tuple(box_notes),
         entries=tuple(sorted(entry.items())),
     )
+
+
+def through_block(runs: Sequence[Run], elec: Electrical, shared: frozenset[str]) -> list[Run]:
+    """A loop line out of a block of sockets that shares the chase with the cable in (shared,
+    after plaster; decision 2026-11-25): pulled through the block from its first flush box to
+    its last, POST_PITCH_MM per post past the first, added to its ends."""
+    if elec.plaster != "after" or not shared:
+        return list(runs)
+    posts = {p.id: p.count for p in elec.points if p.type is PointType.SOCKET}
+    return [
+        replace(r, ends_mm=r.ends_mm + POST_PITCH_MM * (posts[r.source] - 1))
+        if r.id in shared and posts.get(r.source, 1) > 1
+        else r
+        for r in runs
+    ]

@@ -54,7 +54,7 @@ from floorplan_engine.model.intake import (
 )
 from floorplan_engine.model.panel_catalog import DeviceKind
 from floorplan_engine.model.plumbing import Plumbing
-from floorplan_engine.model.schema import Electrical
+from floorplan_engine.model.schema import Electrical, PointType
 from floorplan_engine.pipeline.assessment import Assessment, assess_project, price_service
 from floorplan_engine.pipeline.files import OUT_DIR, PLUMBING_ESTIMATE_FILES
 from floorplan_engine.pipeline.prices import find_prices, load_price_layers, load_prices
@@ -240,10 +240,16 @@ def _estimate_notes(
         ),
         estimate_text("note_crimp", lang),
     ]
-    if any(ln.key.startswith("wago.") for ln in est.lines):
-        notes.append(estimate_text("note_splice", lang))
-    if any(ln.key == "work.splice_crimp" for ln in est.lines):
+    # Flush boxes (decision 2026-11-25): a socket loop has no joints, switches of a light chain
+    # do — one note on both, by the studio's way of joining
+    sockets = {p.id for p in elec.points if p.type is PointType.SOCKET}
+    looped = any(r.source in sockets and r.target in sockets for r in wiring.runs)
+    if any(ln.key == "work.splice_crimp" for ln in est.lines) or (
+        looped and prices.splice == "crimp"
+    ):
         notes.append(estimate_text("note_splice_crimp", lang))
+    elif looped or any(ln.key.startswith("wago.") for ln in est.lines):
+        notes.append(estimate_text("note_splice", lang))
     if any(ln.key.startswith("work.chase") for ln in est.lines):
         notes.append(
             estimate_text("note_chases", lang, d=f"{CHASE_SHARE:g}", k=CHASE_CABLES, n=CHASE_NARROW)

@@ -13,7 +13,6 @@ from floorplan_engine.electrical.splices import (
     back_box_joints,
     clamp_counts,
     deep_label,
-    sleeves,
     splice_label,
     wago_clamps,
 )
@@ -39,34 +38,24 @@ def test_wago_clamps_by_wires(wires: int, clamps: list[str]) -> None:
     assert wago_clamps(wires) == clamps
 
 
-def test_socket_loop_pass_points_join_l_n_pe() -> None:
-    """A pass socket — in, out and the tap to the device, a 3-wire clamp on L, N and PE; the last
-    single socket — straight into the device, no joint."""
-    sockets = [_pt(f"s{k}", "socket", 600 + 1000 * k, 300, "QF2") for k in range(3)]
-    wiring, elec = room_wiring(sockets, distribution="loop")
-    assert not wiring.boxes
-    joints = back_box_joints(wiring, elec)
-    sources = {r.source for r in wiring.runs}
-    last = next(p["id"] for p in sockets if p["id"] not in sources)
-    assert set(joints) == {p["id"] for p in sockets} - {last}
-    for pid, fb in joints.items():
-        feed = next(r for r in wiring.runs if r.target == pid)
-        out = next(r for r in wiring.runs if r.source == pid)
-        assert (fb.feed, fb.outs, fb.devices) == (feed.id, (out.id,), 1)
-        assert fb.joints == tuple(Joint(c, 3, (out.id,), 1) for c in ("L", "N", "PE"))
-    assert set(clamp_counts(joints)) == {"413"} and sleeves(joints) == 6
-
-
-def test_socket_loop_block_takes_a_bigger_clamp() -> None:
-    """A block of two sockets on one point: in, out and two taps — a 5-wire clamp; at the end of
-    the loop in and two taps — a 3-wire clamp (PE is not looped through the devices)."""
-    sockets = [_pt(f"s{k}", "socket", 600 + 1000 * k, 300, "QF2", count=2) for k in range(2)]
-    wiring, elec = room_wiring(sockets, distribution="loop")
-    joints = back_box_joints(wiring, elec)
-    head = next(r.target for r in wiring.runs if r.source == "board")
-    tail = next(p["id"] for p in sockets if p["id"] != head)
-    assert _clamps(joints) == {head: {"415": 3}, tail: {"413": 3}}
-    assert joints[tail].outs == () and joints[tail].joints[0].taps == 2
+@pytest.mark.parametrize(
+    ("extra", "count"),
+    [
+        ({"plaster": "before"}, 1),
+        ({"plaster": "before"}, 2),
+        ({}, 2),  # after plaster, two chases (separate)
+        ({"loop_conduit": "shared", "conduit": "walls"}, 2),
+        ({"loop_conduit": "shared", "conduit": "walls"}, 1),
+    ],
+)
+def test_socket_loop_has_no_joints(extra: dict[str, Any], count: int) -> None:
+    """Sockets in a loop (decision 2026-11-25): the cables go into the double terminals, the
+    sockets of a block are joined by jumpers, PE too — no joint in any way of laying the cable,
+    single sockets and blocks alike."""
+    sockets = [_pt(f"s{k}", "socket", 600 + 1000 * k, 300, "QF2", count=count) for k in range(3)]
+    wiring, elec = room_wiring(sockets, distribution="loop", **extra)
+    assert not wiring.boxes and any(r.source in ("s0", "s1", "s2") for r in wiring.runs)
+    assert back_box_joints(wiring, elec) == {}
 
 
 def test_light_chain_switch_passes_n_and_pe_on() -> None:

@@ -24,6 +24,7 @@ from floorplan_engine.electrical.boxes import BOX_SIZE_MM, box_square
 from floorplan_engine.electrical.bundles import bundles, lanes, offset_path, segments
 from floorplan_engine.electrical.chases import wall_chases, with_conduit
 from floorplan_engine.electrical.estimate import PriceList, build_estimate
+from floorplan_engine.electrical.frames import POST_PITCH_MM
 from floorplan_engine.electrical.panel import LineClass
 from floorplan_engine.electrical.wiring import box_wiring
 from floorplan_engine.electrical.wiring_context import END_ALLOWANCE
@@ -40,7 +41,8 @@ from floorplan_engine.model.geometry import Vec
 from floorplan_engine.model.scale import sheet
 from floorplan_engine.model.schema import Electrical, ElectricalPoint, Plan
 from floorplan_engine.validation.plan import validate_plan
-from tests.conftest import make_plan
+from tests.conftest import make_plan, room_wiring
+from tests.conftest import wall_point as w3_point
 from tests.electrical.conftest import (
     DOOR,
     RECT,
@@ -730,3 +732,31 @@ def test_stacked_point_is_wired_at_the_wall_not_at_its_symbol() -> None:
         return point
 
     assert (end(stacked) - end(lone)).length() == pytest.approx(0.0, abs=1.0)
+
+
+@pytest.mark.parametrize("plaster", ["after", "before"])
+def test_shared_loop_pulls_the_cable_out_through_the_block(plaster: str) -> None:
+    """One chase for both cables of a loop (shared, after plaster; decision 2026-11-25): the
+    cable out of a block is pulled from its first flush box to its last — POST_PITCH_MM per post
+    past the first on its line; a single socket and two chases add nothing; before plaster both
+    cables are at the block edges, nothing either."""
+    sockets = [
+        w3_point("s0", "socket", 600, 300, "QF2", count=3),
+        w3_point("s1", "socket", 1600, 300, "QF2"),
+        w3_point("s2", "socket", 2600, 300, "QF2", count=3),
+    ]
+    base = {"distribution": "loop", "conduit": "walls", "plaster": plaster}
+    shared, _ = room_wiring(sockets, loop_conduit="shared", **base)
+    separate, _ = room_wiring(sockets, loop_conduit="separate", **base)
+    assert shared.shared_rises
+    counts = {"s0": 3, "s1": 1, "s2": 3}
+    for a, b in zip(shared.runs, separate.runs, strict=True):
+        extra = 0.0
+        if plaster == "after" and a.id in shared.shared_rises:
+            extra = POST_PITCH_MM * (counts[a.source] - 1)
+        assert a.ends_mm == pytest.approx(b.ends_mm + extra)
+    if plaster == "after":
+        added = sum(
+            a.length_mm - b.length_mm for a, b in zip(shared.runs, separate.runs, strict=True)
+        )
+        assert added == pytest.approx(2 * POST_PITCH_MM)  # one 3-post block passes the loop on

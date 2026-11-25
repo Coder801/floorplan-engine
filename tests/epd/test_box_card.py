@@ -129,38 +129,43 @@ def test_box_object_card_carries_box_in_its_epd_json() -> None:
     assert "box" not in cards["point:s1"].as_dict()
 
 
-def _loop_sockets() -> list[dict[str, object]]:
-    return [wall_point(f"s{k}", "socket", 600 + 1000 * k, 300, "QF2") for k in range(3)]
+def _chain() -> list[dict[str, object]]:
+    """Light in a chain: panel → k2 → k1 → l1 (k2 feeds k1 from its flush box)."""
+    return [
+        {"id": "l1", "room": "r", "type": "downlight", "ceiling": [1500, 2000], "group": "QF1"},
+        wall_point("k1", "switch", 500, 900, "QF1"),
+        wall_point("k2", "switch", 2500, 900, "QF1"),
+    ]
 
 
-def test_splice_card_cables_and_joints_of_a_pass_socket() -> None:
-    """A pass socket of a loop (decision 2026-11-25): the method, the deep box, the cable in and
-    out as in the box card, one device, and L, N, PE each joining 3 wires (in, out, tap) with a
-    221-413; with crimps — one sleeve per conductor and no clamps."""
-    wiring, elec = room_wiring(_loop_sockets(), distribution="loop")
-    joints = back_box_joints(wiring, elec)
-    pid, fb = next(iter(joints.items()))
+def test_splice_card_cables_and_joints_of_a_feeding_switch() -> None:
+    """A switch of a light chain that feeds another one (decision 2026-11-25): the method, the
+    deep box, the cable in and out as in the box card, one device; L joins in, the device and
+    the feed on (413), N and PE in and out (412); with crimps — one sleeve per conductor."""
+    wiring, elec = room_wiring(_chain(), light_wiring="chain")
+    fb = back_box_joints(wiring, elec)["k2"]
     points = {p.id: p for p in elec.points}
     numbers = {p.id: k for k, p in enumerate(elec.points, 1)}
     card = splice_card(fb, "wago", wiring, numbers, points, lambda e: f"name {e}")
-    feed = next(r for r in wiring.runs if r.target == pid)
-    out = next(r for r in wiring.runs if r.source == pid)
+    feed = next(r for r in wiring.runs if r.target == "k2")
+    out = next(r for r in wiring.runs if r.source == "k2")
     assert card["method"] == "wago" and card["deep_mm"] == 60 and card["devices"] == 1
     assert card["in"] == {
         "key": f"wire:{feed.id}",
-        "from": f"name {feed.source}",
-        "from_key": "board" if feed.source == "board" else f"point:{feed.source}",
-        "group": "QF2",
+        "from": "name board",
+        "from_key": "board",
+        "group": "QF1",
         "mark": feed.mark,
         "length_m": round(feed.length_mm / 1000, 1),
     }
     assert [o["key"] for o in card["out"]] == [f"wire:{out.id}"]  # type: ignore[attr-defined]
-    assert card["out"][0]["to_key"] == f"point:{out.target}"  # type: ignore[index]
+    assert card["out"][0]["to_key"] == "point:k1"  # type: ignore[index]
+    wire = f"wire:{out.id}"
     assert card["joints"] == [
-        {"conductor": c, "wires": 3, "out": [f"wire:{out.id}"], "taps": 1, "clamps": ["413"],
-         "sleeves": 0}
-        for c in ("L", "N", "PE")
-    ]  # fmt: skip
+        {"conductor": "L", "wires": 3, "out": [wire], "taps": 1, "clamps": ["413"], "sleeves": 0},
+        {"conductor": "N", "wires": 2, "out": [wire], "taps": 0, "clamps": ["412"], "sleeves": 0},
+        {"conductor": "PE", "wires": 2, "out": [wire], "taps": 0, "clamps": ["412"], "sleeves": 0},
+    ]
     crimp = splice_card(fb, "crimp", wiring, numbers, points, str)
     assert all(j["clamps"] == [] and j["sleeves"] == 1 for j in crimp["joints"])  # type: ignore[attr-defined]
 
@@ -168,17 +173,20 @@ def test_splice_card_cables_and_joints_of_a_pass_socket() -> None:
 def test_point_card_carries_splice_and_its_row() -> None:
     """End to end: the point:<id> card of a joined flush box has the row "Соединение" and the
     splice key, method from describe_objects (the studio setting); a point without a joint —
-    neither."""
-    wiring, elec = room_wiring(_loop_sockets(), distribution="loop")
+    neither; sockets of a loop never have one."""
+    sockets = [wall_point(f"s{k}", "socket", 300 + 900 * k, 300, "QF2") for k in range(3)]
+    wiring, elec = room_wiring([*_chain(), *sockets], light_wiring="chain", distribution="loop")
     plan = make_plan(RECT, [{"wall": "w2", "type": "door", "offset": 1000, "width": 900}])
     _, contours = validate_plan(plan)
     joints = back_box_joints(wiring, elec)
+    assert set(joints) == {"k1", "k2"}
     cards = describe_objects(plan, contours, elec, wiring, splice="crimp")
     for p in elec.points:
         data = json.loads(json.dumps(cards[f"point:{p.id}"].as_dict(), ensure_ascii=False))
         rows = dict(data["rows"])
         if p.id in joints:
             assert data["splice"]["method"] == "crimp"
-            assert rows["Соединение"] == "гильзы ×3, глуб. ≥60"
+            n = len(joints[p.id].joints)
+            assert rows["Соединение"] == f"гильзы ×{n}, глуб. ≥60"
         else:
             assert "splice" not in data and "Соединение" not in rows

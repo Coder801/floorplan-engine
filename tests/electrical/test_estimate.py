@@ -42,7 +42,7 @@ from floorplan_engine.electrical.led_supply import (
 from floorplan_engine.electrical.low_links import LED_MARK
 from floorplan_engine.electrical.panel import build_panel, busbars, device_name
 from floorplan_engine.electrical.pricing import MockPriceService, Prices, mock_price
-from floorplan_engine.electrical.splices import back_box_joints
+from floorplan_engine.electrical.splices import Splice, back_box_joints
 from floorplan_engine.electrical.wiring import RESERVE, box_wiring
 from floorplan_engine.model.schema import Electrical, Plan
 from floorplan_engine.pipeline import build_project, estimate_project
@@ -1116,22 +1116,38 @@ def test_boxes_keep_crimps_and_no_wago() -> None:
     assert not any(k.startswith("wago") for k in q) and "work.splice" not in q
 
 
+def _two_switches() -> list[dict[str, Any]]:
+    """Light in a chain where one switch feeds the other: panel → k2 → k1 → l1 (test_splices)."""
+    return [
+        {"id": "l1", "room": "r", "type": "downlight", "ceiling": [1500, 2000], "group": "QF1"},
+        _pt("k1", "switch", 500, 900, "QF1"),
+        _pt("k2", "switch", 2500, 900, "QF1"),
+    ]
+
+
 def test_wago_lines_without_price_with_note(tmp_path: Path) -> None:
     """Clamps and their work are rough items with no price anywhere (pricing.UNPRICED): in the
-    estimate "no price", with the hint; the estimate notes say why clamps and not crimps."""
-    sockets = [_pt(f"s{k}", "socket", 600 + 1000 * k, 300, "QF2") for k in range(3)]
-    wiring, elec = room_wiring(sockets, distribution="loop")
+    estimate "no price", with the hint; the note says sockets of a loop have no joints and why
+    switches have them."""
+    wiring, elec = room_wiring(_two_switches(), light_wiring="chain")
     est = build_estimate(wiring, elec, Prices(None, MockPriceService()), "uk")
     by_key = {ln.key: ln for ln in est.lines}
     clamp, work = by_key["wago.413"], by_key["work.splice"]
-    assert (clamp.section, clamp.price, clamp.name) == (
+    assert (clamp.section, clamp.price, clamp.name, clamp.qty) == (
         "material_rough",
         None,
         "Клема важільна Wago 221-413",
+        1,
     )
-    assert (work.section, work.price, work.qty) == ("rough", None, 2)
+    assert by_key["wago.412"].qty == 4 and (work.section, work.price, work.qty) == (
+        "rough",
+        None,
+        2,
+    )
     assert "221-413 — на 3" in (clamp.hint or "") and "уточнюється" in (clamp.hint or "")
-    assert "60 мм" in estimate_module.text("note_splice", "ru")
+    note = estimate_module.text("note_splice", "ru")
+    assert "без соединений" in note and "перемычки" in note and "60 мм" in note
+    assert "1.7.144" not in note
     assert "опресування" in estimate_module.text("note_splice", "uk")
 
 
@@ -1139,13 +1155,11 @@ def test_crimp_splice_in_flush_boxes_counts_sleeves_and_its_own_work() -> None:
     """splice crimp, a studio setting in its price list (decision 2026-11-25): the same joints as
     with clamps, a sleeve with heat shrink per joint in the crimp item, the work —
     work.splice_crimp; no clamps and no work.splice."""
-    sockets = [_pt(f"s{k}", "socket", 600 + 1000 * k, 300, "QF2", count=2) for k in range(2)]
-    wiring, elec = room_wiring(sockets, distribution="loop")
+    wiring, elec = room_wiring(_two_switches(), light_wiring="chain")
     joints = back_box_joints(wiring, elec)
-    wires = sorted([j.wires for j in fb.joints] for fb in joints.values())
-    assert wires == [[3, 3, 3], [4, 4, 4]]  # end block, pass block
+    assert sorted(len(fb.joints) for fb in joints.values()) == [2, 3]  # k1: N, PE; k2: L, N, PE
     q = quantities(wiring, elec, "crimp")
-    assert q["crimp"] == 6 and q["work.splice_crimp"] == 2
+    assert q["crimp"] == 5 and q["work.splice_crimp"] == 2
     assert "work.splice" not in q and not any(k.startswith("wago") for k in q)
     wago_q = quantities(wiring, elec, "wago")
     assert "crimp" not in wago_q and wago_q["work.splice"] == 2
@@ -1158,15 +1172,27 @@ def test_crimp_splice_in_flush_boxes_counts_sleeves_and_its_own_work() -> None:
         None,
         "Соединение в подрозетнике опрессовкой",
     )
-    assert by_key["crimp"].qty == 6 and "work.splice" not in by_key
+    assert by_key["crimp"].qty == 5 and "work.splice" not in by_key
     note = estimate_module.text("note_splice_crimp", "uk")
-    assert "60 мм" in note and "без пружин" in note
+    assert "60 мм" in note and "без пружин" in note and "перемички" in note
+
+
+def test_socket_loop_buys_no_clamps_and_no_splice_work() -> None:
+    """Sockets in a loop (decision 2026-11-25): double terminals and jumpers, no joints — no
+    clamps, no sleeves, no splice work, whatever the studio's setting."""
+    sockets = [_pt(f"s{k}", "socket", 600 + 1000 * k, 300, "QF2", count=2) for k in range(3)]
+    wiring, elec = room_wiring(sockets, distribution="loop")
+    assert not wiring.boxes and back_box_joints(wiring, elec) == {}
+    splices: tuple[Splice, ...] = ("wago", "crimp")
+    for splice in splices:
+        q = quantities(wiring, elec, splice)
+        assert not {"crimp", "work.splice", "work.splice_crimp"} & set(q)
+        assert not any(k.startswith("wago") for k in q)
 
 
 def test_splice_defaults_to_wago_without_a_studio_setting() -> None:
     """No splice in the price list, no list at all, or the price service alone — wago."""
-    sockets = [_pt(f"s{k}", "socket", 600 + 1000 * k, 300, "QF2") for k in range(3)]
-    wiring, elec = room_wiring(sockets, distribution="loop")
+    wiring, elec = room_wiring(_two_switches(), light_wiring="chain")
     assert PriceList().splice is None and MockPriceService().splice is None
     for prices in (PriceList(), Prices(), Prices(PriceList(), MockPriceService())):
         keys = {ln.key for ln in build_estimate(wiring, elec, prices, "ru").lines}

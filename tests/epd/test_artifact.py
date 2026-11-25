@@ -198,13 +198,20 @@ def test_wiring_page_gets_cards_of_points_with_joints(tmp_path: Path) -> None:
     2026-11-25): its card with the splice key, so the viewer can mark it and draw its joints."""
     plan = make_plan(RECT, [{"wall": "w2", "type": "door", "offset": 1000, "width": 900}])
     _, contours = validate_plan(plan)
-    sockets = [wall_point(f"s{k}", "socket", 600 + 1000 * k, 300, "QF2") for k in range(3)]
+    points = [
+        {"id": "l1", "room": "r", "type": "downlight", "ceiling": [1500, 2000], "group": "QF1"},
+        wall_point("k1", "switch", 500, 900, "QF1"),
+        wall_point("k2", "switch", 2500, 900, "QF1"),
+        *(wall_point(f"s{k}", "socket", 300 + 900 * k, 300, "QF2") for k in range(3)),
+    ]
     board = {"room": "r", "wall": "w1", "offset": 500, "height": 1700}
-    elec = Electrical.model_validate({"points": sockets, "board": board, "distribution": "loop"})
+    elec = Electrical.model_validate(
+        {"points": points, "board": board, "distribution": "loop", "light_wiring": "chain"}
+    )
     wiring = box_wiring(plan, contours, elec)
     assert wiring is not None
     joints = back_box_joints(wiring, elec)
-    assert len(joints) == 2
+    assert set(joints) == {"k1", "k2"}  # sockets of the loop have none
     doc = build_project_document(plan, contours, elec, today=date(2026, 10, 20))
     path = tmp_path / "project.dxf"
     doc.saveas(path, encoding="utf-8")
@@ -213,8 +220,8 @@ def test_wiring_page_gets_cards_of_points_with_joints(tmp_path: Path) -> None:
         export_artifact(readfile(path), plan, tmp_path / "p.epd", objects=objects)
     )
     page = next(p for p in pages if p.get("stage") == "wiring")
-    points = {k for k in page["objects"] if k.startswith("point:")}
-    assert points == {f"point:{pid}" for pid in joints}
+    cards = {k for k in page["objects"] if k.startswith("point:")}
+    assert cards == {f"point:{pid}" for pid in joints}
     drawn = {item["o"] for item in page["items"] if "o" in item}
-    assert points <= drawn  # the symbol is on the sheet: the viewer marks it there
-    assert all(page["objects"][k]["splice"]["method"] == "wago" for k in points)
+    assert cards <= drawn  # the symbol is on the sheet: the viewer marks it there
+    assert all(page["objects"][k]["splice"]["method"] == "wago" for k in cards)

@@ -1,25 +1,28 @@
-"""Joints in flush boxes (decision 2026-11-25): where a socket loop (distribution loop) or light in
-a chain (light_wiring chain) joins wires in a flush box, which conductor joins how many wires,
-and what with. One calculation for the estimate (estimate.quantities: clamps or sleeves and the
-work), the point card in the viewer (epd/box_card.splice_card) and the "Points" table
+"""Joints in flush boxes (decisions 2026-11-25): where light in a chain (light_wiring chain) joins
+wires in a switch flush box, which conductor joins how many wires, and what with. One
+calculation for the estimate (estimate.quantities: clamps or sleeves and the work), the point
+card in the viewer (epd/box_card.splice_card) and the "Points" table
 (drawing/schedules.points_table), so the drawing and the estimate cannot drift apart.
 
-How the wires are joined is a studio setting, `splice` in its price list (estimate.PriceList):
-wago — Wago 221 lever clamps (the default: a flush box has little room, stiff 2.5 mm² cores with
-crimps and heat shrink do not fold behind the device, a clamp opens for the insulation test);
-crimp — sleeves with heat shrink (permanent, no springs, but harder to fit in a flush box and it
-does not open for the test). Either way the PE is not looped through the device terminals (ПУЭ
-1.7.144): the loop goes through a branch, so taking a socket off does not break it, and the
-flush box must be deep, DEEP_BOX_MM and more. Junction boxes are always crimped.
+Sockets in a loop (distribution loop) have no joints (the user's decision, 2026-11-25): the
+cables in and out go into the double terminals of the sockets, the sockets of a block are joined
+by jumpers through those terminals, PE too. Before plaster, and after it with two chases
+(loop_conduit separate), the cable comes in at one edge of the block and leaves at the other;
+with one chase for both (shared) both come down into the first flush box and the outgoing one is
+pulled through the block to the last (wiring.through_block adds that length to its line).
 
-What is joined at a point:
-- socket: L, N and PE alike — the cable in + the cables out + one tap per device (count); two
-  wires (the last single socket) go straight into the device, no joint;
-- switch: N and PE — in + out, the switch does not take them; the phase (L) — in + one tap per
-  device + the feeds on (to another switch or an output); the switched wire to the lights and
-  the travellers to the second pass switch go from the device terminals, no joint; the second
-  pass switch gets the travellers, not the phase.
-Lights are joined at their own outputs, not in flush boxes: they are not counted.
+A switch has no N and PE terminals, so they are joined in its flush box, and the phase too when
+it branches on. How is a studio setting, `splice` in its price list (estimate.PriceList): wago —
+Wago 221 lever clamps (the default: a flush box has little room, a clamp opens for the
+insulation test); crimp — sleeves with heat shrink (permanent, no springs, but harder to fit in
+a flush box and it does not open for the test). A flush box with a joint must be deep,
+DEEP_BOX_MM and more. Junction boxes are always crimped.
+
+What is joined at a switch: N and PE — the cable in + the cables out, the switch does not take
+them; the phase (L) — in + one tap per device + the feeds on (to another switch or an output);
+the switched wire to the lights and the travellers to the second pass switch go from the device
+terminals, no joint; the second pass switch gets the travellers, not the phase. Lights are
+joined at their own outputs, not in flush boxes: they are not counted.
 """
 
 from __future__ import annotations
@@ -92,9 +95,9 @@ def wago_clamps(wires: int) -> list[str]:
 
 
 def back_box_joints(wiring: Wiring, elec: Electrical) -> dict[str, FlushBoxJoints]:
-    """Joints in the flush boxes of a chain, by point id in model order: only wall sockets and
-    switches where a line goes on to another point (Run.source is a point), or a block of
-    several devices at the end of a loop (module docstring: what is joined)."""
+    """Joints in the flush boxes of a light chain, by point id in model order: only wall switches
+    where a line comes in from a point or goes on to one (Run.source is a point); sockets of a
+    loop have none (module docstring: what is joined)."""
     by_id = {p.id: p for p in elec.points}
     outs: dict[str, list[Run]] = {}
     fed_by: dict[str, Run] = {}
@@ -124,11 +127,7 @@ def back_box_joints(wiring: Wiring, elec: Electrical) -> dict[str, FlushBoxJoint
         ids = tuple(r.id for r in mine)
         feed = fed_by.get(p.id)
         joints: list[Joint] = []
-        if p.type is PointType.SOCKET:
-            wires = 1 + len(mine) + p.count
-            if wires > 2:
-                joints = [Joint(c, wires, ids, p.count) for c in ("L", "N", "PE")]
-        elif p.type in SWITCHES:
+        if p.type in SWITCHES:  # a socket has none: double terminals and jumpers
             feeds = tuple(
                 r.id for r in mine
                 if r.target in by_id and by_id[r.target].type not in LAMP_TYPES

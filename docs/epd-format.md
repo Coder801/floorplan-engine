@@ -526,8 +526,10 @@ pages/02.json
                  "mark": "3x1.5", "length_m": 1.6}]}
 ```
 - `splice` — у точки (`point:`), в подрозетнике которой соединяются жилы (решение
-  2026-11-25: шлейф розеток и свет цепочкой; `electrical/splices.back_box_joints` — тот же расчёт,
-  что в смете). `method` — чем соединяют, настройка студии в прайсе: `"wago"` (клеммы Wago 221)
+  2026-11-25; `electrical/splices.back_box_joints` — тот же расчёт, что в смете). Это только
+  выключатели при свете цепочкой: у выключателя нет клемм N и PE. У розеток шлейфа ключа нет
+  (решение 2026-11-25: двойные клеммы и перемычки, соединений нет; в сборках 0.22.0 он был и у
+  розеток). `method` — чем соединяют, настройка студии в прайсе: `"wago"` (клеммы Wago 221)
   или `"crimp"` (гильзы с термоусадкой); `deep_mm` — подрозетник нужен не мельче (60); `in` —
   кабель, который приходит в подрозетник, того же вида, что `box.in`; `out` — кабели, которые
   уходят дальше, того же вида, что `box.out`; `devices` — механизмов на точке (отводы к ним);
@@ -545,19 +547,22 @@ pages/02.json
 
 ```json
 "splice": {"method": "wago", "deep_mm": 60,
-           "in": {"key": "wire:wire_15", "from": "Розетка із заземленням, Спальня",
-                  "from_key": "point:bedroom_socket_4", "group": "QF2", "mark": "3x2.5",
-                  "length_m": 7.0},
-           "out": [{"key": "wire:wire_16", "to": "Розетка із заземленням, Спальня",
-                    "to_key": "point:bedroom_socket_2", "kind": "point", "point_type": "socket",
-                    "number": 3, "group": "QF2", "mark": "3x2.5", "length_m": 6.3}],
+           "in": {"key": "wire:wire_42", "from": "ЩР", "from_key": "board", "group": "QF7",
+                  "mark": "3x1.5", "length_m": 9.8},
+           "out": [{"key": "wire:wire_39", "to": "Світильник точковий, Гардеробна",
+                    "to_key": "point:wardrobe_downlight_3", "kind": "point",
+                    "point_type": "downlight", "number": 52, "group": "QF7", "mark": "4x1.5",
+                    "length_m": 4.0},
+                   {"key": "wire:wire_43", "to": "Вивід кабелю до техніки, Гардеробна",
+                    "to_key": "point:wardrobe_outlet_1", "kind": "point", "point_type": "outlet",
+                    "number": 49, "group": "QF7", "mark": "3x1.5", "length_m": 3.7}],
            "devices": 1,
-           "joints": [{"conductor": "L", "wires": 3, "out": ["wire:wire_16"], "taps": 1,
+           "joints": [{"conductor": "L", "wires": 3, "out": ["wire:wire_43"], "taps": 1,
                        "clamps": ["413"], "sleeves": 0},
-                      {"conductor": "N", "wires": 3, "out": ["wire:wire_16"], "taps": 1,
-                       "clamps": ["413"], "sleeves": 0},
-                      {"conductor": "PE", "wires": 3, "out": ["wire:wire_16"], "taps": 1,
-                       "clamps": ["413"], "sleeves": 0}]}
+                      {"conductor": "N", "wires": 3, "out": ["wire:wire_39", "wire:wire_43"],
+                       "taps": 0, "clamps": ["413"], "sleeves": 0},
+                      {"conductor": "PE", "wires": 3, "out": ["wire:wire_39", "wire:wire_43"],
+                       "taps": 0, "clamps": ["413"], "sleeves": 0}]}
 ```
 - `brief` — у линии проводки (`wire:`) и коробки (`box:`): короткая карточка того же вида
   (`title`, `rows`) для простого вида интерфейса — откуда, куда и трасса у линии, помещение и
