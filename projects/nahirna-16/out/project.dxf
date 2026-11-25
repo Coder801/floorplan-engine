@@ -493,7 +493,7 @@ $SKPOLY
   9
 $TDCREATE
  40
-2461370.9581712964
+2461371.081087963
   9
 $TDUCREATE
  40
@@ -501,7 +501,7 @@ $TDUCREATE
   9
 $TDUPDATE
  40
-2461370.958252315
+2461371.0811458332
   9
 $TDUUPDATE
  40
@@ -933,11 +933,11 @@ $PSTYLEMODE
   9
 $FINGERPRINTGUID
   2
-{7C2E8D2F-7D15-40EF-B3F8-BB19BF71734D}
+{DDCE75A8-33FD-4AC0-8C41-0B6F0CFBA3A4}
   9
 $VERSIONGUID
   2
-{02C18CDD-D631-4377-A40F-231818C5888C}
+{2B53B5C3-A02F-4FDC-A8F9-A23A0B8BCB74}
   9
 $EXTNAMES
 290
@@ -1359,9 +1359,9 @@ ISM
   0
 CLASS
   1
-ACDBPLACEHOLDER
+LAYOUT
   2
-AcDbPlaceHolder
+AcDbLayout
   3
 ObjectDBX Classes
  90
@@ -1375,9 +1375,9 @@ ObjectDBX Classes
   0
 CLASS
   1
-LAYOUT
+ACDBPLACEHOLDER
   2
-AcDbLayout
+AcDbPlaceHolder
   3
 ObjectDBX Classes
  90
@@ -64485,7 +64485,7 @@ AcDbText
  40
 1.8
   1
-100
+150
   7
 PLEX_LIGHT
  72
@@ -64523,7 +64523,7 @@ AcDbText
  40
 1.8
   1
-900
+1 350
   7
 PLEX_LIGHT
  72
@@ -64739,7 +64739,7 @@ AcDbText
  40
 1.8
   1
-250
+375
   7
 PLEX_LIGHT
  72
@@ -64777,7 +64777,7 @@ AcDbText
  40
 1.8
   1
-250
+375
   7
 PLEX_LIGHT
  72
@@ -64993,7 +64993,7 @@ AcDbText
  40
 1.8
   1
-140
+115
   7
 PLEX_LIGHT
  72
@@ -65031,7 +65031,7 @@ AcDbText
  40
 1.8
   1
-9 660
+7 935
   7
 PLEX_LIGHT
  72
@@ -65247,7 +65247,7 @@ AcDbText
  40
 1.8
   1
-250
+450
   7
 PLEX_LIGHT
  72
@@ -65285,7 +65285,7 @@ AcDbText
  40
 1.8
   1
-2 000
+3 600
   7
 PLEX_LIGHT
  72
@@ -65755,7 +65755,7 @@ AcDbText
  40
 1.8
   1
-1 500
+2 500
   7
 PLEX_LIGHT
  72
@@ -65793,7 +65793,7 @@ AcDbText
  40
 1.8
   1
-1 500
+2 500
   7
 PLEX_LIGHT
  72
@@ -66301,7 +66301,7 @@ AcDbText
  40
 1.8
   1
-45 033
+46 483
   7
 PLEX_LIGHT
  72
@@ -66771,7 +66771,7 @@ AcDbText
  40
 1.8
   1
-100
+120
   7
 PLEX_LIGHT
  72
@@ -66809,7 +66809,7 @@ AcDbText
  40
 1.8
   1
-3 000
+3 600
   7
 PLEX_LIGHT
  72
@@ -67279,7 +67279,7 @@ AcDbText
  40
 1.8
   1
-125
+100
   7
 PLEX_LIGHT
  72
@@ -67317,7 +67317,7 @@ AcDbText
  40
 1.8
   1
-8 625
+6 900
   7
 PLEX_LIGHT
  72
@@ -67825,7 +67825,7 @@ AcDbText
  40
 1.8
   1
-13 985
+12 860
   7
 PLEX_LIGHT
  72
@@ -68079,7 +68079,7 @@ AcDbText
  40
 1.8
   1
-185 893,20
+186 218,20
   7
 PLEX_LIGHT
  72
@@ -68341,7 +68341,7 @@ AcDbText
  40
 1.8
   1
-Ціни: prices.yaml (2026-11)
+Ціни: prices.yaml (2026-10)
   7
 PLEX_LIGHT
  11
@@ -68377,7 +68377,7 @@ AcDbText
  40
 1.8
   1
-Ціни 29 поз. — із сервісу цін (поки імітація, не ринкові ціни); решта — prices.yaml
+Ціни 30 поз. — із сервісу цін (поки імітація, не ринкові ціни); решта — prices.yaml
   7
 PLEX_LIGHT
  11
@@ -111445,7 +111445,7 @@ AcDbText
  40
 1.8
   1
-100
+150
   7
 PLEX_LIGHT
  72
@@ -111483,7 +111483,7 @@ AcDbText
  40
 1.8
   1
-600
+900
   7
 PLEX_LIGHT
  72
@@ -113007,7 +113007,7 @@ AcDbText
  40
 1.8
   1
-28 138,10
+28 438,10
   7
 PLEX_LIGHT
  72
@@ -113261,7 +113261,7 @@ AcDbText
  40
 1.8
   1
-78 623,30
+78 923,30
   7
 PLEX_LIGHT
  72
@@ -113523,7 +113523,7 @@ AcDbText
  40
 1.8
   1
-Ціни: prices.yaml (2026-11)
+Ціни: prices.yaml (2026-10)
   7
 PLEX_LIGHT
  11
@@ -1152637,7 +1152637,7 @@ DictionaryVariables
 280
 0
   1
-1.4.4 @ 2026-11-25T20:59:46.875106+00:00
+1.4.4 @ 2026-11-25T23:56:46.516933+00:00
   0
 DICTIONARY
   5
@@ -1157443,7 +1157443,7 @@ DictionaryVariables
 280
 0
   1
-1.4.4 @ 2026-11-25T20:59:53.101002+00:00
+1.4.4 @ 2026-11-25T23:56:51.839536+00:00
   0
 ENDSEC
   0
