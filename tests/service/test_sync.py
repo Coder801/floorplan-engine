@@ -94,17 +94,43 @@ def test_pull_round_trip_and_conflicts(db: Session, tmp_path: Path) -> None:
     assert sync.push(db, store, folder).new_version is False
 
 
-def test_studio_files_round_trip(db: Session, tmp_path: Path) -> None:
+def test_studio_files_only_come_out_of_the_database(db: Session, tmp_path: Path) -> None:
+    """The studio price list and profile live only in the database (decision 2026-11-27): pull
+    writes working copies, nothing reads them back."""
+    from floorplan_engine.service.db.models import StudioProfile
+
     studio = _studio(db)
-    root = tmp_path / "projects"
-    root.mkdir()
-    (root / "prices.yaml").write_text(STUDIO_PRICES, "utf-8")
-    (root / "studio.yaml").write_text("organization: Искра\nstage: Р\n", "utf-8")
-    assert sync.push_studio(db, studio, root) == ["prices.yaml", "studio.yaml"]
+    sync.put_price_list(db, {"studio_id": studio.id}, STUDIO_PRICES)
+    db.add(StudioProfile(studio_id=studio.id, organization="Искра", stage="Р", signatures=[]))
+    db.flush()
     back = tmp_path / "back"
     assert sync.pull_studio(db, studio, back) == ["prices.yaml", "studio.yaml"]
     assert (back / "prices.yaml").read_text("utf-8") == STUDIO_PRICES  # comments kept
     assert "stage: Р" in (back / "studio.yaml").read_text("utf-8")
+    assert not hasattr(sync, "push_studio")
+
+
+def test_push_leaves_the_project_price_list_alone(db: Session, tmp_path: Path) -> None:
+    """A project's own price list is not taken from the folder, nor removed when the folder has
+    none: it is edited only in the database."""
+    from floorplan_engine.service.db.models import PriceList
+
+    store = LocalObjectStore(tmp_path / "store")
+    folder = _folder(tmp_path)
+    project = sync.push(db, store, folder, _studio(db), build=False).project
+    sync.put_price_list(db, {"project_id": project.id}, "items:\n  work.chase: 500\n")
+    (folder / "prices.yaml").write_text("items:\n  work.chase: 1\n", "utf-8")
+    (folder / "answers.yaml").write_text("answers: {}\n", "utf-8")
+    sync.push(db, store, folder, build=False)
+
+    def text() -> str | None:
+        return db.scalar(select(PriceList.text).where(PriceList.project_id == project.id))
+
+    assert text() == "items:\n  work.chase: 500\n"
+    (folder / "prices.yaml").unlink()
+    (folder / "answers.yaml").write_text("answers: {q1: 1}\n", "utf-8")
+    sync.push(db, store, folder, build=False)
+    assert text() == "items:\n  work.chase: 500\n"
 
 
 def test_import_and_pull_commands(
@@ -124,7 +150,10 @@ def test_import_and_pull_commands(
     runner = CliRunner()
     result = runner.invoke(app, ["project", "import", str(root), "--owner", "owner@example.com"])
     assert result.exit_code == 0, result.output
-    assert "Студия «Искра»: prices.yaml" in result.output and "kv: версия 1" in result.output
+    assert "Студия «Искра»" in result.output and "kv: версия 1" in result.output
+    with make_sessions(pg)() as db:  # the studio price list is never imported from a folder
+        studio = acc.own_studio(db, _owner_of(db, "owner@example.com"))
+        assert studio is not None and sync.pull_studio(db, studio, tmp_path / "none") == []
     again = runner.invoke(app, ["project", "import", str(root), "--owner", "owner@example.com"])
     assert "kv: без изменений (версия 1)" in again.output
     pulled = runner.invoke(app, ["project", "pull", "kv", "--to", str(tmp_path / "out")])
@@ -197,8 +226,8 @@ def test_import_only_new_restores_lost_source_files(
 def test_import_only_new_keeps_the_database(
     pg: Engine, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Server start: projects and the studio price list already in the database are not
-    overwritten by the image (the database is the truth); new ones are added."""
+    """Server start: projects already in the database are not overwritten by the image (the
+    database is the truth), new ones are added; the image's price list is never imported."""
     monkeypatch.setenv("DATABASE_URL", conftest.test_database_url())
     monkeypatch.setenv("SHTROBA_OBJECTS", str(tmp_path / "store"))
     root = tmp_path / "seed"
@@ -214,7 +243,7 @@ def test_import_only_new_keeps_the_database(
     (root / "kv" / "answers.yaml").write_text("answers: {}\n", "utf-8")  # git changed
     (root / "prices.yaml").write_text("currency: грн\nitems: {}\n", "utf-8")
     again = runner.invoke(app, args)
-    assert "kv: уже в базе — пропущен" in again.output and "уже в базе" in again.output
+    assert "kv: уже в базе — пропущен" in again.output
     from floorplan_engine.service.db.session import make_sessions
 
     with make_sessions(pg)() as db:
@@ -224,15 +253,15 @@ def test_import_only_new_keeps_the_database(
         assert latest is not None and latest.version == 1  # git did not overwrite the database
         studio = acc.own_studio(db, _owner(db))
         assert studio is not None
-        files = sync.pull_studio(db, studio, tmp_path / "back")
-        assert files == ["prices.yaml"]
-        assert (tmp_path / "back" / "prices.yaml").read_text("utf-8") == STUDIO_PRICES
+        assert sync.pull_studio(db, studio, tmp_path / "back") == []  # nothing from the image
 
 
 def _owner(db: Session) -> AppUser:
-    from sqlalchemy import select
+    return _owner_of(db, "boss@example.com")
 
-    user = db.scalar(select(AppUser).where(AppUser.email == "boss@example.com"))
+
+def _owner_of(db: Session, email: str) -> AppUser:
+    user = db.scalar(select(AppUser).where(AppUser.email == email))
     assert user is not None
     return user
 

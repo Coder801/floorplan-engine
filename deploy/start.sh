@@ -5,8 +5,9 @@
 # database.md, "Переезд проектов из папок в базу"; SHTROBA_STORAGE=files turns it back): files go
 # to SHTROBA_OBJECTS on the volume. The projects in the image (git) are only a seed: on start
 # they are moved into the owner's studio (SHTROBA_OWNER; the owner and the firm are created if
-# missing) once — projects and the studio price list already in the database are not touched,
-# the database is the truth.
+# missing) once — projects already in the database are not touched, the database is the truth.
+# The studio price list and profile are never seeded from git: they live only in the database
+# (decision 2026-11-27).
 #
 # Without login — the old folder mode: the projects in the image replace their copy on the
 # volume, keeping only wiring.yaml and variant.yaml written by the viewer, then are rebuilt.
@@ -49,11 +50,6 @@ else
     cp "$kept"/*.yaml "$dest"/ 2>/dev/null || true
     rm -rf "$kept"
     floorplan-engine build "$dest" > /dev/null || echo "Сборка $name не удалась" >&2
-  done
-  # The studio price list and profile are edited on the server (studio settings), so git only
-  # seeds them when the server has none
-  for f in prices.yaml studio.yaml; do
-    [ -f "/app/projects-seed/$f" ] && [ ! -f "$PROJECTS_DIR/$f" ] && cp "/app/projects-seed/$f" "$PROJECTS_DIR/$f"
   done
 fi
 

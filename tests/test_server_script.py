@@ -357,20 +357,13 @@ def test_dump_needs_docker(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> N
         server.dump_database("postgresql://x", tmp_path / "x.dump")
 
 
-def test_send_removes_the_project_prices_missing_in_the_folder(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Decision 2026-11-25: prices.yaml is the project's exceptions; no file in the folder — the
-    server's project list is removed and the project rebuilt (push alone builds only a new model
-    version)."""
+def test_send_refuses_price_lists(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Price lists live only in the database (decision 2026-11-27): send never ships one."""
     _project(tmp_path, monkeypatch, "x: 1\n")
     calls = _server_file(monkeypatch, "items:\n  work.cable: 30\n")
-    server.send("kv42", ["prices.yaml"], yes=True)
-    assert 'rm -f "$w"/kv42/prices.yaml' in calls[-1]
-    assert calls[-1].index("project push") < calls[-1].index("project build kv42")
-    calls = _server_file(monkeypatch, "")  # none on the server either: nothing to do
-    server.send("kv42", ["prices.yaml"], yes=True)
-    assert not any("project push" in c for c in calls)
+    with pytest.raises(server.ServerError, match="можно только"):
+        server.send("kv42", ["prices.yaml"], yes=True)
+    assert calls == [] and "prices.yaml" not in server.SEND_FILES
 
 
 def test_send_model_file_does_not_rebuild_twice(
@@ -391,21 +384,18 @@ def _studio(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, text: str | None) -
     return path
 
 
-def test_studio_prices_push_only_after_yes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    _studio(tmp_path, monkeypatch, "items:\n  socket_box: 25\n")
+def test_studio_prices_pull_only_after_yes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The server's studio list → projects/prices.yaml, a working copy; nothing goes back."""
+    path = _studio(tmp_path, monkeypatch, "items: {}\n")
     calls = _server_file(monkeypatch, "items:\n  socket_box: 20\n")
     monkeypatch.setattr("builtins.input", lambda _: "n")
     with pytest.raises(server.ServerError, match="отменено"):
         server.studio_prices()
-    assert not any("studio push" in c for c in calls)
+    assert path.read_text(encoding="utf-8") == "items: {}\n"
     assert 'studio pull "$w" --owner "${SHTROBA_OWNER' in calls[0]
     server.studio_prices(yes=True)
-    packed = base64.b64encode(b"items:\n  socket_box: 25\n").decode("ascii")
-    pushed = calls[-1]
-    assert packed in pushed and 'studio push "$w" --owner "${SHTROBA_OWNER' in pushed
-    # the push folder is fresh and holds only prices.yaml: the studio profile stays
-    assert "w=$(mktemp -d)" in pushed and "studio pull" not in pushed
-    assert "studio.yaml" not in pushed
+    assert path.read_text(encoding="utf-8") == "items:\n  socket_box: 20\n"
+    assert not any("studio push" in c or "project push" in c for c in calls)
 
 
 def test_studio_prices_shows_the_diff(
@@ -415,60 +405,37 @@ def test_studio_prices_shows_the_diff(
     _server_file(monkeypatch, "items:\n  socket_box: 20\n  work.marking: 10\n")
     server.studio_prices(yes=True)
     out = capsys.readouterr().out
-    assert "-  work.marking: 10" in out and "+  socket_box: 25" in out
-    assert "server.py rebuild" in out
+    assert "+  work.marking: 10" in out and "-  socket_box: 25" in out
 
 
 def test_studio_prices_same_does_nothing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    _studio(tmp_path, monkeypatch, "items: {}\n")
+    path = _studio(tmp_path, monkeypatch, "items: {}\n")
     calls = _server_file(monkeypatch, "items: {}\n")
     server.studio_prices(yes=True)
-    assert len(calls) == 1
+    assert len(calls) == 1 and path.read_text(encoding="utf-8") == "items: {}\n"
 
 
-def test_studio_prices_needs_the_local_file(
+def test_studio_prices_into_a_folder_without_a_copy(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _studio(tmp_path, monkeypatch, None)
-    calls = _server_file(monkeypatch, "items: {}\n")
-    with pytest.raises(server.ServerError, match="нет файла"):
-        server.studio_prices(yes=True)
-    assert calls == []
-
-
-def test_studio_prices_rebuild(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    _studio(tmp_path, monkeypatch, "items: {a: 1}\n")
+    path = _studio(tmp_path, monkeypatch, None)
     _server_file(monkeypatch, "items: {}\n")
-    rebuilt: list[list[str]] = []
-    monkeypatch.setattr(server, "rebuild", lambda names, wait=False: rebuilt.append(names))
-    server.studio_prices(yes=True, rebuild_after=True)
-    assert rebuilt == [[]]
-
-
-def test_studio_prices_pull(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    path = _studio(tmp_path, monkeypatch, "items: {}\n")
-    calls = _server_file(monkeypatch, "items:\n  socket_box: 20\n")
-    monkeypatch.setattr("builtins.input", lambda _: "n")
-    with pytest.raises(server.ServerError, match="отменено"):
-        server.studio_prices(pull=True)
+    server.studio_prices(yes=True)
     assert path.read_text(encoding="utf-8") == "items: {}\n"
-    server.studio_prices(pull=True, yes=True)
-    assert path.read_text(encoding="utf-8") == "items:\n  socket_box: 20\n"
-    assert not any("studio push" in c for c in calls)
 
 
-def test_studio_prices_pull_without_server_prices(
+def test_studio_prices_without_server_prices(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     path = _studio(tmp_path, monkeypatch, "items: {}\n")
     _server_file(monkeypatch, "")
     with pytest.raises(server.ServerError, match="нет прайса"):
-        server.studio_prices(pull=True, yes=True)
+        server.studio_prices(yes=True)
     assert path.read_text(encoding="utf-8") == "items: {}\n"
 
 
 def test_main_studio_prices(monkeypatch: pytest.MonkeyPatch) -> None:
     seen: dict[str, bool] = {}
     monkeypatch.setattr(server, "studio_prices", lambda **kw: seen.update(kw))
-    assert server.main(["studio-prices", "--pull", "--yes"]) == 0
-    assert seen == {"pull": True, "yes": True, "rebuild_after": False}
+    assert server.main(["studio-prices", "--yes"]) == 0
+    assert seen == {"yes": True}

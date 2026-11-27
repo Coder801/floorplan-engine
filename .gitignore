@@ -25,3 +25,9 @@ projects/*/out/artifact/
 
 # Копии базы
 *.dump
+
+# Прайс и профиль студии, прайс проекта — только в базе (решение 2026-11-27); в папке — рабочая
+# копия от studio pull / project pull для сборки из папки, в git не идёт
+projects/prices.yaml
+projects/studio.yaml
+projects/*/prices.yaml

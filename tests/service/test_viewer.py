@@ -245,7 +245,10 @@ items:
 """
 
 
-def test_price_page_and_edit(root: Path) -> None:
+def test_price_page_is_read_only(root: Path) -> None:
+    """The folder viewer shows the working copy of the studio list (prices.yaml from `studio
+    pull`) but does not edit it: the price list lives only in the database (decision
+    2026-11-27)."""
     (root / "prices.yaml").write_text(
         "# прайс\ncurrency: грн\nitems:\n  work.chase: 200  # узкая\n"
         '  cable.3x1.5: { price: 45, name: "Кабель ВВГнг 3×1,5" }\n'
@@ -255,7 +258,7 @@ def test_price_page_and_edit(root: Path) -> None:
     (root / "market.yaml").write_text(MARKET, "utf-8")
     client = TestClient(create_viewer(root))
     page = client.get("/api/prices").json()
-    assert page["editable"] is True and page["issues"] == []
+    assert page["editable"] is False and page["issues"] == []
     rows = {r["key"]: r for r in page["rows"]}
     # Works first, then materials (decision 2026-11-25); a key with a parameter from the file is
     # a row of its own after its base item, under its own name
@@ -280,58 +283,16 @@ def test_price_page_and_edit(root: Path) -> None:
     market = page["market"]
     assert market["period"] == {"start": "2026-03", "end": "2026-03", "dated": 1, "undated": 1}
     assert [s["id"] for s in market["sources"]] == ["a", "b"]  # without the unused one
-
-    saved = client.post("/api/prices", json={"items": {"work.chase": 150, "work.cable": 25}})
-    assert saved.status_code == 200
-    text = (root / "prices.yaml").read_text("utf-8")
-    assert "# прайс" in text and "work.chase: 150  # узкая" in text and "work.cable: 25" in text
-    assert {r["key"]: r["price"] for r in saved.json()["rows"]}["work.cable"] == 25
-    assert "socket:" not in text and saved.json()["stale"] == []  # the save dropped it
-
-    # Rough materials too, a key with a parameter too; a finish material, an unknown key or a
-    # price below 0 is refused and the file is unchanged on errors
-    assert client.post("/api/prices", json={"items": {"socket_box": 20}}).status_code == 200
-    assert client.post("/api/prices", json={"items": {"cable.3x2.5": 70}}).status_code == 200
-    text = (root / "prices.yaml").read_text("utf-8")
-    assert "socket_box: 20" in text and "cable.3x2.5: 70" in text
-    refused = client.post("/api/prices", json={"items": {"socket": 60}})
-    assert refused.status_code == 422 and "чистовой материал" in refused.text
-    assert client.post("/api/prices", json={"items": {"no.such": 10}}).status_code == 422
-    assert client.post("/api/prices", json={"items": {"work.chase": -1}}).status_code == 422
-    assert (root / "prices.yaml").read_text("utf-8") == text
-
-
-def test_price_page_splice(root: Path) -> None:
-    """Joints in switch flush boxes (PriceList.splice) are chosen on the price page: wago when
-    the file does not say; the line keeps its comment, the rest of the file stays."""
-    (root / "prices.yaml").write_text(
-        "# прайс\ncurrency: грн\nitems:\n  work.chase: 200  # узкая\n", "utf-8"
-    )
-    client = TestClient(create_viewer(root))
-    assert client.get("/api/prices").json()["splice"] == "wago"
-    saved = client.post("/api/prices", json={"splice": "crimp"})
-    assert saved.status_code == 200 and saved.json()["splice"] == "crimp"
-    text = (root / "prices.yaml").read_text("utf-8")
-    assert text == ("# прайс\ncurrency: грн\nsplice: crimp\nitems:\n  work.chase: 200  # узкая\n")
-    (root / "prices.yaml").write_text(
-        text.replace("splice: crimp", "splice: crimp  # так монтирует бригада"), "utf-8"
-    )
-    saved = client.post("/api/prices", json={"splice": "wago", "items": {"work.chase": 210}})
-    assert saved.status_code == 200 and saved.json()["splice"] == "wago"
-    text = (root / "prices.yaml").read_text("utf-8")
-    assert "splice: wago  # так монтирует бригада\n" in text and text.count("splice:") == 1
-    assert "work.chase: 210  # узкая" in text
-    bad = client.post("/api/prices", json={"splice": "solder", "items": {"work.chase": 1}})
-    assert bad.status_code == 422 and bad.json()["detail"].startswith("splice: ")
-    assert (root / "prices.yaml").read_text("utf-8") == text
+    before = (root / "prices.yaml").read_text("utf-8")
+    assert client.post("/api/prices", json={"items": {"work.chase": 1}}).status_code == 405
+    assert (root / "prices.yaml").read_text("utf-8") == before
 
 
 def test_price_page_without_files(root: Path) -> None:
     client = TestClient(create_viewer(root))
     page = client.get("/api/prices").json()
     assert page["exists"] is False and page["market"] is None and page["splice"] == "wago"
-    assert client.post("/api/prices", json={"items": {"work.chase": 90}}).status_code == 200
-    assert "work.chase: 90" in (root / "prices.yaml").read_text("utf-8")
+    assert page["editable"] is False and not (root / "prices.yaml").exists()
 
 
 def _answers_project(tmp_path: Path) -> Path:

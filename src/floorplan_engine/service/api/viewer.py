@@ -2,10 +2,11 @@
 
 Projects are built in Claude Code (`/plan`, `/electrical`, `build`); here they are shown:
 stages, questions with answers, remarks, sheets, out/ files, sources and model YAML. There is
-no analysis. Writes: answers (answers.yaml), the wiring variant (variant.yaml) and the studio
-price list — prices of works from the studio price page go to prices.yaml next to the projects
-(decision 2026-11-03). Routes are not edited in the viewer (decision 2026-11-16): the build
-computes them; a wiring.yaml left in a project is still applied by the core.
+no analysis. Writes: answers (answers.yaml) and the wiring variant (variant.yaml). The studio price
+list is only shown here: it lives in the database and is edited on the price page of the database
+viewer (decision 2026-11-27); prices.yaml next to the projects is a working copy from `studio
+pull`. Routes are not edited in the viewer (decision 2026-11-16): the build computes them; a
+wiring.yaml left in a project is still applied by the core.
 
 GET /                                   what this service is and where the page is
 GET /api/projects                       list of projects
@@ -22,8 +23,7 @@ POST /api/projects/{name}/answers       one answer → answers.yaml and rebuild 
 POST /api/projects/{name}/answers/review the developer takes a client answer into account or
                                         sends it back with a comment
 POST /api/projects/{name}/wizard        variant and answers together, one rebuild
-GET /api/prices                         studio price page: works, own price, market spread
-POST /api/prices                        studio price edits → prices.yaml next to the projects
+GET /api/prices                         studio price page, read only: works, price, market spread
 GET /api/auth/me                        who is logged in ({"auth": false} means login is off)
 
 Login (service/api/auth.py) is turned on by SHTROBA_AUTH=on: then the project list holds only
@@ -63,7 +63,6 @@ from floorplan_engine.pipeline import (
     price_page,
     review_answer,
     save_answer,
-    save_prices,
     save_wizard,
 )
 from floorplan_engine.service.api.auth import Auth
@@ -363,34 +362,16 @@ def _edit_routes(
         return _rebuilt(path, saved)
 
 
-def _price_routes(
-    app: FastAPI, root: Path, auth: Auth | None, studio_dir: Callable[[Request], Path]
-) -> None:
-    """The studio price page."""
-
-    def edit_prices(request: Request) -> bool:
-        """The studio price list is edited by the studio: login off — anyone; else auth.check."""
-        return auth is None or getattr(request.state, "edit_prices", False)
+def _price_routes(app: FastAPI, root: Path, studio_dir: Callable[[Request], Path]) -> None:
+    """The studio price page, read only: the price list lives in the database (decision
+    2026-11-27), here its working copy is shown (prices.yaml from `studio pull`)."""
 
     @app.get("/api/prices")
     def prices(request: Request) -> dict[str, Any]:
-        """Studio price page: electrical works with the price of the caller's studio (prices.yaml
-        in the studio folder) and the market spread (market.yaml in the root, shared), the period
-        and sources of market prices."""
-        return {**price_page(studio_dir(request), root), "editable": edit_prices(request)}
-
-    @app.post("/api/prices")
-    def save_price_list(
-        request: Request, changes: Annotated[dict[str, Any], Body()]
-    ) -> dict[str, Any]:
-        """Price edits: {"items": {key: price | null}, "date"?} → prices.yaml; projects are not
-        rebuilt (the estimate is rebuilt by build or estimate)."""
-        if not edit_prices(request):
-            raise HTTPException(403, "прайс правит только студия")
-        issues = save_prices(studio_dir(request), changes)
-        if issues:
-            raise HTTPException(422, "; ".join(f"{i.path}: {i.message}" for i in issues))
-        return {**price_page(studio_dir(request), root), "editable": True}
+        """Studio price page: the items with the studio price (prices.yaml in the studio folder)
+        and the market spread (market.yaml in the root, shared), the period and sources of market
+        prices; not editable."""
+        return {**price_page(studio_dir(request), root), "editable": False}
 
 
 def _file_routes(
@@ -460,6 +441,6 @@ def create_viewer(
 
     _read_routes(app, root, auth, project_dir)
     _edit_routes(app, auth, project_dir)
-    _price_routes(app, root, auth, studio_dir)
+    _price_routes(app, root, studio_dir)
     _file_routes(app, project_dir, inside)
     return app

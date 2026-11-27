@@ -1,14 +1,18 @@
 """A project folder ↔ the database (stage B, step B3; docs/database.md, "Переезд проектов из папок в
 базу"): the database is the truth, a folder is a working copy for Claude Code.
 
-- push: the folder's model files become a new model version (only if they changed), plus the
-  project's own price list and new sources (by hash), then a build. A new project needs a studio.
-- pull: the latest version, the project price list, missing sources and the latest build's out/
-  go into the folder.
+- push: the folder's model files become a new model version (only if they changed), plus new
+  sources (by hash), then a build. A new project needs a studio. The project's own price list is
+  not pushed: price lists live only in the database (decision 2026-11-27), edited on the price
+  page.
+- pull: the latest version, the project price list (a working copy for a folder build), missing
+  sources and the latest build's out/ go into the folder.
 - The folder remembers where it came from in a hidden `.shtroba.yaml` (project id and version):
   push refuses if the database got a newer version meanwhile (an answer on the server — pull
   first), pull refuses to overwrite local edits that were never pushed (unless forced).
-- Studio files next to the projects (prices.yaml, studio.yaml): push_studio / pull_studio.
+- Studio files next to the projects (prices.yaml, studio.yaml): only pull_studio — working copies
+  for a folder build; the database is their only truth (decision 2026-11-27), nothing reads
+  them back into it.
 
 Functions take an open Session and do not commit.
 """
@@ -41,10 +45,9 @@ from floorplan_engine.service.db.models import (
     ProjectMember,
     Source,
     Studio,
-    StudioProfile,
 )
 from floorplan_engine.service.objects import ObjectStore, source_key
-from floorplan_engine.validation.issues import ROOM_FILE, STUDIO_FILE
+from floorplan_engine.validation.issues import ROOM_FILE
 
 MARKER = ".shtroba.yaml"
 SOURCE_DIR = ps.SOURCE_DIR
@@ -277,12 +280,6 @@ def push(
     new = latest is None or repo.model_files(latest) != files
     version = repo.add_model_version(session, project.id, files, author) if new else latest
     assert version is not None
-    prices = folder / PRICES_FILE
-    put_price_list(
-        session,
-        {"project_id": project.id},
-        prices.read_text("utf-8") if prices.is_file() else None,
-    )
     result = PushResult(project, version.version, new)
     result.sources, result.restored = _push_sources(session, store, project, folder)
     session.flush()
@@ -348,31 +345,6 @@ def pull(
 
 # --- Studio files next to the projects ---------------------------------------------------
 
-PROFILE_FIELDS = ("organization", "stage", "signatures")
-
-
-def push_studio(session: Session, studio: Studio, root: Path) -> list[str]:
-    """root/prices.yaml and root/studio.yaml → the studio's price list and profile. Returns the
-    files taken."""
-    taken = []
-    prices = root / PRICES_FILE
-    if prices.is_file():
-        put_price_list(session, {"studio_id": studio.id}, prices.read_text("utf-8"))
-        taken.append(PRICES_FILE)
-    profile_path = root / STUDIO_FILE
-    if profile_path.is_file():
-        data = yaml.safe_load(profile_path.read_text("utf-8")) or {}
-        profile = session.get(StudioProfile, studio.id)
-        if profile is None:
-            profile = StudioProfile(studio_id=studio.id)
-            session.add(profile)
-        profile.organization = str(data.get("organization", ""))
-        profile.stage = str(data.get("stage", ""))
-        profile.signatures = list(data.get("signatures") or [])
-        taken.append(STUDIO_FILE)
-    session.flush()
-    return taken
-
 
 def pull_studio(session: Session, studio: Studio, root: Path) -> list[str]:
     """The studio's price list and profile → root/prices.yaml and root/studio.yaml."""
@@ -381,12 +353,6 @@ def pull_studio(session: Session, studio: Studio, root: Path) -> list[str]:
     for name, text in files.items():
         (root / name).write_text(text, "utf-8")
     return sorted(files)
-
-
-def has_studio_files(session: Session, studio: Studio) -> bool:
-    """The studio already has a price list or a profile in the database."""
-    prices = session.scalar(select(PriceList.id).where(PriceList.studio_id == studio.id))
-    return prices is not None or session.get(StudioProfile, studio.id) is not None
 
 
 def ensure_owner(session: Session, owner: str, firm: str = "Shtroba") -> Studio:

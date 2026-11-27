@@ -136,8 +136,9 @@ def test_roles_filter_projects_and_actions(auth: Auth, root: Path) -> None:
     client.cookies.set(COOKIE, studio_token)
     assert client.get("/api/projects/kv1").json()["can"]["choose_variant"] is True
     assert {p["name"] for p in client.get("/api/projects").json()} == {"kv1", "kv2"}
-    assert client.get("/api/prices").json()["editable"] is True
-    assert client.post("/api/prices", json={"items": {"work.chase": 90}}).status_code == 200
+    # Folder mode shows the price list but never edits it: it lives in the database (2026-11-27)
+    assert client.get("/api/prices").json()["editable"] is False
+    assert client.post("/api/prices", json={"items": {"work.chase": 90}}).status_code == 405
     assert client.get(f"/api/invites/{invite}").status_code == 404  # already accepted
 
 
@@ -373,8 +374,8 @@ def test_owner_login_adopts_project_folders(pg: Engine, root: Path) -> None:
 
 def test_studios_have_own_folders_and_price_lists(auth: Auth, root: Path) -> None:
     """The studio that took the root sees the root projects; another studio sees only the
-    projects in its own folder (<root>/<studio id>/) and edits its own price list there — neither
-    sees nor changes the other's prices."""
+    projects in its own folder (<root>/<studio id>/) and reads its own price list there (the
+    working copy; the list itself is edited only in the database) — neither sees the other's."""
     a_token, _ = _login(auth, "studio-a")
     b_token, _ = _login(auth, "studio-b")
     with auth.db() as db:
@@ -397,14 +398,13 @@ def test_studios_have_own_folders_and_price_lists(auth: Auth, root: Path) -> Non
     assert client.get("/api/projects/b1").status_code == 200
     assert client.get("/api/projects/kv1").status_code == 404
     assert client.get("/api/prices").json()["exists"] is False  # no inherited list
-    assert client.post("/api/prices", json={"items": {"work.chase": 111}}).status_code == 200
-    assert "111" in (folder_b / "prices.yaml").read_text("utf-8")
-    assert not (root / "prices.yaml").exists()
+    (folder_b / "prices.yaml").write_text("items:\n  work.chase: 111\n", "utf-8")
+    (root / "prices.yaml").write_text("items:\n  work.chase: 222\n", "utf-8")
+    b_rows = {r["key"]: r["price"] for r in client.get("/api/prices").json()["rows"]}
+    assert b_rows["work.chase"] == 111
 
     client.cookies.set(COOKIE, a_token)
     assert [p["name"] for p in client.get("/api/projects").json()] == ["kv1"]
     assert client.get("/api/projects/b1").status_code == 404
-    assert client.get("/api/prices").json()["exists"] is False  # B's list is not A's
-    assert client.post("/api/prices", json={"items": {"work.chase": 222}}).status_code == 200
-    assert "222" in (root / "prices.yaml").read_text("utf-8")
-    assert "111" in (folder_b / "prices.yaml").read_text("utf-8")
+    a_rows = {r["key"]: r["price"] for r in client.get("/api/prices").json()["rows"]}
+    assert a_rows["work.chase"] == 222  # A reads the root list, not B's

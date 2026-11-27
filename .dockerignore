@@ -11,3 +11,7 @@ admin/dist
 data
 .env
 **/.DS_Store
+# Прайс и профиль студии — только в базе: рабочая копия из папки в образ не идёт
+projects/prices.yaml
+projects/studio.yaml
+projects/*/prices.yaml

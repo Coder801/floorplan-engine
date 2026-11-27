@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 project_app = typer.Typer(
     help="Проект в базе ↔ папка (правда — база): push — папку в базу, pull — из базы в папку."
 )
-studio_app = typer.Typer(help="Прайс и профиль студии (prices.yaml, studio.yaml) ↔ база.")
+studio_app = typer.Typer(help="Прайс и профиль студии из базы — в папку (рабочая копия).")
 
 OwnerOpt = Annotated[
     str | None, typer.Option(help="Почта или телефон владельца студии (уже входил и выбрал тип)")
@@ -168,14 +168,15 @@ def project_import(
     only_new: Annotated[
         bool,
         typer.Option(
-            help="Только то, чего в базе нет: проекты студии и её прайс с профилем не трогать "
-            "(старт сервера: правда — база)"
+            help="Только то, чего в базе нет: проекты студии не трогать (старт сервера: правда — "
+            "база)"
         ),
     ] = False,
 ) -> None:
-    """Перенести папку проектов в базу: прайс и профиль студии (prices.yaml, studio.yaml), затем
-    каждый проект — как project push. Повторный запуск заливает только изменения; с --only-new
-    уже перенесённое не трогает вовсе (кроме строк без модели: они заполняются из папки)."""
+    """Перенести папку проектов в базу: каждый проект — как project push. Прайс и профиль студии
+    не переносятся: они живут только в базе (решение 2026-11-27). Повторный запуск заливает только
+    изменения; с --only-new уже перенесённое не трогает вовсе (кроме строк без модели: они
+    заполняются из папки)."""
     from floorplan_engine.service import sync
     from floorplan_engine.service.api.viewer import project_folders
     from floorplan_engine.service.db import access as acc
@@ -184,12 +185,8 @@ def project_import(
     with database() as db:
         studio = sync.ensure_owner(db, owner) if create_owner else _owner_studio(db, owner)
         assert studio is not None
-        if only_new and sync.has_studio_files(db, studio):
-            taken = ["уже в базе"]
-        else:
-            taken = sync.push_studio(db, studio, root)
         db.commit()
-        typer.echo(f"Студия «{studio.name}»: {', '.join(taken) or 'файлов студии нет'}")
+        typer.echo(f"Студия «{studio.name}»")
         for folder in project_folders(root):
             if only_new and sync.take_blank(db, folder.name, studio) is None:
                 db.commit()
@@ -203,28 +200,13 @@ def project_import(
             _push_one(db, folder, studio, build)
 
 
-@studio_app.command("push")
-def studio_push(
-    root: Annotated[Path, typer.Argument(help="Папка с prices.yaml и studio.yaml")],
-    owner: Annotated[str, typer.Option(help="Почта или телефон владельца студии")],
-) -> None:
-    """Прайс и профиль студии из папки — в базу."""
-    from floorplan_engine.service import sync
-
-    with database() as db:
-        studio = _owner_studio(db, owner)
-        assert studio is not None
-        taken = sync.push_studio(db, studio, root)
-        db.commit()
-    typer.echo(f"Студия «{studio.name}»: {', '.join(taken) or 'файлов нет'}")
-
-
 @studio_app.command("pull")
 def studio_pull(
     root: Annotated[Path, typer.Argument(help="Куда: папка проектов")],
     owner: Annotated[str, typer.Option(help="Почта или телефон владельца студии")],
 ) -> None:
-    """Прайс и профиль студии из базы — в папку."""
+    """Прайс и профиль студии из базы — в папку: рабочая копия для сборки из папки. Обратно в базу
+    они не идут: правда — база, прайс правится на странице прайса (решение 2026-11-27)."""
     from floorplan_engine.service import sync
 
     with database() as db:
