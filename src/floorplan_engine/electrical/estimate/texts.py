@@ -1,5 +1,5 @@
-"""Electrical estimate texts: section headings, notes and table strings (ru, uk), the
-provisional mark of the materials totals and the number format of the estimate tables.
+"""Electrical estimate texts: section headings, notes and table strings (ru, uk) and the number
+format of the estimate tables.
 
 The notes (`note_*`) are put together by the estimate pipeline (pipeline/estimates.py), the
 headings and table strings by the writers (estimate/files.py) and the sheets.
@@ -7,15 +7,12 @@ headings and table strings by the writers (estimate/files.py) and the sheets.
 
 from __future__ import annotations
 
-from floorplan_engine.electrical.estimate.items import MATERIAL_SECTIONS, Section
+from floorplan_engine.electrical.estimate.items import Section
 from floorplan_engine.model.texts import Language
 
-# Decision 2026-11-12: material prices are not market prices yet (price lists and the price
-# service are a placeholder). Decision 2026-11-23: the section heading stays plain, the total of
-# each materials section is marked as provisional instead: "!" after the amount in Markdown and on
-# the sheet, a yellow cell in Excel, the row flag guess in the viewer
-MATERIAL_PRICES_MOCK = True
-PROVISIONAL_MARK = " !"
+# The provisional mark of the materials totals (" !", a yellow Excel cell, guess in the viewer,
+# decisions 2026-11-12 and 2026-11-23) is gone with the mock prices (decision 2026-11-27): rough
+# materials are priced by the studio list, finish materials are a bill of quantities ("listed")
 
 TEXT: dict[str, dict[str, str]] = {
     "material": {"ru": "Материалы", "uk": "Матеріали"},
@@ -31,6 +28,16 @@ TEXT: dict[str, dict[str, str]] = {
     "subtotal": {"ru": "Итого", "uk": "Разом"},
     "total": {"ru": "Всего", "uk": "Усього"},
     "no_price": {"ru": "нет цены", "uk": "немає ціни"},
+    "listed": {
+        "ru": "Цены — после выбора серии",
+        "uk": "Ціни — після вибору серії",
+    },
+    "note_listed": {
+        "ru": "Чистовые материалы ({n} поз.) — ведомость без цен: механизмы, светильники "
+        "и автоматика щита — по выбору заказчика, цены после выбора серии; в итог не входят",
+        "uk": "Чистові матеріали ({n} поз.) — відомість без цін: механізми, світильники "
+        "й автоматика щита — за вибором замовника, ціни після вибору серії; до підсумку не входять",
+    },
     "unpriced": {
         "ru": "Без цены: {n} поз. — в итог не входят, нужна цена в {f}.",
         "uk": "Без ціни: {n} поз. — до підсумку не входять, потрібна ціна в {f}.",
@@ -51,12 +58,12 @@ TEXT: dict[str, dict[str, str]] = {
         "uk": "Цін немає: {f} не знайдено — кошторис лише з обсягами",
     },
     "note_service": {
-        "ru": "Цены {n} поз. — из сервиса цен (пока имитация, не рыночные цены); остальные — {f}",
-        "uk": "Ціни {n} поз. — із сервісу цін (поки імітація, не ринкові ціни); решта — {f}",
+        "ru": "Цены {n} поз. — из сервиса цен; остальные — {f}",
+        "uk": "Ціни {n} поз. — із сервісу цін; решта — {f}",
     },
     "note_service_all": {
-        "ru": "Все цены — из сервиса цен (пока имитация, не рыночные цены): {f} нет",
-        "uk": "Усі ціни — із сервісу цін (поки імітація, не ринкові ціни): {f} немає",
+        "ru": "Все цены — из сервиса цен: {f} нет",
+        "uk": "Усі ціни — із сервісу цін: {f} немає",
     },
     "note_cable": {
         "ru": "Кабель — с запасом {pct} %; прокладка — по фактической длине",
@@ -189,10 +196,10 @@ TEXT: dict[str, dict[str, str]] = {
         "uk": "Щит — за складом аркуша «Щит»: апарати за видами і номіналами",
     },
     "note_board_kit": {
-        "ru": "board_kit в {f} не используется: состав щита — с листа «Щит», цены аппаратов — "
-        "ключами {keys}",
-        "uk": "board_kit у {f} не використовується: склад щита — з аркуша «Щит», ціни апаратів — "
-        "ключами {keys}",
+        "ru": "board_kit в {f} не используется: состав щита — с листа «Щит», аппараты — "
+        "в чистовых материалах, без цен",
+        "uk": "board_kit у {f} не використовується: склад щита — з аркуша «Щит», апарати — "
+        "у чистових матеріалах, без цін",
     },
     "note_height": {
         "ru": "Высота потолка 2700 мм — допущение (в room.yaml не указана)",
@@ -208,12 +215,6 @@ TEXT: dict[str, dict[str, str]] = {
 def section_title(section: Section, language: Language) -> str:
     """Section heading in the estimate: plain, without a mark (decision 2026-11-23)."""
     return text(section, language)
-
-
-def provisional(section: Section, priced: bool) -> bool:
-    """The section total is provisional: a materials section of a priced estimate while
-    MATERIAL_PRICES_MOCK is on (a bill of quantities and the grand total get no mark)."""
-    return priced and MATERIAL_PRICES_MOCK and section in MATERIAL_SECTIONS
 
 
 def text(key: str, language: Language, **values: object) -> str:

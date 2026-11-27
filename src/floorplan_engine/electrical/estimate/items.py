@@ -12,7 +12,8 @@ test. Materials are split the same way (decision 2026-11-13), by the work they a
 for: rough (`material_rough`: cable, conduit and fixings, flush and junction boxes, crimps,
 enclosures, rough light) and finish (`material_finish`: panel devices and comb busbars, wiring
 devices and frames, lights, outputs, LED strip and supplies); Estimate.materials is both. An
-item's section is in LINES.
+item's section is in LINES. Finish materials are a bill of quantities without prices
+(LISTED_SECTIONS, decision 2026-11-27).
 """
 
 from __future__ import annotations
@@ -30,6 +31,11 @@ from floorplan_engine.model.schema import WallMaterial
 Section = Literal["material", "material_rough", "material_finish", "rough", "finish"]
 MATERIAL_SECTIONS: tuple[Section, ...] = ("material", "material_rough", "material_finish")
 SECTIONS: tuple[Section, ...] = (*MATERIAL_SECTIONS, "rough", "finish")  # order in the estimate
+# Sections that are a bill of quantities, never priced (decision 2026-11-27): finish materials —
+# wiring devices, frames, lights, LED and all panel devices — depend on the series and brand the
+# client picks, so the studio cannot know their price and an "average" one only misleads. Their
+# rows carry the quantity only, the section has no total and stays out of the estimate total
+LISTED_SECTIONS: tuple[Section, ...] = ("material_finish",)
 WORK_PREFIX = "work."  # work items (services); the rest of LINES are materials
 
 # Estimate items: key → section, unit, name (ru, uk). Keys with a parameter:
@@ -124,10 +130,10 @@ LINES: dict[str, tuple[Section, str, str, str]] = {
     "sconce": ("material_finish", "шт", "", ""),
     "led_output": ("material_finish", "шт", "", ""),
     "outlet": ("material_finish", "шт", "", ""),
-    # No price anywhere yet (UNPRICED): the work behind it is set with the floor heating section
+    # A finish material (no price, LISTED_SECTIONS); its work comes with the floor heating section
     "thermostat": ("material_finish", "шт", "", ""),
     "led_strip": ("material_finish", "м", "", ""),
-    # Floor heating (floor_heating.py, decision 2026-11-14): by zones, no price anywhere yet
+    # Floor heating (floor_heating.py, decision 2026-11-14): by zones, priced by the studio list
     "heating_cable": (
         "material_rough",
         "шт",

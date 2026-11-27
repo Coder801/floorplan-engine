@@ -49,7 +49,6 @@ from floorplan_engine.electrical.work_scope import text as scope_text
 from floorplan_engine.model.intake import (
     Stage,
 )
-from floorplan_engine.model.panel_catalog import DeviceKind
 from floorplan_engine.model.plumbing import Plumbing
 from floorplan_engine.model.schema import Electrical, PointType
 from floorplan_engine.pipeline.assessment import Assessment, assess_project, price_service
@@ -115,8 +114,8 @@ def estimate_project(
 ) -> EstimateResult:
     """Electrical estimate: quantities from the model, prices from the studio list with the
     project's prices.yaml on top (load_price_layers) or from prices_path alone, on top of the
-    price service (prices_from; None means the mock). Writes out/estimate.md, estimate.csv and
-    estimate.xlsx."""
+    price service (prices_from; None — the studio list alone). Writes out/estimate.md,
+    estimate.csv and estimate.xlsx."""
     assessment = assess_project(project)
     result = EstimateResult(assessment)
     report = assessment.report
@@ -279,8 +278,7 @@ def _estimate_notes(
             )
         )
     if prices.own is not None and prices.own.board_kit and source is not None:
-        keys = ", ".join(k.value for k in DeviceKind)
-        notes.append(estimate_text("note_board_kit", lang, f=source.name, keys=keys))
+        notes.append(estimate_text("note_board_kit", lang, f=source.name))
     with_boxes = {b.group for b in wiring.boxes}
     direct = sorted({r.group for r in wiring.runs} - with_boxes, key=group_key)
     if direct:

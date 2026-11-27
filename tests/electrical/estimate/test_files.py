@@ -6,8 +6,7 @@ from pathlib import Path
 
 import pytest
 
-import floorplan_engine.electrical.estimate.texts as estimate_texts
-from floorplan_engine.electrical.estimate import Estimate, build_estimate
+from floorplan_engine.electrical.estimate import build_estimate
 from floorplan_engine.electrical.estimate.files import write_markdown
 from floorplan_engine.electrical.price_list import (
     PriceList,
@@ -60,45 +59,44 @@ def test_xlsx_formulas_give_estimate_total(tmp_path: Path) -> None:
     assert est.unpriced > 0  # items without a price are in the workbook but not in the total
 
 
-def test_xlsx_material_totals_are_yellow(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """A provisional materials total keeps its SUM formula and gets the yellow fill; work totals
-    and "Total" do not (decision 2026-11-23)."""
+def test_xlsx_totals_are_plain_and_finish_materials_are_a_list(tmp_path: Path) -> None:
+    """No yellow provisional fill any more (decision 2026-11-27): every total is a plain SUM
+    formula; finish materials have no price, no sum, no total — the note stands in its place."""
     from openpyxl import load_workbook
 
-    from floorplan_engine.electrical.estimate.files import XLSX_GUESS_FILL, write_xlsx
-
-    def fills(est: Estimate, name: str) -> list[bool]:
-        ws = load_workbook(write_xlsx(est, tmp_path / name, "Кошторис", [], "uk")).active
-        assert ws is not None
-        rows = [
-            r for r in range(1, ws.max_row + 1) if ws[f"B{r}"].value in ("Разом", "Усього, грн")
-        ]
-        assert all(str(ws[f"F{r}"].value).startswith("=") for r in rows)  # still formulas
-        return [str(ws[f"F{r}"].fill.start_color.rgb).endswith(XLSX_GUESS_FILL) for r in rows]
+    from floorplan_engine.electrical.estimate.files import write_xlsx
 
     wiring, elec = _wiring()
     priced = build_estimate(
-        wiring, elec, PriceList.model_validate({"items": {"work.cable": 30}}), "uk"
+        wiring, elec, PriceList.model_validate({"items": {"work.cable": 30, "socket": 180}}), "uk"
     )
-    assert fills(priced, "p.xlsx") == [True, True, False, False, False]
-    assert not any(fills(build_estimate(wiring, elec, PriceList(), "uk"), "v.xlsx"))
-    monkeypatch.setattr(estimate_texts, "MATERIAL_PRICES_MOCK", False)
-    assert not any(fills(priced, "o.xlsx"))
+    ws = load_workbook(write_xlsx(priced, tmp_path / "p.xlsx", "Кошторис", [], "uk")).active
+    assert ws is not None
+    totals = [r for r in range(1, ws.max_row + 1) if ws[f"B{r}"].value in ("Разом", "Усього, грн")]
+    assert len(totals) == 4  # three section totals and "Total": none for finish materials
+    assert all(str(ws[f"F{r}"].value).startswith("=") for r in totals)
+    assert all(ws[f"F{r}"].fill.start_color.rgb in (None, "00000000") for r in totals)
+    socket = next(r for r in range(1, ws.max_row + 1) if ws[f"G{r}"].value == "socket")
+    assert (
+        ws[f"D{socket}"].value and ws[f"E{socket}"].value is None and ws[f"F{socket}"].value is None
+    )
+    notes = [ws[f"B{r}"].value for r in range(socket, ws.max_row + 1)]
+    assert "Ціни — після вибору серії" in notes
+    assert _eval_xlsx(tmp_path / "p.xlsx") == pytest.approx(priced.total)
 
 
-def test_markdown_marks_material_totals(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_markdown_totals_are_plain_and_finish_materials_are_a_list(tmp_path: Path) -> None:
     wiring, elec = _wiring()
     priced = build_estimate(
-        wiring, elec, PriceList.model_validate({"items": {"socket_box": 20}}), "ru"
+        wiring, elec, PriceList.model_validate({"items": {"socket_box": 20, "socket": 180}}), "ru"
     )
     md = write_markdown(priced, tmp_path / "e.md", "Смета", [], "ru").read_text(encoding="utf-8")
     assert "## Черновые материалы\n" in md and "имитация" not in md
     totals = [ln for ln in md.splitlines() if ln.startswith("| | **Итого**")]
-    assert [ln.endswith("** ! |") for ln in totals] == [True, True, False, False]
-    assert not any(ln.startswith("**Всего") and "!" in ln for ln in md.splitlines())
+    assert len(totals) == 3 and not any(ln.endswith(" ! |") for ln in totals)
+    assert "| | *Цены — после выбора серии* | | | | |" in md
+    socket = next(ln for ln in md.splitlines() if "| Розетка с заземлением |" in ln)
+    assert socket.endswith("|  |  |")  # quantity only: no price, no "no price"
     volumes = build_estimate(wiring, elec, PriceList(), "ru")
     md = write_markdown(volumes, tmp_path / "v.md", "Смета", [], "ru").read_text(encoding="utf-8")
     assert "## Черновые материалы\n" in md and " ! |" not in md
-    monkeypatch.setattr(estimate_texts, "MATERIAL_PRICES_MOCK", False)
-    md = write_markdown(priced, tmp_path / "o.md", "Смета", [], "ru").read_text(encoding="utf-8")
-    assert " ! |" not in md

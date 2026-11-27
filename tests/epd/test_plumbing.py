@@ -3,17 +3,16 @@
 from __future__ import annotations
 
 from floorplan_engine.electrical.elevations import wall_elevations
-from floorplan_engine.electrical.pricing import MockPriceService, Prices
+from floorplan_engine.electrical.pricing import Prices
 from floorplan_engine.epd.plumbing import plumbing_objects, plumbing_scene, plumbing_tables
 from floorplan_engine.model.geometry import Contour
 from floorplan_engine.model.plumbing import Plumbing
 from floorplan_engine.model.schema import Electrical, Plan
-from floorplan_engine.plumbing.estimate import MOCK_PRICES
 from floorplan_engine.plumbing.network import build_network
 from floorplan_engine.plumbing.network_model import Network
 from floorplan_engine.plumbing.rows import water_views
 from floorplan_engine.validation.plan import validate_plan
-from tests.conftest import make_flat
+from tests.conftest import make_flat, studio_prices
 
 PLUMBING = Plumbing.model_validate(
     {
@@ -53,18 +52,15 @@ def test_tables_and_estimate() -> None:
     assert [t.title for t in tables["plumbing"]] == ["Сантехприборы", "Трубы"]
     assert tables["plumbing"][0].rows[0].keys == ("fixture:wc",)
     assert tables["plumbing_estimate"][0].title == "Ведомость объёмов сантехники"
-    assert not any(r.guess for r in tables["plumbing_estimate"][0].rows)
 
 
-def test_priced_estimate_marks_the_materials_total() -> None:
-    """The plumbing estimate has one "material" section: its total is provisional (guess) while
-    material prices are a placeholder, the work total is not (decision 2026-11-23)."""
+def test_priced_estimate_has_plain_totals() -> None:
+    """The plumbing estimate has one "material" section and the work, both priced by the studio
+    list: plain totals, no provisional mark (decision 2026-11-27)."""
     plan, _, net = _setup()
-    service = MockPriceService(extra=MOCK_PRICES)
-    side = plumbing_tables(plan, PLUMBING, net, Prices(service=service))["plumbing_estimate"][0]
+    side = plumbing_tables(plan, PLUMBING, net, studio_prices())["plumbing_estimate"][0]
     totals = [r for r in side.rows if r.cells[1] == "Итого"]
-    assert [r.guess for r in totals] == [True, False]
-    assert totals[0].as_dict()["guess"] is True and "guess" not in totals[1].as_dict()
+    assert len(totals) == 2 and all("guess" not in r.as_dict() for r in totals)
 
 
 def test_scene_water_rises_to_outlet_sewer_slopes_down() -> None:

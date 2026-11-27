@@ -1,4 +1,4 @@
-"""Electrical estimate texts: section headings, the provisional mark, the number format."""
+"""Electrical estimate texts: section headings, the listed-section note, the number format."""
 
 from __future__ import annotations
 
@@ -7,8 +7,8 @@ import pytest
 from floorplan_engine.electrical.estimate.texts import (
     format_number,
     parse_number,
-    provisional,
     section_title,
+    text,
 )
 
 
@@ -36,10 +36,14 @@ def test_parse_number_no_price(text: str) -> None:
     assert parse_number(text) is None
 
 
-def test_section_titles_are_plain_and_only_priced_materials_are_provisional() -> None:
+def test_section_titles_are_plain_and_finish_materials_have_their_note() -> None:
     assert section_title("material", "ru") == "Материалы"
     assert section_title("material_finish", "ru") == "Чистовые материалы"
     assert section_title("material_rough", "uk") == "Чорнові матеріали"
     assert section_title("rough", "ru") == "Черновые работы"
-    assert provisional("material", True) and provisional("material_finish", True)
-    assert not provisional("material", False) and not provisional("rough", True)
+    assert text("listed", "uk") == "Ціни — після вибору серії"
+    note = text("note_listed", "ru", n=5)
+    assert (
+        note.startswith("Чистовые материалы (5 поз.) — ведомость без цен")
+        and "имитация" not in note
+    )

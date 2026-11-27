@@ -6,6 +6,7 @@ from typing import Any
 
 import pytest
 
+from floorplan_engine.electrical.estimate.items import LINES
 from floorplan_engine.electrical.estimate.quantities import quantities
 from floorplan_engine.electrical.led_supply import (
     LED_V,
@@ -15,7 +16,6 @@ from floorplan_engine.electrical.led_supply import (
     section_for,
 )
 from floorplan_engine.electrical.low_links import LED_MARK
-from floorplan_engine.electrical.pricing import mock_price
 from floorplan_engine.electrical.splices import Splice, back_box_joints
 from floorplan_engine.electrical.wiring import RESERVE, box_wiring
 from floorplan_engine.model.schema import Electrical, Plan
@@ -107,7 +107,7 @@ def test_led_supply_in_the_panel_gives_a_12v_line_of_its_own() -> None:
     assert q[f"cable.{run.mark}"] > 0
     assert q["work.board_install"] == 2  # the LED supplies box is a second panel
     assert q["work.insulation_test"] == 2  # the 12 V line is no power group of its own
-    assert mock_price("led_psu_din") and mock_price("work.led_psu_din")
+    assert "led_psu_din" in LINES and "work.led_psu_din" in LINES  # items the estimate prices
 
 
 def test_no_led_outputs_no_supplies() -> None:

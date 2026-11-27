@@ -196,17 +196,19 @@ def estimate(
     if result.prices is not None:
         typer.echo(f"Цены: {result.prices}")
     if result.estimate is not None and result.estimate.from_service:
-        typer.echo(f"Сервис цен (имитация): {result.estimate.from_service} поз.")
+        typer.echo(f"Сервис цен: {result.estimate.from_service} поз.")
     for issue in result.issues:
         typer.secho(str(issue), fg=typer.colors.RED)
     if result.estimate is None:
         raise typer.Exit(code=1)
     est = result.estimate
     cur = est.currency
-    typer.echo(f"Материалы:        {est.materials:,.0f} {cur}".replace(",", " "))
-    typer.echo(f"Черновые работы:  {est.subtotal('rough'):,.0f} {cur}".replace(",", " "))
-    typer.echo(f"Чистовые работы:  {est.subtotal('finish'):,.0f} {cur}".replace(",", " "))
-    typer.echo(f"Всего:            {est.total:,.0f} {cur}".replace(",", " "))
+    typer.echo(f"Черновые материалы: {est.materials:,.0f} {cur}".replace(",", " "))
+    typer.echo(f"Черновые работы:    {est.subtotal('rough'):,.0f} {cur}".replace(",", " "))
+    typer.echo(f"Чистовые работы:    {est.subtotal('finish'):,.0f} {cur}".replace(",", " "))
+    typer.echo(f"Всего:              {est.total:,.0f} {cur}".replace(",", " "))
+    if est.listed:
+        typer.echo(f"Чистовые материалы: {est.listed} поз. — ведомость без цен (выбор заказчика)")
     if est.unpriced:
         typer.secho(f"Без цены: {est.unpriced} поз. — в итог не входят", fg=typer.colors.YELLOW)
     for path in result.files:

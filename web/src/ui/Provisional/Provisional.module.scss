@@ -1,6 +1,0 @@
-// The value in the warning text colour (--warn-text: readable on paper and panels in both themes)
-// and a yellow triangle with "!" after it, the size of the text; the line does not break between them
-.value { color: var(--warn-text); white-space: nowrap; cursor: help; }
-.sign { width: 1em; height: 1em; margin-left: 3px; vertical-align: -0.125em; }
-.triangle { fill: var(--warn); stroke: var(--warn); stroke-width: 2; stroke-linejoin: round; }
-.mark { fill: #29251f; }  // dark on yellow in both themes

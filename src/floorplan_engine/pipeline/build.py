@@ -375,9 +375,10 @@ def build_project(
     """Assess the project, write the report and, if the plan can be built, build the DXF and the
     .epd artifact from the stages that can be built. Sheets are shown from the .epd (canvas);
     PNGs from the DXF only with previews=True, otherwise old out/sheets/*.png are deleted.
-    prices_from is the price service for the estimate; None means the mock
-    (pricing.MockPriceService). Router searches are remembered for the build (search_memo): the
-    sheets, the estimate and the variant summaries route the same cables many times."""
+    prices_from is an external price service for the estimate; None — prices come only from the
+    studio price list (no mock, decision 2026-11-27). Router searches are remembered for the
+    build (search_memo): the sheets, the estimate and the variant summaries route the same cables
+    many times."""
     with search_memo():
         return _build_project(project, previews, prices_from)
 

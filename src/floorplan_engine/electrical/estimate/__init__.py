@@ -25,9 +25,12 @@ Here build_estimate puts the items together and prices them. The panel follows t
 - panel labels (Electrical.panel_labels): one item at a fixed price per panel, right after the
   assembly.
 
-Prices are never invented: items with no price in the list stay in the estimate marked
-"no price" and are left out of the total. LED profiles are not described in the model and are
-not in the estimate.
+Prices come only from the studio price list (with the project's on top); they are never
+invented: items with no price in the list stay in the estimate marked "no price" and are left out
+of the total. Finish materials are a bill of quantities (items.LISTED_SECTIONS, decision
+2026-11-27): wiring devices, lights and panel devices depend on the series the client picks, so
+their rows carry no price at all, are not "no price" and the section has no total. LED profiles
+are not described in the model and are not in the estimate.
 """
 
 from __future__ import annotations
@@ -40,6 +43,7 @@ from floorplan_engine.electrical.estimate.items import (
     FIXTURES,
     HINTS,
     LINES,
+    LISTED_SECTIONS,
     MATERIAL_SECTIONS,
     SECTIONS,
     WALL_MATERIALS,
@@ -49,7 +53,7 @@ from floorplan_engine.electrical.estimate.items import (
 )
 from floorplan_engine.electrical.estimate.quantities import quantities as count_quantities
 from floorplan_engine.electrical.panel import BoardPanel, busbars, device_name
-from floorplan_engine.electrical.price_list import PriceSource, derived_quote
+from floorplan_engine.electrical.price_list import PriceSource, Quote, derived_quote
 from floorplan_engine.electrical.splices import DEFAULT_SPLICE
 from floorplan_engine.electrical.wiring_model import Wiring
 from floorplan_engine.model.panel_catalog import Enclosure
@@ -59,10 +63,7 @@ from floorplan_engine.model.texts import Language, tr
 # Notes added to an item's hint: no price yet, a price from the price service, a chase
 # without a known wall material
 PRICE_TBD = {"ru": "Цена уточняется", "uk": "Ціна уточнюється"}
-PRICE_SERVICE = {
-    "ru": "Цена — из сервиса цен (пока имитация, не рыночная)",
-    "uk": "Ціна — із сервісу цін (поки імітація, не ринкова)",
-}
+PRICE_SERVICE = {"ru": "Цена — из сервиса цен", "uk": "Ціна — із сервісу цін"}
 NO_MATERIAL = {
     "ru": "Материал стены не указан в плане: цена — по кирпичу, уточняется",
     "uk": "Матеріал стіни не вказано в плані: ціна — за цеглою, уточнюється",
@@ -76,13 +77,18 @@ class Line:
     name: str
     unit: str
     qty: float
-    price: float | None  # None: not in the price list
+    price: float | None  # None: not in the price list, or a listed section (no price at all)
     hint: str | None = None  # item note (HINTS)
-    service: bool = False  # price from the price service (mock), not from the list
+    service: bool = False  # price from an external price service, not from the list
 
     @property
     def total(self) -> float | None:
         return None if self.price is None else self.qty * self.price
+
+    @property
+    def listed(self) -> bool:
+        """A finish material: quantity only, no price by design (LISTED_SECTIONS)."""
+        return self.section in LISTED_SECTIONS
 
 
 @dataclass(frozen=True)
@@ -109,7 +115,14 @@ class Estimate:
 
     @property
     def unpriced(self) -> int:
-        return sum(1 for ln in self.lines if ln.price is None)
+        """Items the price list has no price for; listed (finish) materials are not counted:
+        they have no price by design."""
+        return sum(1 for ln in self.lines if ln.price is None and not ln.listed)
+
+    @property
+    def listed(self) -> int:
+        """Finish material items: a bill of quantities, priced after the client picks a series."""
+        return sum(1 for ln in self.lines if ln.listed)
 
     @property
     def has_prices(self) -> bool:
@@ -156,7 +169,8 @@ def build_estimate(
     def line(key: str, qty: float, name: str | None = None) -> Line:
         base, param = split_key(key)
         section, unit, ru, uk = LINES[base]
-        quote = derived_quote(prices, key)
+        listed = section in LISTED_SECTIONS
+        quote = Quote(None, None, False) if listed else derived_quote(prices, key)
         p, exact = quote.price, quote.exact
         if exact and exact.name:
             name = exact.name
@@ -172,7 +186,7 @@ def build_estimate(
         hint = HINTS.get(base, {}).get(language)
         if base in CHASE_KEYS and not param:
             hint = NO_MATERIAL[language]
-        if hint and p is None:
+        if hint and p is None and not listed:
             hint = f"{hint}. {PRICE_TBD[language]}"
         if quote.service and p is not None:
             hint = f"{hint}. {PRICE_SERVICE[language]}" if hint else PRICE_SERVICE[language]

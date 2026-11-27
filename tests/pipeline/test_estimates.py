@@ -29,23 +29,24 @@ def test_estimate_project_writes_tables(tmp_path: Path) -> None:
     (project / "room.yaml").write_text(yaml.safe_dump(room, allow_unicode=True), "utf-8")
     (project / "electrical.yaml").write_text(yaml.safe_dump(ELEC, allow_unicode=True), "utf-8")
 
-    # Without prices.yaml all prices come from the price service (mock); the estimate still has a
-    # total
+    # Without prices.yaml there are no prices at all (no mock, decision 2026-11-27): a bill of
+    # quantities
     no_prices = estimate_project(project)
     est = no_prices.estimate
-    assert est is not None and est.total > 0 and est.unpriced == 0
-    assert est.from_service == len(est.lines) and no_prices.prices is None
-    assert "Все цены — из сервиса цен" in no_prices.files[0].read_text("utf-8")
+    assert est is not None and est.total == 0 and not est.has_prices
+    assert est.from_service == 0 and no_prices.prices is None
+    assert "сервиса цен" not in no_prices.files[0].read_text("utf-8")
 
     (project / "prices.yaml").write_text("items:\n  socket_box: 20\n  work.chase: 200\n", "utf-8")
     result = estimate_project(project)
     assert result.estimate is not None and result.estimate.total > 0
-    assert result.estimate.from_service == len(result.estimate.lines) - 2  # own price list on top
+    assert result.estimate.from_service == 0  # the studio list alone
     md, csv_path, xlsx, scope = result.files
     assert scope.name == "work-scope.md" and "work-scope.md" in md.read_text("utf-8")
     assert xlsx.suffix == ".xlsx" and xlsx.stat().st_size > 0
     text = md.read_text("utf-8")
-    assert "Смета электрики: Кв" in text and "из сервиса цен (пока имитация" in text
+    assert "Смета электрики: Кв" in text and "имитация" not in text
+    assert "Чистовые материалы" in text and "ведомость без цен" in text
     raw = csv_path.read_bytes()
     assert raw.startswith(b"\xef\xbb\xbf")  # BOM: Excel recognises UTF-8
     assert "socket_box;Подрозетник;шт;4;20;80,00" in raw.decode("utf-8-sig")

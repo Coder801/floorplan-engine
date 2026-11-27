@@ -7,8 +7,6 @@ import json
 import zipfile
 from pathlib import Path
 
-import pytest
-
 from floorplan_engine.drawing.tables import Column, Table
 from floorplan_engine.electrical.panel import build_panel
 from floorplan_engine.epd.artifact import export_artifact
@@ -222,29 +220,24 @@ def test_estimate_work_rows_carry_their_scope() -> None:
     assert all(r.scope is None for r in table.rows if r.section)
 
 
-def test_estimate_material_totals_carry_guess(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Contract with the viewer (decision 2026-11-23): the total row of each materials section
-    has "guess": true while material prices are a placeholder; its amount is plain text, work
-    totals and the grand total get no flag, a bill of quantities neither."""
-    import floorplan_engine.electrical.estimate.texts as estimate_texts
+def test_estimate_totals_have_no_guess_and_finish_materials_no_total() -> None:
+    """Contract with the viewer: no "guess" flag any more (mock prices are gone, decision
+    2026-11-27); finish materials are rows with a quantity and empty price and sum, and their
+    section has no total row (the viewer and the report read totals by the shape of the row)."""
     from floorplan_engine.electrical.price_list import PriceList
     from floorplan_engine.electrical.pricing import Prices
 
     plan, contours, elec, wiring = _model()
     prices = Prices(PriceList.model_validate({"items": {"socket_box": 20}}))
-
-    def totals() -> list[dict[str, object]]:
-        table = side_tables(plan, contours, elec, wiring, prices)["estimate"][0]
-        return [r.as_dict() for r in table.rows if r.cells[1] == "Итого"]
-
-    rows = totals()
-    assert [r.get("guess") for r in rows] == [True, True, None, None]
-    cells = rows[0]["cells"]
-    assert isinstance(cells, list) and not cells[-1].endswith("!")  # the mark is the viewer's
-    volumes = side_tables(plan, contours, elec, wiring)["estimate"][0]
-    assert not any(r.guess for r in volumes.rows)
-    monkeypatch.setattr(estimate_texts, "MATERIAL_PRICES_MOCK", False)
-    assert not any("guess" in r for r in totals())
+    table = side_tables(plan, contours, elec, wiring, prices)["estimate"][0]
+    rows = [r.as_dict() for r in table.rows]
+    assert not any("guess" in r for r in rows)
+    assert sum(1 for r in table.rows if r.cells[1] == "Итого") == 3
+    heads = [k for k, r in enumerate(table.rows) if r.section]
+    finish = next(k for k in heads if table.rows[k].cells[1] == "Чистовые материалы")
+    following = table.rows[finish + 1 : next(k for k in heads if k > finish)]
+    assert following and all(r.cells[0] and r.cells[-2:] == ("", "") for r in following)
+    assert any("ведомость без цен" in n for n in table.notes)
 
 
 def test_room_table_has_a_row_per_zone() -> None:

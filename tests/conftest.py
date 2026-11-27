@@ -5,10 +5,26 @@ from typing import Any
 import pytest
 
 from floorplan_engine.electrical.estimate import quantities as estimate_quantities
+from floorplan_engine.electrical.estimate.items import LINES, LISTED_SECTIONS
+from floorplan_engine.electrical.price_list import PriceList
+from floorplan_engine.electrical.pricing import Prices
 from floorplan_engine.electrical.wiring import box_wiring
 from floorplan_engine.electrical.wiring_model import Wiring
 from floorplan_engine.model.schema import Electrical, Plan
 from floorplan_engine.sheets import stages
+
+
+def studio_prices(price: float = 10.0, **items: float) -> Prices:
+    """A synthetic studio price list: every priced item (LINES and the plumbing items, all but
+    the finish materials, which have no price) at one flat price, items set apart by key
+    (`work__chase=200` for work.chase: "__" stands for "."). For tests that need a priced
+    estimate since the mock price service is gone (decision 2026-11-27)."""
+    from floorplan_engine.plumbing.estimate import LINES as PLUMBING_LINES
+
+    keys = [k for k, line in LINES.items() if line[0] not in LISTED_SECTIONS] + list(PLUMBING_LINES)
+    prices: dict[str, float] = dict.fromkeys(keys, price)
+    prices |= {k.replace("__", "."): v for k, v in items.items()}
+    return Prices(PriceList(items=dict(prices)))
 
 
 @pytest.fixture

@@ -14,7 +14,13 @@ from typing import Any
 
 import yaml
 
-from floorplan_engine.electrical.estimate.items import HINTS, LINES, WORK_PREFIX, split_key
+from floorplan_engine.electrical.estimate.items import (
+    HINTS,
+    LINES,
+    LISTED_SECTIONS,
+    WORK_PREFIX,
+    split_key,
+)
 from floorplan_engine.electrical.market import (
     MARKET_FILE,
     MarketSample,
@@ -29,7 +35,7 @@ from floorplan_engine.electrical.price_list import (
     edit_price_items,
     unknown_keys,
 )
-from floorplan_engine.electrical.pricing import Prices, mock_price
+from floorplan_engine.electrical.pricing import Prices
 from floorplan_engine.electrical.splices import DEFAULT_SPLICE, Splice
 from floorplan_engine.electrical.terms import term_issues
 from floorplan_engine.model.intake import (
@@ -175,8 +181,6 @@ def price_page(root: Path, market_root: Path | None = None) -> dict[str, Any]:
                 "name": name,
                 "hint": HINTS.get(key),
                 "price": price.price if price is not None else None,
-                # no studio price — the estimate takes the price service's (a mock for now)
-                "service": mock_price(key) if price is None else None,
                 "market": None
                 if item is None or spread is None
                 else {
@@ -199,6 +203,9 @@ def price_page(root: Path, market_root: Path | None = None) -> dict[str, Any]:
         # joints in switch flush boxes, the studio's choice; not set — the default (wago)
         "splice": (own.splice if own is not None else None) or DEFAULT_SPLICE,
         "rows": rows,
+        # finish materials the list still prices (before 2026-11-27): no longer counted, the next
+        # save removes them (save_prices)
+        "stale": stale_keys(own),
         "market": None
         if market is None
         else {
@@ -214,15 +221,36 @@ def price_page(root: Path, market_root: Path | None = None) -> dict[str, Any]:
     }
 
 
+LISTED_MESSAGE = "чистовой материал — без цены: серию выбирает заказчик"
+
+
+def _parsed_list(text: str) -> PriceList | None:
+    """The price list of a prices.yaml text; None if it does not parse (save_prices reports it)."""
+    parsed, _ = parse_model(PriceList, yaml.safe_load(text) or {}, PRICES_FILE)
+    return parsed
+
+
+def listed_key(key: str) -> bool:
+    """An item of a section without prices (finish materials, LISTED_SECTIONS)."""
+    base = split_key(key)[0]
+    return base in LINES and LINES[base][0] in LISTED_SECTIONS
+
+
+def stale_keys(own: PriceList | None) -> list[str]:
+    """Keys of the price list that price finish materials: the estimate ignores them (a bill of
+    quantities, decision 2026-11-27), the studio price page drops them on the next save."""
+    return [k for k in (own.items if own is not None else {}) if listed_key(k)]
+
+
 def _page_keys(own: PriceList | None) -> list[str]:
     """Rows of the price page: every electrical item (LINES) in estimate order, works first; after
     each, the keys with a parameter the price list names (cable.3x1.5 after cable). Retired keys
-    are not shown."""
+    and finish materials (no prices, LISTED_SECTIONS) are not shown."""
     named = [k for k in (own.items if own is not None else {}) if split_key(k)[1]]
     out: list[str] = []
     for work in (True, False):
         for key in LINES:
-            if key.startswith(WORK_PREFIX) != work:
+            if key.startswith(WORK_PREFIX) != work or listed_key(key):
                 continue
             out.append(key)
             out += [k for k in named if split_key(k)[0] == key]
@@ -246,9 +274,11 @@ def _set_splice(text: str, splice: Splice) -> str:
 def save_prices(root: Path, changes: dict[str, Any]) -> list[Issue]:
     """Studio price page edits → root/prices.yaml: {"items"?: {key: price | None}, "date"?,
     "splice"?: "wago" | "crimp"}; any electrical estimate item, works and materials, a key with a
-    parameter too (its base in LINES); None removes the price; splice — joints in switch flush
-    boxes (PriceList.splice). Comments and other keys of the file stay
-    (price_list.edit_price_items). Errors come with a field path; the file then is unchanged."""
+    parameter too (its base in LINES), except finish materials — they have no price
+    (LISTED_SECTIONS); None removes the price; splice — joints in switch flush boxes
+    (PriceList.splice). Every save also removes the finish materials the file still prices
+    (stale_keys). Comments and other keys of the file stay (price_list.edit_price_items). Errors
+    come with a field path; the file then is unchanged."""
     path = root / PRICES_FILE
     items = changes.get("items", {})
     if not isinstance(items, dict):
@@ -257,6 +287,8 @@ def save_prices(root: Path, changes: dict[str, Any]) -> list[Issue]:
     for key, value in items.items():
         if not isinstance(key, str) or split_key(key)[0] not in LINES:
             bad.append(Issue(PRICES_FILE, f"items.{key}", "нет такой позиции в смете"))
+        elif listed_key(key) and value is not None:
+            bad.append(Issue(PRICES_FILE, f"items.{key}", LISTED_MESSAGE))
         elif value is not None and (
             isinstance(value, bool) or not isinstance(value, int | float) or value < 0
         ):
@@ -269,7 +301,9 @@ def save_prices(root: Path, changes: dict[str, Any]) -> list[Issue]:
         bad.append(Issue(PRICES_FILE, "splice", f"ожидается одно из: {', '.join(SPLICES)}"))
     if bad:
         return bad
-    text = edit_price_items(path.read_text("utf-8") if path.is_file() else NEW_PRICES, items)
+    current = path.read_text("utf-8") if path.is_file() else NEW_PRICES
+    stale = stale_keys(_parsed_list(current))
+    text = edit_price_items(current, {**dict.fromkeys(stale), **items})
     if date is not None:
         line = f'date: "{date}"' if date else 'date: ""'
         text, n = re.subn(r"^date:.*$", line, text, count=1, flags=re.M)

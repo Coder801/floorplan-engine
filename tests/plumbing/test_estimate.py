@@ -2,13 +2,12 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from floorplan_engine.electrical.pricing import MockPriceService, Prices
+from floorplan_engine.electrical.pricing import Prices
 from floorplan_engine.model.geometry import Vec
 from floorplan_engine.model.plumbing import Plumbing
 from floorplan_engine.model.texts import Language
 from floorplan_engine.plumbing.estimate import (
     LINES,
-    MOCK_PRICES,
     build_estimate,
     elbows,
     quantities,
@@ -18,7 +17,7 @@ from floorplan_engine.plumbing.network import build_network
 from floorplan_engine.plumbing.network_model import Network, Pipe, drop_bends
 from floorplan_engine.plumbing.rules import DROP_TURN
 from floorplan_engine.validation.plan import validate_plan
-from tests.conftest import make_flat
+from tests.conftest import make_flat, studio_prices
 from tests.plumbing.test_network import network
 
 PLUMBING = Plumbing.model_validate(
@@ -49,11 +48,12 @@ def test_quantities_follow_network() -> None:
     assert set(q) <= set(LINES)
 
 
-def test_mock_covers_all_lines_and_totals() -> None:
-    assert set(MOCK_PRICES) == set(LINES)
-    est = build_estimate(_net(), PLUMBING, Prices(None, MockPriceService(extra=MOCK_PRICES)))
+def test_studio_list_prices_every_line_and_totals() -> None:
+    """Prices only from the studio list (no mock, decision 2026-11-27): a full list prices every
+    plumbing item; nothing is marked as a service price."""
+    est = build_estimate(_net(), PLUMBING, studio_prices())
     assert est.unpriced == 0 and est.total > 0
-    assert all(ln.service for ln in est.lines)
+    assert not any(ln.service for ln in est.lines)
 
 
 def test_no_prices_is_volumes() -> None:
@@ -66,7 +66,7 @@ def test_all_plumbing_works_are_rough() -> None:
     finishing work (fixtures, mixers)."""
     assert {v[0] for k, v in LINES.items() if k.startswith("work.")} == {"rough"}
     assert {v[0] for k, v in LINES.items() if not k.startswith("work.")} == {"material"}
-    est = build_estimate(_net(), PLUMBING, Prices(None, MockPriceService(extra=MOCK_PRICES)))
+    est = build_estimate(_net(), PLUMBING, studio_prices())
     assert est.subtotal("finish") == 0 and est.subtotal("rough") > 0
     assert est.total == est.subtotal("material") + est.work
 

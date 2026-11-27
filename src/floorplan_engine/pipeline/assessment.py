@@ -9,13 +9,11 @@ from ezdxf.document import Drawing
 from ezdxf.filemanagement import readfile
 
 from floorplan_engine.electrical.price_list import PriceSource
-from floorplan_engine.electrical.pricing import MockPriceService
 from floorplan_engine.model.furniture import Furniture
 from floorplan_engine.model.intake import (
     Stage,
 )
 from floorplan_engine.model.plumbing import Plumbing
-from floorplan_engine.plumbing.estimate import MOCK_PRICES as PLUMBING_MOCK_PRICES
 from floorplan_engine.validation.assess import STAGE_FILES, StageResult, assess
 from floorplan_engine.validation.issues import (
     Issue,
@@ -82,10 +80,10 @@ def furniture_of(assessment: Assessment) -> Furniture | None:
     return assessment.report.furniture
 
 
-def price_service(given: PriceSource | None) -> PriceSource:
-    """Price service for estimates: the given client (service/, later) or the mock, which also knows
-    plumbing items (plumbing/estimate.MOCK_PRICES)."""
-    return given if given is not None else MockPriceService(extra=PLUMBING_MOCK_PRICES)
+def price_service(given: PriceSource | None) -> PriceSource | None:
+    """Price service for estimates: the given client (service/, later) or none — prices then come
+    only from the studio price list (decision 2026-11-27: no mock prices)."""
+    return given
 
 
 def write_report(out: Path, assessment: Assessment, fallback_name: str) -> list[Path]:

@@ -39,7 +39,7 @@ def check(project: Path) -> bool:
     )
     prices_path = find_prices(project)
     own = load_prices(prices_path)[0] if prices_path is not None else None
-    prices = Prices(own, price_service(None))  # as in build: price list over the price service
+    prices = Prices(own, price_service(None))  # as in build: the studio price list only
     furniture = furniture_of(assessment)
     paper, scale = choose_paper_and_scale(
         report.plan, report.contours, report.electrical, prices, plumbing=water, furniture=furniture

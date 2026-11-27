@@ -57,12 +57,12 @@ def test_overview_plumbing_water_and_sewer() -> None:
 
 
 def test_overview_plumbing_estimate_total() -> None:
-    from floorplan_engine.electrical.pricing import MockPriceService, Prices
-    from floorplan_engine.plumbing.estimate import MOCK_PRICES, build_estimate
+    from floorplan_engine.plumbing.estimate import build_estimate
+    from tests.conftest import studio_prices
 
     plan, contours, _, _ = _model()
     net = _net()
-    est = build_estimate(net, PLUMBING, Prices(None, MockPriceService(extra=MOCK_PRICES)))
+    est = build_estimate(net, PLUMBING, studio_prices())
     data = overview_data(plan, contours, None, None, PLUMBING, net, est)["plumbing"]
     assert data["estimate"] == {
         "total": round(est.total, 2),

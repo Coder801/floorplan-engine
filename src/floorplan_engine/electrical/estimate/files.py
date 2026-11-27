@@ -1,6 +1,7 @@
 """Electrical estimate files: out/estimate.md, out/estimate.csv and out/estimate.xlsx (Excel with
-formulas: change a price or a quantity and the sums recalculate). The total of a materials
-section is marked as provisional while material prices are a placeholder (estimate.texts).
+formulas: change a price or a quantity and the sums recalculate). Finish materials are a bill of
+quantities (items.LISTED_SECTIONS): no price, no sum, and instead of the section total the note
+that prices come after the series is chosen.
 """
 
 from __future__ import annotations
@@ -15,14 +16,8 @@ from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.worksheet.worksheet import Worksheet
 
 from floorplan_engine.electrical.estimate import Estimate
-from floorplan_engine.electrical.estimate.items import MATERIAL_SECTIONS, SECTIONS
-from floorplan_engine.electrical.estimate.texts import (
-    PROVISIONAL_MARK,
-    format_number,
-    provisional,
-    section_title,
-    text,
-)
+from floorplan_engine.electrical.estimate.items import LISTED_SECTIONS, MATERIAL_SECTIONS, SECTIONS
+from floorplan_engine.electrical.estimate.texts import format_number, section_title, text
 from floorplan_engine.electrical.price_list import PRICES_FILE
 from floorplan_engine.model.texts import Language
 
@@ -32,7 +27,6 @@ ESTIMATE_XLSX = "estimate.xlsx"
 XLSX_MONEY = "#,##0.00"
 XLSX_QTY = "#,##0.0##"
 XLSX_EDIT_FILL = "FFF4D6"  # cells edited by hand: price and quantity
-XLSX_GUESS_FILL = "FFE066"  # provisional amount: total of materials priced by the placeholder
 
 
 def write_markdown(
@@ -59,18 +53,25 @@ def write_markdown(
             t("head", c=est.currency),
             "|---|---|---|---|---:|---:|",
         ]
+        listed = section in LISTED_SECTIONS
         for k, ln in enumerate(rows, 1):
-            price = format_number(ln.price) if ln.price is not None else t("no_price")
-            total = format_number(ln.total) if ln.total is not None else "—"
+            if listed:
+                price, total = "", ""
+            else:
+                price = format_number(ln.price) if ln.price is not None else t("no_price")
+                total = format_number(ln.total) if ln.total is not None else "—"
             qty = format_number(ln.qty, 1).removesuffix(",0")
             out.append(f"| {k} | {ln.name} | {ln.unit} | {qty} | {price} | {total} |")
-        mark = PROVISIONAL_MARK if provisional(section, est.has_prices) else ""
-        amount = f"**{format_number(est.subtotal(section))}**{mark}"
-        out += [f"| | **{t('subtotal')}** | | | | {amount} |", ""]
+        if listed:
+            out += [f"| | *{t('listed')}* | | | | |", ""]
+        else:
+            amount = f"**{format_number(est.subtotal(section))}**"
+            out += [f"| | **{t('subtotal')}** | | | | {amount} |", ""]
     out += [f"**{t('total')}: {format_number(est.total)} {est.currency}**", ""]
     out += tail
-    if est.unpriced:
-        out += [t("unpriced", n=est.unpriced, f=PRICES_FILE), ""]
+    unpriced = t("unpriced", n=est.unpriced, f=PRICES_FILE)
+    if est.unpriced and unpriced not in notes:  # the price notes may already say it
+        out += [unpriced, ""]
     out += [f"- {n}" for n in notes]
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("\n".join(out) + "\n", encoding="utf-8")
@@ -109,9 +110,10 @@ def write_xlsx(
     tail: Callable[[Worksheet, Mapping[str, str]], None] | None = None,
 ) -> Path:
     """Estimate in Excel: sections, row sum as a formula "qty × price", section totals and "Total"
-    as formulas, prices and quantities highlighted (they get edited), the total of a materials
-    section in yellow while it is provisional (provisional). An item without a price has
-    an empty price with a note; once a price is entered it counts in the totals. extra adds its
+    as formulas, prices and quantities highlighted (they get edited). An item without a price has
+    an empty price with a note; once a price is entered it counts in the totals. Finish materials
+    (LISTED_SECTIONS) are a bill of quantities: no price, no sum, no total, a note in place of
+    the total, outside "Total". extra adds its
     own sheets after the estimate (the work scope, work_scope.scope_sheet); tail adds rows after
     "Total" (the agreed terms, terms.terms_sheet_tail) and gets the cells of the section
     totals and of "Total" by name."""
@@ -141,7 +143,6 @@ def write_xlsx(
         cell.font = Font(bold=True)
         cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
     edit = PatternFill("solid", start_color=XLSX_EDIT_FILL, end_color=XLSX_EDIT_FILL)
-    guess = PatternFill("solid", start_color=XLSX_GUESS_FILL, end_color=XLSX_GUESS_FILL)
     grey = Font(color="999999", size=8)
     subtotals: dict[str, str] = {}
     for section in SECTIONS:
@@ -150,6 +151,16 @@ def write_xlsx(
             continue
         ws.append(["", section_title(section, language)])
         ws.cell(ws.max_row, 2).font = Font(bold=True)
+        if section in LISTED_SECTIONS:
+            for k, ln in enumerate(rows, 1):
+                ws.append([k, ln.name, ln.unit, ln.qty, None, None, ln.key])
+                ws.cell(ws.max_row, 4).number_format = XLSX_QTY
+                ws.cell(ws.max_row, 7).font = grey
+                if ln.hint:
+                    ws.cell(ws.max_row, 2).comment = Comment(ln.hint, "Shtroba")
+            ws.append(["", t("listed")])
+            ws.cell(ws.max_row, 2).font = Font(italic=True)
+            continue
         first = ws.max_row + 1
         for k, ln in enumerate(rows, 1):
             r = ws.max_row + 1
@@ -170,8 +181,6 @@ def write_xlsx(
         ws.cell(total_row, 2).font = Font(bold=True)
         ws.cell(total_row, 6).font = Font(bold=True)
         ws.cell(total_row, 6).number_format = XLSX_MONEY
-        if provisional(section, est.has_prices):
-            ws.cell(total_row, 6).fill = guess
         subtotals[section] = f"F{total_row}"
     ws.append([])
     ws.append(
@@ -196,8 +205,9 @@ def write_xlsx(
             cells["material"] = parts[0] if len(parts) == 1 else f"({'+'.join(parts)})"
         tail(ws, cells)
     ws.append([])
-    if est.unpriced:
-        ws.append(["", t("unpriced", n=est.unpriced, f=PRICES_FILE)])
+    unpriced = t("unpriced", n=est.unpriced, f=PRICES_FILE)
+    if est.unpriced and unpriced not in notes:  # the price notes may already say it
+        ws.append(["", unpriced])
     for note in notes:
         ws.append(["", note])
     for letter, width in zip("ABCDEFG", (5, 48, 7, 10, 12, 14, 18), strict=True):

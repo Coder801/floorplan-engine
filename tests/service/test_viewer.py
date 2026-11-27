@@ -248,7 +248,8 @@ items:
 def test_price_page_and_edit(root: Path) -> None:
     (root / "prices.yaml").write_text(
         "# прайс\ncurrency: грн\nitems:\n  work.chase: 200  # узкая\n"
-        '  cable.3x1.5: { price: 45, name: "Кабель ВВГнг 3×1,5" }\n',
+        '  cable.3x1.5: { price: 45, name: "Кабель ВВГнг 3×1,5" }\n'
+        "  socket: 180  # до 2026-11-27\n",
         "utf-8",
     )
     (root / "market.yaml").write_text(MARKET, "utf-8")
@@ -265,12 +266,16 @@ def test_price_page_and_edit(root: Path) -> None:
     assert keys.index("cable.3x1.5") == keys.index("cable") + 1
     assert rows["cable.3x1.5"]["price"] == 45
     assert rows["cable.3x1.5"]["name"]["uk"] == "Кабель ВВГнг 3×1,5"
-    assert rows["socket"]["kind"] == "material" and rows["socket"]["price"] is None
+    # Finish materials have no price (decision 2026-11-27): no row; the list's own price of one
+    # is reported as stale; no mock price for an empty row
+    assert "socket" not in rows and "breaker" not in rows and page["stale"] == ["socket"]
+    assert rows["socket_box"]["kind"] == "material" and rows["socket_box"]["price"] is None
+    assert not any("service" in r for r in page["rows"])
     chase = rows["work.chase"]
-    assert chase["price"] == 200 and chase["service"] is None
+    assert chase["price"] == 200
     assert chase["market"]["median"] == 100 and chase["market"]["n"] == 2
     assert [q["source"] for q in chase["market"]["quotes"]] == ["a", "b"]
-    assert rows["work.cable"]["price"] is None and rows["work.cable"]["service"] == 34
+    assert rows["work.cable"]["price"] is None
     assert rows["work.cable"]["market"] is None
     market = page["market"]
     assert market["period"] == {"start": "2026-03", "end": "2026-03", "dated": 1, "undated": 1}
@@ -281,13 +286,16 @@ def test_price_page_and_edit(root: Path) -> None:
     text = (root / "prices.yaml").read_text("utf-8")
     assert "# прайс" in text and "work.chase: 150  # узкая" in text and "work.cable: 25" in text
     assert {r["key"]: r["price"] for r in saved.json()["rows"]}["work.cable"] == 25
+    assert "socket:" not in text and saved.json()["stale"] == []  # the save dropped it
 
-    # Materials too, a key with a parameter too; an unknown key or a price below 0 is refused
-    # and the file is unchanged on errors
-    assert client.post("/api/prices", json={"items": {"socket": 60}}).status_code == 200
+    # Rough materials too, a key with a parameter too; a finish material, an unknown key or a
+    # price below 0 is refused and the file is unchanged on errors
+    assert client.post("/api/prices", json={"items": {"socket_box": 20}}).status_code == 200
     assert client.post("/api/prices", json={"items": {"cable.3x2.5": 70}}).status_code == 200
     text = (root / "prices.yaml").read_text("utf-8")
-    assert "socket: 60" in text and "cable.3x2.5: 70" in text
+    assert "socket_box: 20" in text and "cable.3x2.5: 70" in text
+    refused = client.post("/api/prices", json={"items": {"socket": 60}})
+    assert refused.status_code == 422 and "чистовой материал" in refused.text
     assert client.post("/api/prices", json={"items": {"no.such": 10}}).status_code == 422
     assert client.post("/api/prices", json={"items": {"work.chase": -1}}).status_code == 422
     assert (root / "prices.yaml").read_text("utf-8") == text

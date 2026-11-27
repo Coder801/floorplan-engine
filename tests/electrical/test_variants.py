@@ -13,7 +13,6 @@ import pytest
 import yaml
 from pydantic import ValidationError
 
-from floorplan_engine.electrical.pricing import MockPriceService, Prices
 from floorplan_engine.electrical.variants import (
     MODES,
     ROUTES,
@@ -32,7 +31,7 @@ from floorplan_engine.pipeline import (
 )
 from floorplan_engine.validation.issues import Severity
 from floorplan_engine.validation.plan import validate_plan
-from tests.conftest import make_plan
+from tests.conftest import make_plan, studio_prices
 from tests.electrical.test_estimate import DOOR, ELEC, LED, RECT
 
 EDIT = {"from": "board", "to": "s1", "path": [[0, 0], [0, 100], [50, 100]]}
@@ -122,7 +121,7 @@ def test_loop_conduit_is_a_job_option_and_a_neighbour_only_with_chain_drops_in_c
 def test_job_options_show_in_the_summary() -> None:
     plan = make_plan(RECT, [DOOR])
     _, contours = validate_plan(plan)
-    prices = Prices(None, MockPriceService("грн"))
+    prices = studio_prices()
     base = variant_summary(plan, contours, _elec(), Variant(), None, prices)
     job = Variant(plaster="before", rough_light=True)
     summary = variant_summary(plan, contours, _elec(), job, None, prices)
@@ -238,7 +237,7 @@ def test_variant_summary_differs_by_mode_and_route() -> None:
     plan = make_plan(RECT, [DOOR])
     _, contours = validate_plan(plan)
     elec = _elec()
-    prices = Prices(None, MockPriceService())
+    prices = studio_prices()
     summaries = {
         v.key: variant_summary(plan, contours, elec, v, None, prices)
         for v in (Variant(mode=m, route=r) for m in MODES for r in ROUTES)
@@ -341,7 +340,8 @@ def test_build_writes_variant_summaries_to_manifest(tmp_path: Path) -> None:
     assert block["items"][0]["key"] == "proper-ceiling-boxes"  # the chosen set first
     assert len(block["items"]) == 11  # and its neighbours, one option changed each
     assert {i["mode"] for i in block["items"]} == {"economy", "standard", "proper"}
-    assert all(i["total"] > 0 and i["devices"] > 0 for i in block["items"])
+    # No studio price list in the folder: no prices (no mock any more), the devices still count
+    assert all(i["total"] == 0 and i["devices"] > 0 for i in block["items"])
     assert block["led"] is False  # no LED outputs: the wizard does not ask
 
 

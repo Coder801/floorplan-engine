@@ -22,7 +22,9 @@ ESTIMATE: dict[str, Any] = {
         _row("", "Черновые материалы", "", "", "", "", section=True),
         _row("1", "Кабель ВВГнг 3×1,5", "м", "10,5", "45", "472,5", hint="цена сервиса"),
         _row("2", "Гофра", "м", "4", "—", "—"),
-        _row("", "Итого", "", "", "", "472,5", guess=True),
+        _row("", "Итого", "", "", "", "472,5"),
+        _row("", "Чистовые материалы", "", "", "", "", section=True),
+        _row("1", "Розетка", "шт", "4", "", ""),
         _row("", "Черновые работы", "", "", "", "", section=True),
         _row(
             "1",
@@ -64,10 +66,25 @@ def test_only_chosen_sections_with_formulas() -> None:
     assert ws.cell(names.index("Кабель ВВГнг 3×1,5") + 1, 2).comment is not None
 
 
+def test_finish_materials_are_a_list_without_prices_or_a_total() -> None:
+    """Finish materials (decision 2026-11-27): the quantity only, the note in place of the total,
+    and "Total" sums the priced sections alone."""
+    ws = _sheets(report_xlsx(MANIFEST, {"estimate": ESTIMATE}, ["material_finish", "work_rough"]))[
+        0
+    ]
+    rows = _values(ws)
+    names = [r[1] for r in rows]
+    socket = rows[names.index("Розетка")]
+    assert socket[3] == 4 and all(c is None for c in socket[4:])
+    assert "Цены — после выбора серии" in names
+    total = rows[names.index("Всего, грн")]
+    assert "+" not in str(total[5])  # one priced section: the rough work
+
+
 def test_missing_section_and_work_scope_sheet() -> None:
-    sheets = _sheets(
-        report_xlsx(MANIFEST, {"estimate": ESTIMATE}, ["material_finish", "work_rough"])
-    )
+    est = {**ESTIMATE, "rows": [r for r in ESTIMATE["rows"] if r["cells"][1] != "Розетка"
+                                and r["cells"][1] != "Чистовые материалы"]}  # fmt: skip
+    sheets = _sheets(report_xlsx(MANIFEST, {"estimate": est}, ["material_finish", "work_rough"]))
     assert len(sheets) == 2
     first = [r[1] for r in _values(sheets[0])]
     assert "Чистовые материалы: В смете нет этого раздела" in first

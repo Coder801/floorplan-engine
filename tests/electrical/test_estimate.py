@@ -10,7 +10,6 @@ from typing import Any
 import pytest
 
 import floorplan_engine.electrical.estimate.texts as estimate_texts
-from floorplan_engine.drawing.tables import Guess
 from floorplan_engine.electrical.estimate import Estimate, Line, build_estimate
 from floorplan_engine.electrical.estimate.items import (
     CHASE_KEYS,
@@ -21,18 +20,17 @@ from floorplan_engine.electrical.estimate.items import (
     split_key,
 )
 from floorplan_engine.electrical.estimate.quantities import quantities
-from floorplan_engine.electrical.estimate.texts import format_number
 from floorplan_engine.electrical.panel import build_panel, busbars, device_name
 from floorplan_engine.electrical.price_list import (
     PriceList,
     unknown_keys,
 )
-from floorplan_engine.electrical.pricing import MockPriceService, Prices, mock_price
+from floorplan_engine.electrical.pricing import Prices
 from floorplan_engine.electrical.splices import back_box_joints
 from floorplan_engine.electrical.wiring import RESERVE, box_wiring
 from floorplan_engine.model.schema import Electrical
 from floorplan_engine.validation.plan import validate_plan
-from tests.conftest import make_plan, room_wiring
+from tests.conftest import make_plan, room_wiring, studio_prices
 
 RECT = [{"length": 3000}, {"length": 4000}, {"length": 3000}, {"length": 4000}]
 DOOR = {"wall": "w2", "type": "door", "offset": 1000, "width": 900}
@@ -111,25 +109,30 @@ def test_estimate_table_with_and_without_prices() -> None:
     table = estimate_table(priced, "uk", priced=True)
     assert table.title == "Кошторис електрики" and len(table.columns) == 6
     names = [r[1] for r in table.rows]
-    # Section headings are plain (decision 2026-11-23): the mark is on the materials totals
+    # Section headings are plain (decision 2026-11-23)
     assert names[0] == "Чорнові матеріали"
     assert "Чистові матеріали" in names
     assert "Чорнові роботи" in names and "Чистові роботи" in names
-    # A section total is a plain "Total": the section name is in the heading right above it
-    assert names.count("Разом") == 4
+    # A section total is a plain "Total": the section name is in the heading right above it;
+    # finish materials are a bill of quantities without one (decision 2026-11-27)
+    assert names.count("Разом") == 3
     assert not any(str(n).startswith("Разом:") for n in names)
     assert table.total is not None and table.total[1] == "Усього"
     socket_box = next(r for r in table.rows if r[1] == "Підрозетник")
     assert socket_box[4] == "20" and socket_box[5] == "80"  # 4 posts × 20
-    unpriced = next(r for r in table.rows if r[1] == "Розетка із заземленням")
+    unpriced = next(r for r in table.rows if r[1] == "Прокладання кабелю")
     assert unpriced[4] == unpriced[5] == "—"
+    listed = next(r for r in table.rows if r[1] == "Розетка із заземленням")
+    assert listed[3] and listed[4] == listed[5] == ""  # quantity only, no "no price"
+    finish = names.index("Чистові матеріали")
+    after = next(n for n in names[finish + 1 :] if n in ("Разом", "Чорнові роботи"))
+    assert after == "Чорнові роботи"  # no total under the finish materials
 
     volumes = estimate_table(build_estimate(wiring, elec, PriceList(), "uk"), "uk", priced=False)
     assert volumes.title == "Відомість обсягів електрики"
     assert len(volumes.columns) == 4 and volumes.total is None  # no prices and no totals
     assert not any(str(r[1]).startswith("Разом") for r in volumes.rows)
     assert volumes.rows[0][1] == "Чорнові матеріали"
-    assert not any(isinstance(c, Guess) for r in volumes.rows for c in r)  # nothing to mark
 
 
 def _subtotals(table: Any) -> list[Any]:
@@ -137,24 +140,18 @@ def _subtotals(table: Any) -> list[Any]:
     return [r[5] for r in table.rows if r[1] in ("Разом", "Итого")]
 
 
-def test_estimate_table_marks_material_totals_as_provisional(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """While material prices are a placeholder, each materials total is a Guess cell: " !" on
-    the sheet; work totals and the grand total stay plain (decision 2026-11-23)."""
+def test_estimate_table_totals_are_plain_and_finish_materials_have_none() -> None:
+    """No provisional mark any more (mock prices are gone, decision 2026-11-27): the totals of
+    rough materials and of the work are plain amounts; finish materials have no total."""
     from floorplan_engine.drawing.schedules import estimate_table
 
     wiring, elec = _wiring()
-    est = build_estimate(
-        wiring, elec, PriceList.model_validate({"items": {"socket_box": 20}}), "uk"
-    )
+    est = build_estimate(wiring, elec, studio_prices(), "uk")
     cells = _subtotals(estimate_table(est, "uk", priced=True))
-    assert [isinstance(c, Guess) for c in cells] == [True, True, False, False]
-    assert cells[0].mark == " !" and cells[0].text == format_number(est.subtotal("material_rough"))
+    assert len(cells) == 3 and all(isinstance(c, str) for c in cells)
     table = estimate_table(est, "uk", priced=True)
     assert table.total is not None and isinstance(table.total[5], str)
-    monkeypatch.setattr(estimate_texts, "MATERIAL_PRICES_MOCK", False)
-    assert not any(isinstance(c, Guess) for c in _subtotals(estimate_table(est, "uk", True)))
+    assert est.total == est.subtotal("material_rough") + est.work
 
 
 def test_estimate_on_wiring_sheet(tmp_path: Path) -> None:
@@ -176,8 +173,7 @@ def test_estimate_on_wiring_sheet(tmp_path: Path) -> None:
     }
     wiring_tab = next(name for name in texts if name.endswith("Проводка"))
     assert "Смета электрики" in texts[wiring_tab]  # the plan language defaults to ru
-    # Materials totals are provisional on the sheet: " !" after the amount (decision 2026-11-23)
-    assert any(t.endswith(" !") for t in texts[wiring_tab])
+    assert not any(t.endswith(" !") for t in texts[wiring_tab])  # no provisional mark any more
     assert not any("Смета электрики" in t for name, t in texts.items() if name != wiring_tab)
 
 
@@ -275,7 +271,8 @@ def test_empty_estimate_is_zero() -> None:
 
 def test_panel_from_board_sheet_priced_by_kind() -> None:
     """The panel in the estimate is the "Panel" sheet set: a row per kind and rating, as in the
-    purchase list; price by kind, refined by rating; assembly by the set's modules; no breaker per
+    purchase list; the devices are finish materials without a price, whatever the list says (the
+    client picks the brand, decision 2026-11-27); assembly by the set's modules; no breaker per
     group."""
     plan = make_plan(RECT, [DOOR])
     _, contours = validate_plan(plan)
@@ -294,14 +291,9 @@ def test_panel_from_board_sheet_priced_by_kind() -> None:
     names = {device_name(d, "ru") for d in panel.devices}
     assert {ln.name for ln in devices} == names  # the same names as in the purchase list
     assert sum(ln.qty for ln in devices) == len(panel.devices)
-    by_name = {ln.name: ln for ln in devices}
-    for d in panel.devices:
-        ln = by_name[device_name(d, "ru")]
-        if d.kind.value == "breaker":
-            assert ln.price == (160 if d.label == "C16" else 140)
-        if d.kind.value == "input":
-            assert ln.price == 500
-    assert next(ln for ln in est.lines if ln.key == "work.board_module").qty == panel.modules
+    assert all(ln.price is None and ln.listed for ln in devices)
+    module = next(ln for ln in est.lines if ln.key == "work.board_module")
+    assert module.qty == panel.modules and module.price == 100  # the work is priced
     keys = [ln.key for ln in est.lines]
     assert "breaker" not in keys  # "per group" breaker only without a panel
     assert keys.index("board_enclosure") < keys.index(devices[0].key)  # devices after the enclosure
@@ -310,7 +302,7 @@ def test_panel_from_board_sheet_priced_by_kind() -> None:
 
 def test_comb_busbars_after_the_panel_devices() -> None:
     """Comb busbars of the group rails (instead of wire jumpers): 1 m bars by poles, as counted
-    by panel.busbars, in the materials right after the panel devices; priced as any item."""
+    by panel.busbars, in the finish materials right after the panel devices, without a price."""
     plan = make_plan(RECT, [DOOR])
     _, contours = validate_plan(plan)
     more = [_pt(f"x{k}", "socket", 400 + 300 * k, 300, f"QF{k}") for k in range(3, 7)]
@@ -325,7 +317,7 @@ def test_comb_busbars_after_the_panel_devices() -> None:
     combs = [ln for ln in est.lines if split_key(ln.key)[0] == "busbar"]
     assert {ln.key: ln.qty for ln in combs} == counted
     assert all(ln.section == "material_finish" and ln.unit == "шт" for ln in combs)
-    assert all(ln.price == (390 if ln.key == "busbar.2P" else 180) for ln in combs)
+    assert all(ln.price is None for ln in combs)
     assert combs[0].name.startswith("Шина гребенчатая") and "перемычек" in (combs[0].hint or "")
     keys = [ln.key for ln in est.lines]
     kinds = {d.kind.value for d in panel.all_devices}
@@ -391,13 +383,13 @@ def test_mechanism_hint_says_price_tbd_only_without_price() -> None:
     assert all(ln.hint is None for ln in rest if ln.key not in CHASE_KEYS)
 
 
-def test_gun_fixing_names_and_mock_prices() -> None:
+def test_gun_fixing_names_and_studio_prices() -> None:
     wiring, elec = _wiring()
     elec = elec.model_copy(update={"conduit": "ceiling"})
-    est = build_estimate(wiring, elec, Prices(None, MockPriceService()))
+    est = build_estimate(wiring, elec, studio_prices(conduit_clip=4))
     by_key = {ln.key: ln for ln in est.lines}
     clip = next(ln for k, ln in by_key.items() if k.startswith("conduit_clip."))
-    assert "под монтажный пистолет" in clip.name and clip.price == mock_price(clip.key)
+    assert "под монтажный пистолет" in clip.name and clip.price == 4  # the kind key prices it
     assert by_key["cable_pad"].name.startswith("Площадка под монтажный пистолет")
     assert by_key["cable_pad"].hint is not None
     assert unknown_keys(PriceList.model_validate({"items": {"cable_fixing": 2}})) == []
@@ -438,7 +430,8 @@ LED = _pt("led1", "led_output", 2000, 1500, "QF1")
 
 def test_chases_split_by_wall_material() -> None:
     """Chase metres by wall material: the wall's own one, otherwise the plan default; a chase
-    without a known material stays work.chase, priced as brick with a note (Kyiv 2026-11)."""
+    without a known material stays work.chase with a note; a material the studio does not price
+    on its own takes the plain work.chase price."""
     walls = [{**w, "material": "concrete"} if k == 0 else w for k, w in enumerate(RECT)]
     plan = make_plan(walls, [DOOR])
     elec = Electrical.model_validate(ELEC)
@@ -451,7 +444,8 @@ def test_chases_split_by_wall_material() -> None:
     chase = {k: v for k, v in q.items() if split_key(k)[0] in CHASE_KEYS}
     assert sum(chase.values()) == pytest.approx(wiring.chase_mm / 1000, abs=0.2)
     assert "work.chase.concrete" in chase and "work.chase" in chase
-    est = build_estimate(wiring, elec, Prices(None, MockPriceService()), "ru")
+    prices = studio_prices(work__chase=120, **{"work__chase__concrete": 200})
+    est = build_estimate(wiring, elec, prices, "ru")
     by_key = {ln.key: ln for ln in est.lines}
     concrete = by_key["work.chase.concrete"]
     assert (concrete.name, concrete.price) == ("Штроба узкая, 1–2 кабеля, бетон", 200)
@@ -467,8 +461,9 @@ def test_chases_split_by_wall_material() -> None:
 
 
 def test_thermostat_is_one_row_by_point() -> None:
-    """A floor heating controller: its own item by point, priced by the mock (2026-11-24); no flush
-    box, frame or fitting work is counted for it (its work comes later)."""
+    """A floor heating controller: its own item by point, a finish material without a price
+    (decision 2026-11-27); no flush box, frame or fitting work is counted for it (its work comes
+    later)."""
     plan = make_plan(RECT, [DOOR])
     _, contours = validate_plan(plan)
     reg = [_pt("t1", "thermostat", 2000, 1500, "QF5"), _pt("t2", "thermostat", 2800, 1500, "QF5")]
@@ -480,26 +475,31 @@ def test_thermostat_is_one_row_by_point() -> None:
     assert q["thermostat"] == 2 and "thermostat" not in q0
     for key in ("socket_box", "work.socket_box", "work.mechanism", "frame.1", "switch2"):
         assert q.get(key) == q0.get(key), key
-    prices = Prices(None, MockPriceService())
+    prices = studio_prices()
     est = build_estimate(wiring, elec, prices, "ru")
     row = next(ln for ln in est.lines if ln.key == "thermostat")
     assert (row.name, row.unit, row.qty) == ("Регулятор тёплого пола", "шт", 2)
-    assert row.price == 3000 and row.total == 6000 and row.section == "material_finish"
-    assert est.unpriced == 0
+    assert row.price is None and row.listed and row.section == "material_finish"
     assert est.total == pytest.approx(sum(ln.total for ln in est.lines if ln.total is not None))
     assert build_estimate(wiring, elec, prices, "uk").lines[est.lines.index(row)].name == (
         "Регулятор теплої підлоги"
     )
-    # A studio price list beats the mock like for any other item
+    # Even a studio price does not price it: the client picks the controller
     own = PriceList.model_validate({"items": {"thermostat": 1000}})
-    priced = build_estimate(wiring, elec, Prices(own, MockPriceService()), "ru")
-    assert priced.unpriced == 0 and priced.total == pytest.approx(est.total - 4000)
+    assert (
+        next(
+            ln
+            for ln in build_estimate(wiring, elec, Prices(own), "ru").lines
+            if ln.key == "thermostat"
+        ).price
+        is None
+    )
 
 
 @pytest.mark.usefixtures("heating_released")
 def test_floor_heating_rows_by_zone_without_prices() -> None:
     """Floor heating (decision 2026-11-14): a section per zone by its length, a sensor and its
-    conduit, the laying work by heated area — all without a price (pricing.UNPRICED)."""
+    conduit, the laying work by heated area — priced only if the studio lists them."""
     plan = make_plan(RECT, [DOOR])
     _, contours = validate_plan(plan)
     reg = _pt("t1", "thermostat", 2000, 1500, "QF5")
@@ -515,7 +515,7 @@ def test_floor_heating_rows_by_zone_without_prices() -> None:
     assert q["heating_sensor"] == 1
     assert q["heating_conduit"] == pytest.approx(round(zone.sensor_m * (1 + RESERVE), 1))
     assert q["work.floor_heating"] == pytest.approx(round(zone.area_m2, 1))
-    est = build_estimate(wiring, elec, Prices(None, MockPriceService()), "ru")
+    est = build_estimate(wiring, elec, PriceList(), "ru")
     rows = {ln.key: ln for ln in est.lines if "heating" in ln.key}
     assert set(rows) == {
         f"heating_cable.{zone.length:g}",
@@ -541,10 +541,10 @@ def _two_switches() -> list[dict[str, Any]]:
 
 def test_switch_joint_work_without_clamp_lines_with_note(tmp_path: Path) -> None:
     """Joints in switch flush boxes (decision 2026-11-25): only the work, named for the switch,
-    rough, no price anywhere (pricing.UNPRICED); no Wago clamp lines — the note says the method
+    rough, no price unless the studio lists one; no Wago clamp lines — the note says the method
     and why; sockets of a loop have no joints."""
     wiring, elec = room_wiring(_two_switches(), light_wiring="chain")
-    est = build_estimate(wiring, elec, Prices(None, MockPriceService()), "uk")
+    est = build_estimate(wiring, elec, PriceList(), "uk")
     by_key = {ln.key: ln for ln in est.lines}
     work = by_key["work.splice"]
     assert (work.section, work.price, work.qty, work.name) == (
@@ -573,7 +573,7 @@ def test_crimp_splice_counts_only_its_own_work() -> None:
     assert q["work.splice_crimp"] == 2 and "crimp" not in q and "work.splice" not in q
     assert quantities(wiring, elec, "wago")["work.splice"] == 2
     own = PriceList.model_validate({"splice": "crimp"})
-    est = build_estimate(wiring, elec, Prices(own, MockPriceService()), "ru")
+    est = build_estimate(wiring, elec, Prices(own), "ru")
     by_key = {ln.key: ln for ln in est.lines}
     work = by_key["work.splice_crimp"]
     assert (work.section, work.price, work.name) == (
@@ -587,13 +587,13 @@ def test_crimp_splice_counts_only_its_own_work() -> None:
 
 
 def test_splice_defaults_to_wago_without_a_studio_setting() -> None:
-    """No splice in the price list, no list at all, or the price service alone — wago."""
+    """No splice in the price list or no list at all — wago."""
     wiring, elec = room_wiring(_two_switches(), light_wiring="chain")
-    assert PriceList().splice is None and MockPriceService().splice is None
-    for prices in (PriceList(), Prices(), Prices(PriceList(), MockPriceService())):
+    assert PriceList().splice is None
+    for prices in (PriceList(), Prices(), Prices(PriceList())):
         keys = {ln.key for ln in build_estimate(wiring, elec, prices, "ru").lines}
         assert "work.splice" in keys and "work.splice_crimp" not in keys
-    crimp = Prices(PriceList.model_validate({"splice": "crimp"}), MockPriceService())
+    crimp = Prices(PriceList.model_validate({"splice": "crimp"}))
     assert crimp.splice == "crimp" and PriceList.model_validate({"splice": "wago"}).splice == "wago"
     with pytest.raises(ValueError):
         PriceList.model_validate({"splice": "solder"})

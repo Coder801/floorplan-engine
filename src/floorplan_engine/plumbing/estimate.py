@@ -1,5 +1,5 @@
-"""Plumbing estimate: quantities come from the network (network.py), prices from the studio or
-project price list on top of the price service, as for electrical (electrical/pricing.py).
+"""Plumbing estimate: quantities come from the network (network.py), prices only from the studio
+price list (with the project's on top), as for electrical (electrical/pricing.py); no mock prices.
 Rows are the same `Line` and `Estimate`, so the files (md, csv, xlsx with formulas) and the
 sheet table are shared with electrical.
 
@@ -35,7 +35,6 @@ sheet table are shared with electrical.
 from __future__ import annotations
 
 from collections import defaultdict
-from collections.abc import Mapping
 
 from floorplan_engine.electrical.estimate import Estimate, Line
 from floorplan_engine.electrical.estimate.items import SECTIONS, Section
@@ -182,55 +181,7 @@ LINES: dict[str, tuple[Section, Unit, str, str]] = {
         "Опресування водопостачання",
     ),
 }
-# Price service mock (electrical/pricing.MockPriceService, extra): UAH per unit, a rough
-# Kyiv guide for autumn 2026, not market prices
-MOCK_PRICES: dict[str, float] = {
-    "water.pipe16": 75,
-    "water.pipe20": 115,
-    "water.outlet16": 260,
-    "water.outlet20": 330,
-    "water.elbow16": 190,
-    "water.elbow20": 260,
-    "water.sleeve16": 45,
-    "water.sleeve20": 60,
-    "water.eurocone16": 170,
-    "water.eurocone20": 230,
-    "water.adapter16": 210,
-    "water.adapter20": 280,
-    "water.tee16": 270,
-    "water.tee20_16": 330,
-    "water.tee20": 360,
-    "water.insulation": 15,
-    "water.collector": 350,
-    "water.valve": 350,
-    "water.filter": 450,
-    "water.reducer": 1500,
-    "water.meter": 900,
-    "water.boiler_kit": 900,
-    "water.fixing": 6,
-    "sewer.pipe50": 70,
-    "sewer.pipe110": 170,
-    "sewer.bend50": 35,
-    "sewer.bend110": 70,
-    "sewer.tee50": 50,
-    "sewer.tee110": 110,
-    "sewer.tee110_50": 90,
-    "sewer.riser_tee": 600,
-    "sewer.reducer": 40,
-    "sewer.revision": 150,
-    "sewer.fixing": 15,
-    "work.water_pipe": 120,
-    "work.sewer_pipe": 200,
-    "work.water_outlet": 350,
-    "work.input": 2500,
-    "work.riser_tee": 1200,
-    "work.wall_hole": 250,
-    "work.chase_pipe": 350,
-    "work.chase_sewer": 600,
-    "work.chase_sewer_floor": 500,
-    "work.sewer_box": 450,
-    "work.pressure_test": 1000,
-}
+
 TEXT: dict[str, dict[str, str]] = {
     "title": {"ru": "Смета сантехники: {name}", "uk": "Кошторис сантехніки: {name}"},
     "sheet_title": {"ru": "Смета сантехники", "uk": "Кошторис сантехніки"},
@@ -384,7 +335,3 @@ def build_estimate(
         )
     lines.sort(key=lambda ln: SECTIONS.index(ln.section))
     return Estimate(tuple(lines), prices.currency)
-
-
-def mock_prices() -> Mapping[str, float]:
-    return MOCK_PRICES

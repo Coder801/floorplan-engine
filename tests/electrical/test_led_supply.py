@@ -27,13 +27,12 @@ from floorplan_engine.electrical.led_supply import (
     supply_for,
 )
 from floorplan_engine.electrical.panel import build_panel
-from floorplan_engine.electrical.pricing import MockPriceService, Prices
 from floorplan_engine.electrical.wiring import box_wiring
 from floorplan_engine.epd.panel_data import panel_data
 from floorplan_engine.model.panel_catalog import DeviceKind
 from floorplan_engine.model.schema import Electrical
 from floorplan_engine.validation.plan import validate_plan
-from tests.conftest import make_plan
+from tests.conftest import make_plan, studio_prices
 from tests.electrical.test_estimate import DOOR, ELEC, RECT, _pt
 
 
@@ -155,7 +154,7 @@ def test_estimate_lists_supplies_by_power_and_the_box_enclosure() -> None:
     plan, wiring = _plan_and_wiring(elec)
     panel = build_panel(plan, elec)
     assert panel is not None
-    prices = Prices(None, MockPriceService())
+    prices = studio_prices()
     est = build_estimate(wiring, elec, prices, "ru", panel)
     keys = [ln.key for ln in est.lines]
     assert "led_psu_din" not in keys  # replaced by the devices of the LED box

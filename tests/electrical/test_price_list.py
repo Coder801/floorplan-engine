@@ -10,19 +10,19 @@ from floorplan_engine.electrical.price_list import (
     edit_price_items,
     unknown_keys,
 )
-from floorplan_engine.electrical.pricing import MockPriceService, Prices, mock_price
+from floorplan_engine.electrical.pricing import Prices
 
 
 def test_large_hole_costs_two_and_a_half_times() -> None:
     """A large hole (core drill) is priced from an ordinary one × 2.5, unless the price
-    list names it itself; the price service mock follows the same rule."""
+    list names it itself."""
     own = PriceList.model_validate({"items": {"work.wall_hole": 200}})
-    quote = derived_quote(Prices(own, MockPriceService()), "work.wall_hole_large")
+    quote = derived_quote(Prices(own), "work.wall_hole_large")
     assert quote.price is not None and quote.price.price == 500 and not quote.service
     named = PriceList.model_validate({"items": {"work.wall_hole_large": 260}})
-    quote = derived_quote(Prices(named, MockPriceService()), "work.wall_hole_large")
+    quote = derived_quote(Prices(named), "work.wall_hole_large")
     assert quote.price is not None and quote.price.price == 260
-    assert mock_price("work.wall_hole_large") == 2.5 * (mock_price("work.wall_hole") or 0)
+    assert derived_quote(Prices(PriceList()), "work.wall_hole_large").price is None
 
 
 def test_unknown_keys_lists_only_foreign_keys_in_order() -> None:
@@ -110,10 +110,10 @@ def test_edit_price_items_without_items_section() -> None:
 
 def test_wide_chase_priced_from_narrow_in_the_same_material() -> None:
     own = PriceList.model_validate({"items": {"work.chase.brick": 100}})
-    quote = derived_quote(Prices(own, MockPriceService()), "work.chase_wide.brick")
+    quote = derived_quote(Prices(own), "work.chase_wide.brick")
     assert quote.price is not None and quote.price.price == 150 and not quote.service
     named = PriceList.model_validate({"items": {"work.chase_wide.brick": 170}})
-    quote = derived_quote(Prices(named, MockPriceService()), "work.chase_wide.brick")
+    quote = derived_quote(Prices(named), "work.chase_wide.brick")
     assert quote.price is not None and quote.price.price == 170
 
 

@@ -31,9 +31,10 @@ Parts (`PARTS`), chosen in the download dialog:
                    always last, on a new page (on screen set off by a rule)
 An estimate that is not split into rough and finish materials (section `material`) is shown
 with either materials part. Every priced estimate ends with a closing block: section
-totals and their sum. The estimate notes (where the prices come from, items without a price,
-how the panel is counted) are for the studio and stay out of the report; the mark of a
-provisional materials total stays.
+totals and their sum; finish materials are a bill of quantities without prices
+(estimate/items.LISTED_SECTIONS): no total, a line saying prices come after the series is chosen,
+outside the closing block. The estimate notes (where the prices come from, items without a
+price, how the panel is counted) are for the studio and stay out of the report.
 """
 
 from __future__ import annotations
@@ -48,7 +49,7 @@ from pathlib import Path
 from typing import Any, Literal, cast, get_args
 
 from floorplan_engine import BRAND
-from floorplan_engine.electrical.estimate.items import MATERIAL_SECTIONS, SECTIONS, Section
+from floorplan_engine.electrical.estimate.items import LISTED_SECTIONS, SECTIONS, Section
 from floorplan_engine.electrical.estimate.texts import format_number, parse_number, section_title
 from floorplan_engine.electrical.estimate.texts import text as estimate_text
 from floorplan_engine.electrical.panel_text import DEVICE_LEGEND
@@ -168,11 +169,6 @@ TEXT: dict[str, dict[Language, str]] = {
         "uk": "Що входить у кожну роботу і результат при здачі — у додатку «Що входить у роботи»",
     },
     "result": {"ru": "Результат", "uk": "Результат"},
-    "guess": {
-        "ru": "≈ — цены материалов ориентировочные: типовые, не рыночные",
-        "uk": "≈ — ціни матеріалів орієнтовні: типові, не ринкові",
-    },
-    "approximate": {"ru": "цены ориентировочные", "uk": "ціни орієнтовні"},
 }
 
 
@@ -196,7 +192,11 @@ class EstimateBlock:
     title: str
     rows: tuple[dict[str, Any], ...]
     subtotal: dict[str, Any] | None
-    approximate: bool = False  # materials priced by the placeholder service: the prices are rough
+
+    @property
+    def listed(self) -> bool:
+        """Finish materials: a bill of quantities without prices and without a total."""
+        return self.section in LISTED_SECTIONS
 
 
 def report_title(parts: Sequence[Part], language: Language) -> str:
@@ -654,28 +654,24 @@ def _missing(title: str, message: str) -> str:
 
 def estimate_blocks(estimate: dict[str, Any], language: Language) -> list[EstimateBlock]:
     """Sections of the estimate table (side.estimate_side_table) by their heading; builds before
-    2026-11-23 wrote a note after a dash into the heading ("… — цены пока имитация"). A heading
-    that is not a known section is skipped. A materials section is approximate when its total is
-    provisional (`guess`) or, in those older builds, its heading carried that note."""
+    2026-11-23 wrote a note after a dash into the heading ("… — цены пока имитация"), it is
+    dropped. A heading that is not a known section is skipped."""
     titles = {section_title(s, language): s for s in SECTIONS}
     blocks: list[EstimateBlock] = []
     section: Section | None = None
     title = ""
-    noted = False
     rows: list[dict[str, Any]] = []
 
     def close(subtotal: dict[str, Any] | None) -> None:
         if section is not None:
-            rough = noted or bool(subtotal and subtotal.get("guess"))
-            approximate = rough and section in MATERIAL_SECTIONS
-            blocks.append(EstimateBlock(section, title, tuple(rows), subtotal, approximate))
+            blocks.append(EstimateBlock(section, title, tuple(rows), subtotal))
 
     for row in estimate["rows"]:
         cells = [str(c) for c in row["cells"]]
         if row.get("section"):
             close(None)
-            title, dash, _ = cells[1].partition(" — ")
-            section, rows, noted = titles.get(title), [], bool(dash)
+            title = cells[1].partition(" — ")[0]
+            section, rows = titles.get(title), []
         elif _is_subtotal(cells):
             close(row)
             section, rows = None, []
@@ -693,8 +689,6 @@ def _is_subtotal(cells: Sequence[str]) -> bool:
 
 def _block(block: EstimateBlock, columns: list[str], align: list[str], language: Language) -> str:
     cls = ["r-lines__num" if a != "left" else "" for a in align]
-    approx = text("approximate", language)
-    tag = f' <span class="r-lines__tag">{_e(approx)}</span>' if block.approximate else ""
     head = "".join(f'<th class="{c}">{_e(t)}</th>' for c, t in zip(cls, columns, strict=True))
     # One row group per item (a row does not break across pages); the work scope is in the
     # appendix, the work table points to it under its heading
@@ -705,14 +699,15 @@ def _block(block: EstimateBlock, columns: list[str], align: list[str], language:
     ref = ""
     if _scoped(block):
         ref = f'<p class="r-lines__ref">{_e(text("appendix_ref", language))}</p>'  # fmt: skip
-    if block.subtotal is not None:
+    if block.listed:  # a bill of quantities: no total, prices come with the chosen series
+        listed = f'<p class="r-lines__ref">{_e(estimate_text("listed", language))}</p>'
+        ref = f"{ref}{listed}"
+    elif block.subtotal is not None:
         cells = [str(c) for c in block.subtotal["cells"]]
-        if block.approximate:
-            cells[-1] = f"≈ {cells[-1]}"
         body.append(f'<tbody class="r-lines__subtotal">{_tr(cells, cls)}</tbody>')
     return "".join(
         [
-            f'<section class="r-lines"><h2 class="r-lines__title">{_e(block.title)}{tag}</h2>',
+            f'<section class="r-lines"><h2 class="r-lines__title">{_e(block.title)}</h2>',
             ref,
             f'<table class="r-lines__table"><thead><tr>{head}</tr></thead>',
             f"{''.join(body)}</table></section>",
@@ -779,8 +774,6 @@ APPENDIX_CSS = f"""
 LINES_CSS = f"""
 .r-lines {{ font: 9.5pt/1.45 {FONT}; color: #1d2330; }}
 .r-lines__title {{ font-size: 11pt; font-weight: 600; margin: 10mm 0 1mm; break-after: avoid; }}
-.r-lines__tag {{ font-size: 8pt; font-weight: 400; color: #8a5a00; background: #fff4d6;
-  padding: 0.3mm 1.6mm; margin-left: 2mm; vertical-align: 1px; white-space: nowrap; }}
 .r-lines__empty {{ color: #999; font-style: italic; }}
 .r-lines__table {{ width: 100%; border-collapse: collapse; table-layout: fixed; }}
 .r-lines__table thead {{ display: table-header-group; }}
@@ -809,35 +802,31 @@ LINES_CSS = f"""
 
 
 def _summary(blocks: Sequence[EstimateBlock], columns: list[str], language: Language) -> str:
-    """Closing block: section totals on the left, their sum large on the right, and what "!"
-    means; only when every shown section has a priced total (a bill of quantities has none)."""
-    totals = [b.subtotal for b in blocks]
-    if not blocks or any(t is None for t in totals):
+    """Closing block: section totals on the left, their sum large on the right; only when every
+    shown priced section has a total (a bill of quantities has none). Finish materials (listed)
+    have no price and stay out of it."""
+    priced = [b for b in blocks if not b.listed]
+    totals = [b.subtotal for b in priced]
+    if not priced or any(t is None for t in totals):
         return ""
-    cells = [
-        (b.title, str(t["cells"][-1]), b.approximate)
-        for b, t in zip(blocks, totals, strict=True)
-        if t
-    ]
-    sums = [parse_number(value) for _, value, _ in cells]
+    cells = [(b.title, str(t["cells"][-1])) for b, t in zip(priced, totals, strict=True) if t]
+    sums = [parse_number(value) for _, value in cells]
     if any(v is None for v in sums):
         return ""
     rows = "".join(
         f'<div class="r-closing__part"><span>{_e(title)}</span>'
-        f'<span class="r-closing__sum">{"≈ " if guess else ""}{_e(value)}</span></div>'
-        for title, value, guess in cells
+        f'<span class="r-closing__sum">{_e(value)}</span></div>'
+        for title, value in cells
     )
     total = format_number(sum(v for v in sums if v is not None))
     heading = f"{estimate_text('total', language)}, {columns[-1].rpartition(', ')[2]}"
-    guess = any(g for _, _, g in cells)
-    note = f'<p class="r-closing__note">{_e(text("guess", language))}</p>' if guess else ""
     return "".join(
         [
             '<section class="r-closing"><div class="r-closing__head">',
             f"<span>{_e(text('summary', language))}</span><span>{_e(heading)}</span></div>",
             f'<div class="r-closing__body"><div class="r-closing__parts">{rows}</div>',
             f'<div class="r-closing__grand">{_e(total)}</div></div>',
-            f"{note}</section>",
+            "</section>",
         ]
     )
 
@@ -855,5 +844,4 @@ CLOSING_CSS = f"""
 .r-closing__part {{ display: flex; justify-content: space-between; gap: 6mm; }}
 .r-closing__sum {{ white-space: nowrap; }}
 .r-closing__grand {{ font-size: 20pt; font-weight: 600; color: #fb7578; white-space: nowrap; }}
-.r-closing__note {{ color: #555; font-size: 8.5pt; margin: 2mm 0 0; }}
 """

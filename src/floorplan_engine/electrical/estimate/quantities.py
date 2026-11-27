@@ -31,7 +31,7 @@ specification: the estimate without prices is the bill of quantities:
 - one breaker per group and the panel installation; the panel set of the "Panel" sheet, its
   assembly and labels replace them in build_estimate (estimate/__init__.py);
 - lights, lighting outputs and appliance outputs by point, LED strip in metres; a floor
-  heating controller (`thermostat`) is one item by point with no price yet (pricing.UNPRICED)
+  heating controller (`thermostat`) is one item by point, a finish material without a price,
   and no flush box, frame or fitting work counted for it;
 - a LED power supply per LED output and its fitting (decision 2026-11-11): at the strip, or on
   a DIN rail in the panel (Electrical.led_supply), with its own prices; in the panel the

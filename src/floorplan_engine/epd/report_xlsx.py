@@ -25,7 +25,7 @@ from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.worksheet.properties import PageSetupProperties
 from openpyxl.worksheet.worksheet import Worksheet
 
-from floorplan_engine.electrical.estimate.files import XLSX_GUESS_FILL, XLSX_MONEY, XLSX_QTY
+from floorplan_engine.electrical.estimate.files import XLSX_MONEY, XLSX_QTY
 from floorplan_engine.electrical.estimate.texts import parse_number, section_title
 from floorplan_engine.electrical.estimate.texts import text as estimate_text
 from floorplan_engine.epd.report import (
@@ -136,7 +136,7 @@ def report_xlsx(
             if block in shown:  # an estimate not split: one materials section for both
                 continue
             shown.append(block)
-            total = _block(ws, block, width, priced)
+            total = _block(ws, block, width, priced, language)
             if total is not None:
                 subtotals.append(total)
     if priced and subtotals:
@@ -148,9 +148,6 @@ def report_xlsx(
         _row(ws, grand, width, font=_font(size=13, bold=True), height=30, above=RULE_STRONG,
              medium=True)  # fmt: skip
         ws.cell(grand, 6).number_format = XLSX_MONEY
-        if any(b.approximate for b in shown):
-            ws.append(["", text("guess", language)])
-            _row(ws, ws.max_row, width, font=_font(size=9, color=MUTED, italic=True), height=20)
     for letter, w in zip("ABCDEF", WIDTHS[:width], strict=False):
         ws.column_dimensions[letter].width = w
     ws.freeze_panes = f"A{head_row + 1}"
@@ -163,8 +160,11 @@ def _section_title(part: Part, language: Language) -> str:
     return section_title(ESTIMATE_PARTS[part][0], language)
 
 
-def _block(ws: Worksheet, block: EstimateBlock, width: int, priced: bool) -> str | None:
-    """A section: heading, items, its total as a formula; returns the total cell (priced)."""
+def _block(
+    ws: Worksheet, block: EstimateBlock, width: int, priced: bool, language: Language
+) -> str | None:
+    """A section: heading, items, its total as a formula; returns the total cell (priced). Finish
+    materials (listed) are a bill of quantities: no price, no total, the note in its place."""
     _gap(ws)
     ws.append(["", block.title])
     _row(ws, ws.max_row, width, font=_font(size=11, bold=True), height=24, below=RULE_STRONG)
@@ -176,7 +176,7 @@ def _block(ws: Worksheet, block: EstimateBlock, width: int, priced: bool) -> str
         qty = parse_number(cells[3])
         values: list[object] = [int(no) if no is not None else cells[0], cells[1], cells[2],
                                 qty if qty is not None else cells[3]]  # fmt: skip
-        if priced:
+        if priced and not block.listed:
             price = parse_number(cells[4])
             values += [price, f'=IF(E{r}="","",D{r}*E{r})']
         ws.append(values)
@@ -188,6 +188,10 @@ def _block(ws: Worksheet, block: EstimateBlock, width: int, priced: bool) -> str
             ws.cell(r, 6).number_format = XLSX_MONEY
         if row.get("hint"):
             ws.cell(r, 2).comment = Comment(str(row["hint"]), "Shtroba")
+    if block.listed:
+        ws.append(["", estimate_text("listed", language)])
+        _row(ws, ws.max_row, width, font=_font(size=9, color=MUTED, italic=True), height=20)
+        return None
     if not priced:
         return None
     last = ws.max_row
@@ -196,9 +200,6 @@ def _block(ws: Worksheet, block: EstimateBlock, width: int, priced: bool) -> str
     total = ws.max_row
     _row(ws, total, width, font=_font(bold=True), height=24, above=RULE_STRONG)
     ws.cell(total, 6).number_format = XLSX_MONEY
-    if block.approximate:
-        guess = PatternFill("solid", start_color=XLSX_GUESS_FILL, end_color=XLSX_GUESS_FILL)
-        ws.cell(total, 6).fill = guess
     return f"F{total}"
 
 

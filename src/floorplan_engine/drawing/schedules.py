@@ -12,18 +12,15 @@ from floorplan_engine.drawing.tables import (
     TEXT_GAP,
     Cell,
     Column,
-    Guess,
     Mark,
     Table,
     name_width,
 )
 from floorplan_engine.electrical.colors import group_colors
 from floorplan_engine.electrical.estimate import Estimate
-from floorplan_engine.electrical.estimate.items import SECTIONS
+from floorplan_engine.electrical.estimate.items import LISTED_SECTIONS, SECTIONS
 from floorplan_engine.electrical.estimate.texts import (
-    PROVISIONAL_MARK,
     format_number,
-    provisional,
     section_title,
 )
 from floorplan_engine.electrical.estimate.texts import text as estimate_text
@@ -179,9 +176,11 @@ def estimate_table(
     est: Estimate, language: Language, priced: bool, title: str | None = None
 ) -> Table:
     """Estimate on the sheet: sections (rough and finish materials, rough and finishing work), their
-    totals and "Total"; without a price list, a bill of quantities (quantities only). The total of a
-    materials section is a Guess cell while it is provisional (estimate.texts.provisional). title
-    is a custom title (plumbing estimate); none means electrical."""
+    totals and "Total"; without a price list, a bill of quantities (quantities only). Finish
+    materials (LISTED_SECTIONS) are a bill of quantities in any case: empty price and sum and no
+    total (the note under the estimate says why, pricing.price_notes); the viewer and the report
+    read the totals by the shape of the row, so no caption row is added. title is a custom title
+    (plumbing estimate); none means electrical."""
 
     def t(key: str, **values: object) -> str:
         return estimate_text(key, language, **values)
@@ -208,24 +207,22 @@ def estimate_table(
         if not lines:
             continue
         heading = section_title(section, language)
+        listed = section in LISTED_SECTIONS
         rows.append(("", heading, "", "", *(("", "") if priced else ())))
         for k, ln in enumerate(lines, 1):
             qty = format_number(ln.qty, 1).removesuffix(",0")
-            money = (
-                (
+            money: tuple[Cell, ...] = ()
+            if priced and listed:
+                money = ("", "")
+            elif priced:
+                money = (
                     format_number(ln.price) if ln.price is not None else "—",
                     format_number(ln.total) if ln.total is not None else "—",
                 )
-                if priced
-                else ()
-            )
             rows.append((str(k), ln.name, ln.unit, qty, *money))
-        if priced:
-            # Plain "Total": the section heading is right above, its name is not repeated; the
-            # total of materials priced by the placeholder is provisional (decision 2026-11-23)
-            amount = format_number(est.subtotal(section))
-            cell: Cell = Guess(amount, PROVISIONAL_MARK) if provisional(section, priced) else amount
-            rows.append(("", t("subtotal"), "", "", "", cell))
+        if priced and not listed:
+            # Plain "Total": the section heading is right above, its name is not repeated
+            rows.append(("", t("subtotal"), "", "", "", format_number(est.subtotal(section))))
     total = ("", t("total"), "", "", "", format_number(est.total)) if priced else None
     if title is None:
         title = t("sheet_title") if priced else t("sheet_volumes")

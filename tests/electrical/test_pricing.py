@@ -1,108 +1,100 @@
-"""Estimate prices (electrical/pricing.py): the price service mock knows every item, the studio
-price list beats the service, service rows are marked."""
+"""Estimate prices (electrical/pricing.py): only the studio price list (decision 2026-11-27, no
+mock price service), a price service on top is still possible and its rows are marked; finish
+materials are a bill of quantities without prices."""
 
 from __future__ import annotations
 
-import pytest
+from dataclasses import dataclass
 
 from floorplan_engine.electrical.estimate import build_estimate
-from floorplan_engine.electrical.estimate.items import LINES
-from floorplan_engine.electrical.price_list import PriceList
-from floorplan_engine.electrical.pricing import (
-    UNPRICED,
-    MockPriceService,
-    Prices,
-    mock_covers_all_lines,
-    mock_price,
-    price_notes,
-)
+from floorplan_engine.electrical.estimate.items import LINES, LISTED_SECTIONS
+from floorplan_engine.electrical.price_list import Price, PriceList, Quote
+from floorplan_engine.electrical.pricing import Prices, price_notes
+from floorplan_engine.electrical.splices import Splice
+from floorplan_engine.pipeline import price_service
 from tests.electrical.test_estimate import _wiring
 
 
-def test_mock_knows_every_line_and_is_deterministic() -> None:
-    assert mock_covers_all_lines() == []
-    assert len(LINES) > 30
-    assert mock_price("socket") == mock_price("socket") == 180
-    assert mock_price("busbar.1P") == 200 and mock_price("busbar.4P") == 750  # 1 m comb
-    assert mock_price("нет такого") is None
+@dataclass(frozen=True)
+class FlatService:
+    """A stand-in external price service: one price for every key."""
+
+    price: float = 99.0
+    currency: str = "грн"
+
+    @property
+    def splice(self) -> Splice | None:
+        return None
+
+    def lookup(self, key: str) -> Quote:
+        return Quote(Price(price=self.price), None, service=True)
 
 
-@pytest.mark.parametrize(
-    ("key", "price"),
-    [
-        ("cable.3x1.5", 45),  # 10 UAH per mm² of total cross-section
-        ("cable.3x2.5", 75),
-        ("cable.5x6", 300),
-        ("cable.UTP cat.6", 28),  # low-voltage cable by mark
-        ("thermostat", 3000),
-        ("cable.abc", None),
-        ("frame.1", 60),
-        ("frame.4", 180),
-        ("junction_box.80", 40),
-        ("junction_box.100×100", 60),
-        ("junction_box_ip.150x110", 220),
-        ("input.C63 2P", 850),  # above 40 A costs more
-        ("input.C40 2P", 650),
-        ("relay.63 А", 1900),
-        ("breaker.C16", 140),
-        ("breaker.C50", 220),
-        ("diff.C16 30 мА", 950),
-        ("breaker.C16 3P", 420),  # three-phase: more poles
-        ("diff.C16 30 мА 4P", 2375),
-        ("input.C40 4P", 1300),
-        ("ats.АВР", 4500),  # no rating: price for the kind
-        ("work.chase", 120),  # wall material unknown: as brick
-        ("work.chase.concrete", 200),
-        ("work.chase.claydite", 150),
-        ("work.chase.brick", 120),
-        ("work.chase.aerated", 90),
-        ("work.chase_wide.concrete", 300),  # wide: narrow × 1.5 in the same material
-        ("work.chase_wide.aerated", 135),
-        ("work.chase_wide", 180),
-    ],
-)
-def test_mock_price_by_parameter(key: str, price: float | None) -> None:
-    assert mock_price(key) == price
+def test_build_has_no_price_service_by_default() -> None:
+    """No mock: without a given client the estimate is priced by the studio list alone."""
+    assert price_service(None) is None
+    service = FlatService()
+    assert price_service(service) is service
 
 
 def test_own_prices_override_service_even_without_rating() -> None:
     own = PriceList.model_validate(
         {"items": {"diff": 700, "cable.3x2.5": {"price": 80, "name": "ВВГнг"}}}
     )
-    prices = Prices(own, MockPriceService())
+    prices = Prices(own, FlatService())
     diff = prices.lookup("diff.C16 30 мА")
     assert diff.price is not None and not diff.service
     assert diff.price.price == 700  # own key for the kind beats the exact service price
-    assert prices.lookup("socket").service and prices.lookup("socket").price is not None
+    assert prices.lookup("socket_box").service and prices.lookup("socket_box").price is not None
     exact = prices.lookup("cable.3x2.5")
     assert exact.exact is not None and exact.exact.name == "ВВГнг"
     assert prices.currency == "грн" and prices.priced
     assert not Prices().priced and Prices().lookup("socket").price is None
 
 
-def test_estimate_marks_service_lines_and_notes() -> None:
+def test_only_the_studio_list_prices_the_estimate() -> None:
+    """A key the list has no price for stays "no price" (not invented), out of the total."""
     wiring, elec = _wiring()
     own = PriceList.model_validate({"items": {"socket_box": 20}, "date": "2026-10"})
-    est = build_estimate(wiring, elec, Prices(own, MockPriceService()), "uk")
+    est = build_estimate(wiring, elec, Prices(own), "uk")
     by_key = {ln.key: ln for ln in est.lines}
-    assert not by_key["socket_box"].service and by_key["socket_box"].hint is None
-    assert by_key["socket"].service and "імітація" in (by_key["socket"].hint or "")
-    assert est.unpriced == 0 and est.from_service == len(est.lines) - 1
-    notes = price_notes(est, Prices(own, MockPriceService()), "uk")
-    assert notes[0] == "Ціни: prices.yaml (2026-10)" and "із сервісу цін" in notes[1]
-    assert price_notes(est, Prices(None, MockPriceService()), "uk")[0].startswith("Усі ціни")
-    # Device fitting: its own note and the service mark together
-    assert "Встановлення розеток" in (by_key["work.mechanism"].hint or "")
-    assert "імітація" in (by_key["work.mechanism"].hint or "")
+    assert by_key["socket_box"].price == 20 and not by_key["socket_box"].service
+    assert by_key["work.cable"].price is None  # no price in the list: not invented
+    assert est.from_service == 0
+    assert est.unpriced == sum(1 for ln in est.lines if not ln.listed) - 1
+    notes = price_notes(est, Prices(own), "uk")
+    assert notes[0] == "Ціни: prices.yaml (2026-10)"
+    assert not any("імітація" in n for n in notes)
 
 
-def test_mock_leaves_floor_heating_without_a_price() -> None:
-    """Prices are not invented: the floor heating cable, sensor and their work, the joint work in
-    switch flush boxes are the items the mock skips (a section length as the key parameter too);
-    the controller has a price."""
-    heating = {"heating_cable", "heating_sensor", "heating_conduit", "work.floor_heating"}
-    splices = {"work.splice", "work.splice_crimp"}  # 2026-11-25: no price given yet
-    assert heating | splices == UNPRICED and set(LINES) >= UNPRICED
-    for key in (*heating, *splices, "heating_cable.27"):
-        assert mock_price(key) is None
-        assert MockPriceService().lookup(key).price is None
+def test_finish_materials_are_listed_without_prices() -> None:
+    """Wiring devices, lights and panel devices are the client's choice: no price even when the
+    list names one, not counted as "no price", out of the totals; one note says why."""
+    wiring, elec = _wiring()
+    finish = [k for k, line in LINES.items() if line[0] in LISTED_SECTIONS]
+    assert {"socket", "frame", "breaker", "rcd", "light", "led_psu"} <= set(finish)
+    own = PriceList.model_validate({"items": {"socket": 180, "breaker": 140, "socket_box": 20}})
+    est = build_estimate(wiring, elec, Prices(own), "ru")
+    listed = [ln for ln in est.lines if ln.listed]
+    assert listed and all(ln.section == "material_finish" for ln in listed)
+    assert all(ln.price is None and ln.total is None for ln in listed)
+    assert not any("уточняется" in (ln.hint or "") for ln in listed)
+    assert est.subtotal("material_finish") == 0 and est.listed == len(listed)
+    assert est.unpriced == sum(1 for ln in est.lines if ln.price is None and not ln.listed)
+    notes = price_notes(est, Prices(own), "ru")
+    assert any(
+        n.startswith(f"Чистовые материалы ({len(listed)} поз.) — ведомость без цен") for n in notes
+    )
+
+
+def test_service_rows_are_marked_without_the_mock_wording() -> None:
+    wiring, elec = _wiring()
+    own = PriceList.model_validate({"items": {"socket_box": 20}})
+    est = build_estimate(wiring, elec, Prices(own, FlatService()), "uk")
+    by_key = {ln.key: ln for ln in est.lines}
+    assert by_key["work.cable"].service and by_key["work.cable"].price == 99
+    assert "із сервісу цін" in (by_key["work.cable"].hint or "")
+    assert "імітація" not in (by_key["work.cable"].hint or "")
+    assert not by_key["socket"].service  # a listed line is never looked up
+    notes = price_notes(est, Prices(own, FlatService()), "uk")
+    assert any("із сервісу цін" in n and "імітація" not in n for n in notes)

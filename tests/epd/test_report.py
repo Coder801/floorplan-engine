@@ -39,10 +39,10 @@ ESTIMATE: dict[str, Any] = {
         # A build before 2026-11-23: a note after the dash in the heading
         _row("", "Черновые материалы — цены пока имитация", "", "", "", "", section=True),
         _row("1", "Кабель ВВГнг 3×1,5", "м", "10", "45", "450"),
-        _row("", "Итого", "", "", "", "450", guess=True),
+        _row("", "Итого", "", "", "", "450"),
+        # Finish materials: a bill of quantities, no price, no total (decision 2026-11-27)
         _row("", "Чистовые материалы", "", "", "", "", section=True),
-        _row("1", "Розетка", "шт", "2", "180", "360"),
-        _row("", "Итого", "", "", "", "360"),
+        _row("1", "Розетка", "шт", "2", "", ""),
         _row("", "Черновые работы", "", "", "", "", section=True),
         _row(
             "1",
@@ -58,7 +58,7 @@ ESTIMATE: dict[str, Any] = {
         _row("1", "Установка механизмов", "шт", "2", "100", "200"),
         _row("", "Итого", "", "", "", "1 200,50"),
     ],
-    "total": ["", "Всего", "", "", "", "2 350,50"],
+    "total": ["", "Всего", "", "", "", "1 990,50"],
     "notes": ["Цены: prices.yaml"],
 }
 
@@ -142,7 +142,8 @@ def test_blocks_by_heading() -> None:
     assert [b.section for b in blocks] == ["material_rough", "material_finish", "rough", "finish"]
     assert blocks[0].title == "Черновые материалы"
     assert [r["cells"][1] for r in blocks[0].rows] == ["Кабель ВВГнг 3×1,5"]
-    assert blocks[0].subtotal is not None and blocks[0].subtotal["guess"]
+    assert blocks[0].subtotal is not None and not blocks[0].listed
+    assert blocks[1].listed and blocks[1].subtotal is None
 
 
 def test_unknown_heading_skipped() -> None:
@@ -157,18 +158,16 @@ def test_only_chosen_sections() -> None:
     assert "r-plan" not in html  # no plan
     assert "<b>Входит:</b> разметка трассы; фиксация." in html
     assert "<b>Результат:</b> кабель закреплён" in html
-    assert '<div class="r-closing__grand">700</div>' in html  # 360 + 340
+    assert "Цены — после выбора серии" in html  # in place of the finish materials total
+    assert '<div class="r-closing__grand">340</div>' in html  # finish materials have no price
 
 
-def test_all_parts_summary_and_provisional_mark() -> None:
+def test_all_parts_summary_without_a_provisional_mark() -> None:
     html = report_html(MANIFEST, _page(), PARTS)
     assert '<section class="r-plan">' in html
-    assert ">2 350,50<" in html  # 450 + 360 + 340 + 1 200,50
-    # Materials priced by the placeholder: a tag at the heading, "≈" at the sums, the key at the end
-    assert html.count('<span class="r-lines__tag">цены ориентировочные</span>') == 1
-    assert '<td class="r-lines__num">≈ 450</td>' in html
-    assert '<span class="r-closing__sum">≈ 450</span>' in html
-    assert "≈ — цены материалов ориентировочные" in html and " !" not in html
+    assert ">1 990,50<" in html  # 450 + 340 + 1 200,50: finish materials stay out
+    assert "ориентировочные" not in html and "≈" not in html and " !" not in html
+    assert '<span class="r-closing__sum">450</span>' in html
     assert "prices.yaml" not in html  # studio notes stay out of the report
     assert "Кв &lt;1&gt;" in html and "Кв <1>" not in html
 
@@ -371,14 +370,21 @@ def test_plan_legend_grid() -> None:
     assert "grid-template-columns: repeat(auto-fill" in html
 
 
-def test_old_build_heading_note_makes_materials_approximate() -> None:
-    blocks = estimate_blocks(ESTIMATE, "ru")
-    assert [b.approximate for b in blocks] == [True, False, False, False]
+def test_old_build_heading_note_is_dropped_and_priced_finish_materials_stay_out() -> None:
+    """A build before 2026-11-27 priced finish materials and gave them a total: the report still
+    leaves them out of the closing block; the old note after the dash is not part of the title."""
+    assert estimate_blocks(ESTIMATE, "ru")[0].title == "Черновые материалы"
     rows = [
         _row("", "Чистовые материалы", "", "", "", "", section=True),
+        _row("1", "Розетка", "шт", "2", "180", "360"),
         _row("", "Итого", "", "", "", "360"),
+        _row("", "Черновые работы", "", "", "", "", section=True),
+        _row("1", "Прокладка кабеля", "м", "10", "34", "340"),
+        _row("", "Итого", "", "", "", "340"),
     ]
-    assert [b.approximate for b in estimate_blocks({**ESTIMATE, "rows": rows}, "ru")] == [False]
+    page = {**_page(), "estimate": {**ESTIMATE, "rows": rows}}
+    html = report_html(MANIFEST, page, ["material_finish", "work_rough"])
+    assert '<div class="r-closing__grand">340</div>' in html
 
 
 def test_panel_legend_explains_the_abbreviations() -> None:
