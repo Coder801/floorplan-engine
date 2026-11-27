@@ -426,6 +426,13 @@ attachment`, имя «<проект> — Смета электрики.xlsx» (�
 Правит только студия (`editable`), иначе `POST` — `403`. Проекты не пересобираются: смета новая
 после `build`.
 
+Кто открывает страницу (решение 2026-11-28, `access.PRICE_ROLES`, `access.can_open_prices`):
+владелец и дизайнер студии (`account_type: pro`, роль в `membership` — `owner` или `designer`) —
+читают и правят прайс своей студии; суперпользователь — тоже; гость (`visitor`) — только `GET`,
+без правки. Монтажнику студии `GET` и `POST` — `403` «прайс — только для владельца и дизайнера
+студии», остальным — `403` «прайс — только для студии». Показывать ли раздел прайса, фронт
+узнаёт из `GET /api/auth/me`: `"user": {…, "prices": true}` — по тому же правилу.
+
 ### `GET /api/prices`
 
 `{file, exists, currency, date, note, splice, rows, stale, market, issues, editable}`: `rows` —
@@ -506,3 +513,37 @@ multipart:
 - `project` — `null`, если отзыв без проекта или проект удалён.
 - `total` — сколько подходит под фильтры, `counts` — сколько всего по статусам (без фильтров).
 - В `GET /api/admin/summary` — `feedback_new`: сколько отзывов в статусе `new`.
+
+### Админка: клиенты, прайс и профиль студии
+
+Решение 2026-11-28. Только действующий суперпользователь (иначе `403`), только чтение.
+
+`GET /api/admin/clients?q=` — все учётки хозяев квартир (`account_type: client`), новые сверху,
+по строке на человека; `q` — как у `/api/admin/users`: имя, почта, телефон без учёта регистра.
+
+```json
+[{"user": {"id": "…", "name": "Иван", "email": "…", "phone": null, "account_type": "client",
+           "superuser": false, "active": true, "last_login": "…", "created": "…"},
+  "kind": "studio",
+  "project": {"id": "…", "name": "Кв 12", "slug": "kv12", "studio": {"id": "…", "name": "Искра"},
+              "state": "built", "services": ["electrical", "plumbing", "demolition"],
+              "created": "…"},
+  "studio": {"id": "…", "name": "Искра"}}]
+```
+
+`kind`: `personal` — проект в своём «Мой ремонт» (ведёт сам; первый по имени, `studio` — `null`);
+`studio` — клиент проекта студии по приглашению (`project_member` с ролью `client`; `studio` —
+студия проекта); `none` — проекта пока нет (`project` и `studio` — `null`). Есть свой проект —
+строка `personal`, даже если человек ещё и клиент студии. В `GET /api/admin/summary` — `clients`:
+сколько учёток `account_type: client`.
+
+`GET /api/admin/studios/{id}` — ещё два поля:
+
+```json
+{"prices": {"text": "currency: грн\nitems:\n  work.chase: 120\n", "updated": "2026-11-28T10:00:00+00:00"},
+ "profile": {"organization": "ООО Искра", "stage": "Р", "signatures": []}}
+```
+
+`prices.text` — прайс студии как записан (строка `price_list` студии), `null` — прайса нет;
+`prices.updated` — когда записан (`price_list.updated_at`, миграция `0020`), `null` — прайса нет или
+он записан до колонки. `profile` — строка `studio_profile`, `null` — профиля нет.
