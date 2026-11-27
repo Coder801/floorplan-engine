@@ -42,10 +42,15 @@ Postgres (`TEST_REQUIRE_DB=1`) и покрытием (`--cov`, ниже 90 % —
    подавлений, если можно обойтись.
 3. Документация — в том же изменении: `docs/architecture.md` (если меняется, где что
    считается), `docs/status.md` (строка о сделанном), `docs/modules.md` (модуль), `CLAUDE.md` (правило),
-   `web/README.md` (устройство фронта), `docs/epd-format.md` (формат страниц).
+   `web/README.md` (устройство фронта), `docs/epd-format.md` (формат страниц), `docs/diagrams.md`
+   (UML-схемы: новый слой, состояние проекта, группа фронта, файл модели, контейнер или связь
+   между ними; часть сверяет `tests/test_diagrams.py`).
 4. База сервиса — только Postgres, и в тестах тоже: перед тестами `docker compose up -d db`
    (`tests/service/conftest.py`). Новое поле или таблица — миграцией в том же изменении,
-   иначе упадёт `test_migrations_match_models`.
+   иначе упадёт `test_migrations_match_models`. Тесты бэка идут параллельно, по процессу на
+   ядро (`pytest-xdist`, `addopts = "-n auto"` в `pyproject.toml`), у каждого процесса своя
+   база `floorplan_engine_gwN_test`; поэтому тест не пишет в общие папки и порты — только в
+   `tmp_path`. `-n 0` — в одном процессе (отладка с `pdb`).
 5. Перед тем как сообщить, что готово, — скилл `verify`: тесты, типы и линтер обеих сторон,
    которых касалось изменение, и раскладка — контракты импортов бэка (`uv run lint-imports`)
    и `src/structure.test.ts` фронта.
