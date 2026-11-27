@@ -18,7 +18,7 @@ from typing import Literal
 
 from pydantic import Field, model_validator
 
-from floorplan_engine.electrical.estimate_items import LINES
+from floorplan_engine.electrical.estimate.items import LINES
 from floorplan_engine.model.schema import StrictModel
 
 MARKET_FILE = "market.yaml"  # market sample — next to the studio price list (projects/)

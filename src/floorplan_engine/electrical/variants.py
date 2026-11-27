@@ -19,7 +19,7 @@ from dataclasses import dataclass
 from typing import get_args
 
 from floorplan_engine.electrical.estimate import build_estimate
-from floorplan_engine.electrical.estimate_quantities import conduit_lengths
+from floorplan_engine.electrical.estimate.quantities import conduit_lengths
 from floorplan_engine.electrical.lines import split_by_lines
 from floorplan_engine.electrical.low_links import is_low
 from floorplan_engine.electrical.master import with_master_switch

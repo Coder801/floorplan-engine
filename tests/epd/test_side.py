@@ -226,7 +226,7 @@ def test_estimate_material_totals_carry_guess(monkeypatch: pytest.MonkeyPatch) -
     """Contract with the viewer (decision 2026-11-23): the total row of each materials section
     has "guess": true while material prices are a placeholder; its amount is plain text, work
     totals and the grand total get no flag, a bill of quantities neither."""
-    import floorplan_engine.electrical.estimate_texts as estimate_texts
+    import floorplan_engine.electrical.estimate.texts as estimate_texts
     from floorplan_engine.electrical.price_list import PriceList
     from floorplan_engine.electrical.pricing import Prices
 

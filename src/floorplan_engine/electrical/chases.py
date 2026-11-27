@@ -149,7 +149,7 @@ def before_plaster(chases: Sequence[Chase]) -> tuple[Chase, ...]:
 def with_conduit(
     chases: Sequence[Chase], conduit: Conduit, loop: LoopConduit = "separate"
 ) -> tuple[Chase, ...]:
-    """Mark the chases the cables go down in conduit (estimate_quantities.conduit_mm): floor
+    """Mark the chases the cables go down in conduit (estimate.quantities.conduit_mm): floor
     routes always, ceiling routes with conduit in the walls. Such a chase is narrow only for one
     conduit (CHASE_NARROW_CONDUIT). With loop "shared" a chain point's cable in and cable out go
     in one conduit (decision 2026-11-11): a point twice in the chase is a pair, one conduit

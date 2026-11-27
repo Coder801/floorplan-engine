@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from floorplan_engine.electrical.estimate_texts import (
+from floorplan_engine.electrical.estimate.texts import (
     format_number,
     parse_number,
     provisional,

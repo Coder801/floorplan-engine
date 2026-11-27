@@ -6,7 +6,7 @@ project state.
 
 from __future__ import annotations
 
-from floorplan_engine.electrical.estimate_items import WORK_PREFIX
+from floorplan_engine.electrical.estimate.items import WORK_PREFIX
 from floorplan_engine.pipeline.answers import (
     MAX_ANSWER_TEXT,
     AnswerSaved,

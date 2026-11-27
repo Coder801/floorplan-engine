@@ -10,7 +10,7 @@ from typing import Any
 
 import pytest
 
-from floorplan_engine.electrical.estimate_quantities import (
+from floorplan_engine.electrical.estimate.quantities import (
     CONDUIT_JOINT_EVERY,
     conduit_lengths,
     quantities,

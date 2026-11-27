@@ -19,14 +19,14 @@ from floorplan_engine.drawing.tables import (
 )
 from floorplan_engine.electrical.colors import group_colors
 from floorplan_engine.electrical.estimate import Estimate
-from floorplan_engine.electrical.estimate_items import SECTIONS
-from floorplan_engine.electrical.estimate_texts import (
+from floorplan_engine.electrical.estimate.items import SECTIONS
+from floorplan_engine.electrical.estimate.texts import (
     PROVISIONAL_MARK,
     format_number,
     provisional,
     section_title,
 )
-from floorplan_engine.electrical.estimate_texts import text as estimate_text
+from floorplan_engine.electrical.estimate.texts import text as estimate_text
 from floorplan_engine.electrical.groups import ASSUMED, GroupRow, group_rows
 from floorplan_engine.electrical.groups import text as groups_text
 from floorplan_engine.electrical.panel import BoardPanel
@@ -180,7 +180,7 @@ def estimate_table(
 ) -> Table:
     """Estimate on the sheet: sections (rough and finish materials, rough and finishing work), their
     totals and "Total"; without a price list, a bill of quantities (quantities only). The total of a
-    materials section is a Guess cell while it is provisional (estimate_texts.provisional). title
+    materials section is a Guess cell while it is provisional (estimate.texts.provisional). title
     is a custom title (plumbing estimate); none means electrical."""
 
     def t(key: str, **values: object) -> str:

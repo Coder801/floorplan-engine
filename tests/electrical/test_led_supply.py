@@ -9,7 +9,7 @@ import pytest
 
 from floorplan_engine.electrical import wiring as wiring_module
 from floorplan_engine.electrical.estimate import build_estimate
-from floorplan_engine.electrical.estimate_quantities import quantities
+from floorplan_engine.electrical.estimate.quantities import quantities
 from floorplan_engine.electrical.led_supply import (
     DROP_MAX,
     LED_LENGTH_MAX,

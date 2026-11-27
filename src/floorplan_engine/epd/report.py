@@ -48,9 +48,9 @@ from pathlib import Path
 from typing import Any, Literal, cast, get_args
 
 from floorplan_engine import BRAND
-from floorplan_engine.electrical.estimate_items import MATERIAL_SECTIONS, SECTIONS, Section
-from floorplan_engine.electrical.estimate_texts import format_number, parse_number, section_title
-from floorplan_engine.electrical.estimate_texts import text as estimate_text
+from floorplan_engine.electrical.estimate.items import MATERIAL_SECTIONS, SECTIONS, Section
+from floorplan_engine.electrical.estimate.texts import format_number, parse_number, section_title
+from floorplan_engine.electrical.estimate.texts import text as estimate_text
 from floorplan_engine.electrical.panel_text import DEVICE_LEGEND
 from floorplan_engine.epd.single_line import assumed_any, single_line_svgs
 from floorplan_engine.model.texts import Language
@@ -189,7 +189,7 @@ def parts_of(values: Sequence[str]) -> tuple[Part, ...]:
 
 
 @dataclass(frozen=True)
-class _Block:
+class EstimateBlock:
     """One estimate section of the page table: its heading, rows and total row."""
 
     section: Section
@@ -211,7 +211,7 @@ def report_filename(manifest: dict[str, Any], parts: Sequence[Part]) -> str:
     """The PDF file name: "<project> — <document>.pdf"; characters a file system refuses
     (/ \\ : * ? " < > |) become spaces."""
     project = str((manifest.get("project") or {}).get("name") or "").strip()
-    title = report_title(parts, _language(manifest))
+    title = report_title(parts, report_language(manifest))
     name = f"{project} — {title}" if project else title
     safe = "".join(" " if c in '/\\:*?"<>|' or ord(c) < 32 else c for c in name)
     return " ".join(safe.split()) + ".pdf"
@@ -234,7 +234,7 @@ def report_html(
     `r-plan`, `r-lines`, `r-closing`), its CSS sits next to its function and selects only inside
     that class, and the page takes the CSS of the sections it holds. Nothing is shared but the
     page box (`@page`, the body margin)."""
-    language = _language(manifest)
+    language = report_language(manifest)
     project = str((manifest.get("project") or {}).get("name") or "")
     estimate = (wiring or {}).get("estimate")
     chosen = [p for p in parts if p in ESTIMATE_PARTS]
@@ -344,7 +344,7 @@ def _css_string(value: str) -> str:
     return '"' + out.replace("\n", " ") + '"'
 
 
-def _language(manifest: dict[str, Any]) -> Language:
+def report_language(manifest: dict[str, Any]) -> Language:
     value = (manifest.get("project") or {}).get("language")
     return cast(Language, value) if value in get_args(Language) else "ru"
 
@@ -628,7 +628,7 @@ def _estimate(estimate: dict[str, Any] | None, parts: Sequence[Part], language: 
     columns = [str(c) for c in estimate["columns"]]
     align = [str(a) for a in estimate["align"]]
     out: list[str] = []
-    shown: list[_Block] = []
+    shown: list[EstimateBlock] = []
     for part in parts:
         found = [blocks[s] for s in ESTIMATE_PARTS[part] if s in blocks]
         if not found:
@@ -652,13 +652,13 @@ def _missing(title: str, message: str) -> str:
     )
 
 
-def estimate_blocks(estimate: dict[str, Any], language: Language) -> list[_Block]:
+def estimate_blocks(estimate: dict[str, Any], language: Language) -> list[EstimateBlock]:
     """Sections of the estimate table (side.estimate_side_table) by their heading; builds before
     2026-11-23 wrote a note after a dash into the heading ("… — цены пока имитация"). A heading
     that is not a known section is skipped. A materials section is approximate when its total is
     provisional (`guess`) or, in those older builds, its heading carried that note."""
     titles = {section_title(s, language): s for s in SECTIONS}
-    blocks: list[_Block] = []
+    blocks: list[EstimateBlock] = []
     section: Section | None = None
     title = ""
     noted = False
@@ -668,7 +668,7 @@ def estimate_blocks(estimate: dict[str, Any], language: Language) -> list[_Block
         if section is not None:
             rough = noted or bool(subtotal and subtotal.get("guess"))
             approximate = rough and section in MATERIAL_SECTIONS
-            blocks.append(_Block(section, title, tuple(rows), subtotal, approximate))
+            blocks.append(EstimateBlock(section, title, tuple(rows), subtotal, approximate))
 
     for row in estimate["rows"]:
         cells = [str(c) for c in row["cells"]]
@@ -691,7 +691,7 @@ def _is_subtotal(cells: Sequence[str]) -> bool:
     return not cells[0] and sum(1 for c in cells if c) == 2 and bool(cells[-1])
 
 
-def _block(block: _Block, columns: list[str], align: list[str], language: Language) -> str:
+def _block(block: EstimateBlock, columns: list[str], align: list[str], language: Language) -> str:
     cls = ["r-lines__num" if a != "left" else "" for a in align]
     approx = text("approximate", language)
     tag = f' <span class="r-lines__tag">{_e(approx)}</span>' if block.approximate else ""
@@ -725,12 +725,12 @@ def _tr(cells: Sequence[str], cls: Sequence[str]) -> str:
     return f"<tr>{tds}</tr>"
 
 
-def _scoped(block: _Block) -> bool:
+def _scoped(block: EstimateBlock) -> bool:
     """A work section with a scope on any of its items."""
     return block.section in WORK_SECTIONS and any(r.get("scope") for r in block.rows)
 
 
-def _appendix(blocks: Sequence[_Block], language: Language) -> str:
+def _appendix(blocks: Sequence[EstimateBlock], language: Language) -> str:
     """What each work includes and its result, by work section, numbers as in the tables; on a
     page of its own after the closing block. None of the shown sections has a scope: nothing."""
     groups = [b for b in blocks if _scoped(b)]
@@ -808,7 +808,7 @@ LINES_CSS = f"""
 """
 
 
-def _summary(blocks: Sequence[_Block], columns: list[str], language: Language) -> str:
+def _summary(blocks: Sequence[EstimateBlock], columns: list[str], language: Language) -> str:
     """Closing block: section totals on the left, their sum large on the right, and what "!"
     means; only when every shown section has a priced total (a bill of quantities has none)."""
     totals = [b.subtotal for b in blocks]

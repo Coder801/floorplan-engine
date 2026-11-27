@@ -1,6 +1,6 @@
 """Electrical estimate files: out/estimate.md, out/estimate.csv and out/estimate.xlsx (Excel with
 formulas: change a price or a quantity and the sums recalculate). The total of a materials
-section is marked as provisional while material prices are a placeholder (estimate_texts).
+section is marked as provisional while material prices are a placeholder (estimate.texts).
 """
 
 from __future__ import annotations
@@ -15,8 +15,8 @@ from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.worksheet.worksheet import Worksheet
 
 from floorplan_engine.electrical.estimate import Estimate
-from floorplan_engine.electrical.estimate_items import MATERIAL_SECTIONS, SECTIONS
-from floorplan_engine.electrical.estimate_texts import (
+from floorplan_engine.electrical.estimate.items import MATERIAL_SECTIONS, SECTIONS
+from floorplan_engine.electrical.estimate.texts import (
     PROVISIONAL_MARK,
     format_number,
     provisional,

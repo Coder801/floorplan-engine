@@ -7,7 +7,7 @@ from pathlib import Path
 
 from floorplan_engine.electrical.chases import CHASE_CABLES, CHASE_SHARE
 from floorplan_engine.electrical.estimate import Estimate, build_estimate
-from floorplan_engine.electrical.estimate_files import (
+from floorplan_engine.electrical.estimate.files import (
     ESTIMATE_CSV,
     ESTIMATE_MD,
     ESTIMATE_XLSX,
@@ -15,8 +15,8 @@ from floorplan_engine.electrical.estimate_files import (
     write_markdown,
     write_xlsx,
 )
-from floorplan_engine.electrical.estimate_quantities import CONDUIT_JOINT_EVERY
-from floorplan_engine.electrical.estimate_texts import text as estimate_text
+from floorplan_engine.electrical.estimate.quantities import CONDUIT_JOINT_EVERY
+from floorplan_engine.electrical.estimate.texts import text as estimate_text
 from floorplan_engine.electrical.groups import group_key
 from floorplan_engine.electrical.mounting import (
     CONDUIT_FILL,

@@ -2,12 +2,12 @@
 provisional mark of the materials totals and the number format of the estimate tables.
 
 The notes (`note_*`) are put together by the estimate pipeline (pipeline/estimates.py), the
-headings and table strings by the writers (estimate_files.py) and the sheets.
+headings and table strings by the writers (estimate/files.py) and the sheets.
 """
 
 from __future__ import annotations
 
-from floorplan_engine.electrical.estimate_items import MATERIAL_SECTIONS, Section
+from floorplan_engine.electrical.estimate.items import MATERIAL_SECTIONS, Section
 from floorplan_engine.model.texts import Language
 
 # Decision 2026-11-12: material prices are not market prices yet (price lists and the price

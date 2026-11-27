@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-from floorplan_engine.electrical.estimate_quantities import quantities
+from floorplan_engine.electrical.estimate.quantities import quantities
 from floorplan_engine.electrical.led_supply import (
     LED_V,
     STRIP_DEFAULT_M,
@@ -129,7 +129,7 @@ def test_before_plaster_leaves_no_chase_work() -> None:
 def test_conduit_floor_always_ceiling_only_premium() -> None:
     """Conduit (docs/wiring-variants.md): on the floor always, the whole line; on the ceiling in
     premium, only the ceiling part; the diameter follows the cable cross-section."""
-    from floorplan_engine.electrical.estimate_quantities import conduit_mm
+    from floorplan_engine.electrical.estimate.quantities import conduit_mm
     from floorplan_engine.electrical.mounting import conduit_diameter
 
     assert [conduit_diameter(m) for m in ("3x1.5", "3x2.5", "3x4", "5x10", "UTP")] == [

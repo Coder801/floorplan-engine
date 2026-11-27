@@ -6,9 +6,9 @@ from pathlib import Path
 
 import pytest
 
-import floorplan_engine.electrical.estimate_texts as estimate_texts
+import floorplan_engine.electrical.estimate.texts as estimate_texts
 from floorplan_engine.electrical.estimate import Estimate, build_estimate
-from floorplan_engine.electrical.estimate_files import write_markdown
+from floorplan_engine.electrical.estimate.files import write_markdown
 from floorplan_engine.electrical.price_list import (
     PriceList,
 )
@@ -53,7 +53,7 @@ def test_xlsx_formulas_give_estimate_total(tmp_path: Path) -> None:
     wiring, elec = _wiring()
     prices = PriceList.model_validate({"items": {"cable.3x2.5": 70, "work.cable": 30}})
     est = build_estimate(wiring, elec, prices, "uk")
-    from floorplan_engine.electrical.estimate_files import write_xlsx
+    from floorplan_engine.electrical.estimate.files import write_xlsx
 
     path = write_xlsx(est, tmp_path / "e.xlsx", "Кошторис", ["примітка"], "uk")
     assert _eval_xlsx(path) == pytest.approx(est.total)
@@ -65,7 +65,7 @@ def test_xlsx_material_totals_are_yellow(tmp_path: Path, monkeypatch: pytest.Mon
     and "Total" do not (decision 2026-11-23)."""
     from openpyxl import load_workbook
 
-    from floorplan_engine.electrical.estimate_files import XLSX_GUESS_FILL, write_xlsx
+    from floorplan_engine.electrical.estimate.files import XLSX_GUESS_FILL, write_xlsx
 
     def fills(est: Estimate, name: str) -> list[bool]:
         ws = load_workbook(write_xlsx(est, tmp_path / name, "Кошторис", [], "uk")).active

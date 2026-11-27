@@ -31,7 +31,7 @@ from floorplan_engine.electrical.elevations import (
 from floorplan_engine.electrical.frames import POST_PITCH_MM
 from floorplan_engine.electrical.point_numbers import ranges
 from floorplan_engine.model.geometry import Vec
-from floorplan_engine.model.schema import PointType
+from floorplan_engine.model.schema import SWITCH_TYPES, PointType
 from floorplan_engine.model.texts import Language, tr
 
 DARK = 0x29251F
@@ -69,7 +69,6 @@ JOG = 2.0  # bend
 MIN_SYMBOL = 1.0  # symbol radius on the sheet, not less than this, mm
 DASH, DASH_GAP = 0.8, 0.6  # dashed leaders from an outlet to the scales, sheet mm
 
-SWITCHES = frozenset({PointType.SWITCH, PointType.PASS_SWITCH})
 LOW_TYPES = frozenset({PointType.DATA, PointType.TV})
 DIAL = 0.5  # floor heating controller: dial radius as a share of the symbol half-size
 
@@ -362,7 +361,7 @@ def _draw(
         first = c.x + p.slot * pitch - pitch * (p.posts - 1) / 2
         for k in range(p.posts):
             cx = first + k * pitch
-            if p.type in SWITCHES:
+            if p.type in SWITCH_TYPES:
                 rect((cx - r, c.y - r, cx + r, c.y + r), LW_THIN, BACK)
             elif p.type is PointType.THERMOSTAT:
                 rect((cx - r, c.y - r, cx + r, c.y + r), LW_THIN, BACK)
@@ -386,7 +385,7 @@ def _draw(
         first = c.x + p.slot * pitch - pitch * (p.posts - 1) / 2
         for k in range(p.posts):
             cx = first + k * pitch
-            if p.type in SWITCHES:
+            if p.type in SWITCH_TYPES:
                 rect((cx - r, c.y - r, cx + r, c.y + r), LW_WALL, color, 0xFFFFFF)
             elif p.type is PointType.THERMOSTAT:  # a square face with a round dial
                 rect((cx - r, c.y - r, cx + r, c.y + r), LW_WALL, color, 0xFFFFFF)

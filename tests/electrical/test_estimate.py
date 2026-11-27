@@ -8,12 +8,11 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-import yaml
 
-import floorplan_engine.electrical.estimate_texts as estimate_texts
+import floorplan_engine.electrical.estimate.texts as estimate_texts
 from floorplan_engine.drawing.tables import Guess
 from floorplan_engine.electrical.estimate import Estimate, Line, build_estimate
-from floorplan_engine.electrical.estimate_items import (
+from floorplan_engine.electrical.estimate.items import (
     CHASE_KEYS,
     HINTS,
     LINES,
@@ -21,8 +20,8 @@ from floorplan_engine.electrical.estimate_items import (
     Section,
     split_key,
 )
-from floorplan_engine.electrical.estimate_quantities import quantities
-from floorplan_engine.electrical.estimate_texts import format_number
+from floorplan_engine.electrical.estimate.quantities import quantities
+from floorplan_engine.electrical.estimate.texts import format_number
 from floorplan_engine.electrical.panel import build_panel, busbars, device_name
 from floorplan_engine.electrical.price_list import (
     PriceList,
@@ -32,7 +31,6 @@ from floorplan_engine.electrical.pricing import MockPriceService, Prices, mock_p
 from floorplan_engine.electrical.splices import back_box_joints
 from floorplan_engine.electrical.wiring import RESERVE, box_wiring
 from floorplan_engine.model.schema import Electrical
-from floorplan_engine.pipeline import build_project, estimate_project
 from floorplan_engine.validation.plan import validate_plan
 from tests.conftest import make_plan, room_wiring
 
@@ -102,68 +100,6 @@ def test_prices_and_unpriced_lines() -> None:
     assert unknown_keys(PriceList.model_validate({"items": {"cabel.3x1.5": 1, "frame.2": 5}})) == [
         "cabel.3x1.5"
     ]
-
-
-def test_estimate_project_writes_tables(tmp_path: Path) -> None:
-    project = tmp_path / "kv1"
-    project.mkdir()
-    room = {
-        "name": "Кв",
-        "default_wall_thickness": 120,
-        "source": "text",
-        "rooms": [
-            {
-                "id": "r",
-                "name": "К",
-                "walls": [{"id": f"w{i + 1}", **w} for i, w in enumerate(RECT)],
-                "openings": [{"id": "r_door_1", **DOOR}],
-            }
-        ],
-    }
-    (project / "room.yaml").write_text(yaml.safe_dump(room, allow_unicode=True), "utf-8")
-    (project / "electrical.yaml").write_text(yaml.safe_dump(ELEC, allow_unicode=True), "utf-8")
-
-    # Without prices.yaml all prices come from the price service (mock); the estimate still has a
-    # total
-    no_prices = estimate_project(project)
-    est = no_prices.estimate
-    assert est is not None and est.total > 0 and est.unpriced == 0
-    assert est.from_service == len(est.lines) and no_prices.prices is None
-    assert "Все цены — из сервиса цен" in no_prices.files[0].read_text("utf-8")
-
-    (project / "prices.yaml").write_text("items:\n  socket_box: 20\n  work.chase: 200\n", "utf-8")
-    result = estimate_project(project)
-    assert result.estimate is not None and result.estimate.total > 0
-    assert result.estimate.from_service == len(result.estimate.lines) - 2  # own price list on top
-    md, csv_path, xlsx, scope = result.files
-    assert scope.name == "work-scope.md" and "work-scope.md" in md.read_text("utf-8")
-    assert xlsx.suffix == ".xlsx" and xlsx.stat().st_size > 0
-    text = md.read_text("utf-8")
-    assert "Смета электрики: Кв" in text and "из сервиса цен (пока имитация" in text
-    raw = csv_path.read_bytes()
-    assert raw.startswith(b"\xef\xbb\xbf")  # BOM: Excel recognises UTF-8
-    assert "socket_box;Подрозетник;шт;4;20;80,00" in raw.decode("utf-8-sig")
-
-    (project / "prices.yaml").write_text("items:\n  sockt_box: 20\n", "utf-8")
-    bad = estimate_project(project)
-    assert bad.estimate is None
-    assert any(i.file == "prices.yaml" and i.path == "items.sockt_box" for i in bad.issues)
-
-    # build writes the same estimate, so the Excel in the viewer matches the sheets; a price list
-    # with errors gives no estimate (errors go to price_issues)
-    (project / "prices.yaml").write_text("items:\n  socket_box: 20\n", "utf-8")
-    built = build_project(project)
-    assert [f.name for f in built.estimate] == [
-        "estimate.md",
-        "estimate.csv",
-        "estimate.xlsx",
-        "work-scope.md",
-    ]
-    (project / "prices.yaml").write_text("items:\n  sockt_box: 20\n", "utf-8")
-    broken = build_project(project)
-    assert broken.price_issues and not broken.estimate
-    assert not (project / "out" / "estimate.xlsx").exists()
-    assert not (project / "out" / "work-scope.md").exists()
 
 
 def test_estimate_table_with_and_without_prices() -> None:
@@ -252,61 +188,6 @@ def test_box_price_falls_back_to_size_free_key() -> None:
     boxes = [ln for ln in est.lines if ln.key.startswith("junction_box.")]
     assert boxes and all(ln.price == 60 for ln in boxes)
     assert all("×" in ln.name or "Ø" in ln.name for ln in boxes)  # size in the name
-
-
-def test_studio_prices_used_when_project_has_none(tmp_path: Path) -> None:
-    from floorplan_engine.pipeline import find_prices
-
-    project = tmp_path / "kv"
-    project.mkdir()
-    assert find_prices(project) is None
-    (tmp_path / "prices.yaml").write_text("items: {}\n", "utf-8")
-    assert find_prices(project) == tmp_path / "prices.yaml"
-    (project / "prices.yaml").write_text("items: {}\n", "utf-8")
-    assert find_prices(project) == project / "prices.yaml"  # the top layer names the notes
-
-
-def test_project_prices_change_only_their_keys(tmp_path: Path) -> None:
-    """Decision 2026-11-25: the studio list is the base, the project's own list wins only for the
-    keys it names; terms merge the same way; a broken layer stops the estimate prices."""
-    from floorplan_engine.pipeline import load_price_layers
-
-    project = tmp_path / "kv"
-    project.mkdir()
-    assert load_price_layers(project) == (None, [])
-    (tmp_path / "prices.yaml").write_text(
-        'date: "2026-11"\nitems:\n  work.cable: 45\n  work.mechanism: 125\n  socket_box: 20\n',
-        "utf-8",
-    )
-    studio, issues = load_price_layers(project)
-    assert issues == [] and studio is not None and studio.items["work.cable"] == 45
-    (project / "prices.yaml").write_text("items:\n  work.mechanism: 100\n", "utf-8")
-    merged, issues = load_price_layers(project)
-    assert issues == [] and merged is not None
-    assert merged.items == {"work.cable": 45, "work.mechanism": 100, "socket_box": 20}
-    assert merged.date == "2026-11"  # the project list does not set it: the studio's stays
-    (project / "prices.yaml").write_text("items:\n  no.such.item: 1\n", "utf-8")
-    broken, issues = load_price_layers(project)
-    assert broken is None and issues and issues[0].path == "items.no.such.item"
-
-
-def test_studio_splice_setting_reaches_every_project(tmp_path: Path) -> None:
-    """splice is set once in the studio list (decision 2026-11-25); a project list without it keeps
-    the studio's, one that sets it wins, like terms."""
-    from floorplan_engine.pipeline import load_price_layers
-
-    project = tmp_path / "kv"
-    project.mkdir()
-    (tmp_path / "prices.yaml").write_text("splice: crimp\nitems:\n  socket_box: 20\n", "utf-8")
-    (project / "prices.yaml").write_text("items:\n  socket_box: 25\n", "utf-8")
-    merged, issues = load_price_layers(project)
-    assert issues == [] and merged is not None and merged.splice == "crimp"
-    (project / "prices.yaml").write_text("splice: wago\n", "utf-8")
-    merged, _ = load_price_layers(project)
-    assert merged is not None and merged.splice == "wago"
-    (tmp_path / "prices.yaml").write_text("splice: solder\n", "utf-8")
-    broken, issues = load_price_layers(project)
-    assert broken is None and issues and issues[0].path == "splice"
 
 
 def _line(section: Section, qty: float, price: float | None, key: str = "k") -> Line:

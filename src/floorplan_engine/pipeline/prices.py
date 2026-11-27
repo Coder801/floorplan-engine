@@ -14,7 +14,7 @@ from typing import Any
 
 import yaml
 
-from floorplan_engine.electrical.estimate_items import HINTS, LINES, WORK_PREFIX, split_key
+from floorplan_engine.electrical.estimate.items import HINTS, LINES, WORK_PREFIX, split_key
 from floorplan_engine.electrical.market import (
     MARKET_FILE,
     MarketSample,
@@ -124,7 +124,7 @@ def load_prices(path: Path) -> tuple[PriceList | None, list[Issue]]:
 
 NEW_PRICES = (
     "# Общий прайс студии для сметы; prices.yaml проекта меняет только свои ключи.\n"
-    "# Цены — за единицу позиции; ключи — LINES в electrical/estimate_items.py.\n"
+    "# Цены — за единицу позиции; ключи — LINES в electrical/estimate/items.py.\n"
     "currency: грн\n"
     "items:\n"
 )

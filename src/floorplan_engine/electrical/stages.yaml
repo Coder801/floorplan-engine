@@ -1,5 +1,5 @@
 # Этапы монтажа электрики (docs/work-tasks.md, «Черновик из сметы»): каждая позиция сметы входит
-# ровно в один этап. Ключи — базовые ключи LINES (electrical/estimate_items.py, split_key): позиция с
+# ровно в один этап. Ключи — базовые ключи LINES (electrical/estimate/items.py, split_key): позиция с
 # параметром (`work.chase.brick`, `breaker.C16`, `cable.3x1.5`) идёт по ключу без параметра.
 # «prefix.*» — все ключи LINES с этим началом. Тест сверяет: все ключи разложены, лишних нет.
 #   key    — ключ этапа; у задачи — «electrical.<key>»;

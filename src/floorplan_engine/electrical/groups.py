@@ -13,7 +13,7 @@ from collections import Counter
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 
-from floorplan_engine.model.schema import Electrical, ElectricalPoint, Plan, PointType
+from floorplan_engine.model.schema import SWITCH_TYPES, Electrical, ElectricalPoint, Plan, PointType
 from floorplan_engine.model.texts import Language
 from floorplan_engine.model.zones import point_places
 
@@ -58,7 +58,6 @@ LIGHT = frozenset(
         PointType.LED_OUTPUT,
     }
 )
-SWITCHES = frozenset({PointType.SWITCH, PointType.PASS_SWITCH})
 LOW = frozenset({PointType.DATA, PointType.TV})
 
 
@@ -88,7 +87,7 @@ def composed_purpose(
     the consumers are: a switch by the door of another room does not add it (the bathroom
     light switched from the hall is "Освітлення — Санвузол")."""
     types = {p.type for p in points}
-    fed = [p for p in points if p.type not in SWITCHES] or points
+    fed = [p for p in points if p.type not in SWITCH_TYPES] or points
     where = ", ".join(dict.fromkeys(places.get(p.id, p.room) for p in fed))
     single = {
         PointType.SOCKET: "socket",
@@ -110,7 +109,7 @@ def composed_purpose(
         kinds.append(text("floor_heating", language))
     if types & LOW:
         kinds.append(text("low", language))
-    if not kinds and types & SWITCHES:
+    if not kinds and types & SWITCH_TYPES:
         kinds.append(text("switches", language))
     what = ", ".join(k if n == 0 else k[0].lower() + k[1:] for n, k in enumerate(kinds))
     return f"{what} — {where}" if where else what

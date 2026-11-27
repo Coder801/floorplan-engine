@@ -38,7 +38,7 @@ from collections import defaultdict
 from collections.abc import Mapping
 
 from floorplan_engine.electrical.estimate import Estimate, Line
-from floorplan_engine.electrical.estimate_items import SECTIONS, Section
+from floorplan_engine.electrical.estimate.items import SECTIONS, Section
 from floorplan_engine.electrical.price_list import PriceSource
 from floorplan_engine.model.plumbing import Plumbing
 from floorplan_engine.model.texts import Language

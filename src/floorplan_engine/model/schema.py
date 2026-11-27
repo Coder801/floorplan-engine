@@ -34,7 +34,7 @@ class StrictModel(BaseModel):
 
 
 class WallMaterial(StrEnum):
-    """What a wall is built of: the chase price depends on it (estimate_quantities.py)."""
+    """What a wall is built of: the chase price depends on it (estimate/quantities.py)."""
 
     CONCRETE = "concrete"  # monolith, reinforced concrete panel
     CLAYDITE = "claydite"  # expanded clay concrete block

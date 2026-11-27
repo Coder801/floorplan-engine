@@ -1,6 +1,6 @@
 """Price list of the electrical estimate (prices.yaml) and the price source protocol.
 
-PriceList is prices.yaml: prices by item key (estimate_items.LINES), the agreed terms and the
+PriceList is prices.yaml: prices by item key (estimate.items.LINES), the agreed terms and the
 studio's splice method; PriceSource is what the estimate reads prices from (a price list, the
 price service or both merged, pricing.Prices). Items of DERIVED_PRICES are priced from another
 one unless the list names them. Prices are never invented: an item with no price stays in the
@@ -16,7 +16,7 @@ from typing import Protocol
 
 from pydantic import Field
 
-from floorplan_engine.electrical.estimate_items import LINES, RETIRED, split_key
+from floorplan_engine.electrical.estimate.items import LINES, RETIRED, split_key
 from floorplan_engine.electrical.splices import Splice
 from floorplan_engine.electrical.terms import TermDecision
 from floorplan_engine.model.schema import StrictModel

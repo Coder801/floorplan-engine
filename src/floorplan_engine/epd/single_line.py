@@ -40,8 +40,8 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
-from floorplan_engine.electrical.estimate_items import cable_title
-from floorplan_engine.electrical.estimate_texts import format_number
+from floorplan_engine.electrical.estimate.items import cable_title
+from floorplan_engine.electrical.estimate.texts import format_number
 from floorplan_engine.electrical.master import CONTROL_ID
 from floorplan_engine.model.texts import Language
 

@@ -4,7 +4,7 @@ from typing import Any
 
 import pytest
 
-from floorplan_engine.electrical import estimate_quantities
+from floorplan_engine.electrical.estimate import quantities as estimate_quantities
 from floorplan_engine.electrical.wiring import box_wiring
 from floorplan_engine.electrical.wiring_model import Wiring
 from floorplan_engine.model.schema import Electrical, Plan

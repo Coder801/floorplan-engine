@@ -1,6 +1,6 @@
 """Joints in flush boxes (decisions 2026-11-25): where light in a chain (light_wiring chain) joins
 wires in a switch flush box, which conductor joins how many wires, and what with. One
-calculation for the estimate (estimate_quantities.quantities: clamps or sleeves and the work),
+calculation for the estimate (estimate.quantities.quantities: clamps or sleeves and the work),
 the point card in the viewer (epd/box_card.splice_card) and the "Points" table
 (drawing/schedules.points_table), so the drawing and the estimate cannot drift apart.
 
@@ -35,7 +35,7 @@ from typing import Literal
 from floorplan_engine.electrical.switch_links import switch_links
 from floorplan_engine.electrical.wiring_context import LAMP_TYPES
 from floorplan_engine.electrical.wiring_model import Run, Wiring
-from floorplan_engine.model.schema import Electrical, PointType
+from floorplan_engine.model.schema import SWITCH_TYPES, Electrical, PointType
 from floorplan_engine.model.texts import Language
 
 Splice = Literal["wago", "crimp"]
@@ -45,7 +45,6 @@ DEFAULT_SPLICE: Splice = "wago"
 WAGO_SIZES: tuple[tuple[int, str], ...] = ((2, "412"), (3, "413"), (5, "415"))
 DEEP_BOX_MM = 60  # a flush box with a joint: in, out, tap and the joints behind the device
 Conductor = Literal["L", "N", "PE"]
-SWITCHES = frozenset({PointType.SWITCH, PointType.PASS_SWITCH})
 
 TEXT: dict[str, dict[str, str]] = {
     "wago": {"ru": "Wago {clamps}", "uk": "Wago {clamps}"},
@@ -127,7 +126,7 @@ def back_box_joints(wiring: Wiring, elec: Electrical) -> dict[str, FlushBoxJoint
         ids = tuple(r.id for r in mine)
         feed = fed_by.get(p.id)
         joints: list[Joint] = []
-        if p.type in SWITCHES:  # a socket has none: double terminals and jumpers
+        if p.type in SWITCH_TYPES:  # a socket has none: double terminals and jumpers
             feeds = tuple(
                 r.id for r in mine
                 if r.target in by_id and by_id[r.target].type not in LAMP_TYPES

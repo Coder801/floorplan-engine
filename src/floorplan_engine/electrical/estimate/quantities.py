@@ -29,7 +29,7 @@ specification: the estimate without prices is the bill of quantities:
   one × 1.5); a chase without a known material stays `work.chase`; passes through walls from
   wall_holes;
 - one breaker per group and the panel installation; the panel set of the "Panel" sheet, its
-  assembly and labels replace them in build_estimate (estimate.py);
+  assembly and labels replace them in build_estimate (estimate/__init__.py);
 - lights, lighting outputs and appliance outputs by point, LED strip in metres; a floor
   heating controller (`thermostat`) is one item by point with no price yet (pricing.UNPRICED)
   and no flush box, frame or fitting work counted for it;
@@ -54,7 +54,7 @@ import math
 from collections import Counter
 
 from floorplan_engine.electrical.boxes import BOX_ORDER
-from floorplan_engine.electrical.estimate_items import CHASE_KEYS, FIXTURES, WALL_MATERIALS
+from floorplan_engine.electrical.estimate.items import CHASE_KEYS, FIXTURES, WALL_MATERIALS
 from floorplan_engine.electrical.floor_heating import RELEASED as HEATING_RELEASED
 from floorplan_engine.electrical.led_supply import led_outputs as led_outputs_of
 from floorplan_engine.electrical.mounting import (
@@ -65,10 +65,17 @@ from floorplan_engine.electrical.mounting import (
     shared_pairs,
     source_conduits,
 )
-from floorplan_engine.electrical.splices import DEFAULT_SPLICE, SWITCHES, Splice, back_box_joints
+from floorplan_engine.electrical.splices import DEFAULT_SPLICE, Splice, back_box_joints
 from floorplan_engine.electrical.wiring import RESERVE
 from floorplan_engine.electrical.wiring_model import Run, Wiring
-from floorplan_engine.model.schema import LIGHT_TYPES, Conduit, Electrical, PointType, WallMaterial
+from floorplan_engine.model.schema import (
+    LIGHT_TYPES,
+    SWITCH_TYPES,
+    Conduit,
+    Electrical,
+    PointType,
+    WallMaterial,
+)
 
 # Conduit fittings (decision 2026-11-11): a joint coupling per this many mm of conduit of a
 # diameter (roll ends and offcuts; the conduit itself is counted in metres, not rolls); an
@@ -144,7 +151,7 @@ def quantities(
     keys = sum(  # a switch fed from a flush box is spliced there with clamps, not crimped
         by_id[r.target].keys
         for r in wiring.runs
-        if r.source in box_ids and r.target in by_id and by_id[r.target].type in SWITCHES
+        if r.source in box_ids and r.target in by_id and by_id[r.target].type in SWITCH_TYPES
     )
     q["crimp"] = 3 * len(wiring.boxes) + keys
     # Switch flush boxes of a light chain (splices.py): the work only, by the studio's method;

@@ -2,15 +2,15 @@
 list (prices.yaml).
 
 There is no drawing, only a table: one item per quantity (Line), sections with their own totals
-(Estimate). The modules of the estimate:
+(Estimate). The modules of the estimate package:
 
-- estimate_items.py — the item catalogue: section, unit and name of each key (LINES), notes
+- items.py — the item catalogue: section, unit and name of each key (LINES), notes
   (HINTS), keys with a parameter (split_key), the order of the sections;
-- estimate_quantities.py — the quantities from the model (quantities): what is counted and how;
-- price_list.py — prices.yaml (PriceList), the price source protocol (PriceSource), prices
-  derived from another item;
-- estimate_texts.py — headings, notes and table strings, the provisional mark, number format;
-- estimate_files.py — out/estimate.md, out/estimate.csv and out/estimate.xlsx.
+- quantities.py — the quantities from the model (quantities): what is counted and how;
+- electrical/price_list.py, beside the package — prices.yaml (PriceList), the price source
+  protocol (PriceSource), prices derived from another item;
+- texts.py — headings, notes and table strings, the provisional mark, number format;
+- files.py — out/estimate.md, out/estimate.csv and out/estimate.xlsx.
 
 Here build_estimate puts the items together and prices them. The panel follows the "Panel" sheet:
 
@@ -35,7 +35,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from floorplan_engine.electrical.boxes import BOX_TITLES
-from floorplan_engine.electrical.estimate_items import (
+from floorplan_engine.electrical.estimate.items import (
     CHASE_KEYS,
     FIXTURES,
     HINTS,
@@ -47,7 +47,7 @@ from floorplan_engine.electrical.estimate_items import (
     cable_title,
     split_key,
 )
-from floorplan_engine.electrical.estimate_quantities import quantities
+from floorplan_engine.electrical.estimate.quantities import quantities as count_quantities
 from floorplan_engine.electrical.panel import BoardPanel, busbars, device_name
 from floorplan_engine.electrical.price_list import PriceSource, derived_quote
 from floorplan_engine.electrical.splices import DEFAULT_SPLICE
@@ -139,7 +139,7 @@ def build_estimate(
     device kind and rating, assembly by the modules of the set; no panel means one breaker per
     group. prices is a price list or the list merged with the price service (pricing.Prices);
     its splice says how the flush box joints are made."""
-    q = quantities(wiring, elec, prices.splice or DEFAULT_SPLICE)
+    q = count_quantities(wiring, elec, prices.splice or DEFAULT_SPLICE)
     if panel is not None:
         q.pop("breaker", None)
     if panel is not None and panel.led is not None:  # supplies by power, as LED box devices
