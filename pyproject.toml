@@ -33,6 +33,7 @@ dev = [
     "mypy>=1.10",
     "pytest>=8.0",
     "pytest-cov>=7.1.0",
+    "pytest-xdist>=3.8.0",
     "ruff>=0.5",
     "types-openpyxl>=3.1.5.20261017",
     "types-PyYAML>=6.0",
@@ -40,7 +41,7 @@ dev = [
 ]
 service = [
     "alembic>=1.20.1",
-    "anthropic>=1.15.0",
+    "anthropic>=2.0",
     "authlib>=1.9.1",
     "fastapi>=0.151.0",
     "httpx>=0.28.1",
@@ -57,6 +58,9 @@ service = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# In parallel, one process per core (pytest-xdist; every process gets its own test database,
+# tests/service/conftest.py); -n 0 runs in one process, e.g. to debug a test with pdb
+addopts = "-n auto"
 # NumPy 2.5 warns about code inside ezdxf, not ours
 filterwarnings = ["ignore::DeprecationWarning:ezdxf.*"]
 
