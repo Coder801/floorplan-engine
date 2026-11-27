@@ -28,6 +28,7 @@ from floorplan_engine.drawing.titleblock import (
     format_candidates,
 )
 from floorplan_engine.electrical.pricing import Prices
+from floorplan_engine.electrical.routing import search_memo
 from floorplan_engine.model.furniture import Furniture
 from floorplan_engine.model.geometry import Contour, Vec
 from floorplan_engine.model.plumbing import Plumbing
@@ -204,7 +205,23 @@ def build_project_document(
     prices are the estimate prices on the wiring sheet (price list on top of the price service);
     None gives a bill of quantities without prices.
     edits are manual wiring edits (wiring.yaml); plumbing is plumbing (the "Plumbing" sheet);
-    furniture is furniture.yaml (on the plan and the floor heating sheets)."""
+    furniture is furniture.yaml (on the plan and the floor heating sheets). Router searches are
+    remembered for the whole document (search_memo, an outer block of the build is used): the
+    paper choice and the final drawing route the same cables."""
+    with search_memo():
+        return _project_document(plan, contours, elec, today, prices, edits, plumbing, furniture)
+
+
+def _project_document(
+    plan: Plan,
+    contours: dict[str, Contour],
+    elec: Electrical | None,
+    today: date | None,
+    prices: Prices | None,
+    edits: WiringEdits | None,
+    plumbing: Plumbing | None,
+    furniture: Furniture | None,
+) -> Drawing:
     water = (plumbing, build_network(plan, contours, plumbing)) if plumbing is not None else None
     paper, scale = choose_paper_and_scale(plan, contours, elec, prices, edits, water, furniture)
     with drawing_scale(scale):
