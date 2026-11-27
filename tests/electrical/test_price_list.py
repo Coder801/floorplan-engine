@@ -124,3 +124,21 @@ def test_old_wago_prices_are_ignored() -> None:
         {"items": {"wago": 20, "wago.412": 18, "wago.413": 22, "wago.415": 28, "nope": 1}}
     )
     assert unknown_keys(prices) == ["nope"]
+
+
+def test_price_list_and_its_users_import_on_their_own() -> None:
+    """Each module imports alone in a fresh interpreter: price_list imports estimate.items, which
+    runs the estimate package, and the package must not import price_list back at load time (a
+    cycle the test run hides, since there the package is usually loaded first)."""
+    import subprocess
+    import sys
+
+    for module in (
+        "floorplan_engine.electrical.price_list",
+        "floorplan_engine.electrical.pricing",
+        "floorplan_engine.service.sync",
+    ):
+        done = subprocess.run(
+            [sys.executable, "-c", f"import {module}"], capture_output=True, text=True, check=False
+        )
+        assert done.returncode == 0, f"{module}: {done.stderr.strip().splitlines()[-1:]}"

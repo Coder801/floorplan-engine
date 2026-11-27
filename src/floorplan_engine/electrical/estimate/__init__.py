@@ -36,6 +36,7 @@ are not described in the model and are not in the estimate.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from floorplan_engine.electrical.boxes import BOX_TITLES
 from floorplan_engine.electrical.estimate.items import (
@@ -53,12 +54,16 @@ from floorplan_engine.electrical.estimate.items import (
 )
 from floorplan_engine.electrical.estimate.quantities import quantities as count_quantities
 from floorplan_engine.electrical.panel import BoardPanel, busbars, device_name
-from floorplan_engine.electrical.price_list import PriceSource, Quote, derived_quote
 from floorplan_engine.electrical.splices import DEFAULT_SPLICE
 from floorplan_engine.electrical.wiring_model import Wiring
 from floorplan_engine.model.panel_catalog import Enclosure
 from floorplan_engine.model.schema import Electrical, WallMaterial
 from floorplan_engine.model.texts import Language, tr
+
+if TYPE_CHECKING:
+    # price_list imports estimate.items, which runs this package: importing price_list here at
+    # load time would be a cycle (price_list first → this __init__ → price_list half-loaded)
+    from floorplan_engine.electrical.price_list import PriceSource
 
 # Notes added to an item's hint: no price yet, a price from the price service, a chase
 # without a known wall material
@@ -152,6 +157,8 @@ def build_estimate(
     device kind and rating, assembly by the modules of the set; no panel means one breaker per
     group. prices is a price list or the list merged with the price service (pricing.Prices);
     its splice says how the flush box joints are made."""
+    from floorplan_engine.electrical.price_list import Quote, derived_quote  # no import cycle
+
     q = count_quantities(wiring, elec, prices.splice or DEFAULT_SPLICE)
     if panel is not None:
         q.pop("breaker", None)
