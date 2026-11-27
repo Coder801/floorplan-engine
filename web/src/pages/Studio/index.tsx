@@ -2,7 +2,9 @@
 // the gear in the header: sections on the left, the section on the right. "Studio" is the
 // firm's profile (name, kind, city, logo) from the account; editing comes later, the fields are
 // read-only for now. "Price list · electrical" is the studio's prices of works next to the
-// market (widgets/PriceList). Plumbing prices come later.
+// market (widgets/PriceList), only for those with the right (Account.prices: owner and designer
+// of a firm, a superuser; login off — everyone): without it the section is neither shown nor
+// fetched, and #@studio/prices opens the profile. Plumbing prices come later.
 
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -29,8 +31,15 @@ interface Props {
   onBack: () => void;
 }
 
-export function Studio({ account, section, onSection, onBack }: Props) {
+// Sections this account may open: the price list needs the right (login off — open to all)
+function studioSections(account: Account | null): StudioSection[] {
+  return account === null || account.prices ? [...STUDIO_SECTIONS] : ["profile"];
+}
+
+export function Studio({ account, section: asked, onSection, onBack }: Props) {
   const { t } = useTranslation();
+  const sections = studioSections(account);
+  const section = sections.includes(asked) ? asked : "profile";
   const [dirty, setDirty] = useState(false);  // unsaved prices
   const leave = useCallback((go: () => void) => { if (!dirty || confirm(t("prices.leave"))) { setDirty(false); go(); } }, [dirty, t]);
 
@@ -53,7 +62,7 @@ export function Studio({ account, section, onSection, onBack }: Props) {
         </header>
         <div className={css.body}>
           <nav className={css.nav} aria-label={t("studio.title")}>
-            {STUDIO_SECTIONS.map((s) => (
+            {sections.map((s) => (
               <button key={s} className={cx(s === section && css.on)} aria-current={s === section ? "page" : undefined}
                       onClick={() => s !== section && leave(() => onSection(s))}>{t(`studio.sections.${s}`)}</button>
             ))}

@@ -163,6 +163,26 @@ def test_studio_invite_makes_member(db: Session) -> None:
         acc.set_account_type(db, designer, "client")
 
 
+def test_price_list_only_for_owner_and_designer(db: Session) -> None:
+    """The studio price list (decision 2026-11-28): owner and designer of a studio account, a
+    superuser; not an installer of the studio, not a client, not a user without a workspace."""
+    owner = user(db, "owner", "pro")
+    studio = acc.own_studio(db, owner)
+    assert studio is not None
+    designer, installer = user(db, "designer"), user(db, "installer")
+    acc.accept_invite(db, designer, acc.create_invite(db, owner, "designer", studio=studio))
+    acc.accept_invite(db, installer, acc.create_invite(db, owner, "installer", studio=studio))
+    assert installer.account_type == "pro"
+    assert acc.price_studio(db, owner) is studio and acc.price_studio(db, designer) is studio
+    assert acc.price_studio(db, installer) is None
+    flat, nobody = user(db, "flat", "client"), user(db, "nobody")
+    assert [acc.can_open_prices(db, u) for u in (owner, designer, installer, flat, nobody)] == [
+        True, True, False, False, False
+    ]  # fmt: skip
+    nobody.is_superuser = True
+    assert acc.can_open_prices(db, nobody) and acc.price_studio(db, nobody) is None
+
+
 def test_register_firm(db: Session) -> None:
     """A firm has a name and a kind; one per person; a firm employee does not create their own."""
     owner = user(db, "owner")

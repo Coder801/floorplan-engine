@@ -8,6 +8,7 @@ export interface User {
   phone: string | null;     // "+380…": Telegram login
   account_type: "client" | "pro" | null;
   superuser: boolean;
+  prices?: boolean;         // the studio price list (GET /api/prices): owner and designer of a firm, a superuser
   space: Space | null;      // own workspace: a firm or "Мой ремонт"
 }
 

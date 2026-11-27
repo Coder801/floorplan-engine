@@ -177,6 +177,45 @@ def test_price_list_of_own_studio(
         assert "splice: crimp" in rows[0].text
 
 
+def test_price_list_only_for_owner_and_designer(
+    setup: tuple[TestClient, LocalObjectStore, dict[str, str]], auth: Auth
+) -> None:
+    """Decision 2026-11-28: an installer of the studio neither reads nor edits its price list;
+    the designer edits it; /api/auth/me tells the front by `prices`."""
+    client, _, tokens = setup
+    tokens.update({name: _login(auth, name) for name in ("designer", "installer")})
+    with auth.db() as db:
+        a = acc.session_user(db, tokens["a"])
+        assert a is not None
+        firm = acc.own_studio(db, a)
+        assert firm is not None
+        for name in ("designer", "installer"):
+            person = acc.session_user(db, tokens[name])
+            assert person is not None
+            acc.accept_invite(db, person, acc.create_invite(db, a, name, studio=firm))
+
+    def me(name: str) -> bool:
+        client.cookies.set(COOKIE, tokens[name])
+        return bool(client.get("/api/auth/me").json()["user"]["prices"])
+
+    assert [me(n) for n in ("a", "designer", "installer", "client")] == [True, True, False, False]
+    client.cookies.set(COOKIE, tokens["designer"])
+    assert client.get("/api/prices").json()["editable"] is True
+    assert client.post("/api/prices", json={"items": {"work.chase": 99}}).status_code == 200
+    client.cookies.set(COOKIE, tokens["installer"])
+    for response in (
+        client.get("/api/prices"),
+        client.post("/api/prices", json={"items": {"work.chase": 1}}),
+    ):
+        assert response.status_code == 403
+        assert response.json()["detail"] == "прайс — только для владельца и дизайнера студии"
+    client.cookies.set(COOKIE, tokens["a"])
+    assert client.get("/api/prices").json()["editable"] is True  # the owner too
+    with auth.db() as db:
+        [row] = db.query(PriceList).all()
+        assert row.text is not None and "99" in row.text and row.updated_at is not None
+
+
 def _with_questions(auth: Auth, store: LocalObjectStore, pid: str) -> None:
     """A new model version with a client question and a studio one, built."""
     intake = (

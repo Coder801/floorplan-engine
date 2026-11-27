@@ -80,6 +80,7 @@ export function Gate({ children }: { children: (account: Account | null) => Reac
     plan: me.user?.account_type ?? null,
     space: me.user?.space?.kind === "studio" ? me.user.space.name : null,
     firm: me.user?.space?.kind === "studio" ? me.user.space : null,
+    prices: !!me.user?.prices,
     visitor: !me.user && !!me.visitor,
     code: !me.user && !!me.code,
     feedback: !!me.feedback,

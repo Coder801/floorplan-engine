@@ -22,7 +22,14 @@ describe("Gate", () => {
     stubApi({ "GET /api/auth/me": me({ feedback: true }) });
     render(<Gate>{inside}</Gate>);
     expect(await screen.findByText("Проекты: Иван")).toBeInTheDocument();
-    expect(inside.mock.lastCall?.[0]).toMatchObject({ id: "u1", plan: "pro", space: "Ампер", visitor: false, code: false, feedback: true });
+    expect(inside.mock.lastCall?.[0]).toMatchObject({ id: "u1", plan: "pro", space: "Ампер", visitor: false, code: false, feedback: true, prices: true });
+  });
+
+  it("passes no price-list right to an installer", async () => {
+    stubApi({ "GET /api/auth/me": me({ user: user({ prices: false }) }) });
+    render(<Gate>{inside}</Gate>);
+    expect(await screen.findByText("Проекты: Иван")).toBeInTheDocument();
+    expect(inside.mock.lastCall?.[0]).toMatchObject({ plan: "pro", prices: false });
   });
 
   it("shows only the configured ways in; no way says so", async () => {

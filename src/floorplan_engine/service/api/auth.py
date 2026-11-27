@@ -222,6 +222,8 @@ def _user_json(db: Session, user: AppUser) -> dict[str, Any]:
         "phone": user.phone,
         "account_type": user.account_type,
         "superuser": user.is_superuser,
+        # The studio price page is open (acc.can_open_prices): the front hides it otherwise
+        "prices": acc.can_open_prices(db, user),
         "space": None
         if space is None
         else {
@@ -376,17 +378,17 @@ class Auth:
         return None
 
     def _prices(self, db: Session, who: acc.Principal, request: Request) -> Response | None:
-        """Studio price list: a studio account edits the list of its own studio (prices.yaml in
-        the studio folder); a superuser outside a studio and the debug guest — the root list (the
-        guest only reads)."""
+        """Studio price list: the owner or designer of a studio account edits the list of its own
+        studio (acc.PRICE_ROLES; an installer gets 403); a superuser outside a studio and the
+        debug guest — the root list (the guest only reads)."""
         user = who.user
         space = acc.user_space(db, user) if user is not None else None
-        if user is not None and (
-            user.is_superuser or (user.account_type == "pro" and space is not None)
-        ):
+        if user is not None and acc.can_open_prices(db, user):
             edit = True
         elif who.visitor and request.method == "GET":
             edit = False
+        elif user is not None and space is not None and user.account_type == "pro":
+            return denied(403, "прайс — только для владельца и дизайнера студии")
         else:
             return denied(403, "прайс — только для студии")
         request.state.edit_prices = edit

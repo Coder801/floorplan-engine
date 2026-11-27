@@ -31,6 +31,7 @@ export interface Account {
   plan: "client" | "pro" | null;
   space?: string | null;  // firm name ("Мой ремонт" has none)
   firm?: Space | null;    // the firm's profile for the studio settings (kind "studio" only)
+  prices?: boolean;       // may see the studio price list (User.prices: owner, designer, superuser); installers may not
   visitor: boolean;
   code?: boolean;         // logged in by a project access code (no account)
   feedback?: boolean;     // the server takes product feedback (Me.feedback): "Leave feedback"

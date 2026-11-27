@@ -103,6 +103,9 @@ STUDIO_ROLES = frozenset({"owner", "designer", "installer"})
 # and the panel settings (pipeline.answers.for_client), never the studio's questions
 CLIENT_SIDE = frozenset({"client", "client_code", "viewer"})
 PROJECT_ROLES = frozenset({"client", "installer"})
+# Who opens and edits the studio price list (decision 2026-11-28): the owner and the designer of a
+# studio account; an installer of the studio does not
+PRICE_ROLES = frozenset({"owner", "designer"})
 
 SESSION_DAYS = 30
 INVITE_DAYS = 7
@@ -394,6 +397,28 @@ def user_space(session: Session, user: AppUser) -> Studio | None:
         .join(Membership, Membership.studio_id == Studio.id)
         .where(Membership.user_id == user.id)
     )
+
+
+def price_studio(session: Session, user: AppUser) -> Studio | None:
+    """The workspace whose price list the user opens and edits (PRICE_ROLES): a studio account
+    (account_type pro) that is the owner or designer there; None for the rest. A superuser
+    without one still opens the price page (api/auth.py, Auth._prices)."""
+    if user.account_type != "pro":
+        return None
+    row = session.execute(
+        select(Studio, Membership.role)
+        .join(Membership, Membership.studio_id == Studio.id)
+        .where(Membership.user_id == user.id)
+    ).first()
+    if row is None or row[1] not in PRICE_ROLES:
+        return None
+    return row[0]
+
+
+def can_open_prices(session: Session, user: AppUser) -> bool:
+    """The price page is open to the user: a superuser, or the owner or designer of a studio
+    account (price_studio)."""
+    return user.is_superuser or price_studio(session, user) is not None
 
 
 def own_studio(session: Session, user: AppUser) -> Studio | None:

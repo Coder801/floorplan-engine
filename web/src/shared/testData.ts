@@ -22,7 +22,7 @@ export const question = (over: Partial<Question> = {}): Question => ({
 });
 
 export const user = (over: Partial<User> = {}): User => ({
-  id: "u1", name: "Иван", email: "ivan@example.com", phone: null, account_type: "pro", superuser: false,
+  id: "u1", name: "Иван", email: "ivan@example.com", phone: null, account_type: "pro", superuser: false, prices: true,
   space: { kind: "studio", name: "Ампер", business: "electric", city: "Киев" }, ...over,
 });
 

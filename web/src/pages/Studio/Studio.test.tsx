@@ -7,7 +7,7 @@ import type { Account } from "@/widgets/Settings";
 import { Studio } from "./index";
 
 const firm: Account = {
-  name: "Иван", plan: "pro", space: "Искра", visitor: false, logout: vi.fn(),
+  name: "Иван", plan: "pro", space: "Искра", visitor: false, prices: true, logout: vi.fn(),
   firm: { kind: "studio", name: "Искра", business: "electric", city: "Киев" },
 };
 
@@ -31,6 +31,21 @@ describe("Studio", () => {
     expect(screen.getByText("Вход выключен — профиль студии хранится в учётке фирмы.")).toBeInTheDocument();
     rerender(<Studio account={{ ...firm, firm: null }} section="profile" onSection={vi.fn()} onBack={vi.fn()} />);
     expect(screen.getByText("Профиль фирмы не заполнен: учётка без фирмы.")).toBeInTheDocument();
+  });
+
+  it("hides the price list from those without the right and opens the profile instead", async () => {
+    const sent = stubApi({ "GET /api/prices": pricePage() });
+    render(<Studio account={{ ...firm, prices: false }} section="prices" onSection={vi.fn()} onBack={vi.fn()} />);
+    expect(screen.queryByRole("button", { name: "Прайс · электрика" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Студия" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("textbox", { name: "Название" })).toHaveValue("Искра");
+    await Promise.resolve();
+    expect(sent).toEqual([]);
+  });
+
+  it("shows the price list when login is off", () => {
+    render(<Studio account={null} section="profile" onSection={vi.fn()} onBack={vi.fn()} />);
+    expect(screen.getByRole("button", { name: "Прайс · электрика" })).toBeInTheDocument();
   });
 
   it("asks before leaving unsaved prices", async () => {
