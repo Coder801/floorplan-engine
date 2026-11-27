@@ -63,7 +63,8 @@ def test_only_the_studio_list_prices_the_estimate() -> None:
     assert est.from_service == 0
     assert est.unpriced == sum(1 for ln in est.lines if not ln.listed) - 1
     notes = price_notes(est, Prices(own), "uk")
-    assert notes[0] == "Ціни: prices.yaml (2026-10)"
+    assert notes[0] == "Ціни: прайс студії (2026-10)"  # the list, not a file (only in the DB)
+    assert any(n.endswith("потрібна ціна в прайсі студії.") for n in notes)
     assert not any("імітація" in n for n in notes)
 
 

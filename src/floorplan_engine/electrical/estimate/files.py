@@ -18,7 +18,6 @@ from openpyxl.worksheet.worksheet import Worksheet
 from floorplan_engine.electrical.estimate import Estimate
 from floorplan_engine.electrical.estimate.items import LISTED_SECTIONS, MATERIAL_SECTIONS, SECTIONS
 from floorplan_engine.electrical.estimate.texts import format_number, section_title, text
-from floorplan_engine.electrical.price_list import PRICES_FILE
 from floorplan_engine.model.texts import Language
 
 ESTIMATE_MD = "estimate.md"
@@ -69,7 +68,7 @@ def write_markdown(
             out += [f"| | **{t('subtotal')}** | | | | {amount} |", ""]
     out += [f"**{t('total')}: {format_number(est.total)} {est.currency}**", ""]
     out += tail
-    unpriced = t("unpriced", n=est.unpriced, f=PRICES_FILE)
+    unpriced = t("unpriced", n=est.unpriced)
     if est.unpriced and unpriced not in notes:  # the price notes may already say it
         out += [unpriced, ""]
     out += [f"- {n}" for n in notes]
@@ -205,7 +204,7 @@ def write_xlsx(
             cells["material"] = parts[0] if len(parts) == 1 else f"({'+'.join(parts)})"
         tail(ws, cells)
     ws.append([])
-    unpriced = t("unpriced", n=est.unpriced, f=PRICES_FILE)
+    unpriced = t("unpriced", n=est.unpriced)
     if est.unpriced and unpriced not in notes:  # the price notes may already say it
         ws.append(["", unpriced])
     for note in notes:

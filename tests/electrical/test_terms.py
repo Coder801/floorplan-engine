@@ -142,12 +142,12 @@ def test_ukrainian_rows() -> None:
 
 def test_open_note_names_the_items_left_or_none() -> None:
     every = {k: {"who": "client"} for k in load_terms().items}
-    assert open_note(term_rows(_decisions(every), 0, "грн", "ru"), "prices.yaml", "ru") is None
+    assert open_note(term_rows(_decisions(every), 0, "грн", "ru"), "ru") is None
     del every["no_power"]
-    note = open_note(term_rows(_decisions(every), 0, "грн", "ru"), "prices.yaml", "ru")
+    note = open_note(term_rows(_decisions(every), 0, "грн", "ru"), "ru")
     assert note == (
         "Не обговорено с заказчиком: работа без электроэнергии — договоритесь до начала работ "
-        "(terms в prices.yaml)"
+        "(условия — в прайсе студии)"
     )
 
 

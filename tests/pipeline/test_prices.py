@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from floorplan_engine.pipeline import find_prices, load_price_layers
+from floorplan_engine.pipeline.prices import price_page, save_prices
 
 
 def test_studio_prices_used_when_project_has_none(tmp_path: Path) -> None:
@@ -54,3 +55,53 @@ def test_studio_splice_setting_reaches_every_project(tmp_path: Path) -> None:
     (tmp_path / "prices.yaml").write_text("splice: solder\n", "utf-8")
     broken, issues = load_price_layers(project)
     assert broken is None and issues and issues[0].path == "splice"
+
+
+def _text(root: Path) -> str:
+    return (root / "prices.yaml").read_text("utf-8")
+
+
+def test_save_prices_keeps_comments_and_drops_stale_finish_keys(tmp_path: Path) -> None:
+    """The edit behind the price page of the database viewer (it saves through a temporary
+    prices.yaml): line by line, comments kept; a finish material the list still prices goes away
+    on any save; a finish material, an unknown key or a negative price is refused, the file
+    unchanged."""
+    (tmp_path / "prices.yaml").write_text(
+        "# прайс\ncurrency: грн\nitems:\n  work.chase: 200  # узкая\n"
+        "  socket: 180  # до 2026-11-27\n",
+        "utf-8",
+    )
+    assert price_page(tmp_path)["stale"] == ["socket"]
+    assert save_prices(tmp_path, {"items": {"work.chase": 150, "work.cable": 25}}) == []
+    text = _text(tmp_path)
+    assert "# прайс" in text and "work.chase: 150  # узкая" in text and "work.cable: 25" in text
+    assert "socket:" not in text and price_page(tmp_path)["stale"] == []
+    assert save_prices(tmp_path, {"items": {"socket_box": 20, "cable.3x2.5": 70}}) == []
+    text = _text(tmp_path)
+    assert "socket_box: 20" in text and "cable.3x2.5: 70" in text
+    (refused,) = save_prices(tmp_path, {"items": {"socket": 60}})
+    assert refused.path == "items.socket" and "чистовой материал" in refused.message
+    assert save_prices(tmp_path, {"items": {"no.such": 10}})
+    assert save_prices(tmp_path, {"items": {"work.chase": -1}})
+    assert _text(tmp_path) == text
+
+
+def test_save_prices_splice_keeps_its_comment(tmp_path: Path) -> None:
+    """Joints in switch flush boxes (PriceList.splice): wago when the file does not say; the line
+    keeps its comment, the rest of the file stays."""
+    (tmp_path / "prices.yaml").write_text(
+        "# прайс\ncurrency: грн\nitems:\n  work.chase: 200  # узкая\n", "utf-8"
+    )
+    assert price_page(tmp_path)["splice"] == "wago"
+    assert save_prices(tmp_path, {"splice": "crimp"}) == []
+    text = _text(tmp_path)
+    assert text == "# прайс\ncurrency: грн\nsplice: crimp\nitems:\n  work.chase: 200  # узкая\n"
+    (tmp_path / "prices.yaml").write_text(
+        text.replace("splice: crimp", "splice: crimp  # так монтирует бригада"), "utf-8"
+    )
+    assert save_prices(tmp_path, {"splice": "wago", "items": {"work.chase": 210}}) == []
+    text = _text(tmp_path)
+    assert "splice: wago  # так монтирует бригада\n" in text and text.count("splice:") == 1
+    assert "work.chase: 210  # узкая" in text
+    (bad,) = save_prices(tmp_path, {"splice": "solder", "items": {"work.chase": 1}})
+    assert bad.path == "splice" and _text(tmp_path) == text

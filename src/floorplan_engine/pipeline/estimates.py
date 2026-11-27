@@ -26,7 +26,7 @@ from floorplan_engine.electrical.mounting import (
     source_conduits,
 )
 from floorplan_engine.electrical.panel import BoardPanel, build_panel
-from floorplan_engine.electrical.price_list import PRICES_FILE, PriceList, PriceSource
+from floorplan_engine.electrical.price_list import PriceList, PriceSource
 from floorplan_engine.electrical.pricing import Prices, price_notes
 from floorplan_engine.electrical.terms import (
     open_note,
@@ -78,7 +78,6 @@ def write_plumbing_estimate(
     net: Network,
     plumbing: Plumbing,
     prices: Prices,
-    source: Path | None,
 ) -> list[Path]:
     """Plumbing estimate in out/: plumbing-estimate.md, .csv and .xlsx, the same as on the
     "Plumbing" sheet. Written by build."""
@@ -87,9 +86,9 @@ def write_plumbing_estimate(
     lang = plan.language
     est = build_plumbing_estimate(net, plumbing, prices, lang)
     if prices.priced:
-        notes = price_notes(est, prices, lang, f=source.name if source else PRICES_FILE, note=True)
+        notes = price_notes(est, prices, lang, note=True)
     else:
-        notes = [estimate_text("note_no_prices", lang, f=PRICES_FILE)]
+        notes = [estimate_text("note_no_prices", lang)]
     notes += [
         plumbing_estimate_text("note_pipes", lang, pct=round(PLUMBING_RESERVE * 100)),
         plumbing_estimate_text("note_input", lang),
@@ -143,7 +142,7 @@ def estimate_project(
     prices = Prices(own, price_service(prices_from))
     panel = build_panel(report.plan, report.electrical)
     result.estimate, result.files = write_estimate(
-        project, assessment, wiring, report.electrical, prices, result.prices, panel
+        project, assessment, wiring, report.electrical, prices, panel
     )
     return result
 
@@ -154,7 +153,6 @@ def write_estimate(
     wiring: Wiring,
     elec: Electrical,
     prices: Prices,
-    source: Path | None,
     panel: BoardPanel | None,
 ) -> tuple[Estimate, list[Path]]:
     """Estimate in out/: estimate.md, .csv and .xlsx (formulas), from the same quantities as the
@@ -167,10 +165,10 @@ def write_estimate(
     plan = assessment.report.plan
     lang = plan.language
     est = build_estimate(wiring, elec, prices, lang, panel)
-    notes = _estimate_notes(assessment, est, wiring, elec, prices, source)
+    notes = _estimate_notes(assessment, est, wiring, elec, prices)
     decisions = prices.own.terms if prices.own is not None else {}
     terms = term_rows(decisions, est.materials, est.currency, lang)
-    note = open_note(terms, source.name if source else PRICES_FILE, lang)
+    note = open_note(terms, lang)
     if note is not None:
         notes.append(note)
     title = estimate_text("title", lang, name=plan.name)
@@ -212,7 +210,6 @@ def _estimate_notes(
     wiring: Wiring,
     elec: Electrical,
     prices: Prices,
-    source: Path | None,
 ) -> list[str]:
     """Where prices come from, what assumptions the quantities include and what the estimate
     leaves out.
@@ -220,9 +217,9 @@ def _estimate_notes(
     assert assessment.report.plan is not None
     lang = assessment.report.plan.language
     if prices.priced:
-        notes = price_notes(est, prices, lang, f=source.name if source else PRICES_FILE, note=True)
+        notes = price_notes(est, prices, lang, note=True)
     else:
-        notes = [estimate_text("note_no_prices", lang, f=PRICES_FILE)]
+        notes = [estimate_text("note_no_prices", lang)]
     notes += [
         estimate_text("note_cable", lang, pct=round(RESERVE * 100)),
         estimate_text("note_holes", lang, k=HOLE_CABLES),
@@ -277,8 +274,8 @@ def _estimate_notes(
                 "note_board_tail", lang, h=f"{elec.board.height:g}", e=f"{END_ALLOWANCE:g}"
             )
         )
-    if prices.own is not None and prices.own.board_kit and source is not None:
-        notes.append(estimate_text("note_board_kit", lang, f=source.name))
+    if prices.own is not None and prices.own.board_kit:
+        notes.append(estimate_text("note_board_kit", lang))
     with_boxes = {b.group for b in wiring.boxes}
     direct = sorted({r.group for r in wiring.runs} - with_boxes, key=group_key)
     if direct:

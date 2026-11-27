@@ -16,7 +16,7 @@ from dataclasses import dataclass
 
 from floorplan_engine.electrical.estimate import Estimate
 from floorplan_engine.electrical.estimate.texts import text as estimate_text
-from floorplan_engine.electrical.price_list import PRICES_FILE, PriceList, PriceSource, Quote
+from floorplan_engine.electrical.price_list import PriceList, PriceSource, Quote
 from floorplan_engine.electrical.splices import Splice
 from floorplan_engine.model.texts import Language
 
@@ -62,9 +62,7 @@ class Prices:
         return Quote(None, None, False)
 
 
-def price_notes(
-    est: Estimate, prices: Prices, language: Language, f: str = PRICES_FILE, note: bool = False
-) -> list[str]:
+def price_notes(est: Estimate, prices: Prices, language: Language, note: bool = False) -> list[str]:
     """Price sources: the first estimate notes on the sheet, in the viewer and in files: the price
     list (with date and, if note is set, the list's remark), the share of a price service, items
     without a price, the finish materials listed without prices."""
@@ -73,14 +71,14 @@ def price_notes(
         date = f" ({prices.own.date})" if prices.own.date else ""
         if note:
             tail = f" — {prices.own.note}" if prices.own.note else ""
-            out.append(estimate_text("note_prices", language, f=f, date=date, note=tail))
+            out.append(estimate_text("note_prices", language, date=date, note=tail))
         else:
-            out.append(estimate_text("sheet_prices", language, f=f, date=date))
+            out.append(estimate_text("sheet_prices", language, date=date))
     if est.from_service:
         key = "note_service" if prices.own is not None else "note_service_all"
-        out.append(estimate_text(key, language, n=est.from_service, f=f))
+        out.append(estimate_text(key, language, n=est.from_service))
     if est.unpriced:
-        out.append(estimate_text("unpriced", language, n=est.unpriced, f=f))
+        out.append(estimate_text("unpriced", language, n=est.unpriced))
     if est.listed:
         out.append(estimate_text("note_listed", language, n=est.listed))
     return out

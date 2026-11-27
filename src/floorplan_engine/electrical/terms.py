@@ -150,8 +150,10 @@ TEXT: dict[str, dict[str, str]] = {
     "subtotal": {"ru": "Итого обговорено", "uk": "Разом обговорено"},
     "grand": {"ru": "Всего со сопутствующими", "uk": "Усього із супутніми"},
     "note_open": {
-        "ru": "Не обговорено с заказчиком: {names} — договоритесь до начала работ (terms в {f})",
-        "uk": "Не обговорено із замовником: {names} — домовтеся до початку робіт (terms у {f})",
+        "ru": "Не обговорено с заказчиком: {names} — договоритесь до начала работ (условия — в "
+        "прайсе студии)",
+        "uk": "Не обговорено із замовником: {names} — домовтеся до початку робіт (умови — у "
+        "прайсі студії)",
     },
 }
 
@@ -241,12 +243,12 @@ def agreed_total(rows: tuple[TermRow, ...]) -> float:
     return sum(r.amount or 0.0 for r in rows)
 
 
-def open_note(rows: tuple[TermRow, ...], prices_file: str, language: Language) -> str | None:
+def open_note(rows: tuple[TermRow, ...], language: Language) -> str | None:
     """Estimate note about the items nobody agreed on yet; None when all are agreed."""
     names = [r.name.lower() for r in rows if not r.agreed]
     if not names:
         return None
-    return text("note_open", language, names=", ".join(names), f=prices_file)
+    return text("note_open", language, names=", ".join(names))
 
 
 def terms_markdown(

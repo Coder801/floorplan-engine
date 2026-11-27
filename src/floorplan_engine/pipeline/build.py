@@ -73,7 +73,7 @@ from floorplan_engine.pipeline.files import (
     STICKERS_SHORT_FILE,
     WIRING_JOURNAL_FILE,
 )
-from floorplan_engine.pipeline.prices import find_prices, sheet_inputs
+from floorplan_engine.pipeline.prices import sheet_inputs
 from floorplan_engine.pipeline.variants import variant_block
 from floorplan_engine.pipeline.work_plan import work_plan
 from floorplan_engine.plumbing.estimate import build_estimate as build_plumbing_estimate
@@ -257,7 +257,6 @@ def _plumbing_step(run: _Build) -> Network | None:
         net,
         plumbing,
         run.prices or Prices(),
-        find_prices(run.project),
     )
     routes.write_text(
         json.dumps(routes_json(net), ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
@@ -282,7 +281,6 @@ def _estimate_step(
         quantities,
         run.elec,
         run.prices or Prices(),
-        find_prices(run.project),
         panel,
     )
     return est
