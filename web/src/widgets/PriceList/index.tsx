@@ -2,8 +2,9 @@
 // the studio price and the market spread (min — median — max of public price lists,
 // market.yaml), then the materials with the studio price alone (decision 2026-11-25: every item
 // the price list holds), and a footnote on the period and sources. The studio edits its prices
-// here → prices.yaml next to the projects (POST /api/prices); estimates take them at the next
-// build, a project's own prices.yaml changes only the keys it names. Above the tables — how wires
+// here (POST /api/prices) → its price list in the database, the only place it lives (decision
+// 2026-11-27); the folder viewer shows it read only. Estimates take the prices at the next build,
+// a project's own list changes only the keys it names. Above the tables — how wires
 // are joined in the flush boxes of switches (splice: Wago clamps or crimping), saved with the
 // prices by the same button.
 

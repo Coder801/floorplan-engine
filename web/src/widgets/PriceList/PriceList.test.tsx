@@ -43,7 +43,7 @@ describe("PriceList", () => {
     expect(field).toHaveValue("120");
     await user.click(save);
     expect(sent.at(-1)).toMatchObject({ method: "POST", body: { items: { "work.socket": 120 } } });
-    expect(await screen.findByText("Сохранено в prices.yaml — сметы пересчитаются при сборке")).toBeInTheDocument();
+    expect(await screen.findByText("Сохранено в прайсе студии — сметы пересчитаются при сборке")).toBeInTheDocument();
     expect(onDirty).toHaveBeenLastCalledWith(false);
   });
 
@@ -111,7 +111,7 @@ describe("PriceList", () => {
     await user.click(within(group).getByRole("radio", { name: "Опрессовка" }));
     await user.click(save);
     expect(sent.at(-1)?.body).toEqual({ splice: "crimp" });
-    expect(await screen.findByText("Сохранено в prices.yaml — сметы пересчитаются при сборке")).toBeInTheDocument();
+    expect(await screen.findByText("Сохранено в прайсе студии — сметы пересчитаются при сборке")).toBeInTheDocument();
     expect(within(group).getByRole("radio", { name: "Опрессовка" })).toBeChecked();
     // With a price edit — one request
     await user.click(within(group).getByRole("radio", { name: "Клеммы Wago" }));

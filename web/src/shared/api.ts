@@ -95,7 +95,7 @@ async function answerResult(r: Response): Promise<AnswerResult> {
 // Studio price page: works, own price and the market (pipeline.price_page)
 export const getPrices = () => get<PricePage>("/api/prices");
 
-// Studio price edits → prices.yaml next to the projects; null removes the price. splice — the
+// Studio price edits → the studio price list in the database; null removes the price. splice — the
 // joint method of switch flush boxes, sent only when it changed (no items then — only it)
 export async function savePrices(items: Record<string, number | null>, splice?: SpliceMethod): Promise<PricePage> {
   const body = { ...(Object.keys(items).length || !splice ? { items } : {}), ...(splice ? { splice } : {}) };

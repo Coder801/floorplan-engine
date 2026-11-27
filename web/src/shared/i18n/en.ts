@@ -290,7 +290,7 @@ export const en: Messages = {
     lists: "price lists: {{n}}", takeMedian: "use", takeMedianNote: "Set the market median as the studio price",
     noData: "not in price lists", median: "Median", spreadLabel: "min {{min}}, median {{median}}, max {{max}}",
     places: { below: "cheaper than all lists", low: "in the market's lower quarter", mid: "in the market's middle half", high: "in the market's upper quarter", above: "dearer than all lists" },
-    invalid: "A price is a number not below 0", saved: "Saved to prices.yaml — estimates are recalculated at the build",
+    invalid: "A price is a number not below 0", saved: "Saved to the studio price list — estimates are recalculated at the build",
     reset: "Reset", save: "Save", saving: "Saving…",
     splice: {
       title: "Joints in switch flush boxes", wago: "Wago clamps", crimp: "Crimping",

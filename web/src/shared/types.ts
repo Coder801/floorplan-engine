@@ -639,7 +639,7 @@ export interface Elevation extends ElevWall {
 }
 
 // Studio price page (GET /api/prices, pipeline.price_page): electrical works and materials, the
-// studio price (prices.yaml next to the projects) and, for works, the market spread (market.yaml)
+// studio price (the studio price list, kept in the database) and, for works, the market spread (market.yaml)
 export interface MarketQuote { source: string; price: number; text: string }
 export interface MarketSpread {
   n: number; min: number; q1: number; median: number; q3: number; max: number;
