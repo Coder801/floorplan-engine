@@ -1,42 +1,42 @@
 ﻿section;key;name;unit;qty;price;total
 material_rough;cable.3x1.5;Кабель ВВГнг 3×1,5;м;231,1;45;10399,50
 material_rough;cable.3x2.5;Кабель ВВГнг 3×2,5;м;305,8;70;21406,00
-material_rough;cable.4x1.5;Кабель ВВГнг 4×1,5;м;143,3;60;8598,00
-material_rough;cable.UTP cat.6;Кабель UTP cat.6;м;14,9;28;417,20
+material_rough;cable.4x1.5;Кабель ВВГнг 4×1,5;м;143,3;;
+material_rough;cable.UTP cat.6;Кабель UTP cat.6;м;14,9;;
 material_rough;socket_box;Підрозетник;шт;69;20;1380,00
 material_rough;junction_box.80;Коробка розподільча Ø80;шт;2;60;120,00
 material_rough;junction_box.100x100;Коробка розподільча 100×100;шт;3;60;180,00
 material_rough;junction_box_ip.100x100;Коробка розподільча IP44 100×100;шт;2;120;240,00
 material_rough;junction_box.150x110;Коробка розподільча 150×110;шт;1;60;60,00
 material_rough;crimp;Гільза і термоусадка (опресування);шт;24;8;192,00
-material_rough;cable_pad;Площадка під монтажний пістолет з дюбель-цвяхом і стяжкою;шт;1325;5;6625,00
+material_rough;cable_pad;Площадка під монтажний пістолет з дюбель-цвяхом і стяжкою;шт;1325;;
 material_rough;board_enclosure;Корпус щита вбудований, 5 рядів, 60 мод.;шт;1;6000;6000,00
-material_finish;input.C63 2P;Вступний автомат, C63 2P;шт;1;850;850,00
-material_finish;relay.63 А;Реле напруги, 63 А;шт;1;1900;1900,00
-material_finish;breaker.C10;Автомат 1P C10;шт;7;140;980,00
-material_finish;diff.C16 30 мА;Дифавтомат 1P+N C16 30 мА;шт;2;950;1900,00
-material_finish;rcd.40 А 30 мА;ПЗВ 2P 40 А 30 мА;шт;3;1100;3300,00
-material_finish;breaker.C16;Автомат 1P C16;шт;8;140;1120,00
-material_finish;busbar.1P;Шина гребінчаста 1P, 1 м;шт;1;200;200,00
-material_finish;busbar.2P;Шина гребінчаста 2P, 1 м;шт;1;400;400,00
-material_finish;socket;Розетка із заземленням;шт;48;180;8640,00
-material_finish;switch1;Вимикач одноклавішний;шт;10;150;1500,00
-material_finish;switch2;Вимикач двоклавішний;шт;7;190;1330,00
-material_finish;pass_switch;Вимикач прохідний;шт;3;210;630,00
-material_finish;data;Розетка інтернет;шт;1;250;250,00
-material_finish;frame.1;Рамка 1-постова;шт;31;60;1860,00
-material_finish;frame.2;Рамка 2-постова;шт;14;100;1400,00
-material_finish;frame.3;Рамка 3-постова;шт;2;140;280,00
-material_finish;frame.4;Рамка 4-постова;шт;1;180;180,00
-material_finish;light;Світильник стельовий;шт;3;900;2700,00
-material_finish;downlight;Світильник точковий;шт;31;350;10850,00
-material_finish;pendant;Світильник підвісний;шт;3;1500;4500,00
-material_finish;sconce;Бра;шт;11;1200;13200,00
-material_finish;led_output;Вивід для підсвітки;шт;8;150;1200,00
-material_finish;outlet;Вивід кабелю до техніки;шт;6;150;900,00
-material_finish;thermostat;Регулятор теплої підлоги;шт;2;3000;6000,00
-material_finish;led_strip;LED-підсвітка;м;6,35;250;1587,50
-material_finish;led_psu;Блок живлення LED 12 В;шт;8;450;3600,00
+material_finish;input.C63 2P;Вступний автомат, C63 2P;шт;1;;
+material_finish;relay.63 А;Реле напруги, 63 А;шт;1;;
+material_finish;breaker.C10;Автомат 1P C10;шт;7;;
+material_finish;diff.C16 30 мА;Дифавтомат 1P+N C16 30 мА;шт;2;;
+material_finish;rcd.40 А 30 мА;ПЗВ 2P 40 А 30 мА;шт;3;;
+material_finish;breaker.C16;Автомат 1P C16;шт;8;;
+material_finish;busbar.1P;Шина гребінчаста 1P, 1 м;шт;1;;
+material_finish;busbar.2P;Шина гребінчаста 2P, 1 м;шт;1;;
+material_finish;socket;Розетка із заземленням;шт;48;;
+material_finish;switch1;Вимикач одноклавішний;шт;10;;
+material_finish;switch2;Вимикач двоклавішний;шт;7;;
+material_finish;pass_switch;Вимикач прохідний;шт;3;;
+material_finish;data;Розетка інтернет;шт;1;;
+material_finish;frame.1;Рамка 1-постова;шт;31;;
+material_finish;frame.2;Рамка 2-постова;шт;14;;
+material_finish;frame.3;Рамка 3-постова;шт;2;;
+material_finish;frame.4;Рамка 4-постова;шт;1;;
+material_finish;light;Світильник стельовий;шт;3;;
+material_finish;downlight;Світильник точковий;шт;31;;
+material_finish;pendant;Світильник підвісний;шт;3;;
+material_finish;sconce;Бра;шт;11;;
+material_finish;led_output;Вивід для підсвітки;шт;8;;
+material_finish;outlet;Вивід кабелю до техніки;шт;6;;
+material_finish;thermostat;Регулятор теплої підлоги;шт;2;;
+material_finish;led_strip;LED-підсвітка;м;6,35;;
+material_finish;led_psu;Блок живлення LED 12 В;шт;8;;
 rough;work.cable;Прокладання кабелю;м;604,4;45;27198,00
 rough;work.wall_hole;Свердління проходу крізь стіну;шт;9;150;1350,00
 rough;work.wall_hole_large;Свердління великого проходу крізь стіну (коронкою);шт;1;375;375,00
@@ -46,6 +46,6 @@ rough;work.splice;З'єднання N і PE в підрозетнику вими
 rough;work.board_install;Встановлення щита;шт;1;2500;2500,00
 rough;work.insulation_test;Вимірювання опору ізоляції з протоколом;гр.;17;150;2550,00
 finish;work.board_module;Збирання щита;мод.;30;120;3600,00
-finish;work.panel_labels;Маркування апаратів щита наліпками;щит;1;600;600,00
-finish;work.mechanism;Встановлення механізмів;шт;69;100;6900,00
-finish;work.led_psu;Встановлення і підключення блока живлення LED біля стрічки;шт;8;220;1760,00
+finish;work.panel_labels;Маркування апаратів щита наліпками;щит;1;;
+finish;work.mechanism;Встановлення механізмів;шт;69;;
+finish;work.led_psu;Встановлення і підключення блока живлення LED біля стрічки;шт;8;;
