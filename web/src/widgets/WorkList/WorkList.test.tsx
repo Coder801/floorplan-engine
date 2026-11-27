@@ -17,7 +17,7 @@ describe("WorkList", () => {
     const sums = screen.getByRole("banner").querySelector("dl")!;
     expect(sums).toHaveTextContent(/Работы.*Материалы.*Итого/);
     expect(sums).not.toHaveTextContent("имитация");
-    expect(within(sums).getByRole("img", { name: "Цена условная: материалы пока не по рыночным ценам" }).parentElement).toHaveTextContent(/грн$/);
+    expect(within(sums).queryByRole("img")).toBeNull();
     expect(screen.getByRole("button", { name: /Распаечные коробки/ })).toHaveTextContent("Примите работу →");
     expect(screen.getByRole("button", { name: /Ниша под роутер/ })).toHaveTextContent("Согласуйте доп. работу →");
     expect(screen.getByText("Ждут вашего решения: 2")).toBeInTheDocument();

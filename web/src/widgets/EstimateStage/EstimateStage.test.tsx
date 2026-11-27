@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import type { SideTable } from "@/shared/types";
@@ -48,17 +48,20 @@ describe("EstimateStage", () => {
     expect(screen.queryByRole("button", { name: "Открыть" })).toBeNull();
   });
 
-  it("a provisional subtotal (guess) has the warning mark on its sum, other sums do not", () => {
+  it("finish materials are a list without prices: quantities only, no section total, no mark", () => {
     const rows = [
-      { cells: ["", "Материалы", "", ""], section: true },
-      { cells: ["1", "Кабель", "м", "3 200"] },
-      { cells: ["", "Итого", "", "3 200"], guess: true },
+      { cells: ["", "Чистовые материалы", "", "", "", ""], section: true },
+      { cells: ["1", "Розетка", "шт", "4", "", ""] },
+      { cells: ["", "Черновые работы", "", "", "", ""], section: true },
+      { cells: ["1", "Штроба", "м", "10", "200", "2 000"] },
+      { cells: ["", "Итого", "", "", "", "2 000"] },
     ];
     render(<EstimateStage items={[{ table: { ...electrical, rows }, xlsx: null }]} />);
-    const marks = screen.getAllByRole("img", { name: "Цена условная: материалы пока не по рыночным ценам" });
-    expect(marks).toHaveLength(1);
-    expect(marks[0].parentElement).toHaveTextContent("3 200");
-    expect(within(screen.getAllByRole("row", { name: /Итого/ }).at(-1)!).queryByRole("img")).toBeNull();
+    expect(screen.getByRole("row", { name: /Розетка/ })).toHaveTextContent(/Розеткашт4$/);
+    const all = screen.getAllByRole("row");
+    const socket = all.findIndex((r) => /Розетка/.test(r.textContent ?? ""));
+    expect(all[socket + 1]).toHaveTextContent("Черновые работы");  // no total after the list
+    expect(screen.queryByRole("img", { name: /Цена условная/ })).toBeNull();
   });
 
   it("does not show work outside the estimate, even if an old build has it", () => {

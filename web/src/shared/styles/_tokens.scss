@@ -6,7 +6,7 @@
 // deep blue with pale lines — is a third set of colours, not offered yet. --signal is the marking yellow of the main action only;
 // --hl is the red-orange pencil of selection (international orange, not a terracotta). --warn is the
 // warning yellow of marks and fills; --warn-text the same warning as text (on white paper the
-// yellow is unreadable, so the light theme darkens it to amber): a provisional price (ui/Provisional).
+// yellow is unreadable, so the light theme darkens it to amber).
 
 @mixin dark {
   --bg: #121314; --panel: #191a1b; --raise: #202122; --text: #bfbfbf; --muted: #8c8c8c;

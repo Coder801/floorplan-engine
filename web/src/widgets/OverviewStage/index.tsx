@@ -13,7 +13,6 @@ import type { Overview, Project, Question, Variants, VariantSummary } from "@/sh
 import { Button } from "@/ui/Button";
 import { Card } from "@/ui/Card";
 import { Heading } from "@/ui/Heading";
-import { Provisional } from "@/ui/Provisional";
 import { StepMark } from "@/ui/StepMark";
 import { Tag } from "@/ui/Tag";
 import { Text } from "@/ui/Text";
@@ -271,7 +270,7 @@ export function OverviewStage({ overview, variants, project, openQuestions, canC
               // Work and materials apart: material prices are not market prices yet (decision 2026-11-12)
               <dl className={css.split}>
                 <div><dt>{t("overview.work")}</dt><dd>{cash(grand.work, grand.currency)}</dd></div>
-                <div><dt>{t("overview.materials")}</dt><dd><Provisional label={t("estimate.provisional")}>{cash(grand.material, grand.currency)}</Provisional></dd></div>
+                <div><dt>{t("overview.materials")}</dt><dd>{cash(grand.material, grand.currency)}</dd></div>
               </dl>
             )}
             <Button variant="primary" className={css.primary} disabled={!onEstimate} onClick={onEstimate}>{t("overview.openEstimate")}</Button>

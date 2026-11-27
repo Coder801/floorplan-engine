@@ -103,7 +103,7 @@ describe("SidePanel", () => {
       estimate: {
         title: "Смета", columns: ["", "Позиция", "Сумма"], align: ["left", "left", "right"],
         rows: [{ cells: ["", "Работы — цены условные", ""], section: true }, { cells: ["1", "Штроба", "100"] }, { cells: ["", "Итого", "100"] },
-               { cells: ["", "Материалы", ""], section: true }, { cells: ["2", "Кабель", "50"] }, { cells: ["", "Итого", "50"], guess: true }],
+               { cells: ["", "Материалы", ""], section: true }, { cells: ["2", "Кабель", "50"] }, { cells: ["", "Итого", "50"] }],
         total: ["", "Всего", "150"], notes: ["Без материалов"],
       },
       variant: { label: "Стандарт, по потолку", onOpen },
@@ -111,7 +111,7 @@ describe("SidePanel", () => {
     expect(screen.queryByRole("tablist")).toBeNull();
     expect(screen.getByText("Работы")).toBeInTheDocument();
     expect(screen.getByText("Всего")).toBeInTheDocument();
-    expect(screen.getAllByRole("img", { name: "Цена условная: материалы пока не по рыночным ценам" }).map((x) => x.parentElement!.textContent)).toEqual(["50"]);
+    expect(screen.queryByRole("img", { name: /Цена условная/ })).toBeNull();
     expect(screen.getByText("Без материалов")).toBeInTheDocument();
     expect(screen.getByText("Стандарт, по потолку")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "изменить" }));

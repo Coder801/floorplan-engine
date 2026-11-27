@@ -30,7 +30,7 @@ export const me = (over: Partial<Me> = {}): Me => ({ auth: true, user: user(), .
 
 export const priceRow = (over: Partial<PriceRow> = {}): PriceRow => ({
   key: "work.socket", section: "rough", unit: "шт", name: { ru: "Установка подрозетника", uk: "Встановлення підрозетника" },
-  hint: null, price: 100, service: null,
+  hint: null, price: 100,
   market: { n: 3, min: 80, q1: 90, median: 120, q3: 140, max: 200, basis: "бетон",
             quotes: [{ source: "s1", price: 80, text: "подрозетник в бетоне" }] },
   ...over,

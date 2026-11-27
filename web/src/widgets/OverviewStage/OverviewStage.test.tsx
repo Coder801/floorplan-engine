@@ -44,7 +44,7 @@ describe("OverviewStage", () => {
     expect(total).toHaveTextContent(/электрика \(выбранный вариант\) 50\s000 грн · сантехника 15\s000 грн/);
     expect(total).toHaveTextContent(/Работа\s*25\s000 грн/);
     expect(total).toHaveTextContent(/Материалы\s*40\s000 грн/);
-    expect(within(total).getByRole("img", { name: "Цена условная: материалы пока не по рыночным ценам" })).toBeInTheDocument();
+    expect(within(total).queryByRole("img")).toBeNull();  // studio prices: no provisional mark
     await userEvent.click(within(total).getByRole("button", { name: "Открыть смету" }));
     expect(onEstimate).toHaveBeenCalledOnce();
   });

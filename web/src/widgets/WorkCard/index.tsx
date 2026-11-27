@@ -26,7 +26,6 @@ import { Checkbox } from "@/ui/Checkbox";
 import { Heading as Title } from "@/ui/Heading";
 import { IconButton } from "@/ui/IconButton";
 import { PanelHeader } from "@/ui/PanelHeader";
-import { Provisional } from "@/ui/Provisional";
 import { Tag } from "@/ui/Tag";
 import { Text } from "@/ui/Text";
 import { TextArea } from "@/ui/TextArea";
@@ -160,7 +159,7 @@ export function WorkCard({ task, state, run, busy, error, onError, me, onClose, 
                   {!task.materials_included && <span className="muted"> · {t("work.card.notIncluded")}</span>}
                 </dt>
                 <dd className={cx(!task.materials_included && "muted")}>
-                  {task.material_total > 0 ? <Provisional label={t("estimate.provisional")}>{m(task.material_total)}</Provisional> : m(task.material_total)}
+                  {m(task.material_total)}
                 </dd>
                 <dt className={css.grand}>{t("work.card.total")}</dt><dd className={css.grand}>{m(task.total)}</dd>
                 {(task.paid > 0 || rights.payments) && (

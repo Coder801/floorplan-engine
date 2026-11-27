@@ -86,8 +86,8 @@ export const needsBehalf = (action: StatusAction | PlanAction, can: WorkCan) => 
 
 // The channel in words for the feed («студия за заказчика — по звонку: звонок 12.11») and the plan
 // («Утверждён студией за заказчика — в Telegram»)
-// "work 12 000 грн · materials 30 000 грн" under a sum: material prices are a guess for now
-// (decision 2026-11-12); materials outside the task price read "not included"
+// "work 12 000 грн · materials 30 000 грн" under a sum: materials are what the studio prices (rough
+// ones; finish materials are a list without prices); materials outside the task price read "not included"
 export function splitText(work: number, material: number, currency: string, included = true): string {
   const m = (v: number) => money(v, currency, locale());
   const mat = included ? m(material) : i18n.t("work.card.notIncluded");

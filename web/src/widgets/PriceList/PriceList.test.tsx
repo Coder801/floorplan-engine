@@ -60,21 +60,27 @@ describe("PriceList", () => {
     expect(sent.at(-1)?.body).toEqual({ items: { "work.socket": null } });
   });
 
-  it("read-only without the right to edit; a row without market data says so", async () => {
-    stubApi({ "GET /api/prices": pricePage({ editable: false, market: null, rows: [priceRow({ market: null, price: null, service: 90 })] }) });
+  it("read-only without the right to edit; a row without market data says so; no mock price", async () => {
+    stubApi({ "GET /api/prices": pricePage({ editable: false, market: null, rows: [priceRow({ market: null, price: null })] }) });
     render(<PriceList />);
     expect(await screen.findByText("нет в прайсах")).toBeInTheDocument();
     expect(screen.queryByRole("textbox")).toBeNull();
     expect(screen.queryByRole("button", { name: "Сохранить" })).toBeNull();
-    expect(screen.getByText("в смете — имитация")).toBeInTheDocument();
+    expect(screen.queryByText(/имитаци/)).toBeNull();
+  });
+
+  it("finish material prices the list still holds are reported as dropped on save", async () => {
+    stubApi({ "GET /api/prices": pricePage({ stale: ["socket", "breaker"] }) });
+    render(<PriceList />);
+    expect(await screen.findByText(/Цены чистовых материалов \(2 поз\.\) больше не учитываются/)).toBeInTheDocument();
   });
 
   it("shows materials in a table of their own, editable the same way", async () => {
     const user = userEvent.setup();
     const cable = priceRow({ key: "cable.3x1.5", kind: "material", section: "material_rough", unit: "м",
                              name: { ru: "Кабель ВВГнг 3×1,5", uk: "Кабель ВВГнг 3×1,5" }, price: 45, market: null });
-    const box = priceRow({ key: "socket", kind: "material", section: "material_finish",
-                           name: { ru: "Розетка", uk: "Розетка" }, price: null, service: 90, market: null });
+    const box = priceRow({ key: "socket_box", kind: "material", section: "material_rough",
+                           name: { ru: "Подрозетник", uk: "Підрозетник" }, price: null, market: null });
     const sent = stubApi({ "GET /api/prices": pricePage({ rows: [priceRow({ kind: "work" }), cable, box] }),
                            "POST /api/prices": pricePage() });
     render(<PriceList />);
@@ -82,11 +88,11 @@ describe("PriceList", () => {
     const table = heading.nextElementSibling as HTMLElement;
     expect(within(table).getByRole("columnheader", { name: "Материал" })).toBeInTheDocument();
     expect(within(table).getByRole("textbox", { name: "Цена: Кабель ВВГнг 3×1,5" })).toHaveValue("45");
-    expect(within(table).getByRole("textbox", { name: "Цена: Розетка" })).toHaveAttribute("placeholder", "90");
+    expect(within(table).getByRole("textbox", { name: "Цена: Подрозетник" })).toHaveAttribute("placeholder", "—");
     expect(within(table).queryByText("нет в прайсах")).toBeNull();  // no market columns for materials
-    await user.type(within(table).getByRole("textbox", { name: "Цена: Розетка" }), "60");
+    await user.type(within(table).getByRole("textbox", { name: "Цена: Подрозетник" }), "20");
     await user.click(screen.getByRole("button", { name: "Сохранить" }));
-    expect(sent.at(-1)?.body).toEqual({ items: { socket: 60 } });
+    expect(sent.at(-1)?.body).toEqual({ items: { socket_box: 20 } });
   });
 
   it("the joint method of switch flush boxes: saved alone or with the prices; an older server means Wago", async () => {

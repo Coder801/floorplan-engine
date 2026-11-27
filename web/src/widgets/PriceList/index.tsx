@@ -71,20 +71,17 @@ export function PriceList({ onDirty }: { onDirty?: (dirty: boolean) => void }) {
   const works = data?.rows.filter((r) => (r.kind ?? "work") === "work") ?? [];
   const materials = data?.rows.filter((r) => r.kind === "material") ?? [];
 
-  // The studio price cell: an input for the studio, the number for others; no own price — the
-  // service's one as the placeholder and a note
+  // The studio price cell: an input for the studio, the number for others; no own price — "—"
+  // (the estimate leaves the item out of the total)
   const priceCell = (r: PriceRow) => {
     const value = draft[r.key] ?? (r.price === null ? "" : String(r.price));
     return (
       <td className={css.num}>
         {data?.editable ? (
           <input className={css.input} inputMode="decimal" value={value} aria-label={t("prices.priceOf", { name: name(r) })}
-                 placeholder={r.service === null ? "—" : money(r.service, lng)}
+                 placeholder="—"
                  onChange={(e) => edit(r.key, e.target.value)} />
         ) : r.price !== null ? money(r.price, lng) : "—"}
-        {r.price === null && r.service !== null && !(r.key in draft) && (
-          <div className={cx(css.basis, "muted")} title={t("prices.serviceNote")}>{t("prices.service")}</div>
-        )}
       </td>
     );
   };
@@ -102,6 +99,7 @@ export function PriceList({ onDirty }: { onDirty?: (dirty: boolean) => void }) {
         {data && (
           <>
             {data.issues.map((m) => <div key={m} className={css.issue}>{m}</div>)}
+            {!!data.stale?.length && <div className={css.issue}>{t("prices.stale", { n: data.stale.length })}</div>}
             <Stack as="section" gap={2} align="start" className={css.splice} aria-labelledby="splice-title">
               <Heading level={3} size="caps" id="splice-title">{t("prices.splice.title")}</Heading>
               {data.editable ? (

@@ -300,7 +300,6 @@ export interface TableRow {
   group?: string;         // QF group of a row of "Groups": the row has an eye (filter3d)
   marker?: "square";      // icon without colour: a panel device not on a group line
   scope?: WorkScope;      // estimate work row: what its price covers (the row unfolds)
-  guess?: boolean;        // estimate material subtotal: the sum is provisional (prices not at market yet)
 }
 
 // Work scope of an estimate row, in the project language (electrical/work_scope.py): operations
@@ -657,8 +656,7 @@ export interface PriceRow {
   unit: string;
   name: { ru: string; uk: string };
   hint: { ru: string; uk: string } | null;
-  price: number | null;       // studio price; null — none in prices.yaml
-  service: number | null;     // no studio price: the price service's one (a mock for now)
+  price: number | null;       // studio price; null — none in the studio price list
   market: MarketSpread | null;
 }
 // Period of market prices: "YYYY" or "YYYY-MM"; no dated sources — empty strings
@@ -675,6 +673,7 @@ export interface PricePage {
   note: string;
   splice?: SpliceMethod;   // missing on an older server: "wago"
   rows: PriceRow[];
+  stale?: string[];        // finish materials the list still prices: ignored, dropped on the next save
   market: { region: string; collected: string; currency: string; period: MarketPeriod; sources: MarketSource[] } | null;
   issues: string[];
   editable: boolean;

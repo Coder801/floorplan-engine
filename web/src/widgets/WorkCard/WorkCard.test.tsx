@@ -228,16 +228,11 @@ describe("WorkCard", () => {
     expect(onClose).toHaveBeenCalledOnce();
   });
 
-  it("a materials sum is marked provisional; a task without materials has no mark", async () => {
-    const { unmount } = open(task("cable"), CLIENT);
-    await tab(/Позиции/);
-    const mark = screen.getByRole("img", { name: "Цена условная: материалы пока не по рыночным ценам" });
-    expect(mark.parentElement).toHaveTextContent(/грн$/);
-    expect(mark.closest("dl")).not.toHaveTextContent("имитация");
-    unmount();
-    open(task("insulation"), CLIENT);
+  it("a materials sum is a plain studio-priced amount, without a provisional mark", async () => {
+    open(task("cable"), CLIENT);
     await tab(/Позиции/);
     expect(screen.queryByRole("img", { name: /Цена условная/ })).toBeNull();
+    expect(screen.queryByText(/имитаци/)).toBeNull();
   });
 
   it("before approval the client only reads: ticks come later, no status buttons", () => {

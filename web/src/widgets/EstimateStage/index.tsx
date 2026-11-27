@@ -6,8 +6,8 @@
 // (…/result.xlsx), PDF — the same "Estimate for print" as the Download menu; plumbing Excel is a
 // plain link to the whole plumbing estimate in the same look (…/result.xlsx?stage=plumbing). In print, an estimate is on its stage's sheet.
 // A work row with a scope (TableRow.scope) unfolds: what its price includes and the handover
-// result, so the client sees there are no hidden services. A material subtotal with guess has a
-// provisional sum (ui/Provisional): material prices are not market prices yet. The title, Excel and the column headings
+// result, so the client sees there are no hidden services. Finish materials are a list without
+// prices (no total, the note under the estimate says why). The title, Excel and the column headings
 // stay on top while the estimate scrolls.
 
 import { Fragment, useEffect, useState, type CSSProperties } from "react";
@@ -19,7 +19,6 @@ import { Button } from "@/ui/Button";
 import { Card } from "@/ui/Card";
 import { Heading } from "@/ui/Heading";
 import { HelpTip } from "@/ui/HelpTip";
-import { Provisional } from "@/ui/Provisional";
 import { Text } from "@/ui/Text";
 import { ReportDialog } from "@/widgets/ReportDialog";
 import css from "./EstimateStage.module.scss";
@@ -84,9 +83,7 @@ function Estimate({ table, xlsx, report }: EstimateItem) {
                             {name(c)}
                             <HelpTip label={t("estimate.about", { name: c })} text={r.hint} mark="i" size={18} align="left" />
                           </span>
-                        ) : i === 1 ? name(c)
-                          : r.guess && c && i === r.cells.length - 1 ? <Provisional label={t("estimate.provisional")}>{c}</Provisional>
-                          : c}
+                        ) : i === 1 ? name(c) : c}
                       </td>
                     ))}
                   </tr>
