@@ -114,4 +114,28 @@ describe("StudioView", () => {
     await user.click(screen.getByRole("button", { name: "Да" }));
     expect(sent.at(-2)).toMatchObject({ method: "DELETE", path: "/api/admin/invites/i1" });
   });
+
+  it("shows the price list and the profile read only", async () => {
+    stubApi({
+      [DETAIL]: studioDetail({
+        prices: { text: "currency: грн\nworks:\n  work.socket: 150\n", updated: "2026-11-20T10:00:00Z" },
+        profile: { organization: { name: "ООО Ампер", code: "12345678" }, stage: "Р", signatures: [{ role: "ГИП", name: "Иван" }] },
+      }),
+    });
+    render(<StudioView id="s1" onChanged={vi.fn()} />);
+    expect(await screen.findByLabelText("Прайс студии")).toHaveTextContent("work.socket: 150");
+    expect(screen.getByText(/^изменён /)).toBeInTheDocument();
+    expect(screen.getByText("name")).toBeInTheDocument();
+    expect(screen.getByText("ООО Ампер")).toBeInTheDocument();
+    expect(screen.getByText("Р")).toBeInTheDocument();
+    expect(screen.getByText(/"role": "ГИП"/)).toBeInTheDocument();
+    expect(screen.queryByRole("textbox")).toBeNull();
+  });
+
+  it("says when there is no price list and no profile", async () => {
+    stubApi({ [DETAIL]: studioDetail({ prices: { text: null, updated: null }, profile: null }) });
+    render(<StudioView id="s1" onChanged={vi.fn()} />);
+    expect(await screen.findByText("Прайса нет")).toBeInTheDocument();
+    expect(screen.getByText("Профиля нет")).toBeInTheDocument();
+  });
 });

@@ -17,6 +17,7 @@ export function Summary() {
           <a className={css.card} href={href("studios")}><b>{c.studios}</b>фирм</a>
           <a className={css.card} href={href("studios")}><b>{c.personal}</b>«Мой ремонт»</a>
           <a className={css.card} href={href("users")}><b>{c.users}</b>людей</a>
+          {c.clients !== undefined && <a className={css.card} href={href("clients")}><b>{c.clients}</b>клиентов</a>}
           <a className={css.card} href={href("projects")}><b>{c.projects}</b>проектов</a>
           <a className={css.card} href={href("users")}><b>{c.sessions}</b>сеансов</a>
         </div>

@@ -1,7 +1,7 @@
 // Synthetic answers of the admin API for component tests: each factory gives a full record,
 // a test overrides only the fields it is about.
 import type {
-  EventRow, FeedbackItem, FeedbackPage, InviteRow, ProjectDetail, ProjectRow, StudioDetail, StudioRow, UserBrief, UserDetail, UserRow,
+  ClientRow, EventRow, FeedbackItem, FeedbackPage, InviteRow, ProjectDetail, ProjectRow, StudioDetail, StudioRow, UserBrief, UserDetail, UserRow,
 } from "./types";
 
 export const person = (over: Partial<UserBrief> = {}): UserBrief => ({
@@ -33,6 +33,11 @@ export const projectRow = (over: Partial<ProjectRow> = {}): ProjectRow => ({
 export const projectDetail = (over: Partial<ProjectDetail> = {}): ProjectDetail => ({
   id: "p1", name: "Квартира на Нагорной", slug: "nahirna-16", studio: { id: "s1", name: "Ампер" },
   state: "active", created: "2026-10-05T10:00:00Z", services: ["electrical", "plumbing"], members: [], codes: [], invites: [], support: [], ...over,
+});
+
+export const clientRow = (over: Partial<ClientRow> = {}): ClientRow => ({
+  user: person({ account_type: "client", last_login: "2026-11-27T10:00:00Z" }), kind: "studio",
+  project: projectRow(), studio: { id: "s1", name: "Ампер" }, ...over,
 });
 
 export const invite = (over: Partial<InviteRow> = {}): InviteRow => ({

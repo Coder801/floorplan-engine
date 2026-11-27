@@ -1,12 +1,13 @@
-// Admin layout (variant B, decision 2026-11-03): sections | list | detail. The summary and the log
-// take the list and detail columns together. Only an active platform owner gets in: the API
-// answers 403 to others, and the page says so before asking for anything.
+// Admin layout (variant B, decision 2026-11-03): sections | list | detail. The summary, the clients,
+// the feedback and the log take the list and detail columns together. Only an active platform
+// owner gets in: the API answers 403 to others, and the page says so before asking for anything.
 import { useCallback, useState } from "react";
 import * as api from "@/shared/api";
 import { who } from "@/shared/format";
 import { SECTIONS, href, useRoute } from "@/shared/route";
 import { SECTION } from "@/shared/text";
 import { css, cx, useLoad } from "@/components/ui";
+import { Clients } from "@/pages/Clients";
 import { Events } from "@/pages/Events";
 import { Feedback } from "@/pages/Feedback";
 import { ProjectList, ProjectView } from "@/pages/Projects";
@@ -39,7 +40,8 @@ function Admin({ me, name }: { me: string; name: string }) {
   // A change in a detail refreshes the counts of its list
   const [version, setVersion] = useState(0);
   const changed = useCallback(() => setVersion((v) => v + 1), []);
-  const wide = route.section === "summary" || route.section === "events" || route.section === "feedback";
+  const wide = route.section === "summary" || route.section === "events" || route.section === "feedback"
+    || route.section === "clients";
   // New feedback is counted next to its section
   const fresh = useLoad(() => api.feedback({ status: "new", limit: 1 }), [version]);
   const unread = fresh.data?.counts.new ?? 0;
@@ -65,6 +67,7 @@ function Admin({ me, name }: { me: string; name: string }) {
         {route.section === "summary" && <Summary />}
         {route.section === "events" && <Events params={route.params} />}
         {route.section === "feedback" && <Feedback onChanged={changed} />}
+        {route.section === "clients" && <Clients />}
         {!wide && !route.id && <div className={css.empty}>Выберите запись в списке</div>}
         {route.section === "studios" && route.id && <StudioView key={route.id} id={route.id} onChanged={changed} />}
         {route.section === "users" && route.id && <UserView key={route.id} id={route.id} me={me} onChanged={changed} />}

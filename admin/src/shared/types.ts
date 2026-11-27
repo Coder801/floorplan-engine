@@ -42,7 +42,21 @@ export interface ProjectBrief {
   services?: string[];
 }
 
-export interface Summary { studios: number; personal: number; users: number; projects: number; sessions: number }
+export interface Summary {
+  studios: number; personal: number; users: number; projects: number; sessions: number;
+  clients?: number;  // people on the client side (ClientRow); an old server sends none
+}
+
+// A client (GET /api/admin/clients): a person on the client side and how they come to a project.
+// personal — leads their own project in "Мой ремонт", studio — a client of a studio project,
+// none — no project yet
+export type ClientKind = "personal" | "studio" | "none";
+export interface ClientRow {
+  user: UserBrief;
+  kind: ClientKind;
+  project: ProjectBrief | null;
+  studio: { id: string; name: string } | null;
+}
 
 export interface Member { user: UserBrief; role: string; since: string | null }
 
@@ -61,7 +75,12 @@ export interface StudioDetail extends StudioBrief {
   members: Member[];
   projects: ProjectBrief[];
   invites: InviteRow[];
+  // Read only: the studio price list (YAML as stored, text null — none) and its profile
+  // (organization, stage, signatures — stamp data for the sheets; null — none); an old server sends neither
+  prices?: { text: string | null; updated: string | null };
+  profile?: StudioProfile | null;
 }
+export interface StudioProfile { organization?: unknown; stage?: unknown; signatures?: unknown }
 
 export interface UserRow extends UserBrief { space: StudioBrief | null }
 export interface UserDetail extends UserBrief {

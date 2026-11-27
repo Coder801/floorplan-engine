@@ -3,7 +3,7 @@
 import type { Section } from "./route";
 
 export const SECTION: Record<Section, string> = {
-  summary: "Сводка", studios: "Студии", users: "Люди", projects: "Проекты", feedback: "Отзывы", events: "Журнал",
+  summary: "Сводка", studios: "Студии", users: "Люди", clients: "Клиенты", projects: "Проекты", feedback: "Отзывы", events: "Журнал",
 };
 
 export const ROLE: Record<string, string> = {
@@ -32,6 +32,11 @@ export const ACCOUNT: Record<string, string> = { client: "хозяин квар�
 export const KIND: Record<string, string> = {
   studio: "фирма", personal: "Мой ремонт", unowned: "без владельца",
 };
+// How a client comes to a project (ClientRow.kind)
+export const CLIENT_KIND: Record<string, string> = {
+  personal: "Мой ремонт", studio: "Клиент студии", none: "Без проекта",
+};
+export const CLIENT_KINDS = ["personal", "studio", "none"];
 export const BUSINESS: Record<string, string> = {
   design: "дизайн и проект", electric: "электромонтаж", construction: "ремонт", master: "частный мастер",
 };

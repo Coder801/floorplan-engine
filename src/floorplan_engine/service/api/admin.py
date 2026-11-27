@@ -90,6 +90,10 @@ def _view_routes(r: APIRouter, call: _Call) -> None:
     def users(request: Request, q: str = "") -> list[dict[str, Any]]:
         return call(request, lambda db, _: adm.users(db, q))
 
+    @r.get("/clients")
+    def clients(request: Request, q: str = "") -> list[dict[str, Any]]:
+        return call(request, lambda db, _: adm.clients(db, q))
+
     @r.get("/users/{user_id}")
     def user(request: Request, user_id: str) -> dict[str, Any]:
         return call(request, lambda db, _: adm.user_detail(db, adm.get(db, AppUser, user_id)))

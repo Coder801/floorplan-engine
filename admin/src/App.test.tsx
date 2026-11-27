@@ -63,4 +63,14 @@ describe("App", () => {
     expect(await screen.findByRole("heading", { name: "Ампер" })).toBeInTheDocument();
     expect(screen.queryByText("Выберите запись в списке")).toBeNull();
   });
+
+  it("the clients take the whole width", async () => {
+    location.hash = "#/clients";
+    stubApi({ ...COMMON, "GET /api/auth/me": { auth: true, user: owner }, "GET /api/admin/clients?q=": [] });
+    render(<App />);
+    expect(await screen.findByRole("heading", { name: "Клиенты" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Клиенты" })).toHaveAttribute("href", "#/clients");
+    expect(screen.queryByText("Выберите запись в списке")).toBeNull();
+    location.hash = "";
+  });
 });

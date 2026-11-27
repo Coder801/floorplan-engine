@@ -1,7 +1,7 @@
 // Requests to the admin API /api/admin/* (service/api/admin.py). A broken access rule comes back
 // as 409 with a Russian reason: it is thrown as ApiError and shown next to the action.
 import type {
-  EventRow, FeedbackItem, FeedbackPage, FeedbackStatus, Me, ProjectDetail, ProjectRow, StudioDetail, StudioRow, Summary, UserDetail, UserRow,
+  ClientRow, EventRow, FeedbackItem, FeedbackPage, FeedbackStatus, Me, ProjectDetail, ProjectRow, StudioDetail, StudioRow, Summary, UserDetail, UserRow,
 } from "./types";
 
 export class ApiError extends Error {
@@ -47,6 +47,8 @@ export const user = (id: string) => call<UserDetail>("GET", `${A}/users/${q(id)}
 export const setActive = (id: string, active: boolean) =>
   call<UserDetail>("POST", `${A}/users/${q(id)}/active`, { active });
 export const logout = (id: string) => call<UserDetail>("POST", `${A}/users/${q(id)}/logout`);
+
+export const clients = (search = "") => call<ClientRow[]>("GET", `${A}/clients?q=${q(search)}`);
 
 export const projects = () => call<ProjectRow[]>("GET", `${A}/projects`);
 export const project = (id: string) => call<ProjectDetail>("GET", `${A}/projects/${q(id)}`);

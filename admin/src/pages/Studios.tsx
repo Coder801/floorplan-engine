@@ -1,11 +1,13 @@
 // Studios: list with a kind filter; detail with members (role changes at once), projects and
 // invites. Only a firm has employees: "Мой ремонт" and "без владельца" say why there is no button.
-import { useMemo, useState } from "react";
+// The price list (YAML) and the profile (stamp data) of the studio are shown read only.
+import { Fragment, useMemo, useState } from "react";
 import * as api from "@/shared/api";
 import { contact, date, who } from "@/shared/format";
 import { href } from "@/shared/route";
+import { PROFILE_PARTS, profileView } from "@/shared/profile";
 import { BUSINESS, KIND, ROLE, STUDIO_ROLES, word } from "@/shared/text";
-import type { StudioDetail, StudioRow } from "@/shared/types";
+import type { StudioDetail, StudioProfile, StudioRow } from "@/shared/types";
 import { IssueForm, OneTime, PersonPicker } from "@/components/dialogs";
 import { Button, Confirm } from "@/components/buttons";
 import { Cols, ErrorLine, Section, Status, W, css, cx, useAction, useLoad } from "@/components/ui";
@@ -107,6 +109,18 @@ export function StudioView({ id, onChanged }: { id: string; onChanged: () => voi
         </tbody></table>
       </Section>
 
+      {s.prices && (
+        <Section title="Прайс" action={s.prices.text !== null && s.prices.updated && <span className={css.muted}>изменён {date(s.prices.updated)}</span>}>
+          {s.prices.text === null ? <div className={css.empty}>Прайса нет</div>
+            : <pre className={css.code} aria-label="Прайс студии">{s.prices.text}</pre>}
+        </Section>
+      )}
+      {s.profile !== undefined && (
+        <Section title="Профиль">
+          {s.profile === null ? <div className={css.empty}>Профиля нет</div> : <Profile profile={s.profile} />}
+        </Section>
+      )}
+
       {s.invites.length > 0 && (
         <Section title="Приглашения в студию">
           <table><Cols w={[W.role, null, 200, W.day, W.act]} /><tbody>
@@ -141,6 +155,29 @@ export function StudioView({ id, onChanged }: { id: string; onChanged: () => voi
           onClose={(v) => { setInviting(false); setLink(v); if (v) detail.reload(); }} />
       )}
       {link && <OneTime title="Ссылка-приглашение" value={link} onClose={() => setLink(null)} />}
+    </>
+  );
+}
+
+// The studio profile, read only: each part that is there, flat ones as "key → value"
+function Profile({ profile }: { profile: StudioProfile }) {
+  const parts = PROFILE_PARTS.filter((p) => profile[p.key] !== undefined && profile[p.key] !== null);
+  if (!parts.length) return <div className={css.empty}>Профиль пустой</div>;
+  return (
+    <>
+      {parts.map(({ key, label }) => {
+        const view = profileView(profile[key]);
+        return (
+          <div key={key}>
+            <div className={css.muted}>{label}</div>
+            {view.kind === "json" ? <pre className={css.code}>{view.text}</pre> : (
+              <dl className={css.pairs}>
+                {view.lines.map(([k, v], i) => <Fragment key={k || i}><dt>{k}</dt><dd>{v}</dd></Fragment>)}
+              </dl>
+            )}
+          </div>
+        );
+      })}
     </>
   );
 }

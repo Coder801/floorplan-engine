@@ -10,9 +10,11 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import Engine
 
+from floorplan_engine.service import sync
 from floorplan_engine.service.api.auth import COOKIE, Auth, AuthConfig
 from floorplan_engine.service.api.viewer import create_viewer
 from floorplan_engine.service.db import access as acc
+from floorplan_engine.service.db.models import StudioProfile
 from floorplan_engine.service.db.session import make_sessions
 
 SECRET = "x" * 40
@@ -178,3 +180,57 @@ def test_project_services_from_admin(auth: Auth, tmp_path: Path) -> None:
     log = boss.get(f"/api/admin/events?project={pid}").json()
     changes = [e["payload"]["services"] for e in log if e["action"] == "admin_project_services"]
     assert changes == [[], ["electrical", "plumbing"]]  # newest first
+
+
+def test_clients_of_three_kinds(auth: Auth, tmp_path: Path) -> None:
+    """GET /api/admin/clients: one row per client account, newest first — their own "Мой
+    ремонт" project, a studio project by invite, or none yet; q searches like users."""
+    owner, flat, guest, lonely = (_login(auth, n) for n in ("owner", "flat", "guest", "lonely"))
+    _login(auth, "nobody")  # no account type yet — not a client
+    with auth.db() as db:
+        o, f, g, n = (acc.session_user(db, t) for t in (owner, flat, guest, lonely))
+        assert o is not None and f is not None and g is not None and n is not None
+        firm = acc.register_firm(db, o, "Искра", "electric")
+        kv = acc.create_project_for(db, o, "Кв студии", "kv1")
+        acc.accept_invite(db, g, acc.create_invite(db, o, "client", project=kv))
+        acc.set_account_type(db, f, "client")
+        acc.create_project_for(db, f, "Моя квартира", "flat")
+        acc.set_account_type(db, n, "client")
+        firm_id, kv_id = str(firm.id), str(kv.id)
+    assert _client(auth, tmp_path, owner).get("/api/admin/clients").status_code == 403
+    boss = _client(auth, tmp_path, _login(auth, "boss"))
+    rows = boss.get("/api/admin/clients").json()
+    assert [(r["user"]["name"], r["kind"]) for r in rows] == [
+        ("lonely", "none"), ("guest", "studio"), ("flat", "personal")
+    ]  # fmt: skip
+    none, studio, personal = rows
+    assert none["project"] is None and none["studio"] is None
+    assert studio["project"]["id"] == kv_id
+    assert studio["studio"] == {"id": firm_id, "name": "Искра"}
+    assert personal["project"]["name"] == "Моя квартира" and personal["studio"] is None
+    assert set(personal) == {"user", "kind", "project", "studio"}
+    assert [r["user"]["email"] for r in boss.get("/api/admin/clients?q=GUE").json()] == [
+        "guest@example.com"
+    ]
+    assert boss.get("/api/admin/summary").json()["clients"] == 3
+
+
+def test_studio_detail_shows_prices_and_profile(auth: Auth, tmp_path: Path) -> None:
+    """The studio card shows its price list as written and its profile, read-only; a studio
+    without them gets null text and null profile."""
+    owner, other = _login(auth, "owner"), _login(auth, "other")
+    with auth.db() as db:
+        o, x = acc.session_user(db, owner), acc.session_user(db, other)
+        assert o is not None and x is not None
+        firm = acc.register_firm(db, o, "Искра", "electric")
+        bare = str(acc.register_firm(db, x, "Пустая", "design").id)
+        sync.put_price_list(db, {"studio_id": firm.id}, "currency: грн\nitems:\n  work.chase: 5\n")
+        db.add(StudioProfile(studio_id=firm.id, organization="ООО Искра", stage="Р"))
+        firm_id = str(firm.id)
+    boss = _client(auth, tmp_path, _login(auth, "boss"))
+    detail = boss.get(f"/api/admin/studios/{firm_id}").json()
+    assert detail["prices"]["text"] == "currency: грн\nitems:\n  work.chase: 5\n"
+    assert detail["prices"]["updated"] is not None
+    assert detail["profile"] == {"organization": "ООО Искра", "stage": "Р", "signatures": []}
+    empty = boss.get(f"/api/admin/studios/{bare}").json()
+    assert empty["prices"] == {"text": None, "updated": None} and empty["profile"] is None

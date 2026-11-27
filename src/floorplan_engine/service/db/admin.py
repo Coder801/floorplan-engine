@@ -1,5 +1,6 @@
 """Platform admin (decision 2026-11-03, docs/database.md, "Admin"): what the superuser sees and
-changes — studios, users, projects, members, invites, access codes, support, the audit log.
+changes — studios (with their price list and profile, read-only), users, clients, projects,
+members, invites, access codes, support, the audit log.
 
 Changes go through the same rules as everywhere (access.py, access_codes.py): one workspace per
 person, a client has one project, a studio keeps an owner. Every change is in the audit log with
@@ -13,7 +14,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import Select, func, or_, select
 from sqlalchemy.orm import Session
 
 from floorplan_engine.service.db.access import (
@@ -37,9 +38,11 @@ from floorplan_engine.service.db.models import (
     Invite,
     Membership,
     OAuthAccount,
+    PriceList,
     Project,
     ProjectMember,
     Studio,
+    StudioProfile,
     SupportGrant,
     UserSession,
 )
@@ -143,6 +146,7 @@ def summary(session: Session) -> dict[str, int]:
         "studios": count(Studio, Studio.kind == "studio"),
         "personal": count(Studio, Studio.kind == "personal"),
         "users": count(AppUser),
+        "clients": count(AppUser, AppUser.account_type == "client"),
         "projects": count(Project),
         "sessions": count(UserSession, UserSession.expires_at > now()),
         "feedback_new": count(Feedback, Feedback.status == "new"),  # db/feedback.py
@@ -186,21 +190,89 @@ def studio_detail(session: Session, studio: Studio) -> dict[str, Any]:
             )
         ],
         "invites": [_invite(session, i) for i in invites],
+        "prices": _studio_prices(session, studio),
+        "profile": _studio_profile(session, studio),
     }
+
+
+def _studio_prices(session: Session, studio: Studio) -> dict[str, Any]:
+    """The studio price list as written (read-only): its text and when it was last written."""
+    row = session.scalar(select(PriceList).where(PriceList.studio_id == studio.id))
+    return {
+        "text": row.text if row is not None else None,
+        "updated": _time(row.updated_at) if row is not None else None,
+    }
+
+
+def _studio_profile(session: Session, studio: Studio) -> dict[str, Any] | None:
+    """The studio profile row (read-only); None if the studio has none."""
+    row = session.get(StudioProfile, studio.id)
+    if row is None:
+        return None
+    return {"organization": row.organization, "stage": row.stage, "signatures": row.signatures}
+
+
+def _search(query: Select[AppUser], q: str) -> Select[AppUser]:
+    """Users whose name, e-mail or phone contains q (any case); q empty — all."""
+    if not q.strip():
+        return query
+    like = f"%{q.strip().lower()}%"
+    return query.where(
+        or_(
+            func.lower(AppUser.name).like(like),
+            func.lower(AppUser.email).like(like),
+            AppUser.phone.like(like),
+        )
+    )
+
+
+def clients(session: Session, q: str = "") -> list[dict[str, Any]]:
+    """Clients (account_type client), newest first, one row each; q — as in users(). kind:
+    personal — their own "Мой ремонт" has a project (the first by name), they lead it
+    themselves; studio — a client of a studio project; none — no project yet."""
+    query = _search(
+        select(AppUser).where(AppUser.account_type == "client").order_by(AppUser.created_at.desc()),
+        q,
+    )
+    out = []
+    for u in session.scalars(query):
+        own = session.scalar(
+            select(Project)
+            .join(Studio, Studio.id == Project.studio_id)
+            .join(Membership, Membership.studio_id == Studio.id)
+            .where(Membership.user_id == u.id, Studio.kind == "personal")
+            .order_by(Project.name, Project.created_at)
+            .limit(1)
+        )
+        invited = (
+            None
+            if own is not None
+            else session.scalar(
+                select(Project)
+                .join(ProjectMember, ProjectMember.project_id == Project.id)
+                .where(ProjectMember.user_id == u.id, ProjectMember.role == "client")
+                .order_by(ProjectMember.created_at)
+                .limit(1)
+            )
+        )
+        project = own or invited
+        kind = "personal" if own is not None else "studio" if invited is not None else "none"
+        out.append(
+            {
+                "user": user_brief(u),
+                "kind": kind,
+                "project": project_brief(project) if project is not None else None,
+                "studio": {"id": str(invited.studio_id), "name": invited.studio.name}
+                if invited is not None
+                else None,
+            }
+        )
+    return out
 
 
 def users(session: Session, q: str = "") -> list[dict[str, Any]]:
     """Users, newest first; q looks in the name, e-mail and phone."""
-    query = select(AppUser).order_by(AppUser.created_at.desc())
-    if q.strip():
-        like = f"%{q.strip().lower()}%"
-        query = query.where(
-            or_(
-                func.lower(AppUser.name).like(like),
-                func.lower(AppUser.email).like(like),
-                AppUser.phone.like(like),
-            )
-        )
+    query = _search(select(AppUser).order_by(AppUser.created_at.desc()), q)
     out = []
     for u in session.scalars(query):
         space = user_space(session, u)

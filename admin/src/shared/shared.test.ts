@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { agentOf, applyChange, authorOf, contextOf, nextStatus } from "./feedback";
 import { ago, contact, date, who } from "./format";
 import { popPlace, tipPlace } from "./place";
+import { profileView } from "./profile";
 import { href, parse } from "./route";
 
 describe("route", () => {
@@ -11,6 +12,7 @@ describe("route", () => {
     expect(parse("")).toMatchObject({ section: "summary", id: null });
     expect(parse("#/nope/1").section).toBe("summary");
     expect(parse("#/feedback?status=new")).toMatchObject({ section: "feedback", id: null });
+    expect(parse("#/clients")).toMatchObject({ section: "clients", id: null });
   });
   it("writes what it reads", () => {
     const h = href("projects", "a b", { tab: "codes" });
@@ -94,5 +96,17 @@ describe("place", () => {
     expect(popPlace(button, 1000, 800)).toEqual({ right: 472, maxWidth: 520, top: 134 });
     expect(popPlace({ ...button, left: 990, right: 1018 }, 1000, 800).right).toBe(8);
     expect(popPlace({ ...button, top: 740, bottom: 768 }, 1000, 800)).toMatchObject({ bottom: 66 });
+  });
+});
+
+describe("profileView", () => {
+  it("reads a flat part as lines and a nested one as JSON", () => {
+    expect(profileView("Р")).toEqual({ kind: "lines", lines: [["", "Р"]] });
+    expect(profileView({ name: "ООО Ампер", code: 42, vat: false, note: null })).toEqual({
+      kind: "lines", lines: [["name", "ООО Ампер"], ["code", "42"], ["vat", "нет"], ["note", "—"]],
+    });
+    const nested = [{ role: "ГИП", name: "Иван" }];
+    expect(profileView(nested)).toEqual({ kind: "json", text: JSON.stringify(nested, null, 2) });
+    expect(profileView({ a: { b: 1 } }).kind).toBe("json");
   });
 });

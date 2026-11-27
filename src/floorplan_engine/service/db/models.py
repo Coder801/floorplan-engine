@@ -523,6 +523,11 @@ class PriceList(Base):
     board_kit: Mapped[list[Any]] = mapped_column(default=list)
     # prices.yaml as written, with its comments: the truth; the columns above are its parsed copy
     text: Mapped[str | None] = mapped_column(Text)
+    # When the list was last written (decision 2026-11-28, shown in the admin); rows written
+    # before the column have none
+    updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), default=now, onupdate=now
+    )
 
 
 class Usage(Base):

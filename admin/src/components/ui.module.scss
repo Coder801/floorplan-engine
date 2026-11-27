@@ -182,3 +182,13 @@ td.actions > * + * { margin-left: 4px; }
   position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden;
   clip: rect(0 0 0 0); white-space: nowrap; border: 0;
 }
+
+// Read-only text of a record (the studio price list YAML, a nested profile part)
+.code {
+  margin: 4px 0 0; padding: 8px 10px; max-height: 420px; overflow: auto;
+  font: 12px/1.45 $mono; white-space: pre; background: var(--raise);
+  border: 1px solid var(--line); border-radius: 6px;
+}
+.pairs { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 2px 12px; margin: 2px 0 8px; }
+.pairs dt { color: var(--muted); }
+.pairs dd { margin: 0; overflow-wrap: anywhere; }
