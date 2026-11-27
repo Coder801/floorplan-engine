@@ -1,3 +1,27 @@
+## v0.24.0 (2026-11-27)
+
+### Feat
+
+- **viewer**: show finish materials as a bill of quantities without prices
+- **electrical,plumbing,epd**: take estimate prices only from the studio list
+- **viewer**: download the estimate sections as an Excel file
+
+### Fix
+
+- **electrical**: break the price_list import cycle in estimate
+
+### Refactor
+
+- **viewer**: describe the studio price list without a file name
+- **service,projects**: keep studio prices and profile only in the database
+- **electrical,pipeline**: name the studio price list in estimate texts
+- **electrical**: split estimate into the estimate package
+- **electrical**: split estimate.py into items, quantities, price list, texts and files
+
+### Perf
+
+- **sheets**: remember router searches for the whole document build
+
 ## v0.23.0 (2026-11-26)
 
 ### Feat
