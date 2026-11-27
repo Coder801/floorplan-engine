@@ -20,7 +20,9 @@ Check in this order:
    dict order coming from sets).
 5. **Docs.** CLAUDE.md, `docs/modules.md` (module map), `docs/architecture.md`, `docs/status.md` and
    `service/analysis/analyzer_prompt.md` match the code; translation rules live only in the prompt,
-   CLAUDE.md holds the work order.
+   CLAUDE.md holds the work order. `docs/diagrams.md` (Mermaid UML) shows a new container, link
+   between containers, layer, project state, frontend group or model file; `tests/test_diagrams.py`
+   catches only the last four.
 6. **Tests.** New behaviour is covered; tests do not rely on data in `projects/`.
 
 You may run `uv run pytest`, `uv run mypy`, `uv run ruff check .` and `uv run lint-imports`.
