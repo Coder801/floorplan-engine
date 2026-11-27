@@ -68,8 +68,12 @@ def test_workdir_lays_out_model_studio_and_sources(db: Session, tmp_path: Path) 
     assert not kept.exists()  # removed after use
 
 
-def test_only_the_last_builds_stay(db: Session, tmp_path: Path) -> None:
-    """Old builds go with their rows and files; the model version stays."""
+def test_only_the_last_builds_stay(
+    db: Session, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Old builds go with their rows and files; the model version stays. Two builds are kept
+    instead of three: the same check with one build less (a build takes seconds)."""
+    monkeypatch.setattr(ps, "KEEP_BUILDS", 2)
     store = LocalObjectStore(tmp_path / "objects")
     studio = repo.create_studio(db, "Искра")
     project = repo.create_project(db, studio.id, "Кв")

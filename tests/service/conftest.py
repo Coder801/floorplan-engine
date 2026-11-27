@@ -46,7 +46,15 @@ HINT = "Postgres для тестов не запущен: docker compose up -d d
 
 
 def test_database_url() -> str:
-    return os.environ.get("TEST_DATABASE_URL", TEST_URL)
+    """The test database URL; under pytest-xdist every worker gets its own database
+    (floorplan_engine_test → floorplan_engine_gw3_test), since each one recreates it on start.
+    """
+    url = make_url(os.environ.get("TEST_DATABASE_URL", TEST_URL))
+    worker = os.environ.get("PYTEST_XDIST_WORKER")
+    name = url.database or ""
+    if worker and name.endswith("_test"):
+        url = url.set(database=f"{name.removesuffix('_test')}_{worker}_test")
+    return url.render_as_string(hide_password=False)
 
 
 def migrate(engine: Engine, revision: str, down: bool = False) -> None:
