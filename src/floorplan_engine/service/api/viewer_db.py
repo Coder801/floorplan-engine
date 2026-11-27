@@ -48,7 +48,7 @@ from floorplan_engine.service import project_store as ps
 from floorplan_engine.service import sync
 from floorplan_engine.service.api.auth import Auth
 from floorplan_engine.service.api.feedback import install_feedback_routes
-from floorplan_engine.service.api.report import result_page, result_pdf
+from floorplan_engine.service.api.report import result_page, result_pdf, result_xlsx
 from floorplan_engine.service.api.work import install_work_routes
 from floorplan_engine.service.db import access as acc
 from floorplan_engine.service.db import repositories as repo
@@ -335,6 +335,13 @@ def _read_routes(
     ) -> Response:
         with artifact(request, key) as zf:
             return result_pdf(zf, check_manifest(zf), parts, orientation)
+
+    @app.get("/api/projects/{key}/result.xlsx")
+    def result_as_xlsx(
+        request: Request, key: str, parts: str | None = None, stage: str = "wiring"
+    ) -> Response:
+        with artifact(request, key) as zf:
+            return result_xlsx(zf, check_manifest(zf), parts, stage)
 
     @app.get("/api/projects/{key}/out/{rel:path}")
     def out_file(request: Request, key: str, rel: str) -> Response:

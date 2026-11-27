@@ -191,6 +191,8 @@ export const en: Messages = {
     orientation: "Page orientation", portrait: "Portrait", landscape: "Landscape",
     open: "Open", cancel: "Cancel", nothing: "Tick at least one section",
     pdf: "Download PDF", pdfBusy: "Making the PDF…", pdfFailed: "Could not make the PDF: {{error}}",
+    xlsxTitle: "Estimate in Excel", xlsxLead: "A table with formulas: change a price or a quantity and the sums recalculate. Tick the sections.",
+    xlsx: "Download Excel", xlsxBusy: "Preparing Excel…", xlsxFailed: "Could not make the Excel file: {{error}}",
   },
   gate: {
     role: { client: "apartment owner", installer: "installer", designer: "designer" },
@@ -240,6 +242,7 @@ export const en: Messages = {
     provisional: "Provisional price: materials are not at market prices yet",
     items: "Items",
     excel: "Download Excel",
+    pdf: "Download PDF",
     none: "No estimate: rebuild the project (floorplan-engine build)",
   },
   changelog: {

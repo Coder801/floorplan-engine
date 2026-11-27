@@ -1,7 +1,10 @@
 // "Estimate" tab: full-width estimates one under another, electrical (key estimate of the
 // wiring page) and plumbing (the "Plumbing" page): sections, items, totals; without a price
 // list, a bill of quantities. Excel is the same calculation as a file (build writes
-// out/estimate.xlsx and out/plumbing-estimate.xlsx). In print, an estimate is on its stage's sheet.
+// out/estimate.xlsx and out/plumbing-estimate.xlsx). For the electrical estimate (report: the
+// project key) Excel and PDF open widgets/ReportDialog: Excel — the estimate sections to tick
+// (…/result.xlsx), PDF — the same "Estimate for print" as the Download menu; plumbing Excel is a
+// plain link to the whole plumbing estimate in the same look (…/result.xlsx?stage=plumbing). In print, an estimate is on its stage's sheet.
 // A work row with a scope (TableRow.scope) unfolds: what its price includes and the handover
 // result, so the client sees there are no hidden services. A material subtotal with guess has a
 // provisional sum (ui/Provisional): material prices are not market prices yet. The title, Excel and the column headings
@@ -18,22 +21,25 @@ import { Heading } from "@/ui/Heading";
 import { HelpTip } from "@/ui/HelpTip";
 import { Provisional } from "@/ui/Provisional";
 import { Text } from "@/ui/Text";
+import { ReportDialog } from "@/widgets/ReportDialog";
 import css from "./EstimateStage.module.scss";
 
-export interface EstimateItem { table: SideTable; xlsx: string | null }
+// report: project key for the PDF ("Estimate for print"); missing — no PDF button (plumbing, not built)
+export interface EstimateItem { table: SideTable; xlsx: string | null; report?: string | null }
 
 export function EstimateStage({ items }: { items: EstimateItem[] }) {
   return (
     <div className={css.stage}>
-      {items.map((it) => <Estimate key={it.table.title} table={it.table} xlsx={it.xlsx} />)}
+      {items.map((it) => <Estimate key={it.table.title} {...it} />)}
     </div>
   );
 }
 
-function Estimate({ table, xlsx }: EstimateItem) {
+function Estimate({ table, xlsx, report }: EstimateItem) {
   const { t } = useTranslation();
   const al = (i: number) => (table.align[i] === "left" ? undefined : css.num);
   const [open, setOpen] = useState<ReadonlySet<number>>(new Set());
+  const [dialog, setDialog] = useState<"pdf" | "xlsx" | null>(null);
   const headH = useHeight<HTMLElement>();
   const scoped = table.rows.some((r) => r.scope);
   const toggle = (i: number) => setOpen((prev) => {
@@ -45,8 +51,15 @@ function Estimate({ table, xlsx }: EstimateItem) {
       <Card as="article" padding="lg" className={css.sheet} style={{ "--head-h": `${headH.height}px` } as CSSProperties}>
         <header ref={headH.ref} className={css.head}>
           <Heading level={1}>{table.title}</Heading>
-          {xlsx && <Button variant="primary" href={xlsx} download>{t("estimate.excel")}</Button>}
+          {(xlsx || report) && (
+            <div className={css.downloads}>
+              {report ? <Button onClick={() => setDialog("xlsx")}>{t("estimate.excel")}</Button>
+                : xlsx && <Button variant="primary" href={xlsx} download>{t("estimate.excel")}</Button>}
+              {report && <Button variant="primary" onClick={() => setDialog("pdf")}>{t("estimate.pdf")}</Button>}
+            </div>
+          )}
         </header>
+        {dialog && report && <ReportDialog projectKey={report} format={dialog} onClose={() => setDialog(null)} />}
         {scoped && <Text size="small" tone="muted">{t("estimate.scopeNote")}</Text>}
         <table className={css.table}>
           <thead><tr>{table.columns.map((c, i) => <th key={i} className={al(i)}>{c}</th>)}</tr></thead>

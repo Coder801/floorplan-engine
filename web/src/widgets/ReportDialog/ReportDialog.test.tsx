@@ -87,4 +87,28 @@ describe("ReportDialog", () => {
     await user.keyboard("{Escape}");
     expect(onClose).toHaveBeenCalledTimes(2);
   });
+
+  it("Excel: only the estimate sections, fetches result.xlsx of the choice and saves it", async () => {
+    const user = userEvent.setup();
+    const name = "Кв 42 — Смета электрики.xlsx";
+    const fetch = vi.fn().mockResolvedValue(new Response(new Blob(["PK"]), {
+      status: 200,
+      headers: { "Content-Disposition": `attachment; filename="estimate.xlsx"; filename*=UTF-8''${encodeURIComponent(name)}` },
+    }));
+    vi.stubGlobal("fetch", fetch);
+    vi.stubGlobal("URL", Object.assign(URL, { createObjectURL: vi.fn(() => "blob:x"), revokeObjectURL: vi.fn() }));
+    const saved: string[] = [];
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) {
+      saved.push(this.download);
+    });
+    const onClose = vi.fn();
+    render(<ReportDialog projectKey="p1" format="xlsx" onClose={onClose} />);
+    expect(screen.queryByRole("radio", { name: "Книжная" })).toBeNull();
+    await user.click(screen.getByRole("checkbox", { name: "Чистовые материалы" }));
+    await user.click(screen.getByRole("button", { name: "Скачать Excel" }));
+    await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
+    expect(fetch).toHaveBeenCalledWith("/api/projects/p1/result.xlsx?parts=material_rough,work_rough,work_finish");
+    expect(saved).toEqual([name]);
+    click.mockRestore();
+  });
 });

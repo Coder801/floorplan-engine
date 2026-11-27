@@ -192,6 +192,8 @@ export const ru = {
     orientation: "Ориентация листа", portrait: "Книжная", landscape: "Альбомная",
     open: "Открыть", cancel: "Отмена", nothing: "Отметьте хотя бы один раздел",
     pdf: "Скачать PDF", pdfBusy: "Готовим PDF…", pdfFailed: "Не удалось сделать PDF: {{error}}",
+    xlsxTitle: "Смета в Excel", xlsxLead: "Таблица с формулами: меняете цену или количество — суммы пересчитываются. Отметьте разделы.",
+    xlsx: "Скачать Excel", xlsxBusy: "Готовим Excel…", xlsxFailed: "Не удалось сделать Excel: {{error}}",
   },
   gate: {
     role: { client: "хозяин квартиры", installer: "монтажник", designer: "проектировщик" },
@@ -241,6 +243,7 @@ export const ru = {
     provisional: "Цена условная: материалы пока не по рыночным ценам",
     items: "Позиций",
     excel: "Скачать Excel",
+    pdf: "Скачать PDF",
     none: "Сметы нет: пересоберите проект (floorplan-engine build)",
   },
   changelog: {

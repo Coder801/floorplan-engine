@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { DEFAULT_REPORT, pdfName, rememberReport, reportUrl, savedReport } from "./report";
+import { DEFAULT_REPORT, XLSX_PARTS, pdfName, rememberReport, rememberXlsx, reportUrl, savedReport, savedXlsx, xlsxUrl } from "./report";
 
 // Before the imports: i18n (through api.ts) reads the language from localStorage on load
 const store = vi.hoisted(() => {
@@ -55,5 +55,25 @@ describe("saved report options", () => {
     expect(savedReport()).toEqual(DEFAULT_REPORT);
     store.set("report-options", "{");
     expect(savedReport()).toEqual(DEFAULT_REPORT);
+  });
+});
+
+describe("Excel", () => {
+  beforeEach(() => { store.clear(); });
+
+  it("the URL keeps only the estimate sections, in order", () => {
+    expect(xlsxUrl("p1", ["work_finish", "plan", "material_rough", "panel"]))
+      .toBe("/api/projects/p1/result.xlsx?parts=material_rough,work_finish");
+  });
+
+  it("remembers the sections apart from the PDF choice; nothing stored — all", () => {
+    expect(savedXlsx()).toEqual([...XLSX_PARTS]);
+    rememberXlsx(["work_rough"]);
+    expect(savedXlsx()).toEqual(["work_rough"]);
+    expect(savedReport()).toEqual(DEFAULT_REPORT);
+  });
+
+  it("the file name falls back to the given one", () => {
+    expect(pdfName(null, "estimate.xlsx")).toBe("estimate.xlsx");
   });
 });

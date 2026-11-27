@@ -644,8 +644,8 @@ export function Viewer({ account = null }: { account?: Account | null }) {
     const items: EstimateItem[] = [];
     const wiring = [page, ...drawn].find((p) => p.stage === "wiring" && p.estimate);
     const water = [page, ...drawn].find((p) => p.stage === "plumbing" && p.estimate);
-    if (wiring?.estimate) items.push({ table: wiring.estimate, xlsx: xlsx("estimate.xlsx") });
-    if (water?.estimate) items.push({ table: water.estimate, xlsx: xlsx("plumbing-estimate.xlsx") });
+    if (wiring?.estimate) items.push({ table: wiring.estimate, xlsx: xlsx("estimate.xlsx"), report: electricalOn ? current : null });
+    if (water?.estimate) items.push({ table: water.estimate, xlsx: `${base(current)}/result.xlsx?stage=plumbing` });
     main = items.length ? <EstimateStage items={items} /> : <EmptyState>{t("estimate.none")}</EmptyState>;
   }
   else if (page && project && page.panel) {

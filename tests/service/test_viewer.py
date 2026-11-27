@@ -135,6 +135,26 @@ def test_result_pdf_goes_through_the_service(root: Path, monkeypatch: pytest.Mon
     assert client.get("/api/projects/kv1/result.pdf?parts=photos").status_code == 400
 
 
+def test_result_xlsx(root: Path) -> None:
+    """Excel of the estimate sections: a download; drawing parts are refused."""
+    client = TestClient(create_viewer(root))
+    response = client.get("/api/projects/kv1/result.xlsx?parts=material_rough,work_rough")
+    assert response.status_code == 200 and response.content.startswith(b"PK")
+    assert response.headers["content-type"].startswith("application/vnd.openxmlformats")
+    assert 'filename="estimate.xlsx"' in response.headers["content-disposition"]
+    assert client.get("/api/projects/kv1/result.xlsx").status_code == 200
+    assert client.get("/api/projects/kv1/result.xlsx?parts=plan").status_code == 400
+    assert client.get("/api/projects/kv1/result.xlsx?parts=photos").status_code == 400
+    assert client.get("/api/projects/nope/result.xlsx").status_code == 404
+    plumbing = client.get("/api/projects/kv1/result.xlsx?stage=plumbing")
+    assert plumbing.status_code == 200 and plumbing.content.startswith(b"PK")
+    assert (
+        client.get("/api/projects/kv1/result.xlsx?stage=plumbing&parts=work_rough").status_code
+        == 400
+    )
+    assert client.get("/api/projects/kv1/result.xlsx?stage=heating").status_code == 400
+
+
 def test_result_pdf_service_failure_is_502(root: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     def broken(url: str, json: dict[str, object], timeout: float) -> httpx.Response:
         raise httpx.ConnectError("refused")

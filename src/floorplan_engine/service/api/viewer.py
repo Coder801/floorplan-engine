@@ -17,6 +17,7 @@ GET /api/projects/{name}/sheets         sheet manifest from out/project.epd
 GET /api/projects/{name}/sheets/{n}     sheet n (1, 2…): vector primitives for canvas
 GET /api/projects/{name}/result         estimate report as HTML for the PDF (api/report.py)
 GET /api/projects/{name}/result.pdf     the same report printed to PDF (api/pdf.py)
+GET /api/projects/{name}/result.xlsx    the chosen estimate sections as Excel (api/report.py)
 POST /api/projects/{name}/answers       one answer → answers.yaml and rebuild (not for text)
 POST /api/projects/{name}/answers/review the developer takes a client answer into account or
                                         sends it back with a comment
@@ -66,7 +67,7 @@ from floorplan_engine.pipeline import (
     save_wizard,
 )
 from floorplan_engine.service.api.auth import Auth
-from floorplan_engine.service.api.report import result_page, result_pdf
+from floorplan_engine.service.api.report import result_page, result_pdf, result_xlsx
 from floorplan_engine.service.api.viewer_db import (
     answer_body,
     answer_note,
@@ -287,6 +288,13 @@ def _read_routes(
     ) -> Response:
         with artifact(request, name) as zf:
             return result_pdf(zf, check_manifest(zf), parts, orientation)
+
+    @app.get("/api/projects/{name}/result.xlsx")
+    def result_as_xlsx(
+        request: Request, name: str, parts: str | None = None, stage: str = "wiring"
+    ) -> Response:
+        with artifact(request, name) as zf:
+            return result_xlsx(zf, check_manifest(zf), parts, stage)
 
 
 def _note(auth: Auth | None, request: Request) -> AnswerNote:

@@ -77,7 +77,9 @@ describe("Viewer", () => {
     expect(JSON.parse(localStorage.getItem("place:p1")!)).toMatchObject({ sheet: 1, info: false });
     await user.click(within(tabs).getByRole("button", { name: "Смета" }));
     expect(await screen.findByRole("heading", { level: 1, name: "Смета электрики" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Скачать Excel" })).toHaveAttribute("href", `${P}/out/estimate.xlsx`);
+    // The electrical estimate: Excel and PDF open the section choice (ReportDialog), not a file link
+    expect(screen.getByRole("button", { name: "Скачать Excel" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Скачать PDF" })).toBeInTheDocument();
   });
 
   it("a switched-off service drops its section and estimate; a place left on its sheet goes back to the plan", async () => {

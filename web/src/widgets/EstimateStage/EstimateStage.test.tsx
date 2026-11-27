@@ -29,6 +29,25 @@ describe("EstimateStage", () => {
     expect(screen.getAllByText("Цены — прайс студии")).toHaveLength(2);
   });
 
+  it("PDF opens the estimate-for-print dialog, only where the estimate has a report", async () => {
+    render(<EstimateStage items={[{ table: electrical, xlsx: null, report: "p1" },
+                                  { table: { ...electrical, title: "Смета сантехники" }, xlsx: null }]} />);
+    const pdf = screen.getAllByRole("button", { name: "Скачать PDF" });
+    expect(pdf).toHaveLength(1);
+    await userEvent.click(pdf[0]);
+    expect(screen.getByRole("dialog", { name: "Смета для печати" })).toBeInTheDocument();
+  });
+
+  it("with a report, Excel opens the section choice instead of the file link", async () => {
+    render(<EstimateStage items={[{ table: electrical, xlsx: "/api/projects/p1/out/estimate.xlsx", report: "p1" }]} />);
+    expect(screen.queryByRole("link", { name: "Скачать Excel" })).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Скачать Excel" }));
+    const dialog = screen.getByRole("dialog", { name: "Смета в Excel" });
+    expect(dialog.querySelectorAll("input[type=checkbox]")).toHaveLength(4);
+    expect(screen.queryByRole("checkbox", { name: "План электрики" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Открыть" })).toBeNull();
+  });
+
   it("a provisional subtotal (guess) has the warning mark on its sum, other sums do not", () => {
     const rows = [
       { cells: ["", "Материалы", "", ""], section: true },

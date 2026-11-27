@@ -191,6 +191,8 @@ export const uk: Messages = {
     orientation: "Орієнтація аркуша", portrait: "Книжкова", landscape: "Альбомна",
     open: "Відкрити", cancel: "Скасувати", nothing: "Позначте хоча б один розділ",
     pdf: "Завантажити PDF", pdfBusy: "Готуємо PDF…", pdfFailed: "Не вдалося зробити PDF: {{error}}",
+    xlsxTitle: "Кошторис в Excel", xlsxLead: "Таблиця з формулами: змінюєте ціну або кількість — суми перераховуються. Позначте розділи.",
+    xlsx: "Завантажити Excel", xlsxBusy: "Готуємо Excel…", xlsxFailed: "Не вдалося зробити Excel: {{error}}",
   },
   gate: {
     role: { client: "власник квартири", installer: "монтажник", designer: "проєктувальник" },
@@ -240,6 +242,7 @@ export const uk: Messages = {
     provisional: "Ціна умовна: матеріали поки не за ринковими цінами",
     items: "Позицій",
     excel: "Завантажити Excel",
+    pdf: "Завантажити PDF",
     none: "Кошторису немає: перезберіть проєкт (floorplan-engine build)",
   },
   changelog: {

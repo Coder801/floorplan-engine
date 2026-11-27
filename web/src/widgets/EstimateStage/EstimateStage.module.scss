@@ -26,6 +26,7 @@
   margin: calc(-1 * var(--pad-y)) calc(-1 * var(--pad-x)) 0; padding: var(--pad-y) var(--pad-x) var(--space-3);
   border-radius: var(--radius-lg) var(--radius-lg) 0 0; background: var(--raise);
 }
+.downloads { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--space-2); }
 .table {
   width: 100%; border-collapse: collapse;
   th, td { padding: var(--space-2); border-top: 1px solid var(--line); text-align: left; vertical-align: top; }
