@@ -33,7 +33,7 @@ uv run floorplan-engine access code projects/<имя> --label "Иван" [--role
 uv run floorplan-engine project push projects/<имя> [--owner <email>]   # папку — в базу: новая версия модели, исходники, сборка (правда — база)
 uv run floorplan-engine project pull <имя> [--to projects] [--force]    # из базы — в папку: модель, исходники, out/ последней сборки
 uv run floorplan-engine project build [<имя>…] [--owner <email> | --all]  # пересобрать из базы текущим кодом: модель не меняется, без имён — все проекты студии или базы
-uv run floorplan-engine project import projects --owner <email>         # перенести папку проектов и прайс/профиль студии в базу (studio push|pull — только студия)
+uv run floorplan-engine project import projects --owner <email>         # перенести папку проектов в базу; прайс и профиль студии — только в базе (studio pull — рабочая копия в папку)
 cd web && npm install && npm run dev                    # только страница просмотра (API — view)
 cd web && npm run build                                 # сборка фронта в web/dist (выкладка — README в web/)
 cd web && npm run storybook                          # Storybook: компоненты по отдельности, http://127.0.0.1:6006
@@ -49,7 +49,7 @@ uv run floorplan-engine trace projects/<имя> [--line wire_3 | --group QF3 | -
 TEST_REQUIRE_DB=1 uv run pytest --cov && uv run mypy && uv run ruff check . && uv run ruff format --check . && uv run lint-imports
 uv run python scripts/flow.py feature <имя> | integrate | release [--dry-run]  # ветки и релиз: develop → feature → develop → main (docs/development.md)
 uv run python scripts/flow.py ship [--increment patch] [--no-backup|--no-rebuild|--no-local]  # всё после /commit: вливание, проверки, релиз, бэкап при миграции, пуш, пересборка на сервере и локально
-uv run python scripts/server.py check | rebuild [имена] [--wait] | send <проект> room.yaml | studio-prices [--pull] [--yes] [--rebuild] | backup  # боевой сервер через railway ssh; studio-prices — projects/prices.yaml ↔ прайс студии; backup — база и файлы в ~/shtroba-backups
+uv run python scripts/server.py check | rebuild [имена] [--wait] | send <проект> room.yaml | studio-prices [--yes] | backup  # боевой сервер через railway ssh; studio-prices — прайс студии с сервера в projects/prices.yaml (рабочая копия, обратно не шлётся); backup — база и файлы в ~/shtroba-backups
 ```
 
 Slash-команды: `/plan`, `/electrical`, `/check`, `/review`, `/commit`, `/release` (в `.claude/commands/`).
