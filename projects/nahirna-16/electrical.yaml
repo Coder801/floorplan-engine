@@ -60,6 +60,9 @@ points:
   - { id: kitchen_socket_6, room: living, wall: w4, offset: 2570, type: socket, height: 300, group: QF8 }
   - { id: kitchen_socket_7, room: living, wall: w4, offset: 2570, type: socket, height: 1100, group: QF8 }
   - { id: kitchen_ac, room: living, wall: w4, offset: 3570, type: outlet, height: 250, note: "кондиціонер", group: QF15 }  # h=250 как на чертеже — уточнить
+  # Варильна поверхня на острові: вивід — у місці розетки № 35 (kitchen_socket_1), h=700 (вказівка замовника 2026-11-28)
+  # Варильна на 2 секції, паспорта немає: 3,7 кВт — верх типової двоконфоркової (рішення замовника 2026-11-28, припущення до паспорта)
+  - { id: kitchen_hob, room: living, wall: w3, offset: 630, type: outlet, height: 700, note: "варильна поверхня, 2 секції", power: 3700, group: QF18 }
   - { id: kitchen_pendant_1, room: living, ceiling: [3580, 4930], type: pendant, group: QF1 }
   - { id: kitchen_pendant_2, room: living, ceiling: [4670, 4010], type: pendant, group: QF1 }  # над островом
 
@@ -181,6 +184,8 @@ cables:
   - { id: cable_16, from: board, to: [bedroom_ac], group: QF16, cable: "3x2.5", route: ceiling }
   # QF17 — тепла підлога
   - { id: cable_17, from: board, to: [bath_floor_reg, entry_floor_reg], group: QF17, cable: "3x2.5", route: ceiling, direct: true }  # окрема лінія на кожен регулятор, без коробок
+  # QF18 — варильна поверхня на 2 секції (3,7 кВт, одна фаза: 16,1 А → C20, 3x4)
+  - { id: cable_18, from: board, to: [kitchen_hob], group: QF18, cable: "3x4", route: ceiling }
 led_strips:
   - { id: bath_led_strip_1, room: bath, wall: w5, start: 0, end: 920 }
   - { id: bath2_led_strip_1, room: bath2, wall: w1, start: 550, end: 2050 }
