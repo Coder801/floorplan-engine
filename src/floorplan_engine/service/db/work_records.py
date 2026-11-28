@@ -28,7 +28,7 @@ from floorplan_engine.service.db.work import (
     check_open,
     feed,
     get_row,
-    number_field,
+    money_field,
     text_field,
 )
 from floorplan_engine.service.objects import ObjectStore, work_photo_key
@@ -151,7 +151,7 @@ def add_payment(
     check_open(plan)
     if plan.state != "approved":
         raise WorkError("оплаты отмечаются после утверждения плана")
-    amount = number_field(data.get("amount"), "amount", nullable=False)
+    amount = money_field(data.get("amount"), "amount")  # to the cent: 0.004 is no payment
     if not amount:
         raise WorkError("amount: нужна сумма больше 0", 422)
     try:
@@ -159,7 +159,7 @@ def add_payment(
     except ValueError as exc:
         raise WorkError("paid_on: дата ГГГГ-ММ-ДД", 422) from exc
     payment = WorkPayment(
-        amount=round(amount, 2),
+        amount=amount,
         paid_on=paid_on,
         note=text_field(data.get("note", ""), "note", TEXT_MAX),
         recorded_by=actor.user_id,

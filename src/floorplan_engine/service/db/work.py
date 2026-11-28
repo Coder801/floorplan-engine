@@ -25,6 +25,7 @@ from typing import Any, TypeVar
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from floorplan_engine.model.money import cents, line_total, money_sum
 from floorplan_engine.service.db import access as acc
 from floorplan_engine.service.db.models import (
     AppUser,
@@ -165,7 +166,7 @@ class Totals:
 
     @property
     def total(self) -> float:
-        return round(self.work + (self.material if self.materials_included else 0.0), 2)
+        return money_sum((self.work, self.material if self.materials_included else 0.0))
 
     @property
     def settled(self) -> bool:
@@ -175,7 +176,7 @@ class Totals:
 
 def line_sum(line: WorkLine) -> float | None:
     qty = line.fact_qty if line.fact_qty is not None else line.plan_qty
-    return None if line.price is None else round(qty * line.price, 2)
+    return None if line.price is None else line_total(qty, line.price)
 
 
 def totals(task: WorkTask) -> Totals:
@@ -183,12 +184,12 @@ def totals(task: WorkTask) -> Totals:
     total if the task includes them; paid — Σ payments."""
 
     def by(kind: str) -> float:
-        return round(sum(line_sum(ln) or 0.0 for ln in task.lines if ln.kind == kind), 2)
+        return money_sum(line_sum(ln) or 0.0 for ln in task.lines if ln.kind == kind)
 
     return Totals(
         by("work"),
         by("material"),
-        round(sum(p.amount for p in task.payments), 2),
+        money_sum(p.amount for p in task.payments),
         sum(1 for ln in task.lines if ln.price is None),
         task.materials_included,
     )
@@ -253,6 +254,19 @@ def number_field(value: object, field: str, nullable: bool = True) -> float | No
     return float(value)
 
 
+MONEY_MAX = 9_999_999_999.99  # numeric(12, 2): the largest price the column holds
+
+
+def money_field(value: object, field: str) -> float | None:
+    """A price: a number not below 0, rounded to the cent (numeric(12, 2), model/money.py)."""
+    number = number_field(value, field)
+    if number is None:
+        return None
+    if number > MONEY_MAX:
+        raise WorkError(f"{field}: не больше {MONEY_MAX:,.2f}".replace(",", " "), 422)
+    return cents(number)
+
+
 def parse_line(position: int, data: Mapping[str, Any], where: str) -> WorkLine:
     kind = data.get("kind", "work")
     if kind not in KINDS:
@@ -265,7 +279,7 @@ def parse_line(position: int, data: Mapping[str, Any], where: str) -> WorkLine:
         title=text_field(data.get("title"), f"{where}.title", TITLE_MAX, required=True),
         unit=text_field(data.get("unit", ""), f"{where}.unit", 20),
         plan_qty=qty,
-        price=number_field(data.get("price"), f"{where}.price"),
+        price=money_field(data.get("price"), f"{where}.price"),
     )
 
 
@@ -523,7 +537,7 @@ def edit_line(
     if "price" in data:
         actor.need("work_manage")
         need_money(plan, task)
-        line.price = number_field(data["price"], "price")
+        line.price = money_field(data["price"], "price")
     return line
 
 

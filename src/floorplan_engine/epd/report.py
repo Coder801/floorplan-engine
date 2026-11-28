@@ -50,10 +50,11 @@ from typing import Any, Literal, cast, get_args
 
 from floorplan_engine import BRAND
 from floorplan_engine.electrical.estimate.items import LISTED_SECTIONS, SECTIONS, Section
-from floorplan_engine.electrical.estimate.texts import format_number, parse_number, section_title
+from floorplan_engine.electrical.estimate.texts import parse_number, section_title
 from floorplan_engine.electrical.estimate.texts import text as estimate_text
 from floorplan_engine.electrical.panel_text import DEVICE_LEGEND
 from floorplan_engine.epd.single_line import assumed_any, single_line_svgs
+from floorplan_engine.model.money import format_money, money_sum
 from floorplan_engine.model.texts import Language
 
 Orientation = Literal["portrait", "landscape"]
@@ -818,7 +819,7 @@ def _summary(blocks: Sequence[EstimateBlock], columns: list[str], language: Lang
         f'<span class="r-closing__sum">{_e(value)}</span></div>'
         for title, value in cells
     )
-    total = format_number(sum(v for v in sums if v is not None))
+    total = format_money(money_sum(v for v in sums if v is not None))
     heading = f"{estimate_text('total', language)}, {columns[-1].rpartition(', ')[2]}"
     return "".join(
         [

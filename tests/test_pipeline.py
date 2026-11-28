@@ -380,7 +380,7 @@ def test_terms_go_after_the_estimate_and_into_the_work_scope(project: Path) -> N
     assert "- Расходники на инструмент (диски, буры, коронки, свёрла) входят в цену работ" in md
     assert "Вне сметы" not in md  # the note and the section are gone (decision 2026-11-22)
     scope = (project / "out" / "work-scope.md").read_text("utf-8")
-    assert "Договорённость: студия, фиксированная сумма — 1 500 грн" in scope
+    assert "Договорённость: студия, фиксированная сумма — 1 500,00 грн" in scope
     assert "вне сметы" not in scope
 
 

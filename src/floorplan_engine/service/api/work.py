@@ -25,6 +25,7 @@ from fastapi.responses import FileResponse, Response
 from sqlalchemy.orm import Session
 
 from floorplan_engine.epd.artifact import MANIFEST
+from floorplan_engine.model.money import money_sum
 from floorplan_engine.pipeline import ARTIFACT_FILE
 from floorplan_engine.service import project_store as ps
 from floorplan_engine.service.api.auth import Auth
@@ -214,10 +215,10 @@ def work_state(
         "approved_on_behalf": _on_behalf(plan.approved_on_behalf, plan.approved_note),
         "closed_at": _at(plan.closed_at),
         "totals": {
-            "work": round(sum(t["work_total"] for t in tasks), 2),
-            "material": round(sum(t["material_total"] for t in tasks), 2),
-            "total": round(sum(t["total"] for t in tasks), 2),
-            "paid": round(sum(t["paid"] for t in tasks), 2),
+            "work": money_sum(t["work_total"] for t in tasks),
+            "material": money_sum(t["material_total"] for t in tasks),
+            "total": money_sum(t["total"] for t in tasks),
+            "paid": money_sum(t["paid"] for t in tasks),
             "tasks": len(tasks),
             "accepted": sum(1 for t in tasks if t["status"] == "accepted"),
             "settled": sum(1 for t in tasks if t["settled"]),

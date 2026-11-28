@@ -178,7 +178,7 @@ def _block(
                                 qty if qty is not None else cells[3]]  # fmt: skip
         if priced and not block.listed:
             price = parse_number(cells[4])
-            values += [price, f'=IF(E{r}="","",D{r}*E{r})']
+            values += [price, f'=IF(E{r}="","",ROUND(D{r}*E{r},2))']  # as Line.total
         ws.append(values)
         _row(ws, r, width, font=_font(), height=None, below=RULE, wrap=True)
         ws.cell(r, 1).font = _font(color=MUTED)

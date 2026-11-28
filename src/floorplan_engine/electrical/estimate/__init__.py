@@ -56,6 +56,7 @@ from floorplan_engine.electrical.estimate.quantities import quantities as count_
 from floorplan_engine.electrical.panel import BoardPanel, busbars, device_name
 from floorplan_engine.electrical.splices import DEFAULT_SPLICE
 from floorplan_engine.electrical.wiring_model import Wiring
+from floorplan_engine.model.money import line_total, money_sum
 from floorplan_engine.model.panel_catalog import Enclosure
 from floorplan_engine.model.schema import Electrical, WallMaterial
 from floorplan_engine.model.texts import Language, tr
@@ -88,7 +89,8 @@ class Line:
 
     @property
     def total(self) -> float | None:
-        return None if self.price is None else self.qty * self.price
+        """qty × price rounded to the cent (model/money.py): the totals add these up."""
+        return None if self.price is None else line_total(self.qty, self.price)
 
     @property
     def listed(self) -> bool:
@@ -102,21 +104,21 @@ class Estimate:
     currency: str
 
     def subtotal(self, section: Section) -> float:
-        return sum(ln.total or 0.0 for ln in self.lines if ln.section == section)
+        return money_sum(ln.total or 0.0 for ln in self.lines if ln.section == section)
 
     @property
     def materials(self) -> float:
         """All materials: rough and finish (and the ones of an estimate that is not split)."""
-        return sum(self.subtotal(s) for s in MATERIAL_SECTIONS)
+        return money_sum(self.subtotal(s) for s in MATERIAL_SECTIONS)
 
     @property
     def work(self) -> float:
         """All work: rough and finishing."""
-        return self.subtotal("rough") + self.subtotal("finish")
+        return money_sum((self.subtotal("rough"), self.subtotal("finish")))
 
     @property
     def total(self) -> float:
-        return sum(self.subtotal(s) for s in SECTIONS)
+        return money_sum(self.subtotal(s) for s in SECTIONS)
 
     @property
     def unpriced(self) -> int:

@@ -159,7 +159,7 @@ def test_only_chosen_sections() -> None:
     assert "<b>Входит:</b> разметка трассы; фиксация." in html
     assert "<b>Результат:</b> кабель закреплён" in html
     assert "Цены — после выбора серии" in html  # in place of the finish materials total
-    assert '<div class="r-closing__grand">340</div>' in html  # finish materials have no price
+    assert '<div class="r-closing__grand">340,00</div>' in html  # finish materials have no price
 
 
 def test_all_parts_summary_without_a_provisional_mark() -> None:
@@ -384,7 +384,7 @@ def test_old_build_heading_note_is_dropped_and_priced_finish_materials_stay_out(
     ]
     page = {**_page(), "estimate": {**ESTIMATE, "rows": rows}}
     html = report_html(MANIFEST, page, ["material_finish", "work_rough"])
-    assert '<div class="r-closing__grand">340</div>' in html
+    assert '<div class="r-closing__grand">340,00</div>' in html
 
 
 def test_panel_legend_explains_the_abbreviations() -> None:

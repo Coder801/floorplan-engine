@@ -21,6 +21,9 @@ from floorplan_engine.service.db import work_records as records
 from floorplan_engine.service.db.models import (
     AuditEvent,
     Project,
+    WorkLine,
+    WorkPayment,
+    WorkTask,
 )
 from floorplan_engine.service.db.session import make_sessions
 from floorplan_engine.service.objects import LocalObjectStore
@@ -52,6 +55,21 @@ def test_plan_from_the_draft(world: World) -> None:
     assert work.totals(cable).unpriced == 1 and work.totals(cable).material == 0.0
     with fails(409, "уже есть план"):
         work.create_plan(world.db, world.project, world.build, DRAFT, world.owner)
+
+
+def test_sums_are_to_the_cent() -> None:
+    """A line sum is (fact ?? plan) × price to the cent, totals add the rounded lines
+    (model/money.py): 3 × 0.1 = 0.3, 1.5 × 0.15 = 0.225 → 0.23."""
+    lines = [
+        WorkLine(kind="work", plan_qty=3, fact_qty=None, price=0.1),
+        WorkLine(kind="work", plan_qty=9, fact_qty=1.5, price=0.15),
+        WorkLine(kind="material", plan_qty=2, fact_qty=None, price=0.05),
+    ]
+    payments = [WorkPayment(amount=0.1), WorkPayment(amount=0.2)]
+    task = WorkTask(lines=lines, payments=payments, materials_included=True)
+    assert [work.line_sum(ln) for ln in lines] == [0.3, 0.23, 0.1]
+    t = work.totals(task)
+    assert (t.work, t.material, t.total, t.paid) == (0.53, 0.1, 0.63, 0.3)
 
 
 def test_plan_skips_tasks_of_switched_off_services(world: World) -> None:
@@ -568,6 +586,28 @@ def test_api_by_role(api: tuple[Auth, LocalObjectStore, dict[str, Any]], tmp_pat
             db.scalars(select(AuditEvent.action).where(AuditEvent.project_id == project.id))
         )
     assert {"work_plan_create", "work_plan_approve", "work_status", "work_photo"} <= actions
+
+
+def test_api_money_is_numbers_to_the_cent(
+    api: tuple[Auth, LocalObjectStore, dict[str, Any]], tmp_path: Path
+) -> None:
+    """Prices, sums and totals in the work API are JSON numbers rounded to the cent."""
+    url = f"/api/projects/{api[2]['id']}/work"
+    owner = _client(api, tmp_path, "a")
+    tasks = owner.post(f"{url}/plan").json()["tasks"]
+    task = next(t for t in tasks if t["lines"])
+    line = task["lines"][0]
+    edited = owner.patch(f"{url}/tasks/{task['id']}/lines/{line['id']}", json={"price": 0.005})
+    assert edited.status_code == 200
+    own = {"title": "Своя", "kind": "work", "qty": 3, "price": 0.1}
+    state = owner.post(f"{url}/tasks/{task['id']}/lines", json=own).json()
+    task = next(t for t in state["tasks"] if t["id"] == task["id"])
+    first, added = task["lines"][0], task["lines"][-1]
+    assert first["price"] == 0.01 and first["sum"] == round(first["plan_qty"] * 0.01, 2)
+    assert (added["price"], added["sum"]) == (0.1, 0.3)
+    totals = state["plan"]["totals"]
+    assert all(isinstance(totals[k], float | int) for k in ("work", "material", "total"))
+    assert all(round(totals[k], 2) == totals[k] for k in ("work", "material", "total"))
 
 
 def test_api_without_a_draft(

@@ -6,6 +6,7 @@ from __future__ import annotations
 from floorplan_engine.electrical.price_list import (
     Price,
     PriceList,
+    cents_items,
     derived_quote,
     edit_price_items,
     unknown_keys,
@@ -23,6 +24,14 @@ def test_wide_chase_costs_half_as_much_again() -> None:
     quote = derived_quote(Prices(named), "work.chase_wide.brick")
     assert quote.price is not None and quote.price.price == 200
     assert derived_quote(Prices(PriceList()), "work.chase_wide.brick").price is None
+
+
+def test_derived_price_is_rounded_to_the_cent_half_up() -> None:
+    """1.03 × 1.5 = 1.545 → 1.55 and 0.15 × 1.5 = 0.225 → 0.23 (float would give 1.54, 0.22)."""
+    for base, price in ((1.03, 1.55), (0.15, 0.23), (33.33, 50.0)):
+        own = PriceList.model_validate({"items": {"work.chase.brick": base}})
+        quote = derived_quote(Prices(own), "work.chase_wide.brick")
+        assert quote.price is not None and quote.price.price == price
 
 
 def test_cable_pass_is_not_priced_from_the_old_hole() -> None:
@@ -97,7 +106,7 @@ def test_edit_price_items_keeps_comments() -> None:
         PRICES_TEXT,
         {"work.cable": 25.5, "board_enclosure": 6500, "socket_box": None, "work.mechanism": 90},
     )
-    cable = "  work.cable: 25.5                 # по потолку"
+    cable = "  work.cable: 25.50                 # по потолку"
     assert cable in out
     assert 'board_enclosure: { price: 6500, name: "Корпус" }' in out
     assert "socket_box" not in out
@@ -106,7 +115,7 @@ def test_edit_price_items_keeps_comments() -> None:
     lines = out.splitlines()
     assert lines.index("  work.mechanism: 90") < lines.index("board_kit: []")
     assert lines.index("  work.mechanism: 90") > lines.index(
-        "  work.cable: 25.5                 # по потолку"
+        "  work.cable: 25.50                 # по потолку"
     )
 
 
@@ -150,3 +159,25 @@ def test_price_list_and_its_users_import_on_their_own() -> None:
             [sys.executable, "-c", f"import {module}"], capture_output=True, text=True, check=False
         )
         assert done.returncode == 0, f"{module}: {done.stderr.strip().splitlines()[-1:]}"
+
+
+def test_prices_are_read_and_written_to_the_cent() -> None:
+    """Decision 2026-11-28: a price list price is to the cent, half up; the text keeps a whole
+    price as is and writes cents with two decimals."""
+    prices = PriceList.model_validate(
+        {
+            "items": {"a": 76.505, "b": {"price": 0.225, "name": "x"}, "c": 5},
+            "board_kit": [{"name": "k", "price": 1.005}],
+        }
+    )
+    assert prices.items["a"] == 76.51 and prices.items["c"] == 5
+    assert prices.price("b") == Price(price=0.23, name="x")
+    assert prices.board_kit[0].price == 1.01
+    text = edit_price_items("items:\n  a: 1\n  b: { price: 2, name: x }\n", {"a": 76.5, "b": 3})
+    assert text == "items:\n  a: 76.50\n  b: { price: 3, name: x }\n"
+    assert edit_price_items("items:\n", {"c": 0.005}) == "items:\n  c: 0.01\n"
+    assert cents_items({"a": 76.505, "b": {"price": 0.225}, "c": "x"}) == {
+        "a": 76.51,
+        "b": {"price": 0.23},
+        "c": "x",
+    }

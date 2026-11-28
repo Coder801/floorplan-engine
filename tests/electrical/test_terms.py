@@ -117,8 +117,8 @@ def test_rows_conditions_and_amounts() -> None:
         "фиксированная сумма",
         1500,
     )
-    assert by["carry"].terms == "по факту: 150 грн за этаж" and by["carry"].amount is None
-    assert by["parking"].terms == "по факту: 200 грн за сутки"
+    assert by["carry"].terms == "по факту: 150,00 грн за этаж" and by["carry"].amount is None
+    assert by["parking"].terms == "по факту: 200,00 грн за сутки"
     assert by["purchase"].terms == "7,5 % от материалов сметы"
     assert by["purchase"].amount == 750 and by["purchase"].percent == 7.5
     assert by["off_hours"].terms == "надбавка 30 % к работам в это время"
@@ -151,15 +151,22 @@ def test_open_note_names_the_items_left_or_none() -> None:
     )
 
 
+def test_percent_of_materials_is_to_the_cent_half_up() -> None:
+    """7.5 % of 1003 = 75.225 → 75.23 (float round gives 75.22)."""
+    decisions = _decisions({"purchase": {"who": "studio", "pay": "percent", "percent": 7.5}})
+    rows = term_rows(decisions, materials=1003, currency="грн", language="ru")
+    assert next(r for r in rows if r.key == "purchase").amount == 75.23
+
+
 def test_markdown_total_only_when_something_is_agreed_for_a_sum() -> None:
     nothing = terms_markdown(term_rows({}, 1000, "грн", "ru"), 5000, "грн", "ru")
     assert nothing[0] == "## Обговаривается отдельно"
     assert not any("Итого" in line for line in nothing)
     fixed = _decisions({"delivery": {"who": "studio", "pay": "fixed", "price": 1500}})
     out = terms_markdown(term_rows(fixed, 1000, "грн", "ru"), 5000, "грн", "ru")
-    assert "| 1 | Доставка материалов | Студия | фиксированная сумма | 1 500 |" in out
-    assert "| | **Итого обговорено** | | | **1 500** |" in out
-    assert "**Всего со сопутствующими: 6 500 грн**" in out
+    assert "| 1 | Доставка материалов | Студия | фиксированная сумма | 1 500,00 |" in out
+    assert "| | **Итого обговорено** | | | **1 500,00** |" in out
+    assert "**Всего со сопутствующими: 6 500,00 грн**" in out
 
 
 def test_scope_section_tells_what_each_item_is_about() -> None:
@@ -168,7 +175,7 @@ def test_scope_section_tells_what_each_item_is_about() -> None:
     assert out[0] == "## Обговаривается отдельно"
     assert out[4] == (
         "- **Доставка материалов** — кто привозит материалы на объект и сколько стоит рейс. "
-        "Договорённость: студия, фиксированная сумма — 1 500 грн"
+        "Договорённость: студия, фиксированная сумма — 1 500,00 грн"
     )
     assert out[5].endswith("Договорённость: не обговорено")
 

@@ -119,7 +119,7 @@ def test_estimate_table_with_and_without_prices() -> None:
     assert not any(str(n).startswith("Разом:") for n in names)
     assert table.total is not None and table.total[1] == "Усього"
     socket_box = next(r for r in table.rows if r[1] == "Підрозетник")
-    assert socket_box[4] == "20" and socket_box[5] == "80"  # 4 posts × 20
+    assert socket_box[4] == "20,00" and socket_box[5] == "80,00"  # 4 posts × 20
     unpriced = next(r for r in table.rows if r[1] == "Прокладання кабелю")
     assert unpriced[4] == unpriced[5] == "—"
     listed = next(r for r in table.rows if r[1] == "Розетка із заземленням")

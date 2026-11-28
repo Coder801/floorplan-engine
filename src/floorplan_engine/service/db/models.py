@@ -719,7 +719,8 @@ class WorkLine(Base):
     unit: Mapped[str] = mapped_column(String(20), default="")
     plan_qty: Mapped[float] = mapped_column(Float)
     fact_qty: Mapped[float | None] = mapped_column(Float)
-    price: Mapped[float | None] = mapped_column(Float)
+    # to the cent (decision 2026-11-28): numeric, not float; rounded on write (work.money_field)
+    price: Mapped[float | None] = mapped_column(Numeric(12, 2, asdecimal=False))
 
 
 class WorkPhoto(Base):

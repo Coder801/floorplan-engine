@@ -28,7 +28,7 @@ import yaml
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
-from floorplan_engine.electrical.price_list import PRICES_FILE
+from floorplan_engine.electrical.price_list import PRICES_FILE, cents_items
 from floorplan_engine.pipeline import OUT_DIR
 from floorplan_engine.service import project_store as ps
 from floorplan_engine.service.db import access as acc
@@ -107,7 +107,8 @@ def _source_kind(path: Path) -> str:
 
 
 def _parsed_prices(text: str) -> dict[str, Any]:
-    """The parsed columns of price_list from prices.yaml; the text stays the truth."""
+    """The parsed columns of price_list from prices.yaml; the text stays the truth. Prices are
+    to the cent, as the estimate reads them (PriceList)."""
     data = repo.parsed_copy(text)
     if not isinstance(data, dict):
         return {}
@@ -115,6 +116,7 @@ def _parsed_prices(text: str) -> dict[str, Any]:
     for key, default in (("currency", "грн"), ("date", ""), ("note", ""), ("items", {})):
         value = data.get(key, default)
         out[key] = value if isinstance(value, type(default)) else default
+    out["items"] = cents_items(out["items"])
     return out
 
 

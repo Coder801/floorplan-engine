@@ -11,6 +11,7 @@ from floorplan_engine.cli.common import ProjectArg, exit_on, fail, print_report,
 from floorplan_engine.drawing.symbols import export_symbols
 from floorplan_engine.electrical.work_scope import WORK_SCOPE_MD
 from floorplan_engine.epd.artifact import read_artifact, render_page_png
+from floorplan_engine.model.money import format_money
 from floorplan_engine.model.schema import SheetFormat
 from floorplan_engine.pipeline import (
     ARTIFACT_FILE,
@@ -203,10 +204,10 @@ def estimate(
         raise typer.Exit(code=1)
     est = result.estimate
     cur = est.currency
-    typer.echo(f"Черновые материалы: {est.materials:,.0f} {cur}".replace(",", " "))
-    typer.echo(f"Черновые работы:    {est.subtotal('rough'):,.0f} {cur}".replace(",", " "))
-    typer.echo(f"Чистовые работы:    {est.subtotal('finish'):,.0f} {cur}".replace(",", " "))
-    typer.echo(f"Всего:              {est.total:,.0f} {cur}".replace(",", " "))
+    typer.echo(f"Черновые материалы: {format_money(est.materials)} {cur}")
+    typer.echo(f"Черновые работы:    {format_money(est.subtotal('rough'))} {cur}")
+    typer.echo(f"Чистовые работы:    {format_money(est.subtotal('finish'))} {cur}")
+    typer.echo(f"Всего:              {format_money(est.total)} {cur}")
     if est.listed:
         typer.echo(f"Чистовые материалы: {est.listed} поз. — ведомость без цен (выбор заказчика)")
     if est.unpriced:

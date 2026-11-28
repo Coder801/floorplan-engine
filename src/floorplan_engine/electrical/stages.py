@@ -29,6 +29,7 @@ from pydantic import Field, ValidationInfo, model_validator
 from floorplan_engine.electrical.estimate import Estimate
 from floorplan_engine.electrical.estimate.items import LINES, WORK_PREFIX, split_key
 from floorplan_engine.electrical.work_scope import Phrase, load_scope
+from floorplan_engine.model.money import line_total, money_sum
 from floorplan_engine.model.schema import StrictModel
 from floorplan_engine.model.texts import Language
 
@@ -123,7 +124,7 @@ class DraftLine:
 
     @property
     def sum(self) -> float | None:
-        return None if self.price is None else round(self.qty * self.price, 2)
+        return None if self.price is None else line_total(self.qty, self.price)
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -151,7 +152,7 @@ class DraftTask:
     lines: tuple[DraftLine, ...]
 
     def _total(self, kind: Kind) -> float:
-        return round(sum(ln.sum or 0.0 for ln in self.lines if ln.kind == kind), 2)
+        return money_sum(ln.sum or 0.0 for ln in self.lines if ln.kind == kind)
 
     @property
     def work_total(self) -> float:

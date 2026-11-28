@@ -49,7 +49,7 @@ def test_estimate_project_writes_tables(tmp_path: Path) -> None:
     assert "Чистовые материалы" in text and "ведомость без цен" in text
     raw = csv_path.read_bytes()
     assert raw.startswith(b"\xef\xbb\xbf")  # BOM: Excel recognises UTF-8
-    assert "socket_box;Подрозетник;шт;4;20;80,00" in raw.decode("utf-8-sig")
+    assert "socket_box;Подрозетник;шт;4;20,00;80,00" in raw.decode("utf-8-sig")
 
     (project / "prices.yaml").write_text("items:\n  sockt_box: 20\n", "utf-8")
     bad = estimate_project(project)

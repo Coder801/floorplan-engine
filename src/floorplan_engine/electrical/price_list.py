@@ -12,13 +12,14 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Any, Protocol
 
-from pydantic import Field
+from pydantic import Field, field_validator
 
 from floorplan_engine.electrical.estimate.items import LINES, RETIRED, split_key
 from floorplan_engine.electrical.splices import Splice
 from floorplan_engine.electrical.terms import TermDecision
+from floorplan_engine.model.money import cents, line_total
 from floorplan_engine.model.schema import StrictModel
 
 PRICES_FILE = "prices.yaml"  # the project price list lives in the project folder, next to room.yaml
@@ -27,6 +28,12 @@ PRICES_FILE = "prices.yaml"  # the project price list lives in the project folde
 class Price(StrictModel):
     price: float = Field(ge=0)
     name: str | None = Field(default=None, description="Своё наименование вместо стандартного")
+
+    @field_validator("price")
+    @classmethod
+    def _to_the_cent(cls, price: float) -> float:
+        """Prices are to the cent (model/money.py): 0.225 → 0.23."""
+        return cents(price)
 
 
 class BoardItem(StrictModel):
@@ -37,6 +44,11 @@ class BoardItem(StrictModel):
     price: float = Field(ge=0)
     qty: int = Field(default=1, ge=1)
     modules: int = Field(default=0, ge=0, description="Ширина на DIN-рейке, модулей")
+
+    @field_validator("price")
+    @classmethod
+    def _to_the_cent(cls, price: float) -> float:
+        return cents(price)
 
 
 class PriceList(StrictModel):
@@ -60,6 +72,12 @@ class PriceList(StrictModel):
         "розеток соединений нет): wago — клеммами Wago 221, crimp — опрессовкой гильзами с "
         "термоусадкой; нет — wago. В распаечных коробках — всегда опрессовка",
     )
+
+    @field_validator("items")
+    @classmethod
+    def _items_to_the_cent(cls, items: dict[str, float | Price]) -> dict[str, float | Price]:
+        """A plain price is rounded to the cent like Price.price (76.505 → 76.51)."""
+        return {k: v if isinstance(v, Price) else cents(v) for k, v in items.items()}
 
     def price(self, key: str) -> Price | None:
         item = self.items.get(key)
@@ -129,7 +147,7 @@ def derived_quote(prices: PriceSource, key: str) -> Quote:
     base = prices.lookup(base_key)
     if base.price is None:
         return quote
-    return Quote(Price(price=round(base.price.price * factor, 2)), None, base.service)
+    return Quote(Price(price=line_total(base.price.price, factor)), None, base.service)
 
 
 def unknown_keys(prices: PriceList) -> list[str]:
@@ -138,11 +156,28 @@ def unknown_keys(prices: PriceList) -> list[str]:
     return [k for k in prices.items if split_key(k)[0] not in LINES and k not in RETIRED]
 
 
+def cents_items(items: dict[str, Any]) -> dict[str, Any]:
+    """Raw `items` of prices.yaml (the parsed copy the database keeps) with every price to the
+    cent: `key: 76.505` and `key: { price: 76.505 }` → 76.51; anything else stays as is."""
+
+    def one(value: Any) -> Any:
+        if isinstance(value, int | float) and not isinstance(value, bool):
+            return cents(value)
+        if isinstance(value, dict) and isinstance(value.get("price"), int | float):
+            return {**value, "price": cents(value["price"])}
+        return value
+
+    return {k: one(v) for k, v in items.items()}
+
+
 ITEMS_LINE = re.compile(r"^items:\s*(#.*)?$")
 
 
 def _money(value: float) -> str:
-    return str(int(value)) if float(value).is_integer() else f"{value:g}"
+    """A price in the prices.yaml text: whole as is ("76"), with cents — two decimals ("76.50",
+    76.505 → "76.51")."""
+    value = cents(value)
+    return str(int(value)) if value.is_integer() else f"{value:.2f}"
 
 
 def edit_price_items(text: str, items: dict[str, float | None]) -> str:

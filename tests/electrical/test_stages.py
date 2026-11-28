@@ -11,6 +11,7 @@ from pydantic import ValidationError
 from floorplan_engine.electrical.estimate import Estimate, Line
 from floorplan_engine.electrical.estimate.items import LINES, split_key
 from floorplan_engine.electrical.stages import (
+    DraftLine,
     draft_tasks,
     electrical_draft,
     expand,
@@ -169,3 +170,10 @@ def test_stage_without_items_is_always_in_the_draft() -> None:
 def test_stage_without_items_needs_a_result() -> None:
     with pytest.raises(ValidationError, match=r"stages\[0\].result: у этапа без позиций"):
         parse_stages({"stages": [_stage("look", [])]}, LINES)
+
+
+def test_stage_sums_are_to_the_cent() -> None:
+    """A line sum is qty × price to the cent (3 × 0.1 = 0.3, not 0.30000000000000004)."""
+    assert DraftLine("a", "work", "A", "шт", 3, 0.1).sum == 0.3
+    assert DraftLine("b", "material", "B", "м", 1.5, 0.15).sum == 0.23
+    assert DraftLine("c", "work", "C", "шт", 1, None).sum is None

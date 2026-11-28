@@ -28,8 +28,9 @@ from typing import Literal
 import yaml
 from openpyxl.styles import Font
 from openpyxl.worksheet.worksheet import Worksheet
-from pydantic import Field, model_validator
+from pydantic import Field, field_validator, model_validator
 
+from floorplan_engine.model.money import cents, format_money, money_sum
 from floorplan_engine.model.schema import StrictModel
 from floorplan_engine.model.texts import Language
 
@@ -57,6 +58,11 @@ class TermDecision(StrictModel):
     unit: str | None = Field(default=None, description="Единица тарифа by_fact вместо стандартной")
     percent: float | None = Field(default=None, gt=0, le=100)
     note: str = ""
+
+    @field_validator("price")
+    @classmethod
+    def _to_the_cent(cls, price: float | None) -> float | None:
+        return None if price is None else cents(price)
 
     @model_validator(mode="after")
     def _consistent(self) -> TermDecision:
@@ -162,10 +168,6 @@ def text(key: str, language: Language, **values: object) -> str:
     return TEXT[key][language].format(**values)
 
 
-def _num(x: float) -> str:
-    return f"{x:,.2f}".replace(",", " ").replace(".", ",").removesuffix(",00")
-
-
 @dataclass(frozen=True)
 class TermRow:
     """One item for this estimate, in the project language."""
@@ -212,13 +214,13 @@ def term_rows(
             elif d.pay == Pay.BY_FACT:
                 assert d.price is not None
                 unit = d.unit or item.unit.of(language)
-                terms = t("by_fact", p=_num(d.price), c=currency, u=unit)
+                terms = t("by_fact", p=format_money(d.price), c=currency, u=unit)
             elif d.pay == Pay.PERCENT:
                 assert d.percent is not None and item.percent is not None
                 terms = t(item.percent, p=f"{d.percent:g}".replace(".", ","))
                 if item.percent == "materials":
                     share = d.percent
-                    amount = round(materials * d.percent / 100, 2)
+                    amount = cents(materials * d.percent / 100)
             else:
                 terms = t("included")
         if d is not None and d.note:
@@ -240,7 +242,7 @@ def term_rows(
 
 
 def agreed_total(rows: tuple[TermRow, ...]) -> float:
-    return sum(r.amount or 0.0 for r in rows)
+    return money_sum(r.amount or 0.0 for r in rows)
 
 
 def open_note(rows: tuple[TermRow, ...], language: Language) -> str | None:
@@ -262,12 +264,12 @@ def terms_markdown(
 
     out = [f"## {t('title')}", "", t("head", c=currency), "|---|---|---|---|---:|"]
     for r in rows:
-        amount = _num(r.amount) if r.amount is not None else "—"
+        amount = format_money(r.amount) if r.amount is not None else "—"
         out.append(f"| {r.no} | {r.name} | {r.who} | {r.terms} | {amount} |")
     agreed = agreed_total(rows)
     if agreed:
-        out += [f"| | **{t('subtotal')}** | | | **{_num(agreed)}** |", ""]
-        out += [f"**{t('grand')}: {_num(total + agreed)} {currency}**"]
+        out += [f"| | **{t('subtotal')}** | | | **{format_money(agreed)}** |", ""]
+        out += [f"**{t('grand')}: {format_money(money_sum((total, agreed)))} {currency}**"]
     out.append("")
     return out
 
@@ -281,7 +283,7 @@ def terms_scope_markdown(rows: tuple[TermRow, ...], currency: str, language: Lan
     out = [f"## {t('title')}", "", t("intro"), ""]
     for r in rows:
         who = "" if r.who == "—" else f"{r.who.lower()}, "
-        amount = "" if r.amount is None else f" — {_num(r.amount)} {currency}"
+        amount = "" if r.amount is None else f" — {format_money(r.amount)} {currency}"
         out.append(f"- **{r.name}** — {r.about}. {t('agreement')}: {who}{r.terms}{amount}")
     out.append("")
     return out
@@ -328,6 +330,6 @@ def terms_scope_sheet(
     """Rows for the work scope sheet: item, what is agreed, the agreement."""
     out = [["", text("title", language)], ["", text("intro", language)]]
     for r in rows:
-        amount = "" if r.amount is None else f" — {_num(r.amount)} {currency}"
+        amount = "" if r.amount is None else f" — {format_money(r.amount)} {currency}"
         out.append([str(r.no), r.name, "", r.about, f"{r.who}: {r.terms}{amount}"])
     return out

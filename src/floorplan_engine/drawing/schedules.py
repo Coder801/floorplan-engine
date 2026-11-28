@@ -31,6 +31,7 @@ from floorplan_engine.electrical.panel_text import kw
 from floorplan_engine.electrical.point_numbers import point_rows
 from floorplan_engine.electrical.point_numbers import text as points_text
 from floorplan_engine.electrical.wiring_model import Wiring
+from floorplan_engine.model.money import format_money
 from floorplan_engine.model.schema import Electrical, Plan
 from floorplan_engine.model.texts import Language
 
@@ -216,14 +217,14 @@ def estimate_table(
                 money = ("", "")
             elif priced:
                 money = (
-                    format_number(ln.price) if ln.price is not None else "—",
-                    format_number(ln.total) if ln.total is not None else "—",
+                    format_money(ln.price) if ln.price is not None else "—",
+                    format_money(ln.total) if ln.total is not None else "—",
                 )
             rows.append((str(k), ln.name, ln.unit, qty, *money))
         if priced and not listed:
             # Plain "Total": the section heading is right above, its name is not repeated
-            rows.append(("", t("subtotal"), "", "", "", format_number(est.subtotal(section))))
-    total = ("", t("total"), "", "", "", format_number(est.total)) if priced else None
+            rows.append(("", t("subtotal"), "", "", "", format_money(est.subtotal(section))))
+    total = ("", t("total"), "", "", "", format_money(est.total)) if priced else None
     if title is None:
         title = t("sheet_title") if priced else t("sheet_volumes")
     return Table(

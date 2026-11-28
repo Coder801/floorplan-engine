@@ -18,6 +18,7 @@ from openpyxl.worksheet.worksheet import Worksheet
 from floorplan_engine.electrical.estimate import Estimate
 from floorplan_engine.electrical.estimate.items import LISTED_SECTIONS, MATERIAL_SECTIONS, SECTIONS
 from floorplan_engine.electrical.estimate.texts import format_number, section_title, text
+from floorplan_engine.model.money import format_money
 from floorplan_engine.model.texts import Language
 
 ESTIMATE_MD = "estimate.md"
@@ -57,16 +58,16 @@ def write_markdown(
             if listed:
                 price, total = "", ""
             else:
-                price = format_number(ln.price) if ln.price is not None else t("no_price")
-                total = format_number(ln.total) if ln.total is not None else "—"
+                price = format_money(ln.price) if ln.price is not None else t("no_price")
+                total = format_money(ln.total) if ln.total is not None else "—"
             qty = format_number(ln.qty, 1).removesuffix(",0")
             out.append(f"| {k} | {ln.name} | {ln.unit} | {qty} | {price} | {total} |")
         if listed:
             out += [f"| | *{t('listed')}* | | | | |", ""]
         else:
-            amount = f"**{format_number(est.subtotal(section))}**"
+            amount = f"**{format_money(est.subtotal(section))}**"
             out += [f"| | **{t('subtotal')}** | | | | {amount} |", ""]
-    out += [f"**{t('total')}: {format_number(est.total)} {est.currency}**", ""]
+    out += [f"**{t('total')}: {format_money(est.total)} {est.currency}**", ""]
     out += tail
     unpriced = t("unpriced", n=est.unpriced)
     if est.unpriced and unpriced not in notes:  # the price notes may already say it
@@ -75,6 +76,11 @@ def write_markdown(
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("\n".join(out) + "\n", encoding="utf-8")
     return path
+
+
+def _csv_money(value: float) -> str:
+    """Money in the CSV: two decimals, decimal comma, no thousands separator (76 → "76,00")."""
+    return format_money(value).replace(" ", "")
 
 
 def write_csv(est: Estimate, path: Path) -> Path:
@@ -92,8 +98,8 @@ def write_csv(est: Estimate, path: Path) -> Path:
                     ln.name,
                     ln.unit,
                     f"{ln.qty:g}".replace(".", ","),
-                    "" if ln.price is None else f"{ln.price:g}".replace(".", ","),
-                    "" if ln.total is None else f"{ln.total:.2f}".replace(".", ","),
+                    "" if ln.price is None else _csv_money(ln.price),
+                    "" if ln.total is None else _csv_money(ln.total),
                 ]
             )
     return path
@@ -108,7 +114,8 @@ def write_xlsx(
     extra: Callable[[Workbook], None] | None = None,
     tail: Callable[[Worksheet, Mapping[str, str]], None] | None = None,
 ) -> Path:
-    """Estimate in Excel: sections, row sum as a formula "qty × price", section totals and "Total"
+    """Estimate in Excel: sections, row sum as a formula "qty × price" rounded to the cent (as
+    Line.total), section totals and "Total"
     as formulas, prices and quantities highlighted (they get edited). An item without a price has
     an empty price with a note; once a price is entered it counts in the totals. Finish materials
     (LISTED_SECTIONS) are a bill of quantities: no price, no sum, no total, a note in place of
@@ -163,7 +170,8 @@ def write_xlsx(
         first = ws.max_row + 1
         for k, ln in enumerate(rows, 1):
             r = ws.max_row + 1
-            ws.append([k, ln.name, ln.unit, ln.qty, ln.price, f'=IF(E{r}="","",D{r}*E{r})', ln.key])
+            row_sum = f'=IF(E{r}="","",ROUND(D{r}*E{r},2))'  # to the cent, as Line.total
+            ws.append([k, ln.name, ln.unit, ln.qty, ln.price, row_sum, ln.key])
             ws.cell(r, 4).number_format = XLSX_QTY
             ws.cell(r, 5).number_format = XLSX_MONEY
             ws.cell(r, 6).number_format = XLSX_MONEY
