@@ -1,3 +1,14 @@
+## v0.25.0 (2026-11-28)
+
+### Feat
+
+- **viewer**: show questions as threads in the database viewer
+- **api**: add question thread endpoints and installer rights
+- **service**: check accepted thread answers with the AI
+- **db**: add question threads and access term columns
+- **admin,service**: add clients section and studio price and profile to admin
+- **service,viewer**: open the studio price list to owner and designer only
+
 ## v0.24.0 (2026-11-27)
 
 ### Feat
