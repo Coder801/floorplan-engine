@@ -3,8 +3,10 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { AnswerRefused, type AnswerResult } from "@/shared/api";
 import type { QuestionsMemory } from "@/shared/questions";
+import { fail, stubApi } from "@/shared/testApi";
 import { project, question } from "@/shared/testData";
 import type { Project } from "@/shared/types";
+import { ask, listOf, thread } from "@/widgets/Threads/mock";
 import { Questions } from "./index";
 
 const done: AnswerResult = { built: true, rebuilt: false };
@@ -190,5 +192,68 @@ describe("Questions", () => {
     first.unmount();
     setup(withQuestions([question()]), { memory });
     expect(screen.getByRole("textbox", { name: "Ваш ответ" })).toHaveValue("2650");
+  });
+
+  it("a question to the installer clarifies, as the client's", async () => {
+    setup(withQuestions([question({ audience: "installer", answer: "text" })], { answers: { q1: { text: "у окна" } } }));
+    await userEvent.click(screen.getByRole("button", { name: /монтажнику/ }));
+    expect(screen.getByRole("button", { name: "Учтено" })).toBeInTheDocument();
+  });
+
+  describe("the database viewer: threads", () => {
+    const T = "/api/projects/p1/threads";
+    const formThread = thread({
+      id: "t7", messages: [],
+      question: ask({ text: "Какая высота потолка?", audience: "studio", kind: "value", stage: "plan" }),
+    });
+
+    it("threads instead of the list; a studio value keeps its form above the feed", async () => {
+      stubApi({ [`GET ${T}`]: listOf([formThread]), [`GET ${T}/t7`]: formThread });
+      const user = userEvent.setup();
+      const { onAnswer } = setup(withQuestions([question()], { id: "p1", work: true }));
+      await user.click(await screen.findByRole("button", { name: /Какая высота потолка/ }));
+      expect(screen.getByText("Сейчас в проекте: 2700 мм")).toBeInTheDocument();
+      await user.type(screen.getByRole("textbox", { name: "Ваш ответ" }), "2750");
+      await user.click(screen.getByRole("button", { name: "Сохранить" }));
+      expect(onAnswer).toHaveBeenCalledWith("q1", 2750);
+      expect(await screen.findByRole("textbox", { name: "Сообщение" })).toBeInTheDocument();  // the feed under it
+      // the old "taken into account / send back" is not there
+      expect(screen.queryByRole("button", { name: "Учтено" })).toBeNull();
+    });
+
+    it("a text question has no answer form: the reply is a message", async () => {
+      const text = thread({ id: "t1", question: ask({ text: "Где щит?", audience: "studio" }) });
+      stubApi({ [`GET ${T}`]: listOf([text]), [`GET ${T}/t1`]: text });
+      setup(withQuestions([question({ answer: "text", text: "Где щит?" })], { id: "p1", work: true }));
+      await userEvent.click(await screen.findByRole("button", { name: /Где щит/ }));
+      expect(await screen.findByRole("textbox", { name: "Сообщение" })).toBeInTheDocument();
+      expect(screen.queryByRole("textbox", { name: "Ваш ответ" })).toBeNull();
+      expect(screen.queryByRole("button", { name: "Отправить ответ" })).toBeNull();
+    });
+
+    it("a client question of any kind is answered by a message, not by POST …/answers", async () => {
+      const client = thread({ id: "t2", question: ask({ id: "q1", text: "Какая высота потолка?", kind: "value", audience: "client" }) });
+      const sent = stubApi({ [`GET ${T}`]: listOf([client]), [`GET ${T}/t2`]: client });
+      setup(withQuestions([question({ audience: "client" })], { id: "p1", work: true }));
+      await userEvent.click(await screen.findByRole("button", { name: /Какая высота потолка/ }));
+      expect(await screen.findByRole("textbox", { name: "Сообщение" })).toBeInTheDocument();
+      expect(screen.queryByRole("textbox", { name: "Ваш ответ" })).toBeNull();
+      expect(screen.queryByRole("button", { name: /Оставить/ })).toBeNull();
+      expect(sent.every((s) => s.method === "GET")).toBe(true);
+    });
+
+    it("a server without threads (404) keeps answers.yaml", async () => {
+      stubApi({ [`GET ${T}`]: fail(404, "Not Found") });
+      setup(withQuestions([question()], { id: "p1", work: true }));
+      expect(await screen.findByText("Сейчас в проекте: 2700 мм")).toBeInTheDocument();
+      expect(screen.getByText("нужен ответ")).toBeInTheDocument();
+    });
+
+    it("the folder viewer (no work) never asks for threads", () => {
+      const sent = stubApi({});
+      setup(withQuestions([question()], { work: false }));
+      expect(screen.getByRole("textbox", { name: "Ваш ответ" })).toBeInTheDocument();
+      expect(sent).toEqual([]);
+    });
   });
 });

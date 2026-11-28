@@ -402,6 +402,13 @@ export function Viewer({ account = null }: { account?: Account | null }) {
     }
   };
 
+  // Threads (the database viewer): the AI check of an accepted answer ended — the questions and the
+  // answers are read again; a new model version is built by the server, shared/rebuild.ts sees it
+  const settleThreads = async () => {
+    if (!current) return;
+    try { setProject(await getProject(current)); } catch { /* the next rebuild check reads it */ }
+  };
+
   // The setup wizard: all choices at once, one rebuild; a refusal stays in the wizard
   const applyWizard = async (body: WizardBody) => {
     if (!current) return false;
@@ -853,6 +860,7 @@ export function Viewer({ account = null }: { account?: Account | null }) {
           <Drawer tab={drawer} project={project} shownSource={source} onSource={showSource}
                   busy={answering || refreshing} onAnswer={answerQuestion} onReview={reviewQuestion}
                   stages={pages.flatMap((pg) => pg.stage ?? []).filter((st) => stageShown(mode, st))} onShow={showQuestion} memory={questionsMemory}
+                  onSettled={() => void settleThreads()}
                   closing={closing} onClose={closeDrawer} onClosed={drawerClosed} />
         )}
       </SidePanel>

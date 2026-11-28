@@ -3,7 +3,12 @@
 // next question opens at once); a text answer is only saved and waits for the analyzer. Who may
 // answer — can.answer; the studio also sees ids and field paths. A client question only clarifies
 // (decision 2026-11-11): any answer goes as { text }, the studio takes it into account or sends it
-// back with a comment (can.review).
+// back with a comment (can.review). The installer's question is the same (2026-11-28).
+//
+// The database viewer (project.work, docs/question-threads.md) shows threads instead
+// (widgets/Threads): a text answer is a message, the studio accepts it; a value, a choice or groups
+// of a studio question keep this form, above the thread feed. A server without threads (GET
+// /threads → 404) falls back to this list.
 
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -11,13 +16,15 @@ import { AnswerRefused, type AnswerResult, type ReviewOutcome } from "@/shared/a
 import { cx } from "@/shared/cx";
 import i18n, { label } from "@/shared/i18n";
 import {
-  forClient, groupOf, keepOrder, listOrder, nextOpen, parseNumber, plainNumber, returnedComment, shortMessage, shownOn, statusOf,
+  clarifies, forClient, groupOf, keepOrder, listOrder, nextOpen, parseNumber, plainNumber, returnedComment, shortMessage, shownOn, statusOf,
   type Answer, type Group, type QuestionsMemory, type Status,
 } from "@/shared/questions";
+import { answeredByForm } from "@/shared/threadList";
 import type { Project, Question } from "@/shared/types";
 import { Button } from "@/ui/Button";
 import { IconButton } from "@/ui/IconButton";
 import { Text } from "@/ui/Text";
+import { Threads } from "@/widgets/Threads";
 import css from "./Questions.module.scss";
 
 interface Props {
@@ -29,6 +36,7 @@ interface Props {
   stages: string[];  // stages of the sheets: where "show" can lead
   onShow: (to: { stage: string; key: string | null }) => void;
   memory: React.MutableRefObject<QuestionsMemory>;  // the panel closes, this stays
+  onSettled?: () => void;  // threads: the AI check of an answer ended — read the project again
 }
 
 type Failure = AnswerRefused | string;
@@ -55,7 +63,7 @@ interface CardProps {
   onReview: (outcome: ReviewOutcome, comment?: string) => void;
 }
 
-export function Questions({ project: p, busy, onAnswer, onReview, stages, onShow, memory }: Props) {
+export function Questions({ project: p, busy, onAnswer, onReview, stages, onShow, memory, onSettled }: Props) {
   const { t } = useTranslation();
   const qs = p.report?.questions ?? [];
   const can = p.can?.answer === true;
@@ -71,7 +79,9 @@ export function Questions({ project: p, busy, onAnswer, onReview, stages, onShow
     memory.current.expanded !== undefined ? memory.current.expanded : can ? firstOpen ?? null : null);
   const [drafts, setDrafts] = useState<Record<string, string>>(memory.current.drafts);
   const [closedShown, setClosedShown] = useState(memory.current.closedShown === true);  // closed ones fold away
-  memory.current = { drafts, expanded, closedShown };
+  memory.current = { ...memory.current, drafts, expanded, closedShown };
+  const [noThreads, setNoThreads] = useState(false);  // the server has no thread endpoints
+  const threaded = p.work === true && !noThreads;
   const [failures, setFailures] = useState<Record<string, Failure>>({});
   const [editing, setEditing] = useState<string | null>(null);
   const [asking, setAsking] = useState<string | null>(null);
@@ -91,9 +101,6 @@ export function Questions({ project: p, busy, onAnswer, onReview, stages, onShow
       setDone(qs.length - before.current);
     }
   }, [busy, qs.length]);
-
-  if (!p.report) return <Text tone="muted">{t("drawer.noReport")}</Text>;
-  if (!qs.length) return <Text tone="muted">{t("drawer.noQuestions")}</Text>;
 
   const fail = (id: string, failure: Failure | null) => setFailures((all) => {
     const { [id]: _, ...rest } = all;
@@ -147,28 +154,61 @@ export function Questions({ project: p, busy, onAnswer, onReview, stages, onShow
     }
   };
 
+  const rowProps = (q: Question): RowProps => ({
+    q, answer: p.answers[q.id], status: status(q.id), can, studio, reviewer,
+    busy, working: working === q.id, editing: editing === q.id, asking: asking === q.id,
+    draft: drafts[q.id], failure: failures[q.id],
+    open: expanded === q.id,
+    shows: shownOn(q, stages), onShow,
+    onToggle: () => setExpanded(expanded === q.id ? null : q.id),
+    onDraft: (text) => setDrafts((all) => ({ ...all, [q.id]: text })),
+    onSave: (answer) => void save(q, answer),
+    onEdit: (on) => {
+      setEditing(on ? q.id : null);
+      fail(q.id, null);
+      setDrafts(({ [q.id]: _, ...rest }) => rest);
+    },
+    onAsk: (on) => setAsking(on ? q.id : null),
+    onOpen: setExpanded,
+    onLocal: (message) => fail(q.id, message),
+    onReview: (outcome, comment) => void review(q, outcome, comment),
+  });
+
+  // The rebuild after a form answer and how the list changed: over the list in both views
+  const bands = (
+    <>
+      {working !== null && (
+        <div className={css.band} role="status"><span className={css.ring} />{t("questions.rebuilding")}</div>
+      )}
+      {done !== null && !busy && (
+        <div className={cx(css.band, css.ok)} role="status">
+          <span>
+            <b>{t("questions.rebuilt")}</b>
+            {done < 0 && ` ${t("questions.fewer", { n: -done })}`}
+            {done > 0 && ` ${t("questions.more", { n: done })}`}
+          </span>
+          <IconButton variant="close" label={t("common.close")} onClick={() => setDone(null)} />
+        </div>
+      )}
+    </>
+  );
+
+  if (threaded) {
+    return (
+      <Threads project={p} notice={bands} memory={memory} drafts={drafts}
+               onDraft={(key, text) => setDrafts((all) => ({ ...all, [key]: text }))}
+               extraFor={(qid) => { const q = byId.get(qid); return q ? <Extra {...rowProps(q)} /> : null; }}
+               onUnavailable={() => setNoThreads(true)} onSettled={() => onSettled?.()} />
+    );
+  }
+
+  if (!p.report) return <Text tone="muted">{t("drawer.noReport")}</Text>;
+  if (!qs.length) return <Text tone="muted">{t("drawer.noQuestions")}</Text>;
+
   const counts = ids.reduce((n, id) => ({ ...n, [groupOf(status(id))]: n[groupOf(status(id))] + 1 }),
                             { open: 0, pending: 0, closed: 0 } as Record<Group, number>);
 
-  const card = (q: Question) => (
-    <Card key={q.id} q={q} answer={p.answers[q.id]} status={status(q.id)} can={can} studio={studio} reviewer={reviewer}
-          busy={busy} working={working === q.id} editing={editing === q.id} asking={asking === q.id}
-          draft={drafts[q.id]} failure={failures[q.id]}
-          open={expanded === q.id}
-          shows={shownOn(q, stages)} onShow={onShow}
-          onToggle={() => setExpanded(expanded === q.id ? null : q.id)}
-          onDraft={(text) => setDrafts((all) => ({ ...all, [q.id]: text }))}
-          onSave={(answer) => void save(q, answer)}
-          onEdit={(on) => {
-            setEditing(on ? q.id : null);
-            fail(q.id, null);
-            setDrafts(({ [q.id]: _, ...rest }) => rest);
-          }}
-          onAsk={(on) => setAsking(on ? q.id : null)}
-          onOpen={setExpanded}
-          onLocal={(message) => fail(q.id, message)}
-          onReview={(outcome, comment) => void review(q, outcome, comment)} />
-  );
+  const card = (q: Question) => <Card key={q.id} {...rowProps(q)} />;
 
   const group = (g: Group, title: string) => {
     const rows = ids.filter((id) => order.current.get(id) === g).flatMap((id) => byId.get(id) ?? []);
@@ -197,19 +237,7 @@ export function Questions({ project: p, busy, onAnswer, onReview, stages, onShow
           <span><b>{counts.closed}</b> {t("questions.doneN")}</span>
         </div>
         {!can && <div className={css.readOnly}>{t("questions.readOnly")}</div>}
-        {working !== null && (
-          <div className={css.band} role="status"><span className={css.ring} />{t("questions.rebuilding")}</div>
-        )}
-        {done !== null && !busy && (
-          <div className={cx(css.band, css.ok)} role="status">
-            <span>
-              <b>{t("questions.rebuilt")}</b>
-              {done < 0 && ` ${t("questions.fewer", { n: -done })}`}
-              {done > 0 && ` ${t("questions.more", { n: done })}`}
-            </span>
-            <IconButton variant="close" label={t("common.close")} onClick={() => setDone(null)} />
-          </div>
-        )}
+        {bands}
       </div>
       {group("open", t("questions.groupOpen"))}
       {group("pending", t("questions.groupPending"))}
@@ -240,7 +268,7 @@ function Card(props: RowProps) {
         <span className={css.meta}>
           <span className={`sev-${q.severity}`}>
             {`${label("severity", q.severity)} · ${label("stage", q.stage)}`}
-            {studio && forClient(q) && ` · ${t("questions.forClient")}`}
+            {studio && clarifies(q) && ` · ${t(forClient(q) ? "questions.forClient" : "questions.forInstaller")}`}
             {studio && <span className={cx(css.id, "mono muted")}>{` · ${q.id}`}</span>}
           </span>
           {word && <span className={cx(css.word, css[word])}>{t(`questions.status.${word}`)}</span>}
@@ -256,8 +284,8 @@ function Card(props: RowProps) {
           )}
           {comment && status === "returned" && <div className={css.returned}>{t("questions.returnedBy", { comment })}</div>}
           {can ? <Controls {...props} /> : <Answered q={q} answer={answer} status={status} empty />}
-          {forClient(q) && status === "pending" && (reviewer ? <Review {...props} /> : can && <div className={css.hint}>{t("questions.clientWaits")}</div>)}
-          {forClient(q) && status === "resolved" && <div className={css.hint}>{t("questions.resolvedClient")}</div>}
+          {clarifies(q) && status === "pending" && (reviewer ? <Review {...props} /> : can && <div className={css.hint}>{t("questions.clientWaits")}</div>)}
+          {clarifies(q) && status === "resolved" && <div className={css.hint}>{t("questions.resolvedClient")}</div>}
           {shows && (
             <div className={css.actions}>
               <Button variant="link" className={css.quiet} onClick={() => onShow(shows)}>
@@ -269,6 +297,34 @@ function Card(props: RowProps) {
           {studio && q.also && q.also.length > 0 && <div className={css.hint}>{t("questions.also", { n: q.also.length })}</div>}
         </div>
       )}
+    </div>
+  );
+}
+
+// Above the feed of a thread (the database viewer): the form of a value, choice or groups question
+// asked of the studio, as in the folder list. A text answer and any answer of the client or the
+// installer is a message of the thread: POST …/answers with { text } is not sent here; then
+// "show on the drawing" and, for the studio, the field path
+function Extra(props: RowProps) {
+  const { q, answer, status, can, studio, shows, onShow } = props;
+  const { t } = useTranslation();
+  const form = answeredByForm(q.answer, q.audience);
+  if (!form && !shows && !(studio && q.target)) return null;
+  return (
+    <div>
+      {form && q.assumption !== undefined && q.answer !== "choice" && status === "open" && (
+        <div className={css.now}>{t("questions.now", { value: shown(q, q.assumption) })}</div>
+      )}
+      {form && (can ? <Controls {...props} /> : <Answered q={q} answer={answer} status={status} empty />)}
+      {shows && (
+        <div className={css.actions}>
+          <Button variant="link" className={css.quiet} onClick={() => onShow(shows)}>
+            {t(q.answer === "groups" ? "questions.pickGroups" : shows.key ? "questions.show" : "questions.showPanel")}
+          </Button>
+        </div>
+      )}
+      {studio && q.target && <div className={css.path}>{q.target}</div>}
+      {studio && form && q.also && q.also.length > 0 && <div className={css.hint}>{t("questions.also", { n: q.also.length })}</div>}
     </div>
   );
 }
@@ -285,8 +341,8 @@ function answerValue(q: Question, answer: unknown): string {
   const o = answer as { text?: string };
   if (!o || typeof o !== "object") return shown(q, answer);
   // A client value or choice is kept as text: it reads as the value it is
-  if (forClient(q) && q.answer === "value") return shown(q, parseNumber(o.text ?? "") ?? o.text);
-  if (forClient(q) && q.answer === "choice") return shown(q, o.text);
+  if (clarifies(q) && q.answer === "value") return shown(q, parseNumber(o.text ?? "") ?? o.text);
+  if (clarifies(q) && q.answer === "choice") return shown(q, o.text);
   return `«${o.text}»`;
 }
 
@@ -346,7 +402,7 @@ function Controls(props: CardProps) {
           )}
         </div>
       )}
-      {resolved && !forClient(q) && <div className={css.hint}>{t("questions.resolvedNote")}</div>}
+      {resolved && !clarifies(q) && <div className={css.hint}>{t("questions.resolvedNote")}</div>}
       <FailureBox {...props} />
     </>
   );
@@ -361,7 +417,7 @@ function Form(props: CardProps) {
       {q.answer === "value" ? t("questions.keep", { value: shown(q, q.assumption) }) : t("questions.keepPlain")}
     </Button>
   ) : null;
-  const client = forClient(q);
+  const client = clarifies(q);
   const before = typeof answer === "object" && answer !== null ? (answer as { text?: string }).text : answer;
   const value = draft ?? (editing && before !== undefined ? plainNumber(before) : "");
   let form: React.ReactNode;

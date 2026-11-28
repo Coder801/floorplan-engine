@@ -11,6 +11,9 @@ export interface Stage {
   builds?: boolean;
 }
 
+// Who a question is for: the studio (designer), the client, the installer
+export type Audience = "studio" | "client" | "installer";
+
 export interface Question {
   id: string;
   stage: string;
@@ -18,9 +21,10 @@ export interface Question {
   state: string;
   text: string;
   answer: "value" | "choice" | "text" | "groups";
-  // Who is asked (decision 2026-11-11): the client's answer only clarifies, it never goes into the
-  // model; an older build has no audience — the studio's
-  audience?: "studio" | "client";
+  // Who is asked (decision 2026-11-11, installer — 2026-11-28): the client's and the installer's
+  // answer only clarifies, the studio accepts it in a thread (docs/question-threads.md); an older
+  // build has no audience — the studio's
+  audience?: Audience;
   options?: string[];
   option_labels?: Record<string, string>;  // how an option reads for a person, in the project language
   also?: string[];

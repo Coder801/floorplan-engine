@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  forClient, groupOf, keepOrder, listOrder, nextOpen, objectOf, parseNumber, plainNumber, returnedComment, shortMessage, shownOn, statusOf,
+  clarifies, forClient, groupOf, keepOrder, listOrder, nextOpen, objectOf, parseNumber, plainNumber, returnedComment, shortMessage, shownOn, statusOf,
 } from "./questions";
 import type { Question } from "./types";
 
@@ -28,6 +28,10 @@ describe("вопросы", () => {
     expect(nextOpen(["a", "b", "c"], (id) => (id === "c" ? "returned" : "answered"), "a")).toBe("c");
     expect(forClient({ audience: "client" })).toBe(true);
     expect(forClient({})).toBe(false);  // an older build: the studio's
+    expect(clarifies({ audience: "installer" })).toBe(true);
+    expect(clarifies({ audience: "client" })).toBe(true);
+    expect(clarifies({ audience: "studio" })).toBe(false);
+    expect(clarifies({})).toBe(false);
   });
 
   it("порядок: группы, внутри — вес", () => {

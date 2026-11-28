@@ -1,0 +1,52 @@
+// An opened thread under its row: the chain link and quote, the state band, the message feed (a
+// person's message plain, the AI check and the system on a raised background), the reply form
+
+@use "@/shared/styles/mixins" as *;
+
+.card { display: grid; gap: var(--space-2); min-width: 0; }
+.chain { display: grid; gap: var(--space-1); justify-items: start; }
+.quote {
+  display: grid; gap: 2px; margin: 0; padding: var(--space-2) var(--space-3);
+  border-left: 3px solid var(--line); background: var(--raise);
+}
+// A text action: a link with a finger-sized target
+.quiet { min-height: var(--control-h); padding: 0 var(--space-2); text-align: left; }
+.actions { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
+
+.band {
+  display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--space-2); align-items: center;
+  padding: var(--space-2) var(--space-3); border: 1px solid var(--line); background: var(--raise);
+  b { font-weight: 500; }
+  &.resolved { grid-template-columns: minmax(0, 1fr); border-color: var(--ok); color: var(--ok); }
+  &.superseded { grid-template-columns: minmax(0, 1fr); border-color: var(--major); }
+  &.closed { grid-template-columns: minmax(0, 1fr); color: var(--muted); }
+}
+.block { display: block; }
+.ring {
+  width: 14px; height: 14px; border: 2px solid var(--line); border-top-color: var(--text); border-radius: 50%;
+  display: inline-block; flex: none; animation: ring 1s linear infinite;
+  @include no-motion;
+}
+@keyframes ring { to { transform: rotate(360deg); } }
+
+.feed { display: grid; gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
+.message {
+  display: grid; gap: var(--space-1); min-width: 0; padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--line);
+  &.machine { background: var(--raise); }  // the AI check and the system
+  &.accepted { border-color: var(--ok); border-width: 2px; }
+}
+.who { @include type(small); display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0 var(--space-2); color: var(--muted); }
+.text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.verdict { @include type(small); font-weight: 500; }
+.satisfied { color: var(--ok); }
+.unsatisfied { color: var(--major); }
+.changes {
+  @include type(small);
+  margin: var(--space-1) 0 0; padding-left: var(--space-4); font-family: $mono; overflow-wrap: anywhere;
+}
+.acceptedMark { @include type(small); color: var(--ok); font-weight: 500; }
+
+.reply { display: grid; gap: var(--space-2); }
+.options { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.failure { margin-top: var(--space-1); }

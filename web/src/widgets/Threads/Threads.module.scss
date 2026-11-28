@@ -1,0 +1,58 @@
+// Thread list: the counter strip over the tabs, rows as in the folder questions list (a stripe on
+// the left is the severity, an open row stays a row and its card is added below)
+
+@use "@/shared/styles/mixins" as *;
+
+// Over the panel body's top padding (12px): nothing shows above the strip when the list scrolls
+.strip {
+  position: sticky; top: calc(-1 * var(--space-3)); z-index: 3; background: var(--panel);
+  margin: calc(-1 * var(--space-3)) 0 var(--space-2); padding: var(--space-3) 0 var(--space-2); border-bottom: 1px solid var(--line);
+}
+.counts {
+  @include type(small);
+  display: flex; flex-wrap: wrap; gap: 0 var(--space-3); color: var(--muted); min-height: 20px;
+  b { color: var(--text); font-family: $mono; font-weight: 500; }
+}
+.readOnly { @include type(small); color: var(--muted); margin-top: 2px; }
+.failed { display: grid; gap: var(--space-2); justify-items: start; }
+.empty { margin-top: var(--space-3); }
+
+.group { @include type(caps); color: var(--muted); margin: var(--space-4) 0 var(--space-2); }
+// The closed group's title is a button: the whole line folds and unfolds the list
+.fold {
+  @include focus-ring; display: flex; justify-content: space-between; align-items: center; width: 100%;
+  min-height: 36px; margin-bottom: 0; text-align: left; cursor: pointer;
+  &:hover { color: var(--text); }
+}
+
+.row {
+  --sev: var(--line);
+  min-width: 0; padding: 0 2px 0 12px; border-bottom: 1px solid var(--line);
+  box-shadow: inset 3px 0 var(--sev);
+}
+.critical { --sev: var(--critical); }
+.major { --sev: var(--major); }
+.minor { --sev: var(--minor); }
+.done { box-shadow: inset 3px 0 color-mix(in srgb, var(--sev) 35%, var(--line)); }
+.expanded { padding-bottom: 12px; }
+.head {
+  @include focus-ring;
+  display: grid; grid-template-columns: minmax(0, 1fr) 18px; gap: 0 6px; width: 100%; text-align: left;
+  padding: 10px 0 8px; min-height: 56px; border-radius: 0;
+}
+.meta {
+  @include type(caps);
+  display: flex; flex-wrap: wrap; gap: 0 var(--space-2); justify-content: space-between;
+}
+.marks { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
+.id { text-transform: none; letter-spacing: 0; font-weight: 400; }
+.chevron { text-align: right; @include type(body); }
+.word { @include type(small); font-weight: 500; text-transform: none; letter-spacing: 0; }
+.checking { color: var(--pin); }
+.resolved { color: var(--ok); }
+.superseded { color: var(--major); }
+.closed { color: var(--muted); }
+.text, .summary { grid-column: 1 / 3; font-weight: 400; }
+.text { margin: var(--space-1) 0; }
+.summary { @include type(small); margin-top: 2px; }
+.clamp { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }

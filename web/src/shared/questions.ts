@@ -25,6 +25,8 @@ export const groupOf = (s: Status): Group => (s === "returned" ? "open" : s === 
 
 // A client question only clarifies: any answer goes as { text } and never into the model
 export const forClient = (q: { audience?: string }) => q.audience === "client";
+// The same for the installer (decision 2026-11-28): a question to anyone but the studio clarifies
+export const clarifies = (q: { audience?: string }) => q.audience === "client" || q.audience === "installer";
 
 // The studio's comment on a sent-back answer
 export function returnedComment(answer: unknown): string | null {
@@ -105,5 +107,9 @@ export function shownOn(q: Question, stages: string[]): { stage: string; key: st
   return key || q.stage === "panel" ? { stage: q.stage, key } : null;
 }
 
-// What survives closing the panel: typed answers and the open question
-export interface QuestionsMemory { drafts: Record<string, string>; expanded?: string | null; closedShown?: boolean }
+// What survives closing the panel: typed answers and the open question; with threads (the database
+// viewer) — the open thread and the audience tab, replies in drafts under "thread:<id>"
+export interface QuestionsMemory {
+  drafts: Record<string, string>; expanded?: string | null; closedShown?: boolean;
+  thread?: string | null; tab?: string;
+}

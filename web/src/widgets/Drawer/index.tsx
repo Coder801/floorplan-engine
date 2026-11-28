@@ -33,12 +33,13 @@ interface Props {
   stages: string[];             // stages of the sheets: where "show" can lead
   onShow: (to: { stage: string; key: string | null }) => void;
   memory: React.MutableRefObject<QuestionsMemory>;  // outlives the panel
+  onSettled?: () => void;       // threads: an answer's AI check ended — read the project again
   closing: boolean;             // asked to close: the panel slides out to the right
   onClose: () => void;          // close: start sliding out
   onClosed: () => void;         // slid out: remove
 }
 
-export function Drawer({ tab, project, shownSource, onSource, busy, onAnswer, onReview, stages, onShow, memory, closing, onClose, onClosed }: Props) {
+export function Drawer({ tab, project, shownSource, onSource, busy, onAnswer, onReview, stages, onShow, memory, onSettled, closing, onClose, onClosed }: Props) {
   const { t } = useTranslation();
   useEffect(() => {
     const onKey = (ev: KeyboardEvent) => { if (ev.key === "Escape") onClose(); };
@@ -48,7 +49,7 @@ export function Drawer({ tab, project, shownSource, onSource, busy, onAnswer, on
   // Without animation (reduced motion) there is no animation end, so remove right away
   useEffect(() => { if (closing && REDUCED_MOTION) onClosed(); }, [closing, onClosed]);
   let body: React.ReactNode;
-  if (tab === "questions") body = <Questions project={project} busy={busy} onAnswer={onAnswer} onReview={onReview} stages={stages} onShow={onShow} memory={memory} />;
+  if (tab === "questions") body = <Questions project={project} busy={busy} onAnswer={onAnswer} onReview={onReview} stages={stages} onShow={onShow} memory={memory} onSettled={onSettled} />;
   else if (tab === "sources") body = <Sources project={project} shown={shownSource} onSource={onSource} />;
   else body = <ProjectInfo project={project} />;
   return (
