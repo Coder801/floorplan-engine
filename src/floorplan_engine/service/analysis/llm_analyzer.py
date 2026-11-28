@@ -170,6 +170,9 @@ class ClaudeCodeBackend:
     max_budget_usd: float = 10.0
     timeout_s: float = 30 * 60
     name: str = "claude-code"
+    # The JSON the model answers with; the answer check (check_answer.py) has its own
+    schema: dict[str, Any] = field(default_factory=lambda: ENVELOPE_SCHEMA)
+    sources: bool = True  # the first message lists source/ and its PDF digests
     _session: str | None = field(default=None, repr=False)
     _spent: float = field(default=0.0, repr=False)  # session total_cost_usd at the previous call
 
@@ -187,7 +190,7 @@ class ClaudeCodeBackend:
             "--output-format",
             "json",
             "--json-schema",
-            json.dumps(ENVELOPE_SCHEMA),
+            json.dumps(self.schema),
             "--model",
             self.model,
             "--effort",
@@ -245,6 +248,8 @@ class ClaudeCodeBackend:
         return Reply(data["structured_output"], usage)
 
     def start(self, project: Path, prompt: str) -> Reply:
+        if not self.sources:
+            return self._run(project, prompt, None)
         sources = (
             sorted((project / SOURCE_DIR).glob("*")) if (project / SOURCE_DIR).exists() else []
         )
@@ -273,6 +278,8 @@ class ApiBackend:
     effort: str = DEFAULT_EFFORT
     max_tokens: int = 64000
     name: str = "api"
+    schema: dict[str, Any] = field(default_factory=lambda: ENVELOPE_SCHEMA)
+    sources: bool = True  # the first message holds source/ as documents and images
     _messages: list[dict[str, Any]] = field(default_factory=list, repr=False)
 
     @staticmethod
@@ -314,7 +321,7 @@ class ApiBackend:
         client = anthropic.Anthropic()
         output_config = {
             "effort": self.effort,
-            "format": {"type": "json_schema", "schema": ENVELOPE_SCHEMA},
+            "format": {"type": "json_schema", "schema": self.schema},
         }
         started = time.monotonic()
         with client.beta.messages.stream(
@@ -348,7 +355,8 @@ class ApiBackend:
         return Reply(envelope, usage)
 
     def start(self, project: Path, prompt: str) -> Reply:
-        content = [*self.source_blocks(project), {"type": "text", "text": prompt}]
+        blocks = self.source_blocks(project) if self.sources else []
+        content = [*blocks, {"type": "text", "text": prompt}]
         self._messages = [{"role": "user", "content": content}]
         return self._call()
 
