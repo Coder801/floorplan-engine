@@ -1,3 +1,19 @@
+## v0.26.0 (2026-11-28)
+
+### Feat
+
+- **viewer**: show money with two decimals
+- **estimate**: count money to the cent (migration 0023)
+- **electrical**: cable passes with PVC sleeves and firestop foam
+- **projects**: add a cooktop line to nahirna-16 and confirm its panel groups
+
+### Fix
+
+- **prices,service**: plumbing prices on the price page, reject non-finite money
+- **electrical**: size sleeves by cable section, share low-voltage sleeves, B1 foam
+- **viewer**: round money half up like the backend above 1000
+- **projects**: keep the server's answer log entries in nahirna-16
+
 ## v0.25.0 (2026-11-28)
 
 ### Feat
