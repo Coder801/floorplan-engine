@@ -30,6 +30,7 @@ uv run alembic revision --autogenerate -m "что изменилось"
 | `tests/service/conftest.py` | Тесты базы — на Postgres из `docker-compose.yml`, своя база `floorplan_engine_test` (`TEST_DATABASE_URL`, имя обязано кончаться на `_test` — она пересоздаётся): миграции вверх, вниз до нуля и снова вверх, после теста таблицы очищаются; `test_db.test_migrations_match_models` сверяет схему миграций с моделями. Postgres не запущен — пропуск, `TEST_REQUIRE_DB=1` — ошибка |
 | `service/db/repositories.py` | Проекты, источники (без повторов по sha256), кэш выжимок по версии алгоритма, версии модели (новая версия — сразу в таблицы вопросов, `questions.ingest`), расход LLM. Функции не делают commit — транзакцией управляет вызывающий |
 | `service/db/questions.py`, `service/db/questions_yaml.py` | Вопросы и ответы в базе (раздел «Вопросы и ответы»): разбор версии в строки и ревизии (`ingest`), тексты YAML из таблиц (`texts`, `snapshot`), вопросы кода из отчёта сборки (`record_code`), история (`history`), заполнение миграцией (`backfill`); разбор и сборка текста YAML без базы — `questions_yaml` |
+| `service/db/threads.py` | Треды вопросов (раздел «Вопросы и ответы», «Треды»): тред нового вопроса и ответы в него (`follow`), сообщения, принятие, закрытие, итог проверки, новый вопрос вместо нерешённого (`follow_up`), заполнение миграцией `0022` (`backfill`) |
 | `service/db/work.py`, `service/db/work_tasks.py`, `service/db/work_records.py` | Монтаж по задачам (`docs/work-tasks.md`): план из черновика `.epd`, его жизнь, статусы и права на них, действия студии за заказчика (`on_behalf`), галочки приёмки, строки, суммы (`totals`) — `work.py`; задачи: добавить, править, порядок, `after` без круга, объединить, перенести строки, удалить — `work_tasks.py`; фото в хранилище, комментарии, оплаты — `work_records.py`. Без commit, как `repositories.py` |
 | `migrations/` | Alembic: `env.py`, `versions/0001_initial.py` |
 
@@ -256,7 +257,7 @@ erDiagram
 
 Правда о вопросах и ответах — таблицы ниже; `intake.yaml` и `answers.yaml` — формат обмена на
 границе: сборка, анализатор, `project push`/`pull`. Правила — `service/db/questions.py` (таблицы),
-`service/db/questions_yaml.py` (текст YAML). Это шаг 1: треды вопросов и API истории — шаг 2.
+`service/db/questions_yaml.py` (текст YAML), треды — `service/db/threads.py` (ниже, «Треды»).
 
 ```mermaid
 erDiagram
@@ -274,7 +275,7 @@ erDiagram
     text target
     jsonb also
     string unit
-    string audience "studio | client"
+    string audience "studio | client | installer"
     string kind "value | choice | text | groups (answer в YAML)"
     jsonb options
     jsonb option_labels
@@ -288,7 +289,7 @@ erDiagram
     jsonb assumption
     string severity
     text note "комментарий YAML рядом с вопросом"
-    string reason "new | edit | removed | restored"
+    string reason "new | edit | removed | restored | superseded"
     string author "analyzer | operator | user | code"
     uuid user_id FK "SET NULL"
     string author_label "«код: Иван» или имя из log"
@@ -336,8 +337,94 @@ erDiagram
   заполняет новые таблицы из всех версий моделей по порядку (`questions.backfill`; вопросы кода —
   из последней сборки каждой версии). Проверено на копии локальной базы (19 версий, 3 проекта):
   тексты из таблиц совпадают со снимками. Откат удаляет ревизии; тексты версий остаются.
-- **Дальше (шаг 2):** треды — обсуждение вопроса (`question_id`) или свободное, без вопроса;
-  API истории — `questions.history`.
+- **Треды** (решение 2026-11-28, миграция `0022`; план целиком — `docs/question-threads.md`).
+  Вопрос обсуждается в треде: сообщения адресата и студии, одно из них студия принимает как ответ.
+
+  ```mermaid
+  erDiagram
+    PROJECT ||--o{ QUESTION_THREAD : "треды"
+    QUESTION ||--o{ QUESTION_THREAD : "обсуждение"
+    QUESTION_THREAD ||--o{ THREAD_MESSAGE : "сообщения"
+    QUESTION_THREAD ||--o| QUESTION_THREAD : "previous_thread_id"
+    MODEL_VERSION ||--o| QUESTION_THREAD : "result_version_id"
+    QUESTION_THREAD {
+      uuid id PK
+      uuid project_id FK "CASCADE"
+      uuid question_id FK "CASCADE; пусто — свободный тред (позже)"
+      uuid previous_thread_id FK "SET NULL; предыдущий нерешённый тред цепочки"
+      string state "open | checking | resolved | superseded | closed"
+      uuid accepted_message_id FK "SET NULL"
+      uuid result_version_id FK "SET NULL; версия модели по ответу"
+      datetime created_at
+      datetime closed_at
+    }
+    THREAD_MESSAGE {
+      uuid id PK
+      uuid thread_id FK "CASCADE"
+      string author "user | analyzer | system"
+      uuid user_id FK "SET NULL"
+      string author_label "имя или «код: Иван»"
+      string role "роль автора в проекте на момент сообщения; пусто — неизвестна"
+      text text
+      jsonb meta "у analyzer: verdict, changes, reason; у цитаты: quote, previous_thread_id"
+      datetime created_at
+    }
+  ```
+
+  - **Один открытый тред на вопрос** (`open` или `checking`; частичный уникальный индекс
+    `uq_question_thread_live`). Новый вопрос — открытый тред: `questions.ingest` и `record_code`
+    после разбора зовут `threads.follow`. Ответы версии идут в тред вопроса: ответ формой
+    (`value`, `choice`, `groups`, `accept`) — тред `resolved`, ответ формой снят — снова `open`;
+    текстовый ответ — сообщение его автора, комментарий `returned` — сообщение студии,
+    `resolved: true` — тред `resolved`. Роль автора — его роль в проекте сейчас
+    (`access.project_role`), у кода заказчика — `client_code`, у оператора из CLI — пусто.
+  - **Принятие и проверка.** Студия принимает сообщение (`accept`: `open` → `checking`,
+    `accepted_message_id`). Итог проверки (шаг 2 плана, ИИ): ответ закрывает вопрос — `resolve`
+    (`result_version_id`); проверка не удалась — `reopen` (снова `open`, системное сообщение с
+    причиной); не закрывает — `follow_up`: тред `superseded`, его вопрос — ревизия `superseded` и
+    уходит из `intake.yaml`, новый вопрос (следующий `q<n>`, `source = analyzer`, ответ текстом,
+    на месте старого) с тредом `previous_thread_id`, первое сообщение — цитата принятого ответа.
+    Студия закрывает открытый тред вручную (`close`). Вопрос с ревизией `superseded`, снова
+    попавший в `intake.yaml`, — `restored`, как снятый. Принять можно только сообщение вопроса с
+    ответом текстом: число, выбор и группы — формой.
+  - **Проверка ИИ** (шаг 2, `service/answer_check.py`; правила модели — `analyzer_prompt.md`,
+    «Проверка ответа»). После принятия API зовёт `AnswerChecks.check_thread(project_id,
+    thread_id)`: проект встаёт в очередь, его треды `checking` проверяются по одному, от
+    старого. Последняя версия — во временной папке (`project_store.workdir`), модель
+    (`check_answer`, бэкенды анализатора без источников) получает вопрос, сообщения с ролями,
+    принятое, цитаты цепочки (`threads.chain`), файлы этапа и ошибки; транзакция на время ответа
+    закрыта. `satisfied`: файлы модели и ответ `{ text: <принятое>, resolved: true }` (в `log` —
+    `by: ИИ`) пишутся в папку, ядро проверяет (`validate_project`); новых ошибок нет — версия
+    модели от `analyzer`, `threads.resolve` с `result_version_id`, пересборка (`project_store.build`);
+    новые ошибки — один повтор в том же разговоре, потом `reopen` с ошибками. `unsatisfied` —
+    `follow_up` (адресат, вес и этап — из `followup`, по умолчанию прежние) и пересборка: новый
+    вопрос — в отчёте. В тред — сообщение `analyzer` с `reason` и `changes` (`meta`: `verdict`,
+    `changes`). Модель недоступна или ответила не по схеме — `reopen` с причиной. Пока модель
+    думала, версия модели сменилась — проверка заново по новой модели, не больше двух раз, потом
+    `reopen`; тред закрыли вручную — итог отбрасывается. Каждый вызов модели — строка `usage`
+    (`round` — текущий раунд проекта).
+  - **Одна проверка на проект — на всех серверах.** Проверка держит сессионную advisory-блокировку
+    проекта (`pg_try_advisory_lock(20261128, hashtext(<project_id>))` — двухчисловая форма, её
+    ключи не пересекаются с одночисловой (bigint) блокировкой сборки `project_store.lock`) на своём
+    соединении всё время проверки, пока транзакции закрыты. Работа берётся из базы: под
+    блокировкой — самый старый тред `checking` проекта, пока такие есть; после снятия — ещё один
+    взгляд, и если тред появился между последним обходом и снятием, блокировка берётся снова.
+    Сервер, не получивший блокировку, сразу выходит: тред увидит держатель. Упавший сервер
+    теряет соединение, а с ним и блокировку; треды `checking` подбирает `recover` при старте и
+    обход каждые 60 с (`SWEEP_SECONDS`). Миграции нет.
+  - Ответ ИИ ложится в `answer_revision` обычным путём (`ingest`); принятое сообщение в тред не
+    дублируется, тред `checking` разбор версии не закрывает — его закрывает проверка.
+  - **YAML на границе не меняется:** треды в `intake.yaml` и `answers.yaml` не пишутся, сборка,
+    `push` и `pull` их не знают.
+  - **Миграция `0022`** создаёт таблицы и заполняет треды из ответов (`threads.backfill`): текстовый
+    ответ — тред с сообщением автора, `returned` — второе сообщение студии, `resolved` — тред
+    `resolved` (проверку ИИ задним числом не делаем); ответ формой — `resolved` без сообщений;
+    вопрос без ответа — `open`. Проверено на копии локальной базы (3 проекта, 66 вопросов):
+    66 тредов — 42 `open`, 24 `resolved`, одно сообщение; тексты `intake.yaml` и `answers.yaml`
+    из таблиц до и после миграции совпадают байт в байт. Откат удаляет треды; ответы остаются в
+    `answer_revision`.
+- **Дальше:** API тредов и просмотр — шаги 3–4 `docs/question-threads.md`; API истории —
+  `questions.history`.
 
 ### Монтаж по задачам (решение 2026-11-11, миграции `0013`, `0014`)
 

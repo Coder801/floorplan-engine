@@ -87,6 +87,7 @@ flowchart LR
 | Надписи с координатами, высоты «Н=…», многострочные заметки | код | `facts.vector._labels` (из символов PDF), `facts.analysis._blocks` |
 | Что за комната, какой символ, к какой стене относится размер | LLM | `service/analysis/llm_analyzer.py`, правила — `service/analysis/analyzer_prompt.md` |
 | Запись модели, допущения, вопросы | LLM (или человек) | то же |
+| Проверка принятого ответа (решение 2026-11-28): закрывает ли сообщение треда вопрос и какая правка модели из него следует; если не закрывает — следующий вопрос и кому | LLM (шаг `check_answer`, без источников); результат проверяет ядро, как после раунда | `service/analysis/check_answer.py`, очередь и запись — `service/answer_check.py`; правила — `analyzer_prompt.md`, «Проверка ответа» |
 | Сканы и фото (вектора нет) | LLM по картинке | то же |
 
 Анализатор: Opus 5.5, effort `medium`, один вызов. Ошибки проверки возвращаются модели,
@@ -226,6 +227,7 @@ API на FastAPI ([service-api.md](service-api.md)). Проект проходи
 | Доступ к API сервиса | `service/api/project_guard.py` |
 | Хранение на диске | `service/storage.py` |
 | Анализатор: ручной или LLM | `service/analysis/analyzer.py`, `llm_analyzer.py` |
+| Треды вопросов и проверка принятого ответа: студия принимает сообщение, LLM проверяет ответ, ядро проверяет правку; новая версия модели и пересборка, повтор при новых ошибках или новый вопрос цепочки; одна проверка на проект за раз | `service/db/threads.py`, `service/answer_check.AnswerChecks` (`check_thread` — после принятия), `service/analysis/check_answer.py` |
 
 ### Команды CLI
 
