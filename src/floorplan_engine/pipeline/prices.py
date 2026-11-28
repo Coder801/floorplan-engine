@@ -18,6 +18,7 @@ from floorplan_engine.electrical.estimate.items import (
     HINTS,
     LINES,
     LISTED_SECTIONS,
+    RETIRED,
     WORK_PREFIX,
     split_key,
 )
@@ -44,6 +45,7 @@ from floorplan_engine.model.intake import (
 from floorplan_engine.model.schema import Electrical
 from floorplan_engine.pipeline.assessment import Assessment, plumbing_of
 from floorplan_engine.plumbing.estimate import LINES as PLUMBING_LINES
+from floorplan_engine.plumbing.estimate import unit_text
 from floorplan_engine.validation.issues import (
     Issue,
     load_yaml,
@@ -146,12 +148,18 @@ def load_market(path: Path) -> tuple[MarketSample | None, list[Issue]]:
     return parse_model(MarketSample, data, path.name)
 
 
+# Keys the electrical estimate retired that the plumbing estimate still counts (work.wall_hole,
+# a hole for pipes; decision 2026-11-28): on the price page they are current, with a market spread
+MARKET_RETIRED = frozenset(RETIRED - PLUMBING_LINES.keys())
+
+
 def price_page(root: Path, market_root: Path | None = None) -> dict[str, Any]:
     """Studio price page (viewer, GET /api/prices): the electrical estimate items in estimate
-    order — works (kind "work") and materials (kind "material", decision 2026-11-25: the page shows
-    every item the price list can hold) — the studio price from root/prices.yaml next to the
-    market spread from market.yaml (in market_root, by default in root: the sample is shared by
-    all studios), the period of the market prices and its sources. A key with a parameter the
+    order, then the plumbing ones (stage "electrical" or "plumbing": the studio list is one for
+    both) — works (kind "work") and materials (kind "material", decision 2026-11-25: the page
+    shows every item the price list can hold) — the studio price from root/prices.yaml next to
+    the market spread from market.yaml (in market_root, by default in root: the sample is shared
+    by all studios), the period of the market prices and its sources. A key with a parameter the
     file names (cable.3x1.5, work.chase.brick) is a row of its own after its base item. Errors of
     either file — in issues."""
     prices_path = root / PRICES_FILE
@@ -161,10 +169,11 @@ def price_page(root: Path, market_root: Path | None = None) -> dict[str, Any]:
     rows = []
     for key in _page_keys(own):
         base, param = split_key(key)
-        section, unit, ru, uk = LINES[base]
+        plumbing = base not in LINES
+        section, unit, ru, uk = PLUMBING_LINES[base] if plumbing else LINES[base]
         price = own.price(key) if own is not None else None
         item = market.items.get(key) if market is not None else None
-        spread = item_spread(market, key) if market is not None else None
+        spread = item_spread(market, key, MARKET_RETIRED) if market is not None else None
         name = {"ru": ru, "uk": uk}
         if param:
             name = (
@@ -176,8 +185,9 @@ def price_page(root: Path, market_root: Path | None = None) -> dict[str, Any]:
             {
                 "key": key,
                 "kind": "work" if base.startswith(WORK_PREFIX) else "material",
+                "stage": "plumbing" if plumbing else "electrical",
                 "section": section,
-                "unit": unit,
+                "unit": unit_text(unit, "ru") if plumbing else unit,
                 "name": name,
                 "hint": HINTS.get(key),
                 "price": price.price if price is not None else None,
@@ -193,7 +203,7 @@ def price_page(root: Path, market_root: Path | None = None) -> dict[str, Any]:
                 },
             }
         )
-    used = used_sources(market) if market is not None else set()
+    used = used_sources(market, MARKET_RETIRED) if market is not None else set()
     return {
         "file": PRICES_FILE,
         "exists": prices_path.is_file(),
@@ -243,9 +253,10 @@ def stale_keys(own: PriceList | None) -> list[str]:
 
 
 def _page_keys(own: PriceList | None) -> list[str]:
-    """Rows of the price page: every electrical item (LINES) in estimate order, works first; after
-    each, the keys with a parameter the price list names (cable.3x1.5 after cable). Retired keys
-    and finish materials (no prices, LISTED_SECTIONS) are not shown."""
+    """Rows of the price page: every electrical item (LINES) in estimate order, then every
+    plumbing one (plumbing.estimate.LINES), works first; after each electrical item, the keys with
+    a parameter the price list names (cable.3x1.5 after cable). Retired keys and finish materials
+    (no prices, LISTED_SECTIONS) are not shown."""
     named = [k for k in (own.items if own is not None else {}) if split_key(k)[1]]
     out: list[str] = []
     for work in (True, False):
@@ -254,7 +265,14 @@ def _page_keys(own: PriceList | None) -> list[str]:
                 continue
             out.append(key)
             out += [k for k in named if split_key(k)[0] == key]
+        out += [k for k in PLUMBING_LINES if k.startswith(WORK_PREFIX) == work and k not in LINES]
     return out
+
+
+def priced_key(key: str) -> bool:
+    """A key the studio price list may hold: an electrical item (its base in LINES, a parameter
+    too) or a plumbing one (plumbing.estimate.LINES)."""
+    return split_key(key)[0] in LINES or key in PLUMBING_LINES
 
 
 SPLICES: tuple[Splice, ...] = ("wago", "crimp")
@@ -274,18 +292,18 @@ def _set_splice(text: str, splice: Splice) -> str:
 def save_prices(root: Path, changes: dict[str, Any]) -> list[Issue]:
     """Studio price page edits → root/prices.yaml: {"items"?: {key: price | None}, "date"?,
     "splice"?: "wago" | "crimp"}; any electrical estimate item, works and materials, a key with a
-    parameter too (its base in LINES), except finish materials — they have no price
-    (LISTED_SECTIONS); None removes the price; splice — joints in switch flush boxes
-    (PriceList.splice). Every save also removes the finish materials the file still prices
-    (stale_keys). Comments and other keys of the file stay (price_list.edit_price_items). Errors
-    come with a field path; the file then is unchanged."""
+    parameter too (its base in LINES), or a plumbing one (priced_key), except finish materials —
+    they have no price (LISTED_SECTIONS); None removes the price; splice — joints in switch
+    flush boxes (PriceList.splice). Every save also removes the finish materials the file still
+    prices (stale_keys). Comments and other keys of the file stay (price_list.edit_price_items).
+    Errors come with a field path; the file then is unchanged."""
     path = root / PRICES_FILE
     items = changes.get("items", {})
     if not isinstance(items, dict):
         return [Issue(PRICES_FILE, "items", "ожидается словарь «ключ: цена»")]
     bad = []
     for key, value in items.items():
-        if not isinstance(key, str) or split_key(key)[0] not in LINES:
+        if not isinstance(key, str) or not priced_key(key):
             bad.append(Issue(PRICES_FILE, f"items.{key}", "нет такой позиции в смете"))
         elif listed_key(key) and value is not None:
             bad.append(Issue(PRICES_FILE, f"items.{key}", LISTED_MESSAGE))

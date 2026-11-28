@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import re
 import statistics
+from collections.abc import Set
 from dataclasses import dataclass
 from typing import Literal
 
@@ -110,8 +111,11 @@ def spread(prices: list[float]) -> Spread | None:
     return Spread(len(xs), xs[0], round(q1, 1), round(median, 1), round(q3, 1), xs[-1])
 
 
-def item_spread(sample: MarketSample, key: str) -> Spread | None:
-    item = sample.items.get(key) if key not in RETIRED else None
+def item_spread(sample: MarketSample, key: str, retired: Set[str] = RETIRED) -> Spread | None:
+    """Spread of an item; a retired key has none. retired: the keys no estimate counts, RETIRED
+    by default; the price page passes it without the keys another stage still counts
+    (work.wall_hole is a plumbing item, pipeline.prices)."""
+    item = sample.items.get(key) if key not in retired else None
     return None if item is None else spread([q.price for q in item.quotes.values()])
 
 
@@ -152,6 +156,7 @@ def period(sample: MarketSample, used: set[str] | None = None) -> Period:
     return Period(start, end, len(dates), len(sources) - len(dates))
 
 
-def used_sources(sample: MarketSample) -> set[str]:
-    """Sources that have at least one price for a current item of the sample."""
-    return {src for k, item in sample.items.items() if k not in RETIRED for src in item.quotes}
+def used_sources(sample: MarketSample, retired: Set[str] = RETIRED) -> set[str]:
+    """Sources that have at least one price for a current item of the sample (not in retired,
+    as in item_spread)."""
+    return {src for k, item in sample.items.items() if k not in retired for src in item.quotes}

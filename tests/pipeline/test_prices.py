@@ -105,3 +105,48 @@ def test_save_prices_splice_keeps_its_comment(tmp_path: Path) -> None:
     assert "work.chase: 210  # узкая" in text
     (bad,) = save_prices(tmp_path, {"splice": "solder", "items": {"work.chase": 1}})
     assert bad.path == "splice" and _text(tmp_path) == text
+
+
+MARKET = """region: Київ
+collected: "2026-11-28"
+sources:
+  a: { name: "A", url: "https://a.example", date: "2026-11" }
+  b: { name: "B", url: "https://b.example" }
+items:
+  work.wall_hole:
+    basis: "сквозное отверстие в стене, бетон, до Ø25"
+    quotes:
+      a: { price: 160, text: "свердління" }
+      b: { price: 80, text: "отвір" }
+  work.wall_hole_large:
+    quotes:
+      b: { price: 300, text: "коронка" }
+"""
+
+
+def test_plumbing_items_on_the_price_page(tmp_path: Path) -> None:
+    """The studio list is one for electrical and plumbing: work.wall_hole, retired from the
+    electrical estimate on 2026-11-28 (a cable pass), is still a plumbing item — a row of the
+    page with its market spread, and the page saves it; a key no estimate counts
+    (work.wall_hole_large) has neither."""
+    (tmp_path / "prices.yaml").write_text("items:\n  work.wall_hole: 120\n", "utf-8")
+    (tmp_path / "market.yaml").write_text(MARKET, "utf-8")
+    page = price_page(tmp_path)
+    assert page["issues"] == []
+    rows = {r["key"]: r for r in page["rows"]}
+    hole = rows["work.wall_hole"]
+    assert (hole["stage"], hole["kind"], hole["price"]) == ("plumbing", "work", 120)
+    assert hole["name"]["ru"] == "Отверстие в перегородке под трубы" and hole["unit"] == "шт"
+    assert hole["market"]["n"] == 2 and hole["market"]["median"] == 120
+    assert rows["work.cable_pass"]["stage"] == "electrical"
+    assert rows["water.collector"]["unit"] == "вых."  # a unit by language: the Russian one
+    assert "work.wall_hole_large" not in rows
+    assert [s["id"] for s in page["market"]["sources"]] == ["a", "b"]
+    # Works first, electrical then plumbing; then materials the same way
+    order = [(r["kind"], r["stage"]) for r in page["rows"]]
+    assert order == sorted(order, key=lambda ks: (ks[0] != "work", ks[1] != "electrical"))
+    assert save_prices(tmp_path, {"items": {"work.wall_hole": 140, "sewer.pipe50": 90}}) == []
+    text = _text(tmp_path)
+    assert "work.wall_hole: 140" in text and "sewer.pipe50: 90" in text
+    (bad,) = save_prices(tmp_path, {"items": {"work.wall_hole": -1}})
+    assert bad.path == "items.work.wall_hole"

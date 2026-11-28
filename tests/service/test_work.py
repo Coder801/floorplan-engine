@@ -72,6 +72,16 @@ def test_sums_are_to_the_cent() -> None:
     assert (t.work, t.material, t.total, t.paid) == (0.53, 0.1, 0.63, 0.3)
 
 
+@pytest.mark.parametrize("value", [float("nan"), float("inf"), float("-inf")])
+def test_non_finite_numbers_are_refused(value: float) -> None:
+    """NaN and Infinity pass JSON parsing: a quantity or a price of them is a 422 with the field,
+    not a 500 from the decimal rounding."""
+    with fails(422, "price: нужно число не меньше 0"):
+        work.money_field(value, "price")
+    with fails(422, "qty: нужно число не меньше 0"):
+        work.number_field(value, "qty")
+
+
 def test_plan_skips_tasks_of_switched_off_services(world: World) -> None:
     """Decision 2026-11-25: plumbing ticked off in the admin page — its draft tasks do not make
     the plan; nothing left of the switched-on services — no draft."""
@@ -599,6 +609,10 @@ def test_api_money_is_numbers_to_the_cent(
     line = task["lines"][0]
     edited = owner.patch(f"{url}/tasks/{task['id']}/lines/{line['id']}", json={"price": 0.005})
     assert edited.status_code == 200
+    line_url = f"{url}/tasks/{task['id']}/lines/{line['id']}"
+    for raw in ('{"price": NaN}', '{"price": Infinity}', '{"price": -Infinity}'):
+        bad = owner.patch(line_url, content=raw, headers={"content-type": "application/json"})
+        assert bad.status_code == 422 and "нужно число не меньше 0" in bad.text
     own = {"title": "Своя", "kind": "work", "qty": 3, "price": 0.1}
     state = owner.post(f"{url}/tasks/{task['id']}/lines", json=own).json()
     task = next(t for t in state["tasks"] if t["id"] == task["id"])

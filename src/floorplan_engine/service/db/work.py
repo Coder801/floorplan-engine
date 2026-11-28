@@ -17,6 +17,7 @@ status.
 
 from __future__ import annotations
 
+import math
 import uuid
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
@@ -249,7 +250,13 @@ def text_field(value: object, field: str, limit: int, required: bool = False) ->
 def number_field(value: object, field: str, nullable: bool = True) -> float | None:
     if value is None and nullable:
         return None
-    if isinstance(value, bool) or not isinstance(value, int | float) or value < 0:
+    # NaN and Infinity come through JSON too: not a number for a quantity or a price
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, int | float)
+        or not math.isfinite(value)
+        or value < 0
+    ):
         raise WorkError(f"{field}: нужно число не меньше 0", 422)
     return float(value)
 

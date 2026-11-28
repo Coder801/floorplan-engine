@@ -75,6 +75,10 @@ def test_retired_item_is_read_without_a_spread() -> None:
     )
     assert item_spread(sample, "work.wall_hole") is None
     assert used_sources(sample) == {"a"}
+    # The price page passes what is retired for every stage: work.wall_hole is a plumbing item
+    current = item_spread(sample, "work.wall_hole", frozenset())
+    assert current is not None and current.median == 160
+    assert used_sources(sample, frozenset()) == {"a", "e"}
 
 
 def test_period_from_earliest_year_to_latest_month() -> None:
