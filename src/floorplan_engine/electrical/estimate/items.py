@@ -5,15 +5,15 @@ LINES has each item's section, unit and name (ru, uk); HINTS the item notes; key
 are the keys an old price list may still name.
 
 Work comes in two sections with their own totals (decision 2026-11-03): rough (`rough`),
-before plaster and screed: chases, passes, laying cable and conduit, flush boxes, boxes with
-crimping, panel recess and enclosure, labelling, insulation test; finishing (`finish`), after
-the finish: filling the panel with devices, panel labels, fitting the devices, protection
-test. Materials are split the same way (decision 2026-11-13), by the work they are bought
-for: rough (`material_rough`: cable, conduit and fixings, flush and junction boxes, crimps,
-enclosures, rough light) and finish (`material_finish`: panel devices and comb busbars, wiring
-devices and frames, lights, outputs, LED strip and supplies); Estimate.materials is both. An
-item's section is in LINES. Finish materials are a bill of quantities without prices
-(LISTED_SECTIONS, decision 2026-11-27).
+before plaster and screed: chases, passes and their sleeves, laying cable and conduit, flush
+boxes, boxes with crimping, panel recess and enclosure, labelling, insulation test; finishing
+(`finish`), after the finish: filling the panel with devices, panel labels, fitting the
+devices, protection test. Materials are split the same way (decision 2026-11-13), by the work
+they are bought for: rough (`material_rough`: cable, conduit and fixings, pass sleeves and
+firestop foam, flush and junction boxes, crimps, enclosures, rough light) and finish
+(`material_finish`: panel devices and comb busbars, wiring devices and frames, lights, outputs,
+LED strip and supplies); Estimate.materials is both. An item's section is in LINES. Finish
+materials are a bill of quantities without prices (LISTED_SECTIONS, decision 2026-11-27).
 """
 
 from __future__ import annotations
@@ -49,6 +49,19 @@ LINES: dict[str, tuple[Section, str, str, str]] = {
         "шт",
         "Муфта соединительная для гофры Ø{n}",
         "Муфта з'єднувальна для гофри Ø{n}",
+    ),
+    # Wall pass sleeves and their foam (sleeves.py, decision 2026-11-28)
+    "sleeve": (
+        "material_rough",
+        "м",
+        "Гильза ПВХ Ø{n} для прохода через стену",
+        "Гільза ПВХ Ø{n} для проходу крізь стіну",
+    ),
+    "firestop_foam": (
+        "material_rough",
+        "шт",
+        "Пена огнезащитная, баллон 325 мл",
+        "Піна вогнезахисна, балон 325 мл",
     ),
     "socket_box": ("material_rough", "шт", "Подрозетник", "Підрозетник"),
     "junction_box": (
@@ -176,18 +189,8 @@ LINES: dict[str, tuple[Section, str, str, str]] = {
         "Штроба широкая, 3–4 кабеля",
         "Штроба широка, 3–4 кабелі",
     ),
-    "work.wall_hole": (
-        "rough",
-        "шт",
-        "Сверление прохода через стену",
-        "Свердління проходу крізь стіну",
-    ),
-    "work.wall_hole_large": (
-        "rough",
-        "шт",
-        "Сверление большого прохода через стену (коронкой)",
-        "Свердління великого проходу крізь стіну (коронкою)",
-    ),
+    # One pass — one sleeve (decision 2026-11-28): drilling, the sleeve, the firestop foam
+    "work.cable_pass": ("rough", "шт", "Кабельная проходка", "Кабельний прохід"),
     "work.socket_box": (
         "rough",
         "шт",
@@ -310,6 +313,25 @@ HINTS: dict[str, dict[str, str]] = {
         "опресовуються гільзами з термоусадкою, гільзи окремим рядком не йдуть; у тісному "
         "підрозетнику це складніше, ніж у коробці",
     },
+    "sleeve": {
+        "ru": "Гладкая жёсткая труба ПВХ; длина — толщина стены в месте прохода и по 10 мм "
+        "выступа с каждой стороны",
+        "uk": "Гладка жорстка труба ПВХ; довжина — товщина стіни в місці проходу і по 10 мм "
+        "виступу з кожного боку",
+    },
+    "firestop_foam": {
+        "ru": "Заделка зазоров в гильзах вокруг кабелей (ПУЭ п. 2.1.58): по объёму, выход "
+        "баллона до 2,1 л — в тесной гильзе меньше",
+        "uk": "Закладення зазорів у гільзах навколо кабелів (ПУЕ п. 2.1.58): за об'ємом, вихід "
+        "балона до 2,1 л — у тісній гільзі менше",
+    },
+    "work.cable_pass": {
+        "ru": "Сверление, гильза ПВХ на всю толщину стены с выступом 10 мм с каждой стороны, "
+        "после протяжки кабелей — заделка огнезащитной пеной; кабели потом можно заменить",
+        "uk": "Свердління, гільза ПВХ на всю товщину стіни з виступом 10 мм з кожного боку, "
+        "після протягування кабелів — закладення вогнезахисною піною; кабелі потім можна "
+        "замінити",
+    },
     "busbar": {
         "ru": "Соединяет автоматы на рейке вместо перемычек; режется по месту",
         "uk": "З'єднує автомати на рейці замість перемичок; ріжеться за місцем",
@@ -325,6 +347,7 @@ PARAM_KEYS = (
     "frame",
     "junction_box",
     "junction_box_ip",
+    "sleeve",
     "work.chase",
     "work.chase_wide",
     *(k.value for k in DeviceKind),
@@ -362,6 +385,11 @@ def split_key(key: str) -> tuple[str, str]:
 # Items folded into others: an old price list may still name them, the price is ignored
 RETIRED = {
     "work.marking",  # cable end marking — part of work.cable since 2026-11-11
+    # Drilling a pass and the core-drilled large hole: since 2026-11-28 a cable pass with a
+    # sleeve and foam (work.cable_pass), several beside each other instead of a large one.
+    # work.wall_hole stays a plumbing item (plumbing.estimate)
+    "work.wall_hole",
+    "work.wall_hole_large",
     "cable_fixing",  # split into conduit_clip.<Ø> and cable_pad on 2026-11-11
     # Wago clamps of switch flush boxes: not itemised since 2026-11-25 (in the joint work)
     "wago",

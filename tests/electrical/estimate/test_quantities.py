@@ -57,8 +57,8 @@ def test_wet_boxes_and_wall_holes_in_estimate() -> None:
     q = quantities(wiring, elec)
     ip = sum(v for k, v in q.items() if k.startswith("junction_box_ip."))
     assert ip == len(wiring.boxes) and not any(k.startswith("junction_box.") for k in q)
-    holes = q.get("work.wall_hole", 0) + q.get("work.wall_hole_large", 0)
-    assert holes == len(wiring.holes)
+    assert q.get("work.cable_pass", 0) == sum(len(h.sleeves) for h in wiring.holes)
+    assert "work.wall_hole" not in q and "work.wall_hole_large" not in q  # plumbing only
 
 
 def test_rough_light_per_room_with_lights() -> None:

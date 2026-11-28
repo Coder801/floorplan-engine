@@ -245,15 +245,39 @@ def passages(
     return out
 
 
+def wall_thickness(geoms: Sequence[RoomGeometry], at: Point) -> float:
+    """Thickness of the wall at a point of the plan, mm: of the wall band (through its whole
+    thickness outward from the room) nearest to the point, the thickest of those at the same
+    distance (a shared wall is described in both rooms); 0 without rooms."""
+    best: tuple[float, float] | None = None  # distance, minus thickness
+    for g in geoms:
+        for seg in g.contour.segments:
+            out_v = seg.outward * seg.thickness
+            band = Polygon(
+                [
+                    seg.start.as_tuple(),
+                    seg.end.as_tuple(),
+                    (seg.end + out_v).as_tuple(),
+                    (seg.start + out_v).as_tuple(),
+                ]
+            )
+            key = (round(band.distance(at), 1), -seg.thickness)
+            if best is None or key < best:
+                best = key
+    return -best[1] if best is not None else 0.0
+
+
 def wall_holes(
     runs: Sequence[Run],
     passes: Sequence[tuple[str, Polygon]],
     walls: Sequence[Polygon] = (),
+    geoms: Sequence[RoomGeometry] = (),
 ) -> tuple[Hole, ...]:
-    """One hole per entry into a room whatever the number of cables (decision 2026-11-11; more
-    than HOLE_CABLES is a large hole, Hole.large), power and low-voltage apart: above doors and
-    openings for ceiling routes; through drillable walls (routing.drillable_walls) for ceiling
-    and floor routes, lines crossing a wall closer than WALL_HOLE_SHARE share a hole."""
+    """One pass place per entry into a room (decision 2026-11-11), power and low-voltage apart:
+    above doors and openings for ceiling routes; through drillable walls (routing.drillable_walls)
+    for ceiling and floor routes, lines crossing a wall closer than WALL_HOLE_SHARE share one.
+    Each has the wall thickness at its spot (wall_thickness, of the rooms geoms); its cable
+    passes, one sleeve each, come from sleeves.with_sleeves (decision 2026-11-28)."""
     lines = [(r, LineString([v.as_tuple() for v in r.path])) for r in runs if len(r.path) > 1]
     out: list[Hole] = []
     for pid, strip in passes:
@@ -261,8 +285,9 @@ def wall_holes(
         for r, line in lines:
             if r.route == "ceiling" and line.intersection(strip).length > 1.0:
                 through[r.lay].append(r.id)
+        thick = wall_thickness(geoms, strip.centroid) if through else 0.0
         for circuit, ids in sorted(through.items()):
-            out.append(Hole(pid, len(ids), circuit, tuple(ids)))
+            out.append(Hole(pid, len(ids), circuit, tuple(ids), thick))
     for k, strip in enumerate(walls):
         spots: dict[tuple[str, Circuit], list[tuple[Point, list[str]]]] = defaultdict(list)
         for r, line in lines:
@@ -280,5 +305,6 @@ def wall_holes(
         for (route, circuit), found in sorted(spots.items()):
             for at, ids in found:
                 pid = f"wall:{k}:{route}:{at.x:.0f},{at.y:.0f}"
-                out.append(Hole(pid, len(ids), circuit, tuple(ids)))
+                thick = wall_thickness(geoms, at)
+                out.append(Hole(pid, len(ids), circuit, tuple(ids), thick))
     return tuple(out)

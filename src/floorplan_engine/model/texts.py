@@ -290,11 +290,10 @@ TEXTS: dict[str, dict[Language, str]] = {
         "uk": "Штроби до {k} кабелів (у гофрі — одна гофра) — вузькі, {narrow} м; "
         "ширші — {wide} м; силові кабелі і зв'язок — в різних",
     },
+    # Cable passes (decision 2026-11-28): "{n} {word}", word by plural (cable_pass_words)
     "wiring_holes": {
-        "ru": "Проходы через стены: {n} отв., одно на вход в помещение; больших (больше {k} "
-        "кабелей) — {m}",
-        "uk": "Проходи крізь стіни: {n} отв., один на вхід у приміщення; великих (більше {k} "
-        "кабелів) — {m}",
+        "ru": "{n} {word} в ПВХ-гильзах ({sleeves}), заделка огнезащитной пеной",
+        "uk": "{n} {word} у ПВХ-гільзах ({sleeves}), закладення вогнезахисною піною",
     },
     "wiring_lengths_note": {
         "ru": "L — длина прямого участка трассы, м; ×N — кабелей на участке",
@@ -337,6 +336,22 @@ TEXTS: dict[str, dict[Language, str]] = {
     "inv_signature": {"ru": "Подп. и дата", "uk": "Підпис і дата"},
     "inv_replaced": {"ru": "Взам. инв. №", "uk": "Зам. інв. №"},
 }
+
+
+# Word forms after a number: one, few (2–4), many (5–20, 0)
+CABLE_PASS_WORDS: dict[Language, tuple[str, str, str]] = {
+    "ru": ("кабельная проходка", "кабельные проходки", "кабельных проходок"),
+    "uk": ("кабельний прохід", "кабельні проходи", "кабельних проходів"),
+}
+
+
+def plural(n: int, forms: tuple[str, str, str]) -> str:
+    """Russian and Ukrainian plural after a number: 1, 21 — one; 2–4, 22–24 — few; else many."""
+    if n % 10 == 1 and n % 100 != 11:
+        return forms[0]
+    if 2 <= n % 10 <= 4 and not 12 <= n % 100 <= 14:
+        return forms[1]
+    return forms[2]
 
 
 def tr(key: str, language: Language, **values: object) -> str:

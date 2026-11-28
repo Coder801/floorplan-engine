@@ -26,8 +26,11 @@ specification: the estimate without prices is the bill of quantities:
 - chases from wall_chases (shared by nearby drops): narrow (up to CHASE_NARROW cables) and
   wide ones are separate items, each split by wall material (`work.chase.concrete`, Kyiv
   2026-11: concrete 200, claydite 150, brick 120, aerated 90 UAH/m; a wide one is the narrow
-  one × 1.5); a chase without a known material stays `work.chase`; passes through walls from
-  wall_holes;
+  one × 1.5); a chase without a known material stays `work.chase`;
+- cable passes through walls (sleeves.py, decision 2026-11-28): one per sleeve, the work
+  `work.cable_pass` is the drilling, the sleeve and the foam; the sleeves are PVC pipe by Ø in
+  metres (the wall thickness plus SLEEVE_OUT_MM on each side, with RESERVE), the firestop foam
+  in cans by volume;
 - one breaker per group and the panel installation; the panel set of the "Panel" sheet, its
   assembly and labels replace them in build_estimate (estimate/__init__.py);
 - lights, lighting outputs and appliance outputs by point, LED strip in metres; a floor
@@ -64,6 +67,13 @@ from floorplan_engine.electrical.mounting import (
     plan_conduits,
     shared_pairs,
     source_conduits,
+)
+from floorplan_engine.electrical.sleeves import (
+    FOAM_KEY,
+    SLEEVE_KEY,
+    cable_passes,
+    foam_cans,
+    sleeve_lengths,
 )
 from floorplan_engine.electrical.splices import DEFAULT_SPLICE, Splice, back_box_joints
 from floorplan_engine.electrical.wiring import RESERVE
@@ -140,6 +150,11 @@ def quantities(
     for d in sorted(conduit):
         if conduit[d] > 0:
             q[f"conduit_joint.{d}"] = math.ceil(conduit[d] / CONDUIT_JOINT_EVERY)
+    # Cable pass sleeves by Ø (the wall plus what sticks out), with RESERVE, and the foam
+    # (sleeves.py, decision 2026-11-28)
+    for d, mm in sleeve_lengths(wiring.holes).items():
+        q[f"{SLEEVE_KEY}.{d}"] = math.ceil(mm / 1000 * (1 + RESERVE) * 10 - 1e-9) / 10
+    q[FOAM_KEY] = foam_cans(wiring)
     mounted = [p for p in elec.points if p.type in MOUNTED]
     posts = sum(p.count for p in mounted)
     q["socket_box"] = posts
@@ -198,8 +213,7 @@ def quantities(
     heated = sum(z.area_m2 for z in wiring.heating if z.route is not None)
     if heated and HEATING_RELEASED:
         q["work.floor_heating"] = round(heated, 1)
-    q["work.wall_hole"] = sum(1 for h in wiring.holes if not h.large)
-    q["work.wall_hole_large"] = sum(1 for h in wiring.holes if h.large)
+    q["work.cable_pass"] = cable_passes(wiring.holes)
     q["work.socket_box"] = posts
     q["work.junction_box"] = len(wiring.boxes)
     q["work.splice_crimp" if splice == "crimp" else "work.splice"] = len(joints)

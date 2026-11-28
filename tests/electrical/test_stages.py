@@ -123,7 +123,7 @@ def test_draft_groups_lines_by_stage_with_parameters() -> None:
 def test_draft_text_in_the_project_language() -> None:
     survey, task = electrical_draft(_estimate(("work.cable", 1.0, 34.0)), "uk")
     assert survey.title == "Огляд об'єкта і звірка з кресленням"
-    assert task.title == "Прокладання кабелю"
+    assert task.title == "Прокладання кабелю і кабельні проходи"
     assert task.result == (load_scope().items["work.cable"].result.uk,)
     data = task.as_dict()
     # No chases in this estimate: the cable comes right after the survey

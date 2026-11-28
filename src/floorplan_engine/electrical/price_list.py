@@ -99,11 +99,9 @@ class PriceSource(Protocol):
 
 
 # Items priced from another one unless the price list names them itself: key → (base key, factor).
-# A large hole (core drill) costs 2.5 times a normal one: 100 → 250 UAH, Kyiv 2026-11
 # A wide chase costs half as much again as a narrow one in the same material (work.chase_wide.brick
 # from work.chase.brick)
 DERIVED_PRICES: dict[str, tuple[str, float]] = {
-    "work.wall_hole_large": ("work.wall_hole", 2.5),
     "work.chase_wide": ("work.chase", 1.5),
 }
 

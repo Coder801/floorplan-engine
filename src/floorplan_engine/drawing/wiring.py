@@ -54,9 +54,9 @@ from floorplan_engine.electrical.bundles import Bundle, lane_paths
 from floorplan_engine.electrical.chases import CHASE_CABLES, CHASE_SHARE
 from floorplan_engine.electrical.colors import LED_LINE, group_colors, rgb
 from floorplan_engine.electrical.panel import OTHER_LINE, LineClass
+from floorplan_engine.electrical.sleeves import sleeve_counts
 from floorplan_engine.electrical.wiring_model import (
     CHASE_NARROW,
-    HOLE_CABLES,
     JunctionBox,
     Run,
     Wiring,
@@ -64,7 +64,7 @@ from floorplan_engine.electrical.wiring_model import (
 from floorplan_engine.model.geometry import Vec
 from floorplan_engine.model.scale import sheet
 from floorplan_engine.model.schema import Conduit, Electrical
-from floorplan_engine.model.texts import Language, tr
+from floorplan_engine.model.texts import CABLE_PASS_WORDS, Language, plural, tr
 
 FILLET_MM = 1.5  # corner radius on the sheet of a cable without sizes (low voltage)
 LENGTH_MM = 1.8  # length label height on the sheet
@@ -457,9 +457,12 @@ def wiring_notes(wiring: Wiring, language: Language) -> list[str]:
                 k=CHASE_NARROW,
             )
         )
-    if wiring.holes:
-        large = sum(1 for h in wiring.holes if h.large)
-        notes.append(tr("wiring_holes", language, n=len(wiring.holes), m=large, k=HOLE_CABLES))
+    sleeves = sleeve_counts(wiring.holes)
+    if sleeves:  # cable passes, one sleeve each (decision 2026-11-28)
+        n = sum(sleeves.values())
+        listed = ", ".join(f"Ø{d} ×{k}" for d, k in sleeves.items())
+        word = plural(n, CABLE_PASS_WORDS[language])
+        notes.append(tr("wiring_holes", language, n=n, word=word, sleeves=listed))
     if any(r.mark_assumed for r in wiring.runs):
         notes.append(tr("wiring_mark_note", language))
     if wiring.skipped:

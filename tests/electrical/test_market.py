@@ -63,6 +63,20 @@ def test_item_spread_by_key() -> None:
     assert item_spread(sample, "work.cable") is None
 
 
+def test_retired_item_is_read_without_a_spread() -> None:
+    """An item the estimate no longer has (work.wall_hole: a cable pass since 2026-11-28) stays
+    readable in an old sample, but gives no spread and its sources do not count."""
+    sample = _sample(
+        sources={"a": {"name": "A", "url": "https://a"}, "e": {"name": "E", "url": "https://e"}},
+        items={
+            "work.chase": {"quotes": {"a": {"price": 80, "text": "штроба"}}},
+            "work.wall_hole": {"quotes": {"e": {"price": 160, "text": "свердління"}}},
+        },
+    )
+    assert item_spread(sample, "work.wall_hole") is None
+    assert used_sources(sample) == {"a"}
+
+
 def test_period_from_earliest_year_to_latest_month() -> None:
     sample = _sample()
     assert period(sample).as_dict() == {"start": "2024", "end": "2026-11", "dated": 3, "undated": 1}

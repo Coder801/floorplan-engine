@@ -19,8 +19,6 @@ from floorplan_engine.model.schema import WallMaterial
 BOX_BELOW_CEILING = 200.0  # mm: from the ceiling to the box
 BOX_ABOVE_FLOOR = 300.0  # mm: from the floor to the box for floor routes
 CHASE_NARROW = 2  # up to this many cables a chase is narrow, more is wide
-# One hole per entry into a room (decision 2026-11-11); more cables than this — a large hole
-HOLE_CABLES = 5
 # A conduit is wider than a flat cable: a narrow chase takes one, two side by side need a wide one
 CHASE_NARROW_CONDUIT = 1
 
@@ -151,19 +149,29 @@ class Chase:
 
 
 @dataclass(frozen=True)
-class Hole:
-    """Hole in the wall above a door or opening for ceiling routes."""
+class Sleeve:
+    """One cable pass through a wall (decision 2026-11-28, sleeves.py): a smooth rigid PVC
+    sleeve, its outer Ø and the cross-section its cables take; the gap between them is sealed
+    with firestop foam."""
 
-    passage: str  # door or opening id
+    diameter: int  # outer Ø, mm (sleeves.SLEEVE_INNER)
+    cables_mm2: float  # cross-section of its cables, mm²; a cable without sizes counts as 0
+    runs: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class Hole:
+    """Where routes pass through a wall: above a door or opening for ceiling routes, or through
+    a drillable wall. Its cables go through cable passes side by side, one PVC sleeve each
+    (sleeves, decision 2026-11-28: no large core-drilled hole, the cables one Ø40 does not hold
+    go in the next pass), sealed with firestop foam; wall_mm is the wall thickness there."""
+
+    passage: str  # door or opening id, "wall:…" for a drillable wall
     cables: int
     circuit: Circuit = "power"
     runs: tuple[str, ...] = ()
-
-    @property
-    def large(self) -> bool:
-        """More than HOLE_CABLES cables: one hole with a core bit, not a drill (decision
-        2026-11-11)."""
-        return self.cables > HOLE_CABLES
+    wall_mm: float = 0.0  # wall thickness at the pass; 0 — unknown
+    sleeves: tuple[Sleeve, ...] = ()  # the cable passes, sleeves.with_sleeves
 
 
 @dataclass(frozen=True)

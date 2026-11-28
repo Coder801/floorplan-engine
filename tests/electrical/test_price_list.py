@@ -13,16 +13,24 @@ from floorplan_engine.electrical.price_list import (
 from floorplan_engine.electrical.pricing import Prices
 
 
-def test_large_hole_costs_two_and_a_half_times() -> None:
-    """A large hole (core drill) is priced from an ordinary one × 2.5, unless the price
+def test_wide_chase_costs_half_as_much_again() -> None:
+    """A wide chase is priced from a narrow one in the same material × 1.5, unless the price
     list names it itself."""
-    own = PriceList.model_validate({"items": {"work.wall_hole": 200}})
-    quote = derived_quote(Prices(own), "work.wall_hole_large")
-    assert quote.price is not None and quote.price.price == 500 and not quote.service
-    named = PriceList.model_validate({"items": {"work.wall_hole_large": 260}})
-    quote = derived_quote(Prices(named), "work.wall_hole_large")
-    assert quote.price is not None and quote.price.price == 260
-    assert derived_quote(Prices(PriceList()), "work.wall_hole_large").price is None
+    own = PriceList.model_validate({"items": {"work.chase.brick": 120}})
+    quote = derived_quote(Prices(own), "work.chase_wide.brick")
+    assert quote.price is not None and quote.price.price == 180 and not quote.service
+    named = PriceList.model_validate({"items": {"work.chase_wide.brick": 200}})
+    quote = derived_quote(Prices(named), "work.chase_wide.brick")
+    assert quote.price is not None and quote.price.price == 200
+    assert derived_quote(Prices(PriceList()), "work.chase_wide.brick").price is None
+
+
+def test_cable_pass_is_not_priced_from_the_old_hole() -> None:
+    """Decision 2026-11-28: a cable pass (drilling, sleeve, foam) has its own price; work.wall_hole
+    is a plumbing item now, and the old core-drilled hole is retired, not an unknown key."""
+    old = PriceList.model_validate({"items": {"work.wall_hole": 100, "work.wall_hole_large": 250}})
+    assert derived_quote(Prices(old), "work.cable_pass").price is None
+    assert unknown_keys(old) == []
 
 
 def test_unknown_keys_lists_only_foreign_keys_in_order() -> None:

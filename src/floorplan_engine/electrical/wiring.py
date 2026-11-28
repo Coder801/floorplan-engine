@@ -41,8 +41,8 @@ a line of its own, the "group" of the control breaker (SF1), whatever group the 
 switch: it drives the contactor coil, not a light.
 
 Wall passes (wall_holes): a ceiling route passes into a neighbouring room above a door or
-opening, so the wall above it is drilled; one hole per entry into a room (more than
-HOLE_CABLES cables: a large one), power and low-voltage in separate holes. A floor route passes
+opening, so the wall above it is drilled; one pass place per entry into a room, power and
+low-voltage apart. A floor route passes
 under the opening with no drilling. A route goes straight through a drillable wall
 (routing.drillable_walls: not load-bearing, not outer, no thicker than WALL_DRILL_MAX; decision
 2026-11-11), at the ceiling or at the floor, when that is shorter; such holes are counted the
@@ -51,7 +51,8 @@ routing.py): on the ceiling an opening lower than the ceiling costs the same pas
 the floor an opening is free, and a hole already made by a line of the build is free for the
 next lines of its plane and circuit within WALL_HOLE_SHARE, so lines of one source into a room
 go through one hole (wiring_routes.route_runs: lines are routed one after another, in a fixed
-order).
+order). A pass place has cable passes side by side, one PVC sleeve each by its cables, sealed
+with firestop foam (sleeves.py, decision 2026-11-28: no large core-drilled hole).
 
 Socket loop with one chase for both cables (loop_conduit shared, after plaster; decision
 2026-11-25): both come down into the first flush box of a block and the outgoing cable is pulled
@@ -90,6 +91,7 @@ from floorplan_engine.electrical.loads import LOW_TYPES
 from floorplan_engine.electrical.low_links import led_link, led_sections, low_feeds, low_link
 from floorplan_engine.electrical.master import CONTROL_ID, CONTROL_MARK, master_point
 from floorplan_engine.electrical.routing import ceiling_passes, drillable_walls, free_area
+from floorplan_engine.electrical.sleeves import with_sleeves
 from floorplan_engine.electrical.wiring_context import Context, Link, rise
 from floorplan_engine.electrical.wiring_links import group_links
 from floorplan_engine.electrical.wiring_model import JunctionBox, Route, Run, Wiring
@@ -262,7 +264,8 @@ def _wiring(
     if elec.plaster == "before":
         chases = before_plaster(chases)
     chases = with_material(chases, plan)
-    holes = wall_holes(runs, passages(list(ctx.geoms.values()), ctx.ceiling), ctx.walls)
+    rooms = list(ctx.geoms.values())
+    holes = with_sleeves(wall_holes(runs, passages(rooms, ctx.ceiling), ctx.walls, rooms), runs)
     shared = shared_rises(runs, elec.points, elec.conduit_level, elec.loop_conduit)
     return Wiring(
         ctx.ceiling,

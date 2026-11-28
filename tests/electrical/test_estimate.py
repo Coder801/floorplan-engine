@@ -235,6 +235,8 @@ def test_works_split_into_rough_and_finish() -> None:
         "cable",
         "conduit",
         "conduit_joint",
+        "sleeve",
+        "firestop_foam",
         "socket_box",
         "junction_box",
         "junction_box_ip",

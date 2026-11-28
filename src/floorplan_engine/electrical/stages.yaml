@@ -34,16 +34,16 @@ stages:
         uk: "розбіжності з кресленням передано студії списком до початку робіт"
 
   - key: chases
-    title: { ru: "Штробы, проходы, подрозетники", uk: "Штроби, проходи, підрозетники" }
-    lines: [work.chase, work.chase_wide, work.wall_hole, work.wall_hole_large, work.socket_box,
-            socket_box]
+    title: { ru: "Штробы и подрозетники", uk: "Штроби і підрозетники" }
+    lines: [work.chase, work.chase_wide, work.socket_box, socket_box]
     photo: optional
     after: [survey]
 
   - key: cable
-    title: { ru: "Прокладка кабеля", uk: "Прокладання кабелю" }
-    lines: [work.cable, work.conduit, cable, conduit, conduit_joint, conduit_clip,
-            cable_pad]
+    title: { ru: "Прокладка кабеля и кабельные проходки", uk: "Прокладання кабелю і кабельні проходи" }
+    # кабельные проходки — здесь (решение 2026-11-28): пена в гильзе — после протяжки кабелей
+    lines: [work.cable, work.conduit, work.cable_pass, cable, conduit, conduit_joint,
+            conduit_clip, cable_pad, sleeve, firestop_foam]
     photo: required  # трассы до штукатурки: то, что потом в стене
     after: [chases]
 

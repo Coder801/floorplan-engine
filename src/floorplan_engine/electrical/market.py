@@ -18,7 +18,7 @@ from typing import Literal
 
 from pydantic import Field, model_validator
 
-from floorplan_engine.electrical.estimate.items import LINES
+from floorplan_engine.electrical.estimate.items import LINES, RETIRED
 from floorplan_engine.model.schema import StrictModel
 
 MARKET_FILE = "market.yaml"  # market sample — next to the studio price list (projects/)
@@ -55,7 +55,8 @@ class MarketItem(StrictModel):
 
 
 class MarketSample(StrictModel):
-    """market.yaml: prices of works by estimate item keys (LINES) from the sources."""
+    """market.yaml: prices of works by estimate item keys (LINES) from the sources; a retired
+    key (RETIRED) is read but has no spread (item_spread) and its sources do not count."""
 
     region: str = Field(min_length=1)
     collected: str = Field(description="When the sample was collected, YYYY-MM-DD")
@@ -66,7 +67,7 @@ class MarketSample(StrictModel):
     @model_validator(mode="after")
     def _refs(self) -> MarketSample:
         for key, item in self.items.items():
-            if key not in LINES:
+            if key not in LINES and key not in RETIRED:
                 raise ValueError(f"items.{key}: нет такой позиции сметы")
             for src in item.quotes:
                 if src not in self.sources:
@@ -110,7 +111,7 @@ def spread(prices: list[float]) -> Spread | None:
 
 
 def item_spread(sample: MarketSample, key: str) -> Spread | None:
-    item = sample.items.get(key)
+    item = sample.items.get(key) if key not in RETIRED else None
     return None if item is None else spread([q.price for q in item.quotes.values()])
 
 
@@ -152,5 +153,5 @@ def period(sample: MarketSample, used: set[str] | None = None) -> Period:
 
 
 def used_sources(sample: MarketSample) -> set[str]:
-    """Sources that have at least one price in the sample."""
-    return {src for item in sample.items.values() for src in item.quotes}
+    """Sources that have at least one price for a current item of the sample."""
+    return {src for k, item in sample.items.items() if k not in RETIRED for src in item.quotes}

@@ -28,6 +28,12 @@ from floorplan_engine.electrical.mounting import (
 from floorplan_engine.electrical.panel import BoardPanel, build_panel
 from floorplan_engine.electrical.price_list import PriceList, PriceSource
 from floorplan_engine.electrical.pricing import Prices, price_notes
+from floorplan_engine.electrical.sleeves import (
+    FOAM_YIELD_L,
+    SLEEVE_FILL,
+    SLEEVE_INNER,
+    SLEEVE_OUT_MM,
+)
 from floorplan_engine.electrical.terms import (
     open_note,
     term_rows,
@@ -38,7 +44,7 @@ from floorplan_engine.electrical.terms import (
 )
 from floorplan_engine.electrical.wiring import RESERVE, estimate_wiring
 from floorplan_engine.electrical.wiring_context import END_ALLOWANCE
-from floorplan_engine.electrical.wiring_model import CHASE_NARROW, HOLE_CABLES, Wiring
+from floorplan_engine.electrical.wiring_model import CHASE_NARROW, Wiring
 from floorplan_engine.electrical.work_scope import (
     WORK_SCOPE_MD,
     scope_entries,
@@ -222,7 +228,14 @@ def _estimate_notes(
         notes = [estimate_text("note_no_prices", lang)]
     notes += [
         estimate_text("note_cable", lang, pct=round(RESERVE * 100)),
-        estimate_text("note_holes", lang, k=HOLE_CABLES),
+        estimate_text(
+            "note_holes",
+            lang,
+            pct=f"{SLEEVE_FILL * 100:g}",
+            d=max(SLEEVE_INNER),
+            out=f"{SLEEVE_OUT_MM:g}",
+            foam=f"{FOAM_YIELD_L:g}".replace(".", ","),
+        ),
         estimate_text(
             "note_fixing",
             lang,

@@ -22,7 +22,7 @@ from floorplan_engine.drawing.wiring import (
 )
 from floorplan_engine.electrical.boxes import BOX_SIZE_MM, box_square
 from floorplan_engine.electrical.bundles import bundles, lanes, offset_path, segments
-from floorplan_engine.electrical.chases import wall_chases, with_conduit
+from floorplan_engine.electrical.chases import wall_chases, wall_thickness, with_conduit
 from floorplan_engine.electrical.estimate import build_estimate
 from floorplan_engine.electrical.frames import POST_PITCH_MM
 from floorplan_engine.electrical.panel import LineClass
@@ -33,12 +33,11 @@ from floorplan_engine.electrical.wiring_model import (
     BOX_ABOVE_FLOOR,
     BOX_BELOW_CEILING,
     CHASE_NARROW,
-    HOLE_CABLES,
     Chase,
     Run,
     Wiring,
 )
-from floorplan_engine.model.geometry import Vec
+from floorplan_engine.model.geometry import Vec, room_geometries
 from floorplan_engine.model.scale import sheet
 from floorplan_engine.model.schema import Electrical, ElectricalPoint, Plan
 from floorplan_engine.validation.plan import validate_plan
@@ -148,6 +147,19 @@ def test_cable_through_partition_when_door_is_a_detour(route: str) -> None:
     assert [y for y in crossings_of(run) if not 1200 <= y <= 2000]  # straight through the wall
     (hole,) = w.holes  # on the floor too: no opening there, the wall is drilled
     assert hole.passage.startswith(f"wall:0:{route}:") and hole.runs == (run.id,)
+    assert hole.wall_mm == 100.0  # the partition: the length of its sleeve
+    (sleeve,) = hole.sleeves
+    assert sleeve.diameter == 20 and sleeve.runs == (run.id,)  # one 3×2.5 in a Ø20
+
+
+def test_wall_thickness_at_a_pass() -> None:
+    """The thickest wall band nearest to the spot: the 150 mm partition, the 200 mm outer wall."""
+    plan = two_rooms_with_door(thickness=150)
+    _, contours = validate_plan(plan)
+    geoms = room_geometries(plan, contours)
+    assert wall_thickness(geoms, Point(3050, 600)) == 150.0
+    assert wall_thickness(geoms, Point(1500, -100)) == 200.0
+    assert wall_thickness([], Point(0, 0)) == 0.0
 
 
 @pytest.mark.parametrize("partition", [{"bearing": True}, {"thickness": 400}])
@@ -436,13 +448,22 @@ def test_wall_holes_over_doors_for_ceiling_runs() -> None:
     ]
     board = {"room": "a", "wall": "w1", "offset": 1500, "height": 1700}  # facing the door
     w = wiring_of(plan, Electrical.model_validate({"points": pts, "board": board}))
-    # A door in a and an opening in b at the same spot: one pass, the door id; one hole per entry
-    # into a room (decision 2026-11-11): 5 cables are one ordinary hole
+    # A door in a and an opening in b at the same spot: one pass place, the door id, per entry
+    # into a room (decision 2026-11-11): 5 cables 3×2.5 are one cable pass in a Ø40
     (hole,) = w.holes
-    assert hole.passage == "a_door_1" and hole.cables == HOLE_CABLES and not hole.large
-    six = [*pts, {**pts[0], "id": "s5", "offset": 2800, "group": "QF6"}]
-    (big,) = wiring_of(plan, Electrical.model_validate({"points": six, "board": board})).holes
-    assert big.cables == HOLE_CABLES + 1 and big.large
+    assert hole.passage == "a_door_1" and hole.cables == 5
+    assert [s.diameter for s in hole.sleeves] == [40]
+    # Seven do not fit one Ø40 (decision 2026-11-28: no core-drilled hole): the next pass beside
+    seven = [
+        *pts,
+        *(
+            {**pts[0], "id": f"s{k}", "offset": 2600 + 100 * k, "group": f"QF{k + 1}"}
+            for k in (5, 6)
+        ),
+    ]
+    (big,) = wiring_of(plan, Electrical.model_validate({"points": seven, "board": board})).holes
+    assert big.cables == 7 and [len(s.runs) for s in big.sleeves] == [6, 1]
+    assert [s.diameter for s in big.sleeves] == [40, 20]
     cables = [
         {"id": f"c{k}", "from": "board", "to": [f"s{k}"], "group": f"QF{k + 1}", "cable": "3x2.5"}
         for k in range(5)
