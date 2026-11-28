@@ -78,22 +78,39 @@ def for_client(question: Question) -> bool:
     return question.audience == "client" or question.stage is Stage.PANEL
 
 
+def for_installer(question: Question) -> bool:
+    """A question the installer sees and answers: asked of them (decision 2026-11-28)."""
+    return question.audience == "installer"
+
+
 def save_answer(
-    project: Path, qid: str, raw: Any, note: AnswerNote | None, *, client: bool = False
+    project: Path,
+    qid: str,
+    raw: Any,
+    note: AnswerNote | None,
+    *,
+    client: bool = False,
+    installer: bool = False,
 ) -> AnswerSaved:
     """Save one answer from the viewer to answers.yaml (raw None removes it)."""
-    return save_answers(project, {qid: raw}, note, client=client)
+    return save_answers(project, {qid: raw}, note, client=client, installer=installer)
 
 
 def save_answers(
-    project: Path, items: dict[str, Any], note: AnswerNote | None, *, client: bool = False
+    project: Path,
+    items: dict[str, Any],
+    note: AnswerNote | None,
+    *,
+    client: bool = False,
+    installer: bool = False,
 ) -> AnswerSaved:
     """Save answers from the viewer to answers.yaml at once, with one check (None removes an
     answer). If any is refused, the file stays as it was: the model is checked with all of them,
     as the build would. A question may appear only with another answer of the same call (the
     inverter ones with panel_backup), so an id is looked up after the edit. A text answer
     waiting for the developer needs no rebuild. client: the caller is the client, who answers
-    only their own questions and the panel settings (for_client)."""
+    only their own questions and the panel settings (for_client); installer: the caller is the
+    installer, who answers only the questions asked of them (for_installer)."""
     path = project / ANSWERS_FILE
     before = validate_project(project)
     old_text = path.read_text("utf-8") if path.exists() else None
@@ -125,6 +142,11 @@ def save_answers(
             Issue(ANSWERS_FILE, f"answers.{qid}", "на этот вопрос отвечает студия")
             for qid in parsed
             if client and qid in questions and not for_client(questions[qid])
+        ]
+        or [
+            Issue(ANSWERS_FILE, f"answers.{qid}", "этот вопрос задан не монтажнику")
+            for qid in parsed
+            if installer and qid in questions and not for_installer(questions[qid])
         ]
         or [
             Issue(
@@ -163,6 +185,7 @@ def save_wizard(
     note: AnswerNote | None,
     *,
     client: bool = False,
+    installer: bool = False,
 ) -> AnswerSaved:
     """The setup wizard: a wiring variant and answers together, for one rebuild. If the answers
     are refused, variant.yaml goes back too: either everything is saved or nothing is."""
@@ -172,7 +195,11 @@ def save_wizard(
         issues = save_variant(project, variant)
         if issues:
             return AnswerSaved(issues)
-    saved = save_answers(project, items, note, client=client) if items else AnswerSaved()
+    saved = (
+        save_answers(project, items, note, client=client, installer=installer)
+        if items
+        else AnswerSaved()
+    )
     if saved.issues and variant is not None:
         if old_variant is None:
             path.unlink()

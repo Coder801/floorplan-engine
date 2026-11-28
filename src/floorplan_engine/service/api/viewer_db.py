@@ -105,27 +105,58 @@ Outcome = Literal["resolve", "return"]
 OUTCOMES: dict[str, Outcome] = {"resolve": "resolve", "return": "return"}
 
 
+Side = Literal["studio", "client", "installer"]
+
+
+def side_of(role: str | None) -> Side:
+    """Whose questions a project role sees and answers: the client side only the client ones
+    (decision 2026-11-11), the installer only theirs (decision 2026-11-28), the rest — all, as
+    the studio. Login off (no role) — the studio."""
+    if role in acc.CLIENT_SIDE:
+        return "client"
+    if role in acc.INSTALLER_SIDE:
+        return "installer"
+    return "studio"
+
+
+def request_side(request: Request) -> Side:
+    return side_of(getattr(request.state, "role", None))
+
+
 def client_side(request: Request) -> bool:
     """The caller is the client side: sees and answers only the client questions (decision
     2026-11-11). Login off (no role) — the studio."""
-    return getattr(request.state, "role", None) in acc.CLIENT_SIDE
+    return request_side(request) == "client"
 
 
-def _for_client(question: dict[str, Any]) -> bool:
-    """A report question the client sees: asked of them or a panel setting (pipeline.for_client;
-    an older build has no audience — its questions are the studio's)."""
-    return question.get("audience") == "client" or question.get("stage") == Stage.PANEL.value
+def installer_side(request: Request) -> bool:
+    """The caller is the installer: sees and answers only the installer questions."""
+    return request_side(request) == "installer"
+
+
+def sees(side: Side, audience: str | None, stage: str | None) -> bool:
+    """A question this side sees: the studio all; the client those asked of them and the panel
+    settings (pipeline.for_client), the installer those asked of them (pipeline.for_installer).
+    An older build has no audience — its questions are the studio's."""
+    if side == "client":
+        return audience == "client" or stage == Stage.PANEL.value
+    if side == "installer":
+        return audience == "installer"
+    return True
 
 
 def shown(
-    report: dict[str, Any] | None, answers: dict[str, Any], client: bool
+    report: dict[str, Any] | None, answers: dict[str, Any], side: Side
 ) -> tuple[dict[str, Any] | None, dict[str, Any]]:
     """The report and the answers as the caller sees them: question states after text answers
-    saved since the build; the client side gets only its questions and their answers."""
+    saved since the build; the client and installer sides get only their questions and their
+    answers."""
     report = with_pending_text(report, answers)
-    if report is None or not client:
+    if report is None or side == "studio":
         return report, answers
-    questions = [q for q in report.get("questions", []) if _for_client(q)]
+    questions = [
+        q for q in report.get("questions", []) if sees(side, q.get("audience"), q.get("stage"))
+    ]
     ids = {q.get("id") for q in questions}
     return {**report, "questions": questions}, {k: v for k, v in answers.items() if k in ids}
 
@@ -198,14 +229,14 @@ def _stale(built_on: ModelVersion, latest: ModelVersion, report: dict[str, Any])
     return report.get("answers_digest") != build_digest(new.get(ANSWERS_FILE))
 
 
-def summary(session: Session, project: Project, client: bool = False) -> dict[str, Any]:
+def summary(session: Session, project: Project, side: Side = "studio") -> dict[str, Any]:
     """The project card: as the folder viewer's _summary, from the latest build and version;
-    client — the counts of the client side (only its questions)."""
+    side — the counts of the caller's side (only its questions)."""
     build = ps.latest_build(session, project)
     latest = repo.latest_model(session, project.id)
     built_on = _version_of(session, build)
     report = build.report if build is not None else {}
-    questions = (shown(report, _answers_of(latest), client)[0] or {}).get("questions", [])
+    questions = (shown(report, _answers_of(latest), side)[0] or {}).get("questions", [])
     return {
         "id": str(project.id),
         "name": project.slug or str(project.id),
@@ -253,7 +284,7 @@ def _read_routes(
             if who is None:
                 return []
             rows = db.scalars(acc.visible_projects(db, who).order_by(Project.slug)).all()
-            return [summary(db, p, client_side(request)) for p in rows]
+            return [summary(db, p, request_side(request)) for p in rows]
 
     @app.get("/api/projects/{key}")
     def project(key: str, request: Request) -> dict[str, Any]:
@@ -266,13 +297,13 @@ def _read_routes(
             report, answers = shown(
                 build.report if build is not None and build.report else None,
                 _answers_of(version),
-                client_side(request),
+                request_side(request),
             )
             intake = data.get(INTAKE_FILE)
             model = repo.model_files(version) if version is not None else {}
             own_prices = db.scalar(select(PriceList.id).where(PriceList.project_id == p.id))
             return {
-                **summary(db, p, client_side(request)),
+                **summary(db, p, request_side(request)),
                 "report": report,
                 "answers": answers,
                 "artifact": ARTIFACT_FILE in names,
@@ -441,9 +472,13 @@ def _edit_routes(
         """One answer: {id, answer} → answers.yaml of a new model version; a rebuild unless the
         answer is text waiting for the analyzer."""
         qid, raw = answer_body(data)
-        client = client_side(request)
+        client, installer = client_side(request), installer_side(request)
         return rewrite_answers(
-            request, key, lambda folder, note: save_answer(folder, qid, raw, note, client=client)
+            request,
+            key,
+            lambda folder, note: save_answer(
+                folder, qid, raw, note, client=client, installer=installer
+            ),
         )
 
     @app.post("/api/projects/{key}/answers/review")
@@ -465,11 +500,13 @@ def _edit_routes(
         variant, items = wizard_body(data, lambda action: allowed(request, action))
         if variant is None and not items:  # no new version for an empty call
             return {"built": False, "rebuilt": False}
-        client = client_side(request)
+        client, installer = client_side(request), installer_side(request)
         return rewrite_answers(
             request,
             key,
-            lambda folder, note: save_wizard(folder, variant, items, note, client=client),
+            lambda folder, note: save_wizard(
+                folder, variant, items, note, client=client, installer=installer
+            ),
         )
 
 
@@ -518,17 +555,24 @@ def _price_routes(app: FastAPI, auth: Auth, market_root: Path) -> None:
             return page(text, True)
 
 
-def install_db_routes(app: FastAPI, auth: Auth, store: ObjectStore, market_root: Path) -> None:
-    """The viewer's project and price routes on the database; market.yaml (the shared market
-    sample) stays a file in market_root."""
+def project_finder(auth: Auth) -> Callable[[Session, Request, str], Project]:
+    """The project of an address, found as auth.check found it: by id, or by name among the
+    projects the caller sees; 404 otherwise."""
 
     def project_of(db: Session, request: Request, key: str) -> Project:
-        """The project of the address, found as auth.check found it: by id, or by name among the
-        projects the caller sees."""
         project = acc.project_by_key(db, key, auth.principal(db, request))
         if project is None:
             raise HTTPException(404, f"проекта {key} нет")
         return project
+
+    return project_of
+
+
+def install_db_routes(app: FastAPI, auth: Auth, store: ObjectStore, market_root: Path) -> None:
+    """The viewer's project and price routes on the database; market.yaml (the shared market
+    sample) stays a file in market_root. The question threads are api/viewer_threads.py
+    (create_viewer installs them next to these)."""
+    project_of = project_finder(auth)
 
     def allowed(request: Request, action: acc.Action) -> bool:
         return acc.can(getattr(request.state, "role", None), action)

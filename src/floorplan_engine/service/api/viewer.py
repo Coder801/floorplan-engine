@@ -39,9 +39,10 @@ from __future__ import annotations
 
 import json
 import zipfile
-from collections.abc import Callable
+from collections.abc import AsyncIterator, Callable
+from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from pathlib import Path
-from typing import Annotated, Any
+from typing import TYPE_CHECKING, Annotated, Any
 
 import yaml
 from fastapi import Body, FastAPI, HTTPException, Request
@@ -68,20 +69,28 @@ from floorplan_engine.pipeline import (
 from floorplan_engine.service.api.auth import Auth
 from floorplan_engine.service.api.report import result_page, result_pdf, result_xlsx
 from floorplan_engine.service.api.viewer_db import (
+    Side,
     answer_body,
     answer_note,
     check_manifest,
     client_side,
     install_db_routes,
+    installer_side,
+    project_finder,
     question_counts,
     refused_answer,
+    request_side,
     review_body,
     shown,
     wizard_body,
 )
+from floorplan_engine.service.api.viewer_threads import ThreadCheck, install_thread_routes, no_check
 from floorplan_engine.service.db import access as acc
 from floorplan_engine.service.db.services import SERVICES
 from floorplan_engine.service.objects import ObjectStore
+
+if TYPE_CHECKING:
+    from floorplan_engine.service.answer_check import AnswerChecks
 from floorplan_engine.validation.answers_file import build_digest
 from floorplan_engine.validation.issues import (
     ELECTRICAL_FILE,
@@ -163,13 +172,13 @@ def _stale(project: Path, built: float | None, report: dict[str, Any]) -> bool:
     return changed and report.get("answers_digest") != build_digest(text)
 
 
-def _summary(project: Path, client: bool = False) -> dict[str, Any]:
+def _summary(project: Path, side: Side = "studio") -> dict[str, Any]:
     report_path = project / OUT_DIR / REPORT_JSON
     report: dict[str, Any] = (
         json.loads(report_path.read_text("utf-8")) if report_path.exists() else {}
     )
     built = _mtime(report_path)
-    questions = (shown(report, _answers_of(project), client)[0] or {}).get("questions", [])
+    questions = (shown(report, _answers_of(project), side)[0] or {}).get("questions", [])
     return {
         "id": project.name,  # the key in addresses; in the database viewer — the project id
         "name": project.name,
@@ -209,7 +218,7 @@ def _read_routes(
                 (p for name, folder in shown.items() if _is_project(p := root / folder / name)),
                 key=lambda p: p.name,
             )
-        return [_summary(p, client_side(request)) for p in folders]
+        return [_summary(p, request_side(request)) for p in folders]
 
     def allowed(request: Request, action: acc.Action) -> bool:
         return _allowed(auth, request, action)
@@ -219,14 +228,14 @@ def _read_routes(
         path = project_dir(request, name)
         report_path = path / OUT_DIR / REPORT_JSON
         built = json.loads(report_path.read_text("utf-8")) if report_path.exists() else None
-        report, answers = shown(built, _answers_of(path), client_side(request))
+        report, answers = shown(built, _answers_of(path), request_side(request))
         out = _files(path / OUT_DIR)
         intake_path = path / INTAKE_FILE
         intake = (
             (yaml.safe_load(intake_path.read_text("utf-8")) or {}) if intake_path.exists() else {}
         )
         return {
-            **_summary(path, client_side(request)),
+            **_summary(path, request_side(request)),
             "report": report,
             "answers": answers,
             "artifact": ARTIFACT_FILE in out,
@@ -335,7 +344,14 @@ def _edit_routes(
         answer is text waiting for the analyzer (it changes nothing in the sheets)."""
         path = project_dir(request, name)
         qid, raw = answer_body(data)
-        saved = save_answer(path, qid, raw, _note(auth, request), client=client_side(request))
+        saved = save_answer(
+            path,
+            qid,
+            raw,
+            _note(auth, request),
+            client=client_side(request),
+            installer=installer_side(request),
+        )
         return _rebuilt(path, saved)
 
     @app.post("/api/projects/{name}/answers/review")
@@ -358,7 +374,14 @@ def _edit_routes(
         """The setup wizard: {variant?, answers?} → variant.yaml and answers.yaml, one rebuild."""
         path = project_dir(request, name)
         variant, items = wizard_body(data, lambda action: _allowed(auth, request, action))
-        saved = save_wizard(path, variant, items, _note(auth, request), client=client_side(request))
+        saved = save_wizard(
+            path,
+            variant,
+            items,
+            _note(auth, request),
+            client=client_side(request),
+            installer=installer_side(request),
+        )
         return _rebuilt(path, saved)
 
 
@@ -395,13 +418,42 @@ def _file_routes(
         return PlainTextResponse(path.read_text("utf-8"), media_type="text/yaml")
 
 
+def _checks_lifespan(
+    checks: AnswerChecks,
+) -> Callable[[FastAPI], AbstractAsyncContextManager[None]]:
+    """Start the answer-check queue with the app (it re-queues threads left `checking` and sweeps
+    for them), stop it on shutdown."""
+
+    @asynccontextmanager
+    async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+        checks.start()
+        try:
+            yield
+        finally:
+            checks.stop()
+
+    return lifespan
+
+
 def create_viewer(
-    root: Path, auth: Auth | None = None, store: ObjectStore | None = None
+    root: Path,
+    auth: Auth | None = None,
+    store: ObjectStore | None = None,
+    check_thread: ThreadCheck | None = no_check,
+    checks: AnswerChecks | None = None,
 ) -> FastAPI:
     """Viewer API for folder root; auth is login and access (None means everything is open,
     locally). With store, projects come from the database and file storage (viewer_db.py; login
-    is required), root keeps only the shared market sample (market.yaml)."""
-    app = FastAPI(title=f"{BRAND} · просмотр", version=__version__)
+    is required), root keeps only the shared market sample (market.yaml), and questions have
+    threads (viewer_threads.py): check_thread checks an answer the studio accepted (step 2,
+    the AI), the default leaves it `checking`, None turns accepting off (503). checks — the queue
+    of AI checks (service/answer_check.py): its check_thread is used, it starts and stops with
+    the app."""
+    lifespan = None
+    if checks is not None:
+        check_thread = checks.check_thread
+        lifespan = _checks_lifespan(checks)
+    app = FastAPI(title=f"{BRAND} · просмотр", version=__version__, lifespan=lifespan)
     if store is not None:
         if auth is None:
             raise ValueError("проекты из базы — только со входом (SHTROBA_AUTH=on)")
@@ -412,6 +464,7 @@ def create_viewer(
             return {"service": f"{BRAND} · API просмотра", "front": FRONT_HINT, "docs": "/docs"}
 
         install_db_routes(app, auth, store, root)
+        install_thread_routes(app, auth, project_finder(auth), check_thread)
         return app
     if auth is not None:
         auth.folders = lambda: [p.name for p in project_folders(root)]

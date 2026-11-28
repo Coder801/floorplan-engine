@@ -76,9 +76,12 @@ CAN: dict[Action, frozenset[str]] = {
             "client_code",
         }
     ),
-    "answer": frozenset({"owner", "designer", "client", "client_code", "superuser"}),
-    # Take a client answer into account or send it back with a comment (decision 2026-11-11):
-    # the studio that leads the project
+    # Answer a question or write in its thread: the studio all of them, the client side the
+    # client ones, the installer (since 2026-11-28) only the ones asked of them
+    # (pipeline.for_client, for_installer; docs/question-threads.md, «Права и видимость»)
+    "answer": frozenset({"owner", "designer", "installer", "client", "client_code", "superuser"}),
+    # Accept a thread message as the answer or close the thread (decision 2026-11-28), and the
+    # older review of a client answer (decision 2026-11-11): the studio that leads the project
     "review": frozenset({"owner", "designer", "superuser"}),
     # Wiring variant and the setup wizard (docs/wiring-variants.md): the studio, the owner of
     # "Мой ремонт" and, since 2026-11-11, a studio client — it is their flat, by invite or by a
@@ -102,6 +105,9 @@ STUDIO_ROLES = frozenset({"owner", "designer", "installer"})
 # The client side (decision 2026-11-11): sees and answers only the questions asked of the client
 # and the panel settings (pipeline.answers.for_client), never the studio's questions
 CLIENT_SIDE = frozenset({"client", "client_code", "viewer"})
+# The installer side (decision 2026-11-28): sees and answers only the questions asked of the
+# installer (pipeline.answers.for_installer)
+INSTALLER_SIDE = frozenset({"installer"})
 PROJECT_ROLES = frozenset({"client", "installer"})
 # Who opens and edits the studio price list (decision 2026-11-28): the owner and the designer of a
 # studio account; an installer of the studio does not

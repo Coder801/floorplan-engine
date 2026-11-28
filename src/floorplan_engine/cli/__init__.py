@@ -122,13 +122,38 @@ def _viewer_store() -> ObjectStore | None:
     return store_from_env()
 
 
+def _viewer_app(root: Path) -> FastAPI:
+    """The viewer app: folder or database projects; with database projects — the AI check of
+    accepted answers by SHTROBA_ANSWER_CHECK (claude-code | api; the model —
+    SHTROBA_ANSWER_CHECK_MODEL), unset — accepting is off (503)."""
+    from floorplan_engine.service.api.viewer import create_viewer
+    from floorplan_engine.service.api.viewer_threads import ANSWER_CHECK_ENV
+
+    auth, store = _viewer_auth(), _viewer_store()
+    kind = os.environ.get(ANSWER_CHECK_ENV, "").strip().lower()
+    if store is None or auth is None:
+        return create_viewer(root, auth, store)
+    if not kind:
+        typer.echo(f"Проверка ответов ИИ выключена: нет {ANSWER_CHECK_ENV}", err=True)
+        return create_viewer(root, auth, store, check_thread=None)
+    from floorplan_engine.service.analysis.check_answer import make_check_backend
+    from floorplan_engine.service.analysis.llm_analyzer import DEFAULT_MODEL
+    from floorplan_engine.service.answer_check import AnswerChecks
+
+    model = os.environ.get(f"{ANSWER_CHECK_ENV}_MODEL") or DEFAULT_MODEL
+    try:
+        backend = make_check_backend(kind, model)
+    except ValueError as exc:
+        typer.secho(f"{ANSWER_CHECK_ENV}: {exc}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(2) from exc
+    typer.echo(f"Проверка ответов ИИ: {kind}, {model}", err=True)
+    return create_viewer(root, auth, store, checks=AnswerChecks(auth.sessions, store, backend))
+
+
 def dev_viewer() -> FastAPI:
     """API app for `dev`: uvicorn calls the factory again after every code-change restart; the
     projects folder comes from the environment."""
-    from floorplan_engine.service.api.viewer import create_viewer
-
-    root = Path(os.environ.get(DEV_PROJECTS_ENV, "projects"))
-    return create_viewer(root, _viewer_auth(), _viewer_store())
+    return _viewer_app(Path(os.environ.get(DEV_PROJECTS_ENV, "projects")))
 
 
 def serve(
@@ -168,13 +193,13 @@ def view(
     (`cd web && npm run dev`), она ходит в этот API через прокси."""
     import uvicorn
 
-    from floorplan_engine.service.api.viewer import FRONT_HINT, create_viewer
+    from floorplan_engine.service.api.viewer import FRONT_HINT
 
     if not projects.is_dir():
         typer.echo(f"Папки {projects} нет", err=True)
         raise typer.Exit(1)
     typer.echo(f"API просмотра: http://{host}:{port}/api; {FRONT_HINT}")
-    uvicorn.run(create_viewer(projects, _viewer_auth(), _viewer_store()), host=host, port=port)
+    uvicorn.run(_viewer_app(projects), host=host, port=port)
 
 
 def dev(

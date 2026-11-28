@@ -10,11 +10,13 @@ from typing import Any
 import pytest
 import yaml
 
-from floorplan_engine.model.intake import AnswerNote
+from floorplan_engine.model.intake import AnswerNote, Question
 from floorplan_engine.pipeline import (
     assess_project,
     build_project,
     estimate_project,
+    for_client,
+    for_installer,
     review_answer,
     save_answer,
     save_answers,
@@ -156,6 +158,28 @@ def test_client_answers_only_their_questions_and_panel_settings(project: Path) -
     assert not saved.issues and not saved.rebuild
     assert not save_answer(project, "panel_battery", 48, NOTE, client=True).issues
     assert _states(project)["q4"] == "text"
+
+
+def test_installer_answers_only_their_questions(project: Path) -> None:
+    """Decision 2026-11-28: the installer answers only the questions asked of them."""
+    intake = yaml.safe_load((project / "intake.yaml").read_text("utf-8"))
+    intake["questions"].append(
+        {
+            "id": "q5",
+            "stage": "plan",
+            "audience": "installer",
+            "text": "Где стояк?",
+            "answer": "text",
+            "severity": "minor",
+        }
+    )
+    (project / "intake.yaml").write_text(yaml.safe_dump(intake, allow_unicode=True), "utf-8")
+    for qid, raw in (("q3", {"text": "есть"}), ("q4", 2), ("panel_battery", 48)):
+        saved = save_answer(project, qid, raw, NOTE, installer=True)
+        assert saved.issues[0].message == "этот вопрос задан не монтажнику"
+    assert not (project / "answers.yaml").exists()
+    assert not save_answer(project, "q5", {"text": "в нише"}, NOTE, installer=True).issues
+    assert _states(project)["q5"] == "text"
 
 
 def test_review_sends_back_then_takes_into_account(project: Path) -> None:
@@ -383,3 +407,17 @@ def test_plumbing_estimate_has_no_outside_note(tmp_path: Path) -> None:
     md = (tmp_path / "out" / "plumbing-estimate.md").read_text("utf-8")
     assert "Узел ввода" in md and "Расходники на инструмент" in md
     assert "Вне сметы" not in md
+
+
+@pytest.mark.parametrize(
+    ("fields", "client", "installer"),
+    [
+        ({"stage": "plan", "audience": "client"}, True, False),
+        ({"stage": "plan", "audience": "installer"}, False, True),
+        ({"stage": "plan"}, False, False),
+        ({"stage": "panel"}, True, False),  # the setup wizard
+    ],
+)
+def test_whom_a_question_is_for(fields: dict[str, Any], client: bool, installer: bool) -> None:
+    q = Question.model_validate({"id": "q", "text": "?", "severity": "minor", **fields})
+    assert (for_client(q), for_installer(q)) == (client, installer)

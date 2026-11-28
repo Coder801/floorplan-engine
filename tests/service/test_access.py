@@ -72,7 +72,9 @@ def test_outside_installer_sees_only_invited_project(db: Session) -> None:
     inst = user(db, "installer", "pro")
     acc.accept_invite(db, inst, acc.create_invite(db, studio, "installer", project=p1))
     assert role(db, inst, p1) == "installer" and role(db, inst, p2) is None
-    assert acc.can("installer", "choose_variant") and not acc.can("installer", "answer")
+    # Since 2026-11-28 the installer answers too, only the installer questions (viewer_threads)
+    assert acc.can("installer", "choose_variant") and acc.can("installer", "answer")
+    assert not acc.can("installer", "review")
 
 
 def test_client_invites_only_installer(db: Session) -> None:

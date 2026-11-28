@@ -367,6 +367,10 @@ class Auth:
                 action = "answer"
             elif request.method == "POST" and parts[-2:] == ["answers", "review"]:
                 action = "review"
+            elif request.method == "POST" and parts[4:5] == ["threads"]:
+                # Question threads (api/viewer_threads.py): a message needs `answer`, accepting a
+                # message or closing the thread — `review`; whose threads — by the side there
+                action = "review" if parts[-1] in ("accept", "close") else "answer"
             # POST /wizard writes both: viewer_db.wizard_body checks each part by the body
             refused = project_access(db, who, request, parts[3], project, action)
             if refused is not None:
