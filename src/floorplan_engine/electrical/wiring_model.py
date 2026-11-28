@@ -157,6 +157,9 @@ class Sleeve:
     diameter: int  # outer Ø, mm (sleeves.SLEEVE_INNER)
     cables_mm2: float  # cross-section of its cables, mm²; a cable without sizes counts as 0
     runs: tuple[str, ...] = ()
+    # A power cable with a cross-section but no known size (mounting.FLAT_CABLE: 3×10, 5×16): alone
+    # in the sleeve of its conduit size (sleeves.fit_sleeves), to check against the cable
+    by_section: bool = False
 
 
 @dataclass(frozen=True)
@@ -171,6 +174,7 @@ class Hole:
     circuit: Circuit = "power"
     runs: tuple[str, ...] = ()
     wall_mm: float = 0.0  # wall thickness at the pass; 0 — unknown
+    wall_assumed: bool = False  # room.yaml gives that wall no thickness: default_wall_thickness
     sleeves: tuple[Sleeve, ...] = ()  # the cable passes, sleeves.with_sleeves
 
 

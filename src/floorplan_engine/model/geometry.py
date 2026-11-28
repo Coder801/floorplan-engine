@@ -65,6 +65,9 @@ class WallSegment:
     thickness: float
     bearing: bool
     partition: bool = False  # explicitly non-load-bearing: pipes go through at any thickness
+    # No thickness of its own in room.yaml: default_wall_thickness (an assumption, e.g. for the
+    # length of a cable pass sleeve, chases.pass_wall)
+    thickness_assumed: bool = False
 
     @property
     def outward(self) -> Vec:
@@ -152,6 +155,7 @@ def trace_contour(room: Room, default_thickness: float) -> Contour:
                 thickness=wall.thickness if wall.thickness is not None else default_thickness,
                 bearing=wall.bearing,
                 partition=wall.partition,
+                thickness_assumed=wall.thickness is None,
             )
         )
         # Inner angle 90° is a right turn by 90°, 270° a left turn by 90°

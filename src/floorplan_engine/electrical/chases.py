@@ -25,7 +25,7 @@ from floorplan_engine.electrical.wiring_model import (
     Route,
     Run,
 )
-from floorplan_engine.model.geometry import RoomGeometry
+from floorplan_engine.model.geometry import RoomGeometry, WallSegment
 from floorplan_engine.model.schema import (
     Board,
     CableChannel,
@@ -245,11 +245,13 @@ def passages(
     return out
 
 
-def wall_thickness(geoms: Sequence[RoomGeometry], at: Point) -> float:
-    """Thickness of the wall at a point of the plan, mm: of the wall band (through its whole
-    thickness outward from the room) nearest to the point, the thickest of those at the same
-    distance (a shared wall is described in both rooms); 0 without rooms."""
-    best: tuple[float, float] | None = None  # distance, minus thickness
+def pass_wall(geoms: Sequence[RoomGeometry], at: Point) -> WallSegment | None:
+    """The wall at a point of the plan: of the wall bands (through the whole thickness outward
+    from the room) the nearest to the point, the thickest of those at the same distance (a
+    shared wall is described in both rooms), then one with a written thickness; None without
+    rooms."""
+    best: tuple[float, float, bool] | None = None  # distance, minus thickness, assumed
+    wall: WallSegment | None = None
     for g in geoms:
         for seg in g.contour.segments:
             out_v = seg.outward * seg.thickness
@@ -261,10 +263,16 @@ def wall_thickness(geoms: Sequence[RoomGeometry], at: Point) -> float:
                     (seg.start + out_v).as_tuple(),
                 ]
             )
-            key = (round(band.distance(at), 1), -seg.thickness)
+            key = (round(band.distance(at), 1), -seg.thickness, seg.thickness_assumed)
             if best is None or key < best:
-                best = key
-    return -best[1] if best is not None else 0.0
+                best, wall = key, seg
+    return wall
+
+
+def wall_thickness(geoms: Sequence[RoomGeometry], at: Point) -> float:
+    """Thickness of the wall at a point of the plan, mm (pass_wall); 0 without rooms."""
+    wall = pass_wall(geoms, at)
+    return wall.thickness if wall is not None else 0.0
 
 
 def wall_holes(
@@ -276,8 +284,9 @@ def wall_holes(
     """One pass place per entry into a room (decision 2026-11-11), power and low-voltage apart:
     above doors and openings for ceiling routes; through drillable walls (routing.drillable_walls)
     for ceiling and floor routes, lines crossing a wall closer than WALL_HOLE_SHARE share one.
-    Each has the wall thickness at its spot (wall_thickness, of the rooms geoms); its cable
-    passes, one sleeve each, come from sleeves.with_sleeves (decision 2026-11-28)."""
+    Each has the wall thickness at its spot (pass_wall, of the rooms geoms), marked assumed when
+    room.yaml does not give that wall one; its cable passes, one sleeve each, come from
+    sleeves.with_sleeves (decision 2026-11-28)."""
     lines = [(r, LineString([v.as_tuple() for v in r.path])) for r in runs if len(r.path) > 1]
     out: list[Hole] = []
     for pid, strip in passes:
@@ -285,9 +294,9 @@ def wall_holes(
         for r, line in lines:
             if r.route == "ceiling" and line.intersection(strip).length > 1.0:
                 through[r.lay].append(r.id)
-        thick = wall_thickness(geoms, strip.centroid) if through else 0.0
+        wall = pass_wall(geoms, strip.centroid) if through else None
         for circuit, ids in sorted(through.items()):
-            out.append(Hole(pid, len(ids), circuit, tuple(ids), thick))
+            out.append(_hole(pid, circuit, ids, wall))
     for k, strip in enumerate(walls):
         spots: dict[tuple[str, Circuit], list[tuple[Point, list[str]]]] = defaultdict(list)
         for r, line in lines:
@@ -305,6 +314,12 @@ def wall_holes(
         for (route, circuit), found in sorted(spots.items()):
             for at, ids in found:
                 pid = f"wall:{k}:{route}:{at.x:.0f},{at.y:.0f}"
-                thick = wall_thickness(geoms, at)
-                out.append(Hole(pid, len(ids), circuit, tuple(ids), thick))
+                out.append(_hole(pid, circuit, ids, pass_wall(geoms, at)))
     return tuple(out)
+
+
+def _hole(pid: str, circuit: Circuit, ids: Sequence[str], wall: WallSegment | None) -> Hole:
+    """A pass place through this wall: its thickness (0 — unknown) and whether it is assumed."""
+    thick = wall.thickness if wall is not None else 0.0
+    assumed = wall is not None and wall.thickness_assumed
+    return Hole(pid, len(ids), circuit, tuple(ids), thick, wall_assumed=assumed)

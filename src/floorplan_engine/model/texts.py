@@ -292,8 +292,8 @@ TEXTS: dict[str, dict[Language, str]] = {
     },
     # Cable passes (decision 2026-11-28): "{n} {word}", word by plural (cable_pass_words)
     "wiring_holes": {
-        "ru": "{n} {word} в ПВХ-гильзах ({sleeves}), заделка огнезащитной пеной",
-        "uk": "{n} {word} у ПВХ-гільзах ({sleeves}), закладення вогнезахисною піною",
+        "ru": "{n} {word} в ПВХ-гильзах ({sleeves}), заделка огнестойкой монтажной пеной B1",
+        "uk": "{n} {word} у ПВХ-гільзах ({sleeves}), закладення вогнестійкою монтажною піною B1",
     },
     "wiring_lengths_note": {
         "ru": "L — длина прямого участка трассы, м; ×N — кабелей на участке",

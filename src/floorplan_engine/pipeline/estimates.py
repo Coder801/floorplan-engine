@@ -30,6 +30,7 @@ from floorplan_engine.electrical.price_list import PriceList, PriceSource
 from floorplan_engine.electrical.pricing import Prices, price_notes
 from floorplan_engine.electrical.sleeves import (
     FOAM_YIELD_L,
+    LOW_CABLE_OD,
     SLEEVE_FILL,
     SLEEVE_INNER,
     SLEEVE_OUT_MM,
@@ -57,6 +58,7 @@ from floorplan_engine.model.intake import (
 )
 from floorplan_engine.model.plumbing import Plumbing
 from floorplan_engine.model.schema import Electrical, PointType
+from floorplan_engine.model.texts import Language
 from floorplan_engine.pipeline.assessment import Assessment, assess_project, price_service
 from floorplan_engine.pipeline.files import OUT_DIR, PLUMBING_ESTIMATE_FILES
 from floorplan_engine.pipeline.prices import find_prices, load_price_layers, load_prices
@@ -210,6 +212,37 @@ def write_estimate(
     return est, files
 
 
+def _low_sizes() -> str:
+    """The typical outer Ø of the low-voltage cables for the passes note: "UTP ≈ 6 мм, RG-6 ≈ 7
+    мм" (sleeves.LOW_CABLE_OD: the internet one, then the coax)."""
+    names = ("UTP", "RG-6")
+    return ", ".join(f"{n} ≈ {d:g} мм" for n, (_, d) in zip(names, LOW_CABLE_OD, strict=True))
+
+
+def _pass_notes(wiring: Wiring, default_wall: float, lang: Language) -> list[str]:
+    """Notes on the cable passes the estimate counts with less certainty: power cables without a
+    known size, in a sleeve by the conduit of their section (Sleeve.by_section), and passes
+    through walls without a written thickness (Hole.wall_assumed)."""
+    marks = {r.id: r.mark for r in wiring.runs}
+    guessed = sorted(
+        {
+            (marks.get(i, ""), s.diameter)
+            for h in wiring.holes
+            for s in h.sleeves
+            if s.by_section
+            for i in s.runs
+        }
+    )
+    notes = []
+    if guessed:
+        cables = ", ".join(f"{m.replace('x', '×')} — Ø{d}" for m, d in guessed)
+        notes.append(estimate_text("note_holes_section", lang, cables=cables))
+    assumed = sum(len(h.sleeves) for h in wiring.holes if h.wall_assumed)
+    if assumed:
+        notes.append(estimate_text("note_holes_wall", lang, n=assumed, t=f"{default_wall:g}"))
+    return notes
+
+
 def _estimate_notes(
     assessment: Assessment,
     est: Estimate,
@@ -235,7 +268,9 @@ def _estimate_notes(
             d=max(SLEEVE_INNER),
             out=f"{SLEEVE_OUT_MM:g}",
             foam=f"{FOAM_YIELD_L:g}".replace(".", ","),
+            low=_low_sizes(),
         ),
+        *_pass_notes(wiring, assessment.report.plan.default_wall_thickness, lang),
         estimate_text(
             "note_fixing",
             lang,
