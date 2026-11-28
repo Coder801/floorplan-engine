@@ -3,8 +3,9 @@
 
 import { useTranslation } from "react-i18next";
 import { locale } from "@/shared/i18n";
+import { money } from "@/shared/money";
 import type { WorkState } from "@/shared/types";
-import { behalfText, day, modelChanged, money } from "@/shared/work";
+import { behalfText, day, modelChanged } from "@/shared/work";
 import { Text } from "@/ui/Text";
 import css from "./WorkSummary.module.scss";
 

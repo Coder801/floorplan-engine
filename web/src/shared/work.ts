@@ -3,6 +3,7 @@
 // only what to show. Rights come from state.can, never from role names.
 
 import i18n, { locale } from "./i18n";
+import { money } from "./money";
 import type {
   WorkCan, WorkChannel, WorkComment, WorkDomain, WorkOnBehalf, WorkPhoto, WorkPlan, WorkState, WorkStatus, WorkTask, WorkTotals,
 } from "./types";
@@ -282,20 +283,6 @@ export const modelChanged = (state: WorkState) =>
 
 // --- Formats ------------------------------------------------------------------------------------
 
-// Money by the plan currency: an ISO code (UAH) — the locale's currency format; anything else
-// ("грн", as the estimates write it) — the number and the currency word. Kopecks only when there are
-export function money(value: number, currency: string, locale: string): string {
-  const digits = Number.isInteger(Math.round(value * 100) / 100) ? 0 : 2;
-  const opts = { minimumFractionDigits: digits, maximumFractionDigits: digits };
-  if (/^[A-Z]{3}$/.test(currency)) {
-    try {
-      return new Intl.NumberFormat(locale, { ...opts, style: "currency", currency, currencyDisplay: "narrowSymbol" }).format(value);
-    } catch { /* an unknown code: as a word below */ }
-  }
-  const n = new Intl.NumberFormat(locale, opts).format(value);
-  return currency ? `${n} ${currency}` : n;
-}
-
 // A quantity: up to two decimals, no trailing zeros
 export const qty = (value: number, locale: string) => new Intl.NumberFormat(locale, { maximumFractionDigits: 2 }).format(value);
 
@@ -317,15 +304,6 @@ export function moment(value: string | null, locale: string): string {
 export function today(now = new Date()): string {
   const p = (n: number) => String(n).padStart(2, "0");
   return `${now.getFullYear()}-${p(now.getMonth() + 1)}-${p(now.getDate())}`;
-}
-
-// A number typed by a person: comma or dot, spaces; empty — null (as planned / no price);
-// not a number or below zero — undefined (refused)
-export function parseAmount(text: string): number | null | undefined {
-  const s = text.replace(/[\s ]/g, "").replace(",", ".");
-  if (!s) return null;
-  const n = Number(s);
-  return Number.isFinite(n) && n >= 0 ? n : undefined;
 }
 
 export const fileSize = (bytes: number, locale: string) =>

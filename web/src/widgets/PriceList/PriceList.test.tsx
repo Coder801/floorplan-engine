@@ -12,10 +12,10 @@ describe("PriceList", () => {
     render(<PriceList />);
     expect(screen.getByText("Загрузка…")).toBeInTheDocument();
     const field = await screen.findByRole("textbox", { name: "Цена: Установка подрозетника" });
-    expect(field).toHaveValue("100");
+    expect(field).toHaveValue("100,00");
     const row = field.closest("tr")!;
-    expect(within(row).getByText("120")).toBeInTheDocument();
-    expect(within(row).getByRole("img", { name: "мин 80, медиана 120, макс 200" })).toBeInTheDocument();
+    expect(within(row).getByText("120,00")).toBeInTheDocument();
+    expect(within(row).getByRole("img", { name: "мин 80,00, медиана 120,00, макс 200,00" })).toBeInTheDocument();
     expect(within(row).getByText("-17%")).toBeInTheDocument();
     await user.click(within(row).getByRole("button", { name: "прайсов: 3" }));
     expect(screen.getByText("подрозетник в бетоне")).toBeInTheDocument();
@@ -40,11 +40,30 @@ describe("PriceList", () => {
     expect(save).toBeDisabled();
     expect(onDirty).toHaveBeenLastCalledWith(true);
     await user.click(screen.getByRole("button", { name: "Поставить медиану рынка ценой студии" }));
-    expect(field).toHaveValue("120");
+    expect(field).toHaveValue("120,00");
     await user.click(save);
     expect(sent.at(-1)).toMatchObject({ method: "POST", body: { items: { "work.socket": 120 } } });
     expect(await screen.findByText("Сохранено в прайсе студии — сметы пересчитаются при сборке")).toBeInTheDocument();
     expect(onDirty).toHaveBeenLastCalledWith(false);
+  });
+
+  it("a price is typed with a comma or a dot, shown back with kopecks and saved rounded to them", async () => {
+    const user = userEvent.setup();
+    const sent = stubApi({ "GET /api/prices": pricePage(), "POST /api/prices": pricePage() });
+    const onDirty = vi.fn();
+    render(<PriceList onDirty={onDirty} />);
+    const field = await screen.findByRole("textbox", { name: /Цена:/ });
+    await user.clear(field);
+    await user.type(field, "100");
+    await user.tab();
+    expect(field).toHaveValue("100,00");
+    expect(onDirty).toHaveBeenLastCalledWith(false);  // the saved price typed again is no change
+    await user.clear(field);
+    await user.type(field, "76.505");
+    await user.tab();
+    expect(field).toHaveValue("76,51");
+    await user.click(screen.getByRole("button", { name: "Сохранить" }));
+    expect(sent.at(-1)?.body).toEqual({ items: { "work.socket": 76.51 } });
   });
 
   it("an empty field removes the price; reset drops the edits", async () => {
@@ -54,7 +73,7 @@ describe("PriceList", () => {
     const field = await screen.findByRole("textbox", { name: /Цена:/ });
     await user.type(field, "5");
     await user.click(screen.getByRole("button", { name: "Сбросить" }));
-    expect(field).toHaveValue("100");
+    expect(field).toHaveValue("100,00");
     await user.clear(field);
     await user.click(screen.getByRole("button", { name: "Сохранить" }));
     expect(sent.at(-1)?.body).toEqual({ items: { "work.socket": null } });
@@ -87,7 +106,7 @@ describe("PriceList", () => {
     const heading = await screen.findByRole("heading", { name: "Материалы" });
     const table = heading.nextElementSibling as HTMLElement;
     expect(within(table).getByRole("columnheader", { name: "Материал" })).toBeInTheDocument();
-    expect(within(table).getByRole("textbox", { name: "Цена: Кабель ВВГнг 3×1,5" })).toHaveValue("45");
+    expect(within(table).getByRole("textbox", { name: "Цена: Кабель ВВГнг 3×1,5" })).toHaveValue("45,00");
     expect(within(table).getByRole("textbox", { name: "Цена: Подрозетник" })).toHaveAttribute("placeholder", "—");
     expect(within(table).queryByText("нет в прайсах")).toBeNull();  // no market columns for materials
     await user.type(within(table).getByRole("textbox", { name: "Цена: Подрозетник" }), "20");
@@ -115,7 +134,8 @@ describe("PriceList", () => {
     expect(within(group).getByRole("radio", { name: "Опрессовка" })).toBeChecked();
     // With a price edit — one request
     await user.click(within(group).getByRole("radio", { name: "Клеммы Wago" }));
-    await user.type(screen.getByRole("textbox", { name: /Цена:/ }), "5");
+    await user.clear(screen.getByRole("textbox", { name: /Цена:/ }));
+    await user.type(screen.getByRole("textbox", { name: /Цена:/ }), "1005");
     await user.click(save);
     expect(sent.at(-1)?.body).toEqual({ items: { "work.socket": 1005 }, splice: "wago" });
   });

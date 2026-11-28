@@ -3,8 +3,8 @@ import i18n from "./i18n";
 import type { WorkCan, WorkPhoto, WorkPlan, WorkPlanState, WorkState, WorkStatus, WorkTask, WorkTotals } from "./types";
 import {
   actsForClient, afterOf, allDone, behalfText, boardColumns, byColumn, byDomain, canDeletePhoto, canDrag, canMoveLines, cardRights,
-  checksLeft, day, dropTargets, emptyOf, feedOf, layoutOf, mergeBlock, mergeTargets, modelChanged, money, needsBehalf, numberOf,
-  parseAmount, planActions, planNeed, progressOf, shiftTo, splitText, statusButtons, taskNeed, ticked, today,
+  checksLeft, day, dropTargets, emptyOf, feedOf, layoutOf, mergeBlock, mergeTargets, modelChanged, needsBehalf, numberOf,
+  planActions, planNeed, progressOf, shiftTo, splitText, statusButtons, taskNeed, ticked, today,
 } from "./work";
 
 const CAN = {
@@ -238,22 +238,10 @@ describe("права карточки", () => {
 });
 
 describe("форматы", () => {
-  it("деньги: слово валюты из сметы или код ISO, копейки — только если есть", () => {
-    expect(money(20719.6, "грн", "ru-RU")).toBe("20 719,60 грн");
-    expect(money(1500, "грн", "ru-RU")).toBe("1 500 грн");
-    expect(money(1500, "", "en-GB")).toBe("1,500");
-    expect(money(1500, "EUR", "en-GB")).toBe("€1,500");
-  });
   it("день оплаты — календарный, без сдвига по поясу", () => {
     expect(day("2026-11-01", "en-GB")).toBe("1 Nov 2026");
     expect(day("не дата", "en-GB")).toBe("не дата");
     expect(today(new Date(2026, 0, 5))).toBe("2026-01-05");
-  });
-  it("число из поля: запятая, пробелы, пусто — null, неверное — undefined", () => {
-    expect(parseAmount("1 234,5")).toBe(1234.5);
-    expect(parseAmount("")).toBeNull();
-    expect(parseAmount("abc")).toBeUndefined();
-    expect(parseAmount("-3")).toBeUndefined();
   });
   it("лента — от старых к новым; модель менялась после плана", () => {
     const c = (id: string, created_at: string) => ({ id, kind: "comment" as const, status: null, text: "", author: "", user_id: null, on_behalf: null, created_at });
@@ -375,7 +363,7 @@ describe("порядок и «после каких задач»", () => {
 describe("splitText", () => {
   it("work and materials of a sum; materials outside the price read «не входят»", async () => {
     await i18n.changeLanguage("ru");
-    expect(splitText(1200, 3000, "грн")).toMatch(/^работа 1\s200\sгрн · материалы 3\s000\sгрн$/);
-    expect(splitText(1200, 3000, "грн", false)).toMatch(/^работа 1\s200\sгрн · материалы не входят$/);
+    expect(splitText(1200, 3000, "грн")).toMatch(/^работа 1\s200,00\sгрн · материалы 3\s000,00\sгрн$/);
+    expect(splitText(1200, 3000, "грн", false)).toMatch(/^работа 1\s200,00\sгрн · материалы не входят$/);
   });
 });

@@ -9,6 +9,8 @@
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { cx } from "@/shared/cx";
+import { anyKey, locale } from "@/shared/i18n";
+import { cents, money as moneyText } from "@/shared/money";
 import type { Overview, Project, Question, Variants, VariantSummary } from "@/shared/types";
 import { Button } from "@/ui/Button";
 import { Card } from "@/ui/Card";
@@ -18,7 +20,6 @@ import { Tag } from "@/ui/Tag";
 import { Text } from "@/ui/Text";
 import { useTooltip } from "@/ui/Tooltip";
 import { VariantInfo } from "@/widgets/VariantInfo";
-import { anyKey } from "@/shared/i18n";
 import { optionKey, type SetupProgress, type StepId } from "@/widgets/Wizard/steps";
 import { activeSummary, breakersOfScheme, neighbours } from "@/widgets/VariantInfo/variants";
 import { SEVERITIES, questionCounts } from "./questions";
@@ -64,7 +65,7 @@ export function OverviewStage({ overview, variants, project, openQuestions, canC
   const { t, i18n } = useTranslation();
   const { on, tip } = useTooltip();
   const num = (n: number, digits = 2) => n.toLocaleString(i18n.language, { maximumFractionDigits: digits });
-  const cash = (n: number, currency: string) => `${Math.round(n).toLocaleString(i18n.language)} ${currency}`;
+  const cash = (n: number, currency: string) => moneyText(n, currency, locale());
   const money = (s: VariantSummary) => cash(s.total, s.currency);
   if (!overview) return <div className={css.stage}><Text tone="muted">{t("overview.noData")}</Text></div>;
   const o = overview.object;
@@ -84,8 +85,8 @@ export function OverviewStage({ overview, variants, project, openQuestions, canC
   // The comparison: the chosen set, then the same set with one wizard step answered otherwise,
   // and how much that changes the estimate
   const delta = (s: VariantSummary, base: VariantSummary) => {
-    const d = Math.round(s.total - base.total);
-    return d === 0 ? "0" : `${d > 0 ? "+" : "−"}${cash(Math.abs(d), s.currency)}`;
+    const d = cents(s.total - base.total);
+    return d === 0 ? cash(0, "") : `${d > 0 ? "+" : "−"}${cash(Math.abs(d), s.currency)}`;
   };
   const say = anyKey(t);  // a key built from a step, as in Wizard
   const compareRow = (s: VariantSummary, name: ReactNode, base: VariantSummary | null, key: string) => (

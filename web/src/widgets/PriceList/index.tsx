@@ -12,7 +12,9 @@ import { Fragment, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { getPrices, savePrices } from "@/shared/api";
 import { cx } from "@/shared/cx";
+import { locale } from "@/shared/i18n";
 import { deviation, monthText, periodText, place } from "@/shared/market";
+import { amountText, money as moneyText, parseMoney, tidyAmount } from "@/shared/money";
 import type { MarketSpread, PricePage, PriceRow, SpliceMethod } from "@/shared/types";
 import { Button } from "@/ui/Button";
 import { EmptyState } from "@/ui/EmptyState";
@@ -23,7 +25,8 @@ import { Stack } from "@/ui/Stack";
 import { Text } from "@/ui/Text";
 import css from "./PriceList.module.scss";
 
-const money = (v: number, lng: string) => v.toLocaleString(lng, { maximumFractionDigits: 1 });
+// Prices with kopecks; the currency is in the column heading
+const money = (v: number) => moneyText(v, "", locale());
 const SPLICE: SpliceMethod[] = ["wago", "crimp"];
 
 // onDirty — whether there are unsaved prices (the settings page asks before leaving)
@@ -46,8 +49,8 @@ export function PriceList({ onDirty }: { onDirty?: (dirty: boolean) => void }) {
   const changes = useMemo(() => {
     const out: Record<string, number | null> = {};
     for (const [key, text] of Object.entries(draft)) {
-      const v = text.trim() === "" ? null : Number(text.replace(",", "."));
-      if (v !== null && (!Number.isFinite(v) || v < 0)) continue;
+      const v = parseMoney(text);
+      if (v === undefined) continue;
       out[key] = v;
     }
     return out;
@@ -62,6 +65,12 @@ export function PriceList({ onDirty }: { onDirty?: (dirty: boolean) => void }) {
       .finally(() => setBusy(false));
   };
   const edit = (key: string, text: string) => { setSaved(false); setDraft((d) => ({ ...d, [key]: text })); };
+  // Leaving a typed price: shown back with two decimals; the saved price typed again is no change
+  const tidy = (r: PriceRow) => setDraft((d) => {
+    if (!(r.key in d)) return d;
+    if (parseMoney(d[r.key]) === r.price) { const { [r.key]: _, ...rest } = d; return rest; }
+    return { ...d, [r.key]: tidyAmount(d[r.key], locale()) };
+  });
   // An older server sends no splice: the build joins with Wago then
   const savedSplice: SpliceMethod = data?.splice ?? "wago";
   const pickSplice = (m: SpliceMethod) => { setSaved(false); setSplice(m === savedSplice ? null : m); };
@@ -75,14 +84,14 @@ export function PriceList({ onDirty }: { onDirty?: (dirty: boolean) => void }) {
   // The studio price cell: an input for the studio, the number for others; no own price — "—"
   // (the estimate leaves the item out of the total)
   const priceCell = (r: PriceRow) => {
-    const value = draft[r.key] ?? (r.price === null ? "" : String(r.price));
+    const value = draft[r.key] ?? amountText(r.price, locale());
     return (
       <td className={css.num}>
         {data?.editable ? (
           <input className={css.input} inputMode="decimal" value={value} aria-label={t("prices.priceOf", { name: name(r) })}
                  placeholder="—"
-                 onChange={(e) => edit(r.key, e.target.value)} />
-        ) : r.price !== null ? money(r.price, lng) : "—"}
+                 onChange={(e) => edit(r.key, e.target.value)} onBlur={() => tidy(r)} />
+        ) : r.price !== null ? money(r.price) : "—"}
       </td>
     );
   };
@@ -139,16 +148,16 @@ export function PriceList({ onDirty }: { onDirty?: (dirty: boolean) => void }) {
                             <span className={css.medianCell}>
                               {data.editable && current !== r.market.median && (
                                 <button type="button" className={css.take} title={t("prices.takeMedianNote")} aria-label={t("prices.takeMedianNote")}
-                                        onClick={() => edit(r.key, String(r.market!.median))}>{t("prices.takeMedian")}</button>
+                                        onClick={() => edit(r.key, amountText(r.market!.median, locale()))}>{t("prices.takeMedian")}</button>
                               )}
-                              <b>{money(r.market.median, lng)}</b>
+                              <b>{money(r.market.median)}</b>
                             </span>
                           )}
                         </td>
                         <td>
                           {r.market ? (
                             <div className={css.spreadCell}>
-                              <Spread s={r.market} price={current} lng={lng} />
+                              <Spread s={r.market} price={current} />
                               <button type="button" className={css.quotes} aria-expanded={open === r.key}
                                       onClick={() => setOpen(open === r.key ? null : r.key)}>
                                 {t("prices.lists", { n: r.market.n })}
@@ -168,7 +177,7 @@ export function PriceList({ onDirty }: { onDirty?: (dirty: boolean) => void }) {
                                 const s = names.get(q.source);
                                 return (
                                   <li key={q.source}>
-                                    <b className={css.money}>{money(q.price, lng)}</b>
+                                    <b className={css.money}>{money(q.price)}</b>
                                     <span>{q.text}</span>
                                     {s && <a href={s.url} target="_blank" rel="noreferrer">{s.name}</a>}
                                   </li>
@@ -251,16 +260,16 @@ export function PriceList({ onDirty }: { onDirty?: (dirty: boolean) => void }) {
 
 // Spread bar: whiskers min–max, the box is the middle half (Q1–Q3), the tick is the median, the
 // dot is the studio price (outside the spread — at the edge, as an arrow)
-function Spread({ s, price, lng }: { s: MarketSpread; price: number | null; lng: string }) {
+function Spread({ s, price }: { s: MarketSpread; price: number | null }) {
   const { t } = useTranslation();
   const lo = s.min, hi = s.max > s.min ? s.max : s.min + 1;
   const x = (v: number) => `${Math.min(100, Math.max(0, ((v - lo) / (hi - lo)) * 100))}%`;
   const where = price === null ? null : place(price, s);
   return (
     <div className={css.spread}>
-      <span className={cx("small muted", css.edge)}>{money(s.min, lng)}</span>
+      <span className={cx("small muted", css.edge)}>{money(s.min)}</span>
       <div className={css.bar} role="img"
-           aria-label={t("prices.spreadLabel", { min: money(s.min, lng), median: money(s.median, lng), max: money(s.max, lng) })}>
+           aria-label={t("prices.spreadLabel", { min: money(s.min), median: money(s.median), max: money(s.max) })}>
         <span className={css.whisker} />
         <span className={css.box} style={{ left: x(s.q1), width: `calc(${x(s.q3)} - ${x(s.q1)})` }} />
         <span className={css.median} style={{ left: x(s.median) }} title={t("prices.median")} />
@@ -268,7 +277,7 @@ function Spread({ s, price, lng }: { s: MarketSpread; price: number | null; lng:
           <span className={cx(css.own, css[where])} style={{ left: x(price) }} title={t(`prices.places.${where}`)} />
         )}
       </div>
-      <span className={cx("small muted", css.edge)}>{money(s.max, lng)}</span>
+      <span className={cx("small muted", css.edge)}>{money(s.max)}</span>
     </div>
   );
 }

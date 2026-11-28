@@ -14,10 +14,11 @@ import { useTranslation } from "react-i18next";
 import { addWorkTask, setWorkStatus } from "@/shared/api";
 import { cx } from "@/shared/cx";
 import { locale } from "@/shared/i18n";
+import { money } from "@/shared/money";
 import { remember, remembered } from "@/shared/palette";
 import type { WorkDomain, WorkPhotoRule, WorkState, WorkStatus, WorkTask } from "@/shared/types";
 import {
-  behalfText, boardColumns, byColumn, byDomain, canDrag, DOMAIN_FILTERS, domainsOf, dropTargets, modelChanged, money, progressOf,
+  behalfText, boardColumns, byColumn, byDomain, canDrag, DOMAIN_FILTERS, domainsOf, dropTargets, modelChanged, progressOf,
   splitText, taskNeed, type DomainFilter, type DropTargets, type WorkRun,
 } from "@/shared/work";
 import { Button } from "@/ui/Button";

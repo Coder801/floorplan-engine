@@ -13,7 +13,8 @@ import { useTranslation } from "react-i18next";
 import type { WizardBody } from "@/shared/api";
 import { REDUCED_MOTION } from "@/shared/consts";
 import { cx } from "@/shared/cx";
-import { anyKey } from "@/shared/i18n";
+import { anyKey, locale } from "@/shared/i18n";
+import { money as moneyText } from "@/shared/money";
 import { FADE_MS } from "@/shared/popover";
 import { plainNumber } from "@/shared/questions";
 import type { OverviewMaster, OverviewReserve, Project, Scene, Variants, VariantSummary } from "@/shared/types";
@@ -57,7 +58,7 @@ interface Props {
 }
 
 export function Wizard({ project, variants, ceiling, scene = null, reserve, master = null, onApply, onClose, onQuestions, start }: Props) {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const say = anyKey(t);  // keys built from a step and its values
   const setup = useMemo(() => setupOf(project, variants, ceiling?.height ?? null, reserve, master), [project, variants, ceiling, reserve, master]);
   const before = useMemo(() => initialPicks(setup), [setup]);
@@ -99,7 +100,7 @@ export function Wizard({ project, variants, ceiling, scene = null, reserve, mast
   };
 
   const money = (s: VariantSummary | undefined) =>
-    (s ? `${Math.round(s.total).toLocaleString(i18n.language)} ${s.currency}` : "");
+    (s ? moneyText(s.total, s.currency, locale()) : "");
   // Only the saved set and its neighbours (one step answered otherwise) are computed: a step gets
   // prices if all its cards have one, that is while the other steps are as saved
   const summary = (id: StepId, value: string) =>

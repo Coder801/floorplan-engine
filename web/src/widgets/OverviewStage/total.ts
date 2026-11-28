@@ -2,6 +2,7 @@
 // (variants) plus the plumbing estimate (overview.plumbing.estimate); plumbing does not depend
 // on the variant. No estimate at all means no total. The total is also split into work and
 // materials (material prices are a guess for now, decision 2026-11-12).
+import { cents } from "@/shared/money";
 import type { OverviewPlumbing, VariantSummary } from "@/shared/types";
 
 export interface ProjectTotal {
@@ -19,13 +20,13 @@ export interface ProjectTotal {
 function part(key: "work" | "material", ...estimates: ({ work?: number; material?: number } | undefined)[]): number | undefined {
   const present = estimates.filter((e) => e !== undefined);
   if (present.some((e) => e[key] === undefined)) return undefined;
-  return present.reduce((sum, e) => sum + (e[key] ?? 0), 0);
+  return cents(present.reduce((sum, e) => sum + (e[key] ?? 0), 0));
 }
 
 export function projectTotal(variant?: VariantSummary, plumbing?: OverviewPlumbing["estimate"]): ProjectTotal | null {
   if (!variant && !plumbing) return null;
   return {
-    total: (variant?.total ?? 0) + (plumbing?.total ?? 0),
+    total: cents((variant?.total ?? 0) + (plumbing?.total ?? 0)),
     currency: variant?.currency ?? plumbing?.currency ?? "",
     electrical: variant?.total,
     plumbing: plumbing?.total,

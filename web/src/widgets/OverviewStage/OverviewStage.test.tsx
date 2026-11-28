@@ -33,17 +33,17 @@ describe("OverviewStage", () => {
     } }) });
     expect(screen.getByRole("heading", { name: "Вариант проводки" })).toBeInTheDocument();
     const floor = screen.getByRole("row", { name: /Трасса кабеля:.*по полу/ });
-    expect(floor).toHaveTextContent(/−3\s000 грн/);
+    expect(floor).toHaveTextContent(/−3\s000,00 грн/);
     expect(screen.getByRole("row", { name: /Ваш набор/ })).toHaveTextContent("как в проекте");
     expect(screen.getByRole("row", { name: /по потолку|подрозетник/i })).toBeInTheDocument();
     expect(screen.getByText(/Ø110 — 3,2 м/)).toBeInTheDocument();
     expect(screen.getByText(/трасс с ошибкой: 1/)).toBeInTheDocument();
     expect(screen.getByText(/без цены: 3 поз./)).toBeInTheDocument();
     const total = screen.getByRole("heading", { level: 2, name: /Итог по проекту/ }).closest("section")!;
-    expect(total).toHaveTextContent(/65\s000 грн/);
-    expect(total).toHaveTextContent(/электрика \(выбранный вариант\) 50\s000 грн · сантехника 15\s000 грн/);
-    expect(total).toHaveTextContent(/Работа\s*25\s000 грн/);
-    expect(total).toHaveTextContent(/Материалы\s*40\s000 грн/);
+    expect(total).toHaveTextContent(/65\s000,00 грн/);
+    expect(total).toHaveTextContent(/электрика \(выбранный вариант\) 50\s000,00 грн · сантехника 15\s000,00 грн/);
+    expect(total).toHaveTextContent(/Работа\s*25\s000,00 грн/);
+    expect(total).toHaveTextContent(/Материалы\s*40\s000,00 грн/);
     expect(within(total).queryByRole("img")).toBeNull();  // studio prices: no provisional mark
     await userEvent.click(within(total).getByRole("button", { name: "Открыть смету" }));
     expect(onEstimate).toHaveBeenCalledOnce();

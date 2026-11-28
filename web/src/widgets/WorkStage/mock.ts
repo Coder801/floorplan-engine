@@ -1,6 +1,7 @@
 // Work state for Storybook stories of the board, the list and the card: an approved plan with
 // tasks in every status, without the API (docs/service-api.md, the GET /work answer)
 
+import { cents } from "@/shared/money";
 import type { WorkCan, WorkComment, WorkLine, WorkPlan, WorkState, WorkTask } from "@/shared/types";
 import type { WorkRun } from "@/shared/work";
 
@@ -12,16 +13,16 @@ export const CLIENT: WorkCan = { work_do: false, work_accept: true, work_manage:
 export const noRun: WorkRun = async () => true;
 
 const line = (id: string, kind: WorkLine["kind"], title: string, unit: string, plan_qty: number, price: number | null, fact_qty: number | null = null): WorkLine =>
-  ({ id, key: id, kind, title, unit, plan_qty, fact_qty, price, sum: price === null ? null : Math.round((fact_qty ?? plan_qty) * price * 100) / 100 });
+  ({ id, key: id, kind, title, unit, plan_qty, fact_qty, price, sum: price === null ? null : cents((fact_qty ?? plan_qty) * price) });
 
 const note = (c: Omit<WorkComment, "on_behalf"> & Partial<Pick<WorkComment, "on_behalf">>): WorkComment => ({ on_behalf: null, ...c });
 
 function task(id: string, position: number, over: Partial<WorkTask>): WorkTask {
   const lines = over.lines ?? [];
-  const work = lines.filter((l) => l.kind === "work").reduce((s, l) => s + (l.sum ?? 0), 0);
-  const material = lines.filter((l) => l.kind === "material").reduce((s, l) => s + (l.sum ?? 0), 0);
-  const paid = (over.payments ?? []).reduce((s, p) => s + p.amount, 0);
-  const total = work + material;
+  const work = cents(lines.filter((l) => l.kind === "work").reduce((s, l) => s + (l.sum ?? 0), 0));
+  const material = cents(lines.filter((l) => l.kind === "material").reduce((s, l) => s + (l.sum ?? 0), 0));
+  const paid = cents((over.payments ?? []).reduce((s, p) => s + p.amount, 0));
+  const total = cents(work + material);
   return {
     id, key: null, domain: "electrical", position, title: id, description: "", status: "todo", extra: false,
     photo: "optional", result: [], checked: [], after: [], waiting: [], assignee: null, materials_included: true, money_editable: false,
@@ -87,7 +88,7 @@ export const TASKS: WorkTask[] = [
   }),
 ];
 
-const sum = (f: (t: WorkTask) => number) => Math.round(TASKS.reduce((s, t) => s + f(t), 0) * 100) / 100;
+const sum = (f: (t: WorkTask) => number) => cents(TASKS.reduce((s, t) => s + f(t), 0));
 
 export const PLAN: WorkPlan = {
   id: "plan", state: "approved", currency: "грн", model_version: 3,

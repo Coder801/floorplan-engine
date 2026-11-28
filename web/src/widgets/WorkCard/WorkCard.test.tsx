@@ -126,18 +126,21 @@ describe("WorkCard", () => {
     await user.tab();
     expect(sent).toHaveLength(1);  // a wrong number is not sent
     await user.clear(price);
-    await user.type(price, "950");
+    await user.type(price, "950,5");
     await user.tab();
-    expect(sent.at(-1)?.body).toEqual({ price: 950 });
+    expect(price).toHaveValue("950,50");  // a price is shown back with kopecks
+    expect(sent.at(-1)?.body).toEqual({ price: 950.5 });
 
     await user.click(screen.getByRole("button", { name: "+ Добавить строку" }));
     const lineForm = screen.getByRole("button", { name: "Добавить" }).closest("form")!;
     await user.type(within(lineForm).getByRole("textbox", { name: "Название" }), "Профиль");
     await user.selectOptions(within(lineForm).getByRole("combobox", { name: "Вид" }), "Материалы");
     await user.type(within(lineForm).getByRole("textbox", { name: "Ед." }), "м");
-    await user.type(within(lineForm).getByRole("textbox", { name: "Цена" }), "50");
+    await user.type(within(lineForm).getByRole("textbox", { name: "Цена" }), "50.5");
+    await user.tab();
+    expect(within(lineForm).getByRole("textbox", { name: "Цена" })).toHaveValue("50,50");
     await user.click(within(lineForm).getByRole("button", { name: "Добавить" }));
-    expect(sent.at(-1)?.body).toEqual({ title: "Профиль", kind: "material", unit: "м", qty: 1, price: 50 });
+    expect(sent.at(-1)?.body).toEqual({ title: "Профиль", kind: "material", unit: "м", qty: 1, price: 50.5 });
 
     await user.click(screen.getByRole("checkbox", { name: "Материалы в цене задачи" }));
     expect(sent.at(-1)?.body).toEqual({ materials_included: false });
@@ -178,6 +181,7 @@ describe("WorkCard", () => {
     const pay = screen.getByRole("button", { name: "Отметить оплату" });
     expect(pay).toBeDisabled();
     await user.click(screen.getByRole("button", { name: /^Остаток:/ }));
+    expect(screen.getByRole("textbox", { name: "Сумма" })).toHaveValue("37320,20");
     await user.type(screen.getByRole("textbox", { name: "Примечание" }), "остаток");
     await user.click(pay);
     expect(sent.at(-1)?.body).toMatchObject({ amount: expect.any(Number), note: "остаток" });

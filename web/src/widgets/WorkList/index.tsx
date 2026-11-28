@@ -6,8 +6,9 @@
 import { useTranslation } from "react-i18next";
 import { cx } from "@/shared/cx";
 import { locale } from "@/shared/i18n";
+import { money } from "@/shared/money";
 import type { WorkState } from "@/shared/types";
-import { behalfText, money, ordered, planNeed, progressOf, splitText, taskNeed, type WorkRun } from "@/shared/work";
+import { behalfText, ordered, planNeed, progressOf, splitText, taskNeed, type WorkRun } from "@/shared/work";
 import { Card } from "@/ui/Card";
 import { Heading } from "@/ui/Heading";
 import { Text } from "@/ui/Text";

@@ -20,6 +20,7 @@ import {
 } from "@/shared/api";
 import { cx } from "@/shared/cx";
 import { locale } from "@/shared/i18n";
+import { amountText, cents, money, parseAmount, parseMoney, tidyAmount } from "@/shared/money";
 import ui from "@/shared/styles/ui.module.scss";
 import { Button } from "@/ui/Button";
 import { Checkbox } from "@/ui/Checkbox";
@@ -33,7 +34,7 @@ import { TextField } from "@/ui/TextField";
 import type { WorkLine, WorkOnBehalf, WorkPhotoRule, WorkState, WorkStatus, WorkTask } from "@/shared/types";
 import {
   behalfText, canDeletePhoto, canMoveLines, cardRights, checksLeft, day, feedOf, fileSize, isPdf, isPicture, mergeTargets,
-  moment, money, numberOf, parseAmount, PHOTO_MAX, qty, statusButtons, taskNeed, ticked, today, type StatusButton, type WorkRun,
+  moment, numberOf, PHOTO_MAX, qty, statusButtons, taskNeed, ticked, today, type StatusButton, type WorkRun,
 } from "@/shared/work";
 import { Select } from "@/ui/Select";
 import { Tabs, type Tab } from "@/ui/Tabs";
@@ -416,7 +417,7 @@ function Lines({ task, state, currency, run, busy, fact, price, move }: {
                     </td>
                     <td className={css.num}>
                       {price ? (
-                        <NumberCell value={l.price} placeholder="—" label={t("work.card.priceOf", { name: l.title })}
+                        <NumberCell money value={l.price} placeholder="—" label={t("work.card.priceOf", { name: l.title })}
                                     disabled={busy} onSave={(v) => save(l, { price: v })} />
                       ) : l.price === null ? <span className="muted">{t("work.card.noPrice")}</span> : money(l.price, currency, loc)}
                     </td>
@@ -442,15 +443,17 @@ function Lines({ task, state, currency, run, busy, fact, price, move }: {
 }
 
 // A number field saved when it loses focus or on Enter, only if it changed; a wrong number stays
-// red and is not sent
-function NumberCell({ value, placeholder, label, disabled, onSave }: {
-  value: number | null; placeholder: string; label: string; disabled: boolean; onSave: (v: number | null) => Promise<boolean>;
+// red and is not sent. A money field (a price) shows two decimals and rounds what is typed to kopecks
+function NumberCell({ value, placeholder, label, disabled, onSave, money: isMoney = false }: {
+  value: number | null; placeholder: string; label: string; disabled: boolean; onSave: (v: number | null) => Promise<boolean>; money?: boolean;
 }) {
-  const shown = value === null ? "" : String(value);
+  const loc = locale();
+  const shown = isMoney ? amountText(value, loc) : value === null ? "" : String(value);
   const [text, setText] = useState(shown);
   useEffect(() => setText(shown), [shown]);
-  const parsed = parseAmount(text);
+  const parsed = isMoney ? parseMoney(text) : parseAmount(text);
   const commit = () => {
+    if (isMoney) setText(tidyAmount(text, loc));
     if (parsed === undefined || parsed === value) return;
     void onSave(parsed).then((ok) => { if (!ok) setText(shown); });
   };
@@ -471,7 +474,7 @@ function LineForm({ task, run, busy }: { task: WorkTask; run: WorkRun; busy: boo
   const [unit, setUnit] = useState("");
   const [amount, setAmount] = useState("1");
   const [price, setPrice] = useState("");
-  const n = parseAmount(amount), p = parseAmount(price);
+  const n = parseAmount(amount), p = parseMoney(price);
   const valid = !!title.trim() && typeof n === "number" && p !== undefined;
   if (!open) return <Button variant="link" className={css.link} onClick={() => setOpen(true)}>+ {t("work.card.addLine")}</Button>;
   const submit = async (ev: React.FormEvent) => {
@@ -492,7 +495,7 @@ function LineForm({ task, run, busy }: { task: WorkTask; run: WorkRun; busy: boo
       <TextField label={t("work.card.col.plan")} inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)}
                  aria-invalid={typeof n !== "number"} />
       <TextField label={t("work.card.col.price")} inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)}
-                 aria-invalid={p === undefined} />
+                 onBlur={() => setPrice(tidyAmount(price, locale()))} aria-invalid={p === undefined} />
       <div className={cx(css.row, css.wide)}>
         <Button type="submit" variant="primary" disabled={busy || !valid}>{t("work.card.lineAdd")}</Button>
         <Button onClick={() => setOpen(false)}>{t("work.form.cancel")}</Button>
@@ -624,11 +627,11 @@ function Feed({ task, run, busy, write }: { task: WorkTask; run: WorkRun; busy: 
 function Payments({ task, currency, run, busy, add, remove }: { task: WorkTask; currency: string; run: WorkRun; busy: boolean; add: boolean; remove: boolean }) {
   const { t } = useTranslation();
   const loc = locale();
-  const left = Math.max(0, task.total - task.paid);
+  const left = Math.max(0, cents(task.total - task.paid));
   const [amount, setAmount] = useState("");
   const [date, setDate] = useState(today);
   const [note, setNote] = useState("");
-  const n = parseAmount(amount);
+  const n = parseMoney(amount);
   const submit = async (ev: React.FormEvent) => {
     ev.preventDefault();
     if (typeof n !== "number" || n <= 0 || !date) return;
@@ -658,13 +661,13 @@ function Payments({ task, currency, run, busy, add, remove }: { task: WorkTask; 
       ) : <Text size="small" tone="muted">{t("work.card.noPayments")}</Text>}
       {add && (
         <form className={css.payForm} onSubmit={submit}>
-          <TextField label={t("work.card.amount")} inputMode="decimal" value={amount} placeholder={left > 0 ? String(left) : ""}
-                     onChange={(e) => setAmount(e.target.value)} aria-invalid={n === undefined} />
+          <TextField label={t("work.card.amount")} inputMode="decimal" value={amount} placeholder={left > 0 ? amountText(left, loc) : ""}
+                     onChange={(e) => setAmount(e.target.value)} onBlur={() => setAmount(tidyAmount(amount, loc))} aria-invalid={n === undefined} />
           <TextField label={t("work.card.date")} type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
           <TextField className={css.wide} label={t("work.card.note")} value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} />
           <div className={cx(css.row, css.wide)}>
             <Button type="submit" variant="primary" disabled={busy || typeof n !== "number" || n <= 0}>{t("work.card.pay")}</Button>
-            {left > 0 && <Button onClick={() => setAmount(String(Math.round(left * 100) / 100))}>{t("work.card.payRest", { amount: money(left, currency, loc) })}</Button>}
+            {left > 0 && <Button onClick={() => setAmount(amountText(left, loc))}>{t("work.card.payRest", { amount: money(left, currency, loc) })}</Button>}
           </div>
         </form>
       )}
