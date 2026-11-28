@@ -68,6 +68,16 @@ sources:
     url: https://yut-komfort.kiev.ua/-Elektromontazhnye-raboty-.html
     date: ""
     kind: company
+  elektrik_in:
+    name: Електрик-ін
+    url: https://elektrik-in.kiev.ua/services/
+    date: "2026-11"
+    kind: company
+  stroyremdizayn:
+    name: Стройремдизайн
+    url: https://www.stroyremdizayn.kiev.ua/uslugi/elektromontazh-v-kvartire.html
+    date: ""
+    kind: company
 items:
   work.cable:
     basis: "открытая прокладка, за метр"
@@ -112,6 +122,15 @@ items:
     basis: "широкая штроба в бетоне, за метр"
     quotes:
       relicon: { price: 100, text: "Подготовка штроб 25Х50, бетон" }
+  work.cable_pass:
+    basis: "наскрізний отвір під кабель, бетон; гільзу і піну джерела окремо не оцінюють — ціна свердління"
+    quotes:
+      rabotniki: { price: 168, text: "Свердління наскрізних отворів в стіні до 25 мм (бетон, цегла): середня ціна 168 грн/шт" }
+      elektrik_in: { price: 200, text: "Висвердлювання наскрізного отвору в стіні для прокладки кабелів, при заміні проводки" }
+      stroyremdizayn: { price: 180, text: "Пробивка отворів у стіні в несучих стінах до 20мм" }
+      master_elektrik: { price: 30, text: "Сверление сквозных отверстий, до 20 см" }
+      remont_plus: { price: 75, text: "Сверление сквозных отверстий в бетонной перегородке, до 25 мм" }
+      san_sanych: { price: 400, text: "Свердління наскрізних отворів у стіні до 25мм (несуча стіна)" }
   work.wall_hole:
     basis: "сквозное отверстие в стене, бетон, до Ø25"
     quotes:
