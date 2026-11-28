@@ -8,7 +8,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from floorplan_engine.model.intake import QSeverity, Question
+from floorplan_engine.model.intake import ADDRESSEE, QSeverity, Question
 from floorplan_engine.validation.assess import STATUS_TEXT, StageResult, severity
 from floorplan_engine.validation.validate import Report
 
@@ -82,8 +82,8 @@ def render_markdown(name: str, report: Report, results: list[StageResult]) -> st
         lines += ["| --- | --- | --- | --- | --- | --- |"]
         for q in group:
             note = PENDING_NOTE.get(report.question_states.get(q.id, "open"), "")
-            if q.audience == "client":
-                note = f" (заказчику){note}"
+            if q.clarifying:
+                note = f" ({ADDRESSEE[q.audience]}){note}"
             lines.append(
                 f"| {q.id} | {STAGE_TEXT[q.stage.value]} | {_cell(q.text)}{note} "
                 f"| {_cell(q.target)} | {_cell(q.assumption)} | {_answer_hint(q)} |"
@@ -99,7 +99,7 @@ def render_markdown(name: str, report: Report, results: list[StageResult]) -> st
         for q in closed:
             state = report.question_states[q.id]
             # A client answer is taken into account, never put into the model
-            outcome = "учтено" if q.audience == "client" else STATE_TEXT[state]
+            outcome = "учтено" if q.clarifying else STATE_TEXT[state]
             lines.append(f"| {q.id} | {_cell(q.text)} | {outcome} |")
     if report.issues:
         lines += ["", "## Проверка данных", ""]

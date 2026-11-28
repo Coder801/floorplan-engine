@@ -242,6 +242,9 @@ class ProjectMember(Base):
         ForeignKey("app_user.id", ondelete="SET NULL")
     )
     created_at: Mapped[datetime] = _created()
+    # Access term (decision 2026-11-28, access.ACCESS_DAYS): after it the person no longer sees
+    # the project (access.project_role); NULL — no term
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class Invite(Base):
@@ -260,6 +263,9 @@ class Invite(Base):
     )
     role: Mapped[str] = mapped_column(String(20))
     email: Mapped[str | None] = mapped_column(String(320))  # who it was sent to, for the list
+    # Project invite: the access term in days the member gets on accept (expires_at = accept
+    # time + days, project_member.expires_at); NULL — no term. The link itself lives expires_at
+    access_days: Mapped[int | None] = mapped_column(Integer)
     token_hash: Mapped[str] = mapped_column(String(64), unique=True)
     invited_by: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("app_user.id", ondelete="SET NULL")
@@ -414,7 +420,8 @@ class Question(Base):
     target: Mapped[str | None] = mapped_column(Text)
     also: Mapped[list[Any]] = mapped_column(default=list)
     unit: Mapped[str | None] = mapped_column(String(20))
-    audience: Mapped[str] = mapped_column(String(10), default="studio")  # studio | client
+    # studio | client | installer
+    audience: Mapped[str] = mapped_column(String(10), default="studio")
     kind: Mapped[str] = mapped_column(String(10), default="text")  # value | choice | text | groups
     options: Mapped[list[Any]] = mapped_column(default=list)
     option_labels: Mapped[dict[str, Any]] = mapped_column(default=dict)
@@ -424,7 +431,8 @@ class Question(Base):
 
 class QuestionRevision(Base):
     """The wording of a question from one model version on: text, assumption, severity and the
-    YAML comment next to it (note). reason: new | edit | removed | restored. The author is a user
+    YAML comment next to it (note). reason: new | edit | removed | restored | superseded (the
+    answer did not close it: a new question follows, db/threads.follow_up). The author is a user
     (user_id), a client code (author_label), the analyzer, the operator or code."""
 
     __tablename__ = "question_revision"
@@ -470,6 +478,72 @@ class AnswerRevision(Base):
     model_version_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("model_version.id", ondelete="SET NULL")
     )
+    created_at: Mapped[datetime] = _created()
+
+
+class QuestionThread(Base):
+    """The discussion of a question (docs/question-threads.md, db/threads.py): messages of the one
+    asked and of the studio; the studio accepts one of them as the answer. State: open → checking
+    (accepted, the AI checks it) → resolved | superseded (not answered: a new question and thread
+    with previous_thread_id) | open again; open → resolved (a form answer) or closed (by the
+    studio). One open or checking thread per question. question_id None — a free thread (later)."""
+
+    __tablename__ = "question_thread"
+    __table_args__ = (
+        Index(
+            "uq_question_thread_live",
+            "question_id",
+            unique=True,
+            postgresql_where=text("state IN ('open', 'checking')"),
+        ),
+        Index("ix_question_thread_project", "project_id", "created_at"),
+    )
+    id: Mapped[uuid.UUID] = _id()
+    project_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("project.id", ondelete="CASCADE"))
+    question_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("question.id", ondelete="CASCADE")
+    )
+    # The unresolved thread before this one in the chain
+    previous_thread_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("question_thread.id", ondelete="SET NULL")
+    )
+    # open | checking | resolved | superseded | closed
+    state: Mapped[str] = mapped_column(String(12), default="open")
+    accepted_message_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey(
+            "thread_message.id",
+            ondelete="SET NULL",
+            use_alter=True,
+            name="fk_question_thread_accepted_message",
+        )
+    )
+    # The model version made by the accepted answer
+    result_version_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("model_version.id", ondelete="SET NULL")
+    )
+    created_at: Mapped[datetime] = _created()
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class ThreadMessage(Base):
+    """A message of a thread. author: user (user_id, or a client code by author_label), analyzer
+    (its verdict, changes and reason in meta) or system (a failed check, a quote of the accepted
+    answer). role — the author's project role when it was written ("" — not known)."""
+
+    __tablename__ = "thread_message"
+    __table_args__ = (Index("ix_thread_message_thread", "thread_id", "created_at"),)
+    id: Mapped[uuid.UUID] = _id()
+    thread_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("question_thread.id", ondelete="CASCADE")
+    )
+    author: Mapped[str] = mapped_column(String(10))  # user | analyzer | system
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("app_user.id", ondelete="SET NULL")
+    )
+    author_label: Mapped[str] = mapped_column(String(200), default="")
+    role: Mapped[str] = mapped_column(String(20), default="")
+    text: Mapped[str] = mapped_column(Text, default="")
+    meta: Mapped[dict[str, Any]] = mapped_column(default=dict)
     created_at: Mapped[datetime] = _created()
 
 

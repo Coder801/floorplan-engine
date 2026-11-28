@@ -97,7 +97,8 @@ def test_severity_rules(fields: dict[str, Any], expected: QSeverity) -> None:
             {"audience": "client", "answer": "groups", "options": ["QF1"], "severity": "minor"},
             "только у вопросов щита",
         ),
-        ({"audience": "nobody", "severity": "minor"}, "'studio' or 'client'"),
+        ({"audience": "installer", "target": "a.b"}, "вопрос монтажнику только уточняет"),
+        ({"audience": "nobody", "severity": "minor"}, "'studio', 'client' or 'installer'"),
     ],
 )
 def test_question_schema(fields: dict[str, Any], message: str) -> None:
@@ -149,6 +150,22 @@ def test_client_choice_is_one_of_the_options(tmp_path: Path) -> None:
     assert "допустимые ответы: yes, no" in " ".join(
         i.message for i in validate_project(path).issues
     )
+
+
+def test_installer_question_clarifies_like_a_client_one(tmp_path: Path) -> None:
+    """Decision 2026-11-28 (docs/question-threads.md): an installer question has no target, its
+    answer is { text } and is never put into the model; the report says whom it is asked."""
+    q = _q(audience="installer", answer="value", unit="mm", severity="major")
+    assert Question.model_validate(q).clarifying
+    assert not Question.model_validate(_q(severity="minor")).clarifying
+    path = _project(tmp_path, {"questions": [q]})
+    (path / "answers.yaml").write_text("answers:\n  q: 2\n", "utf-8")
+    issues = " ".join(i.message for i in validate_project(path).issues)
+    assert "вопрос монтажнику только уточняет" in issues
+    (path / "answers.yaml").write_text('answers:\n  q: { text: "2,5" }\n', "utf-8")
+    report = validate_project(path)
+    assert report.question_states == {"q": "text"}
+    assert "(монтажнику)" in render_markdown("Кв", report, assess(report))
 
 
 def test_text_answer_is_either_resolved_or_returned() -> None:

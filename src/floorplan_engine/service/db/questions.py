@@ -13,6 +13,9 @@ and answers.yaml are the exchange format at the border — a build, the analyzer
 - The texts of the latest version are made from the tables before a build and on pull
   (project_store.project_files).
 - backfill: the migration fills the tables from the existing model versions, in order.
+- ingest and record_code keep the question threads up (threads.follow: a thread for a new
+  question, the answers into it); backfill does not — migration 0017 runs before the thread
+  tables exist (0022), whose own backfill makes them.
 
 Who: the model version's author (analyzer | operator | user), its user, and the label of a client
 code or a name from the `log` of answers.yaml. Functions take an open Session and do not commit.
@@ -31,6 +34,7 @@ from sqlalchemy.orm import Session
 
 from floorplan_engine.model.intake import ANSWERS_FILE, INTAKE_FILE
 from floorplan_engine.service.db import questions_yaml as qy
+from floorplan_engine.service.db import threads
 from floorplan_engine.service.db.models import (
     AnswerRevision,
     Build,
@@ -44,6 +48,9 @@ from floorplan_engine.validation.answers import AUTO_PREFIXES
 # Who added a question, by the author of the model version it came with
 SOURCE_OF = {"analyzer": "analyzer", "operator": "operator", "user": "studio", "code": "code"}
 CODE = "code"
+# Revision reasons of a question no longer asked: removed from intake.yaml, or superseded by a
+# follow-up question (threads.follow_up); back in intake.yaml — restored
+GONE = ("removed", "superseded")
 
 
 @dataclass(frozen=True)
@@ -205,7 +212,7 @@ def read_questions(
             c = Current(
                 _row(session, project_id, qid, SOURCE_OF.get(stamp.author.kind, CODE)), None, None
             )
-        removed = c.wording is not None and c.wording.reason == "removed"
+        removed = c.wording is not None and c.wording.reason in GONE
         defined = _define(c.row, fields)
         c.row.position = position
         if c.wording is None:
@@ -337,9 +344,11 @@ def snapshot(session: Session, version: ModelVersion) -> None:
 
 
 def ingest(session: Session, version: ModelVersion, author: Author) -> None:
-    """A new model version into the tables, then its texts from them (snapshot)."""
+    """A new model version into the tables and threads, then its texts from them (snapshot)."""
     stamp = _Stamp(author, version.created_at or now(), version.id)
+    before = threads.seen(session, version.project_id)
     _read(session, version.project_id, version.intake_yaml, version.answers_yaml, stamp)
+    threads.follow(session, version.project_id, before)
     snapshot(session, version)
     session.flush()
 
@@ -348,7 +357,16 @@ def record_code(
     session: Session, project_id: uuid.UUID, version_id: uuid.UUID | None, report: dict[str, Any]
 ) -> None:
     """The code-built questions of a build report (id panel_…, heating_…) with source `code`: a
-    row when one is new, a revision when its wording or definition changed."""
+    row when one is new, a revision when its wording or definition changed; a new one gets a
+    thread."""
+    before = threads.seen(session, project_id)
+    _record_code(session, project_id, version_id, report)
+    threads.follow(session, project_id, before)
+
+
+def _record_code(
+    session: Session, project_id: uuid.UUID, version_id: uuid.UUID | None, report: dict[str, Any]
+) -> None:
     cur = current(session, project_id)
     stamp = _Stamp(Author(CODE), now(), version_id)
     for q in report.get("questions") or []:
@@ -410,5 +428,5 @@ def backfill(session: Session) -> int:
             .limit(1)
         )
         if isinstance(report, dict):
-            record_code(session, project_id, vid, report)
+            _record_code(session, project_id, vid, report)
     return len(rows)

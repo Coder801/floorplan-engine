@@ -20,6 +20,7 @@ from floorplan_engine.electrical.panel_questions import (
 )
 from floorplan_engine.model.furniture import FURNITURE_FILE
 from floorplan_engine.model.intake import (
+    ADDRESSEE,
     ANSWERS_FILE,
     INTAKE_FILE,
     Accept,
@@ -96,10 +97,13 @@ def text_state(answer: TextAnswer) -> QuestionState:
 
 
 def _client_answer(question: Question, answer: object, path: str) -> Issue | None:
-    """A client question only clarifies: the answer is { text } of any kind and is never put into
-    the model; a choice is one of the options, a value is a number."""
+    """A client or installer question only clarifies: the answer is { text } of any kind and is
+    never put into the model; a choice is one of the options, a value is a number."""
     if not isinstance(answer, TextAnswer):
-        message = "вопрос заказчику только уточняет: ответ — { text: ... }, в модель он не идёт"
+        message = (
+            f"вопрос {ADDRESSEE[question.audience]} только уточняет: ответ — {{ text: ... }}, "
+            "в модель он не идёт"
+        )
         return Issue(ANSWERS_FILE, path, message)
     if question.answer == "choice" and answer.text not in question.options:
         return Issue(ANSWERS_FILE, path, f"допустимые ответы: {', '.join(question.options)}")
@@ -150,7 +154,7 @@ def apply_answers(
         if question is None:
             issues.append(Issue(ANSWERS_FILE, path, f"вопроса «{qid}» нет в {INTAKE_FILE}"))
             continue
-        if question.audience == "client":
+        if question.clarifying:
             issue = _client_answer(question, answer, path)
             if issue is not None:
                 issues.append(issue)

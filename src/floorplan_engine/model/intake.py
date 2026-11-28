@@ -22,7 +22,7 @@ intake.yaml is written by the analyzer (currently Claude, following the CLAUDE.m
         severity: major                         # only for questions without target
       - id: q3
         stage: electrical
-        audience: client                        # asked of the client; studio by default
+        audience: client                        # client | installer; studio by default
         text: "Нужен ли тёплый пол в ванной?"
         answer: choice
         options: ["yes", "no"]
@@ -34,6 +34,8 @@ question only clarifies: it has no target, its answer of any kind is kept as { t
 put into the model (the drawing follows the design project alone). The developer takes it into
 account (resolved: true, editing the sources if needed) or returns it with a comment (returned).
 Code-built panel questions are the client's own settings (the setup wizard): they apply at once.
+An installer question (decision 2026-11-28, docs/question-threads.md) clarifies like a client one:
+no target, the answer is kept as { text }.
 
 answers.yaml holds answers, applied to the stage YAML on load (the sources are not rewritten):
 
@@ -72,8 +74,11 @@ class Stage(StrEnum):
     PANEL = "panel"  # questions built by code (panel_questions.panel_questions)
 
 
-# Who is asked: the studio (the drawing) or the client (a clarification, never put into the model)
-Audience = Literal["studio", "client"]
+# Who is asked: the studio (the drawing), the client or the installer (a clarification, never put
+# into the model by itself)
+Audience = Literal["studio", "client", "installer"]
+# Whom the question is addressed to, in messages: «вопрос заказчику» / «вопрос монтажнику»
+ADDRESSEE = {"client": "заказчику", "installer": "монтажнику"}
 
 
 class QSeverity(StrEnum):
@@ -120,6 +125,12 @@ class Question(StrictModel):
         default=None, description="Только для вопросов без target; иначе вес считает код"
     )
 
+    @property
+    def clarifying(self) -> bool:
+        """Asked of the client or the installer: the answer only clarifies, it is never put into
+        the model by itself."""
+        return self.audience != "studio"
+
     @model_validator(mode="after")
     def _consistent(self) -> Question:
         if self.answer in ("choice", "groups") and not self.options:
@@ -134,11 +145,11 @@ class Question(StrictModel):
             raise ValueError("у вопроса с target вес считает код — уберите severity")
         if self.also and self.target is None:
             raise ValueError("also без target не имеет смысла")
-        if self.audience == "client":
+        if self.clarifying:
             if self.target is not None:
                 raise ValueError(
-                    "вопрос заказчику только уточняет: target у него не бывает, чертёж меняется "
-                    "только по исходникам"
+                    f"вопрос {ADDRESSEE[self.audience]} только уточняет: target у него не бывает, "
+                    "чертёж меняется только по исходникам"
                 )
             if self.answer == "groups":
                 raise ValueError("answer: groups — только у вопросов щита")
