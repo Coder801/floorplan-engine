@@ -4,7 +4,7 @@ answers:
   panel_master: "no"
   q6: { text: "Разбивку по автоматам подтверждаю: QF1–QF17 как в вопросе, плюс QF18 — варочная (C20, 3x4).", resolved: true }
 log:
-  panel_phases: {"at": "2026-11-14T12:58:59+00:00", "by": "donischenko801@gmail.com"}
-  panel_input: {"at": "2026-11-14T12:58:59+00:00", "by": "donischenko801@gmail.com"}
-  panel_master: {"at": "2026-11-14T12:58:59+00:00", "by": "donischenko801@gmail.com"}
+  panel_phases: {"at": "2026-11-24T22:46:20+00:00", "by": "Dmitry"}
+  panel_input: {"at": "2026-11-24T22:46:20+00:00", "by": "Dmitry"}
+  panel_master: {"at": "2026-11-24T22:46:20+00:00", "by": "Dmitry"}
   q6: {"at": "2026-11-28T15:30:00+00:00", "by": "студия, через Claude Code"}
