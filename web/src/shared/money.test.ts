@@ -11,6 +11,9 @@ describe("cents", () => {
     expect(cents(0.005)).toBe(0.01);
     expect(cents(-1.005)).toBe(-1.01);
     expect(cents(76)).toBe(76);
+    expect(cents(1234.005)).toBe(1234.01); // as the backend, half up past EPSILON range
+    expect(cents(2.675)).toBe(2.68);
+    expect(cents(1234.004)).toBe(1234);
   });
 });
 

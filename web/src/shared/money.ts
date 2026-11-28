@@ -2,9 +2,12 @@
 // itself counts rounded to kopecks. Quantities (metres, pieces, kW) are not money: they keep
 // their own formats (work.ts qty)
 
-// Rounded to kopecks: 0.1 + 0.2 → 0.3, 1.005 → 1.01 (EPSILON lifts the binary just-below half)
+// Rounded to kopecks, half up as the backend (model/money.py): 0.1 + 0.2 → 0.3, 1.005 → 1.01,
+// 1234.005 → 1234.01. The value goes through its shortest decimal form first (15 significant
+// digits), so a binary just-below half (1234.00499…) rounds as the decimal the user typed
 export function cents(value: number): number {
-  const r = Math.round((Math.abs(value) + Number.EPSILON) * 100) / 100;
+  const hundredths = Number((Math.abs(value) * 100).toPrecision(15));
+  const r = Math.round(hundredths) / 100;
   return value < 0 ? -r : r;
 }
 
