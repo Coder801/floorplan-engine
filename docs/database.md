@@ -482,7 +482,7 @@ erDiagram
     string unit
     float plan_qty
     float fact_qty "пусто — как в плане"
-    float price "пусто — нет цены"
+    numeric price "numeric(12, 2), до копейки (0023); пусто — нет цены"
   }
   WORK_PHOTO {
     uuid id PK
@@ -510,15 +510,26 @@ erDiagram
   WORK_PAYMENT {
     uuid id PK
     uuid task_id FK
-    numeric amount
+    numeric amount "numeric(12, 2)"
     date paid_on
     text note
     uuid recorded_by FK
   }
 ```
 
-Суммы не хранятся: сумма строки — `(fact_qty ?? plan_qty) × price`, задачи — по строкам, работы
-и материалы отдельно (`db/work.py`, `totals`); поэтому перенос строк и объединение задач
+**Деньги — до копейки** (решение 2026-11-28, миграция `0023`): цена строки `work_line.price` и
+оплата `work_payment.amount` — `numeric(12, 2)` (в коде — `float`, `asdecimal=False`, как у
+`amount` с самого начала: точно хранит база, а API отдаёт числа); при записи цена и оплата
+округляются до копейки, половина — вверх (`db/work.money_field`, `model/money.py`: 0,005 → 0,01;
+оплата меньше копейки — не оплата), больше 9 999 999 999,99 — `422`. Разобранная копия прайса
+(`price_list.items`) пишется с ценами до копейки (`price_list.cents_items`); текст `prices.yaml`
+остаётся как записан, смета округляет то, что читает (`PriceList`). Миграция `0023` переводит
+колонку (`round(price::numeric, 2)`) и округляет цены в `items` и `board_kit` на месте; откат —
+обратно в `double precision`, округлённые цены JSON остаются. `usage.cost_usd` — расход LLM в
+долларах, не деньги смет: `numeric(10, 4)`, как был.
+
+Суммы не хранятся: сумма строки — `(fact_qty ?? plan_qty) × price` до копейки, задачи — сумма
+округлённых строк, работы и материалы отдельно (`db/work.py`, `totals`); поэтому перенос строк и объединение задач
 (`db/work_tasks.py`) суммы не пересчитывают. Миграция `0014` (решения 2026-11-12): галочки
 приёмки `work_task.checked` (у старых задач — `[]`) и канал подтверждения заказчика, когда студия
 действует за него: `work_plan.approved_on_behalf`/`approved_note`,
